@@ -23,6 +23,7 @@ func emptyListFeedResponse(
 ) *ListFeedResponse {
 	return &ListFeedResponse{
 		Items:         []FeedItemView{},
+		ObjectCards:   []ObjectCardView{},
 		FeedRequestID: feedRequestID,
 		Outcome:       FeedResponseOutcomeEmpty,
 		EmptyReason:   reason,

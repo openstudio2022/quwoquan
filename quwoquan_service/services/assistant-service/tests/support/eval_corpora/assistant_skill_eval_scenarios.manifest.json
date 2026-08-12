@@ -1,0 +1,7 @@
+{
+  "schema": "qwq.eval_corpus_manifest.v1",
+  "corpusFile": "assistant_skill_eval_scenarios.json",
+  "sha256": "97eca8c139e0eb77558f3e50c6e92ff839e27dbb0d805de913f650c8380dd7c7",
+  "caseCount": 21,
+  "purpose": "assistant-skill-quality-comparison"
+}

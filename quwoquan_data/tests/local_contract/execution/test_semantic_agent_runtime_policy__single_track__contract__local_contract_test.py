@@ -49,13 +49,20 @@ def test_scale_calibration_sample_count_matches_runtime_policy() -> None:
         )
 
 
-def test_cursor_auto_is_explicit_and_allows_first_execution() -> None:
-    selection = active_runtime_policy().explicit_semantic_selection("cursor_auto")
+def test_cursor_grok_is_primary_and_cursor_auto_requires_a_new_retry() -> None:
+    primary = active_runtime_policy().explicit_semantic_selection("cursor_grok")
+    retry = active_runtime_policy().explicit_semantic_selection("cursor_auto")
 
-    assert selection.binding.provider is AgentProvider.CURSOR_SDK
-    assert selection.binding.model == "auto"
-    assert selection.runtime.value == "local"
-    assert selection.requires_new_retry_of is False
+    assert primary.binding.provider is AgentProvider.CURSOR_SDK
+    assert primary.binding.model == "grok-4.5"
+    assert primary.binding.model_parameters == ()
+    assert primary.runtime.value == "local"
+    assert primary.requires_new_retry_of is False
+    assert retry.binding.provider is AgentProvider.CURSOR_SDK
+    assert retry.binding.model == "auto"
+    assert retry.binding.model_parameters == ()
+    assert retry.runtime.value == "local"
+    assert retry.requires_new_retry_of is True
 
 
 def test_legacy_cursor_profile_is_not_a_second_truth_source() -> None:

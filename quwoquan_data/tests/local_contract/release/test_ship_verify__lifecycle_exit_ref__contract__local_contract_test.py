@@ -184,6 +184,7 @@ def _dependencies(
         sync_media=lambda **_kwargs: None,
         write_applied_ref=lambda **_kwargs: None,
         assert_target_action_allowed=lambda **_kwargs: None,
+        assert_environment_release_policy=lambda **_kwargs: None,
         resolve_environment_release_target=lambda _env: target,
         require_environment_readiness=_require,
         run_tag_importer=lambda **_kwargs: Path("unused"),
@@ -268,6 +269,16 @@ def test_ship_verify__research_writes_typed_isolation_blocker_before_post_api(
         observed=observed,
         research=True,
     )
+    original_writer = dependencies.write_research_isolation_verification
+
+    def _write_isolation(**kwargs: object) -> Path:
+        observed["runtime_proof_path"] = kwargs.get("runtime_proof_path")
+        return original_writer(**kwargs)
+
+    dependencies = replace(
+        dependencies,
+        write_research_isolation_verification=_write_isolation,
+    )
 
     with pytest.raises(
         SystemExit,
@@ -294,4 +305,9 @@ def test_ship_verify__research_writes_typed_isolation_blocker_before_post_api(
     assert (
         receipt["blocker"]["code"]
         == "DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE"
+    )
+    assert observed["runtime_proof_path"] == (
+        tmp_path
+        / "env/gamma/runs/data-release/release-a/research-verify-a/"
+        "research-isolation-runtime-proof.json"
     )

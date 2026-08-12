@@ -8,6 +8,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as xml
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -26,17 +27,42 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from quwoquan_ops.cli.lib.local_environment_auth import (  # noqa: E402
     LocalAcceptanceSession,
-    open_reference_acceptance_session,
 )
 
 
 LOCAL_TARGETS = {"beta": "beta-local", "gamma": "gamma-local"}
 
 
+class ActorSlot(StrEnum):
+    PRIMARY = "PRIMARY"
+    MEMBER = "MEMBER"
+
+
 class ProbeFailure(RuntimeError):
     def __init__(self, category: str, message: str) -> None:
         super().__init__(message)
         self.category = category
+
+
+def _typed_test_data_session(slot: ActorSlot) -> LocalAcceptanceSession:
+    prefix = "QWQ_TEST_DATA_" + slot.value
+    values = {
+        "owner_id": os.environ.get(prefix + "_OWNER_ID", "").strip(),
+        "persona_id": os.environ.get(prefix + "_PERSONA_ID", "").strip(),
+        "access_token": os.environ.get(prefix + "_ACCESS_TOKEN", "").strip(),
+        "refresh_token": os.environ.get(prefix + "_REFRESH_TOKEN", "").strip(),
+    }
+    if any(not value for value in values.values()):
+        raise ProbeFailure(
+            "auth_missing",
+            f"local probe requires isolated typed test-data actor {slot.value.lower()}",
+        )
+    return LocalAcceptanceSession(
+        owner_id=values["owner_id"],
+        persona_id=values["persona_id"],
+        access_token=values["access_token"],
+        refresh_token=values["refresh_token"],
+    )
 
 
 def reporter_session(
@@ -48,11 +74,8 @@ def reporter_session(
 ) -> LocalAcceptanceSession:
     local_target = LOCAL_TARGETS.get(environment)
     if local_target is not None:
-        return open_reference_acceptance_session(
-            base_url,
-            environment=environment,
-            target_name=local_target,
-        )
+        del base_url, target_name, local_target
+        return _typed_test_data_session(ActorSlot.PRIMARY)
     return _hosted_session(hosted_token_env, "reporter")
 
 
@@ -70,12 +93,8 @@ def media_viewer_session(
             "unsafe_mode",
             "media viewer session is only available to local lifecycle targets",
         )
-    return open_reference_acceptance_session(
-        base_url,
-        environment=environment,
-        target_name=local_target,
-        actor_index=1,
-    )
+    del base_url, target_name, local_target
+    return _typed_test_data_session(ActorSlot.MEMBER)
 
 
 def moderation_operator_session(

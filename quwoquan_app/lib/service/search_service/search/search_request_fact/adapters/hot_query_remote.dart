@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/runtime/transport/generated/search/search_request_page_ids.g.dart';
 import 'package:quwoquan_app/service/search_service/search/search_request_fact/application/search_hot_query_reader.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 /// 热词读面对象的 invocation context 工厂。
 typedef SearchHotQueryInvocationContextFactory =
     CloudOperationInvocationContext Function(String clientPageId);

@@ -12,6 +12,16 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+		if err := runTLSHealthcheck(
+			"https://127.0.0.1:18089/healthz",
+			"/run/secrets/provider-protocol-substitute/ca.crt",
+		); err != nil {
+			log.Printf("provider protocol substitute healthcheck failed: %v", err)
+			os.Exit(1)
+		}
+		return
+	}
 	handler, err := server.New(server.Config{
 		Environment:              required("APP_ENV"),
 		ConfigurationDigest:      required("PROVIDER_SUBSTITUTE_CONFIGURATION_DIGEST"),

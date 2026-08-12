@@ -1,6 +1,12 @@
 creatorProfileId: qwq_creator_landscape_photographer_001
 personaId: builtin_travel_landscape_photographer
 authorId: builtin_travel_landscape_photographer
+version: 1
+admission:
+  processResult: completed
+  qualityResult: passed
+  evidenceRef: evidence/system_builtin_author_admission.json
+  evidenceDigest: sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e
 isSystemBuiltin: true
 displayName: 林间取景
 userHandle: frame_in_mountains
@@ -54,4 +60,4 @@ avatarAsset:
   objectKey: media/objects/sha256/8a/fb/8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd.webp
   bytes: 428956
   mimeType: image/webp
-  rightsSnapshotRef: evidence/avatar_rights/qwq_creator_landscape_photographer_001/8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd.json
+  evidenceRef: evidence/avatar_rights/qwq_creator_landscape_photographer_001/8afb0ece7d71ca694aa081343a5341f49669d3f7fd4c67dcb9d375d27b1fe9fd.json

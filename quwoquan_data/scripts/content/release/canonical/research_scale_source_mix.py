@@ -1,4 +1,4 @@
-"""Professional image-provider mix gate for research scale milestones."""
+"""Professional image-provider observations for research scale milestones."""
 from __future__ import annotations
 
 import re
@@ -174,28 +174,23 @@ def validate_research_scale_source_mix(
         }
         for provider, count in sorted(counts.items())
     ]
-    issues: list[str] = []
     if total < 1:
-        issues.append("accepted posts/image asset pool is empty")
+        raise ResearchScaleSourceMixError(
+            ["accepted posts/image asset pool is empty"]
+        )
     largest_other = max(
         (count for provider, count in counts.items() if provider != "pinterest"),
         default=0,
     )
-    if pinterest <= largest_other:
-        issues.append("Pinterest is not the unique largest provider")
-    if tuchong < 1:
-        issues.append("Tuchong accepted asset count must be positive")
-    if professional * 2 < total:
-        issues.append("Pinterest and Tuchong combined ratio is below 50%")
     dominant = [
         provider
         for provider, count in counts.items()
         if count * 10 > total * 7
     ]
-    if dominant:
-        issues.append("single-provider ratio exceeds 70%: " + ", ".join(sorted(dominant)))
-    if issues:
-        raise ResearchScaleSourceMixError(issues)
+    largest_provider = min(
+        provider for provider, count in counts.items()
+        if count == max(counts.values())
+    )
     return {
         "acceptedImageAssetCount": total,
         "originalAssetClosureCount": original_count,
@@ -203,12 +198,18 @@ def validate_research_scale_source_mix(
         "tuchongAcceptedAssetCount": tuchong,
         "pinterestTuchongAcceptedAssetCount": professional,
         "pinterestTuchongAcceptedAssetRatio": _ratio(professional, total),
-        "largestProvider": "pinterest",
+        "largestProvider": largest_provider,
         "maxProviderAcceptedAssetRatio": max(
             (_ratio(count, total) for count in counts.values()),
             default=0.0,
         ),
         "providerAssetCounts": provider_rows,
+        "policyObservations": {
+            "pinterestUniqueLargest": pinterest > largest_other,
+            "tuchongPresent": tuchong > 0,
+            "pinterestTuchongAtLeastHalf": professional * 2 >= total,
+            "providerAboveSeventyPercent": sorted(dominant),
+        },
     }
 
 

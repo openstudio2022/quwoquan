@@ -212,11 +212,13 @@ Future<void> _recoverPendingTerminalAccountCleanup(Ref ref) async {
     await receiptStore.clear();
     ref.invalidate(accountClosureLocalDataPurgerForActorProvider(actor));
   } catch (error, stackTrace) {
-    await ref.read(exceptionTelemetryPortProvider).recordHandledException(
-      source: 'account_closure_local_cleanup_recovery',
-      error: error,
-      stackTrace: stackTrace,
-    );
+    await ref
+        .read(exceptionTelemetryPortProvider)
+        .recordHandledException(
+          source: 'account_closure_local_cleanup_recovery',
+          error: error,
+          stackTrace: stackTrace,
+        );
   }
 }
 

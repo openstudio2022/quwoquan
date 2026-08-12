@@ -130,8 +130,8 @@ func (s *Signer) Sign(subject TokenSubject) (string, error) {
 	authEpoch := subject.AuthEpoch
 	switch s.config.Type {
 	case TokenTypeAccess:
-		if accountID == "" || deviceActorID != "" {
-			return "", errors.New("auth: access token requires only an account subject")
+		if accountID == "" {
+			return "", errors.New("auth: access token requires an account subject")
 		}
 		if serviceActorID != "" &&
 			(strings.HasPrefix(accountID, "service:") ||
@@ -266,7 +266,6 @@ func (v *Verifier) Verify(token string) (*Claims, error) {
 	switch v.config.Type {
 	case TokenTypeAccess:
 		if strings.TrimSpace(claims.Subject) == "" ||
-			strings.TrimSpace(claims.DeviceActorID) != "" ||
 			claims.AuthEpoch < 0 {
 			return nil, ErrInvalidToken
 		}

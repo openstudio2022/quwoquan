@@ -12,7 +12,6 @@ import hashlib
 import json
 import os
 import tempfile
-from collections import Counter, defaultdict
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
@@ -30,21 +29,34 @@ from governance.coverage.distribution import (
     image_distribution_decision,
 )
 
+from content.execution.controller.execute.pre_acquisition_handoff import (
+    guard_acquisition_source_identity,
+    load_pre_acquisition_handoff,
+)
 from content.source.image_payload import sniff_image_ext
 from content.source.professional_image_admission import pre_acquisition_block
 from content.source.professional_image_discovery_binding import (
     load_discovery_candidates,
     validate_discovery_binding,
 )
+from content.source.professional_image_receipt_counts import (
+    provider_counts as _provider_counts,
+)
 from content.source.professional_image_receipt_validation import (
     validate_image_receipt_inventory,
 )
+from content.source.professional_image_source_attribution import (
+    bound_image_source_attribution,
+    build_image_plan_spec,
+)
 from content.source.professional_image_transport import fetch_public_image
+from content.source.professional_safety_evidence import (
+    file_sha256,
+    load_bound_safety_evidence,
+    validate_image_safety_payload,
+)
 from content.source.research.image_provider_compliance import classify_image_provider
 from content.source.research.text_match import _normalized_title
-from content.execution.controller.execute.pre_acquisition_handoff import (
-    guard_acquisition_source_identity,
-)
 
 ACQUISITION_ROOT = SOURCE_ACQUISITION_ROOT
 _MAX_IMAGE_BYTES = 64 * 1024 * 1024
@@ -102,6 +114,58 @@ def _network_payload(
     )
 
 
+def _frozen_supported_api_payload(
+    item: Mapping[str, Any], *, output_root: Path,
+) -> dict[str, Any]:
+    """Read exact provider bytes already admitted by supported-API evidence."""
+    relative = Path(str(item.get("apiEvidence") or ""))
+    root = output_root.resolve()
+    evidence_path = (root / relative).resolve()
+    if (
+        relative.is_absolute() or ".." in relative.parts
+        or root not in evidence_path.parents
+        or evidence_path.is_symlink() or not evidence_path.is_file()
+    ):
+        raise ValueError("supported_api evidence ref is unsafe or missing")
+    evidence = read_json(evidence_path)
+    if not isinstance(evidence, Mapping):
+        raise TypeError("supported_api evidence must be an object")
+    assert_valid(
+        evidence, "source", "professional_image_supported_api_evidence",
+        label="professional image supported API evidence",
+    )
+    asset_relative = Path(str(evidence.get("originalAssetRef") or ""))
+    asset_path = (root / asset_relative).resolve()
+    if (
+        asset_relative.is_absolute() or ".." in asset_relative.parts
+        or root not in asset_path.parents
+        or asset_path.is_symlink() or not asset_path.is_file()
+    ):
+        raise ValueError("supported_api original asset ref is unsafe or missing")
+    descriptor = os.open(asset_path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        body = os.read(descriptor, _MAX_IMAGE_BYTES + 1)
+    finally:
+        os.close(descriptor)
+    ext = sniff_image_ext(body, "")
+    if (
+        evidence.get("status") != "accepted"
+        or evidence.get("candidateId") != item.get("assetId")
+        or evidence.get("sourcePageUrl") != item.get("sourceUrl")
+        or evidence.get("originalAssetUrl") != item.get("assetUrl")
+        or evidence.get("contentSha256") != _content_digest(body)
+        or len(body) < _MIN_IMAGE_BYTES or len(body) > _MAX_IMAGE_BYTES
+        or ext is None
+    ):
+        raise ValueError("supported_api frozen physical input binding drift")
+    return {
+        "bytes": body, "ext": ext, "contentType": "",
+        "requestedUrl": str(item["assetUrl"]),
+        "normalizedFromUrl": str(item["assetUrl"]),
+        "externalInputEvidenceSha256": file_sha256(evidence_path),
+    }
+
+
 def _put_cas(payload: bytes, ext: str, *, output_root: Path) -> Path:
     digest = hashlib.sha256(payload).hexdigest()
     destination = output_root / "cas" / "sha256" / digest[:2] / f"{digest}{ext}"
@@ -145,6 +209,57 @@ def _write_create_once_receipt(path: Path, receipt: Mapping[str, Any]) -> None:
         handle.write(body)
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def rebind_professional_image_acquisition_manifest(
+    source_manifest_path: Path,
+    *,
+    handoff_ref: Path,
+    destination: Path,
+) -> tuple[dict[str, Any], Path]:
+    """Rebind a verified frozen physical closure to one newer execution identity."""
+    source = read_json(source_manifest_path)
+    if not isinstance(source, dict):
+        raise TypeError("source professional image acquisition manifest must be an object")
+    assert_valid(
+        source, "source", "professional_image_acquisition_manifest",
+        label="source professional image acquisition manifest",
+    )
+    handoff = load_pre_acquisition_handoff(handoff_ref)
+    frozen = source.get("frozenPhysicalInput")
+    if not isinstance(frozen, Mapping):
+        frozen = {
+            "sourceRevision": source["sourceRevision"],
+            "sourceDigest": source["sourceDigest"],
+            "entityCatalogDigest": source["entityCatalogDigest"],
+            "metadataCatalogDigest": source["discoveryPlanDigest"],
+            "externalInputsDigest": _digest(source),
+        }
+    rebound = {
+        **source,
+        "sourceRevision": handoff["sourceRevision"],
+        "sourceDigest": handoff["sourceDigest"]["digest"],
+        "entityCatalogDigest": handoff["entityCatalogDigest"],
+        "executionBundle": handoff["executionBundle"],
+        "frozenPhysicalInput": dict(frozen),
+    }
+    assert_valid(
+        rebound, "source", "professional_image_acquisition_manifest",
+        label="rebound professional image acquisition manifest",
+    )
+    body = json.dumps(rebound, ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        if destination.is_symlink() or not destination.is_file() or destination.read_bytes() != body:
+            raise ValueError(f"rebound acquisition manifest create-once collision: {destination}") from None
+        return rebound, destination
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(body)
+        handle.flush()
+        os.fsync(handle.fileno())
+    return rebound, destination
 
 
 def _require_timestamp(value: object, *, label: str) -> None:
@@ -211,36 +326,6 @@ def _validate_item(item: Mapping[str, Any]) -> tuple[RightsStatus, dict[str, Any
     return rights_status, {**provider, "pathAllowed": True}
 
 
-def _provider_counts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for row in rows:
-        grouped[(str(row["displayName"]), str(row["provider"]))].append(row)
-    result: list[dict[str, Any]] = []
-    for (display_name, provider), assets in sorted(grouped.items()):
-        rights = Counter(str(row["rightsStatus"]) for row in assets)
-        downloaded = sum(row["acquisitionStatus"] == "acquired" for row in assets)
-        accepted = sum(
-            row["distributionDecision"] in {"research_allowed", "commercial_allowed"}
-            for row in assets
-        )
-        result.append(
-            {
-                "displayName": display_name,
-                "provider": provider,
-                "plannedAssetCount": len(assets),
-                "discoveredAssetCount": len(assets),
-                "downloadedAssetCount": downloaded,
-                "acceptedAssetCount": accepted,
-                "rejectedAssetCount": len(assets) - accepted,
-                "verifiedAssetCount": rights["verified"],
-                "unverifiedAssetCount": rights["unverified"],
-                "restrictedAssetCount": rights["restricted"],
-                "unknownAssetCount": rights["unknown"],
-            }
-        )
-    return result
-
-
 def acquire_professional_images(
     manifest_path: Path,
     *,
@@ -278,6 +363,11 @@ def acquire_professional_images(
         item = dict(raw)
         validate_discovery_binding(item, candidates=discovery_candidates)
         rights_status, provider = _validate_item(item)
+        safety_evidence = load_bound_safety_evidence(
+            item,
+            evidence_root=output_root,
+            kind="image",
+        )
         path_allowed = bool(provider["pathAllowed"])
         payload: dict[str, Any] | None = None
         failure_code = ""
@@ -301,6 +391,14 @@ def acquire_professional_images(
                         str(item["manualFile"]),
                         manual_root=manual_root,
                     )
+                elif (
+                    item["acquisitionPath"] == "supported_api"
+                    and not str(item.get("apiEvidence") or "").startswith("https://")
+                    and (output_root / str(item.get("apiEvidence") or "")).is_file()
+                ):
+                    payload = _frozen_supported_api_payload(
+                        item, output_root=output_root
+                    )
                 else:
                     payload = _network_payload(
                         str(item["assetUrl"]),
@@ -322,6 +420,20 @@ def acquire_professional_images(
             usage_scope=str(item["usageScope"]),
             model_release_status=str(item["modelReleaseStatus"]),
         )
+        source_attribution = None
+        if isinstance(item.get("sourceAttribution"), Mapping):
+            source_attribution = bound_image_source_attribution(
+                item,
+                platform=str(provider["platform"]),
+                distribution_decision=decision.value,
+            )
+        elif decision in {
+            DistributionDecision.RESEARCH_ALLOWED,
+            DistributionDecision.COMMERCIAL_ALLOWED,
+        }:
+            raise ValueError(
+                f"{item['assetId']}: admitted image requires sourceAttribution"
+            )
         content_sha256 = ""
         asset_ref = ""
         width = 0
@@ -336,6 +448,13 @@ def acquire_professional_images(
                 failure_code = "DATA.SOURCE.IMAGE_DECODE_FAILED"
                 failure = f"{failure_code}:{probe.failure.value}"
             else:
+                validate_image_safety_payload(
+                    safety_evidence,
+                    item,
+                    body=body,
+                    width=probe.width,
+                    height=probe.height,
+                )
                 content_sha256 = _content_digest(body)
                 duplicate_of = seen_content.get(content_sha256)
                 cas_path = _put_cas(body, str(payload["ext"]), output_root=output_root)
@@ -360,41 +479,22 @@ def acquire_professional_images(
                     DistributionDecision.RESEARCH_ALLOWED,
                     DistributionDecision.COMMERCIAL_ALLOWED,
                 }:
-                    plan_spec = {
-                        "url": cas_path.resolve().as_uri(),
-                        "sourceUrl": str(item["sourceUrl"]),
-                        "collectionPageUrl": str(item["sourceUrl"]),
-                        "originalAssetUrl": str(
-                            item.get("assetUrl") or item["sourceUrl"]
-                        ),
-                        "platform": str(provider["platform"]),
-                        "sourceId": str(provider["sourceId"]),
-                        "discoveryCandidateId": str(item["discoveryCandidateId"]),
-                        "discoveryUrl": str(item["discoveryUrl"]),
-                        "creator": str(item["creator"]),
-                        "credit": str(item["creator"]),
-                        "capturedAt": str(item["capturedAt"]),
-                        "contentSha256": content_sha256,
-                        "acquisitionStatus": acquisition_status.value,
-                        "rightsStatus": rights_status.value,
-                        "authorizationRequired": (
+                    plan_spec = build_image_plan_spec(
+                        item,
+                        platform=str(provider["platform"]),
+                        source_id=str(provider["sourceId"]),
+                        cas_uri=cas_path.resolve().as_uri(),
+                        content_sha256=content_sha256,
+                        acquisition_status=acquisition_status.value,
+                        rights_status=rights_status.value,
+                        authorization_required=(
                             rights_status is not RightsStatus.VERIFIED
                             or not authorization_proof
                         ),
-                        "distributionDecision": decision.value,
-                        "rightsAuditStatus": rights_status.value,
-                        "rightsIssues": list(item["rightsIssues"]),
-                        "license": str(item["license"]),
-                        "licenseSnapshot": str(item["licenseSnapshot"]),
-                        "usageScope": str(item["usageScope"]),
-                        "modelReleaseStatus": str(item["modelReleaseStatus"]),
-                        "termsUrl": str(item["termsUrl"]),
-                        "authorizationProof": authorization_proof,
-                        "caption": str(item["caption"]),
-                        "relevance": str(item["relevance"]),
-                        "width": width,
-                        "height": height,
-                    }
+                        distribution_decision=decision.value,
+                        width=width,
+                        height=height,
+                    )
         rows.append(
             {
                 "assetId": str(item["assetId"]),
@@ -436,6 +536,7 @@ def acquire_professional_images(
                 "caption": str(item["caption"]),
                 "relevance": str(item["relevance"]),
                 "safetyReview": dict(item["safetyReview"]),
+                "sourceAttribution": source_attribution,
                 "withdrawalRequired": rights_status is not RightsStatus.VERIFIED,
                 "failureCode": failure_code,
                 "failure": failure,
@@ -588,4 +689,5 @@ __all__ = [
     "acquire_professional_images",
     "acquired_image_specs_for_entity",
     "load_professional_image_acquisition_receipt",
+    "rebind_professional_image_acquisition_manifest",
 ]

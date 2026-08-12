@@ -10,20 +10,73 @@ from pathlib import Path
 import pytest
 
 from content.execution.campaign.source_snapshot import (
+    campaign_snapshot_roots,
     materialize_source_snapshot,
     source_snapshot_roots,
 )
-from core.source_digest import current_source_digest
+from content.execution.campaign.workspace import _capsule_identity
+from core.schema import assert_valid
+from core.source_digest import (
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
+)
 from support import remove_readonly_test_tree
 
 ROOT = Path(__file__).resolve().parents[4]
 
 
+def test_v2_capsule_identity_freezes_the_captured_branch() -> None:
+    lane_external_inputs = {
+        carrier: {
+            "rootRef": f"external-inputs/{carrier}",
+            "externalInputRefs": [],
+            "externalInputsDigest": "sha256:" + "0" * 64,
+        }
+        for carrier in ("homepage", "article", "image", "video")
+    }
+    kwargs = {
+        "commit_sha": "a" * 40,
+        "source_revision": "sha256:" + "b" * 64,
+        "source_digest": "sha256:" + "c" * 64,
+        "execution_bundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "d" * 64,
+            "inputs": ["quwoquan_data/scripts"],
+        },
+        "entity_catalog_digest": "sha256:" + "e" * 64,
+        "lane_external_inputs": lane_external_inputs,
+        "external_inputs_digest": "sha256:" + "f" * 64,
+        "source_pool_fields": {},
+        "roots": ("quwoquan_data/scripts",),
+    }
+
+    stable, capsule_digest = _capsule_identity(git_branch="main", **kwargs)
+    dev_stable, dev_digest = _capsule_identity(git_branch="dev1.0", **kwargs)
+
+    assert stable["gitBranch"] == "main"
+    assert dev_stable["gitBranch"] == "dev1.0"
+    assert dev_digest != capsule_digest
+    assert_valid(
+        {
+            **stable,
+            "capsuleDigest": capsule_digest,
+            "treeDigest": "sha256:" + "1" * 64,
+        },
+        "execution",
+        "content_source_capsule",
+    )
+
+
 def test_campaign_source_capsule_imports_canonical_release_without_ops_tree(
     tmp_path: Path,
 ) -> None:
-    source_digest = current_source_digest(repo_root=ROOT).digest
-    roots = source_snapshot_roots(ROOT, expected_digest=source_digest)
+    source_digest = current_source_definition_snapshot(repo_root=ROOT).digest
+    execution_bundle = current_execution_bundle_identity(repo_root=ROOT).digest
+    roots = campaign_snapshot_roots(
+        ROOT,
+        expected_digest=source_digest,
+        expected_execution_bundle=execution_bundle,
+    )
     capsule = tmp_path / "source-capsule"
 
     try:
@@ -32,9 +85,13 @@ def test_campaign_source_capsule_imports_canonical_release_without_ops_tree(
             capsule,
             roots=roots,
             expected_digest=source_digest,
+            expected_execution_bundle=execution_bundle,
         )
 
-        assert not (capsule / "quwoquan_ops").exists()
+        assert (
+            capsule / "quwoquan_ops/policies/branch_policy.yaml"
+        ).is_file()
+        assert not (capsule / "quwoquan_ops/cli").exists()
         environment = os.environ.copy()
         environment["PYTHONDONTWRITEBYTECODE"] = "1"
         environment["PYTHONPATH"] = str(capsule / "quwoquan_data" / "scripts")

@@ -12,7 +12,7 @@ import 'package:quwoquan_app/service/user_service/account/user_account/applicati
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../runtime/fixtures/fixture_user_resolver.dart';
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 String get kMockCurrentOwnerId => FixtureUserResolver.currentUserVariantUserId;
 
@@ -232,7 +232,9 @@ class MockUserProfileRepository
 
   @override
   Future<AuthorImpactSummary> getAuthorImpact(String personaId) async {
-    final seed = objectScenarioSeedReader.contentSeedSet('intersection_core');
+    final seed = objectContractExampleReader.contentExample(
+      'intersection_core',
+    );
     final byAuthor = seed?['authorImpact'];
     if (byAuthor is! Map<Object?, Object?>) {
       return AuthorImpactSummary(
@@ -450,7 +452,7 @@ RelationshipCapabilityViewData _relationshipCapability({
 }
 
 List<Map<String, dynamic>> _scenarioProfiles() {
-  final raw = objectScenarioSeedReader.requireSeedSet(
+  final raw = objectContractExampleReader.requireExample(
     'user',
     'user_profile_core',
   )['profiles'];

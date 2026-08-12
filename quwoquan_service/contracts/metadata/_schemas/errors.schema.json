@@ -31,12 +31,12 @@
                 "emitted_by": {
                   "contains": {
                     "anyOf": [
-                      { "enum": ["http", "gateway"] },
+                      { "enum": ["http", "graphql", "gateway"] },
                       {
                         "type": "object",
                         "required": ["surface"],
                         "properties": {
-                          "surface": { "enum": ["http", "gateway"] }
+                          "surface": { "enum": ["http", "graphql", "gateway"] }
                         }
                       }
                     ]

@@ -11,13 +11,13 @@ from dataclasses import dataclass
 from core.control_types import QueueBackend, QueueJobStage
 from core.schema import assert_valid
 
+from content.execution.queue.backend import load_reliabletask_job_set_envelopes
+from content.execution.queue.core import _read_job, stable_job_id
+from content.execution.queue.model import QueueJob
 from content.execution.queue.reliabletask.author import (
     WorkerAgentRunner,
     _execute_author,
 )
-from content.execution.queue.backend import load_reliabletask_job_set_envelopes
-from content.execution.queue.core import _read_job, stable_job_id
-from content.execution.queue.model import QueueJob
 from content.execution.queue.reliabletask.publish import _execute_publish
 from content.execution.runtime_contract import canonical_sha256
 
@@ -34,12 +34,27 @@ class DataContentWorkItem:
     carrier: str
     source_revision: str
     idempotency_key: str
+    max_attempts: int
     job_set_envelope_digest: str
     job_set_digest: str
     actual_task_digest: str
+    worker_host_set_digest: str
+    worker_host_generation: int
+    worker_fencing_token: str
+    worker_host_scope_id: str
 
     @classmethod
-    def from_document(cls, value: Mapping[str, object]) -> "DataContentWorkItem":
+    def from_document(cls, value: Mapping[str, object]) -> DataContentWorkItem:
+        generation = value.get("workerHostGeneration", 0)
+        if isinstance(generation, bool) or not isinstance(generation, int):
+            raise TypeError("ReliableTask worker host generation must be an integer")
+        max_attempts = value.get("maxAttempts")
+        if (
+            isinstance(max_attempts, bool)
+            or not isinstance(max_attempts, int)
+            or max_attempts < 1
+        ):
+            raise TypeError("ReliableTask worker maxAttempts must be an integer >= 1")
         return cls(
             runtime_task_id=str(value.get("runtimeTaskId") or "").strip(),
             job_id=str(value.get("jobId") or "").strip(),
@@ -51,12 +66,82 @@ class DataContentWorkItem:
             carrier=str(value.get("carrier") or "").strip(),
             source_revision=str(value.get("sourceRevision") or "").strip(),
             idempotency_key=str(value.get("idempotencyKey") or "").strip(),
+            max_attempts=max_attempts,
             job_set_envelope_digest=str(
                 value.get("jobSetEnvelopeDigest") or ""
             ).strip(),
             job_set_digest=str(value.get("jobSetDigest") or "").strip(),
             actual_task_digest=str(value.get("actualTaskDigest") or "").strip(),
+            worker_host_set_digest=str(
+                value.get("workerHostSetDigest") or ""
+            ).strip(),
+            worker_host_generation=generation,
+            worker_fencing_token=str(
+                value.get("workerFencingToken") or ""
+            ).strip(),
+            worker_host_scope_id=str(
+                value.get("workerHostScopeId") or ""
+            ).strip(),
         )
+
+
+def _bound_actual_tasks(
+    item: DataContentWorkItem,
+    envelope: Mapping[str, object],
+) -> list[Mapping[str, object]]:
+    frozen_tasks = envelope.get("expectedTasks")
+    if not isinstance(frozen_tasks, list) or not all(
+        isinstance(task, Mapping) for task in frozen_tasks
+    ):
+        raise TypeError("ReliableTask frozen expectedTasks must be an object array")
+    binding = envelope.get("workerHostSetBinding")
+    host_values = (
+        item.worker_host_set_digest,
+        item.worker_fencing_token,
+        item.worker_host_scope_id,
+    )
+    if binding is None:
+        if any(host_values) or item.worker_host_generation != 0:
+            raise ValueError("ReliableTask ungoverned task carries worker host fence")
+        return list(frozen_tasks)
+    if not isinstance(binding, Mapping):
+        raise TypeError("ReliableTask worker host-set binding must be an object")
+    if (
+        item.worker_host_set_digest != str(binding.get("hostSetDigest") or "")
+        or item.worker_host_generation != binding.get("generation")
+        or item.worker_fencing_token != str(binding.get("fencingToken") or "")
+    ):
+        raise ValueError("ReliableTask worker host-set fence mismatch")
+    hosts = binding.get("hosts")
+    matches = (
+        [
+            host
+            for host in hosts
+            if isinstance(host, Mapping)
+            and str(host.get("hostScopeId") or "")
+            == item.worker_host_scope_id
+        ]
+        if isinstance(hosts, list)
+        else []
+    )
+    if len(matches) != 1:
+        raise ValueError("ReliableTask worker hostScopeId is not uniquely assigned")
+    partitions = matches[0].get("partitionKeys")
+    assigned = (
+        {str(value) for value in partitions}
+        if isinstance(partitions, list)
+        else set()
+    )
+    if item.partition_key not in assigned:
+        raise ValueError("ReliableTask worker task partition is not host-assigned")
+    selected = [
+        task
+        for task in frozen_tasks
+        if str(task.get("partitionKey") or "") in assigned
+    ]
+    if not selected:
+        raise ValueError("ReliableTask worker host task slice is empty")
+    return selected
 
 
 def _load_bound_job(item: DataContentWorkItem) -> QueueJob:
@@ -71,7 +156,7 @@ def _load_bound_job(item: DataContentWorkItem) -> QueueJob:
     reliable_ref = job.reliable_task_ref_document() or {}
     payload = reliable_ref.get("payload")
     if not isinstance(payload, Mapping):
-        raise ValueError("ReliableTask job 缺少 typed payload")
+        raise TypeError("ReliableTask job 缺少 typed payload")
     expected = {
         "jobId": item.job_id,
         "executionId": item.execution_id,
@@ -92,6 +177,8 @@ def _load_bound_job(item: DataContentWorkItem) -> QueueJob:
             "ReliableTask worker identity binding mismatch: "
             + ", ".join(sorted(mismatches))
         )
+    if job.max_attempts != item.max_attempts:
+        raise ValueError("ReliableTask worker maxAttempts binding mismatch")
     envelopes = load_reliabletask_job_set_envelopes(item.execution_id)
     stage_envelopes = [
         envelope
@@ -104,13 +191,8 @@ def _load_bound_job(item: DataContentWorkItem) -> QueueJob:
         raise ValueError(
             "ReliableTask worker requires one exact stage-attempt envelope"
         )
-    frozen_tasks = stage_envelopes[0].get("expectedTasks")
-    if not isinstance(frozen_tasks, list):
-        raise TypeError("ReliableTask frozen expectedTasks must be an array")
-    if (
-        canonical_sha256(frozen_tasks) != item.actual_task_digest
-        or item.actual_task_digest != item.job_set_digest
-    ):
+    frozen_tasks = _bound_actual_tasks(item, stage_envelopes[0])
+    if canonical_sha256(frozen_tasks) != item.actual_task_digest:
         raise ValueError("ReliableTask worker actual task digest mismatch")
     frozen_matches = [
         task
@@ -124,11 +206,15 @@ def _load_bound_job(item: DataContentWorkItem) -> QueueJob:
             "ReliableTask worker job is absent from frozen stage job-set envelope"
         )
     frozen = frozen_matches[0]
-    frozen_expected = {**expected, "partitionKey": item.partition_key}
+    frozen_expected = {
+        **expected,
+        "partitionKey": item.partition_key,
+        "maxAttempts": item.max_attempts,
+    }
     frozen_mismatches = [
         key
         for key, expected_value in frozen_expected.items()
-        if str(frozen.get(key) or "").strip() != expected_value
+        if frozen.get(key) != expected_value
     ]
     if frozen_mismatches:
         raise ValueError(
@@ -179,7 +265,7 @@ def run_process_worker() -> None:
         )
         item_payload = request.get("item") if isinstance(request, Mapping) else None
         if not isinstance(item_payload, Mapping):
-            raise ValueError("data content worker request.item 必须为 object")
+            raise TypeError("data content worker request.item 必须为 object")
         # stdout is the strict Go worker protocol. Agent/progress output from
         # the implementation belongs on stderr so it cannot precede the one
         # JSON response and make a completed task look externally failed.
@@ -197,7 +283,7 @@ def run_process_worker() -> None:
         )
     except KeyboardInterrupt:
         raise
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(
             f"[data-content-worker] {type(exc).__name__}: {exc}",
             file=sys.stderr,

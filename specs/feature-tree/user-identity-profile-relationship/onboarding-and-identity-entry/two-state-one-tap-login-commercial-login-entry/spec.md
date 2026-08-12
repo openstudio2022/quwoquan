@@ -71,7 +71,7 @@
 ### REQ-007 手机号验证码异常不拦截用户
 
 - `otp_mismatch` 只显示红色“验证码不正确”，六格轻抖一次、清空并将焦点回到第一格；验证码格永不变红且原倒计时继续。
-- `otp_expired/challenge_consumed` 显示“验证码已失效”，`otp_attempts_exceeded/rate_limited` 显示“尝试次数较多”，`otp_provider_failed` 显示“验证码发送失败”；恢复动作与错误文案分离。
+- `otp_expired/challenge_consumed` 显示“验证码已失效”，`otp_attempts_exceeded` 显示“尝试次数较多”，发码 `otp_rate_limited` 显示“获取过于频繁，请在 N 秒后再试”，`otp_provider_failed` 显示“验证码发送失败”；恢复动作与错误文案分离。
 - 网络校验失败保留验证码并显示“暂时无法验证验证码”与“重新验证”。
 - 修改手机号会清空验证码与错误，关闭和成功目标态不回环。
 

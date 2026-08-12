@@ -1,4 +1,4 @@
-# spec_ref: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md#sit-004
+# spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002.t2
 from __future__ import annotations
 
 import hashlib
@@ -10,6 +10,7 @@ from typing import Any
 from unittest import mock
 
 from quwoquan_ops.ci import generate_release_bound_environment_identity as renderer
+from quwoquan_ops.ci import release_bound_data_evidence as data_validator
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     APPLICATION_PACKAGES,
     ENVIRONMENTS,
@@ -18,7 +19,6 @@ from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import (
     canonical_manifest_digest,
 )
 
-
 DIGEST_A = "sha256:" + "a" * 64
 DIGEST_B = "sha256:" + "b" * 64
 GIT_SHA = "c" * 40
@@ -26,6 +26,11 @@ TREE_DIGEST = "sha1:" + "d" * 40
 BASELINE_ID = "app-stability-baseline--20260728T210000Z"
 RELEASE_ID = "20260728--travel-golden-release--hangzhou-west-lake--pilot-002"
 RELEASE_DIGEST = "sha256:" + "e" * 64
+SOURCE_REVISION = "sha256:" + "3" * 64
+SOURCE_DIGEST = "sha256:" + "4" * 64
+ENTITY_CATALOG_DIGEST = "sha256:" + "5" * 64
+ISOLATION_DIGEST = "sha256:" + "6" * 64
+SUBJECT_HASH = "sha256:" + "7" * 64
 
 
 def _write(path: Path, payload: dict[str, Any]) -> Path:
@@ -41,13 +46,83 @@ def _sha(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _document_digest(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
 def _checksum(payload: dict[str, Any]) -> dict[str, Any]:
     result = dict(payload)
-    encoded = json.dumps(
-        result, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    result["verificationChecksum"] = "sha256:" + hashlib.sha256(encoded).hexdigest()
+    result["verificationChecksum"] = _document_digest(result)
     return result
+
+
+def _research_activation_fields(environment: str) -> dict[str, Any]:
+    app_uat = {
+        "releaseId": RELEASE_ID,
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "homepageId": "entity:west-lake",
+        "homepageTitle": "杭州西湖",
+        "articleWorkId": "post-article",
+        "articleTitle": "西湖图文",
+        "imageWorkId": "post-image",
+        "imageTitle": "西湖图片",
+        "videoWorkId": "post-video",
+        "videoTitle": "西湖视频",
+        "creatorId": "creator-1",
+        "creatorDisplayName": "创作者一号",
+        "tagLabel": "旅行",
+        "videoAttribution": "研究素材来源",
+    }
+    app_uat_digest = _document_digest(app_uat)
+    verification_ref = (
+        f"env/{environment}/runs/data-release/{RELEASE_ID}/verify-001/"
+        "research-isolation-verification.json"
+    )
+    activation = {
+        "schema": "quwoquan_data.environment_activation_envelope",
+        "environment": environment,
+        "releaseId": RELEASE_ID,
+        "manifestDigest": RELEASE_DIGEST,
+        "sourceRevision": SOURCE_REVISION,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "readinessPhase": "research",
+        "importRunId": "import-001",
+        "verifyRunId": "verify-001",
+        "importReportRef": (
+            f"env/{environment}/runs/data-release/{RELEASE_ID}/import-001/import.json"
+        ),
+        "importReportDigest": DIGEST_B,
+        "appUatEnvelopeDigest": app_uat_digest,
+        "researchIsolationPolicy": {
+            "policyRef": f"quwoquan_ops/environments/{environment}/runtime.yaml",
+            "policyDigest": ISOLATION_DIGEST,
+            "verificationRef": verification_ref,
+            "verificationDigest": DIGEST_A,
+            "subjectHash": SUBJECT_HASH,
+        },
+    }
+    return {
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "sourceRevision": SOURCE_REVISION,
+        "sourceDigest": SOURCE_DIGEST,
+        "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+        "readinessPhase": "research",
+        "appUatEnvelope": app_uat,
+        "appUatEnvelopeDigest": app_uat_digest,
+        "activationEnvelope": activation,
+        "activationEnvelopeDigest": _document_digest(activation),
+        "internalSubjectHash": SUBJECT_HASH,
+        "researchIsolationVerificationRef": verification_ref,
+        "researchIsolationVerificationDigest": DIGEST_A,
+    }
 
 
 class Fixture:
@@ -68,7 +143,7 @@ class Fixture:
             payload: dict[str, Any]
             if self.environment == "prod" and surface == "android":
                 payload = {
-                    "schema": "qwq.android.official-release",
+                    "schema": "client-app.android.official-release",
                     "sourceGitSha": GIT_SHA,
                     "sourceTreeDigest": TREE_DIGEST,
                     "packagedAPK": "quwoquan.apk",
@@ -95,9 +170,10 @@ class Fixture:
         for environment in ENVIRONMENTS:
             application_packages[environment] = {}
             for surface in APPLICATION_PACKAGES[environment]:
-                package_digest = "sha256:" + hashlib.sha256(
-                    f"{environment}/{surface}".encode("utf-8")
-                ).hexdigest()
+                package_digest = (
+                    "sha256:"
+                    + hashlib.sha256(f"{environment}/{surface}".encode()).hexdigest()
+                )
                 descriptor_digest = DIGEST_A
                 if environment == self.environment and surface in package_digests:
                     index = 0 if surface == "android" else 1
@@ -186,7 +262,11 @@ class Fixture:
                 },
                 "layers": {
                     layer: {"status": "passed", "artifactDigest": DIGEST_A}
-                    for layer in ("local_contract", "api_integration", "user_acceptance")
+                    for layer in (
+                        "local_contract",
+                        "api_integration",
+                        "user_acceptance",
+                    )
                 },
             },
             "environmentReceipts": {},
@@ -202,6 +282,7 @@ class Fixture:
         }
         manifest["candidateId"] = canonical_candidate_digest(manifest)
         if self.environment == "prod":
+
             def receipt(kind: str, environment: str, status: str) -> dict[str, Any]:
                 evidence = {
                     "candidateId": manifest["candidateId"],
@@ -247,6 +328,7 @@ class Fixture:
                     "releaseId": RELEASE_ID,
                     "releaseKind": "content",
                     "sourceOwner": "qwq_data",
+                    **_research_activation_fields(self.environment),
                     "manifestDigest": RELEASE_DIGEST,
                     "mediaManifestDigest": DIGEST_A,
                     "importRunId": "import-001",
@@ -283,11 +365,31 @@ class Fixture:
                         }
                         for name, query, post_id in (
                             ("discovery_work", "identity=work&limit=3", "post-article"),
-                            ("typed_article", "identity=work&type=article&limit=1", "post-article"),
-                            ("typed_image", "identity=work&type=image&limit=1", "post-image"),
-                            ("typed_video", "identity=work&type=video&limit=1", "post-video"),
-                            ("homepage_recommend", "homepageRef=entity:west-lake&limit=3", "post-image"),
-                            ("premium_stream", "sort=recommend&channelId=premium_stream&limit=1", "post-video"),
+                            (
+                                "typed_article",
+                                "identity=work&type=article&limit=1",
+                                "post-article",
+                            ),
+                            (
+                                "typed_image",
+                                "identity=work&type=image&limit=1",
+                                "post-image",
+                            ),
+                            (
+                                "typed_video",
+                                "identity=work&type=video&limit=1",
+                                "post-video",
+                            ),
+                            (
+                                "homepage_recommend",
+                                "homepageRef=entity:west-lake&limit=3",
+                                "post-image",
+                            ),
+                            (
+                                "premium_stream",
+                                "sort=recommend&channelId=premium_stream&limit=1",
+                                "post-video",
+                            ),
                         )
                     ],
                     "contentImportReportRef": (
@@ -404,9 +506,7 @@ class Fixture:
             run_count = 20 if self.environment == "prod" else 1
             samples: list[dict[str, Any]] = []
             for run_index in range(1, run_count + 1):
-                attempt = (
-                    f"attempt-{self.environment}-{index:02d}-{run_index:02d}"
-                )
+                attempt = f"attempt-{self.environment}-{index:02d}-{run_index:02d}"
                 attempts.append(attempt)
                 sample: dict[str, Any] = {
                     "passed": True,
@@ -594,9 +694,9 @@ class Fixture:
         self.paths["rollback"] = _write(
             self.root / "rollback.json", _checksum(rollback)
         )
-        self.paths["video"] = _write(
-            self.root / "release-video-delivery.json",
-            {"schema": "quwoquan_ops.release_video_delivery_evidence"},
+        self.paths["media"] = _write(
+            self.root / "research-media-readback.json",
+            {"schema": "quwoquan_ops.research_content_isolation"},
         )
 
     def argv(self, output: Path) -> list[str]:
@@ -630,8 +730,8 @@ class Fixture:
                 str(self.paths["telemetry"]),
                 "--rollback-receipt",
                 str(self.paths["rollback"]),
-                "--release-video-delivery",
-                str(self.paths["video"]),
+                "--release-media-readback",
+                str(self.paths["media"]),
                 "--output",
                 str(output),
             ]
@@ -649,16 +749,16 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             renderer,
             "validate_data_evidence",
             return_value={
-                "assetId": "media-video",
-                "postId": "post-video",
-                "publicSliceKey": "media/video/s/asset/video/v1/source.mp4",
-                "publicUrl": "https://cdn.example.net/media/video/source.mp4",
-                "contentType": "video/mp4",
-                "bytes": 4,
-                "sha256": DIGEST_A,
-                "durationMs": 1200,
-                "firstFrameDecoded": True,
-                "rangeStatus": 206,
+                "deliveryMode": "private_signed",
+                "releaseId": RELEASE_ID,
+                "manifestDigest": RELEASE_DIGEST,
+                "subjectHash": SUBJECT_HASH,
+                "receiptRef": "env/alpha/runs/data-release/research-isolation.json",
+                "receiptDigest": DIGEST_A,
+                "anonymousContentStatus": 403,
+                "anonymousMediaStatus": 403,
+                "signedMediaTtlSeconds": 300,
+                "mediaAuditEventId": "audit-media-001",
             },
         ).start()
         self.app_readback_patcher = mock.patch.object(
@@ -683,7 +783,23 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             self.assertEqual(payload["status"], "passed")
             self.assertEqual(payload["identity"]["baselineId"], BASELINE_ID)
             self.assertEqual(payload["identity"]["releaseId"], RELEASE_ID)
-            self.assertEqual(set(payload["identity"]["appArtifacts"]), {"android", "ios"})
+            self.assertEqual(payload["identity"]["releaseClass"], "research")
+            self.assertEqual(payload["identity"]["productLifecycleState"], "research")
+            self.assertEqual(
+                payload["identity"]["dataSourceIdentity"],
+                {
+                    "sourceRevision": SOURCE_REVISION,
+                    "sourceDigest": SOURCE_DIGEST,
+                    "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+                },
+            )
+            self.assertEqual(
+                payload["identity"]["activationEnvelopeDigest"],
+                _document_digest(payload["identity"]["activationEnvelope"]),
+            )
+            self.assertEqual(
+                set(payload["identity"]["appArtifacts"]), {"android", "ios"}
+            )
             self.assertEqual(
                 payload["identity"]["objectIds"]["entityRefs"],
                 ["entity:west-lake"],
@@ -691,17 +807,71 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             self.assertEqual(
                 payload["identity"]["mediaProbe"]["premiumPlayableVideos"], 1
             )
+            self.assertEqual(payload["identity"]["mediaProbe"]["avatarAssets"], 4)
+            self.assertEqual(payload["identity"]["mediaProbe"]["imageAssets"], 1)
             self.assertEqual(
-                payload["identity"]["mediaProbe"]["avatarAssets"], 4
+                payload["identity"]["mediaReadback"]["deliveryMode"],
+                "private_signed",
             )
-            self.assertEqual(
-                payload["identity"]["mediaProbe"]["imageAssets"], 1
-            )
-            self.assertEqual(payload["identity"]["videoDelivery"]["rangeStatus"], 206)
+            self.assertNotIn("publicUrl", payload["identity"]["mediaReadback"])
             self.manifest_files.assert_called_once()
             self.data_evidence.assert_called_once()
             self.app_readback.assert_called_once()
-            self.assertTrue(all("sha256" in value for key, value in payload["evidence"].items() if key != "appArtifactReceipts"))
+            self.assertTrue(
+                all(
+                    "sha256" in value
+                    for key, value in payload["evidence"].items()
+                    if key != "appArtifactReceipts"
+                )
+            )
+
+    def test_research_media_validation_never_enters_public_video_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            readiness_path = _write(root / "release-readiness.json", {"passed": True})
+            receipt_ref = "env/alpha/runs/data-release/research/isolation.json"
+            receipt_path = _write(root / receipt_ref, {"outcome": "PASS"})
+            summary = {
+                "releaseId": RELEASE_ID,
+                "manifestDigest": RELEASE_DIGEST,
+                "subjectHash": SUBJECT_HASH,
+                "receiptRef": receipt_ref,
+                "receiptDigest": DIGEST_A,
+                "anonymousContentStatus": 403,
+                "anonymousMediaStatus": 403,
+                "signedMediaTtlSeconds": 300,
+                "mediaAuditEventId": "audit-media-001",
+            }
+            with (
+                mock.patch.object(data_validator, "output_root", return_value=root),
+                mock.patch.object(
+                    data_validator,
+                    "verify_research_content_isolation",
+                    return_value=summary,
+                ) as isolation,
+                mock.patch.object(
+                    data_validator,
+                    "load_release_content_identity",
+                    side_effect=AssertionError("public video path must not run"),
+                ),
+            ):
+                result = data_validator.validate_data_evidence(
+                    data_output_root=root,
+                    readiness_path=readiness_path,
+                    rollback_path=root / "unused-rollback.json",
+                    media_readback_path=receipt_path,
+                    environment="alpha",
+                    target="alpha-local",
+                    expected_release={
+                        "releaseId": RELEASE_ID,
+                        "releaseDigest": RELEASE_DIGEST,
+                        "verifyRunId": "verify-001",
+                        "releaseClass": "research",
+                    },
+                )
+            isolation.assert_called_once()
+            self.assertEqual(result["deliveryMode"], "private_signed")
+            self.assertNotIn("publicUrl", result)
 
     def test_every_required_input_class_is_fail_closed_and_writes_nothing(self) -> None:
         missing = [
@@ -713,13 +883,15 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             "case",
             "telemetry",
             "rollback",
-            "video",
+            "media",
             "app",
         ]
         for label in missing:
             with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
                 fixture = Fixture(Path(directory))
-                target = fixture.app_paths[0] if label == "app" else fixture.paths[label]
+                target = (
+                    fixture.app_paths[0] if label == "app" else fixture.paths[label]
+                )
                 target.unlink()
                 output = Path(directory) / "identity.json"
                 self.assertEqual(renderer.main(fixture.argv(output)), 2)
@@ -727,7 +899,10 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
 
     def test_canonical_bundle_and_data_recomputation_are_fail_closed(self) -> None:
         for validator in ("manifest", "data"):
-            with self.subTest(validator=validator), tempfile.TemporaryDirectory() as directory:
+            with (
+                self.subTest(validator=validator),
+                tempfile.TemporaryDirectory() as directory,
+            ):
                 fixture = Fixture(Path(directory))
                 output = Path(directory) / "identity.json"
                 if validator == "manifest":
@@ -773,10 +948,36 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
             self.assertEqual(renderer.main(fixture.argv(output)), 2)
             self.assertFalse(output.exists())
 
-    def test_identity_drift_skipped_unknown_synthetic_and_attempt_reuse_block(self) -> None:
+    def test_source_identity_and_research_commercial_drift_are_gate_block(self) -> None:
+        for mutation in ("source", "lifecycle"):
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                fixture = Fixture(Path(directory))
+                readiness = json.loads(fixture.paths["readiness"].read_text())
+                readiness.pop("verificationChecksum")
+                if mutation == "source":
+                    readiness["activationEnvelope"]["sourceDigest"] = DIGEST_B
+                    readiness["activationEnvelopeDigest"] = _document_digest(
+                        readiness["activationEnvelope"]
+                    )
+                else:
+                    readiness["productLifecycleState"] = "commercial"
+                _write(fixture.paths["readiness"], _checksum(readiness))
+                output = Path(directory) / "identity.json"
+                self.assertEqual(renderer.main(fixture.argv(output)), 2)
+                self.assertFalse(output.exists())
+
+    def test_identity_drift_skipped_unknown_synthetic_and_attempt_reuse_block(
+        self,
+    ) -> None:
         mutations = ("identity", "skipped", "unknown", "synthetic", "reuse")
         for mutation in mutations:
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as directory,
+            ):
                 fixture = Fixture(Path(directory))
                 if mutation == "identity":
                     payload = json.loads(fixture.paths["telemetry"].read_text())
@@ -797,16 +998,23 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
                 else:
                     payload = json.loads(fixture.paths["case"].read_text())
                     wrappers = list(payload["runtimeEvidence"].values())
-                    wrappers[1]["evidence"]["samples"][0]["attemptId"] = wrappers[0]["evidence"]["samples"][0]["attemptId"]
+                    wrappers[1]["evidence"]["samples"][0]["attemptId"] = wrappers[0][
+                        "evidence"
+                    ]["samples"][0]["attemptId"]
                     _write(fixture.paths["case"], payload)
                 output = Path(directory) / "identity.json"
                 _write(output, {"schema": renderer.SCHEMA, "status": "passed"})
                 self.assertEqual(renderer.main(fixture.argv(output)), 2)
                 self.assertFalse(output.exists())
 
-    def test_manifest_readiness_and_prod_twenty_run_contract_are_fail_closed(self) -> None:
+    def test_manifest_readiness_and_prod_twenty_run_contract_are_fail_closed(
+        self,
+    ) -> None:
         for mutation in ("manifest-shape", "object-closure", "prod-run-count"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as directory,
+            ):
                 fixture = Fixture(
                     Path(directory),
                     environment="prod" if mutation == "prod-run-count" else "alpha",
@@ -836,7 +1044,10 @@ class ReleaseBoundEnvironmentIdentityContractTest(unittest.TestCase):
 
     def test_prod_dry_run_and_incomplete_rollback_are_not_terminal(self) -> None:
         for mutation in ("dry-run", "incomplete-rollback"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+            with (
+                self.subTest(mutation=mutation),
+                tempfile.TemporaryDirectory() as directory,
+            ):
                 fixture = Fixture(Path(directory), environment="prod")
                 if mutation == "dry-run":
                     payload = json.loads(fixture.paths["import"].read_text())

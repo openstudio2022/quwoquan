@@ -20,14 +20,14 @@ const (
 	profileSearchOutboxMaxBackoff  = time.Minute
 )
 
-// UserProfileSearchProjectionPublisher reconciles a durable profile projection
-// coordinate against the authoritative UserProfile. Returning nil means the
-// ES/OpenSearch write has succeeded and the durable checkpoint may advance.
+// UserProfileSearchProjectionPublisher appends the self-contained projection
+// fact to the durable User stream. Returning nil means transport append has
+// succeeded and the User-owned outbox checkpoint may advance; Search owns the
+// provider write and its independent consumer checkpoint.
 type UserProfileSearchProjectionPublisher interface {
 	PublishUserProfileSearch(
 		ctx context.Context,
-		eventType string,
-		userID string,
+		event userports.UserProfileSearchOutboxEvent,
 	) error
 }
 
@@ -38,7 +38,7 @@ type UserProfileSearchOutboxObserver interface {
 
 // UserProfileSearchOutboxRelay retries the ordinary UserProfile search
 // projection indefinitely. Unlike lifecycle streams it has no terminal-drop
-// state: an unacknowledged ES projection remains a recoverable divergence.
+// state: an unappended durable event remains a recoverable divergence.
 type UserProfileSearchOutboxRelay struct {
 	store     userports.UserProfileSearchOutboxStore
 	publisher UserProfileSearchProjectionPublisher
@@ -119,17 +119,13 @@ func (relay *UserProfileSearchOutboxRelay) RelayOnce(
 		relay.recordSuccessfulScan(now)
 		return false, nil
 	}
-	if err := relay.publisher.PublishUserProfileSearch(
-		ctx,
-		event.EventType,
-		event.UserID,
-	); err != nil {
+	if err := relay.publisher.PublishUserProfileSearch(ctx, event); err != nil {
 		return relay.handleProjectionFailure(
 			ctx,
 			event,
 			now,
 			profileSearchOutboxFailure(
-				userports.UserProfileSearchOutboxFailureProject,
+				userports.UserProfileSearchOutboxFailurePublish,
 				err,
 			),
 		)

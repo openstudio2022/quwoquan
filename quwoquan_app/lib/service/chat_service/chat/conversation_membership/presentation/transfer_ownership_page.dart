@@ -21,6 +21,7 @@ import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/runtime/di/conversation_members_provider.dart';
+import 'package:uuid/uuid.dart';
 
 /// 群主转让页 — 选择成员后确认弹窗
 class TransferOwnershipPage extends ConsumerStatefulWidget {
@@ -40,6 +41,9 @@ class TransferOwnershipPage extends ConsumerStatefulWidget {
 
 class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
   String _searchQuery = '';
+  bool _submitting = false;
+  String? _pendingMemberId;
+  String? _pendingIdempotencyKey;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -49,6 +53,7 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
   }
 
   void _onMemberSelected(ConversationMemberListRow member) {
+    if (_submitting) return;
     final name = member.displayName;
 
     showAppCupertinoDialog<void>(
@@ -68,78 +73,90 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
             child: Text(FoundationText.confirm),
             onPressed: () async {
               Navigator.pop(context);
-              try {
-                await ref
-                    .read(
-                      conversationMembersProvider(
-                        widget.conversationId,
-                      ).notifier,
-                    )
-                    .transferOwnership(member.userId);
-                unawaited(
-                  widget.telemetryTracker.track(
-                    action: ChatInteractionAction.groupGovernance,
-                    outcome: ChatInteractionOutcome.succeeded,
-                    governanceAction: ChatGovernanceAction.ownershipTransfer,
-                    pageName: PageNames.chatTransferOwnership,
-                    surfaceId: AppUiSurfaces.chatTransferOwnership.id,
-                  ),
-                );
-                if (mounted) context.pop();
-              } catch (error) {
-                unawaited(
-                  widget.telemetryTracker.track(
-                    action: ChatInteractionAction.groupGovernance,
-                    outcome: ChatInteractionOutcome.failed,
-                    governanceAction: ChatGovernanceAction.ownershipTransfer,
-                    pageName: PageNames.chatTransferOwnership,
-                    surfaceId: AppUiSurfaces.chatTransferOwnership.id,
-                    error: error,
-                  ),
-                );
-                if (!mounted) {
-                  return;
-                }
-                final resolved = runtimeErrorSemantic(
-                  context,
-                  error: error,
-                  category: UiErrorCategory.submit,
-                  scope: UiErrorScope.global,
-                );
-                final semantic = UiErrorSemantic(
-                  category: resolved.category,
-                  scope: resolved.scope,
-                  title: ChatText.transferOwnershipIncompleteTitle,
-                  message: resolved.message,
-                  secondaryMessage: resolved.secondaryMessage,
-                  primaryAction: const UiErrorAction(
-                    type: UiErrorActionType.retry,
-                    label: ContentText.tryAgain,
-                  ),
-                  secondaryAction: resolved.secondaryAction,
-                  dismissible: resolved.dismissible,
-                  sourceCode: resolved.sourceCode,
-                  failureKind: resolved.failureKind,
-                  recoveryAction: resolved.recoveryAction,
-                  presentation: resolved.presentation,
-                  tone: resolved.tone,
-                );
-                await AppActionErrorFeedback.show(
-                  context,
-                  semantic: semantic,
-                  onAction: (action) async {
-                    if (action.type == UiErrorActionType.retry ||
-                        action.type == UiErrorActionType.resubmit) {
-                      _onMemberSelected(member);
-                    }
-                  },
-                );
-              }
+              await _submitTransfer(member);
             },
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _submitTransfer(ConversationMemberListRow member) async {
+    if (_submitting) return;
+    final sameIntent = _pendingMemberId == member.userId;
+    final idempotencyKey = sameIntent && _pendingIdempotencyKey != null
+        ? _pendingIdempotencyKey!
+        : const Uuid().v4();
+    setState(() {
+      _submitting = true;
+      _pendingMemberId = member.userId;
+      _pendingIdempotencyKey = idempotencyKey;
+    });
+    try {
+      await ref
+          .read(conversationMembersProvider(widget.conversationId).notifier)
+          .transferOwnership(member.userId, idempotencyKey: idempotencyKey);
+      unawaited(
+        widget.telemetryTracker.track(
+          action: ChatInteractionAction.groupGovernance,
+          outcome: ChatInteractionOutcome.succeeded,
+          governanceAction: ChatGovernanceAction.ownershipTransfer,
+          pageName: PageNames.chatTransferOwnership,
+          surfaceId: AppUiSurfaces.chatTransferOwnership.id,
+        ),
+      );
+      if (mounted) {
+        setState(() => _submitting = false);
+        context.pop();
+      }
+    } catch (error) {
+      unawaited(
+        widget.telemetryTracker.track(
+          action: ChatInteractionAction.groupGovernance,
+          outcome: ChatInteractionOutcome.failed,
+          governanceAction: ChatGovernanceAction.ownershipTransfer,
+          pageName: PageNames.chatTransferOwnership,
+          surfaceId: AppUiSurfaces.chatTransferOwnership.id,
+          error: error,
+        ),
+      );
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      final resolved = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      );
+      final semantic = UiErrorSemantic(
+        category: resolved.category,
+        scope: resolved.scope,
+        title: ChatText.transferOwnershipIncompleteTitle,
+        message: resolved.message,
+        secondaryMessage: resolved.secondaryMessage,
+        primaryAction: const UiErrorAction(
+          type: UiErrorActionType.retry,
+          label: ContentText.tryAgain,
+        ),
+        secondaryAction: resolved.secondaryAction,
+        dismissible: resolved.dismissible,
+        sourceCode: resolved.sourceCode,
+        failureKind: resolved.failureKind,
+        recoveryAction: resolved.recoveryAction,
+        presentation: resolved.presentation,
+        tone: resolved.tone,
+      );
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: semantic,
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _submitTransfer(member);
+          }
+        },
+      );
+    }
   }
 
   @override
@@ -171,8 +188,43 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
             onChanged: (v) => setState(() => _searchQuery = v),
           ),
           Expanded(
-            child: membersState.isLoading
+            child: membersState.isLoading && membersState.members.isEmpty
                 ? AppRequestFeedback.section()
+                : !membersState.isOwner
+                ? AppPageErrorState(
+                    semantic: runtimeErrorSemantic(
+                      context,
+                      error: StateError(
+                        'ownership transfer requires the current owner',
+                      ),
+                      category: UiErrorCategory.permissionRequired,
+                      scope: UiErrorScope.page,
+                    ),
+                  )
+                : membersState.error != null && membersState.members.isEmpty
+                ? AppPageErrorState(
+                    semantic: runtimeErrorSemantic(
+                      context,
+                      error: membersState.error!,
+                      category: UiErrorCategory.pageLoad,
+                      scope: UiErrorScope.page,
+                    ),
+                    onRecovery: (action) async {
+                      if (action.type != UiErrorActionType.retry &&
+                          action.type != UiErrorActionType.resubmit) {
+                        return UiRecoveryOutcome.cancelled;
+                      }
+                      return await ref
+                              .read(
+                                conversationMembersProvider(
+                                  widget.conversationId,
+                                ).notifier,
+                              )
+                              .load()
+                          ? UiRecoveryOutcome.recovered
+                          : UiRecoveryOutcome.stillBlocked;
+                    },
+                  )
                 : ListView(
                     padding: EdgeInsets.fromLTRB(
                       AppSpacing.containerMd,
@@ -181,6 +233,28 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
                       AppSpacing.containerLg,
                     ),
                     children: [
+                      if (membersState.error != null)
+                        AppSectionErrorCard(
+                          semantic: runtimeErrorSemantic(
+                            context,
+                            error: membersState.error!,
+                            category: UiErrorCategory.sectionLoad,
+                            scope: UiErrorScope.section,
+                          ),
+                          onAction: (action) async {
+                            if (action.type != UiErrorActionType.retry &&
+                                action.type != UiErrorActionType.resubmit) {
+                              return;
+                            }
+                            await ref
+                                .read(
+                                  conversationMembersProvider(
+                                    widget.conversationId,
+                                  ).notifier,
+                                )
+                                .load();
+                          },
+                        ),
                       if (filtered.isNotEmpty)
                         InsetGroupedMemberListCard(
                           isDark: isDark,
@@ -191,7 +265,11 @@ class _TransferOwnershipPageState extends ConsumerState<TransferOwnershipPage> {
                                 isDark: isDark,
                                 member: m,
                                 subtitleText: null,
-                                onTap: () => _onMemberSelected(m),
+                                onTap: () {
+                                  if (!_submitting) {
+                                    _onMemberSelected(m);
+                                  }
+                                },
                               ),
                           ],
                         ),

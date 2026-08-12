@@ -102,7 +102,7 @@ func TestCanonicalRegistryRegistersDeviceActionsWithoutCloudHandlers(t *testing.
 			return toolpkg.Result{Output: map[string]any{}}, nil
 		}
 	}
-	if err := toolpkg.RegisterCanonical(&registry, handlers); err != nil {
+	if err := toolpkg.RegisterCanonical(&registry, handlers, nil); err != nil {
 		t.Fatalf("register canonical production tools: %v", err)
 	}
 	for _, toolName := range toolpkg.CanonicalToolNames() {

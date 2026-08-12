@@ -85,6 +85,12 @@ type IntersectionHintDoc struct {
 // PostDoc 是灌入运行库的文章文档（与 publish post manifest + article.md 对齐）。
 type PostDoc struct {
 	PostRef               string                             `json:"postRef" bson:"postRef"`
+	ContentID             string                             `json:"contentId" bson:"contentId"`
+	ContentVersion        int64                              `json:"contentVersion" bson:"contentVersion"`
+	PoolSourceType        string                             `json:"poolSourceType" bson:"poolSourceType"`
+	VariantPurpose        string                             `json:"variantPurpose" bson:"variantPurpose"`
+	Admission             ContentAdmission                   `json:"admission" bson:"admission"`
+	PoolStatus            string                             `json:"poolStatus" bson:"poolStatus"`
 	ContentType           string                             `json:"contentType" bson:"contentType"`
 	ContentIdentity       string                             `json:"contentIdentity" bson:"contentIdentity"`
 	Title                 string                             `json:"title" bson:"title"`
@@ -97,6 +103,8 @@ type PostDoc struct {
 	IntersectionHints     []IntersectionHintDoc              `json:"intersectionHints" bson:"intersectionHints"`
 	SemanticMentions      []postmodel.PostSemanticMention    `json:"semanticMentions" bson:"semanticMentions"`
 	AuthorID              string                             `json:"authorId" bson:"authorId"`
+	AuthorDisplayName     string                             `json:"authorDisplayNameSnapshot" bson:"authorDisplayNameSnapshot"`
+	AuthorAvatarURL       string                             `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
 	CreatorProfileID      string                             `json:"creatorProfileId" bson:"creatorProfileId"`
 	CreatorArchetype      string                             `json:"creatorArchetype" bson:"creatorArchetype"`
 	CreatorProfileVersion string                             `json:"creatorProfileVersion" bson:"creatorProfileVersion"`
@@ -252,10 +260,28 @@ func loadReleaseJSON(path string, target any) error {
 }
 
 type creatorProfileDoc struct {
-	Schema    string `json:"schema"`
-	CreatorID string `json:"creatorId"`
-	UserID    string `json:"userId"`
-	AuthorID  string `json:"authorId"`
+	Schema      string                `json:"schema"`
+	CreatorID   string                `json:"creatorId"`
+	UserID      string                `json:"userId"`
+	AuthorID    string                `json:"authorId"`
+	DisplayName string                `json:"displayName"`
+	AvatarAsset *creatorMediaAssetRef `json:"avatarAsset"`
+}
+
+type creatorMediaAssetRef struct {
+	AssetID string `json:"assetId"`
+	Kind    string `json:"kind"`
+	SHA256  string `json:"sha256"`
+}
+
+// CreatorAuthorSnapshot is the immutable creator profile projection used by
+// imported Posts. It keeps the public author identity bound to the same
+// release object closure as authorId instead of asking the App to invent a
+// fallback display name or avatar.
+type CreatorAuthorSnapshot struct {
+	AuthorID    string
+	DisplayName string
+	AvatarURL   string
 }
 
 type creatorImportReceipt struct {
@@ -316,11 +342,17 @@ func LoadReleaseMediaAssets(releaseRoot, expectedReleaseID string) (map[string]R
 	return runtimemedia.LoadReleaseMediaAssets(releaseRoot, expectedReleaseID)
 }
 
-// LoadCreatorAuthorIDs makes the release's public-author closure explicit for
-// content import. A post can never be materialized before its author profile
-// has been imported by user-service.
-func LoadCreatorAuthorIDs(objectRoot string, filter map[string]bool) (map[string]bool, error) {
-	authors := make(map[string]bool, len(filter))
+// LoadCreatorAuthorSnapshots makes the release's public-author closure,
+// display name, and optional avatar explicit for content import. A Post can
+// never be materialized before its canonical creator profile has been imported
+// by user-service and projected into the Post snapshot fields.
+func LoadCreatorAuthorSnapshots(
+	objectRoot string,
+	filter map[string]bool,
+	releaseAssets map[string]ReleaseMediaAsset,
+	mediaAvatarBaseURL string,
+) (map[string]CreatorAuthorSnapshot, error) {
+	authors := make(map[string]CreatorAuthorSnapshot, len(filter))
 	for ref := range filter {
 		path := filepath.Join(objectRoot, "creators", filepath.FromSlash(ref), "profile.json")
 		raw, err := os.ReadFile(path)
@@ -331,16 +363,45 @@ func LoadCreatorAuthorIDs(objectRoot string, filter map[string]bool) (map[string
 		if err := json.Unmarshal(raw, &profile); err != nil {
 			return nil, fmt.Errorf("decode creator profile %s: %w", ref, err)
 		}
+		profile.DisplayName = strings.TrimSpace(profile.DisplayName)
 		if profile.Schema != "quwoquan_data.creator_profile" || profile.CreatorID != ref ||
-			strings.TrimSpace(profile.AuthorID) == "" || profile.UserID != profile.AuthorID {
+			strings.TrimSpace(profile.AuthorID) == "" || profile.UserID != profile.AuthorID ||
+			profile.DisplayName == "" {
 			return nil, fmt.Errorf("creator profile invalid: %s", ref)
 		}
-		if authors[profile.AuthorID] {
+		if _, exists := authors[profile.AuthorID]; exists {
 			return nil, fmt.Errorf("creator authorId is duplicated: %s", profile.AuthorID)
 		}
-		authors[profile.AuthorID] = true
+		avatarURL := ""
+		if profile.AvatarAsset != nil {
+			resolved, err := runtimemedia.ResolveReleaseMediaAsset(
+				releaseAssets,
+				runtimemedia.MediaDeliveryBases{Avatar: mediaAvatarBaseURL},
+				profile.AvatarAsset.AssetID,
+				profile.AvatarAsset.Kind,
+				profile.AvatarAsset.SHA256,
+				"creators/"+ref,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("creator %s avatar differs from release media authority: %w", ref, err)
+			}
+			avatarURL = resolved.PublicURL
+		}
+		authors[profile.AuthorID] = CreatorAuthorSnapshot{
+			AuthorID:    profile.AuthorID,
+			DisplayName: profile.DisplayName,
+			AvatarURL:   avatarURL,
+		}
 	}
 	return authors, nil
+}
+
+func CreatorAuthorIDs(snapshots map[string]CreatorAuthorSnapshot) map[string]bool {
+	authors := make(map[string]bool, len(snapshots))
+	for authorID := range snapshots {
+		authors[authorID] = true
+	}
+	return authors
 }
 
 func ValidateCreatorImportReceipt(path, releaseID string, expectedAuthors map[string]bool) error {
@@ -439,6 +500,9 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		if jerr := json.Unmarshal(raw, &m); jerr != nil {
 			return jerr
 		}
+		if err := normalizeImportedContentPoolRecord(&m, postRef); err != nil {
+			return err
+		}
 		_ = resolveCreatorProfileVersion(&m)
 		if err := validateCreatorProjection(m, postRef); err != nil {
 			return err
@@ -531,6 +595,12 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		}
 		docs = append(docs, PostDoc{
 			PostRef:               postRef,
+			ContentID:             m.ContentID,
+			ContentVersion:        m.Version,
+			PoolSourceType:        m.PoolSourceType,
+			VariantPurpose:        m.VariantPurpose,
+			Admission:             m.Admission,
+			PoolStatus:            m.PoolStatus,
 			ContentType:           m.ContentType,
 			ContentIdentity:       contentIdentity,
 			Title:                 title,

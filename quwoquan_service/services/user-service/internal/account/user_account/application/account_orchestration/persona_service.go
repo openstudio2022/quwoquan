@@ -292,11 +292,18 @@ func (s *PersonaService) GetActivePersonaContextView(ctx context.Context, ownerI
 		return nil, err
 	}
 	if owner == nil {
-		return map[string]any{}, nil
+		return nil, generated.AppErrorFromInternalError(
+			"active Persona owner profile unavailable",
+		)
+	}
+	if persona == nil {
+		return nil, generated.AppErrorFromInternalError(
+			"active Persona unavailable",
+		)
 	}
 	view := buildPersonaProfileView(owner, persona)
 	personaVersion := 1
-	if persona != nil && persona.Version > personaVersion {
+	if persona.Version > personaVersion {
 		personaVersion = persona.Version
 	}
 	return map[string]any{
@@ -304,9 +311,9 @@ func (s *PersonaService) GetActivePersonaContextView(ctx context.Context, ownerI
 		"personaId":              view["personaId"],
 		"displayName":            view["displayName"],
 		"avatarUrl":              view["avatarUrl"],
-		"avatarVersion":          view["avatarVersion"],
+		"avatarVersion":          resolvedPersonaAvatarVersion(persona),
 		"subjectType":            "persona",
-		"isPrimary":              persona != nil && persona.IsPrimary,
+		"isPrimary":              persona.IsPrimary,
 		"personaSnapshotVersion": personaVersion,
 		"sourceSurfaceId":        "",
 		"explicitOverride":       false,

@@ -6,7 +6,6 @@ from internal.recommendation.ranked_recommendation_window.adapters.inbound.confi
 )
 from internal.recommendation.ranked_recommendation_window.adapters.inbound.stream.experiment_policy_consumer import (
     ExperimentPolicyConsumer,
-    STREAM as POLICY_STREAM,
 )
 from internal.recommendation.ranked_recommendation_window.domain.experiment_policy import (
     ExperimentAssignments,
@@ -18,6 +17,14 @@ from internal.recommendation.ranked_recommendation_window.domain.experiment_poli
 from internal.recommendation.ranked_recommendation_window.infrastructure.experiment_assignment_publisher import (
     RedisExperimentAssignmentPublisher,
     STREAM as ASSIGNMENT_STREAM,
+)
+from internal.recommendation.ranked_recommendation_window.infrastructure.mongo_experiment_policy_store import (
+    COLLECTION,
+    MongoExperimentPolicyStore,
+)
+from internal.recommendation.ranked_recommendation_window.infrastructure.redis_experiment_policy_stream import (
+    STREAM as POLICY_STREAM,
+    RedisExperimentPolicyStream,
 )
 
 
@@ -40,7 +47,7 @@ def test_product_ops_policy_is_projected_and_assignment_observation_is_published
         )
     ]
     consumer = ExperimentPolicyConsumer(
-        redis_client=redis,
+        stream=RedisExperimentPolicyStream(redis),
         store=store,
         assignments=assignments,
         consumer="local-contract",
@@ -101,6 +108,14 @@ experiments:
     } == {"rule": 10_000, "model": 0}
 
 
+def test_experiment_policy_store_startup_relies_only_on_declared_id_index() -> None:
+    collection = _CollectionWithoutCustomIndexes()
+    store = MongoExperimentPolicyStore({COLLECTION: collection})
+
+    assert store.ensure_indexes() is None
+    assert collection.create_index_calls == 0
+
+
 class _Store:
     def __init__(self) -> None:
         self.policy = None
@@ -110,6 +125,15 @@ class _Store:
         if self.policy is None or canonical.revision > self.policy.revision:
             self.policy = canonical
         return self.policy
+
+
+class _CollectionWithoutCustomIndexes:
+    def __init__(self) -> None:
+        self.create_index_calls = 0
+
+    def create_index(self, *_args, **_kwargs):
+        self.create_index_calls += 1
+        raise AssertionError("ranked recommendation policy declares no custom index")
 
 
 class _Redis:

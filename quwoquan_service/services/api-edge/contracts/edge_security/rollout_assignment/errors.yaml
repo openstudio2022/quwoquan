@@ -1,0 +1,27 @@
+description: API Edge 生产灰度裁决的 canonical 失败。
+errors:
+- code: GATEWAY.MIDDLEWARE.rollout_state_unavailable
+  reason: rollout_state_unavailable
+  http_status: 503
+  emitted_by:
+  - {surface: gateway}
+  recovery_action: retry
+  recovery_after_seconds: 1
+  disruption_level: snackbar
+  dart_const: rolloutStateUnavailable
+  go_const: ErrRolloutStateUnavailable
+  user_message:
+    zh: 发布路由暂不可用，请稍后重试
+    en: Release routing is temporarily unavailable
+- code: GATEWAY.USER.client_upgrade_required
+  reason: client_upgrade_required
+  http_status: 426
+  emitted_by:
+  - {surface: gateway}
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: clientUpgradeRequired
+  go_const: ErrClientUpgradeRequired
+  user_message:
+    zh: 当前版本已不受支持，请先完成更新
+    en: This app version is no longer supported; update to continue

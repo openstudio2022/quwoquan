@@ -34,7 +34,8 @@ final class OperationPrivacyRedactor {
       _policies[operationId.trim()];
 
   /// 全部已登记 operation，供门禁与测试枚举。
-  List<String> get operationIds => _policies.keys.toList(growable: false)..sort();
+  List<String> get operationIds =>
+      _policies.keys.toList(growable: false)..sort();
 
   /// 按 `operation.privacy` 对将要落日志的载荷脱敏。
   ///

@@ -15,6 +15,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.WindowInsetsController;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -57,7 +58,13 @@ public final class StartupGateActivity extends Activity {
   private Button recoveryPrimary;
   private Button recoveryWeb;
   private boolean mainHandoffStarted;
-  private boolean normalStaticFrameDrawn;
+  private boolean normalLaunchHandoffArmed;
+  private boolean normalLaunchSurfaceReady;
+  private boolean normalWindowFocusConfirmed;
+  private boolean normalWindowFocusConfirmationDispatched;
+  private boolean normalWindowFocusReleaseRequested;
+  private boolean normalWindowFocusReleased;
+  private boolean normalHandoffDispatchPosted;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -108,6 +115,38 @@ public final class StartupGateActivity extends Activity {
   }
 
   @Override
+  public void onWindowFocusChanged(boolean hasFocus) {
+    super.onWindowFocusChanged(hasFocus);
+    if (!normalLaunchHandoffArmed) {
+      return;
+    }
+    if (hasFocus) {
+      if (normalWindowFocusConfirmed) {
+        return;
+      }
+      normalWindowFocusConfirmed = true;
+      // Wait for this callback to return before changing the native window's
+      // focusability. Otherwise the focus-enter event itself can remain
+      // unacknowledged while Flutter occupies the process main thread.
+      mainHandler.post(
+          () -> {
+            if (isFinishing() || isDestroyed() || mainHandoffStarted) {
+              return;
+            }
+            normalWindowFocusConfirmationDispatched = true;
+            Log.i(STARTUP_TAG, "android_gate_window_focus_confirmed");
+            requestWindowFocusReleaseWhenReady();
+          });
+      return;
+    }
+    if (!normalWindowFocusReleaseRequested || normalWindowFocusReleased) {
+      return;
+    }
+    normalWindowFocusReleased = true;
+    scheduleFlutterMainHandoffWhenReady();
+  }
+
+  @Override
   protected void onDestroy() {
     mainHandler.removeCallbacksAndMessages(null);
     recoveryTitle = null;
@@ -142,6 +181,8 @@ public final class StartupGateActivity extends Activity {
   }
 
   private void showNativeLaunchFrameThenStartFlutter() {
+    normalLaunchHandoffArmed = true;
+    normalLaunchSurfaceReady = false;
     final FrameLayout staticFrame = new FrameLayout(this);
     staticFrame.setBackgroundResource(R.drawable.launch_background);
     setContentView(staticFrame);
@@ -149,10 +190,10 @@ public final class StartupGateActivity extends Activity {
         new ViewTreeObserver.OnDrawListener() {
           @Override
           public void onDraw() {
-            if (normalStaticFrameDrawn) {
+            if (normalLaunchSurfaceReady) {
               return;
             }
-            normalStaticFrameDrawn = true;
+            normalLaunchSurfaceReady = true;
             Log.i(STARTUP_TAG, "android_gate_static_frame_drawn");
             // ViewTreeObserver forbids listener removal during its own
             // dispatch. Post cleanup and the Main handoff so this first
@@ -162,7 +203,7 @@ public final class StartupGateActivity extends Activity {
                   if (staticFrame.getViewTreeObserver().isAlive()) {
                     staticFrame.getViewTreeObserver().removeOnDrawListener(this);
                   }
-                  startFlutterMainActivity();
+                  requestWindowFocusReleaseWhenReady();
                 });
           }
         };
@@ -172,16 +213,54 @@ public final class StartupGateActivity extends Activity {
     // only native brand surface and never creates a Flutter Engine in Gate.
     mainHandler.postDelayed(
         () -> {
-          if (!normalStaticFrameDrawn) {
-            normalStaticFrameDrawn = true;
+          if (!normalLaunchSurfaceReady) {
+            normalLaunchSurfaceReady = true;
             if (staticFrame.getViewTreeObserver().isAlive()) {
               staticFrame.getViewTreeObserver().removeOnDrawListener(startAfterFirstDraw);
             }
             Log.w(STARTUP_TAG, "android_gate_static_frame_draw_timeout");
-            startFlutterMainActivity();
+            requestWindowFocusReleaseWhenReady();
           }
         },
         500L);
+  }
+
+  private void requestWindowFocusReleaseWhenReady() {
+    if (!normalLaunchHandoffArmed
+        || !normalLaunchSurfaceReady
+        || !normalWindowFocusConfirmationDispatched
+        || normalWindowFocusReleaseRequested
+        || mainHandoffStarted
+        || isFinishing()) {
+      return;
+    }
+    normalWindowFocusReleaseRequested = true;
+    // MainActivity's fresh Flutter initialization can block this process for
+    // longer than Android's input timeout. Release and acknowledge the native
+    // Gate's focus before starting Main so neither focus-enter nor focus-exit
+    // events are left queued behind Flutter engine startup.
+    getWindow().addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+  }
+
+  private void scheduleFlutterMainHandoffWhenReady() {
+    if (!normalWindowFocusReleased
+        || normalHandoffDispatchPosted
+        || mainHandoffStarted
+        || isFinishing()) {
+      return;
+    }
+    normalHandoffDispatchPosted = true;
+    // Starting Flutter can synchronously occupy this process' main thread for
+    // several seconds on a fresh install. Dispatching from the next main-loop
+    // message guarantees onWindowFocusChanged(false) has returned first, so
+    // both native Gate FocusEvents are acknowledged before Flutter startup.
+    mainHandler.post(
+        () -> {
+          if (!isFinishing() && !isDestroyed()) {
+            Log.i(STARTUP_TAG, "android_gate_window_focus_released");
+            startFlutterMainActivity();
+          }
+        });
   }
 
   @Override

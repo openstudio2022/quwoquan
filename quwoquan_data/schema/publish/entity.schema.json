@@ -80,6 +80,10 @@
         }
       }
     },
+    "sourceAttribution": {
+      "$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution",
+      "description": "Homepage primary source rights and attribution truth; never inferred from primarySource."
+    },
     "structuredFacts": {
       "type": "object",
       "additionalProperties": false,
@@ -185,6 +189,7 @@
     "tagRefs",
     "geoTagRef",
     "primarySource",
-    "sourceUrls"
+    "sourceUrls",
+    "sourceAttribution"
   ]
 }

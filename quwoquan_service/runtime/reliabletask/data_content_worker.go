@@ -3,6 +3,7 @@ package reliabletask
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -30,6 +31,11 @@ var dataContentPayloadFields = map[string]struct{}{
 	"jobSetEnvelopeDigest": {},
 	"jobSetDigest":         {},
 	"actualTaskDigest":     {},
+	"maxAttempts":          {},
+	"workerHostSetDigest":  {},
+	"workerHostGeneration": {},
+	"workerFencingToken":   {},
+	"workerHostScopeId":    {},
 }
 
 // DataContentWorkItem is the single-track worker input decoded from object_job.
@@ -48,6 +54,11 @@ type DataContentWorkItem struct {
 	JobSetEnvelopeDigest string `json:"jobSetEnvelopeDigest"`
 	JobSetDigest         string `json:"jobSetDigest"`
 	ActualTaskDigest     string `json:"actualTaskDigest"`
+	MaxAttempts          int    `json:"maxAttempts"`
+	WorkerHostSetDigest  string `json:"workerHostSetDigest,omitempty"`
+	WorkerHostGeneration int    `json:"workerHostGeneration,omitempty"`
+	WorkerFencingToken   string `json:"workerFencingToken,omitempty"`
+	WorkerHostScopeID    string `json:"workerHostScopeId,omitempty"`
 }
 
 func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, error) {
@@ -70,6 +81,38 @@ func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, err
 			"reliabletask data worker payload schema is invalid",
 		)
 	}
+	hostFieldCount := 0
+	for _, field := range []string{
+		"workerHostSetDigest", "workerHostGeneration",
+		"workerFencingToken", "workerHostScopeId",
+	} {
+		if strings.TrimSpace(task.Payload[field]) != "" {
+			hostFieldCount++
+		}
+	}
+	if hostFieldCount != 0 && hostFieldCount != 4 {
+		return DataContentWorkItem{}, fmt.Errorf(
+			"reliabletask data worker host fence is incomplete",
+		)
+	}
+	hostGeneration := 0
+	if hostFieldCount == 4 {
+		var err error
+		hostGeneration, err = strconv.Atoi(
+			strings.TrimSpace(task.Payload["workerHostGeneration"]),
+		)
+		if err != nil || hostGeneration < 1 {
+			return DataContentWorkItem{}, fmt.Errorf(
+				"reliabletask data worker host generation is invalid",
+			)
+		}
+	}
+	maxAttempts, err := strconv.Atoi(strings.TrimSpace(task.Payload["maxAttempts"]))
+	if err != nil || maxAttempts < 1 {
+		return DataContentWorkItem{}, fmt.Errorf(
+			"reliabletask data worker maxAttempts is invalid",
+		)
+	}
 	item := DataContentWorkItem{
 		RuntimeTaskID:        strings.TrimSpace(task.TaskID),
 		LeaseToken:           strings.TrimSpace(task.LeaseToken),
@@ -85,6 +128,11 @@ func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, err
 		JobSetEnvelopeDigest: strings.TrimSpace(task.Payload["jobSetEnvelopeDigest"]),
 		JobSetDigest:         strings.TrimSpace(task.Payload["jobSetDigest"]),
 		ActualTaskDigest:     strings.TrimSpace(task.Payload["actualTaskDigest"]),
+		MaxAttempts:          maxAttempts,
+		WorkerHostSetDigest:  strings.TrimSpace(task.Payload["workerHostSetDigest"]),
+		WorkerHostGeneration: hostGeneration,
+		WorkerFencingToken:   strings.TrimSpace(task.Payload["workerFencingToken"]),
+		WorkerHostScopeID:    strings.TrimSpace(task.Payload["workerHostScopeId"]),
 	}
 	job := DataContentJob{
 		EntityRef:            item.EntityRef,
@@ -99,6 +147,15 @@ func DecodeDataContentWorkItem(task ReliableAsyncTask) (DataContentWorkItem, err
 		JobSetEnvelopeDigest: item.JobSetEnvelopeDigest,
 		JobSetDigest:         item.JobSetDigest,
 		ActualTaskDigest:     item.ActualTaskDigest,
+		MaxAttempts:          item.MaxAttempts,
+	}
+	if hostFieldCount == 4 {
+		job.WorkerFence = &DataContentWorkerFence{
+			HostSetDigest: item.WorkerHostSetDigest,
+			Generation:    item.WorkerHostGeneration,
+			FencingToken:  item.WorkerFencingToken,
+			HostScopeID:   item.WorkerHostScopeID,
+		}
 	}
 	expectedKey, err := job.ValidateIdentity()
 	if err != nil {
@@ -129,6 +186,7 @@ type DataContentExecutionResult struct {
 	CanonicalObjectRef    string    `json:"canonicalObjectRef,omitempty"`
 	CanonicalObjectSHA256 string    `json:"canonicalObjectSha256,omitempty"`
 	ObjectTransactionID   string    `json:"objectTransactionId,omitempty"`
+	PoolDeliveryIntentID  string    `json:"poolDeliveryIntentId,omitempty"`
 	ResultEnvelopeRef     string    `json:"resultEnvelopeRef"`
 	AcceptanceClass       string    `json:"acceptanceClass"`
 	CompletedAt           time.Time `json:"completedAt"`
@@ -164,6 +222,7 @@ func (r DataContentExecutionResult) validate(item DataContentWorkItem) error {
 		}{
 			{name: "canonicalObjectRef", value: r.CanonicalObjectRef},
 			{name: "objectTransactionId", value: r.ObjectTransactionID},
+			{name: "poolDeliveryIntentId", value: r.PoolDeliveryIntentID},
 		} {
 			if strings.TrimSpace(field.value) == "" {
 				return fmt.Errorf(
@@ -175,6 +234,11 @@ func (r DataContentExecutionResult) validate(item DataContentWorkItem) error {
 		if !validDataContentSHA256(r.CanonicalObjectSHA256) {
 			return fmt.Errorf(
 				"reliabletask canonical data result requires canonicalObjectSha256",
+			)
+		}
+		if !validDataContentSHA256(r.PoolDeliveryIntentID) {
+			return fmt.Errorf(
+				"reliabletask canonical data result requires valid poolDeliveryIntentId",
 			)
 		}
 	case DataContentAcceptanceStageCompleted:
@@ -213,6 +277,7 @@ func (r DataContentExecutionResult) document() map[string]string {
 		"canonicalObjectRef":    strings.TrimSpace(r.CanonicalObjectRef),
 		"canonicalObjectSha256": strings.TrimSpace(r.CanonicalObjectSHA256),
 		"objectTransactionId":   strings.TrimSpace(r.ObjectTransactionID),
+		"poolDeliveryIntentId":  strings.TrimSpace(r.PoolDeliveryIntentID),
 		"resultEnvelopeRef":     strings.TrimSpace(r.ResultEnvelopeRef),
 		"acceptanceClass":       strings.TrimSpace(r.AcceptanceClass),
 		"completedAt":           r.CompletedAt.UTC().Format(time.RFC3339Nano),

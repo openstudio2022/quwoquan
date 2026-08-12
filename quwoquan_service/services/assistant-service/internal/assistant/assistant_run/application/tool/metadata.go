@@ -80,6 +80,36 @@ type ResearchPolicy struct {
 	ChildTargetKinds          []string `json:"childTargetKinds"`
 }
 
+// ExecutionCallCount returns the number of owner/Provider calls represented by
+// one Tool invocation. A discover Tool with parallelInputField always counts
+// the primary query plus every explicitly planned subquery. This is consumed at
+// the final pre-execution budget boundary, so hidden fan-out cannot be charged
+// as one call.
+func (p ResearchPolicy) ExecutionCallCount(input map[string]any) (int, error) {
+	field := strings.TrimSpace(p.ParallelInputField)
+	if p.ResolvedOperation() != ResearchOperationDiscover || field == "" {
+		return 1, nil
+	}
+	if input == nil {
+		return 1, nil
+	}
+	raw, found := input[field]
+	if !found || raw == nil {
+		return 1, nil
+	}
+	switch values := raw.(type) {
+	case []any:
+		return 1 + len(values), nil
+	case []map[string]any:
+		return 1 + len(values), nil
+	default:
+		return 0, fmt.Errorf(
+			"research parallel input %q must be an array",
+			field,
+		)
+	}
+}
+
 func (p ResearchPolicy) ResolvedOperation() string {
 	switch strings.TrimSpace(p.Operation) {
 	case ResearchOperationDiscover:

@@ -76,7 +76,7 @@
 ## 4. 契约引用
 
 - canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml`
-- canonical：`content/test_fixtures/scenarios/content_scenarios.json`
+- local_contract 对象构造器：`quwoquan_app/test/support/runtime/fixtures/object_contract_example_builders.dart#buildObjectContractExampleDocument(content)`；环境交集证据通过 typed capability 和公开 operation 构造。
 - canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_actor_evidence.yaml`
 - canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_target.yaml`
 - canonical：`recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml`

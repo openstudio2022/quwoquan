@@ -60,6 +60,7 @@ func TestGenerateAndCheckAreIdempotent(t *testing.T) {
 		"ContractGraphSHA256",
 		`CanonicalOperationID: "content.post.GetPost"`,
 		"ContractGraphSHA256:",
+		"Transport:",
 		"CommercialStatus:",
 		`"blocked"`,
 	} {

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import fcntl
-import time
 from pathlib import Path
 from typing import Any
 
@@ -11,17 +10,22 @@ from core.runtime_policy import DEFAULT_RUNTIME_PROFILE_ID, load_runtime_policy
 from core.schema import assert_valid
 
 from content.execution.campaign.copy_ready import maybe_write_copy_ready_receipt
-from content.execution.campaign.fleet_transport import (
-    resolve_campaign_fleet_transport,
+from content.execution.campaign.distributed_review_barrier import (
+    wait_for_parallel_review_claims,
+)
+from content.execution.campaign.distributed_runtime import finalize_distributed_runtime
+from content.execution.campaign.distributed_workspace import (
+    capsule_integrity_failure_lanes,
+    load_distributed_capsule,
+    prepare_distributed_capsule,
+    prepare_distributed_workspace,
 )
 from content.execution.campaign.lane import CAMPAIGN_CARRIERS, LaneRunner
 from content.execution.campaign.lane_claim import (
     campaign_lane_claim_session,
     read_lane_claim,
 )
-from content.execution.campaign.observer_binary import (
-    resolve_campaign_observer_binary,
-)
+from content.execution.campaign.lane_command import audited_recovery_kwargs
 from content.execution.campaign.plan import (
     aggregate_status,
     apply_receipt_fields,
@@ -43,16 +47,15 @@ from content.execution.campaign.runtime import (
 )
 from content.execution.campaign.submission import campaign_root, load_submissions
 from content.execution.campaign.workspace import (
-    CampaignLaneWorkspace,
     CampaignRuntimePaths,
     assert_frozen_main_tree,
     release_lane_workspace,
 )
-from content.execution.campaign.distributed_workspace import (
-    prepare_distributed_capsule,
-    prepare_distributed_workspace,
+from content.execution.closure.pool_delivery import (
+    load_execution_pool_delivery_intents,
 )
 from content.execution.identity import validate_execution_id
+
 
 def _load_distributed_plan(
     runtime: CampaignRuntimePaths,
@@ -77,6 +80,7 @@ def _load_distributed_plan(
     ):
         raise ValueError("distributed campaign plan identity or digest drift")
     return plan
+
 
 def _reuse_existing_frozen_campaign(
     runtime: CampaignRuntimePaths,
@@ -134,6 +138,7 @@ def _reuse_existing_frozen_campaign(
         raise ValueError("existing frozen campaign report identity drift")
     return path
 
+
 def _wait_for_parallel_review_claims(
     runtime: CampaignRuntimePaths,
     root_execution_id: str,
@@ -141,45 +146,13 @@ def _wait_for_parallel_review_claims(
     plan: dict[str, Any],
     timeout_seconds: float,
 ) -> None:
-    """Start review only after every frozen lane owns its matching claim."""
-    distributed = plan["distributedRun"]
-    deadline = time.monotonic() + timeout_seconds
-    while True:
-        missing: list[str] = []
-        for carrier in CAMPAIGN_CARRIERS:
-            claim = read_lane_claim(runtime, root_execution_id, carrier)
-            if claim is None:
-                missing.append(carrier)
-                continue
-            if (
-                claim.get("rootExecutionId") != root_execution_id
-                or claim.get("planDigest") != plan["planDigest"]
-                or claim.get("campaignRunId") != distributed["campaignRunId"]
-                or claim.get("campaignGeneration")
-                != distributed["campaignGeneration"]
-                or claim.get("campaignFencingToken")
-                != distributed["campaignFencingToken"]
-                or claim.get("carrier") != carrier
-                or claim.get("executionId")
-                != plan["executionIds"].get(carrier)
-            ):
-                raise ValueError(
-                    f"{carrier} review barrier claim identity drift"
-                )
-            if claim.get("status") not in {"active", "starting", "running"}:
-                raise RuntimeError(
-                    f"{carrier} review barrier claim is not runnable: "
-                    f"{claim.get('status')}"
-                )
-        if not missing:
-            return
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise TimeoutError(
-                "campaign review barrier timed out waiting for lane claims: "
-                + ", ".join(sorted(missing))
-            )
-        time.sleep(min(0.05, remaining))
+    wait_for_parallel_review_claims(
+        runtime,
+        root_execution_id,
+        plan=plan,
+        timeout_seconds=timeout_seconds,
+        read_claim=read_lane_claim,
+    )
 
 
 def freeze_campaign(
@@ -286,11 +259,14 @@ def run_campaign_lane(
     lane_timeout_seconds: float | None = None,
     runtime_paths: CampaignRuntimePaths | None = None,
     lane_runner: LaneRunner | None = None,
+    recover_stage: str | None = None,
+    recovery_reason: str | None = None,
 ) -> Path:
     root_id = validate_execution_id(root_execution_id)
     if carrier not in CAMPAIGN_CARRIERS:
         raise ValueError(f"campaign carrier is invalid: {carrier}")
     runtime = runtime_paths or CampaignRuntimePaths.defaults()
+    recovery = audited_recovery_kwargs(recover_stage, recovery_reason)
     policy = load_runtime_policy(DEFAULT_RUNTIME_PROFILE_ID)
     plan = _load_distributed_plan(runtime, root_id)
     timeout = (
@@ -317,6 +293,7 @@ def run_campaign_lane(
         git_branch=str(plan["gitBranch"]),
         commit_sha=str(plan["gitCommitSha"]),
         source_digest=str(plan["sourceDigest"]),
+        execution_bundle_digest=str(plan["executionBundle"]["digest"]),
     )
     capsule = prepare_distributed_capsule(runtime, plan)
     workspace = prepare_distributed_workspace(
@@ -326,16 +303,6 @@ def run_campaign_lane(
         submissions,
         capsule,
         carrier,
-    )
-    observer = resolve_campaign_observer_binary(
-        runtime,
-        root_id,
-        plan_digest=str(plan["planDigest"]),
-    )
-    fleet = resolve_campaign_fleet_transport(
-        runtime,
-        root_id,
-        plan_digest=str(plan["planDigest"]),
     )
     try:
         with campaign_lane_claim_session(
@@ -372,10 +339,10 @@ def run_campaign_lane(
                     worker_count=1,
                     lane_runner=lane_runner,
                     run_session=session,
-                    observer_binary_binding=observer,
-                    fleet_transport_binding=fleet,
                     carriers=(carrier,),
+                    **recovery,
                 )
+                recovery = {}
                 code, error = reviewed[carrier]
                 if code != 0:
                     raise RuntimeError(error or f"{carrier} review failed")
@@ -397,6 +364,7 @@ def run_campaign_lane(
                 git_branch=str(plan["gitBranch"]),
                 commit_sha=str(plan["gitCommitSha"]),
                 source_digest=str(plan["sourceDigest"]),
+                execution_bundle_digest=str(plan["executionBundle"]["digest"]),
             )
             published = run_phase(
                 {carrier: workspace},
@@ -408,12 +376,20 @@ def run_campaign_lane(
                 worker_count=1,
                 lane_runner=lane_runner,
                 run_session=session,
-                observer_binary_binding=observer,
-                fleet_transport_binding=fleet,
                 carriers=(carrier,),
+                **recovery,
             )
             code, error = published[carrier]
             if code != 0:
+                intents = load_execution_pool_delivery_intents(
+                    expected_execution_id
+                )
+                if code == 10 and len(intents) == int(review["qualifiedCount"]):
+                    session.finish(
+                        status="delivery_pending",
+                        error="DATA.POOL.DELIVERY_UNAVAILABLE",
+                    )
+                    return report_path(runtime, root_id)
                 raise RuntimeError(error or f"{carrier} publish failed")
             receipt = load_lane_receipt(
                 root_id,
@@ -453,7 +429,35 @@ def finalize_campaign(
         submissions = load_submissions(root_id, root=runtime.campaigns_root)
         if set(submissions) != set(CAMPAIGN_CARRIERS):
             raise ValueError("distributed campaign submissions are incomplete")
-        capsule = prepare_distributed_capsule(runtime, plan)
+        frozen_report = read_json(report_path(runtime, root_id))
+        assert_valid(
+            frozen_report,
+            "execution",
+            "content_campaign_report",
+            label=f"frozen campaign report:{root_id}",
+        )
+        try:
+            capsule = load_distributed_capsule(runtime, plan, frozen_report)
+        except (OSError, TypeError, ValueError) as exc:
+            lanes, failure = capsule_integrity_failure_lanes(
+                frozen_report,
+                submissions,
+                detail=str(exc),
+            )
+            return write_report(
+                runtime,
+                root_id,
+                status="blocked",
+                phase="completed",
+                plan_digest=str(plan["planDigest"]),
+                git_branch=str(plan["gitBranch"]),
+                git_commit_sha=str(plan["gitCommitSha"]),
+                source_digest=str(plan["sourceDigest"]),
+                entity_catalog_digest=str(plan["entityCatalogDigest"]),
+                lanes=lanes,
+                started_at=str(plan["frozenAt"]),
+                failure=failure,
+            )
         lanes = {carrier: empty_lane() for carrier in CAMPAIGN_CARRIERS}
         failure_rows: list[str] = []
         for carrier in CAMPAIGN_CARRIERS:
@@ -503,6 +507,39 @@ def finalize_campaign(
                 apply_receipt_fields(lanes, carrier, publish, phase="publish")
             else:
                 claim = read_lane_claim(runtime, root_id, carrier)
+                claim_delivery_pending = bool(
+                    claim
+                    and claim.get("status") == "delivery_pending"
+                    and isinstance(review, dict)
+                    and int(review.get("qualifiedCount") or 0) > 0
+                )
+                intents = (
+                    load_execution_pool_delivery_intents(execution_id)
+                    if claim_delivery_pending
+                    else ()
+                )
+                if (
+                    claim_delivery_pending
+                    and isinstance(review, dict)
+                    and len(intents) == int(review["qualifiedCount"])
+                ):
+                    lane.update(
+                        {
+                            "status": "delivery_pending",
+                            "phase": "publish",
+                            "finalizedCount": 0,
+                            "deliveryPendingCount": len(intents),
+                            "deliveryIntentRefs": [
+                                path.relative_to(runtime.output_root).as_posix()
+                                for _intent, path in intents
+                            ],
+                            "publishReturnCode": 10,
+                            "error": "DATA.POOL.DELIVERY_UNAVAILABLE",
+                        }
+                    )
+                    failure_rows.append(f"{carrier}:delivery_pending")
+                    release_lane_workspace(workspace)
+                    continue
                 lane.update(
                     {
                         "status": "blocked",
@@ -540,6 +577,9 @@ def finalize_campaign(
             str(lanes[carrier]["status"]) in {"finalized", "partial"}
             for carrier in CAMPAIGN_CARRIERS
         ):
+            finalize_distributed_runtime(
+                runtime, root_id, plan=plan, lanes=lanes, status=status
+            )
             maybe_write_copy_ready_receipt(
                 root_execution_id=root_id,
                 plan=plan,
@@ -553,8 +593,4 @@ def finalize_campaign(
         return path
 
 
-__all__ = [
-    "finalize_campaign",
-    "freeze_campaign",
-    "run_campaign_lane",
-]
+__all__ = ["finalize_campaign", "freeze_campaign", "run_campaign_lane"]

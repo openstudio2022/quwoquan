@@ -65,6 +65,14 @@ https://{$QWQ_PUBLIC_WEB_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 	handle /media/* {
 		import media_cors
 		root * /srv/media
+		@object_store_public_slice not file {path}
+		rewrite @object_store_public_slice /{$LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}{uri}
+		reverse_proxy @object_store_public_slice https://object-storage:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT} {
+			transport http {
+				tls_trust_pool file /etc/caddy/tls/object-storage-ca.pem
+				tls_server_name {$QWQ_PUBLIC_UPLOAD_HOST}
+			}
+		}
 		file_server
 	}
 	handle {
@@ -106,12 +114,22 @@ https://{$QWQ_PUBLIC_OPS_HOST}:{$LOCAL_GAMMA_PRODUCT_OPS_PORT:19010} {
 
 https://{$QWQ_PUBLIC_CDN_HOST}:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100} {
 	import public_gamma_tls
-	import media_cors
 	handle /healthz {
 		respond "ok" 200
 	}
-	root * /srv/media
-	file_server
+	handle {
+		import media_cors
+		root * /srv/media
+		@object_store_public_slice not file {path}
+		rewrite @object_store_public_slice /{$LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}{uri}
+		reverse_proxy @object_store_public_slice https://object-storage:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT} {
+			transport http {
+				tls_trust_pool file /etc/caddy/tls/object-storage-ca.pem
+				tls_server_name {$QWQ_PUBLIC_UPLOAD_HOST}
+			}
+		}
+		file_server
+	}
 }
 
 :80 {
@@ -126,6 +144,14 @@ https://{$QWQ_PUBLIC_CDN_HOST}:{$LOCAL_GAMMA_MEDIA_EDGE_PORT:19100} {
 	handle /media/* {
 		import media_cors
 		root * /srv/media
+		@object_store_public_slice not file {path}
+		rewrite @object_store_public_slice /{$LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}{uri}
+		reverse_proxy @object_store_public_slice https://object-storage:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT} {
+			transport http {
+				tls_trust_pool file /etc/caddy/tls/object-storage-ca.pem
+				tls_server_name {$QWQ_PUBLIC_UPLOAD_HOST}
+			}
+		}
 		file_server
 	}
 	handle {

@@ -1,4 +1,4 @@
-"""Approved posts and first-use creators enter canonical in one transaction."""
+"""Approved posts resolve an independently admitted Creator version."""
 from __future__ import annotations
 
 import hashlib
@@ -10,20 +10,29 @@ from pathlib import Path
 
 import pytest
 import yaml
-from content.release.canonical import creator_projection
+from content.release.canonical import creator_projection, post_promotion, post_transaction
 from content.release.canonical.application import apply_object_transaction
 from content.release.canonical.canonical_inventory import load_or_bootstrap_inventory
+from content.release.canonical.content_pool_record import stable_content_id
 from content.release.canonical.object_transaction_audit import (
     audit_object_transaction,
     validate_publish_invariants,
 )
 from content.release.canonical.post_transaction import (
     ObjectTransactionError,
-    build_post_object_transaction_package,
+)
+from content.release.canonical.post_transaction import (
+    build_post_object_transaction_package as _build_post_object_transaction_package,
 )
 from core.schema import validate_result
-from core.source_digest import current_source_digest
+from core.source_digest import (
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
+)
+from core.tree_integrity import tree_integrity_stats
 from governance.coverage import distribution
+from governance.creators.assignment import creator_assignment_from_profile
+from content.templates.registry import TemplateRegistry
 from PIL import Image
 
 EXECUTION_ID = "20260718--travel-image-cold-start--test-region-a--scale-901"
@@ -72,6 +81,85 @@ def _write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
+def _sha(value: object) -> str:
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _source_attribution() -> dict[str, object]:
+    return {
+        "isOriginal": False,
+        "originalCreatorName": "Fixture Photographer",
+        "platform": "Wikimedia Commons",
+        "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+        "originalAssetUrl": "https://upload.wikimedia.org/wikipedia/commons/example.jpg",
+        "attributionText": "Fixture Photographer / CC BY 4.0",
+        "rightsBasis": "CC BY 4.0",
+        "commercialAuthorizationStatus": "unverified",
+        "publicationAdmission": "research_release",
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "2026-07-18T04:00:00Z",
+        "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+    }
+
+
+def build_post_object_transaction_package(
+    *,
+    execution_root: Path,
+    object_ref: str,
+    transaction_id: str,
+    package_root: Path,
+) -> dict[str, object]:
+    """Low-level transaction fixtures pass an explicit frozen intent binding."""
+
+    canonical_ref = object_ref.removeprefix("posts/")
+    object_root = execution_root / "posts" / canonical_ref
+    manifest = json.loads((object_root / "manifest.json").read_text(encoding="utf-8"))
+    content_id = stable_content_id(manifest, canonical_ref)
+    review = object_root / "5.review/attestation.json"
+    digest = "sha256:" + "a" * 64
+    creator_binding = creator_assignment_from_profile(
+        TemplateRegistry.load().creators[str(manifest["creatorProfileId"])]
+    )
+    stable = {
+        "schema": "quwoquan_data.pool_delivery_intent",
+        "executionId": execution_root.name,
+        "carrier": str(manifest["contentType"]),
+        "objectRef": canonical_ref,
+        "contentObjectDir": f"posts/{canonical_ref}",
+        "objectId": content_id,
+        "contentId": content_id,
+        "version": 1,
+        "poolIdentityReservationId": digest,
+        "reviewEvidenceRef": review.relative_to(execution_root).as_posix(),
+        "reviewEvidenceSha256": "sha256:" + hashlib.sha256(review.read_bytes()).hexdigest(),
+        "creatorBindingMode": "manifest_exact",
+        "creatorBinding": creator_binding,
+        "creatorBindingDigest": _sha(creator_binding),
+        "entityTagBindingDigest": digest,
+        "sourceAttributionDigest": digest,
+        "mediaClosureDigest": digest,
+        "transactionId": transaction_id,
+        "transactionInputDigest": str(tree_integrity_stats(object_root)["merkleRoot"]),
+    }
+    intent = {"intentId": _sha(stable), **stable}
+    return _build_post_object_transaction_package(
+        execution_root=execution_root,
+        object_ref=object_ref,
+        transaction_id=transaction_id,
+        package_root=package_root,
+        pool_delivery_intent=intent,
+    )
+
+
 def _force_commercial_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
     research_policy = distribution.load_content_distribution_policy()
     commercial_policy = replace(
@@ -86,6 +174,16 @@ def _force_commercial_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def _admit_packaged_creator(package_root: Path, publish_root: Path) -> None:
+    package = json.loads(
+        (package_root / "object_transaction_package.json").read_text(encoding="utf-8")
+    )
+    for row in package["closure"]["creatorObjects"]:
+        source = package_root / row["packageRef"]
+        target = publish_root / "creators" / row["creatorRef"]
+        shutil.copytree(source, target)
+
+
 def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     execution = tmp_path / "tasks" / EXECUTION_ID
     post = execution / "posts" / POST_REF
@@ -97,12 +195,28 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
         f"{EXECUTION_ID}--post-"
         f"{hashlib.sha256(POST_REF.encode('utf-8')).hexdigest()[:12]}"
     )
+    target_set = {
+        "executionId": EXECUTION_ID,
+        "entityCatalogDigest": "sha256:" + "4" * 64,
+    }
+    target_set_digest = hashlib.sha256(
+        json.dumps(
+            target_set,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    _write_json(execution / "0.plan/target_set.json", target_set)
     _write_json(
         execution / "execution_manifest.json",
         {
             "executionId": EXECUTION_ID,
             "createdAt": "2026-07-18T04:00:00Z",
-            "sourceDigest": current_source_digest().to_document(),
+            "sourceDigest": current_source_definition_snapshot().to_document(),
+            "executionBundle": current_execution_bundle_identity().to_document(),
+            "targetSetRef": "0.plan/target_set.json",
+            "targetSetDigest": target_set_digest,
         },
     )
     _write_json(
@@ -140,11 +254,14 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
             "vertical": "travel",
             "topicId": "西湖__image_1",
             "contentIdentity": "work",
+            "contentId": "qwq_data_west_lake_image_fixture",
+            "version": 1,
             "contentType": "image",
             "carrier": "image",
             "title": "西湖光影",
             "caption": "湖岸与长桥的光影",
             "creatorProfileId": CREATOR_REF,
+            "sourceAttribution": _source_attribution(),
             "sourceUrls": ["https://commons.wikimedia.org/wiki/File:Example.jpg"],
             "entityRefs": ["/entity/地点/景区/西湖"],
             "tagRefs": ["Topic/旅行/玩法/摄影旅拍"],
@@ -197,14 +314,17 @@ def _fixture(tmp_path: Path) -> tuple[Path, Path, Path, str]:
     return execution, package, publish, transaction_id
 
 
-def test_post_transaction_atomically_projects_creator_and_post(tmp_path: Path) -> None:
+def test_post_transaction_resolves_independently_admitted_creator(
+    tmp_path: Path,
+) -> None:
     execution, package, publish, transaction_id = _fixture(tmp_path)
-    build_post_object_transaction_package(
+    transaction = build_post_object_transaction_package(
         execution_root=execution,
         object_ref=POST_REF,
         transaction_id=transaction_id,
         package_root=package,
     )
+    _admit_packaged_creator(package, publish)
     output = tmp_path / "output"
     audit = audit_object_transaction(
         publish_root=publish,
@@ -230,11 +350,85 @@ def test_post_transaction_atomically_projects_creator_and_post(tmp_path: Path) -
     )
     assert datetime.fromisoformat(published_manifest["publishedAt"]).tzinfo is not None
     assert published_manifest["sourceTaskId"] == EXECUTION_ID
+    assert published_manifest["payloadDigest"].startswith("sha256:")
+    assert published_manifest["sourceIdentity"]["executionId"] == EXECUTION_ID
+    assert (
+        published_manifest["sourceDigest"]
+        == current_source_definition_snapshot().to_document()
+    )
+    assert (
+        published_manifest["executionBundle"]
+        == current_execution_bundle_identity().to_document()
+    )
     assert validate_publish_invariants(publish)["status"] == "passed"
 
 
-def test_text_only_post_transaction_does_not_require_media_asset(tmp_path: Path) -> None:
+def test_post_transaction_same_key_requires_same_payload_digest(
+    tmp_path: Path,
+) -> None:
     execution, package, _publish, transaction_id = _fixture(tmp_path)
+    first = build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    replay = build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    assert replay == first
+
+    content_path = execution / "posts" / POST_REF / "content.md"
+    content_path.write_text("# changed payload\n", encoding="utf-8")
+    with pytest.raises(ObjectTransactionError, match="IDEMPOTENCY_CONFLICT"):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
+
+
+def test_applied_post_pool_digest_repair_appends_record_sequence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(post_transaction, "PUBLISH_ROOT", tmp_path / "identity-publish")
+    execution, package, publish, transaction_id = _fixture(tmp_path)
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    canonical = publish / "posts" / POST_REF
+    shutil.copytree(package / "object", canonical)
+    for root in (package / "object", canonical):
+        record_path = root / "_pool/versions/1.json"
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["payloadDigest"] = record["canonicalObjectDigest"] = (
+            "sha256:" + "0" * 64
+        )
+        _write_json(record_path, record)
+
+    assert post_promotion._repair_applied_pool_record_drift(
+        package_root=package,
+        canonical_post=canonical,
+        canonical_ref=POST_REF,
+    )
+    from content.release.canonical.content_pool_record import latest_pool_record
+
+    repaired = latest_pool_record(canonical, "content")
+    assert repaired is not None
+    assert repaired["recordSequence"] == 2
+    assert repaired["contentVersion"] == 1
+
+
+def test_text_only_post_transaction_does_not_require_media_asset(tmp_path: Path) -> None:
+    execution, package, publish, transaction_id = _fixture(tmp_path)
     manifest_path = execution / "posts" / POST_REF / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["contentType"] = "article"
@@ -243,7 +437,7 @@ def test_text_only_post_transaction_does_not_require_media_asset(tmp_path: Path)
     manifest["assets"] = []
     _write_json(manifest_path, manifest)
 
-    build_post_object_transaction_package(
+    transaction = build_post_object_transaction_package(
         execution_root=execution,
         object_ref=POST_REF,
         transaction_id=transaction_id,
@@ -254,6 +448,229 @@ def test_text_only_post_transaction_does_not_require_media_asset(tmp_path: Path)
         (package / "object/asset.refs.json").read_text(encoding="utf-8")
     )
     assert asset_refs == {"assets": []}
+    assert transaction["publishMediaMode"] == "text_only"
+    assert transaction["closure"]["casRefs"] == []
+    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
+    assert rights == {
+        "schema": "quwoquan_data.asset_rights_closure",
+        "publishMediaMode": "text_only",
+        "assets": [],
+    }
+    _admit_packaged_creator(package, publish)
+    from content.release.canonical.object_transaction_contract import _verify_package
+
+    verified = _verify_package(
+        package,
+        canonical_root=publish,
+        require_target_absent=False,
+    )
+    assert verified["rights"]["assets"] == []
+
+
+def test_pre_audit_text_only_package_adds_missing_media_mode_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.update(
+        contentType="article",
+        carrier="article",
+        publishMediaMode="text_only",
+        assets=[],
+    )
+    _write_json(manifest_path, manifest)
+    first = build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    package_path = package / "object_transaction_package.json"
+    legacy = json.loads(package_path.read_text(encoding="utf-8"))
+    legacy.pop("publishMediaMode")
+    _write_json(package_path, legacy)
+    rights_path = package / "object/rights.json"
+    legacy_rights = json.loads(rights_path.read_text(encoding="utf-8"))
+    legacy_rights.pop("publishMediaMode")
+    _write_json(rights_path, legacy_rights)
+    monkeypatch.setattr(post_transaction, "OUTPUT_ROOT", tmp_path / "output")
+
+    resumed = build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+
+    assert {
+        key: value
+        for key, value in resumed.items()
+        if key != "objectClosureDigest"
+    } == {
+        key: value
+        for key, value in first.items()
+        if key != "objectClosureDigest"
+    }
+    assert json.loads(package_path.read_text(encoding="utf-8")) == resumed
+    assert json.loads(rights_path.read_text(encoding="utf-8"))["publishMediaMode"] == "text_only"
+    from content.release.canonical.content_pool_record import latest_pool_record
+
+    record = latest_pool_record(package / "object", "content")
+    assert record is not None
+    assert record["payloadDigest"] == record["canonicalObjectDigest"]
+
+
+def test_media_post_transaction_rejects_empty_cas_closure(tmp_path: Path) -> None:
+    execution, package, publish, transaction_id = _fixture(tmp_path)
+    transaction = build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    assert transaction["publishMediaMode"] == "embedded_media"
+    document_path = package / "object_transaction_package.json"
+    document = json.loads(document_path.read_text(encoding="utf-8"))
+    document["closure"]["casRefs"] = []
+    _write_json(document_path, document)
+
+    from content.release.canonical.object_transaction_contract import _verify_package
+
+    with pytest.raises(ObjectTransactionError, match="casRefs"):
+        _verify_package(
+            package,
+            canonical_root=publish,
+            require_target_absent=False,
+        )
+
+
+def test_media_post_transaction_rejects_empty_rights_closure(tmp_path: Path) -> None:
+    execution, package, publish, transaction_id = _fixture(tmp_path)
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    _admit_packaged_creator(package, publish)
+    rights_path = package / "object/rights.json"
+    rights = json.loads(rights_path.read_text(encoding="utf-8"))
+    rights["assets"] = []
+    _write_json(rights_path, rights)
+
+    from content.release.canonical.object_transaction_contract import _verify_package
+
+    with pytest.raises(ObjectTransactionError, match="minItems 1"):
+        _verify_package(
+            package,
+            canonical_root=publish,
+            require_target_absent=False,
+        )
+
+
+def test_text_only_package_rejects_media_mode_drift(tmp_path: Path) -> None:
+    execution, package, publish, transaction_id = _fixture(tmp_path)
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.update(
+        contentType="article",
+        carrier="article",
+        publishMediaMode="text_only",
+        assets=[],
+    )
+    _write_json(manifest_path, manifest)
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    document_path = package / "object_transaction_package.json"
+    document = json.loads(document_path.read_text(encoding="utf-8"))
+    packaged_manifest_path = package / "object/manifest.json"
+    packaged_manifest = json.loads(
+        packaged_manifest_path.read_text(encoding="utf-8")
+    )
+    packaged_manifest.pop("publishMediaMode")
+    _write_json(packaged_manifest_path, packaged_manifest)
+
+    from content.release.canonical.object_transaction_contract import _verify_package
+
+    with pytest.raises(ObjectTransactionError, match="publishMediaMode"):
+        _verify_package(
+            package,
+            canonical_root=publish,
+            require_target_absent=False,
+        )
+
+
+def test_text_only_package_rejects_missing_rights_media_mode(tmp_path: Path) -> None:
+    execution, package, publish, transaction_id = _fixture(tmp_path)
+    manifest_path = execution / "posts" / POST_REF / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest.update(
+        contentType="article",
+        carrier="article",
+        publishMediaMode="text_only",
+        assets=[],
+    )
+    _write_json(manifest_path, manifest)
+    build_post_object_transaction_package(
+        execution_root=execution,
+        object_ref=POST_REF,
+        transaction_id=transaction_id,
+        package_root=package,
+    )
+    _admit_packaged_creator(package, publish)
+    rights_path = package / "object/rights.json"
+    rights = json.loads(rights_path.read_text(encoding="utf-8"))
+    rights.pop("publishMediaMode")
+    _write_json(rights_path, rights)
+
+    from content.release.canonical.object_transaction_contract import _verify_package
+
+    with pytest.raises(ObjectTransactionError, match="publishMediaMode"):
+        _verify_package(
+            package,
+            canonical_root=publish,
+            require_target_absent=False,
+        )
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (
+        lambda manifest: manifest.pop("executionBundle"),
+        lambda manifest: manifest["executionBundle"].update(
+            inputs=["quwoquan_data/scripts/other"]
+        ),
+        lambda manifest: manifest["sourceDigest"].update(
+            inputs=["quwoquan_data/control_plane/other"]
+        ),
+    ),
+)
+def test_post_transaction_v2_source_identity_requires_exact_snapshot_and_bundle_inputs(
+    tmp_path: Path,
+    mutate,
+) -> None:
+    execution, package, _publish, transaction_id = _fixture(tmp_path)
+    manifest_path = execution / "execution_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    mutate(manifest)
+    _write_json(manifest_path, manifest)
+
+    with pytest.raises(
+        ObjectTransactionError,
+        match="valid frozen sourceDigest",
+    ):
+        build_post_object_transaction_package(
+            execution_root=execution,
+            object_ref=POST_REF,
+            transaction_id=transaction_id,
+            package_root=package,
+        )
 
 
 def test_travel_commercial_asset_blocks_unverified_rights(
@@ -559,12 +976,28 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
     frame_ref = frame.relative_to(execution).as_posix()
     video_id = "west-lake-video"
     poster_id = "west-lake-video-cover"
+    target_set = {
+        "executionId": execution_id,
+        "entityCatalogDigest": "sha256:" + "4" * 64,
+    }
+    target_set_digest = hashlib.sha256(
+        json.dumps(
+            target_set,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    _write_json(execution / "0.plan/target_set.json", target_set)
     _write_json(
         execution / "execution_manifest.json",
         {
             "executionId": execution_id,
             "createdAt": "2026-07-18T04:00:00Z",
-            "sourceDigest": current_source_digest().to_document(),
+                "sourceDigest": current_source_definition_snapshot().to_document(),
+                "executionBundle": current_execution_bundle_identity().to_document(),
+            "targetSetRef": "0.plan/target_set.json",
+            "targetSetDigest": target_set_digest,
         },
     )
     _write_json(
@@ -573,12 +1006,15 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
                 "schema": "quwoquan_data.post_manifest",
                 "vertical": "travel",
                 "topicId": "西湖__video_1",
-                "contentIdentity": "work",
-                "contentType": "video",
+                    "contentIdentity": "work",
+                    "contentId": "qwq_data_west_lake_video_fixture",
+                    "version": 1,
+                    "contentType": "video",
             "carrier": "video",
             "title": "西湖光影短片",
             "caption": "湖岸与长桥的光影",
-            "creatorProfileId": CREATOR_REF,
+                "creatorProfileId": CREATOR_REF,
+                "sourceAttribution": _source_attribution(),
             "sourceUrls": ["https://commons.wikimedia.org/wiki/File:Frame-1.jpg"],
             "entityRefs": ["/entity/地点/景区/西湖"],
             "tagRefs": ["Topic/旅行/玩法/摄影旅拍"],
@@ -664,6 +1100,7 @@ def test_video_transaction_closes_poster_cas_and_path_bound_source_rights(
     for relative in ("creators", "entities", "posts", "tags", "media/objects"):
         (publish / relative).mkdir(parents=True, exist_ok=True)
     _copy_creator_avatar_cas(publish)
+    _admit_packaged_creator(package_root, publish)
     output = tmp_path / "output-video"
     audit = audit_object_transaction(
         publish_root=publish,

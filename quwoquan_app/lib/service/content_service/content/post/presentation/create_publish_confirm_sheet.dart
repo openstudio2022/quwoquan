@@ -495,6 +495,7 @@ String _captureDisclosureGroupLabel(CaptureMetadataDisclosureGroup group) =>
       CaptureMetadataDisclosureGroup.gear => CreationText.captureDisclosureGear,
       CaptureMetadataDisclosureGroup.parameters =>
         CreationText.captureDisclosureParameters,
-      CaptureMetadataDisclosureGroup.place => CreationText.captureDisclosurePlace,
+      CaptureMetadataDisclosureGroup.place =>
+        CreationText.captureDisclosurePlace,
       CaptureMetadataDisclosureGroup.time => CreationText.captureDisclosureTime,
     };

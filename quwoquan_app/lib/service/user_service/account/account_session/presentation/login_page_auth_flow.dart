@@ -206,6 +206,8 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
       case LoginStep.otp:
         _cancelActiveAttempt();
         _otpCountdownTicker?.cancel();
+        _cancelDeliveryConfirmationTimers();
+        unawaited(_clearPendingOtpAttempt());
         _otpController.clear();
         _transitionFlow(
           _flow.copyWith(
@@ -213,9 +215,14 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
             operation: LoginOperation.idle,
             code: '',
             challengeId: '',
+            deliveryRequestId: '',
+            idempotencyKey: '',
             otpChallengeState: OtpChallengeState.none,
+            otpDeliveryState: OtpDeliveryState.none,
             resendDeadline: null,
+            pendingOtpExpiresAt: null,
             feedback: null,
+            deliveryConfirmationExhausted: false,
           ),
           action: 'login_state_changed',
         );
@@ -239,6 +246,9 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
 
   void _restoreRoot() {
     _otpCountdownTicker?.cancel();
+    _cancelDeliveryConfirmationTimers();
+    unawaited(_otpAutofillGateway.stop());
+    unawaited(_clearPendingOtpAttempt());
     _otpController.clear();
     _lastAutoVerifiedCode = '';
     if (_rootStep == LoginStep.oneTap) {
@@ -282,7 +292,9 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
     }
     _activeAttempt = null;
     _otpCountdownTicker?.cancel();
-    _trackLoginFunnel('login_terminal', result: 'success');
+    _cancelDeliveryConfirmationTimers();
+    unawaited(_clearPendingOtpAttempt());
+    _trackLoginFunnel('login_terminal', result: 'login_success');
     final callback = widget.onLoggedIn;
     if (callback != null) {
       callback();
@@ -310,6 +322,8 @@ extension _LoginFrameHostAuthFlow on _LoginFrameHostState {
     _activeAttempt = null;
     _entryResolutionGeneration += 1;
     _otpCountdownTicker?.cancel();
+    _cancelDeliveryConfirmationTimers();
+    unawaited(_clearPendingOtpAttempt());
     if (_isAccountSuspensionSurface) {
       ref
           .read(authSessionControllerProvider.notifier)

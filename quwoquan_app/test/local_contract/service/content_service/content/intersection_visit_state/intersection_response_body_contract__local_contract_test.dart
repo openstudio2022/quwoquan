@@ -76,6 +76,36 @@ void main() {
       );
     });
 
+    test(
+      'my intersection list consumes every cursor page exactly once',
+      () async {
+        executor.paginateInbox = true;
+
+        final items = await repository.listMyIntersections();
+
+        expect(items.map((item) => item.intersectionId), <String>[
+          'ix_page_1',
+          'ix_page_2',
+        ]);
+        expect(executor.inboxCursors, <String>['', 'cursor-2']);
+      },
+    );
+
+    test('my intersection list rejects a cursor cycle', () async {
+      executor.cycleInboxCursor = true;
+
+      await expectLater(
+        repository.listMyIntersections(),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('invalid cursor progression'),
+          ),
+        ),
+      );
+    });
+
     test('object intersection page decodes generated typed items', () async {
       final items = await repository.getObjectIntersections(
         objectId: 'obj_1',
@@ -120,6 +150,9 @@ CloudOperationInvocationContext _context(String clientPageId) {
 
 final class _IntersectionExecutor implements CloudOperationExecutor {
   String? operationId;
+  bool paginateInbox = false;
+  bool cycleInboxCursor = false;
+  final List<String> inboxCursors = <String>[];
 
   @override
   Future<TResponse> send<TResponse>(
@@ -129,7 +162,10 @@ final class _IntersectionExecutor implements CloudOperationExecutor {
     required CloudOperationRequestEncoder requestEncoder,
   }) async {
     operationId = operation.canonicalOperationId;
+    final payload = requestEncoder();
+    final cursor = payload.queryParameters['cursor'] ?? '';
     final reason = intersectionReasonFixture(
+      intersectionId: cursor.isEmpty ? 'ix_page_1' : 'ix_page_2',
       dimension: 'identity',
       primaryText: '你的8位校友关注了这里',
       lifecycleState: 'active',
@@ -146,11 +182,7 @@ final class _IntersectionExecutor implements CloudOperationExecutor {
           'totalReactivatedCount': 0,
         },
       AppCloudOperationIds.contentIntersectionVisitStateListMyIntersections =>
-        <String, Object?>{
-          'items': <Object?>[reason.toWire()],
-          'dimension': 'identity',
-          'hasMore': false,
-        },
+        _inboxResponse(reason, cursor),
       AppCloudOperationIds
           .contentIntersectionVisitStateGetObjectIntersections =>
         <String, Object?>{
@@ -168,7 +200,28 @@ final class _IntersectionExecutor implements CloudOperationExecutor {
         'Unexpected intersection operation ${operation.canonicalOperationId}',
       ),
     };
-    requestEncoder();
     return responseDecoder(response);
+  }
+
+  Map<String, Object?> _inboxResponse(
+    IntersectionReason reason,
+    String cursor,
+  ) {
+    inboxCursors.add(cursor);
+    if (cycleInboxCursor) {
+      return <String, Object?>{
+        'items': <Object?>[reason.toWire()],
+        'dimension': 'identity',
+        'nextCursor': 'cursor-cycle',
+        'hasMore': true,
+      };
+    }
+    final hasMore = paginateInbox && cursor.isEmpty;
+    return <String, Object?>{
+      'items': <Object?>[reason.toWire()],
+      'dimension': 'identity',
+      if (hasMore) 'nextCursor': 'cursor-2',
+      'hasMore': hasMore,
+    };
   }
 }

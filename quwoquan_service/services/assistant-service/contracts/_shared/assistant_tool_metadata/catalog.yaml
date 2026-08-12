@@ -3,27 +3,42 @@ description: Assistant Tool Fabric 的唯一工具目录；运行时注册表由
 tools:
   - toolName: app_search
     displayName: 应用信息检索
-    description: 通过 search-service 检索趣我圈站内公开对象，并返回可核验引用。
+    description: 把冻结检索计划投影为一个或多个 canonical SearchIndexView.Search 调用，并按计划顺序返回可核验结果桶。
     namespace: app
     placement: cloud
     inputSchema:
       type: object
       additionalProperties: false
       properties:
+        goal: {type: string, minLength: 1, description: 本轮检索要解决的用户目标；缺省时使用主查询。}
         query: {type: string, minLength: 1, description: 站内检索词。}
+        searchQueries:
+          type: array
+          maxItems: 7
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              dimension: {type: string, minLength: 1}
+              query: {type: string, minLength: 1}
+              objectTypes: {type: array, maxItems: 16, items: {type: string, minLength: 1}}
+              limit: {type: integer, minimum: 1, maximum: 50}
+            required: [dimension, query]
+        evidenceCriteria: {type: array, minItems: 1, maxItems: 8, items: {type: string, minLength: 1}}
+        maximumQueries: {type: integer, minimum: 1, maximum: 8}
       required: [query]
     outputSchema:
       type: object
       additionalProperties: false
       properties:
-        provider: {type: string}
         summary: {type: string}
-        results: {type: array}
+        resultBuckets: {type: array}
         citations: {type: array}
         emergedTagRefs:
           type: array
           items: {type: string, minLength: 1}
         provenance: {type: object}
+        retrievalPlan: {type: object}
         evidenceAssessment:
           type: object
           additionalProperties: false
@@ -37,14 +52,14 @@ tools:
             artifactRefs: {type: array, items: {type: string}}
             sourceIds: {type: array, items: {type: string}}
           required: [status, evidenceSufficient, replanRequired, reason, targetIds, documentIds, artifactRefs, sourceIds]
-      required: [provider, summary, results, citations, emergedTagRefs, provenance, evidenceAssessment]
+      required: [summary, resultBuckets, citations, emergedTagRefs, provenance, retrievalPlan, evidenceAssessment]
     requiresConfirmation: false
     idempotency: read_only
     sensitivity: public
     environmentScopes: [alpha, beta, gamma, prod]
     serverInjectedInputs: []
     readOnly: true
-    research: {operation: discover}
+    research: {operation: discover, parallelInputField: searchQueries}
     resilience: {timeoutMs: 5000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
     recovery: {action: fail_turn, disruptionLevel: partial}
 
@@ -219,16 +234,20 @@ tools:
       properties:
         runId: {type: string, minLength: 1}
         skillId: {type: string}
+        goal: {type: string, minLength: 1, description: 本轮检索要解决的用户目标；缺省时使用主查询。}
         query: {type: string, minLength: 1, description: 检索主查询词。}
         searchQueries:
           type: array
+          maxItems: 7
           items:
             type: object
             additionalProperties: false
             properties:
-              dimension: {type: string}
-              query: {type: string}
+              dimension: {type: string, minLength: 1}
+              query: {type: string, minLength: 1}
             required: [dimension, query]
+        evidenceCriteria: {type: array, minItems: 1, maxItems: 8, items: {type: string, minLength: 1}}
+        maximumQueries: {type: integer, minimum: 1, maximum: 8}
       required: [query]
     outputSchema:
       type: object

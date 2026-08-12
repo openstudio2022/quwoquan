@@ -42,7 +42,7 @@ search_policy:
   object_type_refs:
   - user.profile
   eligibility_ref: quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/user_search_projection.go#UserProfileSearchEligible
-  index_projector_ref: quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/user_search_projection.go#ProjectUserProfileToSearchDocument
+  index_projector_ref: quwoquan_service/services/search-service/internal/search/search_index_view/application/user_profile_projection.go#UserProfileSearchProjectionEvent.Document
   privacy_filter_ref: quwoquan_service/services/user-service/internal/account/user_account/application/account_orchestration/user_search_projection.go#UserProfileSearchEligible
 assistant_access:
   read:

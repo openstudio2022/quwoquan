@@ -5,7 +5,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_projection_codec.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 import 'home_showcase_core_fixture.g.dart';
 
 ContentPostViewData _contentViewDataFromFixtureMap(Map<String, dynamic> raw) {
@@ -201,7 +201,9 @@ class ContentMockData {
   /// （content_scenarios[.lite|.gamma-curated].json），四环境同源 archived 媒体。
   /// MockRepository 与发现区 wire 查找均消费本 getter，端侧不再维护第二套样本列表。
   static List<ContentPostViewData> get seededShowcaseFeedItems {
-    final seed = objectScenarioSeedReader.contentSeedSet('home_showcase_core');
+    final seed = objectContractExampleReader.contentExample(
+      'home_showcase_core',
+    );
     final hostSeed = _feedItemsFromSeed(seed);
     if (hostSeed.isNotEmpty) {
       return hostSeed;

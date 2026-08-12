@@ -1,6 +1,26 @@
 backend: elasticsearch+mongodb
 role: projection
 collections:
+  search_user_profile_projection_inbox:
+    entity: SearchUserProfileProjectionInbox
+    role: append_only
+    description: UserProfileSearchProjectionRequested 的 Search-owned 幂等凭据；eventId 唯一，只有 Search Provider 应用和 watermark 同一 owning command 成功后才记录 appliedAt。
+    indexes:
+      - name: uq_search_user_profile_projection_event
+        keys: {eventId: 1}
+        unique: true
+      - name: idx_search_user_profile_projection_applied
+        keys: {appliedAt: -1}
+  search_user_profile_projection_watermarks:
+    entity: SearchUserProfileProjectionWatermark
+    role: projection
+    description: 每个 userId 的单调 profileVersion 与 eventId checkpoint；重复事件返回 replayed，低版本返回 stale，delete tombstone 禁止旧 upsert 复活。
+    indexes:
+      - name: uq_search_user_profile_projection_user
+        keys: {userId: 1}
+        unique: true
+      - name: idx_search_user_profile_projection_version
+        keys: {profileVersion: -1}
   search_user_account_restrictions:
     entity: SearchAccountRestrictionView
     role: projection

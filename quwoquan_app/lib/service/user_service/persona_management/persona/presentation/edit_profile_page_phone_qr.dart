@@ -81,10 +81,13 @@ class _PhoneBindPageState extends ConsumerState<_PhoneBindPage> {
           .sendOtp(
             SendOtpCommand(
               phone: wirePhone,
-              platform: CloudRequestHeaders.platform(),
+              platform: otpClientPlatformForRuntime(
+                CloudRequestHeaders.platform(),
+              ),
               appVersion: CloudRequestHeaders.appVersion,
               sourceOperation: 'bind_phone',
             ),
+            idempotencyKey: newOtpIdempotencyKey(),
           );
       if (mounted) {
         setState(() => _busy = false);

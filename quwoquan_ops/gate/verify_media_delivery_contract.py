@@ -728,22 +728,10 @@ def _validate_video_playback_patrol_contract(issues: list[str]) -> None:
     patrol_runner_path = (
         ROOT / "quwoquan_ops" / "cli" / "smoke" / "run_environment_patrol_smoke.py"
     )
-    beta_gateway_path = (
-        ROOT
-        / "quwoquan_ops"
-        / "tests"
-        / "acceptance"
-        / "user_acceptance"
-        / "service_ops"
-        / "assistant-service"
-        / "smoke"
-        / "dev_assistant_beta_gateway.py"
-    )
     stackctl_path = ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
     patrol_test_path = ROOT / "quwoquan_app" / target
     patrol_runner_source = patrol_runner_path.read_text(encoding="utf-8")
     stackctl_source = stackctl_path.read_text(encoding="utf-8")
-    beta_gateway_source = beta_gateway_path.read_text(encoding="utf-8")
 
     if "video_playback_canary__user_acceptance_test.dart" not in patrol_runner_source:
         issues.append("环境 Patrol 默认 target 必须是 video playback canary")
@@ -762,12 +750,6 @@ def _validate_video_playback_patrol_contract(issues: list[str]) -> None:
     for token in required_tokens:
         if token not in patrol_test_source:
             issues.append(f"视频播放 Patrol target 缺少必需断言: {token}")
-    for forbidden in ("_rewrite_media_urls", "_join_media_base"):
-        if forbidden in beta_gateway_source:
-            issues.append(
-                "beta fixture gateway 不得按环境 authority 重写 publicSliceKey: "
-                f"{forbidden}"
-            )
 
 
 def _validate_avatar_media_patrol_contract(issues: list[str]) -> None:

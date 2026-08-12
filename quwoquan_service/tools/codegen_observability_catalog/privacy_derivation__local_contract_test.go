@@ -11,7 +11,7 @@ import (
 	"quwoquan_service/internal/metadata/graph"
 )
 
-// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#open-011
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
 func TestFieldPrivacyCatalogDerivesOnlyObjectAuthoredPolicies(t *testing.T) {
 	truncate := 100
 	source := contractcodegen.NewSourceFromGraph("contracts/metadata", &graph.ContractGraph{
@@ -93,7 +93,7 @@ func TestFieldPrivacyCatalogDerivesOnlyObjectAuthoredPolicies(t *testing.T) {
 	}
 }
 
-// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#open-011
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
 func TestFieldPrivacyPoliciesReachEveryCatalogAndBothRuntimeRedactors(t *testing.T) {
 	value := catalog{FieldPrivacyPolicies: []fieldPrivacyPolicy{
 		{ObjectID: "content.post", Field: "title", Classification: "PUBLIC", Action: "truncate", TruncateChars: 100, Explicit: true, Visibility: []string{"app"}},
@@ -138,7 +138,7 @@ func TestFieldPrivacyPoliciesReachEveryCatalogAndBothRuntimeRedactors(t *testing
 	}
 }
 
-// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#open-011
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
 func TestAppLogRedactorOwnerAndCurrentRuntimeHaveNoHandwrittenTokenRoster(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join("..", "..", ".."))
 	want := filepath.Join(

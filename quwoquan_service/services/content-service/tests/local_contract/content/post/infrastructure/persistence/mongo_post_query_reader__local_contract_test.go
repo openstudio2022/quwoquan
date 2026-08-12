@@ -53,6 +53,15 @@ func TestMongoPostQueryReaderProjectionMatchesTypedSliceWhitelist(t *testing.T) 
 func TestPostFeedProjectionReadsOnlyAdaptiveMediaBindingFields(t *testing.T) {
 	projection := PostFeedProjection()
 	for _, field := range []string{
+		"authorDisplayNameSnapshot",
+		"authorAvatarUrlSnapshot",
+		"summary",
+	} {
+		if got := bsonFieldValue(projection, field); got != 1 {
+			t.Fatalf("feed presentation projection %q = %#v, want explicit inclusion", field, got)
+		}
+	}
+	for _, field := range []string{
 		"mediaItems.kind",
 		"mediaItems.mediaAssetId",
 		"mediaItems.mediaAssetVersion",

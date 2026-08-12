@@ -53,9 +53,11 @@ class RuntimeExecutionRequest:
     topic: str | None
     source_providers: tuple[str, ...]
     target_names: tuple[str, ...]
+    worker_host_set_binding: Mapping[str, Any] | None = None
     scale_source_pool: Mapping[str, Any] | None = None
     source_pool_evidence_root_ref: str | None = None
     source_pool_selection: Mapping[str, Any] | None = None
+    rewrite: Mapping[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if not self.family_ref or not self.region_ref:
@@ -74,6 +76,15 @@ class RuntimeExecutionRequest:
             raise ValueError("partitionCount must be a governed partition count")
         if not re.fullmatch(r"sha256:[a-f0-9]{64}", self.capacity_plan_digest):
             raise ValueError("capacityPlanDigest must be a canonical sha256 digest")
+        if self.worker_host_set_binding is not None:
+            from core.schema import assert_valid
+
+            assert_valid(
+                dict(self.worker_host_set_binding),
+                "execution",
+                "governed_worker_host_binding",
+                label="runtime worker host-set binding",
+            )
         if any(not provider.strip() for provider in self.source_providers):
             raise ValueError("sourceProviders must contain non-empty provider IDs")
         if tuple(sorted(set(self.source_providers))) != self.source_providers:
@@ -88,6 +99,14 @@ class RuntimeExecutionRequest:
             raise ValueError(
                 "targetNames size must fall inside the [quota, count] candidate pool range"
             )
+        if self.rewrite is not None:
+            from content.execution.planning.rewrite import RewriteBinding
+
+            rewrite = RewriteBinding.from_document(self.rewrite)
+            if self.count != 1 or self.quota != 1:
+                raise ValueError("targeted rewrite count and quota must both equal 1")
+            if self.target_names != (rewrite.target_name,):
+                raise ValueError("targeted rewrite must freeze exactly its source target")
         pool_parts = (
             self.scale_source_pool,
             self.source_pool_evidence_root_ref,
@@ -97,6 +116,7 @@ class RuntimeExecutionRequest:
             if not all(part is not None for part in pool_parts):
                 raise ValueError("scale source pool runtime binding is incomplete")
             from core.schema import assert_valid
+
             from content.execution.campaign.source_pool_binding import (
                 validate_lane_source_pool_selection,
             )
@@ -151,6 +171,19 @@ class RuntimeExecutionRequest:
         capacity_plan_digest = str(
             getattr(args, "capacity_plan_digest", "") or ""
         ).strip()
+        raw_host_binding = str(
+            getattr(args, "worker_host_set_binding_json", "") or ""
+        ).strip()
+        worker_host_set_binding = None
+        if raw_host_binding:
+            import json
+
+            decoded = json.loads(raw_host_binding)
+            if not isinstance(decoded, Mapping):
+                raise SystemExit(
+                    "[task execute] GATE_BLOCK --worker-host-set-binding-json must be an object"
+                )
+            worker_host_set_binding = dict(decoded)
         if (
             isinstance(required_workers, bool)
             or not isinstance(required_workers, int)
@@ -218,6 +251,16 @@ class RuntimeExecutionRequest:
                 "candidateCount": len(candidate_ids),
                 "selectionDigest": selection_digest,
             }
+        raw_rewrite = getattr(args, "rewrite_binding", None)
+        rewrite = None
+        if raw_rewrite is not None:
+            if not isinstance(raw_rewrite, Mapping):
+                raise SystemExit(
+                    "[task execute] GATE_BLOCK frozen rewrite binding must be an object"
+                )
+            from content.execution.planning.rewrite import RewriteBinding
+
+            rewrite = RewriteBinding.from_document(raw_rewrite).to_document()
         return cls(
             family_ref=family_ref,
             region_ref=region_ref,
@@ -227,12 +270,14 @@ class RuntimeExecutionRequest:
             required_workers=required_workers,
             partition_count=partition_count,
             capacity_plan_digest=capacity_plan_digest,
+            worker_host_set_binding=worker_host_set_binding,
             topic=topic,
             source_providers=providers,
             target_names=target_names,
             scale_source_pool=scale_source_pool,
             source_pool_evidence_root_ref=evidence_ref or None,
             source_pool_selection=source_pool_selection,
+            rewrite=rewrite,
         )
 
     @classmethod
@@ -248,6 +293,7 @@ class RuntimeExecutionRequest:
                 "requiredWorkers",
                 "partitionCount",
                 "capacityPlanDigest",
+                "workerHostSetBinding",
                 "topic",
                 "sourceProviders",
                 "targetNames",
@@ -255,8 +301,14 @@ class RuntimeExecutionRequest:
             pool_keys = {
                 "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
             }
+            rewrite_keys = {"rewrite"}
             keys = set(document.to_document())
-            if keys not in {frozenset(base), frozenset(base | pool_keys)}:
+            if keys not in {
+                frozenset(base),
+                frozenset(base | pool_keys),
+                frozenset(base | rewrite_keys),
+                frozenset(base | pool_keys | rewrite_keys),
+            }:
                 raise JsonObjectDecodeError(
                     "execution request keys must be exactly "
                     + ", ".join(sorted(base))
@@ -271,6 +323,11 @@ class RuntimeExecutionRequest:
                 required_workers=document.integer("requiredWorkers"),
                 partition_count=document.integer("partitionCount"),
                 capacity_plan_digest=document.string("capacityPlanDigest"),
+                worker_host_set_binding=(
+                    dict(raw["workerHostSetBinding"])
+                    if isinstance(raw.get("workerHostSetBinding"), Mapping)
+                    else None
+                ),
                 topic=document.optional_string("topic"),
                 source_providers=document.string_list("sourceProviders"),
                 target_names=document.string_list("targetNames"),
@@ -289,6 +346,11 @@ class RuntimeExecutionRequest:
                     if isinstance(raw.get("sourcePoolSelection"), Mapping)
                     else None
                 ),
+                rewrite=(
+                    dict(raw["rewrite"])
+                    if isinstance(raw.get("rewrite"), Mapping)
+                    else None
+                ),
             )
         except (JsonObjectDecodeError, ValueError) as exc:
             raise SystemExit(f"[task execute] GATE_BLOCK invalid frozen request: {exc}") from exc
@@ -303,6 +365,11 @@ class RuntimeExecutionRequest:
             "requiredWorkers": self.required_workers,
             "partitionCount": self.partition_count,
             "capacityPlanDigest": self.capacity_plan_digest,
+            "workerHostSetBinding": (
+                dict(self.worker_host_set_binding)
+                if self.worker_host_set_binding is not None
+                else None
+            ),
             "topic": self.topic,
             "sourceProviders": list(self.source_providers),
             "targetNames": list(self.target_names),
@@ -311,6 +378,8 @@ class RuntimeExecutionRequest:
             document["scaleSourcePool"] = dict(self.scale_source_pool)
             document["sourcePoolEvidenceRootRef"] = self.source_pool_evidence_root_ref
             document["sourcePoolSelection"] = dict(self.source_pool_selection or {})
+        if self.rewrite is not None:
+            document["rewrite"] = dict(self.rewrite)
         return document
 
 

@@ -107,6 +107,8 @@ def _candidate(index: int = 0) -> dict[str, object]:
             "license": "authorization pending",
             "termsUrl": "https://gallery.example.test/terms",
             "authorizationProof": "",
+            "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
             "authorizationRequired": True,
             "rightsStatus": "unverified",
             "rightsIssues": ["creator distribution authorization pending"],

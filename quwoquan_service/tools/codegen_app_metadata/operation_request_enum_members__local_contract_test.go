@@ -129,3 +129,49 @@ func TestRequestModelFingerprintIncludesEnumMemberMapping(t *testing.T) {
 		t.Fatal("request model fingerprint ignores client_enum_members")
 	}
 }
+
+func TestCanonicalRequestSearchModeUsesOnlyAppExposedMembers(t *testing.T) {
+	values := map[string][]string{
+		"CanonicalSearchMode": {"suggest", "result", "retrieval"},
+	}
+	err := restrictCanonicalSearchModeToAppExposure(
+		values,
+		[]string{"suggest", "result"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(values["CanonicalSearchMode"], ","); got != "suggest,result" {
+		t.Fatalf("App Search mode values = %q, want suggest,result", got)
+	}
+	field := fieldDef{
+		Name: "mode", Type: "enum", EnumRef: "CanonicalSearchMode",
+	}
+	expression, err := requestEnumFromWireExpression(
+		"CanonicalSearchMode",
+		`map["mode"]`,
+		`'$path.mode'`,
+		field,
+		values,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(expression, "retrieval") ||
+		!strings.Contains(expression, `"suggest" => CanonicalSearchMode.suggest`) ||
+		!strings.Contains(expression, `"result" => CanonicalSearchMode.result`) {
+		t.Fatalf("App Search decoder expression = %q", expression)
+	}
+}
+
+func TestCanonicalRequestSearchModeRejectsExposureOutsideOwnerEnum(t *testing.T) {
+	values := map[string][]string{
+		"CanonicalSearchMode": {"suggest", "result", "retrieval"},
+	}
+	if err := restrictCanonicalSearchModeToAppExposure(
+		values,
+		[]string{"suggest", "admin"},
+	); err == nil || !strings.Contains(err.Error(), "unknown owner mode") {
+		t.Fatalf("invalid App Search exposure error = %v", err)
+	}
+}

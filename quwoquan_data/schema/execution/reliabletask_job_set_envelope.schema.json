@@ -25,7 +25,7 @@
   "additionalProperties": false,
   "properties": {
     "schema": {"const": "quwoquan_data.reliabletask_job_set_envelope"},
-    "version": {"const": 3},
+    "version": {"const": 4},
     "executionId": {"type": "string", "minLength": 1},
     "carrier": {"enum": ["homepage", "article", "image", "video"]},
     "stage": {"enum": ["author", "publish"]},
@@ -59,6 +59,8 @@
     "partitionAlgorithm": {"const": "sha256_carrier_object_ref_mod_v1"},
     "checkpointPolicy": {"$ref": "#/$defs/checkpointPolicy"},
     "campaignBinding": {"$ref": "#/$defs/campaignBinding"},
+    "poolDeliveryBinding": {"$ref": "#/$defs/poolDeliveryBinding"},
+    "workerHostSetBinding": {"$ref": "governed_worker_host_binding.schema.json"},
     "expectedTasks": {
       "type": "array",
       "minItems": 1,
@@ -67,6 +69,16 @@
     "jobSetDigest": {"$ref": "#/$defs/digest"},
     "envelopeDigest": {"$ref": "#/$defs/digest"}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"stage": {"const": "publish"}},
+        "required": ["stage"]
+      },
+      "then": {"required": ["poolDeliveryBinding"]},
+      "else": {"not": {"required": ["poolDeliveryBinding"]}}
+    }
+  ],
   "$defs": {
     "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "checkpointPolicy": {
@@ -96,7 +108,8 @@
         "executionId",
         "ref",
         "stage",
-        "partitionKey"
+        "partitionKey",
+        "maxAttempts"
       ],
       "additionalProperties": false,
       "properties": {
@@ -108,7 +121,8 @@
         "executionId": {"type": "string", "minLength": 1},
         "ref": {"type": "string", "minLength": 1},
         "stage": {"enum": ["author", "publish"]},
-        "partitionKey": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,2})$"}
+        "partitionKey": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,2})$"},
+        "maxAttempts": {"type": "integer", "minimum": 1}
       }
     },
     "campaignBinding": {
@@ -133,6 +147,37 @@
         "campaignSourceRevision": {"$ref": "#/$defs/digest"},
         "campaignSourceDigest": {"$ref": "#/$defs/digest"},
         "campaignEntityCatalogDigest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "poolDeliveryBinding": {
+      "type": "object",
+      "required": [
+        "receiptId",
+        "receiptRef",
+        "evidenceDigest",
+        "transportDigest",
+        "deliveryGeneration",
+        "deliveryFencingToken",
+        "workerRef",
+        "workerSha256",
+        "campaignBinding"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "receiptId": {"$ref": "#/$defs/digest"},
+        "receiptRef": {"type": "string", "minLength": 1},
+        "evidenceDigest": {"$ref": "#/$defs/digest"},
+        "transportDigest": {"$ref": "#/$defs/digest"},
+        "deliveryGeneration": {"type": "integer", "minimum": 1},
+        "deliveryFencingToken": {"$ref": "#/$defs/digest"},
+        "workerRef": {"type": "string", "minLength": 1},
+        "workerSha256": {"$ref": "#/$defs/digest"},
+        "campaignBinding": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/campaignBinding"}
+          ]
+        }
       }
     }
   }

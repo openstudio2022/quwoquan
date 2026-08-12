@@ -92,14 +92,27 @@ abstract interface class ChatGroupAdminRepository
 
   Future<void> updateGroupSettings(
     String conversationId,
-    ChatGroupSettingsViewData settings,
-  );
+    ChatGroupSettingsViewData settings, {
+    String? idempotencyKey,
+  });
 
-  Future<void> updateAnnouncement(String conversationId, String announcement);
+  Future<void> updateAnnouncement(
+    String conversationId,
+    String announcement, {
+    String? idempotencyKey,
+  });
 
-  Future<void> transferOwnership(String conversationId, String newOwnerId);
+  Future<void> transferOwnership(
+    String conversationId,
+    String newOwnerId, {
+    String? idempotencyKey,
+  });
 
-  Future<void> updateGroupAdmins(String conversationId, List<String> adminIds);
+  Future<void> updateGroupAdmins(
+    String conversationId,
+    List<String> adminIds, {
+    String? idempotencyKey,
+  });
 
   @override
   Future<void> dissolveConversation(String conversationId);

@@ -17,6 +17,8 @@ class EntityRequestPageIds {
     'GetHomepageReviewSummary': 'entity.homepage.review_summary',
     'GetHomepageShell': 'entity.homepage.shell',
     'GetMyHomepageReview': 'entity.get.my.homepage.review',
+    'GetMyPendingHomepageClaimRequest': 'entity.homepage.claim.mine',
+    'GetMyPendingHomepageStatusReport': 'entity.homepage.status_report.mine',
     'GetObjectPageBundle': 'entity.get.object.page.bundle',
     'IntakeHomepageCandidate': 'entity.homepage.candidate.intake',
     'ListHomepageCandidates': 'entity.list.homepage.candidates',
@@ -44,6 +46,8 @@ class EntityRequestPageIds {
   static const String getHomepageReviewSummary = 'entity.homepage.review_summary';
   static const String getHomepageShell = 'entity.homepage.shell';
   static const String getMyHomepageReview = 'entity.get.my.homepage.review';
+  static const String getMyPendingHomepageClaimRequest = 'entity.homepage.claim.mine';
+  static const String getMyPendingHomepageStatusReport = 'entity.homepage.status_report.mine';
   static const String getObjectPageBundle = 'entity.get.object.page.bundle';
   static const String intakeHomepageCandidate = 'entity.homepage.candidate.intake';
   static const String listHomepageCandidates = 'entity.list.homepage.candidates';

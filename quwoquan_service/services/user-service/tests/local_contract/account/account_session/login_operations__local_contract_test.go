@@ -10,6 +10,8 @@ package local_contract
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"testing"
 	"time"
@@ -49,14 +51,15 @@ func TestPublishedLoginOperationsUseBoundAuthServiceFacets(t *testing.T) {
 	consents := &accountSessionLoginConsentStore{}
 	challenges := &accountSessionLoginChallengeFacet{}
 	anonymousDevices := &accountSessionLoginAnonymousStore{}
-	signer, err := rtauth.NewHS256Signer(rtauth.TokenConfig{
+	tokenConfig := rtauth.TokenConfig{
 		Secret:       []byte("account-session-login-local-32bytes"),
 		Issuer:       "https://auth.quwoquan.local",
 		Audience:     "quwoquan-api",
 		Type:         rtauth.TokenTypeAccess,
 		TokenVersion: 1,
 		TTL:          30 * time.Minute,
-	})
+	}
+	signer, err := rtauth.NewHS256Signer(tokenConfig)
 	if err != nil {
 		t.Fatalf("access signer: %v", err)
 	}
@@ -89,6 +92,7 @@ func TestPublishedLoginOperationsUseBoundAuthServiceFacets(t *testing.T) {
 		"privacy-v1",
 	)
 	assertAccountSessionLoginGrant(t, "LoginWithPhone", phone, err)
+	assertAccountSessionDeviceActor(t, tokenConfig, phone, "login-device-phone")
 	if challenges.lastVerify.Purpose != "phone_login" ||
 		string(challenges.lastVerify.Credential) != "246810" {
 		t.Fatalf("phone login did not verify AuthenticationChallenge: %+v", challenges.lastVerify)
@@ -124,6 +128,12 @@ func TestPublishedLoginOperationsUseBoundAuthServiceFacets(t *testing.T) {
 			t.Fatalf("%s outcome=%+v err=%v", login.name, outcome, err)
 		}
 		assertAccountSessionLoginGrant(t, login.name, outcome.Session, nil)
+		assertAccountSessionDeviceActor(
+			t,
+			tokenConfig,
+			outcome.Session,
+			"login-device-"+login.name,
+		)
 	}
 
 	oneTap, err := service.LoginWithOneTap(
@@ -136,6 +146,7 @@ func TestPublishedLoginOperationsUseBoundAuthServiceFacets(t *testing.T) {
 		"privacy-v1",
 	)
 	assertAccountSessionLoginGrant(t, "LoginOneTap", oneTap, err)
+	assertAccountSessionDeviceActor(t, tokenConfig, oneTap, "login-device-carrier")
 
 	anonymous, err := service.LoginAnonymously(
 		context.Background(),
@@ -145,6 +156,7 @@ func TestPublishedLoginOperationsUseBoundAuthServiceFacets(t *testing.T) {
 		"1.0.0",
 	)
 	assertAccountSessionLoginGrant(t, "LoginAnonymous", anonymous, err)
+	assertAccountSessionDeviceActor(t, tokenConfig, anonymous, "install-login-anonymous")
 
 	if got := len(sessionStore.records); got != 6 {
 		t.Fatalf("published login operations issued %d AccountSessions, want 6", got)
@@ -157,6 +169,28 @@ func TestPublishedLoginOperationsUseBoundAuthServiceFacets(t *testing.T) {
 	}
 	if credentials.markUsedCalls != 6 {
 		t.Fatalf("verified login credentials marked used=%d want=6", credentials.markUsedCalls)
+	}
+}
+
+func assertAccountSessionDeviceActor(
+	t *testing.T,
+	config rtauth.TokenConfig,
+	grant *sessionapp.AuthSessionGrant,
+	installID string,
+) {
+	t.Helper()
+	verifier, err := rtauth.NewHS256Verifier(config)
+	if err != nil {
+		t.Fatalf("access verifier: %v", err)
+	}
+	claims, err := verifier.Verify(grant.AccessToken)
+	if err != nil {
+		t.Fatalf("verify access token: %v", err)
+	}
+	digest := sha256.Sum256([]byte("qwq-device-actor-v1:" + installID))
+	want := hex.EncodeToString(digest[:16])
+	if claims.DeviceActorID != want {
+		t.Fatalf("access token did=%q want=%q", claims.DeviceActorID, want)
 	}
 }
 
@@ -277,6 +311,13 @@ func (facet *accountSessionLoginChallengeFacet) VerifyChallenge(
 }
 
 func (*accountSessionLoginChallengeFacet) CancelChallenge(context.Context, challengeapp.CancelChallengeCommand) (challengeapp.ChallengeCommandResult, error) {
+	return challengeapp.ChallengeCommandResult{}, nil
+}
+
+func (*accountSessionLoginChallengeFacet) ReportDeliveryResult(
+	context.Context,
+	challengeapp.ReportDeliveryResultCommand,
+) (challengeapp.ChallengeCommandResult, error) {
 	return challengeapp.ChallengeCommandResult{}, nil
 }
 

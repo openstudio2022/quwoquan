@@ -36,7 +36,7 @@
 
 
 
-- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：**分支策略**：支持 `dev1.0` 分支开发与 trunk development，但进入 `main` 统一走显式 PR。
+- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：`main` 是唯一长期发布主干；短期 PR 分支受控、合入即删，退役分支只保留 archive tag/bundle。
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
 - [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
@@ -50,9 +50,9 @@
 
 - `main` 入库后自动启动候选 DAG，生成带 canonical candidate digest 的 OCI `ReleaseEvidenceManifest` 并完成 Alpha/Beta/Gamma 阻断验证；push 不得静默执行正式 Prod apply。
 - 第一方容器预验证由显式 `stackctl deploy --mode prevalidate` 在独立 namespace 执行，不属于正式 rollout。
-- 正式 promotion 只能由人工 dispatch 绑定可达 main 的精确 Git SHA、显式关闭 dry-run 并通过 production environment approval；同一候选摘要进入 `alpha-local / beta-local / gamma-local` 隔离 fanout，准入聚合严格按 `alpha -> beta -> gamma` 判定，全部通过后才能进入 `prod-hosted(gray-initial -> carry-on -> full)`。
+- 正式 promotion 只能由人工 dispatch 绑定可达 main 的精确 Git SHA、显式关闭 dry-run 并通过 production environment approval；同一候选摘要进入 `alpha-local / beta-local / gamma-local` 隔离 fanout，准入聚合严格按 `alpha -> beta -> gamma` 判定，全部通过后才能进入 `prod-hosted(canary -> 5 -> 20 -> 50 -> 100)`。
 - `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。
-- `gray-initial -> carry-on -> full` 之间的健康检查、只读集成探针、SLO gate 与 rollback 可验证；Provider、SFU、真实数据、观测和灾备证据未齐时不得启动正式 apply。
+- `canary -> 5 -> 20 -> 50 -> 100` 各阶段的健康检查、只读集成探针、SLO gate 与 rollback 可验证；Provider、SFU、真实数据、观测和灾备证据未齐时不得启动正式 apply。
 
 <a id="req-002"></a>
 ### REQ-002 prod-hosted ssh-hosted 部署形态（modular-monolith-first + split-ready）SIT
@@ -79,14 +79,14 @@
   GitHub OIDC signer，再从 manifest 导出 candidate、artifact、source/producer、
   pilot/rollback、lifecycle/Green Matrix。禁止 `NIGHTLY_*` / `PROVIDER_*` 字段回填、
   mutable tag 与调用方重复声明派生身份。
-- 仓库不定义 `gamma-hosted` 环境；`gamma-local` 的 release-fast 验证是正式主链阻断阶段，云侧真实复验仍由 prod `gray-initial` rollout stage 承接。
+- 仓库不定义 `gamma-hosted` 环境；`gamma-local` 的 release-fast 验证是正式主链阻断阶段，云侧真实复验仍由 prod `canary` rollout stage 承接。
 - `03/04/05` 名称与 required-check 语义必须保持稳定。
 - `prod` 灰度是 `prod` 语义下的 rollout stage，不得再引入独立环境枚举。
 - `alpha-local` 阶段必须完成环境包、启动与 `stackctl health --scope full`，并落证据产物。
 - `beta-local` 阶段必须完成 `stackctl up/health/inspect` 与 self-hosted beta 设备矩阵，通过后才能进入 gamma。
 - `gamma-local` 阶段必须完成 package、up、full health、release verify 与 inspect，并以同一候选摘要回执阻断 Prod。
-- Prod 在一个保留 production approval 的事务 job 内只拉取、验签、解包一次，再执行 `5% -> 25% -> 100%`；任一阶段失败由 `stackctl` 自动回滚到上一稳定候选并恢复 ready 状态。
-- dry-run 保持只读：只验证 `gray-initial` 及全部前置门禁，不伪造 carry-on/full ledger 状态，也不得形成正式发布成功事实。
+- Prod 在一个保留 production approval 的事务 job 内只拉取、验签、解包一次，再执行 `canary -> 5 -> 20 -> 50 -> 100`；任一阶段失败由 `stackctl` 自动回滚到上一稳定候选并恢复 ready 状态。
+- dry-run 保持只读：只验证 `canary` 及全部前置门禁，不伪造 `5/20/50/100` ledger 状态，也不得形成正式发布成功事实。
 - `CiTimingSummary` 的 600/1800 秒预算只读取 GitHub workflow `created_at -> candidate/prod completed_at` 的官方日历时长；job DAG 仅保留为 `machineCriticalPath` 诊断。App matrix 必须计入四个 shard 的真实最长时长，不允许用静态/串行阶段近似。
 - mainline `CiTimingSummary` 必须作为 `ghcr.io/.../ci-timing-summary@sha256:...` 精确 OCI 证据发布，并按 candidate digest 与 workflow run 写入独立、append-only 的 hosted timing authority；写后必须从 hosted 索引查询并逐字段匹配。未初始化、不可达、写入失败或回读漂移均保持 `GATE_BLOCK`，Actions Artifact 只允许作为可丢失诊断副本。
 - production approval 的请求、批准与等待时长只能来自绑定 repository、workflow run、head SHA 与 `production` environment 的显式 durable review event。Deployment/Deployment Status 的 `pending/queued/in_progress` 只表示部署或作业状态，不能替代 reviewer decision，也不得与 runner/concurrency queue 混算。
@@ -109,9 +109,9 @@
 - WHEN 参与者发起“deliver deploy prod pipeline 能力”对应动作。
 - THEN `main` 入库后自动生成可验证 OCI `ReleaseEvidenceManifest` 并执行三个前置环境；只有精确 SHA 的人工 dispatch、显式非 dry-run 与 production approval 同时成立时才能发起正式 Prod promotion。
 - THEN 第一方 prevalidate 不写正式 rollout、ledger 或 receipt。
-- THEN 同一候选在隔离运行面并行执行 Alpha、Beta、Gamma，按 `alpha -> beta -> gamma` 聚合准入后，才执行 `prod-hosted(gray-initial -> carry-on -> full)`。
+- THEN 同一候选在隔离运行面并行执行 Alpha、Beta、Gamma，按 `alpha -> beta -> gamma` 聚合准入后，才执行 `prod-hosted(canary -> 5 -> 20 -> 50 -> 100)`。
 - THEN `stackctl`、workflow、runbook 与环境矩阵口径一致，不再维护第二套自动推进或回滚逻辑。
-- THEN Prod 三个 rollout stage 在一个受审批事务中复用一次制品物化与治理校验，健康检查、只读集成探针、SLO gate 与 auto rollback 可验证。
+- THEN Prod 五个 rollout stage 在一个受审批事务中复用一次制品物化与治理校验，健康检查、只读集成探针、SLO gate 与 auto rollback 可验证。
 - THEN 权威计时包含 runner 排队与矩阵长尾，600 秒软目标、1800 秒硬门和 1500 秒晋级截止均可验证。
 
 <a id="sit-002"></a>
@@ -136,7 +136,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：`main` 入库后由单一受控 promotion workflow 执行，Gamma-local 作为阻断阶段，远端复验由 prod `gray-initial` 承接。
+- 目标：`main` 入库后由单一受控 promotion workflow 执行，Gamma-local 作为阻断阶段，远端复验由 prod `canary` 承接。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>
@@ -145,6 +145,6 @@
 - 类型：`external_blocker`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仓内已具备多 host/replica plan、渲染 identity、部署迭代与聚合 CAS 合同；真实第二台 ECS、平面 SSH 凭据与一次完整 `gray-initial → carry-on → full` 仍缺。
+- 影响或价值：仓内已具备多 host/replica plan、渲染 identity、部署迭代与聚合 CAS 合同；真实第二台 ECS、平面 SSH 凭据与一次完整 `canary → 5 → 20 → 50 → 100` 仍缺。
 - 目标：在声明 ≥2 个 `management.hosts` 与匹配 replica placement 的前提下，用真实 SSH 完成多 member 发布、逐 host receipt 与 ledger 聚合 CAS。
 - 完成判定：`SIT-002` 对应 live 行为满足且真实测试 `spec_ref` 有效

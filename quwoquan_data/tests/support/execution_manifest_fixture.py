@@ -179,6 +179,7 @@ class ExecutionFixtureBuilder:
                 "requiredWorkers": 1,
                 "partitionCount": 16,
                 "capacityPlanDigest": "sha256:" + "1" * 64,
+                "workerHostSetBinding": None,
                 "articleCommercialClosure": (
                     identity.content_type is ContentType.ARTICLE
                 ),

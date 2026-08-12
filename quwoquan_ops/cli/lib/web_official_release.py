@@ -73,7 +73,7 @@ def package_web_official_release(
         shutil.copytree(build_root, release_root / "public")
 
     manifest = {
-        "schema": "qwq.public-web.release",
+        "schema": "client-app.web.official-release",
         "environment": environment,
         "publicOrigin": public_origin,
         "releaseId": release_id,

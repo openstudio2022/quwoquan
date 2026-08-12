@@ -24,6 +24,7 @@ var (
 	ErrPublicationRejected           = errors.New("CONTENT.USER.publication_rejected")
 	ErrRateLimited                   = errors.New("CONTENT.USER.rate_limited")
 	ErrRequiredDependencyUnavailable = errors.New("CONTENT.SYSTEM.required_dependency_unavailable")
+	ErrResearchIdentityInvalid       = errors.New("CONTENT.USER.research_identity_invalid")
 	ErrStorageReadFailed             = errors.New("CONTENT.SYSTEM.storage_read_failed")
 	ErrStorageWriteFailed            = errors.New("CONTENT.SYSTEM.storage_write_failed")
 	ErrUnauthorized                  = errors.New("CONTENT.USER.unauthorized")
@@ -107,6 +108,12 @@ func AppErrorFromRateLimited(debugMessage string) *rterr.AppError {
 func AppErrorFromRequiredDependencyUnavailable(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.SYSTEM.required_dependency_unavailable")
 	return rterr.NewAppError(code, "内容服务依赖暂时不可用，请稍后重试", debugMessage).WithMetadata("required_dependency_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 5)
+}
+
+// AppErrorFromResearchIdentityInvalid returns *AppError for CONTENT.USER.research_identity_invalid (user_message from errors.yaml).
+func AppErrorFromResearchIdentityInvalid(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.research_identity_invalid")
+	return rterr.NewAppError(code, "当前研究态身份无效或已过期", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromStorageReadFailed returns *AppError for CONTENT.SYSTEM.storage_read_failed (user_message from errors.yaml).

@@ -2,7 +2,7 @@
 """按平面硬校验 prod-hosted 的 SSH 发布凭据（self-hosted / 本机持钥模型）。
 
 访问隔离映射唯一真相源：quwoquan_ops/environments/prod/access-isolation.yaml。
-对给定 rollout stage（gray-initial/carry-on/full）下适用的平面账号，校验以下任一路径：
+对给定 rollout stage（canary/5/20/50/100）下适用的平面账号，校验以下任一路径：
 
 1. 显式 key 文件：`<SSH_KEY_SECRET>_FILE` / `<SSH_KEY_SECRET>_PATH`
 2. 指定 key dir：`--key-dir` 或 `PROD_SSH_KEY_DIR`，按 `<key_dir>/<account>` 查找私钥
@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--stage",
-        choices=["gray-initial", "carry-on", "full"],
+        choices=["canary", "5", "20", "50", "100"],
         required=True,
     )
     parser.add_argument(

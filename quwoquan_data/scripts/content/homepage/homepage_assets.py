@@ -168,6 +168,32 @@ def select_homepage_assets(
             )
         )
 
+    def _complete_excluded(
+        publishable: list[dict[str, Any]],
+    ) -> tuple[HomepageMediaDisposition, ...]:
+        """Give every observed source asset exactly one terminal decision."""
+        decided_refs = {
+            record.source_asset_ref
+            for record in excluded
+            if record.source_asset_ref
+        }
+        decided_refs.update(
+            str(image.get("sourceAssetRef") or "").strip()
+            for image in publishable
+            if str(image.get("sourceAssetRef") or "").strip()
+        )
+        for image in all_images:
+            source_asset_ref = str(image.get("sourceAssetRef") or "").strip()
+            if not source_asset_ref or source_asset_ref in decided_refs:
+                continue
+            _exclude(
+                image,
+                HomepageAssetDisposition.POLICY_EXCLUDED,
+                "not_selected_source_unit",
+            )
+            decided_refs.add(source_asset_ref)
+        return tuple(excluded)
+
     def _source_admission_exclusion_reason(image: Mapping[str, Any]) -> str:
         acquisition_status = str(image.get("acquisitionStatus") or "").strip()
         distribution_decision = str(
@@ -310,7 +336,7 @@ def select_homepage_assets(
         seen.add(key)
         picked.append(image)
     if not picked:
-        return HomepageAssetSelection((), tuple(excluded))
+        return HomepageAssetSelection((), _complete_excluded([]))
 
     from core.page_media import (
         normalized_subject_core,
@@ -420,7 +446,7 @@ def select_homepage_assets(
         publishable.append(item)
     return HomepageAssetSelection(
         publishable=tuple(publishable),
-        excluded=tuple(excluded),
+        excluded=_complete_excluded(publishable),
     )
 
 

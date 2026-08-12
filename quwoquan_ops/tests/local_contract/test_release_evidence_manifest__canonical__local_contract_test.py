@@ -209,7 +209,7 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
             "publicWeb": self._write_json(
                 root / "sources/public-web.json",
                 {
-                    "schema": "qwq.public-web.release",
+                    "schema": "client-app.web.official-release",
                     "sourceGitSha": source["gitSha"],
                     "sourceTreeDigest": source["treeDigest"],
                     "contentSHA256": finalizer.sha256_tree(web_payload).removeprefix(
@@ -220,7 +220,7 @@ class ReleaseEvidenceManifestCanonicalContractTest(unittest.TestCase):
             "androidOfficialRelease": self._write_json(
                 root / "sources/android.json",
                 {
-                    "schema": "qwq.android.official-release",
+                    "schema": "client-app.android.official-release",
                     "sourceGitSha": source["gitSha"],
                     "sourceTreeDigest": source["treeDigest"],
                     "packagedAPK": "quwoquan.apk",

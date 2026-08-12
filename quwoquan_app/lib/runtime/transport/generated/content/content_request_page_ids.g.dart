@@ -42,6 +42,7 @@ class ContentRequestPageIds {
     'GetPost': 'content.post.get',
     'GetPostPublicationEligibility': 'content.get.post.publication.eligibility',
     'GetReport': 'content.get.report',
+    'GetResearchReleaseReadback': 'content.get.research.release.readback',
     'GrantGatheringSafetyTermination': 'content.grant.gathering.safety.termination',
     'HideComment': 'content.hide.comment',
     'InitMediaUpload': 'content.media.init',
@@ -123,6 +124,7 @@ class ContentRequestPageIds {
   static const String getPost = 'content.post.get';
   static const String getPostPublicationEligibility = 'content.get.post.publication.eligibility';
   static const String getReport = 'content.get.report';
+  static const String getResearchReleaseReadback = 'content.get.research.release.readback';
   static const String grantGatheringSafetyTermination = 'content.grant.gathering.safety.termination';
   static const String hideComment = 'content.hide.comment';
   static const String initMediaUpload = 'content.media.init';

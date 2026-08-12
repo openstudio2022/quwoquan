@@ -24,5 +24,6 @@ abstract interface class HomepageClaimRequestCommandWriter {
   Future<HomepageClaimRequestView> createClaimRequest({
     required String homepageId,
     required HomepageClaimRequestDraft draft,
+    String? clientRequestId,
   });
 }

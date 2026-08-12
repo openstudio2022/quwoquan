@@ -24,6 +24,7 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/di/startup_content_dependencies.dart';
 import 'package:quwoquan_app/runtime/shell/composition/quwoquan_app_shell.dart';
 import 'package:quwoquan_app/runtime/shell/startup/startup_content_warmup_port.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/application/public/account_session_ports.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/presentation/login_page.dart';
 import 'package:quwoquan_app/runtime/shell/welcome/welcome_screen.dart';
@@ -52,6 +53,11 @@ final class _StubSessionLifecycleWriter
       const LogoutAck(revoked: true);
 }
 
+final class _NoopBehaviorReporter implements BehaviorReporter {
+  @override
+  Future<void> reportEvents({required List<BehaviorEvent> events}) async {}
+}
+
 void main() {
   Widget wrapRoot(Widget child) {
     return ScreenUtilInit(designSize: const Size(393, 852), child: child);
@@ -72,6 +78,7 @@ void main() {
 
   List<Override> startupOverrides({
     required AuthSessionStore authStore,
+    VoidCallback? onBehaviorReporterCreate,
     List<Override> extra = const [],
   }) {
     return [
@@ -82,6 +89,10 @@ void main() {
       appTelemetryReporterProvider.overrideWithValue(
         RecordingAppTelemetryRecorder(),
       ),
+      behaviorReporterProvider.overrideWith((ref) {
+        onBehaviorReporterCreate?.call();
+        return _NoopBehaviorReporter();
+      }),
       runtimeLoggerProvider.overrideWith((ref) {
         final logger = RuntimeLogger(
           resource: const RuntimeLogResource(
@@ -138,6 +149,68 @@ void main() {
     expect(blockingStore.readStarted, isTrue);
     expect(find.text(FoundationText.welcomeTitle), findsOneWidget);
 
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
+  testWidgets('根组件在首帧后预装认证主体绑定的行为队列', (tester) async {
+    suppressExpectedErrors();
+    var reporterCreateCount = 0;
+
+    await tester.pumpWidget(
+      wrapRoot(
+        ProviderScope(
+          overrides: startupOverrides(
+            authStore: _BlockingAuthSessionStore(),
+            onBehaviorReporterCreate: () => reporterCreateCount += 1,
+          ),
+          child: const QuWoQuanAppRoot(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(reporterCreateCount, 1);
+    expect(find.byType(WelcomeScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 50));
+  });
+
+  testWidgets('Welcome 首帧与 deferred Router 预载并发且不提前挂载主壳', (tester) async {
+    suppressExpectedErrors();
+    AppStartupRuntime.instance.resetForTesting();
+    resetAppRouterLibraryLoaderForTesting();
+    final routerLoad = Completer<void>();
+    var loadCalls = 0;
+    overrideAppRouterLibraryLoaderForTesting(() {
+      loadCalls += 1;
+      return routerLoad.future;
+    });
+    addTearDown(() {
+      if (!routerLoad.isCompleted) {
+        routerLoad.complete();
+      }
+      AppStartupRuntime.instance.resetForTesting();
+      resetAppRouterLibraryLoaderForTesting();
+    });
+
+    await tester.pumpWidget(
+      wrapRoot(
+        ProviderScope(
+          overrides: startupOverrides(authStore: _BlockingAuthSessionStore()),
+          child: const QuWoQuanAppRoot(),
+        ),
+      ),
+    );
+
+    expect(loadCalls, 1);
+    expect(find.byType(WelcomeScreen), findsOneWidget);
+    expect(find.byType(MainAppShell), findsNothing);
+
+    routerLoad.complete();
+    await tester.pump();
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 50));
   });

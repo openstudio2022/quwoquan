@@ -20,6 +20,36 @@ func (testExternalProvider) Send(ctx context.Context, req ExternalInteractionReq
 	}, nil
 }
 
+func TestExternalInteractionDispatcherAcceptsCanonicalSMSOTPProviderContext(t *testing.T) {
+	ctx := context.Background()
+	dispatcher := ExternalInteractionDispatcher{
+		Writer: NewTaskOutboxWriter(NewMemoryStore()),
+	}
+
+	_, err := dispatcher.Submit(ctx, ExternalInteractionRequest{
+		RequestID:      "req-sms-platform-1",
+		Operation:      ExternalInteractionOperationSmsOTP,
+		Tenant:         "quwoquan",
+		Env:            "alpha",
+		IdempotencyKey: "otp:user:platform-1",
+		PayloadRef:     "otp_challenge:ch-platform-1",
+		PayloadDigest:  "digest",
+		Sensitivity:    "secret",
+		ExpiresAt:      time.Now().UTC().Add(time.Minute),
+		Payload: map[string]string{
+			"challengeId":     "ch-platform-1",
+			"phoneHash":       "phone-hash",
+			"maskedRecipient": "180****3909",
+			"templateId":      "sms_otp_login_acceptance",
+			"platform":        "acceptance",
+			"requestRef":      "req-sms-platform-1",
+		},
+	})
+	if err != nil {
+		t.Fatalf("submit canonical SMS OTP provider context: %v", err)
+	}
+}
+
 func TestExternalInteractionDispatcherWorkerRecordsProviderAttempt(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()

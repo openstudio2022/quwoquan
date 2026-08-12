@@ -426,7 +426,7 @@ def _fixture(root: Path) -> dict[str, Path]:
         import_run / "import.json",
         {
             "schema": "quwoquan.content_import_report",
-            "status": "active",
+            "status": "imported",
             "environment": ENVIRONMENT,
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
@@ -438,6 +438,9 @@ def _fixture(root: Path) -> dict[str, Path]:
                 {
                     "postRef": post_ref,
                     "postId": post_id,
+                    "contentId": f"content-{post_id}",
+                    "contentVersion": 1,
+                    "usageScope": "commercial",
                     "contentType": content_type,
                     "authorId": "author-a",
                 }
@@ -566,6 +569,35 @@ def _fixture(root: Path) -> dict[str, Path]:
                 }
                 for name, query, ids in feed_queries
             ],
+            "searchQueries": [
+                {
+                    "targetType": "post",
+                    "targetId": post_id,
+                    "query": post_id,
+                    "status": 200,
+                    "matchedObjectIds": [post_id],
+                    "request": _request_evidence(
+                        "/search",
+                        "search.global",
+                        suffix=f"search-{post_id}",
+                    ),
+                }
+                for _post_ref, post_id, _content_type in POSTS
+            ]
+            + [
+                {
+                    "targetType": "author",
+                    "targetId": "author-a",
+                    "query": "creator-a",
+                    "status": 200,
+                    "matchedObjectIds": ["author-a"],
+                    "request": _request_evidence(
+                        "/search",
+                        "search.global",
+                        suffix="search-author-a",
+                    ),
+                }
+            ],
             "creators": [
                 {
                     "creatorRef": CREATOR_ID,
@@ -591,6 +623,7 @@ def _fixture(root: Path) -> dict[str, Path]:
                         "etag": '"avatar-a"',
                         "hashVerified": True,
                     },
+                    "usesPlatformDefaultAvatar": False,
                 }
             ],
             "posts": [
@@ -657,6 +690,18 @@ def _convert_fixture_to_research(paths: dict[str, Path]) -> str:
     write_json(post_path, post_report)
     _resign_release(paths)
     return subject_hash
+
+
+def _convert_fixture_to_consumer(paths: dict[str, Path]) -> None:
+    post_path = paths["verify"] / "post-api-verification.json"
+    post_report = json.loads(post_path.read_text(encoding="utf-8"))
+    post_report["readinessPhase"] = "consumer"
+    post_report["feedQueries"] = [
+        row
+        for row in post_report["feedQueries"]
+        if row["name"] != "premium_stream"
+    ]
+    write_json(post_path, post_report)
 
 
 def _write(
@@ -787,21 +832,57 @@ def test_environment_release_readiness__binds_full_payload_and_feed_ids__local_c
         "tagLabel": "旅行",
         "videoAttribution": "测试视频来源",
     }
+    assert receipt["appUatEnvelopeDigest"].startswith("sha256:")
+    activation = receipt["activationEnvelope"]
+    assert activation == {
+        "schema": "quwoquan_data.environment_activation_envelope",
+        "environment": ENVIRONMENT,
+        "releaseId": RELEASE_ID,
+        "manifestDigest": payload_digest(paths["release"]),
+        "sourceRevision": SOURCE_REVISION,
+        "sourceDigest": SOURCE_DIGEST.digest,
+        "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+        "releaseClass": "commercial",
+        "productLifecycleState": "commercial",
+        "readinessPhase": "commercial",
+        "importRunId": IMPORT_RUN_ID,
+        "verifyRunId": VERIFY_RUN_ID,
+        "importReportRef": (
+            f"env/{ENVIRONMENT}/runs/data-release/{RELEASE_ID}/"
+            f"{IMPORT_RUN_ID}/import.json"
+        ),
+        "importReportDigest": (
+            "sha256:"
+            + hashlib.sha256((paths["import"] / "import.json").read_bytes()).hexdigest()
+        ),
+        "appUatEnvelopeDigest": receipt["appUatEnvelopeDigest"],
+    }
+    assert receipt["activationEnvelopeDigest"].startswith("sha256:")
 
 
-def test_environment_release_readiness__consumer_excludes_commercial_premium_gate__local_contract(
+def test_environment_release_readiness__selects_canonical_source_identity_mode__local_contract() -> None:
+    assert readiness_subject._release_source_identity_fields(
+        {
+            "targetEnvironment": "alpha",
+            "releaseMode": "research",
+            "sourceIdentities": [{"identityKind": "legacy_canonical_migration"}],
+            "sourceIdentitySetDigest": "sha256:" + "1" * 64,
+        }
+    ) == ("sourceIdentities", "sourceIdentitySetDigest")
+    assert readiness_subject._release_source_identity_fields(
+        {
+            "sourceRevision": "sha256:" + "2" * 64,
+            "sourceDigest": "sha256:" + "3" * 64,
+            "entityCatalogDigest": "sha256:" + "4" * 64,
+        }
+    ) == ("sourceRevision", "sourceDigest", "entityCatalogDigest")
+
+
+def test_environment_release_readiness__consumer_projects_typed_video_app_uat_envelope__local_contract(
     tmp_path: Path,
 ) -> None:
     paths = _fixture(tmp_path)
-    post_path = paths["verify"] / "post-api-verification.json"
-    post_report = json.loads(post_path.read_text(encoding="utf-8"))
-    post_report["readinessPhase"] = "consumer"
-    post_report["feedQueries"] = [
-        row
-        for row in post_report["feedQueries"]
-        if row["name"] != "premium_stream"
-    ]
-    write_json(post_path, post_report)
+    _convert_fixture_to_consumer(paths)
 
     report = _write(tmp_path, readiness_phase="consumer")
     receipt = json.loads(report.read_text(encoding="utf-8"))
@@ -817,7 +898,47 @@ def test_environment_release_readiness__consumer_excludes_commercial_premium_gat
         "typed_video",
         "homepage_recommend",
     }
-    assert "appUatEnvelope" not in receipt
+    assert receipt["appUatEnvelope"] == {
+        "releaseId": RELEASE_ID,
+        "releaseClass": "commercial",
+        "productLifecycleState": "commercial",
+        "homepageId": "homepage-a",
+        "homepageTitle": "测试实体",
+        "articleWorkId": "post-article-a",
+        "articleTitle": "测试文章",
+        "imageWorkId": "post-image-a",
+        "imageTitle": "测试图片",
+        "videoWorkId": "post-video-a",
+        "videoTitle": "测试视频",
+        "creatorName": "测试创作者",
+        "creatorUserHandle": "test_creator",
+        "creatorPersonaId": "author-a",
+        "creatorAvatarAssetId": "creator-avatar-a",
+        "tagLabel": "旅行",
+        "videoAttribution": "测试视频来源",
+    }
+
+
+def test_environment_release_readiness__consumer_app_uat_tamper_cannot_hide_behind_checksum__local_contract(
+    tmp_path: Path,
+) -> None:
+    paths = _fixture(tmp_path)
+    _convert_fixture_to_consumer(paths)
+    readiness = json.loads(
+        _write(tmp_path, readiness_phase="consumer").read_text(encoding="utf-8")
+    )
+    app_uat_envelope = readiness["appUatEnvelope"]
+    assert isinstance(app_uat_envelope, dict)
+    app_uat_envelope["videoWorkId"] = "foreign-video"
+    _resign_readiness(readiness)
+
+    issues = _semantic_issues(tmp_path, paths, readiness)
+
+    assert any(
+        "appUatEnvelope drifts from immutable release closure" in issue
+        for issue in issues
+    )
+    assert all("verificationChecksum drift" not in issue for issue in issues)
 
 
 def test_environment_release_readiness__app_uat_envelope_requires_release_object_title__local_contract(
@@ -972,6 +1093,8 @@ def test_environment_release_readiness__research_projects_internal_uat_without_g
     )
     isolation = {
         "subjectHash": subject_hash,
+        "policyRef": "quwoquan_ops/environments/gamma/runtime.yaml",
+        "policySha256": "sha256:" + "7" * 64,
         "positiveReadback": {
             "releaseId": RELEASE_ID,
             "manifestDigest": payload_digest(paths["release"]),
@@ -1005,8 +1128,58 @@ def test_environment_release_readiness__research_projects_internal_uat_without_g
     assert report["internalSubjectHash"] == subject_hash
     assert report["appUatEnvelope"]["releaseClass"] == "research"
     assert report["appUatEnvelope"]["articleWorkId"] == "post-article-a"
+    isolation_binding = report["activationEnvelope"][
+        "researchIsolationPolicy"
+    ]
+    assert isolation_binding == {
+        "policyRef": "quwoquan_ops/environments/gamma/runtime.yaml",
+        "policyDigest": "sha256:" + "7" * 64,
+        "verificationRef": (
+            f"env/{ENVIRONMENT}/runs/data-release/{RELEASE_ID}/"
+            f"{VERIFY_RUN_ID}/research-isolation-verification.json"
+        ),
+        "verificationDigest": report["researchIsolationVerificationDigest"],
+        "subjectHash": subject_hash,
+    }
     assert "guestActorHash" not in report
     assert "guestLogin" not in report
+
+
+def test_environment_release_readiness__activation_envelope_tamper_fails_semantic_recheck__local_contract(
+    tmp_path: Path,
+) -> None:
+    paths = _fixture(tmp_path)
+    readiness = json.loads(_write(tmp_path).read_text(encoding="utf-8"))
+    activation = readiness["activationEnvelope"]
+    assert isinstance(activation, dict)
+    activation["sourceDigest"] = "sha256:" + "0" * 64
+    _resign_readiness(readiness)
+
+    issues = _semantic_issues(tmp_path, paths, readiness)
+
+    assert any(
+        "activationEnvelope drifts from release/import/readback" in issue
+        for issue in issues
+    )
+    assert all("verificationChecksum drift" not in issue for issue in issues)
+
+
+@pytest.mark.parametrize("environment", ("alpha", "beta", "gamma", "prod"))
+def test_environment_release_readiness__activation_envelope_is_environment_scoped__local_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    environment: str,
+) -> None:
+    monkeypatch.setattr(sys.modules[__name__], "ENVIRONMENT", environment)
+    _fixture(tmp_path)
+
+    readiness = json.loads(_write(tmp_path).read_text(encoding="utf-8"))
+
+    assert readiness["environment"] == environment
+    assert readiness["activationEnvelope"]["environment"] == environment
+    assert readiness["activationEnvelope"]["importReportRef"].startswith(
+        f"env/{environment}/runs/data-release/"
+    )
 
 
 def test_environment_release_readiness__semantic_verifier_reprojects_commercial_app_uat_envelope__local_contract(

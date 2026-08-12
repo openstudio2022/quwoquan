@@ -11,6 +11,9 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/content_behavior_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/my_intersection_inbox_provider.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_insight_primitives.dart';
+import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 
 /// 我的主页「我的交集」预览卡（高保版）。
 ///
@@ -34,9 +37,12 @@ class _MyIntersectionInboxCardState
   @override
   void initState() {
     super.initState();
-    Future<void>.microtask(
-      () => ref.read(myIntersectionPreviewProvider.notifier).load(),
-    );
+    Future<void>.microtask(() async {
+      await Future.wait(<Future<void>>[
+        ref.read(myIntersectionPreviewProvider.notifier).load(),
+        ref.read(myIntersectionSummaryProvider.notifier).load(),
+      ]);
+    });
   }
 
   IntersectionTargetNavigator get _navigator => IntersectionTargetNavigator(
@@ -59,9 +65,10 @@ class _MyIntersectionInboxCardState
     },
   );
 
-  void _openList({String intersectionId = ''}) {
+  void _openList({String intersectionId = '', String dimension = ''}) {
     context.push(
       AppRoutePaths.myIntersections(
+        dimension: dimension.isEmpty ? null : dimension,
         filter: 'fact',
         intersectionId: intersectionId.isEmpty ? null : intersectionId,
       ),
@@ -93,6 +100,7 @@ class _MyIntersectionInboxCardState
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(myIntersectionPreviewProvider);
+    final summaryState = ref.watch(myIntersectionSummaryProvider);
     final visible = state.items
         .where((item) => item.intersectionClass == 'fact')
         .map(displayReadyIntersectionReason)
@@ -105,27 +113,113 @@ class _MyIntersectionInboxCardState
       actionLabel: DiscoveryFeedText.intersectionViewAll,
       onAction: () => _openList(),
       topPadding: true,
-      child: state.isLoading && visible.isEmpty
-          ? const ProfileIntersectionSkeletonList()
-          : visible.isEmpty
-          ? const ProfileIntersectionEmptyState(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (summaryState.summary case final summary?) ...<Widget>[
+            _IntersectionInboxSummaryStrip(
+              summary: summary,
+              onDimensionTap: (dimension) => _openList(dimension: dimension),
+            ),
+            const ProfileInsightDivider(),
+          ],
+          if (state.isLoading && visible.isEmpty)
+            const ProfileIntersectionSkeletonList()
+          else if (visible.isEmpty)
+            const ProfileIntersectionEmptyState(
               text: ProfileText.profileIntersectionEmptyGuidance,
             )
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                for (var index = 0; index < visible.length; index += 1) ...[
-                  if (index > 0) const ProfileInsightDivider(),
-                  ProfileIntersectionPreviewRow(
-                    reason: visible[index],
-                    onTap: () => _openList(
-                      intersectionId: visible[index].intersectionId,
-                    ),
-                    onSpanTap: (span) => _onSpanTap(visible[index], span),
-                  ),
-                ],
-              ],
+          else
+            for (var index = 0; index < visible.length; index += 1) ...[
+              if (index > 0) const ProfileInsightDivider(),
+              ProfileIntersectionPreviewRow(
+                reason: visible[index],
+                onTap: () =>
+                    _openList(intersectionId: visible[index].intersectionId),
+                onSpanTap: (span) => _onSpanTap(visible[index], span),
+              ),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _IntersectionInboxSummaryStrip extends StatelessWidget {
+  const _IntersectionInboxSummaryStrip({
+    required this.summary,
+    required this.onDimensionTap,
+  });
+
+  final IntersectionInboxSummary summary;
+  final ValueChanged<String> onDimensionTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final newDimensions = summary.dimensions
+        .where((item) => item.newCount > 0)
+        .take(3)
+        .toList(growable: false);
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerSm,
+        vertical: AppSpacing.intraGroupSm,
+      ),
+      child: Row(
+        children: <Widget>[
+          Text(
+            DiscoveryFeedText.intersectionEntrySummary(summary.totalCount),
+            key: const ValueKey<String>('my-intersections-total-count'),
+            style: TextStyle(
+              color: AppColors.iosSecondaryLabel(context),
+              fontSize: AppTypography.iosFootnote,
             ),
+          ),
+          if (newDimensions.isNotEmpty) ...<Widget>[
+            SizedBox(width: AppSpacing.intraGroupSm),
+            Expanded(
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: AppSpacing.intraGroupSm,
+                runSpacing: AppSpacing.intraGroupXs,
+                children: <Widget>[
+                  for (final item in newDimensions)
+                    CupertinoButton(
+                      key: ValueKey<String>(
+                        'my-intersections-dimension-${item.dimension}',
+                      ),
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      onPressed: () => onDimensionTap(item.dimension),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Container(
+                            width: AppSpacing.intraGroupXs,
+                            height: AppSpacing.intraGroupXs,
+                            decoration: BoxDecoration(
+                              color: AppColors.iosDestructive(context),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          SizedBox(width: AppSpacing.intraGroupXs),
+                          Text(
+                            '${item.label} ${item.newCount}'
+                            '${DiscoveryFeedText.intersectionNewBadgeSuffix}',
+                            style: TextStyle(
+                              color: AppColors.iosSecondaryLabel(context),
+                              fontSize: AppTypography.iosCaption1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -29,7 +29,6 @@ def resolve_frozen_semantic_selection(
     requested_selection_id: object,
     retry_of: str | None,
 ) -> SemanticExecutionBinding:
-    del retry_of  # Existing manifests, not first use, define retry/rebind safety.
     requested = (
         normalize_semantic_selection_id(requested_selection_id)
         if requested_selection_id not in (None, "")
@@ -47,6 +46,12 @@ def resolve_frozen_semantic_selection(
     else:
         selection_id = requested or DEFAULT_SEMANTIC_SELECTION_ID
     binding = semantic_execution_binding(recipe, selection_id)
+    if existing_manifest is None and binding.requires_new_retry_of:
+        from content.execution.planning.semantic_failover_admission import (
+            require_cursor_auto_retry_admission,
+        )
+
+        require_cursor_auto_retry_admission(retry_of)
     return binding
 
 

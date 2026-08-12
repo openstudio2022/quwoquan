@@ -7,6 +7,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import yaml
+
 from quwoquan_ops.cli.lib.compose_layout import gamma_compose_files
 from quwoquan_ops.cli.alpha.content_release_runtime import _compose_build_environment
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
@@ -15,16 +17,22 @@ from quwoquan_ops.cli.lib.environment_topology import get_target, load_environme
 ROOT = Path(__file__).resolve().parents[3]
 COMPOSE_FILE = ROOT / "quwoquan_ops" / "environments" / "compose" / "docker-compose.gamma-local.yaml"
 CADDYFILE = ROOT / "quwoquan_ops" / "environments" / "gamma" / "local" / "Caddyfile"
-CONTENT_GAMMA_COMPOSE_FILE = (
-    ROOT
-    / "quwoquan_service"
-    / "services"
-    / "content-service"
-    / "environments"
-    / "gamma"
-    / "deploy"
-    / "compose.yaml"
+CONTENT_SERVICE_ROOT = (
+    ROOT / "quwoquan_service" / "services" / "content-service"
 )
+
+
+def content_environment_compose(environment: str) -> Path:
+    return (
+        CONTENT_SERVICE_ROOT
+        / "environments"
+        / environment
+        / "deploy"
+        / "compose.yaml"
+    )
+
+
+CONTENT_GAMMA_COMPOSE_FILE = content_environment_compose("gamma")
 OBJECT_STORAGE_LIFECYCLE_FILE = (
     ROOT
     / "quwoquan_ops"
@@ -75,7 +83,7 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
                     "https://cdn.alpha.quwoquan.com:17100"
                 ),
                 "QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL": (
-                    "https://upload.alpha.quwoquan.com:17100"
+                    "https://upload.alpha.quwoquan.com:17130"
                 ),
             },
         )
@@ -173,29 +181,94 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
         self.assertNotIn("SSL_CERT_FILE:", service_block)
         self.assertNotIn("object-storage-ca.crt", service_block)
 
-    def test_gamma_overlay_owns_required_elasticsearch_dependency(self) -> None:
+    def test_local_environment_overlays_own_required_elasticsearch_dependency(self) -> None:
         content = service_compose("content-service")
-        gamma_content_overlay = CONTENT_GAMMA_COMPOSE_FILE.read_text(encoding="utf-8")
         search = service_compose("search-service")
         entity = service_compose("entity-service")
         circle = service_compose("circle-service")
         expected = "elasticsearch:\n        condition: service_healthy"
         self.assertNotIn(expected, content)
-        self.assertIn(expected, gamma_content_overlay)
-        for dependency, condition in (
-            ("mongodb", "service_healthy"),
-            ("mongo-init", "service_completed_successfully"),
-            ("object-storage-init", "service_completed_successfully"),
-            ("redis", "service_healthy"),
-            ("recommendation-service", "service_healthy"),
-            ("elasticsearch", "service_healthy"),
-        ):
-            self.assertIn(
-                f"{dependency}:\n        condition: {condition}",
-                gamma_content_overlay,
+        for environment in ("alpha", "beta", "gamma"):
+            with self.subTest(environment=environment):
+                environment_overlay = content_environment_compose(environment).read_text(
+                    encoding="utf-8"
+                )
+                for dependency, condition in (
+                    ("mongodb", "service_healthy"),
+                    ("mongo-init", "service_completed_successfully"),
+                    ("object-storage-init", "service_completed_successfully"),
+                    ("redis", "service_healthy"),
+                    ("recommendation-service", "service_healthy"),
+                    ("elasticsearch", "service_healthy"),
+                ):
+                    self.assertIn(
+                        f"{dependency}:\n        condition: {condition}",
+                        environment_overlay,
+                    )
+                self.assertNotIn("sleep ", environment_overlay)
+                self.assertIn(
+                    "x-qwq-workloads: [full, content-commercial]",
+                    environment_overlay,
+                )
+                environment_config = (
+                    CONTENT_SERVICE_ROOT
+                    / "environments"
+                    / environment
+                    / "config.yaml"
+                ).read_text(encoding="utf-8")
+                self.assertIn("sys.content-service.es.enabled: true", environment_config)
+        schema = yaml.safe_load(
+            (CONTENT_SERVICE_ROOT / "config" / "schema.yaml").read_text(
+                encoding="utf-8"
             )
+        )
+        defaults = {
+            entry["key"]: entry.get("default")
+            for entry in schema["configs"]
+        }
+        self.assertEqual(
+            defaults["sys.content-service.es.startupTimeoutMs"],
+            60000,
+        )
+        self.assertEqual(
+            defaults["sys.content-service.es.startupInitialBackoffMs"],
+            100,
+        )
+        self.assertEqual(
+            defaults["sys.content-service.es.startupMaxBackoffMs"],
+            2000,
+        )
+        for environment in ("alpha", "beta", "gamma", "prod"):
+            with self.subTest(environment_config=environment):
+                overrides = yaml.safe_load(
+                    (
+                        CONTENT_SERVICE_ROOT
+                        / "environments"
+                        / environment
+                        / "config.yaml"
+                    ).read_text(encoding="utf-8")
+                )["overrides"]
+                for key in (
+                    "sys.content-service.es.startupTimeoutMs",
+                    "sys.content-service.es.startupInitialBackoffMs",
+                    "sys.content-service.es.startupMaxBackoffMs",
+                ):
+                    self.assertNotIn(key, overrides)
         for block in (search, entity, circle):
             self.assertIn(expected, block)
+
+    def test_elasticsearch_dependency_wait_is_health_bounded_not_blind_sleep(self) -> None:
+        service_block = PRODUCT_OPS_LOCAL_ES_COMPOSE_FILE.read_text(encoding="utf-8")
+
+        self.assertIn("curl -fsS 'http://localhost:9200/_ilm/status'", service_block)
+        for bounded_setting in (
+            "interval: 10s",
+            "timeout: 5s",
+            "start_period: 1200s",
+            "retries: 60",
+        ):
+            self.assertIn(bounded_setting, service_block)
+        self.assertNotIn("sleep ", service_block)
 
     def test_gamma_redis_health_requires_ready_command_processing(self) -> None:
         compose = COMPOSE_FILE.read_text(encoding="utf-8")
@@ -555,6 +628,59 @@ class LocalGammaContentServiceConfigTest(unittest.TestCase):
                 ]
             },
         )
+
+    def test_public_media_miss_uses_only_prefix_scoped_object_storage_origin(self) -> None:
+        compose = COMPOSE_FILE.read_text(encoding="utf-8")
+        caddy = CADDYFILE.read_text(encoding="utf-8")
+        init_block = compose.split("  object-storage-init:\n", 1)[1].split(
+            "\n  livekit-sfu:\n", 1
+        )[0]
+
+        self.assertIn(
+            'mc anonymous set download "qwq/${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}/media/$${media_kind}/s"',
+            init_block,
+        )
+        self.assertIn(
+            "for media_kind in avatar image video background attachment; do",
+            init_block,
+        )
+        for private_prefix in ("uploads", "media/objects", "media/processed"):
+            self.assertNotIn(f"/{private_prefix}", init_block)
+        self.assertIn(
+            "${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:"
+            "/etc/caddy/tls/object-storage-ca.pem:ro",
+            compose,
+        )
+        self.assertEqual(caddy.count("@object_store_public_slice not file {path}"), 3)
+        self.assertEqual(
+            caddy.count(
+                "rewrite @object_store_public_slice /{$LOCAL_GAMMA_OBJECT_STORAGE_BUCKET}{uri}"
+            ),
+            3,
+        )
+        self.assertEqual(
+            caddy.count(
+                "reverse_proxy @object_store_public_slice "
+                "https://object-storage:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT}"
+            ),
+            3,
+        )
+        self.assertEqual(
+            caddy.count(
+                "tls_trust_pool file /etc/caddy/tls/object-storage-ca.pem"
+            ),
+            3,
+        )
+        self.assertEqual(
+            caddy.count("tls_server_name {$QWQ_PUBLIC_UPLOAD_HOST}"),
+            3,
+        )
+        for binding in (
+            'QWQ_PUBLIC_UPLOAD_HOST: "${QWQ_PUBLIC_UPLOAD_HOST:?QWQ_PUBLIC_UPLOAD_HOST is required}"',
+            'LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT: "${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:?LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT is required}"',
+            'LOCAL_GAMMA_OBJECT_STORAGE_BUCKET: "${LOCAL_GAMMA_OBJECT_STORAGE_BUCKET:?LOCAL_GAMMA_OBJECT_STORAGE_BUCKET is required}"',
+        ):
+            self.assertIn(binding, compose)
 
     def test_local_single_node_search_is_not_blocked_by_colima_build_cache_watermark(self) -> None:
         service_block = PRODUCT_OPS_LOCAL_ES_COMPOSE_FILE.read_text(encoding="utf-8")

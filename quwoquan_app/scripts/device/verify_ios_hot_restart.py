@@ -227,23 +227,29 @@ def _find_descendant_flutter_pid(root_pid: int) -> int | None:
         if parent_pid in visited:
             continue
         visited.add(parent_pid)
-        children = subprocess.run(
-            ["pgrep", "-P", str(parent_pid)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
+        try:
+            children = subprocess.run(
+                ["pgrep", "-P", str(parent_pid)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except OSError:
+            return None
         for raw_pid in children.stdout.split():
             try:
                 child_pid = int(raw_pid)
             except ValueError:
                 continue
-            command = subprocess.run(
-                ["ps", "-o", "command=", "-p", str(child_pid)],
-                check=False,
-                capture_output=True,
-                text=True,
-            ).stdout
+            try:
+                command = subprocess.run(
+                    ["ps", "-o", "command=", "-p", str(child_pid)],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                ).stdout
+            except OSError:
+                return None
             if "flutter_tools.snapshot run" in command:
                 return child_pid
             pending.append(child_pid)
@@ -251,76 +257,14 @@ def _find_descendant_flutter_pid(root_pid: int) -> int | None:
 
 
 def _terminate_stale_device_runtime(device_id: str, bundle_id: str) -> dict[str, Any]:
-    """Stop only Flutter residents explicitly bound to this Simulator.
+    """Terminate only the target app; never sweep unrelated host processes.
 
-    The app-content UAT owns the environment operation lock, so an older
-    resident for the same device cannot remain valid evidence.  Matching the
-    literal UDID keeps unrelated Flutter sessions outside this cleanup scope.
+    The outer app-content UAT operation lock serializes this runner.  Host-wide
+    process discovery cannot prove ownership and previously allowed one iOS
+    run to terminate Android or another Simulator's frontend server.  The
+    resident process created below is instead owned through its Popen handle
+    and is always reaped in ``finally``.
     """
-
-    terminated_resident_pids: list[int] = []
-    terminated_frontend_server_pids: list[int] = []
-    process_list = subprocess.run(
-        ["ps", "-axo", "pid=,command="],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    for line in process_list.stdout.splitlines():
-        normalized = line.strip()
-        if not normalized:
-            continue
-        raw_pid, separator, command = normalized.partition(" ")
-        if not separator or not raw_pid.isdigit():
-            continue
-        is_device_resident = (
-            "flutter_tools.snapshot run" in command and device_id in command
-        )
-        is_workspace_frontend_server = False
-        if "frontend_server.dart.snapshot" in command:
-            cwd_result = subprocess.run(
-                ["lsof", "-a", "-p", raw_pid, "-d", "cwd", "-Fn"],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            process_cwd = next(
-                (
-                    line[1:]
-                    for line in cwd_result.stdout.splitlines()
-                    if line.startswith("n")
-                ),
-                "",
-            )
-            is_workspace_frontend_server = process_cwd == str(APP_DIR)
-        if not is_device_resident and not is_workspace_frontend_server:
-            continue
-        pid = int(raw_pid)
-        try:
-            os.kill(pid, signal.SIGTERM)
-            if is_device_resident:
-                terminated_resident_pids.append(pid)
-            else:
-                terminated_frontend_server_pids.append(pid)
-        except OSError:
-            continue
-
-    deadline = time.monotonic() + 5
-    pending = set(terminated_resident_pids + terminated_frontend_server_pids)
-    while pending and time.monotonic() < deadline:
-        for pid in tuple(pending):
-            try:
-                os.kill(pid, 0)
-            except OSError:
-                pending.discard(pid)
-        if pending:
-            time.sleep(0.1)
-    for pid in sorted(pending):
-        try:
-            os.kill(pid, signal.SIGKILL)
-        except OSError:
-            pass
-
     native = subprocess.run(
         ["xcrun", "simctl", "terminate", device_id, bundle_id],
         check=False,
@@ -328,8 +272,9 @@ def _terminate_stale_device_runtime(device_id: str, bundle_id: str) -> dict[str,
         text=True,
     )
     return {
-        "terminatedFlutterResidentPids": terminated_resident_pids,
-        "terminatedFrontendServerPids": terminated_frontend_server_pids,
+        "cleanupScope": "simulator_bundle_only",
+        "terminatedFlutterResidentPids": [],
+        "terminatedFrontendServerPids": [],
         "terminatedNativeApp": native.returncode == 0,
     }
 
@@ -394,6 +339,15 @@ def cold_startup_terminal_observed(
     )
 
 
+def flutter_resident_ready_for_hot_restart(raw_output: bytes | bytearray) -> bool:
+    """Return whether Flutter has installed its resident command reader."""
+
+    return (
+        b"Flutter run key commands." in raw_output
+        and b"R Hot restart." in raw_output
+    )
+
+
 def _wait_for_cold_startup(
     master_fd: int,
     process: subprocess.Popen[bytes],
@@ -414,9 +368,12 @@ def _wait_for_cold_startup(
             timeout_seconds=min(0.5, max(0.0, deadline - time.monotonic())),
         )
         simulator_log = _read_simulator_startup_log(device_id)
-        if cold_startup_terminal_observed(
-            simulator_log,
-            excluded_attempt_ids=excluded_attempt_ids,
+        if (
+            cold_startup_terminal_observed(
+                simulator_log,
+                excluded_attempt_ids=excluded_attempt_ids,
+            )
+            and flutter_resident_ready_for_hot_restart(output)
         ):
             return True
         if process.poll() is not None:

@@ -78,3 +78,23 @@ func (s *PGAnonymousDeviceBindingStoreBase) Delete(ctx context.Context, id strin
 	_, err := s.pool.Exec(ctx, `DELETE FROM anonymous_device_bindings WHERE id = $1`, id)
 	return err
 }
+
+// ListByOwnerID returns all AnonymousDeviceBinding records for the given foreign key.
+func (s *PGAnonymousDeviceBindingStoreBase) ListByOwnerID(ctx context.Context, fkID string) ([]model.AnonymousDeviceBinding, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+AnonymousDeviceBindingCols+` FROM anonymous_device_bindings WHERE owner_id = $1 ORDER BY created_at DESC`, fkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []model.AnonymousDeviceBinding
+	for rows.Next() {
+		var e model.AnonymousDeviceBinding
+		if err := rows.Scan(&e.ID, &e.OwnerID, &e.InstallIDHash, &e.DeviceFingerprintHash, &e.Platform, &e.AppVersion, &e.LastSeenAt, &e.CreatedAt, &e.UpdatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, e)
+	}
+	return result, rows.Err()
+}

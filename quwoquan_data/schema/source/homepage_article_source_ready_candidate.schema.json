@@ -28,7 +28,6 @@
         "body": {"$ref": "#/$defs/fileBinding"},
         "media": {
           "type": "array",
-          "minItems": 1,
           "items": {"$ref": "#/$defs/mediaBinding"}
         }
       }
@@ -38,7 +37,10 @@
       "additionalProperties": false,
       "required": [
         "coverageProjectionRef", "coverageProjectionDigest",
-        "coverageProjectionFileSha256", "discoveryEvidenceRef",
+        "coverageProjectionFileSha256", "seedSelectionRef",
+        "seedSelectionDigest", "seedSelectionFileSha256",
+        "seedOrigin", "seedId", "coverageKey",
+        "discoveryEvidenceRef",
         "discoveryEvidenceFileSha256", "acquisitionEvidenceRefs",
         "rightsEvidenceRefs", "qualityEvidenceRefs"
       ],
@@ -46,6 +48,23 @@
         "coverageProjectionRef": {"$ref": "#/$defs/ref"},
         "coverageProjectionDigest": {"$ref": "#/$defs/sha256"},
         "coverageProjectionFileSha256": {"$ref": "#/$defs/sha256"},
+        "seedSelectionRef": {"$ref": "#/$defs/ref"},
+        "seedSelectionDigest": {"$ref": "#/$defs/sha256"},
+        "seedSelectionFileSha256": {"$ref": "#/$defs/sha256"},
+        "seedOrigin": {"enum": ["legacy_hint", "current_coverage"]},
+        "seedId": {"$ref": "#/$defs/sha256"},
+        "coverageKey": {"$ref": "homepage_article_seed_selection.schema.json#/$defs/seed/properties/coverageKey"},
+        "sourceSelectionOrigin": {"const": "site_frontier"},
+        "historicalComparison": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["candidateId", "bodyContentSha256", "bodyComparison"],
+          "properties": {
+            "candidateId": {"type": "string", "minLength": 1},
+            "bodyContentSha256": {"$ref": "#/$defs/sha256"},
+            "bodyComparison": {"enum": ["same", "changed"]}
+          }
+        },
         "discoveryEvidenceRef": {"$ref": "#/$defs/ref"},
         "discoveryEvidenceFileSha256": {"$ref": "#/$defs/sha256"},
         "acquisitionEvidenceRefs": {"$ref": "#/$defs/evidenceRefs"},
@@ -55,6 +74,13 @@
     },
     "capsuleDigest": {"$ref": "#/$defs/sha256"}
   },
+  "allOf": [
+    {
+      "if": {"properties": {"provenance": {"properties": {"seedOrigin": {"const": "legacy_hint"}}}}},
+      "then": {"properties": {"provenance": {"required": ["historicalComparison"]}}},
+      "else": {"properties": {"provenance": {"not": {"required": ["historicalComparison"]}}}}
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "ref": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},

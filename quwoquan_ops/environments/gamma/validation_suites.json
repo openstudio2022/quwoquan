@@ -445,8 +445,8 @@
       "optimizationPlan": "nightly/release 在独立平台 lease 内执行；只接受全真布尔恢复证据，禁止注入 token 或本地身份。"
     },
     "account_closure_patrol": {
-      "path": "quwoquan_app/test/user_acceptance/journeys/account_closure/account_closure_journey__user_acceptance_test.dart",
-      "target": "test/user_acceptance/journeys/account_closure/account_closure_journey__user_acceptance_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/service/user_service/account/user_account/account_closure_remote__user_acceptance_test.dart",
+      "target": "test/user_acceptance/service/user_service/account/user_account/account_closure_remote__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "release",
       "budgetSeconds": 300,

@@ -13,6 +13,9 @@ const _homeVideoPostId = String.fromEnvironment(
 );
 const _feedKey = ValueKey<String>('home-feed-recommend');
 const _readyKey = ValueKey<String>('video-player-ready');
+const _nativeFirstFrameKey = ValueKey<String>(
+  'video-player-native-first-frame',
+);
 const _errorKey = ValueKey<String>('video-player-error');
 
 void main() {
@@ -29,16 +32,17 @@ void main() {
       await launchPatrolAppOnce($);
       await patrolGoTo($, AppRoutePaths.home);
 
-      final reachedReady = await _focusVideoCardAndWaitForReady(
+      final renderedFirstFrame = await _focusVideoCardAndWaitForFirstFrame(
         $,
         _homeVideoPostId,
       );
       expect(
-        reachedReady,
+        renderedFirstFrame,
         isTrue,
         reason:
             '发布物 $_releaseId 的首页视频 $_homeVideoPostId '
-            '应在稳定可见后完成原生播放器初始化',
+            '应在稳定可见后 6 秒内呈现原生首帧，'
+            '不得以 controller ready 冒充可用',
       );
       expect(
         find.byKey(_errorKey).evaluate(),
@@ -64,7 +68,7 @@ void _expectReleaseEnvelope() {
   }
 }
 
-Future<bool> _focusVideoCardAndWaitForReady(
+Future<bool> _focusVideoCardAndWaitForFirstFrame(
   PatrolIntegrationTester $,
   String postId,
 ) async {
@@ -76,6 +80,10 @@ Future<bool> _focusVideoCardAndWaitForReady(
   final playerError = find.descendant(
     of: card,
     matching: find.byKey(_errorKey),
+  );
+  final nativeFirstFrame = find.descendant(
+    of: card,
+    matching: find.byKey(_nativeFirstFrameKey),
   );
   final feedScrollable = find.descendant(
     of: find.byKey(_feedKey),
@@ -90,7 +98,8 @@ Future<bool> _focusVideoCardAndWaitForReady(
         if (playerError.evaluate().isNotEmpty) {
           return false;
         }
-        if (playerReady.evaluate().isNotEmpty) {
+        if (playerReady.evaluate().isNotEmpty &&
+            nativeFirstFrame.evaluate().isNotEmpty) {
           return true;
         }
         await $.pump(const Duration(milliseconds: 500));

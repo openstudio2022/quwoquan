@@ -1,0 +1,38 @@
+schema: qwq.object-owned-internal-persisted-graphql.v1
+canonicalOperationId: content.post.GetPostArticleRenderAssets
+objectId: content.post
+document: content_post_detail_article_render_assets.graphql
+operationName: ContentPostDetailArticleRenderAssets
+operationType: query
+sha256Hash: 119359eb546ba50284ad676377ca69138129ca01d605688310292ca156848b38
+assemblyProjectionId: content.post.ContentPostDetailSlice
+assemblyMappings:
+- targetField: articleAssetManifest
+  presenceSourceField: articleAssetManifestSummary
+  sources:
+  - {sourceField: articleAssetManifestSummary, strategy: merge_object}
+  - {sourceField: articleAssets, targetKey: assets, strategy: assign_key}
+- targetField: articleRenderProfile
+  sources:
+  - {sourceField: articleRenderProfileSummary, strategy: replace}
+appClientBundle:
+  bundleId: content.post.ContentPostDetail
+  role: extension
+  requiredForContentTypes: [article]
+runtimeRequest:
+  method: POST
+  path: /internal/graphql
+  contentType: application/json
+  queryText: forbidden
+  onlineRegistration: forbidden
+  mutation: forbidden
+  contractGraphHeader: X-Contract-Graph-SHA256
+  trustedServicePrincipal:
+    subject: service:api-edge
+    scope: content.post.graphql.read
+variables:
+  required: [postId]
+  generatedDefaults: {articleAssetFirst: 20}
+  additionalProperties: false
+response:
+  rootField: contentPostDetailArticleRenderAssets

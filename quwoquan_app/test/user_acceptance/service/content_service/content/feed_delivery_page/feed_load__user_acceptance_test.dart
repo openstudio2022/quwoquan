@@ -45,7 +45,10 @@ void main() {
     'discovery_feed_load_and_render',
     tags: ['user-acceptance', 'discovery'],
     skip: !kRunPatrolAcceptance,
-    config: PatrolTesterConfig(visibleTimeout: const Duration(seconds: 10)),
+    config: PatrolTesterConfig(
+      visibleTimeout: const Duration(seconds: 10),
+      printLogs: true,
+    ),
     ($) async {
       await launchPatrolAppOnce($);
 
@@ -66,7 +69,11 @@ void main() {
       );
       final visibleCardKeys = _visibleFeedCardKeys();
       expect(visibleCardKeys, isNotEmpty);
-      debugPrint(
+      // The host-side Patrol runner captures the Dart test process stdout.
+      // PatrolTester.log is not forwarded by iOS XCTest, so it cannot carry
+      // release-bound acceptance evidence across the device boundary.
+      // ignore: avoid_print
+      print(
         'QWQ_FEED_CONTENT_EVIDENCE '
         '${jsonEncode(<String, Object>{'environment': _runtimeEnv, 'visibleCardCount': visibleCardKeys.length, 'visibleCardKeys': visibleCardKeys})}',
       );

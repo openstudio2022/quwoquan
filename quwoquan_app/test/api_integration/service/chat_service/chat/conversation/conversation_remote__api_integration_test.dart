@@ -2,6 +2,7 @@
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/commercial-remote-only-message-system/spec.md#gwt-001
 // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/group-home-chat-info-contract/spec.md#gwt-001
 // spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-003
+// spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-005
 // readiness_case: conversation_create_conversation_app_api
 // readiness_case: conversation_list_conversations_app_api
 // readiness_case: conversation_get_conversation_app_api
@@ -10,7 +11,9 @@
 // readiness_case: conversation_list_conversation_timestamps_app_api
 // readiness_case: conversation_batch_get_conversations_app_api
 // readiness_case: conversation_update_group_governance_settings_app_api
+// readiness_case: conversation_update_announcement_app_api
 // readiness_case: conversation_dissolve_conversation_app_api
+// readiness_case: conversation_list_message_home_app_api
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
@@ -59,6 +62,10 @@ void main() {
     if (conversationId.trim().isEmpty) {
       throw StateError('CreateConversation returned an empty conversationId');
     }
+    await createdHarness.sendMessage(
+      conversationId,
+      'conversation-message-home-$identity',
+    );
     validRemotes = _ConversationRemotes.create(
       harness: createdHarness,
       accessToken: createdHarness.session.accessToken,
@@ -108,6 +115,28 @@ void main() {
     expect(conversations.first.type, isNotEmpty);
   });
 
+  test('production Remote 的 MessageHome 投影包含本次真实消息', () async {
+    final deadline = DateTime.now().add(const Duration(seconds: 15));
+    while (true) {
+      final rows = await activeHarness().repository.listMessageHome(limit: 20);
+      final matches = rows
+          .where((row) => row.conversationId == conversationId)
+          .toList(growable: false);
+      if (matches.isNotEmpty && matches.single.summary.isNotEmpty) {
+        expect(matches.single.kind, 'conversation');
+        expect(matches.single.title, isNotEmpty);
+        expect(matches.single.lastActiveAt, isNotNull);
+        break;
+      }
+      if (DateTime.now().isAfter(deadline)) {
+        throw TestFailure(
+          'MessageHome projection did not converge for $conversationId',
+        );
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+  });
+
   test('generated client 通过 production Remote 返回完整会话', () async {
     final conversation = await activeHarness().repository.getConversation(
       conversationId,
@@ -132,6 +161,57 @@ void main() {
     );
 
     expect(updated.title, title);
+  });
+
+  test('群公告同一意图重放并由 production Remote 权威读回', () async {
+    final remotes = validRemotes!;
+    final identity = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
+    final announcement = 'API announcement $identity';
+    final command = ChatUpdateAnnouncementCommand(
+      conversationId: conversationId,
+      announcement: announcement,
+    );
+    final idempotencyKey = 'conversation-announcement-$identity';
+
+    final first = await remotes.commands.updateAnnouncement(
+      command,
+      idempotencyKey: idempotencyKey,
+    );
+    final replay = await remotes.commands.updateAnnouncement(
+      command,
+      idempotencyKey: idempotencyKey,
+    );
+    final readback = await remotes.query.getConversation(
+      ChatGetConversationQuery(conversationId: conversationId),
+    );
+
+    expect(first.announcement, announcement);
+    expect(replay.announcement, first.announcement);
+    expect(replay.announcementUpdatedAt, first.announcementUpdatedAt);
+    expect(readback.announcement, announcement);
+
+    await _expectCanonicalFailure(
+      remotes.commands.updateAnnouncement(
+        ChatUpdateAnnouncementCommand(
+          conversationId: 'nonexistent_conv_announcement_00000',
+          announcement: announcement,
+        ),
+        idempotencyKey: 'conversation-announcement-missing-$identity',
+      ),
+      operationId: AppCloudOperationIds.chatConversationUpdateAnnouncement,
+      statusCode: 404,
+      code: ChatErrorCode.conversationNotFound.code,
+    );
+
+    final events = await activeHarness().telemetry.waitForEvents(
+      minimumCount: 4,
+    );
+    _expectOperationTelemetry(
+      events,
+      operationId: AppCloudOperationIds.chatConversationUpdateAnnouncement,
+      successCount: 2,
+      failureStatus: 404,
+    );
   });
 
   test('generated client 通过 production Remote 读取同源 GroupHome', () async {

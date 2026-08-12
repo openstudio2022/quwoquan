@@ -34,6 +34,7 @@ type executionBudgetConsumptionState struct {
 
 type executionToolCallReservation struct {
 	state     *executionBudgetConsumptionState
+	count     int64
 	committed bool
 }
 
@@ -136,15 +137,20 @@ func (state *executionBudgetConsumptionState) consumeModel(
 	return nil
 }
 
-func (state *executionBudgetConsumptionState) reserveToolCall(
+func (state *executionBudgetConsumptionState) reserveToolCalls(
 	policy AgentExecutionPolicy,
+	count int,
 ) (*executionToolCallReservation, error) {
+	if count <= 0 {
+		return nil, ErrExecutionBudgetExhausted
+	}
 	if state == nil {
-		return &executionToolCallReservation{}, nil
+		return &executionToolCallReservation{count: int64(count)}, nil
 	}
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	nextToolCalls := state.consumption.ToolCalls + state.pendingToolCalls + 1
+	reserved := int64(count)
+	nextToolCalls := state.consumption.ToolCalls + state.pendingToolCalls + reserved
 	if policy.StopOnBudgetExhaustion &&
 		nextToolCalls > int64(policy.MaxToolCalls) {
 		return nil, ExecutionBudgetError{
@@ -153,13 +159,13 @@ func (state *executionBudgetConsumptionState) reserveToolCall(
 			Consumed:  nextToolCalls,
 		}
 	}
-	state.pendingToolCalls++
-	return &executionToolCallReservation{state: state}, nil
+	state.pendingToolCalls += reserved
+	return &executionToolCallReservation{state: state, count: reserved}, nil
 }
 
-// Commit records one actual ToolExecutor invocation after it returns. The
-// in-memory reservation prevents concurrent Subagents from overcommitting the
-// global allowance without persisting a call that never happened.
+// Commit records the actual owner/Provider call count represented by the Tool
+// invocation after it returns. The in-memory reservation prevents concurrent
+// Subagents from overcommitting without persisting a call that never happened.
 func (reservation *executionToolCallReservation) Commit() error {
 	if reservation == nil || reservation.state == nil || reservation.committed {
 		return nil
@@ -167,15 +173,15 @@ func (reservation *executionToolCallReservation) Commit() error {
 	state := reservation.state
 	state.mu.Lock()
 	defer state.mu.Unlock()
-	if state.pendingToolCalls <= 0 {
+	if reservation.count <= 0 || state.pendingToolCalls < reservation.count {
 		return ErrExecutionBudgetExhausted
 	}
 	next := state.consumption
-	next.ToolCalls++
+	next.ToolCalls += reservation.count
 	if err := state.persistNext(next); err != nil {
 		return err
 	}
-	state.pendingToolCalls--
+	state.pendingToolCalls -= reservation.count
 	reservation.committed = true
 	return nil
 }

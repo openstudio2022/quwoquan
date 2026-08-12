@@ -74,6 +74,7 @@ def _bind_queue_mechanics_backend(monkeypatch: pytest.MonkeyPatch) -> None:
         return QueueBackend(requested_value or metadata_value or QueueBackend.LOCAL_FILE.value)
 
     monkeypatch.setattr(queue_jobs, "resolve_execution_queue_backend", resolve)
+    monkeypatch.setattr(queue_jobs, "resolve_pool_delivery_backend", resolve)
 
 
 def _reliable_identity(ref: str) -> dict:

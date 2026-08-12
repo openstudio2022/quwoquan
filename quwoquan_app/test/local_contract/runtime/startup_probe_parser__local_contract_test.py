@@ -23,6 +23,7 @@ sys.path.insert(0, str(APP_DIR / "test/support/runtime/launcher"))
 from verify_startup_first_frame import (
     ScreenshotAnalysis,
     analyze_screenshot,
+    android_fresh_startup_log_evidence,
     build_arg_parser,
     classify_startup_terminal,
     detect_native_static_petal_mismatch,
@@ -942,6 +943,8 @@ I/QWQStartup: startup_probe phase=welcome_overlay_removed overlayRemovedMs=1890
             android_gate_main_order_observed(
                 """
 QWQStartup android_gate_static_frame_drawn
+QWQStartup android_gate_window_focus_confirmed
+QWQStartup android_gate_window_focus_released
 QWQStartup android_gate_main_handoff
 QWQStartup android_activity_on_create elapsedMs=300
                 """
@@ -955,6 +958,146 @@ QWQStartup android_gate_main_handoff
                 """
             )
         )
+
+    def test_android_fresh_log_requires_one_focus_handoff_attempt(self) -> None:
+        draw_then_focus = """
+QWQStartup android_gate_static_frame_drawn
+QWQStartup android_gate_window_focus_confirmed
+QWQStartup android_gate_window_focus_released
+QWQStartup android_gate_main_handoff
+QWQStartup android_activity_on_create elapsedMs=300
+"""
+        focus_then_draw = """
+QWQStartup android_gate_window_focus_confirmed
+QWQStartup android_gate_static_frame_draw_timeout
+QWQStartup android_gate_window_focus_released
+QWQStartup android_gate_main_handoff
+QWQStartup android_activity_on_create elapsedMs=300
+"""
+        for current in (draw_then_focus, focus_then_draw):
+            with self.subTest(current=current):
+                evidence = android_fresh_startup_log_evidence(
+                    baseline="",
+                    current=current,
+                    package="com.quwoquan.quwoquan_app",
+                )
+                self.assertTrue(evidence["startupAttemptLogUnique"])
+                self.assertTrue(evidence["gateMainOrderObserved"])
+                self.assertTrue(evidence["passed"])
+
+        invalid_logs = {
+            "missing_focus": """
+QWQStartup android_gate_static_frame_drawn
+QWQStartup android_gate_main_handoff
+QWQStartup android_activity_on_create elapsedMs=300
+""",
+            "missing_focus_release": """
+QWQStartup android_gate_static_frame_drawn
+QWQStartup android_gate_window_focus_confirmed
+QWQStartup android_gate_main_handoff
+QWQStartup android_activity_on_create elapsedMs=300
+""",
+            "focus_after_handoff": """
+QWQStartup android_gate_static_frame_drawn
+QWQStartup android_gate_main_handoff
+QWQStartup android_gate_window_focus_confirmed
+QWQStartup android_gate_window_focus_released
+QWQStartup android_activity_on_create elapsedMs=300
+""",
+            "focus_release_after_handoff": """
+QWQStartup android_gate_static_frame_drawn
+QWQStartup android_gate_window_focus_confirmed
+QWQStartup android_gate_main_handoff
+QWQStartup android_gate_window_focus_released
+QWQStartup android_activity_on_create elapsedMs=300
+""",
+            "duplicate_focus": """
+QWQStartup android_gate_static_frame_drawn
+QWQStartup android_gate_window_focus_confirmed
+QWQStartup android_gate_window_focus_confirmed
+QWQStartup android_gate_window_focus_released
+QWQStartup android_gate_main_handoff
+QWQStartup android_activity_on_create elapsedMs=300
+""",
+            "duplicate_main": """
+QWQStartup android_gate_static_frame_drawn
+QWQStartup android_gate_window_focus_confirmed
+QWQStartup android_gate_window_focus_released
+QWQStartup android_gate_main_handoff
+QWQStartup android_activity_on_create elapsedMs=300
+QWQStartup android_activity_on_create elapsedMs=400
+""",
+        }
+        for name, current in invalid_logs.items():
+            with self.subTest(name=name):
+                evidence = android_fresh_startup_log_evidence(
+                    baseline="",
+                    current=current,
+                    package="com.quwoquan.quwoquan_app",
+                )
+                self.assertFalse(evidence["gateMainOrderObserved"])
+                self.assertFalse(evidence["passed"])
+
+    def test_android_fresh_log_rejects_only_current_package_anr(self) -> None:
+        package = "com.quwoquan.quwoquan_app"
+        old_anr = (
+            "08-09 20:00:00.000 E ActivityManager: "
+            f"ANR in {package}\n"
+        )
+        clean_attempt = """
+QWQStartup android_gate_static_frame_drawn
+QWQStartup android_gate_window_focus_confirmed
+QWQStartup android_gate_window_focus_released
+QWQStartup android_gate_main_handoff
+QWQStartup android_activity_on_create elapsedMs=300
+08-09 21:00:00.000 I am_anr : [0,12,com.example.other,reason]
+08-09 21:00:00.001 E ActivityManager: ANR in com.quwoquan.quwoquan_app.preview
+08-09 21:00:00.002 W InputDispatcher: Input dispatching timed out com.example.other
+"""
+        clean = android_fresh_startup_log_evidence(
+            baseline=old_anr,
+            current=old_anr + clean_attempt,
+            package=package,
+        )
+        self.assertTrue(clean["baselineApplied"])
+        self.assertFalse(clean["androidAnrDetected"])
+        self.assertTrue(clean["passed"])
+
+        current_anr_lines = {
+            "am_anr": f"I am_anr : [0,16516,{package},reason]",
+            "anr_in_package": f"E ActivityManager: ANR in {package}",
+            "input_dispatch_timeout": (
+                "W InputDispatcher: Input dispatching timed out "
+                f"({package}/.StartupGateActivity)"
+            ),
+        }
+        for expected_signal, line in current_anr_lines.items():
+            with self.subTest(signal=expected_signal):
+                evidence = android_fresh_startup_log_evidence(
+                    baseline=old_anr,
+                    current=old_anr + clean_attempt + line + "\n",
+                    package=package,
+                )
+                self.assertTrue(evidence["baselineApplied"])
+                self.assertTrue(evidence["androidAnrDetected"])
+                self.assertIn(expected_signal, evidence["androidAnrSignals"])
+                self.assertFalse(evidence["passed"])
+
+    def test_android_fresh_log_fails_closed_when_baseline_is_not_prefix(self) -> None:
+        evidence = android_fresh_startup_log_evidence(
+            baseline="old log line\n",
+            current="""
+QWQStartup android_gate_static_frame_drawn
+QWQStartup android_gate_window_focus_confirmed
+QWQStartup android_gate_window_focus_released
+QWQStartup android_gate_main_handoff
+QWQStartup android_activity_on_create elapsedMs=300
+""",
+            package="com.quwoquan.quwoquan_app",
+        )
+        self.assertFalse(evidence["baselineApplied"])
+        self.assertTrue(evidence["gateMainOrderObserved"])
+        self.assertFalse(evidence["passed"])
 
     def test_android_launch_visual_provenance_is_profile_specific(self) -> None:
         provenance = native_launch_visual_provenance("sw393dp")

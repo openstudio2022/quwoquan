@@ -334,6 +334,7 @@ class AppUiSurfaces {
     description: '网络结果页（小趣搜 assistant 结果 tab + 圈子频道分类内容结果）',
     operationIds: <String>[
       'Search',
+      'SearchPage',
       'CreateAssistantSession',
       'StartAssistantRun',
       'GetAssistantRun',
@@ -430,6 +431,7 @@ class AppUiSurfaces {
     operationIds: <String>[
       'GetHomepageDetail',
       'CreateHomepageClaimRequest',
+      'GetMyPendingHomepageClaimRequest',
     ],
   );
 
@@ -454,6 +456,7 @@ class AppUiSurfaces {
     operationIds: <String>[
       'GetHomepageDetail',
       'CreateHomepageStatusReport',
+      'GetMyPendingHomepageStatusReport',
     ],
   );
 
@@ -653,6 +656,8 @@ class AppUiSurfaces {
     operationIds: <String>[
       'LoginAnonymous',
       'RefreshToken',
+      'IssueWhitelistedResearchSession',
+      'GetResearchReleaseReadback',
       'GetActivePersonaContext',
       'UpsertDevicePushEndpoint',
       'RemoveDevicePushEndpoint',
@@ -768,6 +773,7 @@ class AppUiSurfaces {
     pathTemplate: '/login',
     description: '商用登录入口（手机 OTP + 一键登录 + 社交登录）',
     operationIds: <String>[
+      'GetOtpDeliveryReadiness',
       'SendOtp',
       'LoginWithPhone',
       'LoginWithWechat',

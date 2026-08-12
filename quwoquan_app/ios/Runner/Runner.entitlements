@@ -7,6 +7,7 @@
 	<key>com.apple.developer.associated-domains</key>
 	<array>
 		<string>applinks:$(QWQ_WECHAT_UNIVERSAL_LINK_HOST)</string>
+		<string>webcredentials:$(QWQ_OTP_AUTOFILL_DOMAIN)</string>
 	</array>
 </dict>
 </plist>

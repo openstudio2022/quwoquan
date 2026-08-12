@@ -1,0 +1,323 @@
+schema {
+  query: Query
+}
+
+directive @cost(weight: Int!) on FIELD_DEFINITION
+directive @listCost(argument: String!, defaultValue: Int!, maximumValue: Int!) on FIELD_DEFINITION
+
+type Query {
+  searchPage(input: SearchPageInput!): SearchPageSlice!
+  contentPostDetailBase(postId: ID!): ContentPostDetailBase
+  contentPostDetailSemantic(postId: ID!): ContentPostDetailSemantic
+  contentPostDetailMedia(postId: ID!): ContentPostDetailMedia
+  contentPostDetailArticleRenderAssets(postId: ID!): ContentPostDetailArticleRenderAssets
+  contentPostDetailArticleEntities(postId: ID!): ContentPostDetailArticleEntities
+}
+
+scalar SearchObjectRef
+scalar SearchCursor
+
+enum SearchPageObjectType {
+  CIRCLE
+  CIRCLE_GROUP
+  CONTENT_POST
+  ENTITY_HOMEPAGE
+  LOCATION_PLACE
+  USER_PROFILE
+}
+
+input SearchPageInput {
+  query: String!
+  first: Int = 20
+  after: SearchCursor
+  objectTypes: [SearchPageObjectType!]
+}
+
+type SearchPageSlice {
+  items: [SearchPageItem!]! @listCost(argument: "input.first", defaultValue: 20, maximumValue: 20)
+  facets: [SearchPageFacet!]! @listCost(argument: "input.first", defaultValue: 20, maximumValue: 20)
+  suggestions: [String!]! @listCost(argument: "input.first", defaultValue: 20, maximumValue: 20)
+  nextCursor: SearchCursor
+}
+
+type SearchPageItem {
+  objectRef: SearchObjectRef!
+  resultType: SearchPageObjectType!
+  title: String!
+  subtitle: String
+  snippet: String
+  thumbnailUrl: String
+  action: String!
+}
+
+type SearchPageFacet {
+  key: String!
+  count: Int!
+}
+
+type ContentPostDetailBase {
+  postId: ID!
+  contentType: String!
+  contentIdentity: String
+  assistantUsePolicy: String
+  authorId: ID
+  authorDisplayName: String
+  authorAvatarUrl: String
+  title: String
+  body: String
+  summary: String
+  coverUrl: String
+  sourceAttribution: SourceAttribution
+  location: GeoPoint
+  locationName: String
+  geoTagRef: String
+  visitedAt: String
+  primaryHomepageId: ID
+  canonicalEntityId: ID
+  primaryHomepageType: String
+  primaryHomepageSnapshot: PostHomepageSnapshot
+  status: String!
+  visibility: String!
+  likeCount: Int!
+  commentCount: Int!
+  shareCount: Int!
+  viewCount: Int!
+  createdAt: String!
+  updatedAt: String!
+  publishedAt: String
+}
+
+type ContentPostDetailSemantic {
+  postId: ID!
+  contentType: String!
+  tagRefs(first: Int!): [String!] @listCost(argument: "first", defaultValue: 30, maximumValue: 30)
+  entityRefs(first: Int!): [String!] @listCost(argument: "first", defaultValue: 30, maximumValue: 30)
+  semanticMentions(first: Int!): [PostSemanticMention!] @listCost(argument: "first", defaultValue: 30, maximumValue: 30)
+}
+
+type ContentPostDetailMedia {
+  postId: ID!
+  contentType: String!
+  mediaAssetIds(first: Int!): [ID!] @listCost(argument: "first", defaultValue: 20, maximumValue: 20)
+  mediaUrls(first: Int!): [String!] @listCost(argument: "first", defaultValue: 20, maximumValue: 20)
+  mediaItems(first: Int!): [PostMediaItem!] @listCost(argument: "first", defaultValue: 20, maximumValue: 20)
+  thumbnailUrl: String
+  videoUrl: String
+  width: Int
+  height: Int
+  durationMs: Int
+  coverStrategy: String
+  coverFrameTimeMs: Int
+}
+
+type ContentPostDetailArticleRenderAssets {
+  postId: ID!
+  contentType: String!
+  articleMarkdown: String
+  markdownDialect: String
+  articleMarkdownDigest: String
+  articleAssetManifestSummary: PostArticleAssetManifestSummary
+  articleAssets(first: Int!): [PostArticleAsset!]! @listCost(argument: "first", defaultValue: 20, maximumValue: 20)
+  articleRenderProfileSummary: PostArticleRenderProfile
+  contentVertical: String
+  articleTemplate: String
+  articleFontPreset: String
+}
+
+type ContentPostDetailArticleEntities {
+  postId: ID!
+  contentType: String!
+  entityMentions(first: Int!): [PostEntityMention!] @listCost(argument: "first", defaultValue: 30, maximumValue: 30)
+}
+
+type PostSemanticMention {
+  mentionId: ID!
+  kind: String!
+  surface: String!
+  location: String!
+  rangeStart: Int
+  rangeEnd: Int
+  status: String!
+  candidateId: ID
+  targetRef: String
+}
+
+type PostMediaItem {
+  kind: String!
+  mediaAssetId: ID
+  mediaAssetVersion: Int
+  url: String!
+  coverUrl: String
+  thumbnailUrl: String
+  durationMs: Int
+  width: Int
+  height: Int
+  previewTrackManifestUrl: String
+  previewTrackVersion: Int
+  hlsCmafMasterManifestUrl: String
+  hlsCmafDescriptorVersion: Int
+  title: String
+  coverStrategy: String
+  coverFrameTimeMs: Int
+}
+
+type SourceAttribution {
+  isOriginal: Boolean!
+  originalCreatorId: ID
+  originalCreatorName: String!
+  originalCreatorProfileUrl: String
+  platform: String!
+  sourcePostUrl: String!
+  originalAssetUrl: String!
+  attributionText: String!
+  rightsBasis: String!
+  commercialAuthorizationStatus: String!
+  publicationAdmission: String!
+  authorizationProofUrl: String
+  termsUrl: String
+  riskAcceptanceId: ID
+  watermarkStatus: String!
+  audioRightsStatus: String!
+  modelReleaseStatus: String!
+  propertyReleaseStatus: String!
+  collectedAt: String!
+  takedownPolicy: String!
+}
+
+type PostArticleAssetManifestSummary {
+  schema: String!
+  markdownVersion: String
+  markdownDialect: String
+  articleMarkdownDigest: String!
+  documentSha256: String!
+  assetManifestSha256: String!
+  documentVersionSha256: String!
+}
+
+type PostArticleAssetManifest {
+  schema: String!
+  markdownVersion: String
+  markdownDialect: String
+  articleMarkdownDigest: String!
+  documentSha256: String!
+  assetManifestSha256: String!
+  documentVersionSha256: String!
+  assets: [PostArticleAsset!]!
+}
+
+type PostArticleAsset {
+  assetId: ID!
+  kind: String
+  publicSliceKey: String
+  sha256: String
+  mimeType: String
+  sourceOriginalSha256: String
+  caption: String
+  role: String
+  layout: String
+  width: Int
+  height: Int
+  durationMs: Int
+  thumbnailUrl: String
+  coverUrl: String
+  coverStrategy: String
+  coverFrameTimeMs: Int
+  sourceCollectionId: ID
+}
+
+type PostArticleRenderProfile {
+  template: String
+  fontPreset: String
+  paperThemeMode: String
+  paperTexture: String
+  contentVertical: String
+  layoutPolicy: PostArticleLayoutPolicy
+  width: Int
+  height: Int
+  durationMs: Int
+}
+
+type PostArticleLayoutPolicy {
+  wrapDowngrade: String
+  galleryDowngrade: String
+}
+
+type PostEntityMention {
+  subjectType: String!
+  subjectId: ID!
+  homepageId: ID!
+  displayName: String!
+  rangeStart: Int!
+  rangeEnd: Int!
+}
+
+type GeoPoint {
+  latitude: Float!
+  longitude: Float!
+}
+
+type PostHomepageSnapshot {
+  canonicalEntityId: ID
+  title: String
+  subtitle: String
+  coverUrl: String
+  width: Int
+  height: Int
+  durationMs: Int
+}
+
+# Assembly target only. It is never exposed as a root field; the App generator
+# validates the bundle source fields and typed assembly mappings against it.
+type ContentPostDetailSlice {
+  postId: ID!
+  contentType: String!
+  contentIdentity: String
+  assistantUsePolicy: String
+  authorId: ID
+  authorDisplayName: String
+  authorAvatarUrl: String
+  title: String
+  body: String
+  summary: String
+  tagRefs: [String!]
+  entityRefs: [String!]
+  semanticMentions: [PostSemanticMention!]
+  mediaAssetIds: [ID!]
+  mediaUrls: [String!]
+  mediaItems: [PostMediaItem!]
+  coverUrl: String
+  thumbnailUrl: String
+  videoUrl: String
+  sourceAttribution: SourceAttribution
+  width: Int
+  height: Int
+  durationMs: Int
+  articleMarkdown: String
+  markdownDialect: String
+  articleMarkdownDigest: String
+  articleAssetManifest: PostArticleAssetManifest
+  articleRenderProfile: PostArticleRenderProfile
+  contentVertical: String
+  entityMentions: [PostEntityMention!]
+  articleTemplate: String
+  articleFontPreset: String
+  coverStrategy: String
+  coverFrameTimeMs: Int
+  location: GeoPoint
+  locationName: String
+  geoTagRef: String
+  visitedAt: String
+  primaryHomepageId: ID
+  canonicalEntityId: ID
+  primaryHomepageType: String
+  primaryHomepageSnapshot: PostHomepageSnapshot
+  status: String!
+  visibility: String!
+  likeCount: Int!
+  commentCount: Int!
+  shareCount: Int!
+  viewCount: Int!
+  createdAt: String!
+  updatedAt: String!
+  publishedAt: String
+}

@@ -12,6 +12,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+from quwoquan_ops.ci import collect_prod_soak_observations as collector
 from quwoquan_ops.ci import render_release_lifecycle_receipts as lifecycle
 from quwoquan_ops.cli.lib.environment_stability_final_acceptance import (
     REQUIRED_SOAK_CLAIMS,
@@ -19,6 +20,9 @@ from quwoquan_ops.cli.lib.environment_stability_final_acceptance import (
 )
 from quwoquan_ops.cli.prod import hosted_release_ledger
 from quwoquan_ops.cli.prod.finalize_mainline_release_artifact import sha256_file
+from quwoquan_ops.tests.local_contract.rollout_stage_promotion_evidence_test_support import (
+    promotion_evidence,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 DIGEST_A = "sha256:" + "a" * 64
@@ -50,8 +54,8 @@ def _full_request(*, verified_at: str) -> dict[str, Any]:
         "fromCandidateDigest": DIGEST_A,
         "toCandidateDigest": DIGEST_B,
         "step": "100",
-        "stage": "full",
-        "triggerStage": "full",
+        "stage": "100",
+        "triggerStage": "100",
         "fromReleaseEvidenceRef": (
             "ghcr.io/owner/quwoquan/release-artifact@" + DIGEST_A
         ),
@@ -69,7 +73,14 @@ def _full_request(*, verified_at: str) -> dict[str, Any]:
         "contractGraphDigest": DIGEST_D,
         "adapterDigest": DIGEST_C,
         "expectedGeneration": 0,
-        "sloReadback": {"sampleCount": 100},
+        "sloReadback": {
+            "sampleCount": 100,
+            "promotionEvidence": promotion_evidence(
+                candidate_id=DIGEST_B,
+                artifact_digest=DIGEST_C,
+                stage="100",
+            ),
+        },
         "postChecks": [
             {
                 "name": "health",
@@ -92,7 +103,7 @@ def _expected_credentials(verified_at: str, expires_at: str) -> list[dict[str, s
     for plane in policy["planes"]:
         if (
             plane.get("access") != "read-write"
-            or "full" not in (plane.get("appliesToStages") or [])
+            or "100" not in (plane.get("appliesToStages") or [])
         ):
             continue
         governed = plane.get("rootlessGovernedComposeServices") or []
@@ -123,7 +134,9 @@ def _fixture(
     ledger_root = temporary / "hosted-ledger"
     full_readback = hosted_release_ledger.commit(
         ledger_root,
-        _full_request(verified_at=_timestamp(now - dt.timedelta(seconds=400))),
+        _full_request(
+            verified_at=_timestamp(now - dt.timedelta(days=1, seconds=400))
+        ),
     )
     full_receipt = full_readback["receipt"]
     manifest = {
@@ -167,13 +180,13 @@ def _fixture(
             manifest["configurationPackages"]
         ),
         "contractGraphDigest": DIGEST_D,
-        "requiredSoakSeconds": 300,
+        "requiredSoakSeconds": 86400,
         "soakPolicyDigest": sha256_file(policy_path),
         "credentialPolicyDigest": sha256_file(credential_policy_path),
         "slo": {
             "source": "prometheus",
             "observedAt": observed_at,
-            "windowSeconds": 300,
+            "windowSeconds": 86400,
             "minimumSamples": 100,
             "sampleCount": 200,
             "status": "passed",
@@ -295,7 +308,7 @@ def test_producer_projects_raw_observations_without_secret_material(
             "source": "prometheus",
             "baseUrl": "https://prometheus.invalid",
             "queriedAt": soak["slo"]["observedAt"],
-            "window": "5m",
+            "window": "24h",
             "minimumSamples": 100,
             "queries": {"errorRate": "query"},
             "values": {
@@ -330,7 +343,7 @@ def test_producer_projects_raw_observations_without_secret_material(
         "credentials.json",
         {
             "schema": "prod-plane-credential-evidence",
-            "stage": "full",
+            "stage": "100",
             "verifiedAt": soak["credentials"][0]["verifiedAt"],
             "credentials": soak["credentials"],
         },
@@ -382,9 +395,59 @@ def test_producer_projects_raw_observations_without_secret_material(
 
     assert request["schema"] == hosted_release_ledger.SOAK_REQUEST_SCHEMA
     assert request["fullRolloutReceiptId"] == rollout["receiptId"]
+    assert request["requiredSoakSeconds"] == 86400
+    assert request["slo"]["windowSeconds"] == 86400
     assert request["credentials"] == soak["credentials"]
     assert "baseUrl" not in request["slo"]
     assert "PRIVATE KEY" not in json.dumps(request)
+
+
+def test_collector_uses_canonical_post_100_soak_window_for_prometheus(
+    tmp_path: Path,
+) -> None:
+    policy_path = ROOT / "quwoquan_ops/policies/config-release/slo_thresholds.yaml"
+    policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+    assert policy["readback"]["window"] == "5m"
+    assert policy["readback"]["post_100_soak_window"] == "24h"
+
+    readback_path = tmp_path / "100-readback.json"
+    readback_path.write_text("{}\n", encoding="utf-8")
+    observed_slo = {
+        "source": "prometheus",
+        "queriedAt": _timestamp(dt.datetime.now(dt.timezone.utc)),
+        "window": "24h",
+        "minimumSamples": 100,
+        "values": {
+            "errorRate": 0.001,
+            "p95Ms": 100.0,
+            "redisErrorRate": 0.001,
+            "sampleCount": 200,
+        },
+    }
+    completed_health = subprocess.CompletedProcess([], 0, "", "")
+    with patch.object(collector, "_wait_for_authoritative_window") as wait_window, patch.object(
+        collector.subprocess, "run", return_value=completed_health
+    ), patch.object(
+        collector.stackctl, "_read_prometheus_slo", return_value=observed_slo
+    ) as read_slo, patch.object(
+        collector, "_read_alertmanager", return_value={"status": "passed"}
+    ):
+        collector.collect(
+            full_readback_path=readback_path,
+            service="prod-stack",
+            prometheus_service="prod-stack",
+            prometheus_url="https://prometheus.invalid",
+            alertmanager_url="https://alertmanager.invalid",
+            soak_policy_path=policy_path,
+            health_report_dir=tmp_path / "health",
+            slo_output=tmp_path / "slo.json",
+            alerts_output=tmp_path / "alerts.json",
+        )
+
+    wait_window.assert_called_once_with(
+        {}, service="prod-stack", required_seconds=86400
+    )
+    assert read_slo.call_args.kwargs["window_override"] == "24h"
 
 
 def test_forged_self_hash_is_rejected(tmp_path: Path) -> None:

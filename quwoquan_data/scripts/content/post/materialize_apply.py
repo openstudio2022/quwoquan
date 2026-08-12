@@ -1,9 +1,9 @@
 """Materialize approved post objects from reviewed compose results."""
 from __future__ import annotations
 
+import hashlib
 import shutil
 from pathlib import Path
-from typing import Any
 
 from core.article_package import (
     MARKDOWN_DIALECT,
@@ -12,16 +12,23 @@ from core.article_package import (
     compute_document_sha256,
     copy_asset_files,
 )
+from core.control_types import ContentGenerator
 from core.intersection_signal import build_intersection_hints
 from core.io import write_json
-from core.control_types import ContentGenerator
 from core.post_evidence_chain import build_finalization_report
 from core.provenance import build_provenance
-from content.execution.asset_registry import allocate_post_asset_id, load_execution_asset_registry
+
+from content.execution.asset_registry import (
+    allocate_post_asset_id,
+    load_execution_asset_registry,
+)
 from content.execution.runtime_contract import stage_execution_context
 from content.execution.runtime_state import load_execution_runtime_state
-from content.execution.stage_reports import iter_stage_envelopes, read_stage_envelope
-from content.post.article.draft_io import read_draft_article, read_draft_meta, read_writing_pack
+from content.post.article.draft_io import (
+    read_draft_article,
+    read_draft_meta,
+    read_writing_pack,
+)
 from content.post.article.materialize_article import _resolve_materialized_article
 from content.post.materialize_contract import (
     _ensure_published_manifest_mentions,
@@ -37,6 +44,8 @@ from content.post.materialize_contract import (
 )
 from content.post.materialize_timestamps import materialized_manifest_times
 from content.post.review_evidence import write_review_evidence
+from content.post.source_attribution import source_unit_attribution
+
 
 def materialize_posts(
     execution_id: str,
@@ -50,8 +59,11 @@ def materialize_posts(
     阶段（2.quality/3.compose/4.draft/5.review）同处对象根 `posts/{type}/{angle}/{title}/{seq}/`；
     对象坐标（angle/title/seq）以 `_shared/content_object_index.json` 路由为唯一真相，不再自算序号。
     """
+    from content.execution.stage_reports import (
+        iter_stage_envelopes,
+        read_stage_envelope,
+    )
     from content.post import object_index as content_object
-    from content.execution.stage_reports import iter_stage_envelopes, read_stage_envelope
 
     materialized: list[Path] = []
     execution_state = load_execution_runtime_state(execution_id)
@@ -268,6 +280,12 @@ def materialize_posts(
         manifest = {
             "schema": "quwoquan_data.post_manifest",
             "topicId": ref,
+            # Freeze pool identity before review. Delivery may reserve and
+            # consume it later, but it may never allocate a new identity after
+            # semantic approval.
+            "contentId": "qwq_data_"
+            + hashlib.sha256(f"{execution_id}|{ref}".encode()).hexdigest()[:24],
+            "version": 1,
             "contentType": content_type,
             "contentIdentity": "work",
             "vertical": compose_payload.get("vertical"),
@@ -342,6 +360,16 @@ def materialize_posts(
             "reviewDecision": "approved",
             "publishLayout": compose_payload.get("publishLayout", "travel"),
             "publishAngle": angle,
+            **(
+                {"writingIntent": compose_payload["writingIntent"]}
+                if compose_payload.get("writingIntent")
+                else {}
+            ),
+            **(
+                {"articleCategory": compose_payload["articleCategory"]}
+                if compose_payload.get("articleCategory")
+                else {}
+            ),
             "publishTitle": publish_title,
             "publishSeq": seq,
             # 叙事骨架：发布门 storySpine 真相源。优先 compose 显式 storySpine，
@@ -350,6 +378,14 @@ def materialize_posts(
             # 溯源：内容来自哪个 execution，供 trace/hydrate 与推荐归因消费。
             "executionId": execution_id,
         }
+        attribution = source_unit_attribution(
+            execution_id,
+            content_type,
+            compose_payload=compose_payload,
+            assets=assets,
+        )
+        if attribution is not None:
+            manifest["sourceAttribution"] = attribution
         if is_image:
             manifest.update(
                 {
@@ -385,6 +421,13 @@ def materialize_posts(
         ):
             if manifest.get(optional_creator_key) in (None, "", {}):
                 manifest.pop(optional_creator_key, None)
+        from content.execution.planning.rewrite import apply_execution_rewrite_identity
+
+        manifest = apply_execution_rewrite_identity(
+            manifest,
+            execution_id=execution_id,
+            ref=ref,
+        )
         # 「明」：预生成内容侧交集锚点（对齐 IntersectionReason 闭集口径），runtime 据此 + 用户补全文案。
         manifest["intersectionHints"] = build_intersection_hints(manifest)
         write_json(post_dir / "manifest.json", manifest)

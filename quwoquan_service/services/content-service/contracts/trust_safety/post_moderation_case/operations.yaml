@@ -315,6 +315,7 @@ api_routes:
     availability_percent: 99.9
   security:
     auth_mode: required
+    principal: service
     token_transport: bearer
     visibility: internal
   request_bindings:

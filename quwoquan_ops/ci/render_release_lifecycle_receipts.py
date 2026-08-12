@@ -32,7 +32,7 @@ HOSTED_STATE_SCHEMA = hosted_release_ledger.STATE_SCHEMA
 HOSTED_SOAK_REQUEST_SCHEMA = hosted_release_ledger.SOAK_REQUEST_SCHEMA
 HOSTED_SOAK_RECEIPT_SCHEMA = hosted_release_ledger.SOAK_RECEIPT_SCHEMA
 HOSTED_SOAK_READBACK_SCHEMA = hosted_release_ledger.SOAK_RECEIPT_READBACK_SCHEMA
-STAGES = ("gray-initial", "carry-on", "full")
+STAGES = ("canary", "5", "20", "50", "100")
 RECEIPT_ID_PATTERN = re.compile(r"[0-9a-f]{64}")
 HOSTED_RECEIPT_FIELDS = hosted_release_ledger.RECEIPT_FIELDS
 HOSTED_STATE_FIELDS = hosted_release_ledger.STATE_FIELDS
@@ -139,6 +139,13 @@ def _validate_hosted_receipt(value: Any, *, service: str) -> dict[str, Any]:
         or not isinstance(value.get("sloReadback"), dict)
     ):
         raise ValueError("hosted release receipt generation or SLO evidence is invalid")
+    if service == "prod-stack" and value.get("decision") == "continue":
+        hosted_release_ledger.validate_promotion_evidence(
+            value["sloReadback"].get("promotionEvidence"),
+            candidate_id=value.get("toCandidateDigest"),
+            artifact_digest=value.get("artifactDigest"),
+            stage=value.get("triggerStage"),
+        )
     post_checks = value.get("postChecks")
     if not isinstance(post_checks, list) or not all(
         isinstance(item, dict)
@@ -332,7 +339,7 @@ def render_rollback_readiness(
 
     current = _validate_ledger_readback(current_ledger, service=service)
     stable_current = (
-        current.get("stage") == "full"
+        current.get("stage") == "100"
         and current.get("lastGoodCandidateDigest") == from_candidate_digest
         and current.get("toCandidateDigest") == from_candidate_digest
         and (
@@ -351,7 +358,7 @@ def render_rollback_readiness(
 
     drill = _validate_receipt_readback(rollback_drill, service=service)
     if not (
-        drill.get("stage") == "full"
+        drill.get("stage") == "100"
         and drill.get("decision") == "rolled_back"
         and drill.get("rollbackOutcome") == "rolled_back"
         and drill.get("lastGoodCandidateDigest") == drill.get("toCandidateDigest")
@@ -522,7 +529,7 @@ def render_prod_outcome(
     if rollback_outcome == "not_triggered":
         if not (
             ordered == list(STAGES)
-            and final_stage == "full"
+            and final_stage == "100"
             and final_report.get("exitCode") == 0
             and final_report.get("rolloutDecision") == "continue"
             and final_receipt.get("decision") == "continue"
@@ -663,8 +670,8 @@ def render_prod_soak_request(
     candidate = str(manifest["candidateId"])
     source = manifest["source"]
     if not (
-        full.get("triggerStage") == "full"
-        and full.get("stage") == "full"
+        full.get("triggerStage") == "100"
+        and full.get("stage") == "100"
         and full.get("decision") == "continue"
         and full.get("rollbackOutcome") == "not_triggered"
         and full.get("toCandidateDigest") == candidate
@@ -677,7 +684,9 @@ def render_prod_soak_request(
     thresholds = soak_policy.get("thresholds")
     if not isinstance(readback, dict) or not isinstance(thresholds, dict):
         raise ValueError("soak policy is invalid")
-    required_soak_seconds = _window_seconds(readback.get("window"))
+    required_soak_seconds = _window_seconds(
+        readback.get("post_100_soak_window")
+    )
     minimum_samples = int(readback.get("minimum_samples") or 0)
     if minimum_samples < 1:
         raise ValueError("soak policy requirements are invalid")
@@ -761,7 +770,7 @@ def render_prod_soak_request(
         if (
             not isinstance(plane, dict)
             or plane.get("access") != "read-write"
-            or "full" not in (plane.get("appliesToStages") or [])
+            or "100" not in (plane.get("appliesToStages") or [])
         ):
             continue
         governed = plane.get("rootlessGovernedComposeServices") or []
@@ -779,7 +788,7 @@ def render_prod_soak_request(
         set(credential_evidence)
         == {"schema", "stage", "verifiedAt", "credentials"}
         and credential_evidence.get("schema") == "prod-plane-credential-evidence"
-        and credential_evidence.get("stage") == "full"
+        and credential_evidence.get("stage") == "100"
         and isinstance(credentials, list)
         and bool(credentials)
     ):

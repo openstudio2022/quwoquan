@@ -60,6 +60,28 @@ def test_homepage_source_catalog_closes_primary_evidence(
             "sourceUseMode": "licensed_adaptation",
                 "policyRevision": "encyclopedia-primary",
             "license": "CC BY-SA 4.0",
+            "sourceAttribution": {
+                "isOriginal": False,
+                "originalCreatorId": None,
+                "originalCreatorName": "Wikipedia contributors",
+                "originalCreatorProfileUrl": None,
+                "platform": "Wikipedia",
+                "sourcePostUrl": "https://zh.wikipedia.org/wiki/九寨沟",
+                "originalAssetUrl": "https://zh.wikipedia.org/wiki/九寨沟",
+                "attributionText": "Wikipedia contributors / CC BY-SA 4.0",
+                "rightsBasis": "CC BY-SA 4.0",
+                "commercialAuthorizationStatus": "unverified",
+                "publicationAdmission": "research_release",
+                "authorizationProofUrl": None,
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "riskAcceptanceId": None,
+                "watermarkStatus": "absent",
+                "audioRightsStatus": "no_audio",
+                "modelReleaseStatus": "not_required",
+                "propertyReleaseStatus": "not_required",
+                "collectedAt": "2026-07-11T00:00:00Z",
+                "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+            },
         },
     )
     media = execution_root / "sources" / "unit-2"
@@ -84,7 +106,7 @@ def test_homepage_source_catalog_closes_primary_evidence(
     monkeypatch.setattr(homepage_source_catalog, "execution_root", lambda _execution_id: execution_root)
     obj = tmp_path / "object"
     obj.mkdir()
-    primary, urls, evidence_ref, digest = homepage_source_catalog._materialize_homepage_source_catalog(
+    primary, urls, evidence_ref, digest, attribution = homepage_source_catalog._materialize_homepage_source_catalog(
         execution_id,
         obj,
         {"primaryEvidenceRef": "sources/unit-1/source.md"},
@@ -98,6 +120,7 @@ def test_homepage_source_catalog_closes_primary_evidence(
     assert urls == ["https://zh.wikipedia.org/wiki/九寨沟"]
     assert evidence_ref == "evidence/sources/unit-1/meta.json"
     assert digest.startswith("sha256:")
+    assert attribution["originalCreatorName"] == "Wikipedia contributors"
     assert (obj / "evidence/source_catalog.json").is_file()
     assert (obj / "evidence/sources/unit-1/source.clean.md").read_text(
         encoding="utf-8"

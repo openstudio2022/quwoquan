@@ -3,6 +3,7 @@ from __future__ import annotations
 from content.execution.coverage import coverage_entity_type, coverage_entity_type_for_entity
 from content.execution.support import Any, DOWNLOAD_FETCH_ONLY_RETRY_LIMIT, DataIssue, DataIssueCode, DataIssueLane, DataIssueStage, DataRecoveryAction, ExecutionContext, Iterable, Mapping, Path, _active_spec, _planned_pixel_issue, data_issue, execution_command_root, execution_root, hashlib, image_count_is_hard_quota, image_strategy_allows_ai_generated, image_strategy_requires_publishable_images, json, minimum_publishable_images_per_target, read_json, source_plan_rule_signature
 from core.data_issue import issue_messages
+from core.source_catalog import ARTICLE_BASE_SOURCE_CATEGORIES
 
 _MAX_IMAGES_PER_SOURCE_COLLECTION = 20
 
@@ -227,20 +228,7 @@ def _download_research_lane_issues(
                         f"article source {source.get('source_id')}: "
                         "Qunar search result directory cannot be article base"
                     )
-                if source_category not in {
-                    "travelogue",
-                    "guidebook",
-                    "travel_guide",
-                    "wikivoyage",
-                    "official_article",
-                    "vertical_professional",
-                    "ugc_longform",
-                    "community_post",
-                    "media_article",
-                    "platform_article",
-                    "forum_thread",
-                    "review_note",
-                }:
+                if source_category not in ARTICLE_BASE_SOURCE_CATEGORIES:
                     add(
                         DataIssueCode.SOURCE_CATEGORY_SHORTFALL,
                         f"article source {source.get('source_id')}: base source category "

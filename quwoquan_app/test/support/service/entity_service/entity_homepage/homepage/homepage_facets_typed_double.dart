@@ -1,11 +1,13 @@
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_operation_ports.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_command_writer.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_query_reader.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_command_writer.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_query_reader.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_entity_contracts.dart'
     as wire;
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 /// 由不可变 Entity 场景数据驱动的 local_contract typed adapter。
 ///
@@ -16,13 +18,15 @@ final class InMemoryHomepageFacet
         HomepageIntroductionQuery,
         HomepageCandidateCommandWriter,
         HomepageClaimRequestCommandWriter,
-        HomepageStatusReportCommandWriter {
+        HomepageClaimRequestQueryReader,
+        HomepageStatusReportCommandWriter,
+        HomepageStatusReportQueryReader {
   InMemoryHomepageFacet({
-    ObjectScenarioSeedReader? seedReader,
+    ObjectContractExampleReader? seedReader,
     DateTime Function()? clock,
   }) : _clock = clock ?? (() => DateTime.now().toUtc()),
        _records = _recordsFromFixture(
-         (seedReader ?? objectScenarioSeedReader).requireSeedSet(
+         (seedReader ?? objectContractExampleReader).requireExample(
            'entity',
            'entity_homepage_core',
          ),
@@ -32,8 +36,12 @@ final class InMemoryHomepageFacet
   final Map<String, _InMemoryHomepageRecord> _records;
   final List<HomepageClaimRequestView> _claimRequests =
       <HomepageClaimRequestView>[];
+  final Map<String, HomepageClaimRequestView> _claimRequestsByIntent =
+      <String, HomepageClaimRequestView>{};
   final List<HomepageStatusReportView> _statusReports =
       <HomepageStatusReportView>[];
+  final Map<String, HomepageStatusReportView> _statusReportsByIntent =
+      <String, HomepageStatusReportView>{};
 
   @override
   Future<HomepageSearchSlice> searchHomepages(
@@ -338,8 +346,14 @@ final class InMemoryHomepageFacet
   Future<HomepageClaimRequestView> createClaimRequest({
     required String homepageId,
     required HomepageClaimRequestDraft draft,
+    String? clientRequestId,
   }) async {
     _require(homepageId);
+    final intentId = clientRequestId?.trim() ?? '';
+    final replay = _claimRequestsByIntent[intentId];
+    if (intentId.isNotEmpty && replay != null) {
+      return replay;
+    }
     final record = HomepageClaimRequestView(
       claimRequestId: 'fixture_homepage_claim_${_claimRequests.length + 1}',
       homepageId: homepageId,
@@ -352,15 +366,37 @@ final class InMemoryHomepageFacet
       createdAt: _clock(),
     );
     _claimRequests.add(record);
+    if (intentId.isNotEmpty) {
+      _claimRequestsByIntent[intentId] = record;
+    }
     return record;
+  }
+
+  @override
+  Future<HomepageClaimRequestView> getMyPendingClaimRequest({
+    required String homepageId,
+  }) async {
+    for (final request in _claimRequests.reversed) {
+      if (request.homepageId == homepageId &&
+          request.status == HomepageClaimReviewStatus.pendingReview) {
+        return request;
+      }
+    }
+    throw StateError('pending homepage claim request not found');
   }
 
   @override
   Future<HomepageStatusReportView> createStatusReport({
     required String homepageId,
     required HomepageStatusReportDraft draft,
+    String? clientRequestId,
   }) async {
     _require(homepageId);
+    final intentId = clientRequestId?.trim() ?? '';
+    final replay = _statusReportsByIntent[intentId];
+    if (intentId.isNotEmpty && replay != null) {
+      return replay;
+    }
     final record = HomepageStatusReportView(
       reportId: 'fixture_homepage_report_${_statusReports.length + 1}',
       homepageId: homepageId,
@@ -375,7 +411,25 @@ final class InMemoryHomepageFacet
       createdAt: _clock(),
     );
     _statusReports.add(record);
+    if (intentId.isNotEmpty) {
+      _statusReportsByIntent[intentId] = record;
+    }
     return record;
+  }
+
+  @override
+  Future<HomepageStatusReportView> getMyPendingStatusReport({
+    required String homepageId,
+    required String reason,
+  }) async {
+    for (final report in _statusReports.reversed) {
+      if (report.homepageId == homepageId &&
+          report.reason.wireName == reason &&
+          report.status == HomepageStatusReportStatus.pendingReview) {
+        return report;
+      }
+    }
+    throw StateError('pending homepage status report not found');
   }
 
   _InMemoryHomepageRecord _require(String homepageId) {

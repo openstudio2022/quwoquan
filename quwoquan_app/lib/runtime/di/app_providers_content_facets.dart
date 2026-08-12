@@ -18,6 +18,8 @@ import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_delete.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_article_detail_projector.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_view_projection.dart';
+import 'package:quwoquan_app/service/content_service/content/post/adapters/research_release_readback_remote.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/research_release_readback.dart';
 import 'package:quwoquan_app/service/content_service/content/content_reaction/application/public/content_post_reaction_ports.dart';
 import 'package:quwoquan_app/service/content_service/content/outbound_share_fact/application/public/content_outbound_share_appender.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/local_media_upload_source.dart';
@@ -98,6 +100,20 @@ final _contentFacetsProvider = Provider<_ContentFacets>((ref) {
     feedQuery: facets.feedQuery,
     postDeleteWriter: facets.postDeleteWriter,
     behaviorWriter: facets.behaviorWriter,
+  );
+});
+
+final researchReleaseReadbackProvider = Provider<ResearchReleaseReadback>((ref) {
+  return RemoteResearchReleaseReadback(
+    client: ref.watch(generatedCloudOperationClientProvider),
+    researchIdentityWriter: ref.watch(
+      accountSessionResearchIdentityWriterProvider,
+    ),
+    invocationContext: (clientPageId) => contentQueryInvocationContext(
+      ref,
+      surface: AppUiSurfaces.appShell,
+      clientPageId: clientPageId,
+    ),
   );
 });
 

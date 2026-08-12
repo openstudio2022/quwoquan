@@ -18,7 +18,9 @@ void main() {
     var executing = 0;
     var maxExecuting = 0;
 
-    Future<void> run(WorksViewerArticleHydrationLease lease) async {
+    Future<WorksViewerArticleHydrationTerminal> run(
+      WorksViewerArticleHydrationLease lease,
+    ) async {
       leases[lease.postId] = lease;
       starts.add(lease.postId);
       executing += 1;
@@ -30,6 +32,7 @@ void main() {
       } finally {
         executing -= 1;
       }
+      return WorksViewerArticleHydrationTerminal.recovered;
     }
 
     final first = admission.schedule(postId: 'article-a', task: run);
@@ -39,19 +42,33 @@ void main() {
 
     final dropped = admission.schedule(postId: 'article-b', task: run);
     final latest = admission.schedule(postId: 'article-c', task: run);
-    expect(await dropped, WorksViewerArticleHydrationOutcome.superseded);
+    final droppedResult = await dropped;
+    expect(
+      droppedResult.terminal,
+      WorksViewerArticleHydrationTerminal.superseded,
+    );
     expect(leases['article-a']!.isCancelled, isTrue);
     expect(admission.pendingCount, 1);
     expect(starts, <String>['article-a']);
 
     releases['article-a']!.complete();
-    expect(await first, WorksViewerArticleHydrationOutcome.superseded);
+    final firstResult = await first;
+    expect(
+      firstResult.terminal,
+      WorksViewerArticleHydrationTerminal.superseded,
+    );
     await Future<void>.delayed(Duration.zero);
     expect(starts, <String>['article-a', 'article-c']);
     expect(maxExecuting, 1);
 
     releases['article-c']!.complete();
-    expect(await latest, WorksViewerArticleHydrationOutcome.completed);
+    final latestResult = await latest;
+    expect(
+      latestResult.terminal,
+      WorksViewerArticleHydrationTerminal.recovered,
+    );
+    expect(firstResult.generation, lessThan(latestResult.generation));
+    expect(droppedResult.generation, lessThan(latestResult.generation));
     expect(admission.activeCount, 0);
     expect(admission.pendingCount, 0);
     admission.dispose();
@@ -63,10 +80,13 @@ void main() {
     late WorksViewerArticleHydrationLease lease;
     var starts = 0;
 
-    Future<void> run(WorksViewerArticleHydrationLease value) async {
+    Future<WorksViewerArticleHydrationTerminal> run(
+      WorksViewerArticleHydrationLease value,
+    ) async {
       starts += 1;
       lease = value;
       await release.future;
+      return WorksViewerArticleHydrationTerminal.recovered;
     }
 
     final first = admission.schedule(postId: 'article-a', task: run);
@@ -78,7 +98,10 @@ void main() {
     admission.retainOnly('video-b');
     expect(lease.isCancelled, isTrue);
     release.complete();
-    expect(await first, WorksViewerArticleHydrationOutcome.superseded);
+    expect(
+      (await first).terminal,
+      WorksViewerArticleHydrationTerminal.superseded,
+    );
     admission.dispose();
   });
 
@@ -92,20 +115,54 @@ void main() {
       task: (lease) async {
         activeLease = lease;
         await release.future;
+        return WorksViewerArticleHydrationTerminal.recovered;
       },
     );
     await Future<void>.delayed(Duration.zero);
     final pending = admission.schedule(
       postId: 'article-b',
-      task: (_) async => fail('disposed pending task must not start'),
+      task: (_) async {
+        fail('disposed pending task must not start');
+      },
     );
 
     admission.dispose();
     expect(activeLease.isCancelled, isTrue);
-    expect(await pending, WorksViewerArticleHydrationOutcome.disposed);
+    expect(
+      (await pending).terminal,
+      WorksViewerArticleHydrationTerminal.superseded,
+    );
     release.complete();
-    expect(await active, WorksViewerArticleHydrationOutcome.superseded);
+    expect(
+      (await active).terminal,
+      WorksViewerArticleHydrationTerminal.superseded,
+    );
     expect(admission.activeCount, 0);
     expect(admission.pendingCount, 0);
+  });
+
+  test('task 异常以 stillBlocked 收口且后续 generation 继续 drain', () async {
+    final admission = WorksViewerArticleHydrationAdmission();
+    final blocked = admission.schedule(
+      postId: 'article-a',
+      task: (_) async => throw StateError('typed hydration failure'),
+    );
+
+    final blockedResult = await blocked;
+    expect(
+      blockedResult.terminal,
+      WorksViewerArticleHydrationTerminal.stillBlocked,
+    );
+    expect(blockedResult.failure, isA<StateError>());
+
+    final recovered = await admission.schedule(
+      postId: 'article-b',
+      task: (_) async => WorksViewerArticleHydrationTerminal.recovered,
+    );
+    expect(recovered.terminal, WorksViewerArticleHydrationTerminal.recovered);
+    expect(recovered.generation, greaterThan(blockedResult.generation));
+    expect(admission.activeCount, 0);
+    expect(admission.pendingCount, 0);
+    admission.dispose();
   });
 }

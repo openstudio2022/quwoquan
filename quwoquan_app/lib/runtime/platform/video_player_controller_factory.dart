@@ -44,12 +44,15 @@ class AppVideoPlayerControllerFactory {
   static VideoViewType get preferredViewType =>
       preferredVideoPlaybackViewType(currentAppPlatform);
 
-  static AppVideoPlayerControllerHandle localFilePath(String path) {
+  static AppVideoPlayerControllerHandle localFilePath(
+    String path, {
+    VideoViewType? viewType,
+  }) {
     final sessionToken = createVideoNativePlaybackSignalToken();
     return AppVideoPlayerControllerHandle(
       controller: createLocalFileVideoController(
         path,
-        viewType: preferredViewType,
+        viewType: viewType ?? preferredViewType,
         httpHeaders: videoNativePlaybackSignalRequestHeaders(sessionToken),
         videoPlayerOptions: _ownedLifecycleOptions,
       ),
@@ -67,6 +70,7 @@ class AppVideoPlayerControllerFactory {
   static AppVideoPlayerControllerHandle networkUri(
     Uri uri, {
     VideoFormat? formatHint,
+    VideoViewType? viewType,
   }) {
     final sessionToken = createVideoNativePlaybackSignalToken();
     return AppVideoPlayerControllerHandle(
@@ -74,7 +78,7 @@ class AppVideoPlayerControllerFactory {
         uri,
         formatHint: formatHint,
         httpHeaders: videoNativePlaybackSignalRequestHeaders(sessionToken),
-        viewType: preferredViewType,
+        viewType: viewType ?? preferredViewType,
         videoPlayerOptions: _ownedLifecycleOptions,
       ),
       nativePlaybackSignals: videoNativePlaybackSignalsForToken(sessionToken),

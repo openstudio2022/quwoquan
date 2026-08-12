@@ -22,6 +22,9 @@ from quwoquan_ops.cli.prod import collect_release_artifact_descriptors as eviden
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact as finalizer
 from quwoquan_ops.cli.prod import generate_mainline_release_artifact as generator
 from quwoquan_ops.cli.prod import hosted_release_ledger
+from quwoquan_ops.tests.local_contract.rollout_stage_promotion_evidence_test_support import (
+    promotion_evidence,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -260,7 +263,7 @@ def _evidence_sources(
         )
     payloads: dict[str, dict[str, object]] = {
         "publicWeb": {
-            "schema": "qwq.public-web.release",
+            "schema": "client-app.web.official-release",
             "sourceGitSha": source["gitSha"],
             "sourceTreeDigest": source["treeDigest"],
             "contentSHA256": finalizer.sha256_tree(
@@ -268,7 +271,7 @@ def _evidence_sources(
             ).removeprefix("sha256:"),
         },
         "androidOfficialRelease": {
-            "schema": "qwq.android.official-release",
+            "schema": "client-app.android.official-release",
             "sourceGitSha": source["gitSha"],
             "sourceTreeDigest": source["treeDigest"],
             "packagedAPK": "quwoquan.apk",
@@ -643,9 +646,9 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                 "service": "prod-stack",
                 "fromCandidateDigest": from_digest,
                 "toCandidateDigest": to_digest,
-                "step": "5",
-                "stage": "gray-initial",
-                "triggerStage": "gray-initial",
+                "step": "0",
+                "stage": "canary",
+                "triggerStage": "canary",
                 "fromReleaseEvidenceRef": (
                     f"ghcr.io/owner/repo/release-artifact@{from_digest}"
                 ),
@@ -663,7 +666,14 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                 "contractGraphDigest": to_digest,
                 "adapterDigest": to_digest,
                 "expectedGeneration": 0,
-                "sloReadback": {"source": "prometheus"},
+                "sloReadback": {
+                    "source": "prometheus",
+                    "promotionEvidence": promotion_evidence(
+                        candidate_id=to_digest,
+                        artifact_digest=to_digest,
+                        stage="canary",
+                    ),
+                },
                 "postChecks": [
                     {
                         "name": "health",
@@ -685,7 +695,7 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                 readback["state"],
                 from_candidate_digest=from_digest,
                 to_candidate_digest=to_digest,
-                stage="carry-on",
+                stage="5",
             )
             self.assertEqual((action, generation), ("advance", 1))
             with self.assertRaisesRegex(RuntimeError, "CAS conflict"):
@@ -713,9 +723,9 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                 "service": "prod-stack",
                 "fromCandidateDigest": source,
                 "toCandidateDigest": candidate,
-                "step": "5",
-                "stage": "gray-initial",
-                "triggerStage": "gray-initial",
+                "step": "0",
+                "stage": "canary",
+                "triggerStage": "canary",
                 "fromReleaseEvidenceRef": f"ghcr.io/owner/release@{source}",
                 "toReleaseEvidenceRef": f"ghcr.io/owner/release@{candidate}",
                 "fromImageTransportTag": "sha-source",
@@ -729,7 +739,14 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                 "contractGraphDigest": candidate,
                 "adapterDigest": candidate,
                 "expectedGeneration": 0,
-                "sloReadback": {"source": "prometheus"},
+                "sloReadback": {
+                    "source": "prometheus",
+                    "promotionEvidence": promotion_evidence(
+                        candidate_id=candidate,
+                        artifact_digest=candidate,
+                        stage="canary",
+                    ),
+                },
                 "postChecks": [check],
                 "lastGoodCandidateDigest": source,
                 "verifiedAt": "2026-07-26T00:00:00+00:00",
@@ -739,11 +756,19 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             advance = dict(initial)
             advance.update(
                 {
-                    "step": "25",
-                    "stage": "carry-on",
-                    "triggerStage": "carry-on",
+                    "step": "5",
+                    "stage": "5",
+                    "triggerStage": "5",
                     "expectedGeneration": 1,
                     "verifiedAt": "2026-07-26T00:00:01+00:00",
+                    "sloReadback": {
+                        "source": "prometheus",
+                        "promotionEvidence": promotion_evidence(
+                            candidate_id=candidate,
+                            artifact_digest=candidate,
+                            stage="5",
+                        ),
+                    },
                 }
             )
             rollback = dict(initial)
@@ -752,8 +777,8 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
                     "fromCandidateDigest": candidate,
                     "toCandidateDigest": source,
                     "step": "100",
-                    "stage": "full",
-                    "triggerStage": "gray-initial",
+                    "stage": "100",
+                    "triggerStage": "canary",
                     "fromReleaseEvidenceRef": f"ghcr.io/owner/release@{candidate}",
                     "toReleaseEvidenceRef": f"ghcr.io/owner/release@{source}",
                     "fromImageTransportTag": "sha-candidate",
@@ -809,7 +834,7 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
         self.assertEqual(
             stackctl._decision_from_slo_output(
                 "decision=pause reason=warning_threshold",
-                "gray-initial",
+                "canary",
             ),
             ("pause", "slo gate decision=pause"),
         )
@@ -817,7 +842,7 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
     def test_insufficient_samples_pause_even_at_full_without_false_rollback(self) -> None:
         decision, reason = stackctl._decision_from_slo_output(
             "decision=pause reason=insufficient_samples",
-            "full",
+            "100",
         )
         self.assertEqual(decision, "pause")
         self.assertIn("insufficient", reason)
@@ -832,8 +857,8 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             "fromCandidateDigest": from_digest,
             "toCandidateDigest": digest,
             "step": "100",
-            "stage": "full",
-            "triggerStage": "full",
+            "stage": "100",
+            "triggerStage": "100",
             "fromReleaseEvidenceRef": (
                 f"ghcr.io/owner/repo/release-artifact@{from_digest}"
             ),
@@ -852,7 +877,13 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
             "adapterDigest": digest,
             "expectedGeneration": 2,
             "committedGeneration": 3,
-            "sloReadback": {},
+            "sloReadback": {
+                "promotionEvidence": promotion_evidence(
+                    candidate_id=digest,
+                    artifact_digest=digest,
+                    stage="100",
+                )
+            },
             "postChecks": [],
             "lastGoodCandidateDigest": digest,
             "verifiedAt": "2026-07-26T00:00:00+00:00",
@@ -940,9 +971,9 @@ class ProdReleaseTransactionContractTest(unittest.TestCase):
         self.assertEqual(
             stackctl._decision_from_slo_output(
                 "decision=pause reason=warning_threshold",
-                "full",
+                "100",
             ),
-            ("rollback", "full rollout cannot remain paused on warning SLO"),
+            ("rollback", "100 rollout cannot remain paused on warning SLO"),
         )
 
     def test_global_release_lock_fails_closed(self) -> None:

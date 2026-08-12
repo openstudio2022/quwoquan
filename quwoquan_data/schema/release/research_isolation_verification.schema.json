@@ -98,11 +98,10 @@
     "deniedCapabilities": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["share", "export", "indexing"],
+      "required": ["share", "export"],
       "properties": {
         "share": {"$ref": "#/$defs/deniedCapability"},
-        "export": {"$ref": "#/$defs/deniedCapability"},
-        "indexing": {"$ref": "#/$defs/deniedCapability"}
+        "export": {"$ref": "#/$defs/deniedCapability"}
       }
     },
     "signedMedia": {

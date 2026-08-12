@@ -1,0 +1,20 @@
+schema: qwq.object-owned-internal-persisted-graphql.v1
+canonicalOperationId: gateway.persisted_query_execution.SearchPage
+objectId: gateway.persisted_query_execution
+document: search_page.graphql
+operationName: SearchPage
+operationType: query
+sha256Hash: 894a7b1541100c4ffa20e446d7969aa6bb1c6aa385d025cc2a8c7b625ba50d58
+runtimeRequest:
+  ownerOperationId: search.search_index_view.Search
+  ownerMode: result
+  ownerCalls: 1
+  fallback: forbidden
+  queryText: forbidden
+  onlineRegistration: forbidden
+  mutation: forbidden
+variables:
+  required: [input]
+  additionalProperties: false
+response:
+  rootField: searchPage

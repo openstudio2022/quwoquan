@@ -19,8 +19,11 @@ from content.execution.context import (
 from content.execution import store
 
 
-def managed_local_workspace_lock_path(workspace: str) -> Path:
-    digest = hashlib.sha256(workspace.encode("utf-8")).hexdigest()[:16]
+def managed_local_workspace_lock_path(
+    workspace: str, *, execution_root: Path | None = None
+) -> Path:
+    resource = str((execution_root or Path(workspace)).resolve())
+    digest = hashlib.sha256(resource.encode("utf-8")).hexdigest()[:16]
     root = Path(os.environ.get("QWQ_MANAGED_LOCAL_LOCK_DIR", tempfile.gettempdir()))
     return root / f"qwq-managed-local-{digest}.lock"
 
@@ -30,9 +33,11 @@ def managed_local_workspace_guard(ctx: ExecutionContext):
     from content.execution.agent.agent_conflicts import (
         _cleanup_managed_local_workspace_conflicts,
         _cross_task_managed_data_cli_conflicts,
+        _managed_execution_resource_conflicts,
         _managed_local_workspace_conflicts,
         _managed_workspace_conflicts_for_provider,
     )
+    from content.execution.workspace import execution_root
 
     if not ctx.managed or str(ctx.runtime) != "local":
         yield
@@ -43,7 +48,10 @@ def managed_local_workspace_guard(ctx: ExecutionContext):
         yield
         return
     workspace = str(Path.cwd())
-    lock_path = managed_local_workspace_lock_path(workspace)
+    mutable_execution_root = execution_root(ctx.execution_id)
+    lock_path = managed_local_workspace_lock_path(
+        workspace, execution_root=mutable_execution_root
+    )
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+", encoding="utf-8") as lock_file:
         try:
@@ -72,6 +80,11 @@ def managed_local_workspace_guard(ctx: ExecutionContext):
             conflicts = _managed_workspace_conflicts_for_provider(
                 _managed_local_workspace_conflicts(Path.cwd()),
                 ctx.agent_provider,
+            )
+            conflicts = _managed_execution_resource_conflicts(
+                conflicts,
+                execution_id=ctx.execution_id,
+                execution_root=mutable_execution_root,
             )
             if conflicts and ctx.force_clean_workspace_agent_state:
                 cross_task_conflicts = _cross_task_managed_data_cli_conflicts(
@@ -104,6 +117,11 @@ def managed_local_workspace_guard(ctx: ExecutionContext):
                     conflicts = _managed_workspace_conflicts_for_provider(
                         _managed_local_workspace_conflicts(Path.cwd()),
                         ctx.agent_provider,
+                    )
+                    conflicts = _managed_execution_resource_conflicts(
+                        conflicts,
+                        execution_id=ctx.execution_id,
+                        execution_root=mutable_execution_root,
                     )
                     if cross_task_conflicts:
                         cross_task_pids = {

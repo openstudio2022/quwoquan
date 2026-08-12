@@ -12,6 +12,50 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class LocalEnvGateMatrixContractTest(unittest.TestCase):
+    def test_integration_matrix_accepts_only_current_test_data_case_result(self) -> None:
+        from quwoquan_ops.cli.lib import local_env_gate_matrix as matrix_mod
+
+        with tempfile.TemporaryDirectory() as temporary:
+            report_dir = Path(temporary)
+            (report_dir / "report.json").write_text(
+                json.dumps(
+                    {
+                        "profile": "integration",
+                        "status": "ok",
+                        "steps": [
+                            {
+                                "kind": "test-data",
+                                "caseResult": {
+                                    "status": "passed",
+                                    "executed": 1,
+                                    "skipped": 0,
+                                },
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertTrue(
+                matrix_mod._integration_verify_has_required_test_data_case(
+                    {"reportDir": str(report_dir)}
+                )
+            )
+
+            retired = json.loads(
+                (report_dir / "report.json").read_text(encoding="utf-8")
+            )
+            retired["steps"][0]["kind"] = "nonprod-business-data"
+            (report_dir / "report.json").write_text(
+                json.dumps(retired),
+                encoding="utf-8",
+            )
+            self.assertFalse(
+                matrix_mod._integration_verify_has_required_test_data_case(
+                    {"reportDir": str(report_dir)}
+                )
+            )
+
     def test_emulator_only_profile_is_explicitly_non_promotable(self) -> None:
         from quwoquan_ops.cli.lib import local_env_gate_matrix as matrix_mod
 
@@ -348,7 +392,8 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                 if name == "verify":
                     self.assertFalse(hasattr(args, "reuse_package"))
                     self.assertEqual(args.profile, "integration")
-                    self.assertEqual(args.nonprod_data_evidence, "")
+                    self.assertEqual(args.test_data_request, "")
+                    self.assertEqual(args.test_data_evidence, "")
                 if name == "up":
                     self.assertEqual(args.workload, "full")
                     self.assertTrue(args.skip_build)
@@ -533,6 +578,27 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
             legal_dir = candidate_dir / "packages/legal-static"
             legal_dir.mkdir(parents=True)
             (legal_dir / "marker").write_text("ok", encoding="utf-8")
+
+            def verify_capsule(_path, *, expected_snapshot=None):
+                if expected_snapshot is not None:
+                    return expected_snapshot
+                fingerprint = json.loads(
+                    (app_dir / "package-fingerprint.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                deployment_inputs = fingerprint["deploymentInputs"]
+                return {
+                    "baselineId": fingerprint["baselineId"],
+                    "sourceRevision": fingerprint["sourceRevision"],
+                    "workspaceStatusDigest": fingerprint[
+                        "workspaceStatusDigest"
+                    ],
+                    "deploymentInputRoots": deployment_inputs["roots"],
+                    "deploymentInputDigest": deployment_inputs["digest"],
+                    "deploymentInputFileCount": deployment_inputs["fileCount"],
+                }
+
             with mock.patch(
                 "quwoquan_ops.cli.lib.package_reuse.app_deployment_package_dir",
                 return_value=app_dir,
@@ -566,6 +632,9 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                     "explicit candidate reuse must not inspect the active candidate"
                 ),
             ), mock.patch(
+                "quwoquan_ops.cli.lib.package_reuse.verify_package_input_capsule",
+                side_effect=verify_capsule,
+            ), mock.patch(
                 "quwoquan_ops.cli.lib.package_reuse.validate_candidate_manifest",
                 side_effect=lambda payload, **_kwargs: payload,
             ):
@@ -575,6 +644,12 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                     report_dir="runs/pkg",
                     include_services=True,
                     details=["ready"],
+                    release_input_classification="research_inputs",
+                    contract_graph_digest=f"sha256:{'d' * 64}",
+                    graphql_read_registry={
+                        "schema": "stackctl-graphql-read-registry-package",
+                        "candidateDigest": f"sha256:{'b' * 64}",
+                    },
                 )
                 fingerprint = json.loads(
                     fingerprint_path.read_text(encoding="utf-8")
@@ -592,6 +667,15 @@ class LocalEnvGateMatrixContractTest(unittest.TestCase):
                             ],
                             "packageDigest": fingerprint["packageContent"][
                                 "digest"
+                            ],
+                            "releaseInputClassification": fingerprint[
+                                "releaseInputClassification"
+                            ],
+                            "contractGraphDigest": fingerprint[
+                                "contractGraphDigest"
+                            ],
+                            "graphqlReadRegistry": fingerprint[
+                                "graphqlReadRegistry"
                             ],
                         }
                     )

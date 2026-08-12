@@ -351,7 +351,7 @@ func TestMediaLifecycleConsumerPersistsReadyStateAndCheckpointInRealMongo(t *tes
 		mediaapp.WithClock(func() time.Time { return now.Add(time.Minute) }),
 	)
 	const consumer = "media-lifecycle-api"
-	worker := mediaprocessing.NewWorker(
+	handler := mediaprocessing.NewMediaProcessingHandler(
 		store,
 		store,
 		store,
@@ -362,7 +362,7 @@ func TestMediaLifecycleConsumerPersistsReadyStateAndCheckpointInRealMongo(t *tes
 		mediaprocessing.WithLeaseOwner("media-lifecycle-api-runner"),
 		mediaprocessing.WithClock(func() time.Time { return now.Add(time.Minute) }),
 	)
-	processed, err := worker.Drain(context.Background(), 10)
+	processed, err := handler.Process(context.Background(), 10)
 	if err != nil || processed != 1 {
 		t.Fatalf("drain real Mongo media event: processed=%d err=%v", processed, err)
 	}

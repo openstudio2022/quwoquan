@@ -9,7 +9,6 @@ from types import SimpleNamespace
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[5]
 SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
@@ -18,8 +17,8 @@ if str(SCRIPTS) not in sys.path:
 from content.release.environment import cli as ship_cli  # noqa: E402
 from content.release.environment import readiness as subject  # noqa: E402
 from content.release.environment.readiness import ShipReadinessPhase  # noqa: E402
-from core.io import read_json  # noqa: E402
 from content.release.model import DeploymentEnvironment  # noqa: E402
+from core.io import read_json  # noqa: E402
 
 _LIFECYCLE_EXIT_REF = (
     "env/gamma/runs/release-lifecycle-exit/"
@@ -207,3 +206,49 @@ def test_ship_verify_cli__exposes_research_phase_without_weakening_identity_gate
 
     assert args.readiness_phase == "research"
     assert args.lifecycle_exit_ref == ""
+
+
+@pytest.mark.parametrize("environment", tuple(DeploymentEnvironment))
+def test_research_readiness_is_release_bound_in_every_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    environment: DeploymentEnvironment,
+) -> None:
+    observed: list[list[str]] = []
+
+    def run(command: list[str], **_kwargs: object) -> SimpleNamespace:
+        observed.append(command)
+        return SimpleNamespace(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "schema": "quwoquan_ops.ship_readiness_receipt",
+                    "phase": "research",
+                    "environment": environment.value,
+                    "target": f"{environment.value}-research",
+                    "outcome": "PASS",
+                    "reportDir": (
+                        f"env/{environment.value}/runs/content-readiness/research-001"
+                    ),
+                }
+            ),
+        )
+
+    monkeypatch.setattr(subject.subprocess, "run", run)
+    run_root = tmp_path / environment.value / "research-001"
+    receipt = subject.require_environment_readiness(
+        environment=environment,
+        phase=ShipReadinessPhase.RESEARCH,
+        run=run_root,
+        release_id="research-001",
+        manifest_digest="sha256:" + "a" * 64,
+    )
+
+    assert receipt is not None and receipt.passed
+    command = observed[0]
+    assert command[command.index("--phase") + 1] == "research"
+    assert command[command.index("--env") + 1] == environment.value
+    assert "--lifecycle-exit-ref" not in command
+    evidence = read_json(run_root / "environment-readiness.json")
+    assert evidence["phase"] == "research"
+    assert evidence["environment"] == environment.value

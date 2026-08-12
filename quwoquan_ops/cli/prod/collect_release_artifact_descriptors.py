@@ -33,8 +33,8 @@ from quwoquan_ops.ci.render_provider_conformance_source import (
 )
 
 EVIDENCE_SOURCE_SCHEMAS = {
-    "publicWeb": "qwq.public-web.release",
-    "androidOfficialRelease": "qwq.android.official-release",
+    "publicWeb": "client-app.web.official-release",
+    "androidOfficialRelease": "client-app.android.official-release",
     "opsPortal": "qwq.ops_portal_package",
     "contractGraph": "qwq.contract-graph",
     "providerEvidence": "provider-conformance-readiness",

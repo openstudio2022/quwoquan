@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	. "quwoquan_service/services/content-service/internal/content/post/application"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,6 +135,11 @@ func TestOutboxRelayHealthRequiresRecentSuccessfulScan(t *testing.T) {
 	)
 	if err := relay.Healthy(time.Second); err == nil {
 		t.Fatal("Healthy() must reject a relay without a completed scan")
+	}
+	relay.RecordFailure(errors.New("strict decoder rejected legacy PostDeleted"))
+	if err := relay.Healthy(time.Second); err == nil ||
+		!strings.Contains(err.Error(), "strict decoder rejected legacy PostDeleted") {
+		t.Fatalf("Healthy() before first successful scan must expose the latest failure, got %v", err)
 	}
 
 	relay.RecordSuccess()

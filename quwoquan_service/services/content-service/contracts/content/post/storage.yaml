@@ -136,8 +136,25 @@ collections:
   data_release_state:
     publication_role: not_published
     entity: Post
-    role: projection
-    description: canonical immutable content release 的当前激活投影；只由 release import facade 原子推进。
+    role: authoritative
+    description: canonical immutable content release 的单轨候选状态；只能按 prepared -> imported -> projected -> verified -> active 单调推进。active pointer 仅在 verified 后切换；任何阶段失败都保留 previous active，不得把导入成功伪装成激活成功。
+    indexes:
+    - name: uq_data_release_state_environment_candidate
+      keys: {environment: 1, releaseId: 1, manifestDigest: 1}
+      unique: true
+    - name: idx_data_release_state_active_pointer
+      keys: {environment: 1, status: 1, activatedAt: -1}
+  data_release_stage_receipts:
+    publication_role: not_published
+    entity: Post
+    role: append_only
+    description: 每次 prepared/imported/projected/verified/active 尝试的脱敏持久化回执；保留 duration、attempted/success count、checkpoint 与 first typed blocker。失败回执不可覆盖成功阶段，且不得推进 active pointer。
+    indexes:
+    - name: uq_data_release_stage_receipt_attempt
+      keys: {environment: 1, releaseId: 1, manifestDigest: 1, stage: 1, attemptId: 1}
+      unique: true
+    - name: idx_data_release_stage_receipt_timeline
+      keys: {environment: 1, releaseId: 1, recordedAt: 1}
   post_import_task_outbox:
     publication_role: not_published
     entity: Post

@@ -569,6 +569,9 @@ class _WorksVideoEpisodeStageState extends State<_WorksVideoEpisodeStage> {
             initialize: widget.initialize,
             autoPlay: widget.autoPlay,
             showControls: false,
+            // The immersive PageView must stay in Flutter's texture layer.
+            // Android inline players keep the factory's platform-view default.
+            viewType: VideoViewType.textureView,
             verifiedDuration: item.verifiedDuration,
             onTap: widget.tapEnabled
                 ? () => unawaited(_session.toggle())

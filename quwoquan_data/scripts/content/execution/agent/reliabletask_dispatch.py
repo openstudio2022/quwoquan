@@ -14,14 +14,17 @@ from core.control_types import (
 from core.data_issue import (
     DataIssue,
     DataIssueCode,
+    DataIssueError,
     DataIssueStage,
     DataRecoveryAction,
 )
 
 from content.execution.context import ExecutionContext
-from content.execution.queue.backend import ReliableTaskJobSetCollisionError
 from content.execution.queue.core import _load_jobs, _read_job
 from content.execution.queue.model import QueueJob
+from content.execution.queue.reliabletask.job_set import (
+    ReliableTaskJobSetCollisionError,
+)
 from content.execution.queue.reliabletask.jobs import uses_reliabletask
 from content.execution.queue.reliabletask.projection import (
     record_reliabletask_failure,
@@ -80,10 +83,33 @@ def _active_jobs(
     queue_stage: QueueJobStage,
 ) -> tuple[QueueJob, ...]:
     """仍可被下一轮 fleet 继续推进的作业；终态丢弃作业不在其中。"""
+    from content.execution.queue.reliabletask.fleet import (
+        _has_audited_remote_recovery,
+    )
+
+    recover_dead_tasks = _has_audited_remote_recovery(
+        execution_id,
+        queue_stage,
+    )
     return tuple(
         job
         for job in _remaining_jobs(execution_id, queue_stage)
         if job.state not in _TERMINAL_JOB_STATES
+        or (recover_dead_tasks and job.state is QueueJobState.DEAD)
+    )
+
+
+def _audited_dead_recovery_pending(
+    execution_id: str,
+    queue_stage: QueueJobStage,
+) -> bool:
+    from content.execution.queue.reliabletask.fleet import (
+        _has_audited_remote_recovery,
+    )
+
+    return _has_audited_remote_recovery(execution_id, queue_stage) and any(
+        job.state is QueueJobState.DEAD
+        for job in _remaining_jobs(execution_id, queue_stage)
     )
 
 
@@ -169,6 +195,15 @@ def _contract_issue(stage: ExecutionStage, message: str) -> DataIssue:
         stage=DataIssueStage(stage.value),
         message=message,
         recovery=DataRecoveryAction.STOP,
+    )
+
+
+def _pool_delivery_unavailable_issue(message: str) -> DataIssue:
+    return DataIssue(
+        code=DataIssueCode.POOL_DELIVERY_UNAVAILABLE,
+        stage=DataIssueStage.PUBLISH,
+        message=message,
+        recovery=DataRecoveryAction.RETRY_DELIVERY,
     )
 
 
@@ -307,10 +342,13 @@ def _dispatch_fleet(
     # quota check and this function. Re-read durable delivery before asking the
     # fleet for pending jobs, otherwise a successful final job is misreported
     # as infrastructure unavailable because the pending set is now empty.
-    if _quota_reached(ctx, stage, queue_stage) or _terminal_partial_closure_ready(
-        ctx,
-        stage,
+    recovery_pending = _audited_dead_recovery_pending(
+        ctx.execution_id,
         queue_stage,
+    )
+    if _quota_reached(ctx, stage, queue_stage) or (
+        not recovery_pending
+        and _terminal_partial_closure_ready(ctx, stage, queue_stage)
     ):
         return ReliableTaskDispatchResult(
             stage=stage,
@@ -320,9 +358,7 @@ def _dispatch_fleet(
             completed_count=_delivered_count(ctx, stage, queue_stage),
         )
     remaining_jobs = _remaining_jobs(ctx.execution_id, queue_stage)
-    active_jobs = tuple(
-        job for job in remaining_jobs if job.state not in _TERMINAL_JOB_STATES
-    )
+    active_jobs = _active_jobs(ctx.execution_id, queue_stage)
     if not active_jobs:
         if not remaining_jobs:
             return ReliableTaskDispatchResult(
@@ -366,6 +402,44 @@ def _dispatch_fleet(
             issues=blocking,
             discarded=discarded,
         )
+    if queue_stage is QueueJobStage.PUBLISH:
+        from content.execution.preflight.pool_delivery import (
+            record_pool_delivery_preflight,
+        )
+
+        try:
+            delivery_report, _receipt, _path = record_pool_delivery_preflight(
+                ctx.execution_id
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            return ReliableTaskDispatchResult(
+                stage=stage,
+                queue_stage=queue_stage,
+                status=ReliableTaskDispatchStatus.BLOCKED,
+                attempted_count=0,
+                completed_count=_delivered_count(ctx, stage, queue_stage),
+                issues=(
+                    _contract_issue(
+                        stage,
+                        "pool delivery preflight contract invalid: "
+                        f"{type(exc).__name__}: {exc}",
+                    ),
+                ),
+            )
+        if delivery_report.get("poolDeliveryReady") is not True:
+            return ReliableTaskDispatchResult(
+                stage=stage,
+                queue_stage=queue_stage,
+                status=ReliableTaskDispatchStatus.WAITING,
+                attempted_count=0,
+                completed_count=_delivered_count(ctx, stage, queue_stage),
+                issues=(
+                    _pool_delivery_unavailable_issue(
+                        "canonical pool delivery is pending because the Data-owned "
+                        "Mongo/Redis transport is not host-writable"
+                    ),
+                ),
+            )
     policy = active_runtime_policy()
     expected_job_ids = frozenset(
         job.job_id
@@ -377,6 +451,15 @@ def _dispatch_fleet(
             queue_stage,
             workers=ctx.max_workers,
             completion_grace_seconds=policy.managed_future_grace_seconds,
+        )
+    except DataIssueError as exc:
+        return ReliableTaskDispatchResult(
+            stage=stage,
+            queue_stage=queue_stage,
+            status=ReliableTaskDispatchStatus.BLOCKED,
+            attempted_count=0,
+            completed_count=0,
+            issues=exc.issues,
         )
     except ReliableTaskJobSetCollisionError as exc:
         return ReliableTaskDispatchResult(
@@ -406,16 +489,29 @@ def _dispatch_fleet(
             )
         ):
             return _dispatch_fleet(ctx, stage, queue_stage)
-        issue = DataIssue(
-            code=DataIssueCode.ENVIRONMENT_NOT_READY,
-            stage=DataIssueStage(stage.value),
-            message=f"ReliableTask fleet unavailable: {type(exc).__name__}: {exc}",
-            recovery=DataRecoveryAction.STOP,
+        issue = (
+            _pool_delivery_unavailable_issue(
+                "canonical pool delivery is pending because ReliableTask is "
+                f"unavailable: {type(exc).__name__}: {exc}"
+            )
+            if queue_stage is QueueJobStage.PUBLISH
+            else DataIssue(
+                code=DataIssueCode.ENVIRONMENT_NOT_READY,
+                stage=DataIssueStage(stage.value),
+                message=(
+                    f"ReliableTask fleet unavailable: {type(exc).__name__}: {exc}"
+                ),
+                recovery=DataRecoveryAction.STOP,
+            )
         )
         return ReliableTaskDispatchResult(
             stage=stage,
             queue_stage=queue_stage,
-            status=ReliableTaskDispatchStatus.BLOCKED,
+            status=(
+                ReliableTaskDispatchStatus.WAITING
+                if queue_stage is QueueJobStage.PUBLISH
+                else ReliableTaskDispatchStatus.BLOCKED
+            ),
             attempted_count=0,
             completed_count=0,
             issues=(issue,),
@@ -433,12 +529,18 @@ def _dispatch_fleet(
     discarded = tuple(issue for issue in issues if issue.code in DISCARDED_ISSUE_CODES)
     blocking = tuple(issue for issue in issues if issue.code not in DISCARDED_ISSUE_CODES)
     delivered = _delivered_count(ctx, stage, queue_stage)
+    publish_quota_met = False
     if queue_stage is QueueJobStage.PUBLISH:
-        # Publish delivery may be proven by canonical objects even when resume
-        # jobs are dead (idempotent re-apply). Prefer the fleet's finalized count
-        # and commercial pass over the local succeeded-job ledger alone.
-        delivered = max(delivered, int(report.finalized_object_count or 0))
-    publish_quota_met = queue_stage is QueueJobStage.PUBLISH and bool(report.passed)
+        from content.execution.spec_contract import approved_quota
+
+        canonical_accepted = (
+            report.research_accepted_count + report.commercial_accepted_count
+        )
+        delivered = max(delivered, canonical_accepted)
+        publish_quota_met = bool(
+            report.passed
+            and canonical_accepted >= approved_quota(ctx.execution_id)
+        )
     quota_met = _quota_reached(ctx, stage, queue_stage) or publish_quota_met
     if blocking and not publish_quota_met:
         status = ReliableTaskDispatchStatus.BLOCKED
@@ -481,20 +583,23 @@ def dispatch_reliabletask_checkpoint(
     stage: ExecutionStage,
 ) -> ReliableTaskDispatchResult | None:
     """Run the current checkpoint through the sole service-owned executor."""
-    if not uses_reliabletask(ctx):
-        return None
     queue_stage = _queue_stage_for(stage)
     if queue_stage is None:
+        return None
+    if not uses_reliabletask(ctx, stage=queue_stage):
         return None
     declared = _declared_jobs(ctx.execution_id, queue_stage)
     if not declared:
         return None
     # 配额已交付即视为本 checkpoint 完成：剩余作业要么是终态丢弃对象，
     # 要么是过采冗余，再次派发只是重复消耗额度。
-    if _quota_reached(ctx, stage, queue_stage) or _terminal_partial_closure_ready(
-        ctx,
-        stage,
+    recovery_pending = _audited_dead_recovery_pending(
+        ctx.execution_id,
         queue_stage,
+    )
+    if _quota_reached(ctx, stage, queue_stage) or (
+        not recovery_pending
+        and _terminal_partial_closure_ready(ctx, stage, queue_stage)
     ):
         return None
     return _dispatch_fleet(ctx, stage, queue_stage)

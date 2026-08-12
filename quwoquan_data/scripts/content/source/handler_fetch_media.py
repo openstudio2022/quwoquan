@@ -15,6 +15,7 @@ from core.data_issue import (
     data_issues,
 )
 from core.paths import execution_source_unit_dir
+from core.source_attribution import canonical_source_attribution
 
 from content.execution.stage_reports import write_gate_report
 from content.source.handler_images import (
@@ -105,6 +106,17 @@ def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
         sorted(image_groups.items()), start=1
     ):
         first = group[0]
+        source_attribution = canonical_source_attribution(
+            first.get("sourceAttribution")
+        )
+        if any(
+            canonical_source_attribution(row.get("sourceAttribution"))
+            != source_attribution
+            for row in group[1:]
+        ):
+            raise ValueError(
+                "image collection sourceAttribution must be identical for all assets"
+            )
         source_id = str(first.get("sourceId") or "").strip() or f"{lane}_{slugify(collection_id)}"
         unit_lane = "homepage_image" if lane == "homepage" else lane
         collection_page = str(first.get("collectionPageUrl") or first.get("sourceUrl") or "")
@@ -154,6 +166,7 @@ def _materialize_image_collections(spec: EntityMediaClosureInput) -> set[Path]:
             images=group,
             execution_id=spec.execution_id,
             build_variants=False,
+            source={"sourceAttribution": source_attribution},
         )
         written.add(
             execution_source_unit_dir(

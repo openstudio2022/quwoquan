@@ -26,7 +26,7 @@ services:
       - ${QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_KEY_FILE:?target Provider substitute key is required}:/run/secrets/provider-protocol-substitute/server.key:ro
       - ${QWQ_COMPOSE_PROVIDER_SUBSTITUTE_CA_FILE:?target Provider substitute CA is required}:/run/secrets/provider-protocol-substitute/ca.crt:ro
     healthcheck:
-      test: ["CMD", "wget", "--ca-certificate=/run/secrets/provider-protocol-substitute/ca.crt", "-qO-", "https://127.0.0.1:18089/healthz"]
+      test: ["CMD", "/usr/local/bin/provider-protocol-substitute", "healthcheck"]
       interval: 5s
       timeout: 2s
       start_period: 5s

@@ -7,6 +7,7 @@ from core.runtime_policy import active_runtime_policy
 from content.execution.agent.managed_checkpoint import _managed_checkpoint_worker_count
 from content.execution.agent.managed_checkpoint import _managed_checkpoint_ref
 from content.execution.context import ExecutionContext, _managed_local_cursor_worker_cap
+from content.execution.controller import homepage_review_stage
 from content.execution.spec_contract import ExecutionSpec
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
@@ -108,4 +109,45 @@ def test_homepage_checkpoint_run_has_stable_entity_ref() -> None:
         context,
         "build_homepage",
         "[AGENT_LANE:homepage]\n对象: 测试实体\n",
-    ) == "entities/地点/景区/测试实体"
+    ) == "/entity/地点/景区/测试实体"
+
+
+def test_homepage_review_preserves_full_governed_entity_type(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    execution_id = "20260716--travel-homepage-coverage--test-region-a--pilot-909"
+    target = {"name": "杭州宋城", "entityType": "地点/主题乐园"}
+    fixture = ExecutionFixtureBuilder(execution_id, targets=(target,))
+    context = ExecutionContext(
+        execution_id=execution_id,
+        entity_ids=("杭州宋城",),
+        spec=fixture.spec(),
+    )
+    captured: dict[str, str] = {}
+
+    def _resolve(execution_id: str, name: str, *, etype_hint: str = ""):
+        captured.update(
+            execution_id=execution_id,
+            name=name,
+            etype_hint=etype_hint,
+        )
+        return tmp_path
+
+    monkeypatch.setattr(homepage_review_stage, "resolve_entity_object_dir", _resolve)
+
+    issues = homepage_review_stage._review_homepage_target(
+        context,
+        target,
+        review_model="grok-4.5",
+        review_model_family="grok",
+        review_parameters=(),
+        reviewer_workers=1,
+    )
+
+    assert captured == {
+        "execution_id": execution_id,
+        "name": "杭州宋城",
+        "etype_hint": "地点/主题乐园",
+    }
+    assert issues == ["杭州宋城: review attestation missing"]

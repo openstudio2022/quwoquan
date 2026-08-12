@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-001
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-004
 import 'dart:async';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
 
@@ -16,6 +17,7 @@ import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/my_intersection_inbox_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart';
 import 'package:quwoquan_app/design_system/layout/app_list_page_semantics.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
@@ -389,6 +391,80 @@ void main() {
 
     expect(repo.requestedDimension, 'content');
     expect(find.text('你和沈迟都收藏了「西湖夜航」'), findsOneWidget);
+  });
+
+  testWidgets('未知深链维度归一为全部，不把非闭集值发送到 Remote', (tester) async {
+    final repo = _DimensionAxisIntersectionRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          intersectionRepositoryProvider.overrideWithValue(repo),
+          intersectionVisitWriterProvider.overrideWithValue(
+            const _NoopIntersectionVisitWriter(),
+          ),
+        ],
+        child: const CupertinoApp(
+          home: MyIntersectionInboxPage(dimension: 'legacy-object-kind'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(repo.requestedDimension, '');
+    expect(repo.requestedFilter, 'fact');
+    expect(find.text(DiscoveryFeedText.intersectionFilterAll), findsOneWidget);
+  });
+
+  test('迟到的旧维度请求不得覆盖最新筛选结果或推进旧水位', () async {
+    final repo = _SupersededIntersectionRepository();
+    final visitWriter = _RecordingVisitWriter();
+    final container = ProviderContainer(
+      overrides: [
+        intersectionRepositoryProvider.overrideWithValue(repo),
+        intersectionVisitWriterProvider.overrideWithValue(visitWriter),
+      ],
+    );
+    addTearDown(container.dispose);
+    final subscription = container.listen(
+      myIntersectionListProvider,
+      (_, _) {},
+      fireImmediately: true,
+    );
+    addTearDown(subscription.close);
+    final notifier = container.read(myIntersectionListProvider.notifier);
+
+    final identityLoad = notifier.loadAndMarkVisited(dimension: 'identity');
+    final contentLoad = notifier.loadAndMarkVisited(dimension: 'content');
+    repo.complete('content', <IntersectionReason>[
+      _displayableInboxReason(
+        dimension: 'content',
+        intersectionId: 'ix_latest_content',
+        objectKind: 'content',
+        primaryText: '最新内容交集',
+        actionTargetId: 'post_latest',
+        source: 'coLiked',
+      ),
+    ]);
+    await contentLoad;
+    repo.complete('identity', <IntersectionReason>[
+      _displayableInboxReason(
+        dimension: 'identity',
+        intersectionId: 'ix_stale_identity',
+        objectKind: 'person',
+        primaryText: '迟到身份交集',
+        actionTargetId: 'user_stale',
+        source: 'sameIndustry',
+      ),
+    ]);
+    await identityLoad;
+
+    final state = container.read(myIntersectionListProvider);
+    expect(state.dimension, 'content');
+    expect(state.items.map((item) => item.intersectionId), <String>[
+      'ix_latest_content',
+    ]);
+    expect(visitWriter.dimensions, <String>['content']);
   });
 
   testWidgets('我的交集页从加载态进入空态，并通过 typed writer 推进已读水位', (tester) async {
@@ -1016,5 +1092,52 @@ class _RecoveringIntersectionRepository
     IntersectionDimension? dimension,
   }) async {
     visitCount += 1;
+  }
+}
+
+class _SupersededIntersectionRepository implements IntersectionRepository {
+  final Map<String, Completer<List<IntersectionReason>>> _requests =
+      <String, Completer<List<IntersectionReason>>>{};
+
+  void complete(String dimension, List<IntersectionReason> items) {
+    _requests[dimension]!.complete(items);
+  }
+
+  @override
+  Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
+    return intersectionInboxSummaryFixture(totalCount: 1, totalNewCount: 1);
+  }
+
+  @override
+  Future<List<IntersectionReason>> listMyIntersections({
+    String? dimension,
+    String? filter,
+    String? sourceRef,
+    String? timeBucket,
+    String? cursor,
+    int limit = 50,
+  }) {
+    final key = dimension ?? '';
+    return _requests
+        .putIfAbsent(key, Completer<List<IntersectionReason>>.new)
+        .future;
+  }
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = 8,
+  }) async => const <IntersectionReason>[];
+}
+
+class _RecordingVisitWriter implements IntersectionVisitWriter {
+  final List<String> dimensions = <String>[];
+
+  @override
+  Future<void> markIntersectionsVisited({
+    IntersectionDimension? dimension,
+  }) async {
+    dimensions.add(dimension?.wireName ?? '');
   }
 }

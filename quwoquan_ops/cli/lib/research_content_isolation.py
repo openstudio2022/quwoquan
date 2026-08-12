@@ -31,7 +31,6 @@ _REQUIRED_TRUE = (
     "identityWhitelistRequired",
     "sharingDisabled",
     "exportDisabled",
-    "searchIndexingDisabled",
     "internalAppSignatureRequired",
     "researchBadgeRequired",
     "shortLivedSignedMediaUrlsRequired",
@@ -41,6 +40,7 @@ _REQUIRED_FALSE = (
     "anonymousContentAccess",
     "anonymousMediaAccess",
     "publicContentDistribution",
+    "searchIndexingDisabled",
 )
 _SECRET_KEY_PARTS = ("token", "authorization", "credential", "password", "secret")
 _OPERATION_FIELDS = frozenset(
@@ -426,12 +426,12 @@ def _verify_runtime_proof(
             403,
         }:
             raise ValueError(f"research isolation {label} did not return 401/403")
-    if set(denied) != {"share", "export", "indexing"} or any(
+    if set(denied) != {"share", "export"} or any(
         not isinstance(row, Mapping) or row.get("decision") != "denied"
         for row in denied.values()
     ):
         raise ValueError(
-            "research isolation share/export/indexing denial is incomplete"
+            "research isolation share/export denial is incomplete"
         )
     ttl = signed.get("ttlSeconds")
     if (
@@ -476,11 +476,6 @@ def _verify_runtime_proof(
         (
             denied["export"].get("operation"),
             "export denial",
-            frozenset({200, 401, 403}),
-        ),
-        (
-            denied["indexing"].get("operation"),
-            "index denial",
             frozenset({200, 401, 403}),
         ),
         (signed.get("issuanceOperation"), "media issuance", frozenset({200})),

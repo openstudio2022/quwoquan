@@ -34,7 +34,7 @@ func TestMediaProcessingLifecycleConsumerRecordsReadyAndAcknowledgesCheckpoint(t
 	checkpoint := &processingCheckpoint{}
 	processor := &processingProcessor{}
 	recorder := &processingRecorder{asset: asset, now: createdAt.Add(time.Second)}
-	worker := mediaprocessing.NewWorker(
+	handler := mediaprocessing.NewMediaProcessingHandler(
 		source,
 		processingAssetLoader{asset: asset},
 		checkpoint,
@@ -45,7 +45,7 @@ func TestMediaProcessingLifecycleConsumerRecordsReadyAndAcknowledgesCheckpoint(t
 		mediaprocessing.WithClock(func() time.Time { return createdAt }),
 	)
 
-	processed, err := worker.Drain(context.Background(), 1)
+	processed, err := handler.Process(context.Background(), 1)
 	if err != nil || processed != 1 {
 		t.Fatalf("drain lifecycle event: processed=%d err=%v", processed, err)
 	}

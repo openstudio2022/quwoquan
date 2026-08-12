@@ -73,7 +73,8 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
     Widget listContent;
     if (membersState.isLoading) {
       listContent = AppRequestFeedback.section();
-    } else if (membersState.error case final error?) {
+    } else if (membersState.error case final error?
+        when membersState.members.isEmpty) {
       listContent = AppPageErrorState(
         semantic: runtimeErrorSemantic(
           context,
@@ -102,20 +103,55 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
         },
       );
     } else if (filteredMembers.isEmpty) {
-      listContent = Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.xl),
-          child: Text(
-            ChatText.noMatchingMembers,
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: AppTypography.base, color: fgSecondary),
+      listContent = Column(
+        children: [
+          if (membersState.error case final error?)
+            AppSectionErrorCard(
+              semantic: runtimeErrorSemantic(
+                context,
+                error: error,
+                category: UiErrorCategory.sectionLoad,
+                scope: UiErrorScope.section,
+              ),
+              onAction: (action) async {
+                await _retryLoad(action);
+              },
+            ),
+          Expanded(
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(AppSpacing.xl),
+                child: Text(
+                  ChatText.noMatchingMembers,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: AppTypography.base,
+                    color: fgSecondary,
+                  ),
+                ),
+              ),
+            ),
           ),
-        ),
+        ],
       );
     } else {
       listContent = CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
+          if (membersState.error case final error?)
+            SliverToBoxAdapter(
+              child: AppSectionErrorCard(
+                semantic: runtimeErrorSemantic(
+                  context,
+                  error: error,
+                  category: UiErrorCategory.sectionLoad,
+                  scope: UiErrorScope.section,
+                ),
+                onAction: (action) async {
+                  await _retryLoad(action);
+                },
+              ),
+            ),
           for (final section in sections) ...[
             SliverToBoxAdapter(
               child: MemberListSectionHeader(
@@ -167,5 +203,17 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
         listBody: ColoredBox(color: pageBg, child: listContent),
       ),
     );
+  }
+
+  Future<UiRecoveryOutcome> _retryLoad(UiErrorAction action) async {
+    if (action.type != UiErrorActionType.retry &&
+        action.type != UiErrorActionType.resubmit) {
+      return UiRecoveryOutcome.cancelled;
+    }
+    return await ref
+            .read(conversationMembersProvider(widget.conversationId).notifier)
+            .load()
+        ? UiRecoveryOutcome.recovered
+        : UiRecoveryOutcome.stillBlocked;
   }
 }

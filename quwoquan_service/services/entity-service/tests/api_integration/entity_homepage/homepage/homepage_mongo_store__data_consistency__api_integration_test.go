@@ -14,6 +14,7 @@ import (
 	homepageports "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/domain/ports"
 	homepagepersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/persistence"
 
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 )
@@ -159,6 +160,64 @@ func TestHomepageMongoStoreIdentityCASReceiptOutboxAndProjections(t *testing.T) 
 	events, err := store.ReadAfter(ctx, "", 20)
 	if err != nil || len(events) < 4 {
 		t.Fatalf("homepage outbox facts=%d err=%v", len(events), err)
+	}
+
+	// EventID 是幂等哈希而不是递增序列。后发生事件即使字典序更小，仍必须在
+	// checkpoint 之后被读取，避免合法 Homepage 永久缺失于搜索投影。
+	cursorBase := now.Add(10 * time.Second)
+	firstCursorAggregate, err := homepagemodel.Intake(homepagemodel.IntakeParams{
+		ID: "hp_cursor_first", Title: "游标先发生", HomepageType: "sight",
+		CanonicalEntityID: "entity:sight:cursor_first", SourceType: "official_seed",
+		Now: cursorBase,
+	})
+	if err != nil {
+		t.Fatalf("create first cursor aggregate: %v", err)
+	}
+	if _, err := store.Commit(ctx, mongoCommit(
+		firstCursorAggregate, 0, "cursor-actor", "cursor-first", "cursor-first-digest",
+		"evt-z-first", cursorBase,
+	)); err != nil {
+		t.Fatalf("commit first cursor event: %v", err)
+	}
+	secondCursorAggregate, err := homepagemodel.Intake(homepagemodel.IntakeParams{
+		ID: "hp_cursor_second", Title: "游标后发生", HomepageType: "sight",
+		CanonicalEntityID: "entity:sight:cursor_second", SourceType: "official_seed",
+		Now: cursorBase.Add(time.Second),
+	})
+	if err != nil {
+		t.Fatalf("create second cursor aggregate: %v", err)
+	}
+	if _, err := store.Commit(ctx, mongoCommit(
+		secondCursorAggregate, 0, "cursor-actor", "cursor-second", "cursor-second-digest",
+		"evt-a-second", cursorBase.Add(time.Second),
+	)); err != nil {
+		t.Fatalf("commit second cursor event: %v", err)
+	}
+	if err := store.SaveCheckpoint(ctx, "homepage-search-cursor-test", "evt-z-first"); err != nil {
+		t.Fatalf("save chronological cursor: %v", err)
+	}
+	checkpoint, err := store.LoadCheckpoint(ctx, "homepage-search-cursor-test")
+	if err != nil || checkpoint != "evt-z-first" {
+		t.Fatalf("load chronological cursor: checkpoint=%q err=%v", checkpoint, err)
+	}
+	afterCursor, err := store.ReadAfter(ctx, checkpoint, 20)
+	if err != nil || len(afterCursor) != 1 || afterCursor[0].EventID != "evt-a-second" {
+		t.Fatalf("non-monotonic EventID skipped later event: events=%+v err=%v", afterCursor, err)
+	}
+
+	// 旧 receipt 没有 occurredAt 游标，不能继续按哈希猜顺序；必须触发一次全量重放。
+	if _, err := client.Database("entity_homepage_it").Collection("homepage_projection_checkpoints").InsertOne(
+		ctx,
+		bson.M{
+			"_id": "legacy-homepage-search-cursor", "checkpoint": "evt-z-first",
+			"updatedAt": cursorBase,
+		},
+	); err != nil {
+		t.Fatalf("insert legacy cursor: %v", err)
+	}
+	legacyCheckpoint, err := store.LoadCheckpoint(ctx, "legacy-homepage-search-cursor")
+	if err != nil || legacyCheckpoint != "" {
+		t.Fatalf("legacy hash cursor must force replay: checkpoint=%q err=%v", legacyCheckpoint, err)
 	}
 }
 

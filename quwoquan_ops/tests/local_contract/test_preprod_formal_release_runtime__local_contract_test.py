@@ -93,6 +93,26 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                             "environment": target_name.removesuffix("-local"),
                             "target": target_name,
                             "baselineId": DIGEST,
+                            "releaseInputClassification": "commercial_inputs",
+                            "contractGraphDigest": DIGEST,
+                            "release": {
+                                "candidate": {
+                                    "releaseId": "candidate-commercial",
+                                    "releaseDigest": "sha256:" + "1" * 64,
+                                    "attestationRef": "/candidate-commercial.json",
+                                    "attestationDigest": "sha256:" + "2" * 64,
+                                    "releaseClass": "commercial",
+                                    "productLifecycleState": "commercial",
+                                },
+                                "rollback": {
+                                    "releaseId": "rollback-commercial",
+                                    "releaseDigest": "sha256:" + "3" * 64,
+                                    "attestationRef": "/rollback-commercial.json",
+                                    "attestationDigest": "sha256:" + "4" * 64,
+                                    "releaseClass": "commercial",
+                                    "productLifecycleState": "commercial",
+                                },
+                            },
                         },
                     },
                 )
@@ -257,6 +277,7 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
         manifest = {
             "candidateId": DIGEST,
             "artifactDigest": "sha256:" + "b" * 64,
+            "contractGraphDigest": DIGEST,
             "images": {
                 service: {
                     "repository": f"ghcr.io/owner/repo/{service}",
@@ -307,6 +328,8 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
                 composition = stackctl._bind_gamma_release_image_refs(
                     manifest_path,
                     environment,
+                    release_input_classification="commercial_inputs",
+                    contract_graph_digest=DIGEST,
                 )
 
         self.assertTrue(both_started.is_set())
@@ -320,6 +343,51 @@ class PreprodFormalReleaseRuntimeTest(unittest.TestCase):
             set(composition["images"]),
             {"service-a", "service-b"},
         )
+
+    def test_formal_release_rejects_noncommercial_or_graph_drift_before_pull(
+        self,
+    ) -> None:
+        composition = {
+            "candidateId": DIGEST,
+            "artifactDigest": "sha256:" + "b" * 64,
+            "contractGraphDigest": DIGEST,
+            "images": {
+                "service-a": {
+                    "ref": f"ghcr.io/owner/repo/service-a@{DIGEST}",
+                    "digest": DIGEST,
+                }
+            },
+        }
+        cases = (
+            ("research_inputs", DIGEST, "commercial release inputs"),
+            ("mixed_inputs", DIGEST, "commercial release inputs"),
+            ("commercial_inputs", "sha256:" + "9" * 64, "ContractGraph"),
+        )
+        for classification, graph_digest, message in cases:
+            with (
+                self.subTest(
+                    classification=classification,
+                    graph_digest=graph_digest,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_resolve_gamma_release_image_composition",
+                    return_value=composition,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "run",
+                    side_effect=AssertionError("formal gate must run before pull"),
+                ) as run,
+                self.assertRaisesRegex(ValueError, message),
+            ):
+                stackctl._bind_gamma_release_image_refs(
+                    Path("manifest.json"),
+                    {},
+                    release_input_classification=classification,
+                    contract_graph_digest=graph_digest,
+                )
+            run.assert_not_called()
 
     def test_formal_runtime_image_inspection_is_bounded_parallel(self) -> None:
         refs = {

@@ -129,12 +129,23 @@ final class InMemoryAuthenticationChallengeFacet
   int _sequence = 0;
 
   @override
-  Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {
+  Future<OtpDeliveryReadinessSnapshot> getOtpDeliveryReadiness() async {
+    return const OtpDeliveryReadinessSnapshot(
+      availability: OtpDeliveryReadinessAvailability.ready,
+      retryAfterSeconds: 0,
+    );
+  }
+
+  @override
+  Future<OtpChallengeIssueResult> sendOtp(
+    SendOtpCommand command, {
+    required String idempotencyKey,
+  }) async {
     final sequence = ++_sequence;
     return OtpChallengeIssueResult(
       maskedPhone: _maskPhone(command.phone),
       expiresInSeconds: 300,
-      deliveryStatus: 'queued',
+      deliveryStatus: OtpDeliveryStatus.queued,
       retryAfterSeconds: 60,
       requestId: 'alpha-otp-request-$sequence',
       challengeId: 'alpha-otp-challenge-$sequence',

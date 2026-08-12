@@ -24,10 +24,25 @@ final class RecoveryVersionClient {
     final result = RecoveryVersionResult(
       latestVersion: response.latestVersion.trim(),
       latestBuild: response.latestBuild,
+      minimumSupportedVersion: response.minimumSupportedVersion.trim(),
+      minimumSupportedBuild: response.minimumSupportedBuild,
+      updateState: response.updateState,
       updateUrl: response.updateUrl.trim(),
       recoveryUrl: response.recoveryUrl.trim(),
     );
-    if (result.latestVersion.isEmpty || result.latestBuild <= 0) {
+    final expectedUpdateState = switch (buildNumber) {
+      final build when build < result.minimumSupportedBuild =>
+        RecoveryUpdateState.required,
+      final build when build < result.latestBuild =>
+        RecoveryUpdateState.available,
+      _ => RecoveryUpdateState.none,
+    };
+    if (result.latestVersion.isEmpty ||
+        result.minimumSupportedVersion.isEmpty ||
+        result.latestBuild <= 0 ||
+        result.minimumSupportedBuild <= 0 ||
+        result.minimumSupportedBuild > result.latestBuild ||
+        result.updateState != expectedUpdateState) {
       throw const FormatException('invalid recovery release values');
     }
     return result;

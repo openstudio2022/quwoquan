@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/schema/content/pool_admission.schema.json",
+  "title": "Author and content pool admission",
+  "$defs": {
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "processResult",
+        "qualityResult",
+        "evidenceRef",
+        "evidenceDigest"
+      ],
+      "properties": {
+        "processResult": {"enum": ["completed", "failed"]},
+        "qualityResult": {"enum": ["passed", "failed"]},
+        "evidenceRef": {"type": "string", "minLength": 1},
+        "evidenceDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "authorAdmission": {
+      "$ref": "#/$defs/evidence"
+    },
+    "contentAdmission": {
+      "allOf": [
+        {"$ref": "#/$defs/evidence"},
+        {
+          "type": "object",
+          "required": ["usageScope"],
+          "properties": {
+            "usageScope": {"enum": ["research", "commercial"]}
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,4 +1,16 @@
-// Code generated from contracts/metadata/_shared/runtime_observability.yaml. DO NOT EDIT.
+// Code generated from runtime_observability.yaml and object-local privacy.yaml. DO NOT EDIT.
+
+final class RuntimeLogFieldPrivacyPolicy {
+  const RuntimeLogFieldPrivacyPolicy({required this.objectId, required this.field, required this.classification, required this.action, this.maskStrategy = '', this.truncateChars = 0, required this.explicit, required this.visibility});
+  final String objectId;
+  final String field;
+  final String classification;
+  final String action;
+  final String maskStrategy;
+  final int truncateChars;
+  final bool explicit;
+  final List<String> visibility;
+}
 
 final class RuntimeLogSignalMetadata {
   const RuntimeLogSignalMetadata({required this.owner, required this.producers, required this.logKind, required this.defaultSeverity, required this.environments, required this.attributeAllowlist, required this.correlationKeys, required this.backend, required this.retentionDays, required this.sampling, required this.alert, required this.runbook, required this.piiClassification});
@@ -33,6 +45,116 @@ abstract final class RuntimeLogCatalog {
   };
   static const Set<String> forbiddenAttributeKeys = <String>{'authorization', 'password', 'passwd', 'secret', 'token', 'apiKey', 'credential', 'cookie', 'phone', 'email', 'ssid', 'ip', 'preciseLocation', 'sessionId'};
   static const Set<String> highCardinalityMetricKeys = <String>{'userId', 'sessionId', 'requestId', 'traceId', 'rawPath'};
+  static const List<RuntimeLogFieldPrivacyPolicy> fieldPrivacyPolicies = <RuntimeLogFieldPrivacyPolicy>[
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: '_id', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>['never_expose']),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'articleAssetManifest', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'articleFontPreset', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'articleMarkdown', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'articleMarkdownDigest', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'articleRenderProfile', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'articleTemplate', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'assistantUsePolicy', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'authorAvatarUrlSnapshot', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'authorDisplayNameSnapshot', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'authorId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>['all']),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'authorQualitySignals', classification: 'INTERNAL', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'body', classification: 'PUBLIC', action: 'truncate', maskStrategy: '', truncateChars: 200, explicit: true, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'captureDisclosure', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'captureFeatureRefs', classification: 'INTERNAL', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'commentCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'contentDigest', classification: 'INTERNAL', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'contentIdentity', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'contentType', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'contentVertical', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'coverFrameTimeMs', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'coverStrategy', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'coverUrl', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'createdAt', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'creatorArchetype', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'creatorDisclosure', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'creatorProfileId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'creatorProfileVersion', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'deletedAt', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'deviceInfo', classification: 'PII', action: 'mask', maskStrategy: 'strip_detail', truncateChars: 0, explicit: true, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'durationMs', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'embedding', classification: 'SENSITIVE', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: true, visibility: <String>['never_expose']),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'entityMentions', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'entityRefs', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'experienceClaimMode', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'geoTagRef', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'height', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'helperReadSummary', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'illustrationAssetId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'lastActiveAt', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'likeCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'localDraftId', classification: 'INTERNAL', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'location', classification: 'PII', action: 'mask', maskStrategy: 'city_level_only', truncateChars: 0, explicit: true, visibility: <String>['app', 'content-service-internal']),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'locationName', classification: 'PII', action: 'mask', maskStrategy: 'strip_detail', truncateChars: 0, explicit: true, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'markdownDialect', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'mediaAssetIds', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'mediaItems', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'mediaUrls', classification: 'PUBLIC', action: 'count_only', maskStrategy: '', truncateChars: 0, explicit: true, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'moderationStatus', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>['first_party_service_internal', 'platform-ops']),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'personaContextVersion', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'pinnedCommentId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'primaryHomepageId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'primaryHomepageSnapshot', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'primaryHomepageType', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'publishIntentId', classification: 'INTERNAL', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'publishLocation', classification: 'PII', action: 'mask', maskStrategy: 'city_level_only', truncateChars: 0, explicit: true, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'publishedAt', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'semanticMentions', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'shareCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'sourceAttribution', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'sourcePostId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'sourceTaskId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'sourceType', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'status', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'summary', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'tagRefs', classification: 'PUBLIC', action: 'allow', maskStrategy: '', truncateChars: 0, explicit: true, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'thumbnailUrl', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'title', classification: 'PUBLIC', action: 'truncate', maskStrategy: '', truncateChars: 100, explicit: true, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'updatedAt', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'version', classification: 'INTERNAL', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'videoUrl', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'viewCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'visibility', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'visitedAt', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'content.post', field: 'width', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'accountState', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'anonymousRetentionPolicy', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'authEpoch', classification: 'INTERNAL', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'avatarAssetId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'avatarUrl', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'avatarVersion', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'backgroundAssetId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'backgroundUrl', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'bio', classification: 'PUBLIC', action: 'drop_if_gt_100chars', maskStrategy: '', truncateChars: 0, explicit: true, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'birthDate', classification: 'PII', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: true, visibility: <String>['self', 'user-service-internal']),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'circleCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'createdAt', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'followerCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'followingCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'gender', classification: 'PII', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>['platform-ops', 'self']),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'identityOrigin', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'identityTags', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'interestTags', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'likeCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'logicalShard', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'nickname', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'nicknameCustomized', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'ownerDisplayName', classification: 'PII', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'personaCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'phone', classification: 'PII', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: true, visibility: <String>['user-service-internal']),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'postCount', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'profileVersion', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'region', classification: 'PII', action: 'mask', maskStrategy: 'city_level_only', truncateChars: 0, explicit: true, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'regionTagRef', classification: 'PII', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'suspendedAt', classification: 'INTERNAL', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'suspensionCaseRef', classification: 'INTERNAL', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'updatedAt', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+    RuntimeLogFieldPrivacyPolicy(objectId: 'user.user_account', field: 'userId', classification: 'PUBLIC', action: 'drop', maskStrategy: '', truncateChars: 0, explicit: false, visibility: <String>[]),
+  ];
   static const Set<String> resourceVersionFields = <String>{'appVersion', 'service.version'};
   static const int maxBatchItems = 50;
   static const int maxCanonicalBodyBytes = 131072;

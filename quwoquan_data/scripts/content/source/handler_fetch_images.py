@@ -307,6 +307,7 @@ def prepare_entity_images(
                 "rightsStatus": spec.get("rightsStatus") or spec.get("rightsAuditStatus") or "",
                 "authorizationRequired": spec.get("authorizationRequired"),
                 "distributionDecision": spec.get("distributionDecision") or "",
+                "sourceAttribution": dict(spec.get("sourceAttribution") or {}),
                 "rightsIssues": list(spec.get("rightsIssues") or []),
                 "caption": str(spec.get("caption") or relevance),
                 "relevance": relevance,

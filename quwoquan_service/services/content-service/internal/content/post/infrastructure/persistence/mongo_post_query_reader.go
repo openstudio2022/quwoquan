@@ -690,10 +690,13 @@ func PostFeedProjection() bson.D {
 	return bson.D{
 		{Key: "_id", Value: 1},
 		{Key: "authorId", Value: 1},
+		{Key: "authorDisplayNameSnapshot", Value: 1},
+		{Key: "authorAvatarUrlSnapshot", Value: 1},
 		{Key: "contentType", Value: 1},
 		{Key: "contentIdentity", Value: 1},
 		{Key: "title", Value: 1},
 		{Key: "body", Value: 1},
+		{Key: "summary", Value: 1},
 		{Key: "mediaUrls", Value: 1},
 		{Key: "mediaItems.kind", Value: 1},
 		{Key: "mediaItems.mediaAssetId", Value: 1},

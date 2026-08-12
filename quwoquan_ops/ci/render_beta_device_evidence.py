@@ -201,6 +201,18 @@ def render_stack_bundle(
             )
             if evidence.get("artifactDigest") != artifact_digest:
                 raise ValueError("package artifactDigest is not bound to the manifest")
+            if "formalRelease" in evidence:
+                raise ValueError("package evidence must not claim formalRelease")
+            if evidence.get("releaseInputClassification") != "commercial_inputs":
+                raise ValueError(
+                    "package evidence requires commercial release inputs"
+                )
+            if evidence.get("contractGraphDigest") != manifest.get(
+                "contractGraphDigest"
+            ):
+                raise ValueError(
+                    "package evidence ContractGraph differs from the manifest"
+                )
         if label == "up":
             runtime_images = evidence.get("runtimeImages")
             runtime_images_valid = (
@@ -228,13 +240,21 @@ def render_stack_bundle(
                 evidence.get("runtimeMode") != "immutable-oci"
                 or evidence.get("runtimeCandidateDigest") != candidate
                 or evidence.get("formalRelease") is not True
+                or evidence.get("releaseInputClassification")
+                != "commercial_inputs"
                 or not runtime_images_valid
                 or evidence.get("destructiveRepairPerformed") is not False
                 or evidence.get("destructiveActions") != []
             ):
                 raise ValueError(
                     "Beta up evidence is not an immutable candidate runtime "
-                    "without destructive repair"
+                    "with commercial release inputs and without destructive repair"
+                )
+            if evidence.get("contractGraphDigest") != manifest.get(
+                "contractGraphDigest"
+            ):
+                raise ValueError(
+                    "Beta up evidence ContractGraph differs from the manifest"
                 )
         destination = bundle_dir / "raw" / f"{label}.json"
         _copy_regular_file(source_path, destination)

@@ -14,11 +14,9 @@ from content.execution.campaign.copy_ready import maybe_write_copy_ready_receipt
 from content.execution.campaign.external_input_runtime import (
     freeze_execution_external_input_envelope,
 )
-from content.execution.campaign.fleet_transport import (
-    resolve_campaign_fleet_transport,
-)
-from content.execution.campaign.observer_binary import (
-    resolve_campaign_observer_binary,
+from content.execution.campaign.lane import (
+    CAMPAIGN_CARRIERS,
+    LaneRunner,
 )
 from content.execution.campaign.plan import (
     aggregate_status,
@@ -31,10 +29,6 @@ from content.execution.campaign.plan import (
     utc_now,
     wait_for_submissions,
     write_report,
-)
-from content.execution.campaign.lane import (
-    CAMPAIGN_CARRIERS,
-    LaneRunner,
 )
 from content.execution.campaign.process import run_phase
 from content.execution.campaign.receipt import load_lane_receipt
@@ -49,14 +43,26 @@ from content.execution.campaign.workspace import (
     prepare_source_capsule,
     release_lane_workspace,
 )
-from content.execution.identity import validate_execution_id
-from content.execution.queue.reliabletask.transport import FrozenReliableTaskFleetBinding
-from content.execution.runtime_evidence.reliabletask_process import (
-    ReliableTaskObserverBinaryBinding,
+from content.execution.closure.pool_delivery import (
+    load_execution_pool_delivery_intents,
 )
+from content.execution.identity import validate_execution_id
 
 _REVIEW_STAGE = "review-only"
 _PUBLISH_STAGE = "run"
+
+
+def _delivery_pending_projection(
+    execution_id: str,
+    *,
+    expected_count: int,
+    output_root: Path,
+) -> tuple[int, list[str]]:
+    intents = load_execution_pool_delivery_intents(execution_id)
+    refs = [path.relative_to(output_root).as_posix() for _intent, path in intents]
+    if expected_count <= 0 or len(refs) != expected_count:
+        return 0, []
+    return len(refs), refs
 
 
 def run_campaign(
@@ -95,8 +101,6 @@ def run_campaign(
     caught: BaseException | None = None
     review_carriers: list[str] = list(CAMPAIGN_CARRIERS)
     recovered_review_carriers: list[str] = []
-    observer_binary_binding: ReliableTaskObserverBinaryBinding | None = None
-    fleet_transport_binding: FrozenReliableTaskFleetBinding | None = None
 
     with campaign_run_session(
         runtime,
@@ -153,9 +157,11 @@ def run_campaign(
             final_phase = "capsule"
             capsule = prepare_source_capsule(
                 runtime,
+                git_branch=str(plan["gitBranch"]),
                 commit_sha=str(plan["gitCommitSha"]),
                 source_revision=str(plan["sourceRevision"]),
                 source_digest=str(plan["sourceDigest"]),
+                execution_bundle=dict(plan["executionBundle"]),
                 entity_catalog_digest=str(plan["entityCatalogDigest"]),
                 lane_external_inputs=dict(plan["laneExternalInputs"]),
                 external_inputs_digest=str(plan["externalInputsDigest"]),
@@ -259,22 +265,12 @@ def run_campaign(
                         execution_root=workspaces[carrier].execution_root,
                         return_code=0,
                     )
-            if review_carriers or recovered_review_carriers:
-                observer_binary_binding = resolve_campaign_observer_binary(
-                    runtime,
-                    root_id,
-                    plan_digest=str(plan_digest),
-                )
-                fleet_transport_binding = resolve_campaign_fleet_transport(
-                    runtime,
-                    root_id,
-                    plan_digest=str(plan_digest),
-                )
             assert_frozen_main_tree(
                 runtime.repo_root,
                 git_branch=str(plan["gitBranch"]),
                 commit_sha=str(plan["gitCommitSha"]),
                 source_digest=str(plan["sourceDigest"]),
+                execution_bundle_digest=str(plan["executionBundle"]["digest"]),
             )
             final_phase = "review"
             persist_running_report("review")
@@ -285,6 +281,7 @@ def run_campaign(
                     git_branch=str(plan["gitBranch"]),
                     commit_sha=str(plan["gitCommitSha"]),
                     source_digest=str(plan["sourceDigest"]),
+                    execution_bundle_digest=str(plan["executionBundle"]["digest"]),
                 )
                 # Publish stays single-writer because all carriers share the
                 # canonical PUBLISH_ROOT.  It starts as soon as this lane's
@@ -299,8 +296,6 @@ def run_campaign(
                     worker_count=1,
                     lane_runner=lane_runner,
                     run_session=campaign_run,
-                    observer_binary_binding=observer_binary_binding,
-                    fleet_transport_binding=fleet_transport_binding,
                     carriers=(carrier,),
                 )
                 code, error = published[carrier]
@@ -312,7 +307,23 @@ def run_campaign(
                     }
                 )
                 if code != 0:
-                    lanes[carrier]["status"] = "blocked"
+                    pending_count, intent_refs = _delivery_pending_projection(
+                        str(submissions[carrier]["executionId"]),
+                        expected_count=int(lanes[carrier].get("qualifiedCount") or 0),
+                        output_root=runtime.output_root,
+                    )
+                    if code == 10 and pending_count > 0:
+                        lanes[carrier].update(
+                            {
+                                "status": "delivery_pending",
+                                "finalizedCount": 0,
+                                "deliveryPendingCount": pending_count,
+                                "deliveryIntentRefs": intent_refs,
+                                "error": "DATA.POOL.DELIVERY_UNAVAILABLE",
+                            }
+                        )
+                    else:
+                        lanes[carrier]["status"] = "blocked"
                     persist_running_report("publish")
                     return
                 try:
@@ -391,8 +402,6 @@ def run_campaign(
                 worker_count=policy.campaign_lane_workers,
                 lane_runner=lane_runner,
                 run_session=campaign_run,
-                observer_binary_binding=observer_binary_binding,
-                fleet_transport_binding=fleet_transport_binding,
                 carriers=tuple(review_carriers),
                 on_result=handle_review_result,
             )
@@ -403,6 +412,7 @@ def run_campaign(
                 git_branch=str(plan["gitBranch"]),
                 commit_sha=str(plan["gitCommitSha"]),
                 source_digest=str(plan["sourceDigest"]),
+                execution_bundle_digest=str(plan["executionBundle"]["digest"]),
             )
             final_status = aggregate_status(lanes)
             final_phase = "completed"
@@ -417,7 +427,7 @@ def run_campaign(
                     or int(lanes[carrier].get("finalizedCount") or 0) <= 0
                 ]
                 if lane_failures and final_status == "succeeded_partial":
-                    failure = "partial campaign; blocked lanes: " + ", ".join(
+                    failure = "partial campaign; pending/blocked lanes: " + ", ".join(
                         lane_failures
                     )
         except BaseException as exc:  # noqa: BLE001

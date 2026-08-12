@@ -154,7 +154,7 @@ def main() -> int:
         'export QWQ_ENVIRONMENT="${REQUESTED_ENVIRONMENT:-alpha}"',
         'export QWQ_APP_RUNTIME_ENV="$QWQ_ENVIRONMENT"',
         'export QWQ_LAUNCH_TARGET="${QWQ_APP_RUNTIME_ENV}-local"',
-        'app-debug-preflight --target "$QWQ_LAUNCH_TARGET"',
+        'app-debug-preflight --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
         '--env "$QWQ_APP_RUNTIME_ENV"',
         '--target "$QWQ_LAUNCH_TARGET"',
     ):

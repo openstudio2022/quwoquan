@@ -12,7 +12,6 @@ var (
 	ErrDomainReaderCatalogUnavailable = errors.New("ASSISTANT.SYSTEM.domain_reader_catalog_unavailable")
 	ErrDomainReaderDescriptorNotFound = errors.New("ASSISTANT.USER.domain_reader_descriptor_not_found")
 	ErrDomainReaderInvalidArgument    = errors.New("ASSISTANT.USER.domain_reader_invalid_argument")
-	ErrDomainReaderUnauthorized       = errors.New("ASSISTANT.MIDDLEWARE.domain_reader_unauthorized")
 )
 
 // AppErrorFromDomainReaderCatalogUnavailable returns *AppError for ASSISTANT.SYSTEM.domain_reader_catalog_unavailable (user_message from errors.yaml).
@@ -31,10 +30,4 @@ func AppErrorFromDomainReaderDescriptorNotFound(debugMessage string) *rterr.AppE
 func AppErrorFromDomainReaderInvalidArgument(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.domain_reader_invalid_argument")
 	return rterr.NewAppError(code, "领域读取请求无效", debugMessage).WithMetadata("domain_reader_invalid_argument", 400).WithRecoveryDirective("surface", "inlineCard", 0)
-}
-
-// AppErrorFromDomainReaderUnauthorized returns *AppError for ASSISTANT.MIDDLEWARE.domain_reader_unauthorized (user_message from errors.yaml).
-func AppErrorFromDomainReaderUnauthorized(debugMessage string) *rterr.AppError {
-	code, _ := rterr.ParseCode("ASSISTANT.MIDDLEWARE.domain_reader_unauthorized")
-	return rterr.NewAppError(code, "无权读取领域能力目录", debugMessage).WithMetadata("domain_reader_unauthorized", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }

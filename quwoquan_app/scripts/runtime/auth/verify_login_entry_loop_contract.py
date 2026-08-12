@@ -63,8 +63,11 @@ def main() -> int:
     quick_actions = read(
         "quwoquan_app/lib/runtime/shell/actions/global_surface_actions.dart"
     )
+    global_surface_action_dependencies = read(
+        "quwoquan_app/lib/runtime/di/global_surface_action_dependencies.dart"
+    )
     create_entry_route = read(
-        "quwoquan_app/lib/runtime/di/navigation/app_router_create_entry_route.dart"
+        "quwoquan_app/lib/runtime/di/navigation/app_router.dart"
     )
     main_shell = read("quwoquan_app/lib/runtime/shell/main_app_shell.dart")
     shell_test = read("quwoquan_app/test/local_contract/runtime/shell/main_app_shell_widget__local_contract_test.dart")
@@ -164,10 +167,12 @@ def main() -> int:
         errors,
     )
     require(
-        "Provider<StartGatheringNavigationBinding?>" in quick_actions
-        and "GatheringCreateNavigationBinding" in quick_actions
-        and "AppRoutePaths.gatheringCreate" in quick_actions
-        and "extra: request" in quick_actions,
+        "Provider<GatheringCreateNavigationBinding?>"
+        in global_surface_action_dependencies
+        and "AppRoutePaths.gatheringCreate"
+        in global_surface_action_dependencies
+        and "extra: request" in global_surface_action_dependencies
+        and "globalSurfaceActionBindingsProvider" in quick_actions,
         "活动 canonical route codegen 后必须由 typed binding 进入 generated gatheringCreate 并保留请求",
         errors,
     )

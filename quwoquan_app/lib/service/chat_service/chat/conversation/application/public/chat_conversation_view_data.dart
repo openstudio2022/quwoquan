@@ -90,6 +90,8 @@ final class ChatGroupSettingsViewData {
     this.conversationType = 'group',
     this.circleId = '',
     this.circleGroupId = '',
+    this.status = 'active',
+    this.membersRosterRevision = 0,
   });
 
   factory ChatGroupSettingsViewData.fromWire(ChatConversation source) {
@@ -98,6 +100,8 @@ final class ChatGroupSettingsViewData {
       conversationType: source.type,
       circleId: source.circleId,
       circleGroupId: source.circleGroupId,
+      status: source.status,
+      membersRosterRevision: source.membersRosterRevision,
     );
   }
 
@@ -105,12 +109,16 @@ final class ChatGroupSettingsViewData {
   final String conversationType;
   final String circleId;
   final String circleGroupId;
+  final String status;
+  final int membersRosterRevision;
 
   ChatGroupSettingsViewData copyWith({
     bool? nameEditableByAdminOnly,
     String? conversationType,
     String? circleId,
     String? circleGroupId,
+    String? status,
+    int? membersRosterRevision,
   }) {
     return ChatGroupSettingsViewData(
       nameEditableByAdminOnly:
@@ -118,6 +126,9 @@ final class ChatGroupSettingsViewData {
       conversationType: conversationType ?? this.conversationType,
       circleId: circleId ?? this.circleId,
       circleGroupId: circleGroupId ?? this.circleGroupId,
+      status: status ?? this.status,
+      membersRosterRevision:
+          membersRosterRevision ?? this.membersRosterRevision,
     );
   }
 }

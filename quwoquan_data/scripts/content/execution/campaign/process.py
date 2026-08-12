@@ -40,6 +40,8 @@ def run_phase(
     fleet_transport_binding: FrozenReliableTaskFleetBinding | None = None,
     carriers: tuple[str, ...] | None = None,
     on_result: PhaseResultCallback | None = None,
+    recover_stage: str | None = None,
+    recovery_reason: str | None = None,
 ) -> dict[str, tuple[int, str | None]]:
     selected = CAMPAIGN_CARRIERS if carriers is None else carriers
     unknown = [carrier for carrier in selected if carrier not in CAMPAIGN_CARRIERS]
@@ -64,6 +66,8 @@ def run_phase(
                 run_session=run_session,
                 observer_binary_binding=observer_binary_binding,
                 fleet_transport_binding=fleet_transport_binding,
+                recover_stage=recover_stage,
+                recovery_reason=recovery_reason,
             ): carrier
             for carrier in selected
         }

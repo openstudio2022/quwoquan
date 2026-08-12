@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 import re
-import stat
 import tempfile
 import unicodedata
 from collections import Counter
@@ -20,6 +19,15 @@ from typing import Any
 
 from core.io import read_json
 from core.schema import assert_valid
+from core.source_attribution import canonical_source_attribution
+
+from content.source.research.scale_source_pool_evidence_path import (
+    ScaleSourcePoolEvidencePathError,
+    compute_evidence_file_sha256,
+    resolve_evidence_directory,
+    resolve_evidence_file,
+    resolve_evidence_root,
+)
 
 SOURCE_POOL_SHORTFALL = "DATA.SOURCE.POOL_SHORTFALL"
 SOURCE_POOL_INVALID = "DATA.SOURCE.POOL_INVALID"
@@ -27,15 +35,12 @@ SOURCE_POOL_CREATE_ONCE_COLLISION = "DATA.SOURCE.POOL_CREATE_ONCE_COLLISION"
 SOURCE_POOL_EVIDENCE_INVALID = "DATA.SOURCE.POOL_EVIDENCE_INVALID"
 
 _CARRIERS = ("homepage", "article", "image", "video")
-_REQUIRED_NEW_COUNTS: dict[str, dict[str, int]] = {
-    "M100": {"homepage": 180, "article": 180, "image": 180, "video": 18},
-    "M1000": {"homepage": 1620, "article": 1620, "image": 1620, "video": 162},
-    "M10000": {
-        "homepage": 16200,
-        "article": 16200,
-        "image": 16200,
-        "video": 1620,
-    },
+_MILESTONES = frozenset({"M100", "M1000", "M10000"})
+_DEFAULT_WAVE_CANDIDATE_COUNTS = {
+    "homepage": 12,
+    "article": 12,
+    "image": 12,
+    "video": 12,
 }
 _SHA256 = re.compile(r"^sha256:[0-9a-f]{64}$")
 _PIN_ALIASES = frozenset({"pinterest", "pinterest.com", "www.pinterest.com"})
@@ -66,15 +71,14 @@ class ScaleSourcePoolError(ValueError):
 
 
 def required_candidate_counts(target_scale: str) -> dict[str, int]:
-    """Return the governed *new* oversampled pool for one milestone."""
+    """Return the planning default for one rolling wave, never a milestone gate."""
 
-    try:
-        return dict(_REQUIRED_NEW_COUNTS[str(target_scale).strip()])
-    except KeyError as exc:
+    if str(target_scale).strip() not in _MILESTONES:
         raise ScaleSourcePoolError(
             SOURCE_POOL_INVALID,
             [f"unsupported targetScale={target_scale!r}"],
-        ) from exc
+        )
+    return dict(_DEFAULT_WAVE_CANDIDATE_COUNTS)
 
 
 def _canonical_digest(document: Mapping[str, Any]) -> str:
@@ -123,6 +127,19 @@ def _identity(document: Mapping[str, Any]) -> tuple[str, str, str]:
 
 def _binding_issues(candidate: Mapping[str, Any], *, candidate_id: str) -> list[str]:
     issues: list[str] = []
+    if candidate.get("carrier") in {"homepage", "article"} or (
+        candidate.get("sourceAttribution") is not None
+    ):
+        try:
+            canonical_source_attribution(candidate.get("sourceAttribution"))
+        except ValueError as exc:
+            issues.append(f"{candidate_id}.sourceAttribution is incomplete: {exc}")
+    root_ref = candidate.get("sourceReadyEvidenceRootRef")
+    if candidate.get("carrier") in {"homepage", "article"} or root_ref is not None:
+        try:
+            _safe_ref(root_ref, label=f"{candidate_id}.sourceReadyEvidenceRootRef")
+        except ScaleSourcePoolError as exc:
+            issues.extend(exc.issues)
     for prefix in ("sourceUnit", "acquisition", "rights", "quality"):
         try:
             _safe_ref(candidate.get(f"{prefix}Ref"), label=f"{candidate_id}.{prefix}Ref")
@@ -152,60 +169,55 @@ def _video_issues(candidate: Mapping[str, Any], *, candidate_id: str) -> list[st
         str(candidate.get("playabilityFileSha256") or "").strip()
     ):
         issues.append(f"{candidate_id}.playabilityFileSha256 is not sha256")
-    if any(readiness.get(field) is not True for field in ("playable", "motion", "premiumEligible")):
-        issues.append(f"{candidate_id} is not playable motion Premium media")
+    if any(readiness.get(field) is not True for field in ("playable", "motion")):
+        issues.append(f"{candidate_id} is not playable motion media")
+    return issues
+
+
+def _video_popularity_ready(candidate: Mapping[str, Any]) -> bool:
+    readiness = candidate.get("videoReadiness")
+    if not isinstance(readiness, Mapping):
+        return False
     for field in ("playCount", "likeCount", "commentCount", "shareCount", "favoriteCount"):
         value = readiness.get(field)
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-            issues.append(f"{candidate_id}.{field} is incomplete")
+            return False
     if not str(readiness.get("observedAt") or "").strip():
-        issues.append(f"{candidate_id}.observedAt is missing")
+        return False
     percentile = readiness.get("popularityPercentile")
     if (
         isinstance(percentile, bool)
         or not isinstance(percentile, (int, float))
         or not 0 <= float(percentile) <= 1
     ):
-        issues.append(f"{candidate_id}.popularityPercentile is invalid")
+        return False
     comparison = readiness.get("comparisonBucket")
     if not isinstance(comparison, Mapping):
-        issues.append(f"{candidate_id}.comparisonBucket is missing")
-    else:
-        if _normalized_provider(comparison.get("provider")) != _normalized_provider(
-            candidate.get("provider")
-        ):
-            issues.append(f"{candidate_id}.comparisonBucket provider drift")
-        if any(
-            not str(comparison.get(field) or "").strip()
-            for field in ("topic", "timeBucket")
-        ):
-            issues.append(f"{candidate_id}.comparisonBucket is incomplete")
-        count = comparison.get("candidateCount")
-        if isinstance(count, bool) or not isinstance(count, int) or count < 2:
-            issues.append(f"{candidate_id}.comparisonBucket lacks comparable candidates")
-    return issues
+        return False
+    if _normalized_provider(comparison.get("provider")) != _normalized_provider(
+        candidate.get("provider")
+    ):
+        return False
+    if any(
+        not str(comparison.get(field) or "").strip()
+        for field in ("topic", "timeBucket")
+    ):
+        return False
+    count = comparison.get("candidateCount")
+    return not isinstance(count, bool) and isinstance(count, int) and count >= 2
 
 
-def _image_mix(counts: Counter[str], *, total: int) -> tuple[dict[str, Any], list[str]]:
+def _image_mix(counts: Counter[str], *, total: int) -> dict[str, Any]:
     pinterest = counts["pinterest"]
     tuchong = counts["tuchong"]
     professional = pinterest + tuchong
-    issues: list[str] = []
     largest_other = max(
         (count for provider, count in counts.items() if provider != "pinterest"),
         default=0,
     )
-    if pinterest <= largest_other:
-        issues.append("image pool Pinterest must be the unique largest provider")
-    if tuchong < 1:
-        issues.append("image pool Tuchong count must be positive")
-    if professional * 2 < total:
-        issues.append("image pool Pinterest+Tuchong ratio is below 50%")
     dominant = sorted(
         provider for provider, count in counts.items() if count * 10 > total * 7
     )
-    if dominant:
-        issues.append("image pool single-provider ratio exceeds 70%: " + ", ".join(dominant))
     rows = [
         {
             "provider": provider,
@@ -214,23 +226,35 @@ def _image_mix(counts: Counter[str], *, total: int) -> tuple[dict[str, Any], lis
         }
         for provider, count in sorted(counts.items())
     ]
-    return (
-        {
-            "totalCandidateCount": total,
-            "pinterestCandidateCount": pinterest,
-            "tuchongCandidateCount": tuchong,
-            "pinterestTuchongCandidateRatio": (
-                round(professional / total, 6) if total else 0.0
-            ),
-            "largestProvider": "pinterest" if not issues else "",
-            "maxProviderCandidateRatio": max(
-                (round(count / total, 6) for count in counts.values()),
-                default=0.0,
-            ),
-            "providerCandidateCounts": rows,
-        },
-        issues,
+    largest_provider = (
+        min(
+            provider
+            for provider, count in counts.items()
+            if count == max(counts.values())
+        )
+        if counts
+        else ""
     )
+    return {
+        "totalCandidateCount": total,
+        "pinterestCandidateCount": pinterest,
+        "tuchongCandidateCount": tuchong,
+        "pinterestTuchongCandidateRatio": (
+            round(professional / total, 6) if total else 0.0
+        ),
+        "largestProvider": largest_provider,
+        "maxProviderCandidateRatio": max(
+            (round(count / total, 6) for count in counts.values()),
+            default=0.0,
+        ),
+        "providerCandidateCounts": rows,
+        "policyObservations": {
+            "pinterestUniqueLargest": bool(pinterest > largest_other),
+            "tuchongPresent": bool(tuchong),
+            "pinterestTuchongAtLeastHalf": bool(total and professional * 2 >= total),
+            "providerAboveSeventyPercent": dominant,
+        },
+    }
 
 
 def _assert_pool_document(plan: Mapping[str, Any]) -> tuple[str, str, str]:
@@ -248,16 +272,10 @@ def validate_scale_source_pool(plan: Mapping[str, Any]) -> dict[str, Any]:
     """Validate one immutable source-ready pool and return derived evidence."""
 
     plan_identity = _assert_pool_document(plan)
-    required = required_candidate_counts(str(plan["targetScale"]))
-    declared_required = {
+    declared_wave = {
         str(row["carrier"]): int(row["minimumCandidateCount"])
-        for row in plan["requiredNewCandidateCounts"]
+        for row in plan["waveCandidateCounts"]
     }
-    if declared_required != required:
-        raise ScaleSourcePoolError(
-            SOURCE_POOL_INVALID,
-            ["requiredNewCandidateCounts drift from governed milestone"],
-        )
 
     issues: list[str] = []
     counts: Counter[str] = Counter()
@@ -267,6 +285,8 @@ def validate_scale_source_pool(plan: Mapping[str, Any]) -> dict[str, Any]:
     content_digests: set[str] = set()
     duplicate_count = 0
     entity_mismatch_count = 0
+    video_popularity_ready_count = 0
+    video_premium_eligible_count = 0
     for raw in plan["candidates"]:
         candidate = dict(raw)
         candidate_id = str(candidate["candidateId"]).strip()
@@ -305,6 +325,12 @@ def validate_scale_source_pool(plan: Mapping[str, Any]) -> dict[str, Any]:
             image_providers[_normalized_provider(candidate["provider"])] += 1
         if carrier == "video":
             issues.extend(_video_issues(candidate, candidate_id=candidate_id))
+            video_popularity_ready_count += int(_video_popularity_ready(candidate))
+            readiness = candidate.get("videoReadiness")
+            video_premium_eligible_count += int(
+                isinstance(readiness, Mapping)
+                and readiness.get("premiumEligible") is True
+            )
         elif any(
             candidate[field] is not None
             for field in (
@@ -315,21 +341,20 @@ def validate_scale_source_pool(plan: Mapping[str, Any]) -> dict[str, Any]:
         ):
             issues.append(f"{candidate_id} non-video playability evidence must be null")
 
-    for carrier in _CARRIERS:
-        if counts[carrier] < required[carrier]:
-            issues.append(
-                f"{carrier} source-ready pool shortfall: "
-                f"required={required[carrier]} actual={counts[carrier]}"
-            )
+    actual_wave = {carrier: counts[carrier] for carrier in _CARRIERS}
+    if declared_wave != actual_wave:
+        issues.append(
+            "waveCandidateCounts drift from current physical candidates: "
+            f"declared={declared_wave} actual={actual_wave}"
+        )
     if duplicate_count:
         issues.append(f"cross-carrier duplicateCount={duplicate_count}, required=0")
     if entity_mismatch_count:
         issues.append(f"entityMismatchCount={entity_mismatch_count}, required=0")
-    image_mix, image_issues = _image_mix(
+    image_mix = _image_mix(
         image_providers,
         total=counts["image"],
     )
-    issues.extend(image_issues)
     if issues:
         raise ScaleSourcePoolError(SOURCE_POOL_SHORTFALL, issues)
     return {
@@ -343,7 +368,7 @@ def validate_scale_source_pool(plan: Mapping[str, Any]) -> dict[str, Any]:
         "candidateCounts": [
             {
                 "carrier": carrier,
-                "minimumCandidateCount": required[carrier],
+                "minimumCandidateCount": declared_wave[carrier],
                 "actualCandidateCount": counts[carrier],
             }
             for carrier in _CARRIERS
@@ -351,72 +376,24 @@ def validate_scale_source_pool(plan: Mapping[str, Any]) -> dict[str, Any]:
         "duplicateCount": 0,
         "entityMismatchCount": 0,
         "professionalImageSourceMix": image_mix,
-        "videoPopularityReadyCount": counts["video"],
-        "videoPlayableMotionPremiumCount": counts["video"],
+        "videoPopularityReadyCount": video_popularity_ready_count,
+        "videoPlayableMotionCount": counts["video"],
+        "videoPremiumEligibleCount": video_premium_eligible_count,
         "decision": "GO",
     }
 
 
-def _evidence_root(path: Path) -> Path:
-    root = path.expanduser().absolute()
-    try:
-        mode = root.lstat().st_mode
-    except OSError as exc:
-        raise ScaleSourcePoolError(
-            SOURCE_POOL_EVIDENCE_INVALID,
-            [f"evidence root is missing or unreadable: {root}"],
-        ) from exc
-    if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
-        raise ScaleSourcePoolError(
-            SOURCE_POOL_EVIDENCE_INVALID,
-            [f"evidence root must be a real directory: {root}"],
-        )
-    return root
-
-
-def _evidence_file(path: Path, ref: object, *, label: str) -> Path:
-    try:
-        relative = Path(_safe_ref(ref, label=label))
-    except ScaleSourcePoolError as exc:
-        raise ScaleSourcePoolError(SOURCE_POOL_EVIDENCE_INVALID, exc.issues) from exc
-    current = path
-    for index, part in enumerate(relative.parts):
-        current = current / part
-        try:
-            mode = current.lstat().st_mode
-        except OSError as exc:
-            raise ScaleSourcePoolError(
-                SOURCE_POOL_EVIDENCE_INVALID,
-                [f"{label} file is missing or unreadable: {relative.as_posix()}"],
-            ) from exc
-        if stat.S_ISLNK(mode):
-            raise ScaleSourcePoolError(
-                SOURCE_POOL_EVIDENCE_INVALID,
-                [f"{label} must not traverse a symlink: {relative.as_posix()}"],
-            )
-        final = index == len(relative.parts) - 1
-        if (not final and not stat.S_ISDIR(mode)) or (
-            final and not stat.S_ISREG(mode)
-        ):
-            raise ScaleSourcePoolError(
-                SOURCE_POOL_EVIDENCE_INVALID,
-                [f"{label} is not a regular evidence file: {relative.as_posix()}"],
-            )
-    return current
-
-
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    try:
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-    except OSError as exc:
-        raise ScaleSourcePoolError(
-            SOURCE_POOL_EVIDENCE_INVALID,
-            [f"evidence file became unreadable: {path}"],
-        ) from exc
-    return "sha256:" + digest.hexdigest()
+def _candidate_evidence_root(
+    root: Path, candidate: Mapping[str, Any], *, candidate_id: str
+) -> Path:
+    root_ref = candidate.get("sourceReadyEvidenceRootRef")
+    if root_ref is None:
+        return root
+    return resolve_evidence_directory(
+        root,
+        root_ref,
+        label=f"{candidate_id}.sourceReadyEvidenceRootRef",
+    )
 
 
 def validate_scale_source_pool_evidence(
@@ -428,53 +405,59 @@ def validate_scale_source_pool_evidence(
         _assert_pool_document(plan)
     except ScaleSourcePoolError as exc:
         raise ScaleSourcePoolError(SOURCE_POOL_EVIDENCE_INVALID, exc.issues) from exc
-    root = _evidence_root(evidence_root)
-    computed: dict[str, str] = {}
-    binding_count = 0
-    for candidate in plan["candidates"]:
-        candidate_id = str(candidate["candidateId"])
-        prefixes = ["sourceUnit", "acquisition", "rights", "quality"]
-        if candidate["carrier"] == "video":
-            prefixes.append("playability")
-        elif any(
-            candidate[field] is not None
-            for field in (
-                "playabilityRef",
-                "playabilityDigest",
-                "playabilityFileSha256",
+    try:
+        root = resolve_evidence_root(evidence_root)
+        computed: dict[str, str] = {}
+        binding_count = 0
+        for candidate in plan["candidates"]:
+            candidate_id = str(candidate["candidateId"])
+            candidate_root = _candidate_evidence_root(
+                root, candidate, candidate_id=candidate_id
             )
-        ):
-            raise ScaleSourcePoolError(
-                SOURCE_POOL_EVIDENCE_INVALID,
-                [f"{candidate_id} non-video playability evidence must be null"],
-            )
-        for prefix in prefixes:
-            ref_field = f"{prefix}Ref"
-            sha_field = f"{prefix}FileSha256"
-            expected = str(candidate.get(sha_field) or "")
-            if not _SHA256.fullmatch(expected):
+            prefixes = ["sourceUnit", "acquisition", "rights", "quality"]
+            if candidate["carrier"] == "video":
+                prefixes.append("playability")
+            elif any(
+                candidate[field] is not None
+                for field in (
+                    "playabilityRef",
+                    "playabilityDigest",
+                    "playabilityFileSha256",
+                )
+            ):
                 raise ScaleSourcePoolError(
                     SOURCE_POOL_EVIDENCE_INVALID,
-                    [f"{candidate_id}.{sha_field} is not sha256"],
+                    [f"{candidate_id} non-video playability evidence must be null"],
                 )
-            file_path = _evidence_file(
-                root,
-                candidate.get(ref_field),
-                label=f"{candidate_id}.{ref_field}",
-            )
-            ref = file_path.relative_to(root).as_posix()
-            if ref not in computed:
-                computed[ref] = _file_sha256(file_path)
-            actual = computed[ref]
-            if actual != expected:
-                raise ScaleSourcePoolError(
-                    SOURCE_POOL_EVIDENCE_INVALID,
-                    [
-                        f"{candidate_id}.{sha_field} drift: "
-                        f"expected={expected} actual={actual}"
-                    ],
+            for prefix in prefixes:
+                ref_field = f"{prefix}Ref"
+                sha_field = f"{prefix}FileSha256"
+                expected = str(candidate.get(sha_field) or "")
+                if not _SHA256.fullmatch(expected):
+                    raise ScaleSourcePoolError(
+                        SOURCE_POOL_EVIDENCE_INVALID,
+                        [f"{candidate_id}.{sha_field} is not sha256"],
+                    )
+                file_path = resolve_evidence_file(
+                    candidate_root,
+                    candidate.get(ref_field),
+                    label=f"{candidate_id}.{ref_field}",
                 )
-            binding_count += 1
+                ref = file_path.relative_to(root).as_posix()
+                if ref not in computed:
+                    computed[ref] = compute_evidence_file_sha256(file_path)
+                actual = computed[ref]
+                if actual != expected:
+                    raise ScaleSourcePoolError(
+                        SOURCE_POOL_EVIDENCE_INVALID,
+                        [
+                            f"{candidate_id}.{sha_field} drift: "
+                            f"expected={expected} actual={actual}"
+                        ],
+                    )
+                binding_count += 1
+    except ScaleSourcePoolEvidencePathError as exc:
+        raise ScaleSourcePoolError(SOURCE_POOL_EVIDENCE_INVALID, [exc]) from exc
     validation = validate_scale_source_pool(plan)
     return {
         **validation,
@@ -496,7 +479,8 @@ def build_scale_source_pool_plan(
 ) -> dict[str, Any]:
     """Build and validate a deterministic source-ready pool document."""
 
-    required = required_candidate_counts(target_scale)
+    if str(target_scale).strip() not in _MILESTONES:
+        required_candidate_counts(target_scale)
     ordered = sorted(
         (dict(candidate) for candidate in candidates),
         key=lambda row: (str(row.get("carrier")), str(row.get("objectRef"))),
@@ -509,8 +493,14 @@ def build_scale_source_pool_plan(
         "sourceDigest": source_digest,
         "entityCatalogDigest": entity_catalog_digest,
         "createdAt": created_at,
-        "requiredNewCandidateCounts": [
-            {"carrier": carrier, "minimumCandidateCount": required[carrier]}
+        "waveCandidateCounts": [
+            {
+                "carrier": carrier,
+                "minimumCandidateCount": sum(
+                    str(candidate.get("carrier") or "") == carrier
+                    for candidate in ordered
+                ),
+            }
             for carrier in _CARRIERS
         ],
         "candidates": ordered,

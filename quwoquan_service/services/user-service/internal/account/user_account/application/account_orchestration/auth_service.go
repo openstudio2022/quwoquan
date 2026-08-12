@@ -28,6 +28,7 @@ import (
 	credentialports "quwoquan_service/services/user-service/internal/account/credential_binding/domain/ports"
 	registrationapp "quwoquan_service/services/user-service/internal/account/device_registration/application"
 	accountports "quwoquan_service/services/user-service/internal/account/user_account/domain/ports"
+	useridentity "quwoquan_service/services/user-service/internal/account/user_account/domain/user/identity"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 	personaports "quwoquan_service/services/user-service/internal/persona_management/persona/domain/persona/ports"
@@ -77,6 +78,8 @@ type AuthService struct {
 	accessSigner             *rtauth.Signer
 	accountSecurity          accountports.AccountSecurityReader
 	nicknamePrefix           string
+	managedAcceptancePhone   string
+	managedAcceptanceOwnerID string
 }
 
 type AuthServiceOption func(*AuthService)
@@ -85,10 +88,23 @@ type OTPCodeSealer interface {
 	Seal(secret otpseal.Secret, binding otpseal.Binding) (string, error)
 }
 
+var ErrOtpIdempotencyConflict = errors.New("otp idempotency key conflict")
+
+type OtpSendAdmission struct {
+	Allowed           bool
+	IdempotentReplay  bool
+	RetryAfterSeconds int
+}
+
 // OtpCodeStore 仅拥有发码冷却/配额。OTP 本身只以 AuthenticationChallenge
 // 不可逆 SecretRef 与发往 Integration 的密封 CodeRef 存在，禁止写入 Redis。
 type OtpCodeStore interface {
-	AllowSend(ctx context.Context, phone string) (allowed bool, retryAfterSeconds int, err error)
+	AllowSend(
+		ctx context.Context,
+		phone string,
+		idempotencyKey string,
+		commandFingerprint string,
+	) (OtpSendAdmission, error)
 }
 
 func NewAuthService(
@@ -166,6 +182,21 @@ func WithDefaultNicknamePrefix(prefix string) AuthServiceOption {
 	return func(s *AuthService) {
 		if p := strings.TrimSpace(prefix); p != "" {
 			s.nicknamePrefix = p
+		}
+	}
+}
+
+// WithManagedAcceptanceIdentity binds the one target-scoped Research
+// acceptance subject to its pre-runtime canonical account identity.  It is
+// intentionally exact-match and does not change identity allocation for any
+// other phone or environment.
+func WithManagedAcceptanceIdentity(phone, ownerID string) AuthServiceOption {
+	return func(service *AuthService) {
+		phone = strings.TrimSpace(phone)
+		ownerID = strings.TrimSpace(ownerID)
+		if phone != "" && useridentity.IsCanonicalOwnerID(ownerID) {
+			service.managedAcceptancePhone = phone
+			service.managedAcceptanceOwnerID = ownerID
 		}
 	}
 }
@@ -380,7 +411,12 @@ func (s *AuthService) createOwnerAccountWithIdentity(
 	identityOrigin string,
 	originCode string,
 ) (string, error) {
-	identity, err := buildOwnerIdentityForOrigin(identityOrigin, originCode)
+	identity, err := s.newOwnerIdentity(
+		credentialType,
+		credentialKey,
+		identityOrigin,
+		originCode,
+	)
 	if err != nil {
 		return "", err
 	}
@@ -476,6 +512,30 @@ func (s *AuthService) createOwnerAccountWithIdentity(
 	}
 
 	return ownerID, nil
+}
+
+func (s *AuthService) newOwnerIdentity(
+	credentialType credentialmodel.CredentialType,
+	credentialKey string,
+	identityOrigin string,
+	originCode string,
+) (identityDescriptor, error) {
+	if credentialType != credentialmodel.CredentialType(credentialPhone) ||
+		strings.TrimSpace(credentialKey) != s.managedAcceptancePhone ||
+		s.managedAcceptanceOwnerID == "" {
+		return buildOwnerIdentityForOrigin(identityOrigin, originCode)
+	}
+	parsed, err := useridentity.ParseOwnerID(s.managedAcceptanceOwnerID)
+	if err != nil || parsed.OriginCode() != originCode {
+		return identityDescriptor{}, errors.New(
+			"managed acceptance identity is not canonical for the credential origin",
+		)
+	}
+	return identityDescriptor{
+		OwnerID:      parsed.String(),
+		RootPrefix:   parsed.LogicalShardHex(),
+		LogicalShard: parsed.LogicalShard(),
+	}, nil
 }
 
 func (s *AuthService) resolvePhysicalShard(ownerID string) (string, error) {

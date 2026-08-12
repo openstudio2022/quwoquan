@@ -278,6 +278,7 @@ def handle_coverage_source_ready(args: argparse.Namespace) -> None:
     from pathlib import Path
 
     from governance.coverage.source_readiness import (
+        SourceReadinessTargetError,
         qualify_source_ready_candidates,
     )
 
@@ -291,27 +292,47 @@ def handle_coverage_source_ready(args: argparse.Namespace) -> None:
         for item in str(args.candidates or "").split(",")
         if item.strip()
     ]
-    if not candidate_files and not args.include_master_list:
+    required_entity_refs = list(
+        getattr(args, "required_entity_ref", None) or []
+    )
+    if (
+        not candidate_files
+        and not args.include_master_list
+        and not required_entity_refs
+    ):
         raise SystemExit(
             "[governance coverage source-ready] GATE_BLOCK: "
-            "需要 --candidates 或 --include-master-list"
+            "需要 --candidates、--include-master-list 或 --required-entity-ref"
         )
-    report = qualify_source_ready_candidates(
-        run_id=str(args.run_id),
-        provinces=provinces,
-        candidate_files=candidate_files,
-        sources=[
-            item.strip()
-            for item in str(args.sources or "").split(",")
-            if item.strip()
-        ],
-        minimum_per_province=int(args.minimum_per_province),
-        include_master_list=bool(args.include_master_list),
-        exhaust_input=bool(args.exhaust_input),
-        resume=bool(args.resume),
-    )
+    try:
+        report = qualify_source_ready_candidates(
+            run_id=str(args.run_id),
+            provinces=provinces,
+            candidate_files=candidate_files,
+            sources=[
+                item.strip()
+                for item in str(args.sources or "").split(",")
+                if item.strip()
+            ],
+            minimum_per_province=int(args.minimum_per_province),
+            include_master_list=bool(args.include_master_list),
+            exhaust_input=bool(args.exhaust_input),
+            resume=bool(args.resume),
+            required_entity_refs=required_entity_refs,
+        )
+    except SourceReadinessTargetError as exc:
+        raise SystemExit(
+            "[governance coverage source-ready] GATE_BLOCK: " + str(exc)
+        ) from exc
     print(json.dumps(report, ensure_ascii=False, indent=2))
     if report.get("decision") != "GO":
+        missing_required = report.get("missingRequiredEntityRefs") or []
+        if missing_required:
+            raise SystemExit(
+                "[governance coverage source-ready] GATE_BLOCK: "
+                "DATA.SOURCE.POOL_SHORTFALL: exact required refs were not frozen; "
+                f"{missing_required}"
+            )
         raise SystemExit(
             "[governance coverage source-ready] GATE_BLOCK: "
             f"每省来源就绪下限未满足；{report.get('belowMinimum')}"
@@ -495,6 +516,15 @@ def register_coverage_parser(subparsers: argparse._SubParsersAction) -> None:
         "--include-master-list",
         action="store_true",
         help="同时纳入全国行政实体 catalog 与仓内旅游 POI master list",
+    )
+    pcs.add_argument(
+        "--required-entity-ref",
+        action="append",
+        default=[],
+        help=(
+            "从 canonical master list 精确选择一个 /entity/<type>/<name>；"
+            "可重复，按参数顺序冻结且隐含 --include-master-list/--exhaust-input"
+        ),
     )
     pcs.add_argument(
         "--exhaust-input",

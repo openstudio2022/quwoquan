@@ -29,6 +29,7 @@ STACK_DIGEST = "sha256:" + "2" * 64
 ANDROID_DIGEST = "sha256:" + "3" * 64
 IOS_DIGEST = "sha256:" + "4" * 64
 SERVICE_DIGEST = "sha256:" + "e" * 64
+CONTRACT_GRAPH_DIGEST = "sha256:" + "9" * 64
 
 
 def _manifest() -> dict:
@@ -36,6 +37,7 @@ def _manifest() -> dict:
         "status": "candidate-ready",
         "candidateId": CANDIDATE,
         "artifactDigest": ARTIFACT_DIGEST,
+        "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
         "source": {
             "gitSha": GIT_SHA,
             "treeDigest": TREE_DIGEST,
@@ -61,6 +63,8 @@ def _stack_reports(root: Path) -> dict[str, Path]:
             "artifactDigest": ARTIFACT_DIGEST,
             "sourceGitSha": GIT_SHA,
             "sourceTreeDigest": TREE_DIGEST,
+            "releaseInputClassification": "commercial_inputs",
+            "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
             "endedAt": "2026-07-28T00:00:10Z",
         },
         "up": {
@@ -68,6 +72,8 @@ def _stack_reports(root: Path) -> dict[str, Path]:
             "target": "beta-local",
             "steps": [{"exitCode": 0}],
             "formalRelease": True,
+            "releaseInputClassification": "commercial_inputs",
+            "contractGraphDigest": CONTRACT_GRAPH_DIGEST,
             "runtimeMode": "immutable-oci",
             "runtimeCandidateDigest": CANDIDATE,
             "runtimeImages": {
@@ -251,6 +257,49 @@ def test_stack_bundle_rejects_source_built_or_destructively_repaired_runtime() -
             )
 
 
+@pytest.mark.parametrize(
+    "classification",
+    ["research_inputs", "mixed_inputs"],
+)
+def test_stack_bundle_rejects_noncommercial_release_inputs(
+    classification: str,
+) -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        reports = _stack_reports(root / "source-stack")
+        up = json.loads(reports["up"].read_text(encoding="utf-8"))
+        up["releaseInputClassification"] = classification
+        reports["up"].write_text(json.dumps(up), encoding="utf-8")
+        with patch(
+            "quwoquan_ops.ci.render_beta_device_evidence.validate_manifest"
+        ), pytest.raises(ValueError, match="commercial release inputs"):
+            render_stack_bundle(
+                manifest=_manifest(),
+                host_digest=HOST_DIGEST,
+                stack_paths=reports,
+                bundle_dir=root / "bundle-stack",
+            )
+
+
+@pytest.mark.parametrize("label", ["package", "up"])
+def test_stack_bundle_rejects_contract_graph_drift(label: str) -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        reports = _stack_reports(root / "source-stack")
+        payload = json.loads(reports[label].read_text(encoding="utf-8"))
+        payload["contractGraphDigest"] = "sha256:" + "8" * 64
+        reports[label].write_text(json.dumps(payload), encoding="utf-8")
+        with patch(
+            "quwoquan_ops.ci.render_beta_device_evidence.validate_manifest"
+        ), pytest.raises(ValueError, match="ContractGraph"):
+            render_stack_bundle(
+                manifest=_manifest(),
+                host_digest=HOST_DIGEST,
+                stack_paths=reports,
+                bundle_dir=root / "bundle-stack",
+            )
+
+
 def test_merge_requires_exact_oci_refs_one_host_and_parallel_device_leases() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         payload = _merge(Path(temporary))
@@ -310,12 +359,16 @@ def test_merged_matrix_seals_one_canonical_beta_environment_receipt() -> None:
         candidate_attestation = {
             "schema": "quwoquan_data.release_attestation",
             "releaseId": "pilot-003",
+            "releaseClass": "commercial",
+            "productLifecycleState": "commercial",
             "payloadSha256": "sha256:" + "6" * 64,
             "recordedAt": "2026-07-28T00:00:15Z",
         }
         rollback_attestation = {
             "schema": "quwoquan_data.release_attestation",
             "releaseId": "pilot-002",
+            "releaseClass": "commercial",
+            "productLifecycleState": "commercial",
             "payloadSha256": "sha256:" + "7" * 64,
             "recordedAt": "2026-07-28T00:00:14Z",
         }

@@ -60,7 +60,7 @@ func (relay *OutboxRelay) Drain(ctx context.Context, limit int) (int, error) {
 			return published, err
 		}
 		if !found {
-			relay.recordSuccessfulScan(now, published > 0)
+			relay.recordSuccessfulScan(now)
 			return published, nil
 		}
 		if err := validateMediaUploadOutboxEvent(event); err != nil {
@@ -95,7 +95,7 @@ func (relay *OutboxRelay) Drain(ctx context.Context, limit int) (int, error) {
 		}
 		published++
 	}
-	relay.recordSuccessfulScan(relay.now().UTC(), published > 0)
+	relay.recordSuccessfulScan(relay.now().UTC())
 	return published, nil
 }
 
@@ -162,12 +162,13 @@ func mediaUploadOutboxRetryDelay(attempt int) time.Duration {
 	return time.Second * time.Duration(1<<(attempt-1))
 }
 
-func (relay *OutboxRelay) recordSuccessfulScan(at time.Time, recovered bool) {
+func (relay *OutboxRelay) recordSuccessfulScan(at time.Time) {
 	relay.healthMu.Lock()
 	relay.lastSuccessfulScan = at
-	if recovered {
-		relay.lastFailure = nil
-	}
+	// A complete, error-free scan proves that the outbox dependency has
+	// recovered even when the queue is empty. Requiring a published event here
+	// would permanently latch a transient storage failure on idle runtimes.
+	relay.lastFailure = nil
 	relay.healthMu.Unlock()
 }
 

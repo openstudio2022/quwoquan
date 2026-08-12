@@ -12,7 +12,7 @@
     "sourceDigest",
     "entityCatalogDigest",
     "createdAt",
-    "requiredNewCandidateCounts",
+    "waveCandidateCounts",
     "candidates",
     "planDigest"
   ],
@@ -24,7 +24,7 @@
     "sourceDigest": {"$ref": "#/$defs/sha256"},
     "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
     "createdAt": {"type": "string", "minLength": 1},
-    "requiredNewCandidateCounts": {
+    "waveCandidateCounts": {
       "type": "array",
       "minItems": 4,
       "maxItems": 4,
@@ -54,7 +54,7 @@
       "required": ["carrier", "minimumCandidateCount"],
       "properties": {
         "carrier": {"enum": ["homepage", "article", "image", "video"]},
-        "minimumCandidateCount": {"type": "integer", "minimum": 1}
+        "minimumCandidateCount": {"type": "integer", "minimum": 0}
       }
     },
     "homepageRequiredCount": {
@@ -95,31 +95,29 @@
     "videoReadiness": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "playable",
-        "motion",
-        "premiumEligible",
-        "playCount",
-        "likeCount",
-        "commentCount",
-        "shareCount",
-        "favoriteCount",
-        "observedAt",
-        "popularityPercentile",
-        "comparisonBucket"
-      ],
+      "required": ["playable", "motion", "premiumEligible"],
       "properties": {
-        "playable": {"const": true},
-        "motion": {"const": true},
-        "premiumEligible": {"const": true},
-        "playCount": {"type": "integer", "minimum": 0},
-        "likeCount": {"type": "integer", "minimum": 0},
-        "commentCount": {"type": "integer", "minimum": 0},
-        "shareCount": {"type": "integer", "minimum": 0},
-        "favoriteCount": {"type": "integer", "minimum": 0},
-        "observedAt": {"type": "string", "minLength": 1},
-        "popularityPercentile": {"type": "number", "minimum": 0, "maximum": 1},
-        "comparisonBucket": {"$ref": "#/$defs/comparisonBucket"}
+        "playable": {"type": "boolean"},
+        "motion": {"type": "boolean"},
+        "premiumEligible": {"type": "boolean"},
+        "playCount": {"type": ["integer", "null"], "minimum": 0},
+        "likeCount": {"type": ["integer", "null"], "minimum": 0},
+        "commentCount": {"type": ["integer", "null"], "minimum": 0},
+        "shareCount": {"type": ["integer", "null"], "minimum": 0},
+        "favoriteCount": {"type": ["integer", "null"], "minimum": 0},
+        "observedAt": {"type": ["string", "null"], "minLength": 1},
+        "popularityPercentile": {
+          "anyOf": [
+            {"type": "null"},
+            {"type": "number", "minimum": 0, "maximum": 1}
+          ]
+        },
+        "comparisonBucket": {
+          "anyOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/comparisonBucket"}
+          ]
+        }
       }
     },
     "candidate": {
@@ -167,6 +165,13 @@
         "sourceRevision": {"$ref": "#/$defs/sha256"},
         "sourceDigest": {"$ref": "#/$defs/sha256"},
         "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "sourceAttribution": {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"},
+        "publishMediaMode": {"enum": ["illustrated", "text_only"]},
+        "sourceReadyEvidenceRootRef": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?:\\.|(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+)$"
+        },
         "sourceUnitRef": {"type": "string", "minLength": 1},
         "sourceUnitDigest": {"$ref": "#/$defs/sha256"},
         "sourceUnitFileSha256": {"$ref": "#/$defs/sha256"},
@@ -208,12 +213,26 @@
       },
       "allOf": [
         {
+          "if": {
+            "properties": {
+              "carrier": {"enum": ["homepage", "article"]}
+            },
+            "required": ["carrier"]
+          },
+          "then": {
+            "required": ["sourceReadyEvidenceRootRef", "sourceAttribution"]
+          }
+        },
+        {
           "if": {"properties": {"carrier": {"const": "homepage"}}, "required": ["carrier"]},
           "then": {"properties": {"objectRef": {"pattern": "^entities/"}}}
         },
         {
           "if": {"properties": {"carrier": {"const": "article"}}, "required": ["carrier"]},
-          "then": {"properties": {"objectRef": {"pattern": "^posts/article/"}}}
+          "then": {
+            "required": ["publishMediaMode"],
+            "properties": {"objectRef": {"pattern": "^posts/article/"}}
+          }
         },
         {
           "if": {"properties": {"carrier": {"const": "image"}}, "required": ["carrier"]},

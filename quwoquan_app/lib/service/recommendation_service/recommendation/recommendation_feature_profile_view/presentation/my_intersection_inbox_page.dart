@@ -192,7 +192,7 @@ class _MyIntersectionInboxPageState
     return ref
         .read(myIntersectionListProvider.notifier)
         .loadAndMarkVisited(
-          dimension: selected == 'all' ? widget.dimension : selected,
+          dimension: selected == 'all' ? '' : selected,
           filter: 'fact',
           sourceRef: widget.sourceRef,
           timeBucket: widget.timeBucket,
@@ -218,6 +218,19 @@ class _MyIntersectionInboxPageState
         selected: _selectedTab,
         onSelected: _selectDetailTab,
       ),
+      trailing: _selectedTab == _IntersectionDetailTab.intersections
+          ? Semantics(
+              button: true,
+              label: SearchText.reload,
+              child: CupertinoButton(
+                key: const ValueKey<String>('my-intersections-refresh'),
+                padding: EdgeInsets.zero,
+                minimumSize: const Size.square(AppSpacing.minInteractiveSize),
+                onPressed: state.isLoading ? null : _load,
+                child: const Icon(CupertinoIcons.refresh),
+              ),
+            )
+          : null,
       backgroundColor: AppColors.iosIntersectionTimelineBackground(context),
       onBack: () => context.pop(),
       body: _buildBody(context, state),
@@ -287,23 +300,6 @@ class _MyIntersectionInboxPageState
     if (state.isLoading && state.items.isEmpty) {
       return <Widget>[AppRequestFeedback.section()];
     }
-    if (state.rawError != null) {
-      return <Widget>[
-        AppPageErrorState(
-          semantic: _resolvePageErrorSemantic(state.rawError!),
-          onRecovery: (action) async {
-            if (action.type == UiErrorActionType.retry ||
-                action.type == UiErrorActionType.resubmit) {
-              await _load();
-              return ref.read(myIntersectionListProvider).rawError == null
-                  ? UiRecoveryOutcome.recovered
-                  : UiRecoveryOutcome.stillBlocked;
-            }
-            return UiRecoveryOutcome.cancelled;
-          },
-        ),
-      ];
-    }
     return <Widget>[
       // 二级筛选（全部 + 交集五维）：accent 胶囊，与「我的主页」二级页签同款。
       AppSecondaryTabBar(
@@ -317,7 +313,23 @@ class _MyIntersectionInboxPageState
         },
       ),
       SizedBox(height: AppSpacing.intraGroupSm),
-      if (items.isEmpty)
+      if (state.rawError != null) ...<Widget>[
+        AppPageErrorState(
+          semantic: _resolvePageErrorSemantic(state.rawError!),
+          onRecovery: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _load();
+              return ref.read(myIntersectionListProvider).rawError == null
+                  ? UiRecoveryOutcome.recovered
+                  : UiRecoveryOutcome.stillBlocked;
+            }
+            return UiRecoveryOutcome.cancelled;
+          },
+        ),
+        SizedBox(height: AppSpacing.intraGroupSm),
+      ],
+      if (items.isEmpty && state.rawError == null)
         const IntersectionTimelineEmptyState()
       else ...<Widget>[
         IntersectionBucketTimeline(rows: _intersectionRows(items)),

@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema", "sourceSetId", "targetScale", "sourceRevision", "sourceDigest",
-    "entityCatalogDigest", "createdAt", "coverageProjection", "candidateCapsules",
+    "entityCatalogDigest", "createdAt", "coverageProjection", "seedSelection", "candidateCapsules",
     "counts", "sourceSetDigest"
   ],
   "properties": {
@@ -18,9 +18,10 @@
     "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
     "createdAt": {"type": "string", "minLength": 1},
     "coverageProjection": {"$ref": "#/$defs/documentBinding"},
+    "seedSelection": {"$ref": "#/$defs/documentBinding"},
     "candidateCapsules": {
       "type": "array",
-      "minItems": 2,
+      "minItems": 1,
       "items": {"$ref": "#/$defs/candidateBinding"}
     },
     "counts": {
@@ -28,12 +29,16 @@
       "additionalProperties": false,
       "required": ["homepage", "article"],
       "properties": {
-        "homepage": {"type": "integer", "minimum": 1},
-        "article": {"type": "integer", "minimum": 1}
+        "homepage": {"type": "integer", "minimum": 0},
+        "article": {"type": "integer", "minimum": 0}
       }
     },
     "sourceSetDigest": {"$ref": "#/$defs/sha256"}
   },
+  "anyOf": [
+    {"properties": {"counts": {"properties": {"homepage": {"minimum": 1}}}}},
+    {"properties": {"counts": {"properties": {"article": {"minimum": 1}}}}}
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "ref": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
@@ -50,10 +55,13 @@
     "candidateBinding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["carrier", "candidateId", "ref", "digest", "fileSha256"],
+      "required": [
+        "carrier", "candidateId", "evidenceRootRef", "ref", "digest", "fileSha256"
+      ],
       "properties": {
         "carrier": {"enum": ["homepage", "article"]},
         "candidateId": {"type": "string", "minLength": 1},
+        "evidenceRootRef": {"$ref": "#/$defs/ref"},
         "ref": {"$ref": "#/$defs/ref"},
         "digest": {"$ref": "#/$defs/sha256"},
         "fileSha256": {"$ref": "#/$defs/sha256"}

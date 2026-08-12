@@ -299,7 +299,7 @@ class ObjectEvidenceClosureStrictZeroTest(unittest.TestCase):
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
                 self.assertIn(f"{dimension} / content.demo", result.stdout)
 
-    def test_legacy_flat_evidence_keys_are_not_dual_read(self) -> None:
+    def test_flat_evidence_keys_are_rejected_not_dual_read(self) -> None:
         legacy = {
             "implementation.domain_behavior",
             "implementation.store",

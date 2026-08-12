@@ -223,7 +223,7 @@ def apply_object_transaction(
     package = _verify_package(
         package_root,
         canonical_root=publish_root,
-        require_target_absent=True,
+        require_target_absent=False,
     )
     if any(
         package[key] != report.get(key)

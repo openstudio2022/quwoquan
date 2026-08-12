@@ -19,14 +19,13 @@ var (
 	ErrConnectorConfirmationRequired          = errors.New("INTEGRATION.USER.connector_confirmation_required")
 	ErrConnectorInvocationRevisionConflict    = errors.New("INTEGRATION.USER.connector_invocation_revision_conflict")
 	ErrConnectorInvocationIdempotencyConflict = errors.New("INTEGRATION.USER.connector_invocation_idempotency_conflict")
-	ErrConnectorProviderUnavailable           = errors.New("INTEGRATION.MIDDLEWARE.connector_provider_unavailable")
 	ErrConnectorInvocationUnavailable         = errors.New("INTEGRATION.SYSTEM.connector_invocation_unavailable")
 )
 
 // AppErrorFromConnectorInvocationUnauthorized returns *AppError for INTEGRATION.USER.connector_invocation_unauthorized (user_message from errors.yaml).
 func AppErrorFromConnectorInvocationUnauthorized(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorInvocationUnauthorized.Error()))
-	return rerrors.NewAppError(code, "请先登录后查看连接活动", debugMessage).WithMetadata("connector_invocation_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
+	return rerrors.NewAppError(code, "请先登录或使用受信服务身份访问连接活动", debugMessage).WithMetadata("connector_invocation_unauthorized", 401).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromConnectorInvocationInvalidArgument returns *AppError for INTEGRATION.USER.connector_invocation_invalid_argument (user_message from errors.yaml).
@@ -75,12 +74,6 @@ func AppErrorFromConnectorInvocationRevisionConflict(debugMessage string) *rerro
 func AppErrorFromConnectorInvocationIdempotencyConflict(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrConnectorInvocationIdempotencyConflict.Error()))
 	return rerrors.NewAppError(code, "重复请求与原连接操作不一致", debugMessage).WithMetadata("connector_invocation_idempotency_conflict", 409).WithRecoveryDirective("retry", "snackbar", 0)
-}
-
-// AppErrorFromConnectorProviderUnavailable returns *AppError for INTEGRATION.MIDDLEWARE.connector_provider_unavailable (user_message from errors.yaml).
-func AppErrorFromConnectorProviderUnavailable(debugMessage string) *rerrors.AppError {
-	code, _ := rerrors.ParseCode(string(ErrConnectorProviderUnavailable.Error()))
-	return rerrors.NewAppError(code, "外部应用暂不可用，请稍后重试", debugMessage).WithMetadata("connector_provider_unavailable", 503).WithRecoveryDirective("retry", "snackbar", 3)
 }
 
 // AppErrorFromConnectorInvocationUnavailable returns *AppError for INTEGRATION.SYSTEM.connector_invocation_unavailable (user_message from errors.yaml).

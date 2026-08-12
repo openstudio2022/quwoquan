@@ -21,6 +21,7 @@ import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/runtime/di/login_dependencies.dart';
 import 'package:quwoquan_app/runtime/platform/native_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/one_tap_login_native_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/otp_autofill_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart'
     show
@@ -29,6 +30,9 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart'
         appCredentialBindingCommandWriterProvider,
         authenticationChallengeCommandWriterProvider;
 import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracker.dart';
+import 'package:quwoquan_app/service/user_service/account/authentication_challenge/application/public/pending_otp_attempt_store.dart';
+import 'package:quwoquan_app/service/user_service/account/authentication_challenge/application/public/authentication_challenge_writer.dart'
+    show newOtpIdempotencyKey, otpClientPlatformForRuntime;
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -40,7 +44,9 @@ part 'login_page_frame.dart';
 part 'login_page_form_controls.dart';
 part 'login_page_social_actions.dart';
 
+part 'login_page_readiness.dart';
 part 'login_page_phone_flow.dart';
+part 'login_page_pending_otp.dart';
 part 'login_page_auth_flow.dart';
 
 class LoginFrameHost extends ConsumerStatefulWidget {
@@ -68,6 +74,8 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
     with WidgetsBindingObserver {
   static const Duration _probeTimeout = Duration(milliseconds: 1200);
   static const Duration _requestTimeout = Duration(seconds: 15);
+  static const Duration _sendOtpTimeout = Duration(seconds: 3);
+  static const Duration _pendingOtpTtl = Duration(minutes: 5);
   static const Duration _providerTimeout = Duration(seconds: 60);
   static const Duration _stateDwellThreshold = Duration(seconds: 90);
   static const String _loginPageName = 'LoginPage';
@@ -88,8 +96,11 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
   Map<String, NativeAuthCapability> _socialMethodAvailability =
       const <String, NativeAuthCapability>{};
   late final JourneyEventTracker _journeyTracker;
+  late final OtpAutofillGateway _otpAutofillGateway;
   late final TextEditingController _phoneController, _otpController;
   Timer? _otpCountdownTicker;
+  final List<Timer> _deliveryConfirmationTimers = <Timer>[];
+  int _deliveryConfirmationAttempts = 0;
   Timer? _stateDwellWatchdog;
   final Stopwatch _stateDwellStopwatch = Stopwatch()..start();
 
@@ -108,6 +119,7 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _journeyTracker = ref.read(loginJourneyEventTrackerProvider);
+    _otpAutofillGateway = ref.read(otpAutofillGatewayProvider);
     _flowController = LoginFlowController(
       flowId:
           'login-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}-${identityHashCode(this).toRadixString(36)}',
@@ -118,7 +130,11 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _trackLoginFunnel('login_flow_exposed', result: 'exposed');
-      unawaited(_resolveEntryState());
+      unawaited(() async {
+        if (!await _restorePendingOtpAttempt()) {
+          await _resolveEntryState();
+        }
+      }());
     });
   }
 
@@ -130,6 +146,15 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshCountdownFromDeadline(trackResume: true);
+      if (_flow.step == LoginStep.phoneEntry ||
+          _flow.step == LoginStep.socialPhoneEntry) {
+        unawaited(_checkOtpDeliveryReadiness());
+      }
+      if ((_flow.otpDeliveryState == OtpDeliveryState.confirming ||
+              _flow.otpDeliveryState == OtpDeliveryState.queued) &&
+          !_flow.deliveryConfirmationExhausted) {
+        unawaited(_confirmPendingOtpDelivery());
+      }
     }
   }
 
@@ -139,6 +164,8 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
     _activeAttempt = null;
     _entryResolutionGeneration += 1;
     _otpCountdownTicker?.cancel();
+    _cancelDeliveryConfirmationTimers();
+    unawaited(_otpAutofillGateway.stop());
     _stateDwellWatchdog?.cancel();
     _phoneController.dispose();
     _otpController.dispose();
@@ -168,7 +195,7 @@ class _LoginFrameHostState extends ConsumerState<LoginFrameHost>
         onNavigate: _handleBackOrDismiss,
         onOneTap: () => unawaited(_runWithConsent(LoginPendingIntent.oneTap)),
         onOtherPhone: () => _enterPhoneEntry(preserveRoot: true),
-        onPhonePrimary: () => unawaited(_requestOtp()),
+        onPhonePrimary: () => unawaited(_handlePhonePrimary()),
         onAgreementTap: () => context.push(AppRoutePaths.legalUserAgreement),
         onPrivacyTap: () => context.push(AppRoutePaths.legalPrivacyPolicy),
         onSocialMethod: _handleSocialMethod,

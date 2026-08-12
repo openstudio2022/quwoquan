@@ -14,10 +14,10 @@ from content.execution.contracts import ExecutionStateTransition
 from content.execution.execution_state_journal import (
     verify_execution_state_journal_for_execution,
 )
-from content.execution.planning.selection import (
-    execution_failure_items,
+from content.execution.planning.execution_plan_readback import (
     execution_planned_entity_ids,
 )
+from content.execution.planning.selection import execution_failure_items
 from content.execution.planning.source_precheck import source_precheck_report
 from content.execution.spec_contract import ExecutionSpec
 
@@ -29,13 +29,13 @@ def audit_execution_readiness(
 ) -> dict[str, Any]:
     """Return one typed report for all enabled content lanes of an execution."""
     verify_execution_state_journal_for_execution(execution_id)
-    from content.execution.planning.active_spec import active_spec
     from content.execution.context import ExecutionContext, load_execution_state
     from content.execution.coverage import (
         coverage_entity_ids,
         coverage_entity_type,
         coverage_entity_type_for_entity,
     )
+    from content.execution.planning.active_spec import active_spec
     from content.execution.recovery.download_gate import _download_research_lane_issues
     from content.homepage.homepage import validate_entity_page_inputs
     from content.source.source_inputs import curated_images_for_entity

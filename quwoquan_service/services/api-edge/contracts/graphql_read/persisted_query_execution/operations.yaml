@@ -1,0 +1,112 @@
+description: API Edge 统一 GraphQL 只读入口；operation、对象授权、变量成本计划与执行用量上限由已验签 registry 条目精确绑定并在请求期重验。
+commercial_defaults:
+  status: blocked
+  block_reason: 尚未接入 API Edge composition root、签名发布包与真实 owner Query Slice api_integration
+  gap_id: GATEWAY_GRAPHQL_READ_HOSTED_EVIDENCE
+  target_story: aggregation-contract-stability
+api_routes:
+- method: POST
+  path: /graphql
+  operation: ExecutePersistedGraphQLQuery
+  actor: none
+  application:
+    kind: query
+    facet: PersistedQueryExecutionQueryFacade
+    method: execute
+    reader: PersistedQueryExecutorReader
+    slice: GraphQLReadResponse
+  request_entity: PersistedGraphQLRequest
+  request_body_kind: object
+  response_entity: GraphQLReadResponse
+  response_body: GraphQLReadResponse
+  response_body_kind: object
+  authorization:
+    principal: public
+    ownership_policy: signed_registry_entry_authorization
+  commercial:
+    status: blocked
+    block_reason: 尚未接入 API Edge composition root、签名发布包与真实 owner Query Slice api_integration
+    gap_id: GATEWAY_GRAPHQL_READ_HOSTED_EVIDENCE
+    target_story: aggregation-contract-stability
+  reliability:
+    timeout_ms: 3000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  pagination:
+    default_items: 20
+    maximum_items: 100
+  response_admission:
+    # Registry 中 data 最大 256 KiB；额外 8 KiB 只用于有界 GraphQL envelope/error。
+    maximum_body_bytes: 270336
+  error_codes:
+  - GATEWAY.USER.graphql_request_invalid
+  - GATEWAY.USER.persisted_query_unknown
+  - GATEWAY.USER.graphql_query_forbidden
+  - GATEWAY.MIDDLEWARE.graphql_owner_unavailable
+  privacy:
+    request_classification: SENSITIVE
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: gateway_graphql_read_execute
+    trace: true
+    attributes: [operation, outcome]
+  slo:
+    latency_p95_ms: 1000
+    availability_percent: 99.9
+  security:
+    auth_mode: optional
+    principal: owner
+    token_transport: bearer
+    anonymous_policy: allow
+    visibility: public
+graphql_queries:
+- operation: SearchPage
+  operation_type: query
+  request_entity: SearchPageInput
+  request_body_kind: object
+  response_entity: SearchPageSlice
+  response_body_kind: object
+  authorization: {principal: public, ownership_policy: public_search_discovery}
+  commercial: {status: ready}
+  reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [GATEWAY.USER.graphql_request_invalid, GATEWAY.USER.persisted_query_unknown, GATEWAY.USER.graphql_query_forbidden, GATEWAY.MIDDLEWARE.graphql_owner_unavailable]
+  privacy: {request_classification: SENSITIVE, response_classification: SENSITIVE, log_policy: metadata_only}
+  telemetry: {metric: gateway_graphql_search_page_execute, trace: true, attributes: [outcome, owner_target]}
+  slo: {latency_p95_ms: 1500, availability_percent: 99.5}
+  application: {kind: query, facet: SearchPageQueryFacade, method: searchPage, reader: SearchIndexViewReader, slice: SearchPageSlice}
+readiness_cases:
+- case_id: execute-persisted-graphql-query-local
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/spec.md#dom-001
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ExecutePersistedGraphQLQuery}
+  runner_source_path: quwoquan_service/services/api-edge/tests/local_contract/graphql_read/persisted_query_execution/persisted_query_execution__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: execute-persisted-graphql-query-api
+  spec_ref: specs/feature-tree/gateway-orchestrator-foundation/spec.md#dom-001
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ExecutePersistedGraphQLQuery}
+  runner_source_path: quwoquan_service/services/api-edge/tests/api_integration/graphql_read/persisted_query_execution/persisted_query_execution__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: execute-search-page-persisted-graphql-local
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-002
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: SearchPage}
+  runner_source_path: quwoquan_service/services/api-edge/tests/local_contract/graphql_read/persisted_query_execution/search_page_query_executor__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: execute-search-page-persisted-graphql-api
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-002
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: SearchPage}
+  runner_source_path: quwoquan_service/services/api-edge/tests/api_integration/graphql_read/persisted_query_execution/search_page_query_executor__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: none, digest_binding: candidate}

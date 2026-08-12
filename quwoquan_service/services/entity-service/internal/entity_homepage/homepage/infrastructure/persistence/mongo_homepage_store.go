@@ -877,12 +877,27 @@ func (s *MongoHomepageStore) ReadAfter(
 	limit = boundedLimit(limit, 100, 1000)
 	filter := bson.M{}
 	if value := strings.TrimSpace(checkpoint); value != "" {
-		filter["_id"] = bson.M{"$gt": value}
+		var checkpointEvent outboxDocument
+		if err := s.outbox.FindOne(ctx, bson.M{"_id": value}).Decode(&checkpointEvent); err != nil {
+			return nil, err
+		}
+		// EventID 是幂等哈希，不具备时序性。游标必须按权威 occurredAt
+		// 推进，并仅用 EventID 处理同一时刻的确定性排序。
+		filter["$or"] = bson.A{
+			bson.M{"occurredAt": bson.M{"$gt": checkpointEvent.OccurredAt}},
+			bson.M{
+				"occurredAt": checkpointEvent.OccurredAt,
+				"_id":        bson.M{"$gt": value},
+			},
+		}
 	}
 	cursor, err := s.outbox.Find(
 		ctx,
 		filter,
-		options.Find().SetSort(bson.D{{Key: "_id", Value: 1}}).SetLimit(int64(limit)),
+		options.Find().SetSort(bson.D{
+			{Key: "occurredAt", Value: 1},
+			{Key: "_id", Value: 1},
+		}).SetLimit(int64(limit)),
 	)
 	if err != nil {
 		return nil, err
@@ -907,15 +922,21 @@ func (s *MongoHomepageStore) ReadAfter(
 }
 
 type checkpointDocument struct {
-	ID         string    `bson:"_id"`
-	Checkpoint string    `bson:"checkpoint"`
-	UpdatedAt  time.Time `bson:"updatedAt"`
+	ID               string     `bson:"_id"`
+	Checkpoint       string     `bson:"checkpoint"`
+	CursorOccurredAt *time.Time `bson:"cursorOccurredAt,omitempty"`
+	UpdatedAt        time.Time  `bson:"updatedAt"`
 }
 
 func (s *MongoHomepageStore) LoadCheckpoint(ctx context.Context, consumer string) (string, error) {
 	var document checkpointDocument
 	err := s.checkpoints.FindOne(ctx, bson.M{"_id": strings.TrimSpace(consumer)}).Decode(&document)
 	if errors.Is(err, mongo.ErrNoDocuments) {
+		return "", nil
+	}
+	if err == nil && (document.CursorOccurredAt == nil || document.CursorOccurredAt.IsZero()) {
+		// 旧 checkpoint 只保存非时序 EventID，无法证明未跳过更小哈希。
+		// 返回空游标触发一次完整、幂等重放；下一次 SaveCheckpoint 会升级它。
 		return "", nil
 	}
 	return document.Checkpoint, err
@@ -926,12 +947,19 @@ func (s *MongoHomepageStore) SaveCheckpoint(
 	consumer string,
 	checkpoint string,
 ) error {
+	checkpoint = strings.TrimSpace(checkpoint)
+	var checkpointEvent outboxDocument
+	if err := s.outbox.FindOne(ctx, bson.M{"_id": checkpoint}).Decode(&checkpointEvent); err != nil {
+		return err
+	}
+	cursorOccurredAt := checkpointEvent.OccurredAt.UTC()
 	_, err := s.checkpoints.UpdateOne(
 		ctx,
 		bson.M{"_id": strings.TrimSpace(consumer)},
 		bson.M{"$set": bson.M{
-			"checkpoint": strings.TrimSpace(checkpoint),
-			"updatedAt":  time.Now().UTC(),
+			"checkpoint":       checkpoint,
+			"cursorOccurredAt": cursorOccurredAt,
+			"updatedAt":        time.Now().UTC(),
 		}},
 		options.UpdateOne().SetUpsert(true),
 	)

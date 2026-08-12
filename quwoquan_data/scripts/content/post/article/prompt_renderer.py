@@ -112,6 +112,15 @@ def _writing_intent_line(pack: Mapping[str, Any]) -> str:
         )
     return ""
 
+
+def _article_category_line(pack: Mapping[str, Any]) -> str:
+    if str(pack.get("articleCategory") or "") != "photography":
+        return ""
+    return (
+        "- **文章分类（articleCategory=`photography` · 摄影）**：全篇必须围绕当前实体的"
+        "机位、光线、构图、焦段或拍摄路线组织；不可退化为只提一次拍照的普通游玩攻略。"
+    )
+
 def _preferred_opening_index(ref: str, option_count: int) -> int:
     """按 ref 确定性轮转开篇策略，避免同实体多篇独立自选后开篇/骨架趋同。"""
     if option_count <= 0:
@@ -430,6 +439,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
             "creative_brief_block": _creative_brief_block(creative),
             "persona_block": persona_block,
             "writing_intent_line": _writing_intent_line(pack),
+            "article_category_line": _article_category_line(pack),
             "narrative_block": _narrative_block(pack),
             "base_source_line": _base_source_line(pack, adapt_base=adapt_base),
             "banned_terms_line": _banned_terms_line(pack),

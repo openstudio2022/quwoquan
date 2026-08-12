@@ -7,6 +7,7 @@ from typing import Any, Mapping
 from core.baike_source_contract import SOURCE_LICENSE_METADATA, source_identity_matches_contract
 from core.io import read_json
 from core.paths import STAGE_DOWNLOAD
+from core.source_catalog import ARTICLE_BASE_SOURCE_CATEGORIES
 from content.execution.workspace import relative_execution_ref
 from content.source.source_unit import resolve_entity_object_dir
 from core.qunar_template import is_qunar_url
@@ -19,7 +20,6 @@ from content.source.research.reject_memory import (
 )
 from content.source.research.reject_memory import _url_in_memory
 from content.source.research.source_quality import (
-    _ARTICLE_BASE_CATEGORIES,
     _candidate_gate,
     _source_category,
 )
@@ -224,7 +224,7 @@ def _verified_article_sources_from_prior_plans(
             source["source_id"] = f"article_reused_{len(sources) + 1}_{_normalized_title(original_id)[:24]}"
             source["discoveryProvider"] = "verified_source_pool_reuse"
             source["reuseSourcePlan"] = relative_execution_ref(path, execution_id)
-            if category in _ARTICLE_BASE_CATEGORIES and not source.get("sourceRole"):
+            if category in ARTICLE_BASE_SOURCE_CATEGORIES and not source.get("sourceRole"):
                 source["sourceRole"] = "base"
             if not source.get("matchConfidence"):
                 source["matchConfidence"] = (gate.get("matchConfidence") if gate else 0.86) or 0.86

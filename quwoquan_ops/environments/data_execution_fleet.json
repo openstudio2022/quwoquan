@@ -1,5 +1,6 @@
 {
-  "localTarget": "beta-local",
+  "target": "data-local",
+  "portProfile": "beta-local",
   "mongoPortRole": "data-execution-mongodb",
   "redisPortRole": "data-execution-redis"
 }

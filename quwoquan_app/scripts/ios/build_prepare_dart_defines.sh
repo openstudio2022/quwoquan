@@ -60,6 +60,175 @@ PY
 ENV_NAME="${QWQ_APP_RUNTIME_ENV:-${EXISTING_RUNTIME_ENV:-}}"
 LAUNCH_MODE="${QWQ_APP_LAUNCH_MODE:-${EXISTING_LAUNCH_MODE:-}}"
 DIRECT_RUNTIME_DEFINES_JSON=""
+if [[ -n "${QWQ_LAUNCH_HANDOFF_JSON:-}" ]]; then
+  CANONICAL_HANDOFF_EXPORTS="$(
+    PYTHONDONTWRITEBYTECODE=1 "$RUNTIME_PYTHON" - \
+      "$QWQ_LAUNCH_HANDOFF_JSON" "${DART_DEFINES:-}" "$APP_DIR" <<'PY'
+import base64
+import json
+import os
+import shlex
+import sys
+from pathlib import Path
+
+
+def fail(message: str) -> None:
+    raise ValueError(message)
+
+
+try:
+    handoff = json.loads(sys.argv[1])
+except (IndexError, json.JSONDecodeError) as exc:
+    fail(f"canonical launcher handoff is not valid JSON: {exc}")
+if not isinstance(handoff, dict) or handoff.get("schema") != "app-launcher-handoff":
+    fail("canonical launcher handoff schema is invalid")
+sys.path.insert(0, str(Path(sys.argv[3]) / "scripts/device"))
+from launch_manifest_metadata import (  # noqa: E402
+    load_launch_manifest_contract,
+    validate_handoff_against_metadata,
+)
+
+contract_issues = validate_handoff_against_metadata(
+    handoff,
+    load_launch_manifest_contract(),
+)
+if contract_issues:
+    fail("; ".join(contract_issues))
+effective = handoff.get("effectiveLaunchManifest")
+if not isinstance(effective, dict) or effective.get("schema") != (
+    "app-effective-launch-manifest"
+):
+    fail("canonical effective launch manifest is invalid")
+for field, value in effective.items():
+    if field != "schema" and handoff.get(field) != value:
+        fail(f"launcher handoff/effective manifest mismatch: {field}")
+
+defines = handoff.get("dartDefines")
+if not isinstance(defines, dict) or any(
+    not isinstance(key, str) or not isinstance(value, str)
+    for key, value in defines.items()
+):
+    fail("canonical launcher handoff Dart defines are invalid")
+required_define_keys = {
+    "APP_RUNTIME_ENV",
+    "QWQ_APP_LAUNCH_MODE",
+    "APP_LAUNCH_POLICY",
+    "CONTENT_BINDING_STATE",
+    "CLOUD_GATEWAY_BASE_URL",
+    "PUBLIC_WEB_BASE_URL",
+    "APP_DOWNLOAD_BASE_URL",
+}
+missing = sorted(required_define_keys - defines.keys())
+if missing:
+    fail("canonical launcher handoff Dart defines are incomplete: " + ", ".join(missing))
+expected_define_values = {
+    "APP_RUNTIME_ENV": str(handoff.get("environment") or ""),
+    "QWQ_APP_LAUNCH_MODE": str(handoff.get("launchMode") or ""),
+    "APP_LAUNCH_POLICY": str(handoff.get("launchPolicy") or ""),
+    "CONTENT_BINDING_STATE": str(handoff.get("contentBindingState") or ""),
+    "CLOUD_GATEWAY_BASE_URL": str(handoff.get("recoveryBaseUrl") or ""),
+    "PUBLIC_WEB_BASE_URL": str(handoff.get("publicWebBaseUrl") or ""),
+    "APP_DOWNLOAD_BASE_URL": str(handoff.get("appDownloadBaseUrl") or ""),
+}
+mismatched_defines = sorted(
+    key for key, value in expected_define_values.items() if defines.get(key) != value
+)
+if mismatched_defines:
+    fail(
+        "canonical launcher handoff Dart define projection mismatch: "
+        + ", ".join(mismatched_defines)
+    )
+
+digest_fields = {
+    "QWQ_DART_DEFINES_DIGEST": "dartDefinesDigest",
+    "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": "runtimeConfigDigest",
+    "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": "effectiveLaunchManifestDigest",
+}
+for environment_key, handoff_key in digest_fields.items():
+    value = str(handoff.get(handoff_key) or "")
+    if not value.startswith("sha256:") or len(value) != 71:
+        fail(f"canonical launcher handoff {handoff_key} is invalid")
+
+content_fields = {
+    "QWQ_CONTENT_RELEASE_ID": "contentReleaseId",
+    "QWQ_CONTENT_MANIFEST_DIGEST": "contentManifestDigest",
+    "QWQ_CONTENT_READINESS_RECEIPT_DIGEST": "contentReadinessReceiptDigest",
+}
+content_values = [str(handoff.get(field) or "") for field in content_fields.values()]
+binding_state = str(handoff.get("contentBindingState") or "")
+if binding_state == "bound" and not all(content_values):
+    fail("bound canonical launcher handoff has incomplete content identity")
+if binding_state == "unbound" and any(content_values):
+    fail("unbound canonical launcher handoff contains content identity")
+if binding_state not in {"bound", "unbound"}:
+    fail("canonical launcher handoff contentBindingState is invalid")
+
+identity_fields = {
+    "QWQ_APP_RUNTIME_ENV": "environment",
+    "QWQ_LAUNCH_TARGET": "target",
+    "QWQ_APP_LAUNCH_MODE": "launchMode",
+    "QWQ_APP_LAUNCH_POLICY": "launchPolicy",
+    **digest_fields,
+    **content_fields,
+}
+for environment_key, handoff_key in identity_fields.items():
+    supplied = os.environ.get(environment_key, "").strip()
+    expected = str(handoff.get(handoff_key) or "")
+    if supplied and supplied != expected:
+        fail(f"{environment_key} conflicts with canonical launcher handoff")
+
+existing_defines: dict[str, str] = {}
+for encoded in filter(None, sys.argv[2].strip().split(",")):
+    try:
+        decoded = base64.b64decode(encoded).decode("utf-8")
+    except Exception:
+        continue
+    if "=" not in decoded:
+        continue
+    key, value = decoded.split("=", 1)
+    existing_defines[key] = value
+conflicting_existing = sorted(
+    key
+    for key, value in existing_defines.items()
+    if key in defines and value != defines[key]
+)
+if conflicting_existing:
+    fail(
+        "DART_DEFINES conflict with canonical launcher handoff: "
+        + ", ".join(conflicting_existing)
+    )
+
+exports = {
+    "QWQ_APP_RUNTIME_ENV": handoff["environment"],
+    "QWQ_LAUNCH_TARGET": handoff["target"],
+    "QWQ_APP_LAUNCH_MODE": handoff["launchMode"],
+    "QWQ_APP_LAUNCH_POLICY": handoff["launchPolicy"],
+    **{
+        environment_key: handoff[handoff_key]
+        for environment_key, handoff_key in digest_fields.items()
+    },
+    **{
+        environment_key: str(handoff.get(handoff_key) or "")
+        for environment_key, handoff_key in content_fields.items()
+    },
+    "DIRECT_RUNTIME_DEFINES_JSON": json.dumps(
+        defines,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ),
+}
+for key, value in exports.items():
+    print(f"export {key}={shlex.quote(str(value))}")
+PY
+  )" || {
+    echo "[ios-dart-defines] GATE_BLOCK: canonical launcher handoff is invalid." >&2
+    exit 2
+  }
+  eval "$CANONICAL_HANDOFF_EXPORTS"
+  ENV_NAME="$QWQ_APP_RUNTIME_ENV"
+  LAUNCH_MODE="$QWQ_APP_LAUNCH_MODE"
+  echo "[ios-dart-defines] using canonical launcher handoff for $QWQ_LAUNCH_TARGET." >&2
+fi
 DIRECT_ENVIRONMENT="${QWQ_ENVIRONMENT:-${EXISTING_RUNTIME_ENV:-alpha}}"
 case "$DIRECT_ENVIRONMENT" in
   alpha|beta|gamma) ;;
@@ -88,7 +257,7 @@ if [[ -z "$LAUNCH_MODE" \
   if ! DIRECT_PREFLIGHT_JSON="$(
     PYTHONDONTWRITEBYTECODE=1 "$DIRECT_PYTHON" \
       "$APP_DIR/../quwoquan_ops/cli/stackctl.py" --output-format json \
-      app-debug-preflight --target "$DIRECT_TARGET"
+      app-debug-preflight --target "$DIRECT_TARGET" --runtime-mode test_live
   )"; then
     echo "$DIRECT_PREFLIGHT_JSON" >&2
     DIRECT_PREFLIGHT_BLOCKER="$(
@@ -143,15 +312,26 @@ PY
     exit 2
   }
   eval "$DIRECT_PREFLIGHT_EXPORTS"
+  DIRECT_HANDOFF_COMMAND=(
+    "$DIRECT_PYTHON"
+    "$APP_DIR/scripts/device/build_launcher_handoff.py"
+    --env "$DIRECT_ENVIRONMENT"
+    --target "$DIRECT_TARGET"
+    --launch-mode direct_flutter_run
+    --launch-policy test_live
+    --app-instance-id direct-flutter-run
+    --app-instance-namespace direct-flutter-run
+  )
+  if [[ -n "${QWQ_CONTENT_RELEASE_ID:-}" ]]; then
+    DIRECT_HANDOFF_COMMAND+=(
+      --content-release-id "$QWQ_CONTENT_RELEASE_ID"
+      --content-manifest-digest "$QWQ_CONTENT_MANIFEST_DIGEST"
+      --content-readiness-receipt-digest
+      "$QWQ_CONTENT_READINESS_RECEIPT_DIGEST"
+    )
+  fi
   if ! DIRECT_HANDOFF_JSON="$(
-    PYTHONDONTWRITEBYTECODE=1 "$DIRECT_PYTHON" \
-      "$APP_DIR/scripts/device/build_launcher_handoff.py" \
-      --env "$DIRECT_ENVIRONMENT" \
-      --target "$DIRECT_TARGET" \
-      --launch-mode direct_flutter_run \
-      --launch-policy test_live \
-      --app-instance-id direct-flutter-run \
-      --app-instance-namespace direct-flutter-run
+    PYTHONDONTWRITEBYTECODE=1 "${DIRECT_HANDOFF_COMMAND[@]}"
   )"; then
     echo "[ios-dart-defines] GATE_BLOCK: canonical direct Debug handoff could not be built." >&2
     exit 2
@@ -233,6 +413,13 @@ PY
   fi
 fi
 
+if [[ ("$LAUNCH_MODE" == "canonical_launcher" \
+    || "$LAUNCH_MODE" == "environment_patrol_smoke") \
+   && -z "${QWQ_LAUNCH_HANDOFF_JSON:-}" ]]; then
+  echo "[ios-dart-defines] GATE_BLOCK: $LAUNCH_MODE requires QWQ_LAUNCH_HANDOFF_JSON." >&2
+  exit 2
+fi
+
 if [[ -z "$ENV_NAME" ]]; then
   echo "[ios-dart-defines] GATE_BLOCK: canonical runtime handoff is required; use ./run.sh -d <device>." >&2
   exit 2
@@ -273,12 +460,14 @@ fi
 
 python3 - \
   "$RUNTIME_DEFINES_JSON" \
-  "${DART_DEFINES:-}" <<'PY'
+  "${DART_DEFINES:-}" \
+  "$APP_DIR" <<'PY'
 import base64
 import json
 import os
 import shlex
 import sys
+from pathlib import Path
 
 runtime_defines = json.loads(sys.argv[1])
 existing = sys.argv[2].strip()
@@ -369,6 +558,37 @@ for encoded in filter(None, existing.split(",")):
 
 for key, value in runtime_defines.items():
     merged[key] = value
+
+app_dir = Path(sys.argv[3]).resolve()
+main_entrypoint = "lib/main_prod.dart"
+flutter_target = os.environ.get("FLUTTER_TARGET", "").strip()
+patrol_enabled = merged.get("RUN_PATROL_ACCEPTANCE", "").strip().lower() == "true"
+if patrol_enabled:
+    if not flutter_target:
+        print(
+            "[ios-dart-defines] FAIL: Patrol build requires FLUTTER_TARGET.",
+            file=sys.stderr,
+        )
+        raise SystemExit(5)
+    target_path = Path(flutter_target)
+    if not target_path.is_absolute():
+        target_path = app_dir / target_path
+    target_path = target_path.resolve()
+    canonical_patrol_entrypoint = (
+        app_dir / "test/user_acceptance/patrol/test_bundle.dart"
+    ).resolve()
+    if target_path != canonical_patrol_entrypoint or not target_path.is_file():
+        print(
+            "[ios-dart-defines] FAIL: Patrol build must use the canonical "
+            "test/user_acceptance/patrol/test_bundle.dart entrypoint.",
+            file=sys.stderr,
+        )
+        raise SystemExit(5)
+    effective_flutter_target = flutter_target
+    native_entrypoint = target_path.relative_to(app_dir).as_posix()
+else:
+    effective_flutter_target = main_entrypoint
+    native_entrypoint = main_entrypoint
 missing = sorted(key for key in required_keys if not merged.get(key, "").strip())
 if missing:
     print(
@@ -410,7 +630,7 @@ if target_build_dir and resources_folder:
                 "dartDefinesDigest": dart_defines_digest,
                 "effectiveLaunchManifestDigest": effective_manifest_digest,
                 "launchTarget": launch_target,
-                "entrypoint": "lib/main_prod.dart",
+                "entrypoint": native_entrypoint,
                 "launchMode": runtime_defines.get("QWQ_APP_LAUNCH_MODE", ""),
                 "launchPolicy": runtime_defines.get("APP_LAUNCH_POLICY", ""),
                 "contentBindingState": runtime_defines.get(
@@ -446,7 +666,7 @@ print(
     + ",".join(sorted(required_keys)),
     file=sys.stderr,
 )
-print("export FLUTTER_TARGET=" + shlex.quote("lib/main_prod.dart"))
+print("export FLUTTER_TARGET=" + shlex.quote(effective_flutter_target))
 print("export DART_DEFINES=" + shlex.quote(",".join(encoded_defines)))
 print("export QWQ_IOS_DART_DEFINES_READY=1")
 PY

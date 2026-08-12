@@ -11,6 +11,7 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/app
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/search_user_profile_hit_view.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/social_relation_search_item_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/generated/gateway_contracts.dart';
 
 part 'search_repository_models.dart';
 

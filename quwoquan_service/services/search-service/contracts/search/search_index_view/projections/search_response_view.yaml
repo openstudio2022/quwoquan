@@ -17,6 +17,9 @@ consumers:
 - assistant-service
 - recommendation-engine
 fields:
+- name: interpretedQuery
+  type: OwnerSearchInterpretedQuery
+  description: Search owner 唯一 query 解释；不含 backend DSL
 - name: hits
   type: '[]CanonicalSearchHit'
   description: 统一检索命中列表；公共字段及 content typed slice 由 search-service 的 CanonicalSearchHit 单一解码
@@ -42,3 +45,7 @@ fields:
 - name: requestId
   type: string
   description: 搜索请求 ID，对齐 HTTP X-Request-Id 或服务端生成值
+- name: nextCursor
+  type: string
+  nullable: true
+  description: AEAD opaque continuation；不得解释为 offset 或 ES search_after

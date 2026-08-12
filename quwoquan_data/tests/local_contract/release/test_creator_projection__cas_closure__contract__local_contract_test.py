@@ -153,9 +153,9 @@ def test_creator_avatar_projects_only_from_traceable_cas(
     physical = publish / object_key
     physical.parent.mkdir(parents=True, exist_ok=True)
     physical.write_bytes(avatar)
-    rights_ref = "evidence/avatar-rights.json"
+    evidence_ref = "evidence/avatar-quality.json"
     _write_json(
-        pool / rights_ref,
+        pool / evidence_ref,
         _avatar_rights(
             asset_id="avatar-test",
             digest=digest,
@@ -164,6 +164,7 @@ def test_creator_avatar_projects_only_from_traceable_cas(
     )
     profile = {
         "creatorProfileId": "creator_test",
+        "version": 1,
         "authorId": "author_test",
         "personaId": "author_test",
         "displayName": "测试作者",
@@ -172,6 +173,12 @@ def test_creator_avatar_projects_only_from_traceable_cas(
         "bio": "测试",
         "creatorArchetype": "editor",
         "status": "active",
+        "admission": {
+            "processResult": "completed",
+            "qualityResult": "passed",
+            "evidenceRef": "evidence/author-admission.json",
+            "evidenceDigest": "sha256:" + "0" * 64,
+        },
         "publicProfileTagRefs": [],
         "disclosure": {
             "type": "platform_virtual_creator",
@@ -185,7 +192,7 @@ def test_creator_avatar_projects_only_from_traceable_cas(
             "objectKey": object_key,
             "bytes": len(avatar),
             "mimeType": "image/jpeg",
-            "rightsSnapshotRef": rights_ref,
+            "evidenceRef": evidence_ref,
         },
     }
     profile_path = pool / "profiles/system/creator_test.creator.yaml"
@@ -203,10 +210,14 @@ def test_creator_avatar_projects_only_from_traceable_cas(
         "kind": "avatar",
         "sha256": digest,
     }
+    assert public_profile["version"] == 1
+    assert public_profile["status"] == "active"
+    assert public_profile["admission"] == profile["admission"]
+    assert "usageScope" not in public_profile["admission"]
     assert "avatarUrl" not in public_profile
     assets = json.loads((target / "assets.refs.json").read_text(encoding="utf-8"))
     assert assets["assets"][0]["objectKey"] == object_key
-    assert (target / "rights_snapshots/avatar-rights.json").is_file()
+    assert (target / "rights_snapshots/avatar-quality.json").is_file()
 
 
 def test_creator_avatar_rejects_untraceable_identity(
@@ -220,10 +231,17 @@ def test_creator_avatar_rejects_untraceable_identity(
         yaml.safe_dump(
             {
                 "creatorProfileId": "creator_test",
+                "version": 1,
                 "authorId": "author_test",
                 "personaId": "author_test",
                 "displayName": "测试作者",
                 "status": "active",
+                "admission": {
+                    "processResult": "completed",
+                    "qualityResult": "passed",
+                    "evidenceRef": "evidence/author-admission.json",
+                    "evidenceDigest": "sha256:" + "0" * 64,
+                },
                 "avatarAsset": {
                     "assetId": "avatar-test",
                     "kind": "avatar",

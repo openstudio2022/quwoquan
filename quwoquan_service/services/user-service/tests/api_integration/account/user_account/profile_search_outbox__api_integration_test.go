@@ -3,40 +3,40 @@ package api_integration
 
 import (
 	"context"
+	"fmt"
 	"net/http"
-	"net/http/httptest"
-	"strings"
 	"testing"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
+	rtredis "quwoquan_service/runtime/redis"
 	useraccountapp "quwoquan_service/services/user-service/internal/account/user_account/application"
 	useraccountpersistence "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence"
-	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/searchindex"
+	"quwoquan_service/services/user-service/internal/account/user_account/infrastructure/profileprojection"
 )
 
-type switchableProfileSearchES struct {
+type switchableProfileSearchTransport struct {
+	runtimemessaging.MessageTransport
 	available bool
-	paths     []string
+	attempts  int
+	appended  int
 }
 
-func (server *switchableProfileSearchES) handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		server.paths = append(server.paths, r.Method+" "+r.URL.Path)
-		if !server.available {
-			http.Error(w, "search cluster unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		if r.Method != http.MethodPut ||
-			!strings.HasPrefix(r.URL.Path, "/quwoquan_objects/_doc/") {
-			http.Error(w, "unexpected search request", http.StatusTeapot)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte(`{"result":"created"}`))
-	})
+func (transport *switchableProfileSearchTransport) AppendDurable(
+	ctx context.Context,
+	message runtimemessaging.DurableMessage,
+) (string, error) {
+	transport.attempts++
+	if !transport.available {
+		return "", fmt.Errorf("durable profile projection stream unavailable")
+	}
+	id, err := transport.MessageTransport.AppendDurable(ctx, message)
+	if err == nil {
+		transport.appended++
+	}
+	return id, err
 }
 
-func TestProfileSearchProjectionOutboxRetriesESFailureWithoutLosingProfileUpdate(
+func TestProfileSearchProjectionOutboxRetriesStreamFailureWithoutLosingProfileUpdate(
 	t *testing.T,
 ) {
 	t.Cleanup(func() { cleanAll(t) })
@@ -103,20 +103,15 @@ func TestProfileSearchProjectionOutboxRetriesESFailureWithoutLosingProfileUpdate
 		)
 	}
 
-	esRuntime := &switchableProfileSearchES{}
-	esServer := httptest.NewServer(esRuntime.handler())
-	defer esServer.Close()
-	built, err := searchindex.Build(
-		searchindex.ESConfig{
-			Enabled:          true,
-			Endpoints:        []string{esServer.URL},
-			Index:            "quwoquan_objects",
-			RequestTimeoutMs: 500,
-		},
-		useraccountpersistence.NewPgProfileStore(pgPool),
-	)
+	redis := rtredis.NewMemoryClient()
+	baseTransport, err := runtimemessaging.NewRedisMessageTransport(redis, redis)
 	if err != nil {
-		t.Fatalf("build UserProfile search projection: %v", err)
+		t.Fatalf("build durable transport: %v", err)
+	}
+	streamTransport := &switchableProfileSearchTransport{MessageTransport: baseTransport}
+	streamPublisher, err := profileprojection.NewStreamPublisher(streamTransport)
+	if err != nil {
+		t.Fatalf("build UserProfile search stream publisher: %v", err)
 	}
 	outboxStore, err := useraccountpersistence.NewUserProfileSearchOutboxStore(pgPool)
 	if err != nil {
@@ -124,7 +119,7 @@ func TestProfileSearchProjectionOutboxRetriesESFailureWithoutLosingProfileUpdate
 	}
 	relay, err := useraccountapp.NewUserProfileSearchOutboxRelay(
 		outboxStore,
-		built.Projector,
+		streamPublisher,
 		"profile-search-api-integration",
 	)
 	if err != nil {
@@ -132,7 +127,7 @@ func TestProfileSearchProjectionOutboxRetriesESFailureWithoutLosingProfileUpdate
 	}
 
 	if didWork, err := relay.RelayOnce(context.Background()); !didWork || err == nil {
-		t.Fatalf("ES outage must leave a retryable checkpoint: didWork=%v err=%v", didWork, err)
+		t.Fatalf("stream outage must leave a retryable checkpoint: didWork=%v err=%v", didWork, err)
 	}
 	var failedPending int
 	if err := pgPool.QueryRow(
@@ -140,7 +135,7 @@ func TestProfileSearchProjectionOutboxRetriesESFailureWithoutLosingProfileUpdate
 		`SELECT COUNT(*) FROM user_profile_search_outbox
 		 WHERE user_id=$1
 		   AND published_at IS NULL
-		   AND last_failure_code='search_project'
+		   AND last_failure_code='stream_publish'
 		   AND last_failure_digest <> ''`,
 		ownerID,
 	).Scan(&failedPending); err != nil {
@@ -150,7 +145,7 @@ func TestProfileSearchProjectionOutboxRetriesESFailureWithoutLosingProfileUpdate
 		t.Fatalf("expected one persisted failed checkpoint, got %d", failedPending)
 	}
 
-	esRuntime.available = true
+	streamTransport.available = true
 	if _, err := pgPool.Exec(
 		context.Background(),
 		`UPDATE user_profile_search_outbox
@@ -176,10 +171,10 @@ func TestProfileSearchProjectionOutboxRetriesESFailureWithoutLosingProfileUpdate
 		t.Fatalf("count acknowledged profile search events: %v", err)
 	}
 	if unpublishedEvents != 0 {
-		t.Fatalf("ES success must advance every profile search checkpoint, pending=%d", unpublishedEvents)
+		t.Fatalf("durable append success must advance every profile search checkpoint, pending=%d", unpublishedEvents)
 	}
-	if len(esRuntime.paths) != 3 {
-		t.Fatalf("expected one failed attempt plus two idempotent replays, got %#v", esRuntime.paths)
+	if streamTransport.attempts != 3 || streamTransport.appended != 2 {
+		t.Fatalf("expected one failed attempt plus two durable appends, attempts=%d appended=%d", streamTransport.attempts, streamTransport.appended)
 	}
 }
 
@@ -221,6 +216,81 @@ func TestAnonymousRegistrationCreatesDurablePersonaProfileSearchProjectionCoordi
 			eventType,
 			profileVersion,
 			published,
+		)
+	}
+}
+
+func TestPersonaProfileProjectionAdvancesBeyondRetainedSearchOutboxHistory(
+	t *testing.T,
+) {
+	t.Cleanup(func() { cleanAll(t) })
+	const (
+		ownerID                = "retained_search_history_owner"
+		retainedProfileVersion = int64(18)
+	)
+	personaID := createProfileUpdateFixture(t, ownerID, "retained_history")
+
+	for profileVersion := int64(2); profileVersion <= retainedProfileVersion; profileVersion++ {
+		if _, err := pgPool.Exec(
+			context.Background(),
+			`INSERT INTO user_profile_search_outbox (
+				event_id, user_id, profile_version, event_type, payload_json, occurred_at,
+				published_at, next_attempt_at
+			) VALUES ($1, $2, $3, 'UserProfileUpdated', $4::jsonb, NOW(), NOW(), NOW())`,
+			fmt.Sprintf("retained-profile-search-%02d", profileVersion),
+			ownerID,
+			profileVersion,
+			fmt.Sprintf(`{"eventId":"retained-profile-search-%02d","userId":%q,"profileVersion":%d,"operation":"upsert","nickname":"retained","avatarUrl":"","bio":"","identityTags":[],"followerCount":0,"postCount":0,"updatedAt":"2026-08-12T00:00:00Z"}`, profileVersion, ownerID, profileVersion),
+		); err != nil {
+			t.Fatalf("seed retained profile search version %d: %v", profileVersion, err)
+		}
+	}
+
+	update := doRequest(
+		t,
+		http.MethodPatch,
+		"/user/profile",
+		`{"nickname":"retained_history_updated"}`,
+		authHeadersForPersona(ownerID, personaID),
+	)
+	if update.Code != http.StatusOK {
+		t.Fatalf("profile update: expected 200, got %d: %s", update.Code, update.Body.String())
+	}
+
+	var materializedProfileVersion int64
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT profile_version FROM user_profiles WHERE user_id=$1`,
+		ownerID,
+	).Scan(&materializedProfileVersion); err != nil {
+		t.Fatalf("read materialized profile version: %v", err)
+	}
+	if materializedProfileVersion != retainedProfileVersion+1 {
+		t.Fatalf(
+			"profile projection must advance beyond retained outbox history: got=%d want=%d",
+			materializedProfileVersion,
+			retainedProfileVersion+1,
+		)
+	}
+
+	var pendingCurrentVersion int
+	if err := pgPool.QueryRow(
+		context.Background(),
+		`SELECT COUNT(*)
+		 FROM user_profile_search_outbox
+		 WHERE user_id=$1
+		   AND profile_version=$2
+		   AND event_type='UserProfileUpdated'
+		   AND published_at IS NULL`,
+		ownerID,
+		retainedProfileVersion+1,
+	).Scan(&pendingCurrentVersion); err != nil {
+		t.Fatalf("read current profile search projection coordinate: %v", err)
+	}
+	if pendingCurrentVersion != 1 {
+		t.Fatalf(
+			"expected one durable search coordinate above retained history, got %d",
+			pendingCurrentVersion,
 		)
 	}
 }

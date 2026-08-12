@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-001
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-011.t1
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-003
 // readiness_case: send-otp-local
 // readiness_case: create-alipay-authorization-request-local
@@ -55,6 +56,7 @@ func TestSendOtpCommitsAuthenticationChallengeBeforeSealedDispatch(t *testing.T)
 		"1.0.0",
 		"phone_login",
 		"",
+		"otp-idempotency-0001",
 	)
 	if err != nil {
 		t.Fatalf("SendOtp: %v", err)
@@ -154,8 +156,13 @@ func TestResolveOneTapLoginHintUsesProductionHTTPSResolver(t *testing.T) {
 
 type authenticationChallengeRateLimit struct{}
 
-func (authenticationChallengeRateLimit) AllowSend(context.Context, string) (bool, int, error) {
-	return true, 0, nil
+func (authenticationChallengeRateLimit) AllowSend(
+	context.Context,
+	string,
+	string,
+	string,
+) (accountapp.OtpSendAdmission, error) {
+	return accountapp.OtpSendAdmission{Allowed: true}, nil
 }
 
 type authenticationChallengeSealer struct{}

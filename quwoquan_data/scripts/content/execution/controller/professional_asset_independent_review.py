@@ -75,6 +75,62 @@ def _professional_asset_review_candidates(
     from content.release.canonical.asset_review_adoption import (
         _professional_identity,
     )
+    root = execution_root(ctx.execution_id)
+    if ref.startswith("/entity/"):
+        from content.release.canonical.object_transaction import (
+            _image_dimensions,
+            _source_asset_for_manifest_asset,
+            _source_assets_by_ref,
+        )
+
+        rel = Path(ref.removeprefix("/entity/"))
+        if rel.is_absolute() or ".." in rel.parts or len(rel.parts) < 3:
+            raise ValueError(f"professional entity objectRef is invalid: {ref}")
+        object_dir = root / "entities" / rel
+        manifest_path = object_dir / "manifest.json"
+        if not manifest_path.is_file():
+            return []
+        manifest = read_json(manifest_path)
+        source_assets = _source_assets_by_ref(root)
+        candidates: list[dict[str, str]] = []
+        for raw in manifest.get("assets") or []:
+            if not isinstance(raw, Mapping):
+                continue
+            file_name = str(raw.get("fileName") or "").strip()
+            asset_path = object_dir / "assets" / file_name
+            if not file_name or not asset_path.is_file():
+                continue
+            _width, _height, mime = _image_dimensions(asset_path)
+            if not mime.startswith("image/"):
+                continue
+            _source_ref, source_asset = _source_asset_for_manifest_asset(
+                raw,
+                source_assets,
+            )
+            identity = _professional_identity(
+                raw,
+                (source_asset,),
+                asset_kind="image",
+            )
+            if identity is None:
+                continue
+            receipt_ref, asset_id, content_sha256 = identity
+            candidates.append(
+                {
+                    "assetKind": "image",
+                    "assetId": asset_id,
+                    "contentSha256": content_sha256,
+                    "acquisitionReceiptPath": _acquisition_receipt_path(
+                        "image", receipt_ref
+                    ).as_posix(),
+                }
+            )
+        unique = {
+            (item["assetKind"], item["assetId"], item["contentSha256"]): item
+            for item in candidates
+        }
+        return [unique[key] for key in sorted(unique)]
+
     from content.release.canonical.post_transaction import (
         _asset_sources,
         _media_dimensions,
@@ -82,9 +138,11 @@ def _professional_asset_review_candidates(
         _source_assets,
     )
 
-    root = execution_root(ctx.execution_id)
     object_dir = content_object.content_object_dir(ctx.execution_id, ref)
-    manifest = read_json(object_dir / "manifest.json")
+    manifest_path = object_dir / "manifest.json"
+    if not manifest_path.is_file():
+        return []
+    manifest = read_json(manifest_path)
     source_assets = _source_assets(root)
     candidates: list[dict[str, str]] = []
     for raw in manifest.get("assets") or []:
@@ -221,7 +279,11 @@ def run_professional_asset_independent_reviews(
     root = execution_root(ctx.execution_id)
     issues: list[DataIssue] = []
     for ref in refs:
-        object_dir = content_object.content_object_dir(ctx.execution_id, ref)
+        object_dir = (
+            root / "entities" / Path(ref.removeprefix("/entity/"))
+            if ref.startswith("/entity/")
+            else content_object.content_object_dir(ctx.execution_id, ref)
+        )
         author_evidence = object_dir / "4.draft/agent_result_envelope.json"
         for candidate in _professional_asset_review_candidates(ctx, ref):
             try:

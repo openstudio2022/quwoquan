@@ -1458,6 +1458,33 @@ types:
       - name: postId
         type: string
         client_dart_type: String
+  ResearchReleaseReadbackQuery:
+    fields:
+      - name: researchIdentityAttestation
+        type: string
+        constraints: [NOT_BLANK]
+        client_dart_type: String
+        client_wire_name: X-Research-Identity-Attestation
+  ResearchReleaseReadbackView:
+    fields:
+      - name: releaseId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: manifestDigest
+        type: string
+        constraints: [NOT_BLANK]
+      - name: subjectHash
+        type: string
+        constraints: [NOT_BLANK]
+      - name: attestationIdHash
+        type: string
+        constraints: [NOT_BLANK]
+      - name: signatureVerified
+        type: boolean
+        constraints: [NOT_NULL]
+      - name: researchBadgeVisible
+        type: boolean
+        constraints: [NOT_NULL]
   ContentAuthorPostsQuery:
     fields:
       - name: personaId

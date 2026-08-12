@@ -257,6 +257,7 @@ surfaces:
     description: 网络结果页（小趣搜 assistant 结果 tab + 圈子频道分类内容结果）
     operation_ids:
       - Search
+      - SearchPage
       - CreateAssistantSession
       - StartAssistantRun
       - GetAssistantRun
@@ -332,6 +333,7 @@ surfaces:
     operation_ids:
       - GetHomepageDetail
       - CreateHomepageClaimRequest
+      - GetMyPendingHomepageClaimRequest
 
   - id: homepageMaintenance
     owner: entity
@@ -350,6 +352,7 @@ surfaces:
     operation_ids:
       - GetHomepageDetail
       - CreateHomepageStatusReport
+      - GetMyPendingHomepageStatusReport
 
   - id: circleDetail
     owner: circle
@@ -515,6 +518,8 @@ surfaces:
     operation_ids:
       - LoginAnonymous
       - RefreshToken
+      - IssueWhitelistedResearchSession
+      - GetResearchReleaseReadback
       - GetActivePersonaContext
       - UpsertDevicePushEndpoint
       - RemoveDevicePushEndpoint
@@ -612,6 +617,7 @@ surfaces:
     path_template: /login
     description: 商用登录入口（手机 OTP + 一键登录 + 社交登录）
     operation_ids:
+      - GetOtpDeliveryReadiness
       - SendOtp
       - LoginWithPhone
       - LoginWithWechat

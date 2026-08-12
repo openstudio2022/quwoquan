@@ -7,23 +7,31 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from content.release.canonical import campaign_scale_cumulative, research_scale_promotion as research_scale_promotion_module
-from content.execution.scale.semantic_promotion import (
-    select_scale_calibration_refs,
-    semantic_calibration_evidence_path,
-)
 from content.execution.campaign.source_pool_binding import (
     bound_scale_source_pool_snapshot_digest,
     materialize_bound_scale_source_pool,
 )
-from content.source.research.scale_source_pool import build_scale_source_pool_plan
+from content.execution.scale.semantic_promotion import (
+    select_scale_calibration_refs,
+    semantic_calibration_evidence_path,
+)
+from content.release.canonical import campaign_scale_cumulative
+from content.release.canonical import (
+    research_scale_promotion as research_scale_promotion_module,
+)
 from content.release.canonical.campaign_scale_evidence import (
     CampaignScaleEvidenceError,
     load_campaign_scale_evidence,
     write_campaign_scale_evidence,
 )
-from content.release.canonical.campaign_scale_source_pool import source_pool_lineage_fields
+from content.release.canonical.campaign_scale_source_pool import (
+    source_pool_lineage_fields,
+)
 from content.release.canonical.handler import register_parser
+from content.release.canonical.object_source_identity import (
+    source_identity_digest,
+    source_identity_set,
+)
 from content.release.canonical.research_scale_promotion import (
     ResearchScalePromotionError,
     write_research_scale_promotion,
@@ -36,12 +44,16 @@ from content.release.canonical.research_scale_video_popularity import (
     ResearchScaleVideoPopularityError,
     collect_m100_video_popularity_observations,
 )
+from content.source.research.scale_source_pool import build_scale_source_pool_plan
 from core.paths import campaign_scale_evidence_root, research_scale_promotions_root
 from core.runtime_policy import runtime_profile_digest
 from core.source_digest import SourceDigest
 from support.semantic_preflight_fixture import ready_semantic_preflight
+
 from quwoquan_data.tests.local_contract.source.test_scale_source_pool__milestone_readiness__contract__local_contract_test import (
     EVIDENCE_PAYLOADS,
+)
+from quwoquan_data.tests.local_contract.source.test_scale_source_pool__milestone_readiness__contract__local_contract_test import (
     _candidate as _scale_pool_candidate,
 )
 
@@ -1114,6 +1126,8 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
         "selectedCount": 100,
         "discardedCount": 0,
         "shortfallCount": 0,
+        "deliveryPendingCount": 0,
+        "deliveryIntentRefs": [],
         "error": None,
     }
     _write(
@@ -1309,6 +1323,37 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
         for index in range(100)
     ]
     authorization_ids = [str(row["assetId"]) for row in image_assets]
+    object_source_identities = [
+        {
+            "executionId": execution_id,
+            "sourceRevision": source_revision,
+            "sourceDigest": SOURCE_DIGEST,
+            "entityCatalogDigest": CATALOG_DIGEST,
+        }
+        for execution_id in execution_ids.values()
+    ]
+    source_identities, source_identity_set_digest = source_identity_set(
+        object_source_identities
+    )
+    source_identity_digest_value = source_identity_digest(
+        object_source_identities[0]
+    )
+    milestone_post_refs = {
+        "article": _publish_refs("article")["posts"],
+        "image": _publish_refs("image")["posts"],
+        "video": _publish_refs("video")["posts"][:10],
+    }
+    release_contents = [
+        {
+            "contentId": f"content-{carrier}-{index:03d}",
+            "version": 1,
+            "postRef": raw_ref,
+            "executionId": execution_ids[carrier],
+            "sourceIdentityDigest": source_identity_digest_value,
+        }
+        for carrier, refs in milestone_post_refs.items()
+        for index, raw_ref in enumerate(refs)
+    ]
     _write(
         release / "payload/release.json",
         {
@@ -1326,14 +1371,31 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
                 "unknown": 0,
             },
             "authorizationRequiredAssetIds": authorization_ids,
-            "researchAcceptedCount": 400,
+            "researchAcceptedCount": 310,
             "commercialAcceptedCount": 0,
             "canonicalMerkle": "sha256:" + "e" * 64,
             "executionIds": list(execution_ids.values()),
-            "sourceRevision": source_revision,
-            "sourceDigest": SOURCE_DIGEST,
-            "entityCatalogDigest": CATALOG_DIGEST,
             "sourceDigests": [SOURCE_DIGEST_DOCUMENT],
+            "sourceIdentities": source_identities,
+            "sourceIdentitySetDigest": source_identity_set_digest,
+            "milestone": "M100",
+            "milestoneTargets": {
+                "homepage": 100,
+                "article": 100,
+                "image": 100,
+                "video": 10,
+            },
+            "releaseMode": "research",
+            "poolDigest": "sha256:" + "d" * 64,
+            "counts": {
+                "article": 100,
+                "image": 100,
+                "video": 10,
+                "total": 210,
+            },
+            "contents": release_contents,
+            "authors": [],
+            "buildResult": "completed",
         },
     )
     _write(
@@ -1351,14 +1413,14 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
                 "unknown": 0,
             },
             "authorizationRequiredAssetIds": authorization_ids,
-            "researchAcceptedCount": 400,
+            "researchAcceptedCount": 310,
             "commercialAcceptedCount": 0,
             "carrierCounts": [
                 {
                     "carrier": carrier,
-                    "objectCount": 100,
+                    "objectCount": 10 if carrier == "video" else 100,
                     "assetCount": 100 if carrier == "image" else 0,
-                    "researchAcceptedCount": 100,
+                    "researchAcceptedCount": 10 if carrier == "video" else 100,
                     "commercialAcceptedCount": 0,
                 }
                 for carrier in CARRIERS
@@ -1403,10 +1465,10 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
     )
     _write_ranked_release_videos(
         release,
-        count=100,
+        count=10,
         execution_id=execution_ids["video"],
         source_revision=source_revision,
-        refs=_publish_refs("video")["posts"],
+        refs=milestone_post_refs["video"],
     )
     for carrier in ("article", "image"):
         for raw_ref in _publish_refs(carrier)["posts"]:
@@ -1425,7 +1487,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str | dict[str, object]]:
                 "posts": [
                     raw_ref
                     for carrier in ("article", "image", "video")
-                    for raw_ref in _publish_refs(carrier)["posts"]
+                    for raw_ref in milestone_post_refs[carrier]
                 ],
                 "tags": [],
             },
@@ -1622,8 +1684,11 @@ def test_campaign_scale_evidence_records_m100_as_zero_carried_cumulative_baselin
     assert [row["predecessorCarriedCount"] for row in evidence["lanes"]] == [0] * 4
     assert [row["newFinalizedCount"] for row in evidence["lanes"]] == [100] * 4
     assert [row["totalUniqueFinalizedCount"] for row in evidence["lanes"]] == [
-        100
-    ] * 4
+        100,
+        100,
+        100,
+        10,
+    ]
     assert evidence["scaleStartedAt"] == START.isoformat()
     assert evidence["scaleCompletedAt"] == (
         START + timedelta(hours=1, minutes=2)
@@ -1821,8 +1886,11 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     assert [row["predecessorCarriedCount"] for row in evidence["lanes"]] == [0] * 4
     assert [row["newFinalizedCount"] for row in evidence["lanes"]] == [100] * 4
     assert [row["totalUniqueFinalizedCount"] for row in evidence["lanes"]] == [
-        100
-    ] * 4
+        100,
+        100,
+        100,
+        10,
+    ]
     calibration_binding = evidence["calibrationPreflightReceipt"]
     assert calibration_binding["receiptRef"] == (
         fixture["calibrationPreflightReceiptPath"]
@@ -1839,7 +1907,7 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     assert calibration_receipt["semanticSelectionId"] == "sol_calibration"
     assert calibration_receipt["provider"] == "codex_sdk"
     assert calibration_receipt["model"] == "gpt-5.6-sol"
-    assert calibration_receipt["executionAdmissionReady"] is True
+    assert calibration_receipt["semanticExecutionReady"] is True
     assert evidence["duplicateAssetCount"] == 0
     assert evidence["crossLaneWriteCount"] == 0
     image_lane = next(row for row in evidence["lanes"] if row["carrier"] == "image")
@@ -1927,7 +1995,8 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     assert promotion["nextScaleEligible"] == "M1000"
     assert promotion["campaignEvidenceDigest"] == evidence["evidenceDigest"]
     assert promotion["carrierCounts"][-1]["targetCount"] == 10
-    assert promotion["carrierCounts"][-1]["qualifiedCount"] == 100
+    assert promotion["carrierCounts"][-1]["qualifiedCount"] == 10
+    assert promotion["campaignWaveStatistics"][-1]["qualifiedCount"] == 100
     assert promotion["carrierCounts"][-1]["shortfallCount"] == 0
     assert promotion["statistics"]["objectPassRate"] == {
         "numerator": 400,
@@ -1935,13 +2004,22 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
         "rate": 1.0,
     }
     assert promotion["statistics"]["illustratedRate"] == {
+        "statistical": True,
+        "nonBlocking": True,
         "numerator": 90,
         "denominator": 100,
         "rate": 0.9,
     }
+    assert promotion["statistics"]["textOnlyRate"] == {
+        "statistical": True,
+        "nonBlocking": True,
+        "numerator": 10,
+        "denominator": 100,
+        "rate": 0.1,
+    }
     assert promotion["statistics"]["automaticRecoveryRate"] == {
         "statistical": True,
-        "nonBlocking": False,
+        "nonBlocking": True,
         "status": "MEASURED",
         "eligibleCount": 20,
         "automaticCount": 19,
@@ -1949,14 +2027,14 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
         "rate": 0.95,
     }
     assert promotion["statistics"]["videoPopularity"]["statistical"] is True
-    assert promotion["statistics"]["videoPopularity"]["nonBlocking"] is False
+    assert promotion["statistics"]["videoPopularity"]["nonBlocking"] is True
     assert promotion["statistics"]["videoPopularity"]["rankingCoverage"] == {
-        "numerator": 100,
-        "denominator": 100,
+        "numerator": 10,
+        "denominator": 10,
         "rate": 1.0,
     }
     assert promotion["statistics"]["videoPopularity"]["signalAvailability"] == [
-        {"signal": signal, "numerator": 100, "denominator": 100, "rate": 1.0}
+        {"signal": signal, "numerator": 10, "denominator": 10, "rate": 1.0}
         for signal in ("play", "like", "comment", "share", "favorite")
     ]
     assert promotion["professionalImageSourceMix"]["acceptedImageAssetCount"] == 100
@@ -1992,7 +2070,7 @@ def test_campaign_scale_evidence_derives_real_soak_faults_and_retry_chain(
     assert repeated_path == path
 
 
-def test_m100_promotion_blocks_unranked_video(
+def test_m100_promotion_reports_unranked_video_without_blocking(
     tmp_path: Path,
 ) -> None:
     fixture = _fixture(tmp_path)
@@ -2026,17 +2104,22 @@ def test_m100_promotion_blocks_unranked_video(
     _write(rights_path, rights)
     _evidence, path = _write_evidence(fixture)
 
-    with pytest.raises(
-        ResearchScalePromotionError,
-        match="DATA.SCALE.ATTAINMENT_SHORTFALL",
-    ):
-        write_research_scale_promotion(
-            release_id="research-release",
-            promotion_id="promotion-unranked-video",
-            campaign_evidence_path=path,
-            release_root=fixture["releaseRoot"],
-            output_root=fixture["output"],
-        )
+    promotion, _promotion_path = write_research_scale_promotion(
+        release_id="research-release",
+        promotion_id="promotion-unranked-video",
+        campaign_evidence_path=path,
+        release_root=fixture["releaseRoot"],
+        output_root=fixture["output"],
+    )
+
+    statistic = promotion["statistics"]["videoPopularity"]
+    assert statistic["nonBlocking"] is True
+    assert statistic["rankingCoverage"]["rate"] < 1
+    favorite = next(
+        row for row in statistic["signalAvailability"]
+        if row["signal"] == "favorite"
+    )
+    assert favorite["rate"] < 1
 
 
 def test_campaign_scale_evidence_blocks_lane_receipt_identity_drift(
@@ -2252,7 +2335,7 @@ def test_campaign_scale_evidence_blocks_missing_sol_calibration_sample(
         _write_evidence(fixture)
 
 
-def test_zero_recovery_denominator_blocks_promotion(
+def test_zero_recovery_denominator_is_nonblocking_statistic(
     tmp_path: Path,
 ) -> None:
     fixture = _fixture(tmp_path)
@@ -2278,20 +2361,20 @@ def test_zero_recovery_denominator_blocks_promotion(
     assert fault["automaticRecoveryStatus"] == "NOT_EXERCISED"
     assert fault["automaticRecoveryRate"] is None
 
-    with pytest.raises(
-        ResearchScalePromotionError,
-        match="automatic recovery hard gate failed",
-    ):
-        write_research_scale_promotion(
-            release_id="research-release",
-            promotion_id="promotion-statistical-recovery",
-            campaign_evidence_path=path,
-            release_root=fixture["releaseRoot"],
-            output_root=fixture["output"],
-        )
+    promotion, _promotion_path = write_research_scale_promotion(
+        release_id="research-release",
+        promotion_id="promotion-statistical-recovery",
+        campaign_evidence_path=path,
+        release_root=fixture["releaseRoot"],
+        output_root=fixture["output"],
+    )
+    statistic = promotion["statistics"]["automaticRecoveryRate"]
+    assert statistic["nonBlocking"] is True
+    assert statistic["status"] == "NOT_EXERCISED"
+    assert statistic["rate"] is None
 
 
-def test_low_automatic_recovery_rate_blocks_promotion(
+def test_low_automatic_recovery_rate_is_nonblocking_statistic(
     tmp_path: Path,
 ) -> None:
     fixture = _fixture(tmp_path)
@@ -2321,17 +2404,17 @@ def test_low_automatic_recovery_rate_blocks_promotion(
     assert fault["automaticRecoveredCount"] == 3
     assert fault["automaticRecoveryRate"] == 0.75
 
-    with pytest.raises(
-        ResearchScalePromotionError,
-        match="automatic recovery hard gate failed",
-    ):
-        write_research_scale_promotion(
-            release_id="research-release",
-            promotion_id="promotion-low-statistical-recovery",
-            campaign_evidence_path=path,
-            release_root=fixture["releaseRoot"],
-            output_root=fixture["output"],
-        )
+    promotion, _promotion_path = write_research_scale_promotion(
+        release_id="research-release",
+        promotion_id="promotion-low-statistical-recovery",
+        campaign_evidence_path=path,
+        release_root=fixture["releaseRoot"],
+        output_root=fixture["output"],
+    )
+    statistic = promotion["statistics"]["automaticRecoveryRate"]
+    assert statistic["nonBlocking"] is True
+    assert statistic["eligibleCount"] == 4
+    assert statistic["rate"] == 0.75
 
 
 def test_resource_soak_requires_one_continuous_four_lane_hour(

@@ -4,15 +4,15 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from content.execution.planning.semantic_preflight_admission import (
+    bind_semantic_preflight_receipt,
+)
 from content.execution.preflight.receipt import (
     build_semantic_preflight_receipt,
     write_semantic_preflight_receipt,
 )
 from content.execution.preflight.selection import (
     resolve_semantic_preflight_selection,
-)
-from content.execution.planning.semantic_preflight_admission import (
-    bind_semantic_preflight_receipt,
 )
 from core.paths import OUTPUT_ROOT
 
@@ -33,15 +33,6 @@ def ready_semantic_preflight(
             "provider": selection.provider.value,
             "runtime": {"ready": True, "resolvedPython": sys.executable},
             "network": {"checked": True, "ready": True, "issues": []},
-            "reliableTaskFleet": {
-                "checked": True,
-                "ready": True,
-                "target": "data-execution-fleet-local-contract",
-                "mongo": True,
-                "redis": True,
-                "owned": True,
-                "issues": [],
-            },
             "ready": True,
             "issues": [],
         },
@@ -75,10 +66,18 @@ def ready_semantic_preflight(
             "bridgeDisconnectCount": 0,
             "issues": [],
         },
-        "workspaceSmoke": {},
+        "workspaceSmoke": {
+            "ready": True,
+            "workspaceCount": 4,
+            "successCount": 4,
+            "configuredConcurrency": 4,
+            "effectiveConcurrency": 4,
+            "cleanupStatus": "cleaned",
+            "issues": [],
+        },
         "startupRequested": True,
         "soakRequested": True,
-        "workspaceSmokeRequested": False,
+        "workspaceSmokeRequested": True,
         "ready": True,
     }
     receipt = build_semantic_preflight_receipt(selection=selection, report=report)

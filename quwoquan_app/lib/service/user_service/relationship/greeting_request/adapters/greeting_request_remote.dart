@@ -4,10 +4,16 @@ import 'package:quwoquan_app/service/user_service/relationship/greeting_request/
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef GreetingRequestInvocationContextFactory =
-    CloudOperationInvocationContext Function(String clientPageId);
+    CloudOperationInvocationContext Function(
+      String clientPageId, {
+      String? idempotencyKey,
+    });
 
 final class RemoteGreetingRequestFacet
-    implements GreetingRequestCommandWriter, GreetingRequestQuery {
+    implements
+        GreetingRequestCommandWriter,
+        GreetingRequestQuery,
+        GreetingRequestIntentCommandWriter {
   const RemoteGreetingRequestFacet({
     required this.client,
     required this.invocationContext,
@@ -53,6 +59,20 @@ final class RemoteGreetingRequestFacet
   }
 
   @override
+  Future<GreetingRequestRecord> replyGreetingWithIntent(
+    ReplyGreetingCommand command, {
+    required String idempotencyKey,
+  }) {
+    return client.userGreetingRequestReplyGreetingRequest(
+      command,
+      context: invocationContext(
+        UserRequestPageIds.replyGreetingRequest,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
+  @override
   Future<GreetingRequestRecord> ignoreGreeting(IgnoreGreetingCommand command) {
     return client.userGreetingRequestIgnoreGreetingRequest(
       command,
@@ -61,10 +81,38 @@ final class RemoteGreetingRequestFacet
   }
 
   @override
+  Future<GreetingRequestRecord> ignoreGreetingWithIntent(
+    IgnoreGreetingCommand command, {
+    required String idempotencyKey,
+  }) {
+    return client.userGreetingRequestIgnoreGreetingRequest(
+      command,
+      context: invocationContext(
+        UserRequestPageIds.ignoreGreetingRequest,
+        idempotencyKey: idempotencyKey,
+      ),
+    );
+  }
+
+  @override
   Future<GreetingRequestRecord> cancelGreeting(CancelGreetingCommand command) {
     return client.userGreetingRequestCancelGreetingRequest(
       command,
       context: invocationContext(UserRequestPageIds.cancelGreetingRequest),
+    );
+  }
+
+  @override
+  Future<GreetingRequestRecord> cancelGreetingWithIntent(
+    CancelGreetingCommand command, {
+    required String idempotencyKey,
+  }) {
+    return client.userGreetingRequestCancelGreetingRequest(
+      command,
+      context: invocationContext(
+        UserRequestPageIds.cancelGreetingRequest,
+        idempotencyKey: idempotencyKey,
+      ),
     );
   }
 }
@@ -125,9 +173,16 @@ final class RemoteGreetingRepository implements GreetingRepository {
   }
 
   @override
-  Future<GreetingReplyResultViewData> replyGreeting(String requestId) async {
-    final record = await commandWriter.replyGreeting(
-      ReplyGreetingCommand(requestId: requestId),
+  Future<GreetingReplyResultViewData> replyGreeting(
+    String requestId, {
+    String? idempotencyKey,
+  }) async {
+    final command = ReplyGreetingCommand(requestId: requestId);
+    final record = await _runIntent(
+      idempotencyKey: idempotencyKey,
+      fallback: () => commandWriter.replyGreeting(command),
+      bound: (writer, key) =>
+          writer.replyGreetingWithIntent(command, idempotencyKey: key),
     );
     return GreetingReplyResultViewData(
       conversationId: record.promotedConversationId ?? '',
@@ -135,18 +190,54 @@ final class RemoteGreetingRepository implements GreetingRepository {
   }
 
   @override
-  Future<GreetingRequestViewData> ignoreGreeting(String requestId) async {
-    final record = await commandWriter.ignoreGreeting(
-      IgnoreGreetingCommand(requestId: requestId),
+  Future<GreetingRequestViewData> ignoreGreeting(
+    String requestId, {
+    String? idempotencyKey,
+  }) async {
+    final command = IgnoreGreetingCommand(requestId: requestId);
+    final record = await _runIntent(
+      idempotencyKey: idempotencyKey,
+      fallback: () => commandWriter.ignoreGreeting(command),
+      bound: (writer, key) =>
+          writer.ignoreGreetingWithIntent(command, idempotencyKey: key),
     );
     return GreetingRequestViewData.fromWire(record);
   }
 
   @override
-  Future<GreetingRequestViewData> cancelGreeting(String requestId) async {
-    final record = await commandWriter.cancelGreeting(
-      CancelGreetingCommand(requestId: requestId),
+  Future<GreetingRequestViewData> cancelGreeting(
+    String requestId, {
+    String? idempotencyKey,
+  }) async {
+    final command = CancelGreetingCommand(requestId: requestId);
+    final record = await _runIntent(
+      idempotencyKey: idempotencyKey,
+      fallback: () => commandWriter.cancelGreeting(command),
+      bound: (writer, key) =>
+          writer.cancelGreetingWithIntent(command, idempotencyKey: key),
     );
     return GreetingRequestViewData.fromWire(record);
+  }
+
+  Future<GreetingRequestRecord> _runIntent({
+    required String? idempotencyKey,
+    required Future<GreetingRequestRecord> Function() fallback,
+    required Future<GreetingRequestRecord> Function(
+      GreetingRequestIntentCommandWriter writer,
+      String idempotencyKey,
+    )
+    bound,
+  }) {
+    final normalized = idempotencyKey?.trim() ?? '';
+    if (normalized.isEmpty) {
+      return fallback();
+    }
+    final writer = commandWriter;
+    if (writer is! GreetingRequestIntentCommandWriter) {
+      throw StateError(
+        'GreetingRequest command writer does not support caller-bound intent',
+      );
+    }
+    return bound(writer as GreetingRequestIntentCommandWriter, normalized);
   }
 }

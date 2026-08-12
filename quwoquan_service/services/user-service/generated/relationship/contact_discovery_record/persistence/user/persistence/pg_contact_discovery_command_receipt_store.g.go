@@ -76,3 +76,23 @@ func (s *PGContactDiscoveryCommandReceiptStoreBase) Delete(ctx context.Context, 
 	_, err := s.pool.Exec(ctx, `DELETE FROM contact_discovery_command_receipts WHERE receipt_id = $1`, id)
 	return err
 }
+
+// ListByAggregateID returns all ContactDiscoveryCommandReceipt records for the given foreign key.
+func (s *PGContactDiscoveryCommandReceiptStoreBase) ListByAggregateID(ctx context.Context, fkID string) ([]model.ContactDiscoveryCommandReceipt, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+ContactDiscoveryCommandReceiptCols+` FROM contact_discovery_command_receipts WHERE aggregate_id = $1 ORDER BY created_at DESC`, fkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []model.ContactDiscoveryCommandReceipt
+	for rows.Next() {
+		var e model.ContactDiscoveryCommandReceipt
+		if err := rows.Scan(&e.ReceiptID, &e.OwnerAccountID, &e.Operation, &e.IdempotencyKey, &e.CommandDigest, &e.AggregateID, &e.ResultStatus, &e.ResultJSON, &e.ResultError, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, e)
+	}
+	return result, rows.Err()
+}

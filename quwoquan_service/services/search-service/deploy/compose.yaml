@@ -15,6 +15,7 @@ services:
       CONFIG_ROOT: /etc/qwq-config
       CONFIG_VERSION: "${QWQ_COMPOSE_SEARCH_SERVICE_CONFIG_VERSION:?QWQ_COMPOSE_SEARCH_SERVICE_CONFIG_VERSION is required}"
       IMAGE_VERSION: "${QWQ_COMPOSE_IMAGE_VERSION:?immutable image version is required}"
+      QWQ_RELEASE_CANDIDATE_DIGEST: "${QWQ_RELEASE_CANDIDATE_DIGEST:?release candidate digest is required}"
       # ES 召回主链路：endpoints 经 SEARCH_ES_* 注入（部署密钥口径），gamma config es.enabled=true。
       SEARCH_ES_ENABLED: "true"
       SEARCH_ES_ENDPOINTS: "http://elasticsearch:9200"

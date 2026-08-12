@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib.util
 import io
 import json
 import subprocess
@@ -18,6 +17,7 @@ from quwoquan_ops.cli import legal_static
 from quwoquan_ops.cli.lib.dev_up import (
     app_target_for_env,
     deployment_render_root,
+    detect_device_kind,
     env_cache_target_root,
     observability_runtime_logs_root,
     pick_dev_up_env,
@@ -42,37 +42,32 @@ from quwoquan_ops.cli.stackctl import (
 )
 
 ROOT = Path(__file__).resolve().parents[4]
-_ASSISTANT_BETA_GATEWAY_PATH = (
-    ROOT
-    / "quwoquan_ops"
-    / "tests"
-    / "acceptance"
-    / "user_acceptance"
-    / "service_ops"
-    / "assistant-service"
-    / "smoke"
-    / "dev_assistant_beta_gateway.py"
-)
-_ASSISTANT_BETA_GATEWAY_SPEC = importlib.util.spec_from_file_location(
-    "assistant_beta_gateway",
-    _ASSISTANT_BETA_GATEWAY_PATH,
-)
-if _ASSISTANT_BETA_GATEWAY_SPEC is None or _ASSISTANT_BETA_GATEWAY_SPEC.loader is None:
-    raise RuntimeError(f"cannot load assistant beta gateway: {_ASSISTANT_BETA_GATEWAY_PATH}")
-_ASSISTANT_BETA_GATEWAY_MODULE = importlib.util.module_from_spec(
-    _ASSISTANT_BETA_GATEWAY_SPEC
-)
-_ASSISTANT_BETA_GATEWAY_SPEC.loader.exec_module(_ASSISTANT_BETA_GATEWAY_MODULE)
-AssistantBetaGateway = _ASSISTANT_BETA_GATEWAY_MODULE.AssistantBetaGateway
-app_message_unread_count = _ASSISTANT_BETA_GATEWAY_MODULE.app_message_unread_count
-
-
 class _TtyStringIO(io.StringIO):
     def isatty(self) -> bool:
         return True
 
 
 class DevUpTest(unittest.TestCase):
+    def test_detect_device_kind_distinguishes_ios_simulator_and_physical_device(
+        self,
+    ) -> None:
+        self.assertEqual(
+            detect_device_kind(
+                "SIMULATOR-UDID",
+                target_platform="ios",
+                emulator=True,
+            ),
+            "ios-simulator",
+        )
+        self.assertEqual(
+            detect_device_kind(
+                "PHYSICAL-UDID",
+                target_platform="ios",
+                emulator=False,
+            ),
+            "ios-physical",
+        )
+
     def test_alpha_android_physical_keeps_canonical_public_authorities(self) -> None:
         topology = load_environment_topology()
         overrides = resolve_app_endpoint_overrides(
@@ -929,52 +924,6 @@ class DevUpTest(unittest.TestCase):
                     )
             finally:
                 MockPublicPlaneHandler.legal_static_root = previous_root
-
-    def test_beta_gateway_notification_fixture_family(self) -> None:
-        handler = AssistantBetaGateway.__new__(AssistantBetaGateway)
-        listing = handler._fixture_response("/app-messages")
-        self.assertIsInstance(listing, dict)
-        self.assertGreaterEqual(listing["unreadCount"], 0)
-        unread = handler._fixture_response("/app-messages/unread-count")
-        self.assertEqual(unread["unreadCount"], listing["unreadCount"])
-        aggregate = handler._fixture_response("/notifications/unread-count")
-        self.assertEqual(aggregate["unreadCount"], listing["unreadCount"])
-        first_message = listing["items"][0]
-        message_id = first_message["messageId"]
-        detail = handler._fixture_response(f"/app-messages/{message_id}")
-        self.assertEqual(detail["messageId"], message_id)
-        read = handler._fixture_response(f"/app-messages/{message_id}/read")
-        self.assertTrue(read["read"])
-
-    def test_beta_gateway_unread_count_falls_back_to_message_scan(self) -> None:
-        notification = {
-            "appMessages": [
-                {"messageId": "a", "read": False},
-                {"messageId": "b", "read": True},
-                {"messageId": "c", "read": False},
-            ]
-        }
-        self.assertEqual(app_message_unread_count(notification), 2)
-
-    def test_beta_gateway_intersection_fixture_family(self) -> None:
-        handler = AssistantBetaGateway.__new__(AssistantBetaGateway)
-        summary = handler._fixture_response("/content/intersections/summary")
-        self.assertGreater(summary["totalCount"], 0)
-        listing = handler._fixture_response("/content/intersections", "dimension=interest&limit=5")
-        self.assertTrue(all(item["dimension"] == "interest" for item in listing["items"]))
-        feed = handler._fixture_response(
-            "/content/feed/intersections",
-            "channel=recommend&limit=2",
-        )
-        self.assertEqual(len(feed["items"]), 2)
-        self.assertEqual(
-            handler._fixture_response("/content/intersections/visit"),
-            {"accepted": True},
-        )
-        self.assertEqual(
-            handler._fixture_response("/content/intersections/exposure"),
-            {"accepted": True},
-        )
 
 
 if __name__ == "__main__":

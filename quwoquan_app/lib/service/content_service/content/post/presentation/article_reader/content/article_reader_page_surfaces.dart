@@ -13,6 +13,7 @@ import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 part 'article_reader_page_surfaces_backdrops.dart';
 part 'article_reader_page_surfaces_blocks.dart';
 part 'article_reader_page_surfaces_frontispiece.dart';
+
 class ArticlePageShell extends StatelessWidget {
   const ArticlePageShell({
     super.key,

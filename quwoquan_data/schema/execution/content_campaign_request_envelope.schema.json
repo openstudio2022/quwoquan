@@ -16,6 +16,7 @@
     "requiredWorkers",
     "partitionCount",
     "capacityPlanDigest",
+    "workerHostSetBinding",
     "targetNames",
     "sourceProviders",
     "semanticSelectionId",
@@ -26,6 +27,7 @@
     "gitCommitSha",
     "sourceRevision",
     "sourceDigest",
+    "executionBundle",
     "entityCatalogDigest",
     "preAcquisitionHandoff",
     "externalInputRefs",
@@ -66,6 +68,12 @@
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
     },
+    "workerHostSetBinding": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "governed_worker_host_binding.schema.json"}
+      ]
+    },
     "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
     "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
     "sourcePoolSelection": {"$ref": "scale_source_pool_selection.schema.json"},
@@ -80,9 +88,9 @@
       "uniqueItems": true,
       "items": { "type": "string", "minLength": 1 }
     },
-    "semanticSelectionId": { "enum": ["default", "cursor_auto"] },
+    "semanticSelectionId": { "enum": ["default", "cursor_grok", "cursor_auto"] },
     "semanticPreflightReceipt": {
-      "$ref": "semantic_preflight_receipt_ref.schema.json"
+      "$ref": "semantic_provider_preflight_receipt_ref.schema.json"
     },
     "retryOf": { "type": ["string", "null"] },
     "rootExecutionId": { "type": "string", "minLength": 1 },
@@ -102,6 +110,16 @@
           "minItems": 1,
           "items": { "type": "string", "minLength": 1 }
         }
+      }
+    },
+    "executionBundle": {
+      "type": "object",
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
       }
     },
     "entityCatalogDigest": {
@@ -184,6 +202,9 @@
         "receiptDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" }
       }
     },
+    "m100AlphaAcceptance": {
+      "$ref": "m100_alpha_acceptance_binding.schema.json"
+    },
     "allowedStage": { "const": "submit-only" },
     "operatorPrompt": { "type": "string", "minLength": 1 },
     "requestDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
@@ -192,7 +213,7 @@
   "allOf": [
     {
       "if": {
-        "properties": { "semanticSelectionId": { "const": "cursor_auto" } },
+        "properties": { "semanticSelectionId": { "enum": ["cursor_grok", "cursor_auto"] } },
         "required": ["semanticSelectionId"]
       },
       "then": {
@@ -213,13 +234,57 @@
     },
     {
       "if": {
-        "properties": {"scale": {"enum": ["M100", "M1000", "M10000"]}},
+        "properties": {"scale": {"const": "M1000"}},
+        "required": ["scale"]
+      },
+      "then": {
+        "required": ["m100AlphaAcceptance"]
+      },
+      "else": {
+        "not": {"required": ["m100AlphaAcceptance"]}
+      }
+    },
+    {
+      "if": {
+        "properties": {"scale": {"const": "M10000"}},
         "required": ["scale"]
       },
       "then": {
         "required": [
           "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
-        ]
+        ],
+        "properties": {
+          "workerHostSetBinding": {"$ref": "governed_worker_host_binding.schema.json"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"scale": {"enum": ["M100", "M1000"]}},
+        "required": ["scale"]
+      },
+      "then": {
+        "properties": {"targetNames": {"minItems": 1}}
+      }
+    },
+    {
+      "if": {"required": ["scaleSourcePool"]},
+      "then": {
+        "required": ["sourcePoolEvidenceRootRef", "sourcePoolSelection"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["sourcePoolSelection"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"scale": {"enum": ["M100", "M1000", "M10000"]}},
+        "required": ["scale"]
       },
       "else": {
         "not": {

@@ -24,6 +24,7 @@ from verify_startup_environment_matrix import _validate_runtime_evidence
 
 SCRIPT = APP_DIR / "scripts/ios/build_prepare_dart_defines.sh"
 BUILD_WRAPPER = APP_DIR / "scripts/ios/build_xcode_backend.sh"
+CANONICAL_LAUNCHER = APP_DIR / "run.sh"
 STACKCTL_PYTHON_RESOLVER = APP_DIR / "scripts/ios/build_resolve_stackctl_python.sh"
 RUNTIME_TARGETS = {
     "alpha": "alpha-local",
@@ -124,12 +125,39 @@ def _decode_export(stdout: str) -> dict[str, str]:
     return values
 
 
+def _encode_defines(defines: dict[str, object]) -> str:
+    return ",".join(
+        base64.b64encode(f"{key}={value}".encode()).decode()
+        for key, value in sorted(defines.items())
+    )
+
+
+def _bound_test_live_handoff() -> dict[str, object]:
+    return build_test_handoff(
+        launcher,
+        "alpha",
+        "alpha-local",
+        launch_mode="environment_patrol_smoke",
+        extra_arguments=(
+            "--content-release-id",
+            "travel-research-test",
+            "--content-manifest-digest",
+            "sha256:" + "1" * 64,
+            "--content-readiness-receipt-digest",
+            "sha256:" + "2" * 64,
+        ),
+    )
+
+
 def _write_preflight_python(directory: Path) -> Path:
     executable = directory / "preflight-python"
     preflight = json.dumps(
         {
             "status": "warning",
-            "warnings": ["runtime is offline"],
+            "warnings": [
+                "target startup status is not running: stopped",
+                "api-edge is not ready: network_error",
+            ],
         }
     )
     executable.write_text(
@@ -177,14 +205,13 @@ def _install_direct_handoff(
     )
 
 
-def _write_blocked_preflight_python(directory: Path) -> Path:
+def _write_hard_blocked_preflight_python(directory: Path) -> Path:
     executable = directory / "blocked-preflight-python"
     preflight = json.dumps(
         {
             "status": "gate_block",
             "details": [
-                "target startup status is not running: stopped",
-                "api-edge is not ready: network_error",
+                "api endpoint escapes the selected alpha namespace",
             ],
         }
     )
@@ -331,6 +358,238 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                 "xcode_build",
             )
 
+    def test_canonical_handoff_drives_bound_dart_and_native_manifest(self) -> None:
+        handoff = _bound_test_live_handoff()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            env = dict(os.environ)
+            env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
+            env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(
+                handoff,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+            env["DART_DEFINES"] = _encode_defines(
+                {
+                    **handoff["dartDefines"],
+                    "FLUTTER_VERSION": "test",
+                }
+            )
+            env["TARGET_BUILD_DIR"] = temporary_directory
+            env["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            values = _decode_export(result.stdout)
+            self.assertEqual(values["CONTENT_BINDING_STATE"], "bound")
+            self.assertEqual(
+                values["CONTENT_BINDING_STATE"],
+                handoff["dartDefines"]["CONTENT_BINDING_STATE"],
+            )
+            self.assertEqual(values["FLUTTER_VERSION"], "test")
+            manifest_path = (
+                Path(temporary_directory)
+                / "Runner.app"
+                / "QWQNativeRuntime.plist"
+            )
+            with manifest_path.open("rb") as stream:
+                manifest = plistlib.load(stream)
+            self.assertEqual(manifest["contentBindingState"], "bound")
+            self.assertEqual(
+                manifest["runtimeDefines"]["CONTENT_BINDING_STATE"],
+                "bound",
+            )
+            self.assertEqual(
+                manifest["contentReleaseId"],
+                handoff["contentReleaseId"],
+            )
+            self.assertEqual(
+                manifest["contentManifestDigest"],
+                handoff["contentManifestDigest"],
+            )
+            self.assertEqual(
+                manifest["contentReadinessReceiptDigest"],
+                handoff["contentReadinessReceiptDigest"],
+            )
+
+    def test_patrol_handoff_preserves_canonical_test_bundle_entrypoint(self) -> None:
+        handoff = _bound_test_live_handoff()
+        patrol_entrypoint = (
+            APP_DIR / "test/user_acceptance/patrol/test_bundle.dart"
+        ).resolve()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            env = dict(os.environ)
+            env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
+            env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
+            env["DART_DEFINES"] = _encode_defines(
+                {
+                    **handoff["dartDefines"],
+                    "RUN_PATROL_ACCEPTANCE": "true",
+                }
+            )
+            env["FLUTTER_TARGET"] = str(patrol_entrypoint)
+            env["TARGET_BUILD_DIR"] = temporary_directory
+            env["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = "Runner.app"
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                cwd=APP_DIR,
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            target_export = next(
+                line
+                for line in result.stdout.splitlines()
+                if line.startswith("export FLUTTER_TARGET=")
+            )
+            target_assignment = shlex.split(
+                target_export.removeprefix("export ")
+            )[0]
+            self.assertEqual(
+                target_assignment.split("=", 1)[1],
+                str(patrol_entrypoint),
+            )
+            manifest_path = (
+                Path(temporary_directory)
+                / "Runner.app"
+                / "QWQNativeRuntime.plist"
+            )
+            with manifest_path.open("rb") as stream:
+                manifest = plistlib.load(stream)
+            self.assertEqual(
+                manifest["entrypoint"],
+                "test/user_acceptance/patrol/test_bundle.dart",
+            )
+
+    def test_patrol_handoff_rejects_noncanonical_test_entrypoint(self) -> None:
+        handoff = _bound_test_live_handoff()
+        env = dict(os.environ)
+        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
+        env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
+        env["DART_DEFINES"] = _encode_defines(
+            {
+                **handoff["dartDefines"],
+                "RUN_PATROL_ACCEPTANCE": "true",
+            }
+        )
+        env["FLUTTER_TARGET"] = str(
+            APP_DIR
+            / "test/user_acceptance/service/content_service/content/"
+            "feed_delivery_page/feed_load__user_acceptance_test.dart"
+        )
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            cwd=APP_DIR,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 5)
+        self.assertIn(
+            "Patrol build must use the canonical",
+            result.stderr,
+        )
+
+    def test_canonical_handoff_rejects_conflicting_existing_defines(self) -> None:
+        handoff = _bound_test_live_handoff()
+        poisoned_defines = dict(handoff["dartDefines"])
+        poisoned_defines["CONTENT_BINDING_STATE"] = "unbound"
+        env = dict(os.environ)
+        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
+        env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
+        env["DART_DEFINES"] = _encode_defines(poisoned_defines)
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            cwd=APP_DIR,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(
+            "DART_DEFINES conflict with canonical launcher handoff",
+            result.stderr,
+        )
+
+    def test_canonical_handoff_rejects_partial_bound_content(self) -> None:
+        handoff = _bound_test_live_handoff()
+        handoff["contentManifestDigest"] = ""
+        env = dict(os.environ)
+        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
+        env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
+        env["DART_DEFINES"] = _encode_defines(handoff["dartDefines"])
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            cwd=APP_DIR,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(
+            "contentManifestDigest disagrees with effectiveLaunchManifest",
+            result.stderr,
+        )
+
+    def test_canonical_handoff_rejects_conflicting_environment_identity(self) -> None:
+        handoff = _bound_test_live_handoff()
+        env = dict(os.environ)
+        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
+        env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(handoff)
+        env["QWQ_APP_RUNTIME_ENV"] = "beta"
+        env["DART_DEFINES"] = _encode_defines(handoff["dartDefines"])
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            cwd=APP_DIR,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(
+            "QWQ_APP_RUNTIME_ENV conflicts with canonical launcher handoff",
+            result.stderr,
+        )
+
+    def test_patrol_launch_mode_without_handoff_fails_closed(self) -> None:
+        handoff = _bound_test_live_handoff()
+        env = dict(os.environ)
+        env["QWQ_IOS_STACKCTL_PYTHON"] = str(self.runtime_python)
+        env["QWQ_APP_RUNTIME_ENV"] = "alpha"
+        env["QWQ_APP_LAUNCH_MODE"] = "environment_patrol_smoke"
+        env["QWQ_APP_LAUNCH_POLICY"] = "test_live"
+        env["QWQ_LAUNCH_TARGET"] = "alpha-local"
+        env["QWQ_DART_DEFINES_DIGEST"] = str(handoff["dartDefinesDigest"])
+        env["QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST"] = str(
+            handoff["runtimeConfigDigest"]
+        )
+        env["QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST"] = str(
+            handoff["effectiveLaunchManifestDigest"]
+        )
+        env.pop("QWQ_LAUNCH_HANDOFF_JSON", None)
+        result = subprocess.run(
+            ["bash", str(SCRIPT)],
+            cwd=APP_DIR,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn(
+            "environment_patrol_smoke requires QWQ_LAUNCH_HANDOFF_JSON",
+            result.stderr,
+        )
+
     def test_invalid_environment_fails_before_flutter_build(self) -> None:
         env = dict(os.environ)
         env["QWQ_APP_RUNTIME_ENV"] = "staging"
@@ -411,6 +670,10 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                         f"direct Debug uses canonical {environment}-local handoff",
                         result.stderr,
                     )
+                    self.assertIn(
+                        "WARN: target startup status is not running: stopped",
+                        result.stderr,
+                    )
                     with (
                         build_dir / "Runner.app" / "QWQNativeRuntime.plist"
                     ).open("rb") as stream:
@@ -426,7 +689,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
                         r"^sha256:[0-9a-f]{64}$",
                     )
 
-    def test_direct_ios_debug_reports_the_first_runtime_readiness_blocker(
+    def test_direct_ios_debug_reports_the_first_hard_safety_blocker(
         self,
     ) -> None:
         env = dict(os.environ)
@@ -442,7 +705,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             env.pop(key, None)
         with tempfile.TemporaryDirectory() as temporary_directory:
             env["QWQ_IOS_STACKCTL_PYTHON"] = str(
-                _write_blocked_preflight_python(Path(temporary_directory))
+                _write_hard_blocked_preflight_python(Path(temporary_directory))
             )
             env["CONFIGURATION"] = "Debug"
             env["PLATFORM_NAME"] = "iphoneos"
@@ -457,7 +720,7 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 2)
         self.assertIn(
-            "first blocker: target startup status is not running: stopped",
+            "first blocker: api endpoint escapes the selected alpha namespace",
             result.stderr,
         )
         self.assertNotIn("target content is not ready", result.stderr)
@@ -668,11 +931,16 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
         env["QWQ_APP_RUNTIME_ENV"] = "gamma"
         env["QWQ_APP_LAUNCH_MODE"] = "canonical_launcher"
         env["DART_DEFINES"] = runtime_env
-        _apply_handoff_identity(
+        handoff = _apply_handoff_identity(
             env,
             "gamma",
             launch_mode="canonical_launcher",
             runtime_python=self.runtime_python,
+        )
+        env["QWQ_LAUNCH_HANDOFF_JSON"] = json.dumps(
+            handoff,
+            ensure_ascii=False,
+            separators=(",", ":"),
         )
         result = subprocess.run(
             ["bash", str(SCRIPT)],
@@ -686,6 +954,16 @@ class IosRuntimeDartDefinesContractTest(unittest.TestCase):
             _decode_export(result.stdout)["QWQ_APP_LAUNCH_MODE"],
             "canonical_launcher",
         )
+
+    def test_canonical_launcher_exports_exact_handoff_to_xcode_build_phase(self) -> None:
+        source = CANONICAL_LAUNCHER.read_text(encoding="utf-8")
+        build_handoff = source.index('HANDOFF_JSON="$("${HANDOFF_CMD[@]}")"')
+        export_handoff = source.index(
+            'export QWQ_LAUNCH_HANDOFF_JSON="$HANDOFF_JSON"'
+        )
+        flutter_run = source.index("flutter run \\")
+        self.assertLess(build_handoff, export_handoff)
+        self.assertLess(export_handoff, flutter_run)
 
     def test_conflicting_launcher_and_flutter_environment_fails_build(self) -> None:
         runtime_env = base64.b64encode(b"APP_RUNTIME_ENV=gamma").decode("ascii")

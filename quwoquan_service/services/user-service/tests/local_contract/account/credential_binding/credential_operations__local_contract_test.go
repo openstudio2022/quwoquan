@@ -242,6 +242,13 @@ func (*credentialOperationChallengeFacet) CancelChallenge(
 	return challengeapp.ChallengeCommandResult{}, nil
 }
 
+func (*credentialOperationChallengeFacet) ReportDeliveryResult(
+	context.Context,
+	challengeapp.ReportDeliveryResultCommand,
+) (challengeapp.ChallengeCommandResult, error) {
+	return challengeapp.ChallengeCommandResult{}, nil
+}
+
 type credentialOperationDeviceRegistrar struct {
 	last registrationapp.RegisterCommand
 }

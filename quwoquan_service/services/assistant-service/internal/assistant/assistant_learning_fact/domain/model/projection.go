@@ -11,7 +11,7 @@ import (
 // LearningProjectionDefinitionDigest is the SHA-256 identity of the sole
 // canonical learning projection contract. A stored mismatch is never read as
 // compatible state; the projector must rebuild from canonical facts.
-const LearningProjectionDefinitionDigest = "7b6dde6a357e734f5ee9fd8b8df6ae0a33b42ed035ca9eb2158718396c5340dd"
+const LearningProjectionDefinitionDigest = "a445f797a6cf5ba088b127ae3208564a58b35c7bff870786c7e60819174fee10"
 
 const learningProjectionGenerationPrefix = "rebuild:"
 

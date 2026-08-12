@@ -31,6 +31,16 @@
         }
       }
     },
+    "executionBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest", "inputs"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
     "modelBinding": {
       "type": "object",
       "additionalProperties": false,
@@ -50,9 +60,9 @@
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
     },
-    "semanticSelectionId": {"enum": ["default", "cursor_auto"]},
+    "semanticSelectionId": {"enum": ["default", "cursor_grok", "cursor_auto"]},
     "semanticPreflightReceipt": {
-      "$ref": "semantic_preflight_receipt_ref.schema.json"
+      "$ref": "semantic_provider_preflight_receipt_ref.schema.json"
     },
     "semanticRuntime": {"enum": ["local", "cloud"]},
     "requestRef": {"const": "0.plan/request.json"},
@@ -60,8 +70,28 @@
     "targetSetDigest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "retryOf": {"type": ["string", "null"]}
   },
-  "required": ["executionId", "familyRef", "sourceDigest", "modelBinding", "runtimeProfileId", "runtimeProfileDigest", "semanticSelectionId", "semanticRuntime", "requestRef", "targetSetRef", "targetSetDigest", "retryOf"],
+  "required": ["executionId", "familyRef", "sourceDigest", "executionBundle", "modelBinding", "runtimeProfileId", "runtimeProfileDigest", "semanticSelectionId", "semanticRuntime", "requestRef", "targetSetRef", "targetSetDigest", "retryOf"],
   "allOf": [
+    {
+      "if": {
+        "properties": {"semanticSelectionId": {"const": "cursor_grok"}},
+        "required": ["semanticSelectionId"]
+      },
+      "then": {
+        "required": ["semanticPreflightReceipt"],
+        "properties": {
+          "modelBinding": {
+            "properties": {
+              "provider": {"const": "cursor_sdk"},
+              "authorModel": {"const": "grok-4.5"},
+              "authorModelFamily": {"const": "grok"},
+              "reviewerModel": {"const": "grok-4.5"},
+              "reviewerModelFamily": {"const": "grok"}
+            }
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {"semanticSelectionId": {"const": "cursor_auto"}},
@@ -80,8 +110,14 @@
             }
           }
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {"semanticSelectionId": {"const": "default"}},
+        "required": ["semanticSelectionId"]
       },
-      "else": {
+      "then": {
         "properties": {
           "modelBinding": {
             "properties": {

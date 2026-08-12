@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -12,9 +14,14 @@ import (
 	"quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/application"
 	"quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/domain"
 	"quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/infrastructure/redisstore"
+	rolloutapp "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/application"
+	rolloutdomain "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/domain"
+	graphread "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/adapters/inbound/http"
 
 	"gopkg.in/yaml.v3"
 )
+
+var sha256ReferencePattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
 type policyConfig struct {
 	Limit         int    `yaml:"limit"`
@@ -65,7 +72,24 @@ type runtimeConfig struct {
 			TimeoutMS int    `yaml:"timeout_ms"`
 		} `yaml:"account_security"`
 	} `yaml:"user_service"`
-	Upstreams map[string]string `yaml:"upstreams"`
+	MinimumBuild struct {
+		Mode         string   `yaml:"mode"`
+		SourceDigest string   `yaml:"source_digest"`
+		Android      uint64   `yaml:"android"`
+		IOS          uint64   `yaml:"ios"`
+		Web          uint64   `yaml:"web"`
+		ExemptPaths  []string `yaml:"exempt_paths"`
+	} `yaml:"minimum_build"`
+	Rollout struct {
+		Enabled                 bool                                     `yaml:"enabled"`
+		PolicyFile              string                                   `yaml:"policy_file"`
+		PolicySHA256            string                                   `yaml:"policy_sha256"`
+		NetworkAttributeCatalog rolloutapp.NetworkAttributeCatalogConfig `yaml:"network_attribute_catalog"`
+		Policy                  rolloutdomain.Policy                     `yaml:"-"`
+	} `yaml:"rollout"`
+	GraphQLRead        graphread.Config  `yaml:"graphql_read"`
+	Upstreams          map[string]string `yaml:"upstreams"`
+	CandidateUpstreams map[string]string `yaml:"candidate_upstreams"`
 }
 
 func loadRuntimeConfig(serviceName, environment, configRoot string) (runtimeConfig, error) {
@@ -85,6 +109,14 @@ func loadRuntimeConfig(serviceName, environment, configRoot string) (runtimeConf
 	config.Edge.TrustedNetworkHeader = strings.TrimSpace(config.Edge.TrustedNetworkHeader)
 	config.Redis.Admission.Mode = strings.TrimSpace(config.Redis.Admission.Mode)
 	config.Redis.Admission.Addr = strings.TrimSpace(config.Redis.Admission.Addr)
+	config.MinimumBuild.Mode = strings.TrimSpace(config.MinimumBuild.Mode)
+	config.MinimumBuild.SourceDigest = strings.ToLower(strings.TrimSpace(
+		config.MinimumBuild.SourceDigest,
+	))
+	config.Rollout.PolicyFile = strings.TrimSpace(config.Rollout.PolicyFile)
+	config.Rollout.PolicySHA256 = strings.ToLower(strings.TrimSpace(
+		config.Rollout.PolicySHA256,
+	))
 	config.UserService.AccountSecurity.BaseURL = strings.TrimSpace(
 		config.UserService.AccountSecurity.BaseURL,
 	)
@@ -98,6 +130,22 @@ func loadRuntimeConfig(serviceName, environment, configRoot string) (runtimeConf
 	if _, err := parseOrigin(config.UserService.AccountSecurity.BaseURL); err != nil {
 		return runtimeConfig{}, fmt.Errorf("account security authority: %w", err)
 	}
+	minimumBuildPolicy := config.minimumBuildPolicy()
+	if err := minimumBuildPolicy.Validate(); err != nil {
+		return runtimeConfig{}, fmt.Errorf("minimum build policy: %w", err)
+	}
+	if !sha256ReferencePattern.MatchString(config.MinimumBuild.SourceDigest) {
+		return runtimeConfig{}, errors.New("minimum build source digest is invalid")
+	}
+	exemptPaths, err := config.minimumBuildExemptPaths()
+	if err != nil {
+		return runtimeConfig{}, err
+	}
+	if _, exists := exemptPaths["/ops/app-recovery/version"]; !exists {
+		return runtimeConfig{}, errors.New(
+			"minimum build exemptions must include /ops/app-recovery/version",
+		)
+	}
 	policies := config.policySet()
 	if err := policies.Validate(); err != nil {
 		return runtimeConfig{}, err
@@ -109,6 +157,17 @@ func loadRuntimeConfig(serviceName, environment, configRoot string) (runtimeConf
 		}
 		config.Upstreams[name] = origin
 	}
+	if err := validateAndLoadRolloutConfig(&config, environment, path); err != nil {
+		return runtimeConfig{}, err
+	}
+	if err := graphread.ValidateAndResolveConfig(
+		&config.GraphQLRead,
+		path,
+		config.Rollout.Enabled,
+		config.Rollout.Policy.CandidateDigest,
+	); err != nil {
+		return runtimeConfig{}, err
+	}
 	redisConfig := config.redisConfig()
 	client, err := redisstore.NewClient(redisConfig)
 	if err != nil {
@@ -116,6 +175,65 @@ func loadRuntimeConfig(serviceName, environment, configRoot string) (runtimeConf
 	}
 	_ = client.Close()
 	return config, nil
+}
+
+func validateAndLoadRolloutConfig(
+	config *runtimeConfig,
+	environment string,
+	runtimeConfigPath string,
+) error {
+	if config == nil {
+		return errors.New("runtime config is required")
+	}
+	rolloutConfig := rolloutapp.RuntimeConfig{
+		Enabled:                 config.Rollout.Enabled,
+		PolicyFile:              config.Rollout.PolicyFile,
+		PolicySHA256:            config.Rollout.PolicySHA256,
+		Policy:                  config.Rollout.Policy,
+		CandidateUpstreams:      config.CandidateUpstreams,
+		NetworkAttributeCatalog: config.Rollout.NetworkAttributeCatalog,
+	}
+	if err := rolloutapp.ValidateAndLoadRuntimeConfig(
+		&rolloutConfig,
+		environment,
+		runtimeConfigPath,
+		requiredUpstreams(),
+	); err != nil {
+		return err
+	}
+	config.Rollout.PolicyFile = rolloutConfig.PolicyFile
+	config.Rollout.PolicySHA256 = rolloutConfig.PolicySHA256
+	config.Rollout.Policy = rolloutConfig.Policy
+	config.Rollout.NetworkAttributeCatalog = rolloutConfig.NetworkAttributeCatalog
+	config.CandidateUpstreams = rolloutConfig.CandidateUpstreams
+	return nil
+}
+
+func (config runtimeConfig) minimumBuildPolicy() rolloutapp.MinimumBuildPolicy {
+	return rolloutapp.MinimumBuildPolicy{
+		SourceDigest: config.MinimumBuild.SourceDigest,
+		Mode:         config.MinimumBuild.Mode,
+		Platforms: map[string]uint64{
+			"android": config.MinimumBuild.Android,
+			"ios":     config.MinimumBuild.IOS,
+			"web":     config.MinimumBuild.Web,
+		},
+	}
+}
+
+func (config runtimeConfig) minimumBuildExemptPaths() (map[string]struct{}, error) {
+	result := make(map[string]struct{}, len(config.MinimumBuild.ExemptPaths))
+	for _, rawPath := range config.MinimumBuild.ExemptPaths {
+		path := strings.TrimSpace(rawPath)
+		if path == "" || !strings.HasPrefix(path, "/") {
+			return nil, errors.New("minimum build exemption must be an absolute HTTP path")
+		}
+		if _, exists := result[path]; exists {
+			return nil, fmt.Errorf("duplicate minimum build exemption %s", strconv.Quote(path))
+		}
+		result[path] = struct{}{}
+	}
+	return result, nil
 }
 
 func (config runtimeConfig) policySet() application.PolicySet {

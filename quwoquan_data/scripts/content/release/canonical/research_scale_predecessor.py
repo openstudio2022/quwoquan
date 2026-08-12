@@ -75,12 +75,9 @@ def load_predecessor_promotion(
     if (
         predecessor.get("targetScale") != expected_scale
         or predecessor.get("nextScaleEligible") != target_scale
-        or predecessor.get("sourceRevision") != source_revision
-        or predecessor.get("sourceDigest") != source_digest
-        or predecessor.get("entityCatalogDigest") != entity_catalog_digest
     ):
         raise ResearchScalePredecessorError(
-            "DATA.SCALE.PREDECESSOR_IDENTITY_DRIFT: predecessor scale/source identity drift"
+            "DATA.SCALE.PREDECESSOR_IDENTITY_DRIFT: predecessor scale drift"
         )
     rows = predecessor.get("carrierCounts")
     if not isinstance(rows, list) or len(rows) != 4:
@@ -131,7 +128,7 @@ def load_predecessor_promotion(
             or values["predecessorCarriedCount"] + values["newFinalizedCount"]
             != count
             or values["researchAcceptedCount"] != count
-            or count < target
+            or count != target
         ):
             raise ResearchScalePredecessorError(
                 "DATA.SCALE.ATTAINMENT_SHORTFALL: predecessor target/count arithmetic is not attained"
@@ -141,20 +138,28 @@ def load_predecessor_promotion(
         raise ResearchScalePredecessorError(
             "DATA.SCALE.PREDECESSOR_IDENTITY_DRIFT: predecessor carriers are incomplete"
         )
-    return (
-        {
+    reference: dict[str, Any] = {
             "promotionId": str(predecessor["promotionId"]),
             "releaseId": str(predecessor["releaseId"]),
             "manifestDigest": str(predecessor["manifestDigest"]),
-            "sourceRevision": source_revision,
-            "sourceDigest": source_digest,
-            "entityCatalogDigest": entity_catalog_digest,
             "targetScale": expected_scale,
             "receiptRef": receipt_ref,
             "receiptDigest": _file_sha256(resolved),
-        },
-        carried,
-    )
+    }
+    if isinstance(predecessor.get("sourceIdentities"), list):
+        reference["sourceIdentities"] = list(predecessor["sourceIdentities"])
+        reference["sourceIdentitySetDigest"] = str(
+            predecessor.get("sourceIdentitySetDigest") or ""
+        )
+    else:
+        reference.update(
+            {
+                "sourceRevision": str(predecessor["sourceRevision"]),
+                "sourceDigest": str(predecessor["sourceDigest"]),
+                "entityCatalogDigest": str(predecessor["entityCatalogDigest"]),
+            }
+        )
+    return reference, carried
 
 
 __all__ = ["ResearchScalePredecessorError", "load_predecessor_promotion"]

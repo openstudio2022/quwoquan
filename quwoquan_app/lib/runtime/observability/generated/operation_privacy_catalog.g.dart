@@ -2,20 +2,16 @@
 // Regenerate with: make -C quwoquan_service codegen-operation-privacy
 
 /// operation.privacy 声明的数据密级，按敏感度单调递增。
-enum OperationPrivacyClass {
-  public,
-  internal,
-  sensitive,
-  pii,
-  secret,
-}
+enum OperationPrivacyClass { public, internal, sensitive, pii, secret }
 
 /// operation.privacy.logPolicy 声明的日志载荷策略。
 enum OperationLogPolicy {
   /// 载荷完全不进日志。
   none,
+
   /// 只保留键与形状元数据，值一律不落盘。
   metadataOnly,
+
   /// 低密级值可落盘，高密级值必须掩码。
   redacted,
 }
@@ -45,8 +41,8 @@ final class OperationPrivacyPolicy {
 
 /// operation.privacy 的端侧运行时投影。
 /// key 为 ContractGraph operation id；查不到即 fail-closed。
-const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
-    <String, OperationPrivacyPolicy>{
+const Map<String, OperationPrivacyPolicy>
+generatedOperationPrivacyPolicies = <String, OperationPrivacyPolicy>{
   'assistant.assistant_entry_view.GetAssistantEntry': OperationPrivacyPolicy(
     operationId: 'assistant.assistant_entry_view.GetAssistantEntry',
     domain: 'assistant',
@@ -56,87 +52,125 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
   ),
-  'assistant.assistant_learning_fact.AppendAssistantLearningFact': OperationPrivacyPolicy(
-    operationId: 'assistant.assistant_learning_fact.AppendAssistantLearningFact',
-    domain: 'assistant',
-    metric: 'assistant_learning_fact_append',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'deduplicated', 'error_code', 'fact_type', 'operation', 'outcome', 'training_eligible'},
-  ),
-  'assistant.assistant_learning_fact.GetLearningOpsSummary': OperationPrivacyPolicy(
-    operationId: 'assistant.assistant_learning_fact.GetLearningOpsSummary',
-    domain: 'assistant',
-    metric: 'assistant_learning_ops_query',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'assistant.assistant_policy_release.StageAssistantPolicyRelease': OperationPrivacyPolicy(
-    operationId: 'assistant.assistant_policy_release.StageAssistantPolicyRelease',
-    domain: 'assistant',
-    metric: 'assistant_policy_release_stage',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'replayed', 'rule_count', 'template_count'},
-  ),
-  'assistant.assistant_policy_rollout.ActivateAssistantPolicyRollout': OperationPrivacyPolicy(
-    operationId: 'assistant.assistant_policy_rollout.ActivateAssistantPolicyRollout',
-    domain: 'assistant',
-    metric: 'assistant_policy_rollout_activate',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'replayed', 'revision'},
-  ),
-  'assistant.assistant_policy_rollout.RollbackAssistantPolicyRollout': OperationPrivacyPolicy(
-    operationId: 'assistant.assistant_policy_rollout.RollbackAssistantPolicyRollout',
-    domain: 'assistant',
-    metric: 'assistant_policy_rollout_rollback',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'replayed', 'revision'},
-  ),
-  'assistant.assistant_preference.ListAssistantPreferences': OperationPrivacyPolicy(
-    operationId: 'assistant.assistant_preference.ListAssistantPreferences',
-    domain: 'assistant',
-    metric: 'assistant_preference_query',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'scope', 'status'},
-  ),
-  'assistant.assistant_preference.RestoreAssistantPreference': OperationPrivacyPolicy(
-    operationId: 'assistant.assistant_preference.RestoreAssistantPreference',
-    domain: 'assistant',
-    metric: 'assistant_preference_command',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'assistant.assistant_preference.RevokeAssistantPreference': OperationPrivacyPolicy(
-    operationId: 'assistant.assistant_preference.RevokeAssistantPreference',
-    domain: 'assistant',
-    metric: 'assistant_preference_command',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'assistant.assistant_preference.SetAssistantPreference': OperationPrivacyPolicy(
-    operationId: 'assistant.assistant_preference.SetAssistantPreference',
-    domain: 'assistant',
-    metric: 'assistant_preference_command',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'kind', 'operation', 'outcome', 'scope'},
-  ),
+  'assistant.assistant_learning_fact.AppendAssistantLearningFact':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.assistant_learning_fact.AppendAssistantLearningFact',
+        domain: 'assistant',
+        metric: 'assistant_learning_fact_append',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'deduplicated',
+          'error_code',
+          'fact_type',
+          'operation',
+          'outcome',
+          'training_eligible',
+        },
+      ),
+  'assistant.assistant_learning_fact.GetLearningOpsSummary':
+      OperationPrivacyPolicy(
+        operationId: 'assistant.assistant_learning_fact.GetLearningOpsSummary',
+        domain: 'assistant',
+        metric: 'assistant_learning_ops_query',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'assistant.assistant_policy_release.StageAssistantPolicyRelease':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.assistant_policy_release.StageAssistantPolicyRelease',
+        domain: 'assistant',
+        metric: 'assistant_policy_release_stage',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'outcome',
+          'replayed',
+          'rule_count',
+          'template_count',
+        },
+      ),
+  'assistant.assistant_policy_rollout.ActivateAssistantPolicyRollout':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.assistant_policy_rollout.ActivateAssistantPolicyRollout',
+        domain: 'assistant',
+        metric: 'assistant_policy_rollout_activate',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'replayed', 'revision'},
+      ),
+  'assistant.assistant_policy_rollout.RollbackAssistantPolicyRollout':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.assistant_policy_rollout.RollbackAssistantPolicyRollout',
+        domain: 'assistant',
+        metric: 'assistant_policy_rollout_rollback',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'replayed', 'revision'},
+      ),
+  'assistant.assistant_preference.ListAssistantPreferences':
+      OperationPrivacyPolicy(
+        operationId: 'assistant.assistant_preference.ListAssistantPreferences',
+        domain: 'assistant',
+        metric: 'assistant_preference_query',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'scope',
+          'status',
+        },
+      ),
+  'assistant.assistant_preference.RestoreAssistantPreference':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.assistant_preference.RestoreAssistantPreference',
+        domain: 'assistant',
+        metric: 'assistant_preference_command',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'assistant.assistant_preference.RevokeAssistantPreference':
+      OperationPrivacyPolicy(
+        operationId: 'assistant.assistant_preference.RevokeAssistantPreference',
+        domain: 'assistant',
+        metric: 'assistant_preference_command',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'assistant.assistant_preference.SetAssistantPreference':
+      OperationPrivacyPolicy(
+        operationId: 'assistant.assistant_preference.SetAssistantPreference',
+        domain: 'assistant',
+        metric: 'assistant_preference_command',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'kind',
+          'operation',
+          'outcome',
+          'scope',
+        },
+      ),
   'assistant.assistant_run.ApproveAssistantToolUse': OperationPrivacyPolicy(
     operationId: 'assistant.assistant_run.ApproveAssistantToolUse',
     domain: 'assistant',
@@ -144,7 +178,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'decision', 'error_code', 'operation', 'outcome'},
+    telemetryAttributes: <String>{
+      'decision',
+      'error_code',
+      'operation',
+      'outcome',
+    },
   ),
   'assistant.assistant_run.CancelAssistantRun': OperationPrivacyPolicy(
     operationId: 'assistant.assistant_run.CancelAssistantRun',
@@ -171,7 +210,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'state'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'state',
+    },
   ),
   'assistant.assistant_run.ResumeAssistantRun': OperationPrivacyPolicy(
     operationId: 'assistant.assistant_run.ResumeAssistantRun',
@@ -180,7 +224,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'state'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'state',
+    },
   ),
   'assistant.assistant_run.StartAssistantRun': OperationPrivacyPolicy(
     operationId: 'assistant.assistant_run.StartAssistantRun',
@@ -189,7 +238,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'assistant.assistant_run.SteerAssistantRun': OperationPrivacyPolicy(
     operationId: 'assistant.assistant_run.SteerAssistantRun',
@@ -198,7 +252,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'state'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'state',
+    },
   ),
   'assistant.assistant_run.StreamAssistantRunEvents': OperationPrivacyPolicy(
     operationId: 'assistant.assistant_run.StreamAssistantRunEvents',
@@ -207,7 +266,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'resumed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'resumed',
+    },
   ),
   'assistant.assistant_run.SubmitDeviceActionReceipt': OperationPrivacyPolicy(
     operationId: 'assistant.assistant_run.SubmitDeviceActionReceipt',
@@ -216,7 +280,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'capability', 'error_code', 'operation', 'outcome'},
+    telemetryAttributes: <String>{
+      'capability',
+      'error_code',
+      'operation',
+      'outcome',
+    },
   ),
   'assistant.assistant_session.CreateAssistantSession': OperationPrivacyPolicy(
     operationId: 'assistant.assistant_session.CreateAssistantSession',
@@ -225,7 +294,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'assistant.assistant_session.GetAssistantSession': OperationPrivacyPolicy(
     operationId: 'assistant.assistant_session.GetAssistantSession',
@@ -263,24 +337,38 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
   ),
-  'assistant.domain_reader_descriptor.GetDomainReaderDescriptor': OperationPrivacyPolicy(
-    operationId: 'assistant.domain_reader_descriptor.GetDomainReaderDescriptor',
-    domain: 'assistant',
-    metric: 'assistant_domain_reader_catalog_query',
-    requestClassification: OperationPrivacyClass.public,
-    responseClassification: OperationPrivacyClass.public,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'descriptor_id', 'error_code', 'operation', 'outcome'},
-  ),
-  'assistant.domain_reader_descriptor.ListDomainReaderDescriptors': OperationPrivacyPolicy(
-    operationId: 'assistant.domain_reader_descriptor.ListDomainReaderDescriptors',
-    domain: 'assistant',
-    metric: 'assistant_domain_reader_catalog_query',
-    requestClassification: OperationPrivacyClass.public,
-    responseClassification: OperationPrivacyClass.public,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'item_count', 'operation', 'outcome'},
-  ),
+  'assistant.domain_reader_descriptor.GetDomainReaderDescriptor':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.domain_reader_descriptor.GetDomainReaderDescriptor',
+        domain: 'assistant',
+        metric: 'assistant_domain_reader_catalog_query',
+        requestClassification: OperationPrivacyClass.public,
+        responseClassification: OperationPrivacyClass.public,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'descriptor_id',
+          'error_code',
+          'operation',
+          'outcome',
+        },
+      ),
+  'assistant.domain_reader_descriptor.ListDomainReaderDescriptors':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.domain_reader_descriptor.ListDomainReaderDescriptors',
+        domain: 'assistant',
+        metric: 'assistant_domain_reader_catalog_query',
+        requestClassification: OperationPrivacyClass.public,
+        responseClassification: OperationPrivacyClass.public,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'item_count',
+          'operation',
+          'outcome',
+        },
+      ),
   'assistant.page_context.ReportPageContext': OperationPrivacyPolicy(
     operationId: 'assistant.page_context.ReportPageContext',
     domain: 'assistant',
@@ -297,7 +385,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'source_kind'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'source_kind',
+    },
   ),
   'assistant.skill_catalog.GetSkillCatalogItem': OperationPrivacyPolicy(
     operationId: 'assistant.skill_catalog.GetSkillCatalogItem',
@@ -306,7 +399,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.public,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'skill_id'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'skill_id',
+    },
   ),
   'assistant.skill_catalog.ListSkills': OperationPrivacyPolicy(
     operationId: 'assistant.skill_catalog.ListSkills',
@@ -315,7 +413,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.public,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'item_count', 'operation', 'outcome'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'item_count',
+      'operation',
+      'outcome',
+    },
   ),
   'assistant.skill_consent.GrantSkillConsent': OperationPrivacyPolicy(
     operationId: 'assistant.skill_consent.GrantSkillConsent',
@@ -324,7 +427,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'assistant.skill_consent.ListConsents': OperationPrivacyPolicy(
     operationId: 'assistant.skill_consent.ListConsents',
@@ -342,71 +450,122 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
-  'assistant.skill_data_control_request.ConfirmSkillDataControlRequest': OperationPrivacyPolicy(
-    operationId: 'assistant.skill_data_control_request.ConfirmSkillDataControlRequest',
-    domain: 'assistant',
-    metric: 'assistant_skill_data_control_command',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'assistant.skill_data_control_request.CreateSkillDataControlRequest': OperationPrivacyPolicy(
-    operationId: 'assistant.skill_data_control_request.CreateSkillDataControlRequest',
-    domain: 'assistant',
-    metric: 'assistant_skill_data_control_command',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'assistant.skill_data_control_request.GetSkillDataControlRequest': OperationPrivacyPolicy(
-    operationId: 'assistant.skill_data_control_request.GetSkillDataControlRequest',
-    domain: 'assistant',
-    metric: 'assistant_skill_data_control_query',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'assistant.skill_package_release.ActivateAssistantSkillPackageRelease': OperationPrivacyPolicy(
-    operationId: 'assistant.skill_package_release.ActivateAssistantSkillPackageRelease',
-    domain: 'assistant',
-    metric: 'assistant_skill_package_activate',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'package_id', 'release_digest', 'replayed', 'revision'},
-  ),
-  'assistant.skill_package_release.RollbackAssistantSkillPackageRelease': OperationPrivacyPolicy(
-    operationId: 'assistant.skill_package_release.RollbackAssistantSkillPackageRelease',
-    domain: 'assistant',
-    metric: 'assistant_skill_package_rollback',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'package_id', 'release_digest', 'replayed', 'revision'},
-  ),
-  'assistant.skill_package_release.StageAssistantSkillPackageRelease': OperationPrivacyPolicy(
-    operationId: 'assistant.skill_package_release.StageAssistantSkillPackageRelease',
-    domain: 'assistant',
-    metric: 'assistant_skill_package_stage',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'package_id', 'package_version', 'release_digest', 'replayed'},
-  ),
-  'assistant.skill_subscription.CreateSkillSubscription': OperationPrivacyPolicy(
-    operationId: 'assistant.skill_subscription.CreateSkillSubscription',
-    domain: 'assistant',
-    metric: 'assistant_skill_subscription_command',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
-  ),
+  'assistant.skill_data_control_request.ConfirmSkillDataControlRequest':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.skill_data_control_request.ConfirmSkillDataControlRequest',
+        domain: 'assistant',
+        metric: 'assistant_skill_data_control_command',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'assistant.skill_data_control_request.CreateSkillDataControlRequest':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.skill_data_control_request.CreateSkillDataControlRequest',
+        domain: 'assistant',
+        metric: 'assistant_skill_data_control_command',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'assistant.skill_data_control_request.GetSkillDataControlRequest':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.skill_data_control_request.GetSkillDataControlRequest',
+        domain: 'assistant',
+        metric: 'assistant_skill_data_control_query',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'assistant.skill_package_release.ActivateAssistantSkillPackageRelease':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.skill_package_release.ActivateAssistantSkillPackageRelease',
+        domain: 'assistant',
+        metric: 'assistant_skill_package_activate',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'outcome',
+          'package_id',
+          'release_digest',
+          'replayed',
+          'revision',
+        },
+      ),
+  'assistant.skill_package_release.RollbackAssistantSkillPackageRelease':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.skill_package_release.RollbackAssistantSkillPackageRelease',
+        domain: 'assistant',
+        metric: 'assistant_skill_package_rollback',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'outcome',
+          'package_id',
+          'release_digest',
+          'replayed',
+          'revision',
+        },
+      ),
+  'assistant.skill_package_release.StageAssistantSkillPackageRelease':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.skill_package_release.StageAssistantSkillPackageRelease',
+        domain: 'assistant',
+        metric: 'assistant_skill_package_stage',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'outcome',
+          'package_id',
+          'package_version',
+          'release_digest',
+          'replayed',
+        },
+      ),
+  'assistant.skill_subscription.CreateSkillSubscription':
+      OperationPrivacyPolicy(
+        operationId: 'assistant.skill_subscription.CreateSkillSubscription',
+        domain: 'assistant',
+        metric: 'assistant_skill_subscription_command',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
   'assistant.skill_subscription.GetSkillSubscription': OperationPrivacyPolicy(
     operationId: 'assistant.skill_subscription.GetSkillSubscription',
     domain: 'assistant',
@@ -425,42 +584,70 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
   ),
-  'assistant.skill_subscription.TickSkillSubscriptionCron': OperationPrivacyPolicy(
-    operationId: 'assistant.skill_subscription.TickSkillSubscriptionCron',
-    domain: 'assistant',
-    metric: 'assistant_skill_subscription_cron',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'leases_acquired', 'operation', 'outcome'},
-  ),
-  'assistant.skill_subscription.UpdateSkillSubscriptionStatus': OperationPrivacyPolicy(
-    operationId: 'assistant.skill_subscription.UpdateSkillSubscriptionStatus',
-    domain: 'assistant',
-    metric: 'assistant_skill_subscription_command',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'assistant.skill_surface_placement.GetSkillSurfacePlacement': OperationPrivacyPolicy(
-    operationId: 'assistant.skill_surface_placement.GetSkillSurfacePlacement',
-    domain: 'assistant',
-    metric: 'assistant_skill_surface_placement_query',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'surface_kind'},
-  ),
-  'assistant.skill_surface_placement.PutSkillSurfacePlacement': OperationPrivacyPolicy(
-    operationId: 'assistant.skill_surface_placement.PutSkillSurfacePlacement',
-    domain: 'assistant',
-    metric: 'assistant_skill_surface_placement_command',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed', 'surface_kind'},
-  ),
+  'assistant.skill_subscription.TickSkillSubscriptionCron':
+      OperationPrivacyPolicy(
+        operationId: 'assistant.skill_subscription.TickSkillSubscriptionCron',
+        domain: 'assistant',
+        metric: 'assistant_skill_subscription_cron',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'leases_acquired',
+          'operation',
+          'outcome',
+        },
+      ),
+  'assistant.skill_subscription.UpdateSkillSubscriptionStatus':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.skill_subscription.UpdateSkillSubscriptionStatus',
+        domain: 'assistant',
+        metric: 'assistant_skill_subscription_command',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'assistant.skill_surface_placement.GetSkillSurfacePlacement':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.skill_surface_placement.GetSkillSurfacePlacement',
+        domain: 'assistant',
+        metric: 'assistant_skill_surface_placement_query',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'surface_kind',
+        },
+      ),
+  'assistant.skill_surface_placement.PutSkillSurfacePlacement':
+      OperationPrivacyPolicy(
+        operationId:
+            'assistant.skill_surface_placement.PutSkillSurfacePlacement',
+        domain: 'assistant',
+        metric: 'assistant_skill_surface_placement_command',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+          'surface_kind',
+        },
+      ),
   'assistant.skill_user_setting.GetSkillUserSetting': OperationPrivacyPolicy(
     operationId: 'assistant.skill_user_setting.GetSkillUserSetting',
     domain: 'assistant',
@@ -486,7 +673,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'chat.chat_inbox_view.ListInbox': OperationPrivacyPolicy(
     operationId: 'chat.chat_inbox_view.ListInbox',
@@ -632,15 +824,16 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'access_mode', 'outcome', 'posting_policy'},
   ),
-  'chat.conversation.RecoverChatAccountClosureDeadLetter': OperationPrivacyPolicy(
-    operationId: 'chat.conversation.RecoverChatAccountClosureDeadLetter',
-    domain: 'chat',
-    metric: 'chat_account_closure_dead_letter_recover',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
+  'chat.conversation.RecoverChatAccountClosureDeadLetter':
+      OperationPrivacyPolicy(
+        operationId: 'chat.conversation.RecoverChatAccountClosureDeadLetter',
+        domain: 'chat',
+        metric: 'chat_account_closure_dead_letter_recover',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
   'chat.conversation.UpdateAnnouncement': OperationPrivacyPolicy(
     operationId: 'chat.conversation.UpdateAnnouncement',
     domain: 'chat',
@@ -704,15 +897,22 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'operation', 'outcome'},
   ),
-  'chat.conversation_membership.ProjectGatheringConversationMembership': OperationPrivacyPolicy(
-    operationId: 'chat.conversation_membership.ProjectGatheringConversationMembership',
-    domain: 'chat',
-    metric: 'chat_gathering_membership_project',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'access_role', 'outcome', 'source_type', 'state'},
-  ),
+  'chat.conversation_membership.ProjectGatheringConversationMembership':
+      OperationPrivacyPolicy(
+        operationId:
+            'chat.conversation_membership.ProjectGatheringConversationMembership',
+        domain: 'chat',
+        metric: 'chat_gathering_membership_project',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'access_role',
+          'outcome',
+          'source_type',
+          'state',
+        },
+      ),
   'chat.conversation_membership.RemoveAssistant': OperationPrivacyPolicy(
     operationId: 'chat.conversation_membership.RemoveAssistant',
     domain: 'chat',
@@ -731,15 +931,17 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'operation', 'outcome'},
   ),
-  'chat.conversation_membership.ResolveAssistantDeliveryMembership': OperationPrivacyPolicy(
-    operationId: 'chat.conversation_membership.ResolveAssistantDeliveryMembership',
-    domain: 'chat',
-    metric: 'chat_assistant_delivery_membership_resolve',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'outcome'},
-  ),
+  'chat.conversation_membership.ResolveAssistantDeliveryMembership':
+      OperationPrivacyPolicy(
+        operationId:
+            'chat.conversation_membership.ResolveAssistantDeliveryMembership',
+        domain: 'chat',
+        metric: 'chat_assistant_delivery_membership_resolve',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'outcome'},
+      ),
   'chat.conversation_membership.TransferOwnership': OperationPrivacyPolicy(
     operationId: 'chat.conversation_membership.TransferOwnership',
     domain: 'chat',
@@ -767,15 +969,16 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'operation', 'outcome'},
   ),
-  'chat.conversation_user_state.UpdateConversationSettings': OperationPrivacyPolicy(
-    operationId: 'chat.conversation_user_state.UpdateConversationSettings',
-    domain: 'chat',
-    metric: 'chat_user_state_command',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'operation', 'outcome'},
-  ),
+  'chat.conversation_user_state.UpdateConversationSettings':
+      OperationPrivacyPolicy(
+        operationId: 'chat.conversation_user_state.UpdateConversationSettings',
+        domain: 'chat',
+        metric: 'chat_user_state_command',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'operation', 'outcome'},
+      ),
   'chat.message.ListAssistantGroundingMessages': OperationPrivacyPolicy(
     operationId: 'chat.message.ListAssistantGroundingMessages',
     domain: 'chat',
@@ -1073,24 +1276,27 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'outcome', 'state'},
   ),
-  'circle.circle_group_membership.ApproveCircleGroupMember': OperationPrivacyPolicy(
-    operationId: 'circle.circle_group_membership.ApproveCircleGroupMember',
-    domain: 'circle',
-    metric: 'circle_group_membership_approve',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
-  'circle.circle_group_membership.GetMyCircleGroupMembership': OperationPrivacyPolicy(
-    operationId: 'circle.circle_group_membership.GetMyCircleGroupMembership',
-    domain: 'circle',
-    metric: 'circle_group_membership_self_read',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'state'},
-  ),
+  'circle.circle_group_membership.ApproveCircleGroupMember':
+      OperationPrivacyPolicy(
+        operationId: 'circle.circle_group_membership.ApproveCircleGroupMember',
+        domain: 'circle',
+        metric: 'circle_group_membership_approve',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
+  'circle.circle_group_membership.GetMyCircleGroupMembership':
+      OperationPrivacyPolicy(
+        operationId:
+            'circle.circle_group_membership.GetMyCircleGroupMembership',
+        domain: 'circle',
+        metric: 'circle_group_membership_self_read',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'state'},
+      ),
   'circle.circle_group_membership.LeaveCircleGroup': OperationPrivacyPolicy(
     operationId: 'circle.circle_group_membership.LeaveCircleGroup',
     domain: 'circle',
@@ -1100,42 +1306,48 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'outcome', 'role'},
   ),
-  'circle.circle_group_membership.ListCircleGroupMemberships': OperationPrivacyPolicy(
-    operationId: 'circle.circle_group_membership.ListCircleGroupMemberships',
-    domain: 'circle',
-    metric: 'circle_group_membership_list',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'state'},
-  ),
-  'circle.circle_group_membership.RejectCircleGroupMember': OperationPrivacyPolicy(
-    operationId: 'circle.circle_group_membership.RejectCircleGroupMember',
-    domain: 'circle',
-    metric: 'circle_group_membership_reject',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
-  'circle.circle_group_membership.RemoveCircleGroupMember': OperationPrivacyPolicy(
-    operationId: 'circle.circle_group_membership.RemoveCircleGroupMember',
-    domain: 'circle',
-    metric: 'circle_group_membership_remove',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'role'},
-  ),
-  'circle.circle_group_membership.UpdateCircleGroupMemberRole': OperationPrivacyPolicy(
-    operationId: 'circle.circle_group_membership.UpdateCircleGroupMemberRole',
-    domain: 'circle',
-    metric: 'circle_group_membership_role_update',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'target_role'},
-  ),
+  'circle.circle_group_membership.ListCircleGroupMemberships':
+      OperationPrivacyPolicy(
+        operationId:
+            'circle.circle_group_membership.ListCircleGroupMemberships',
+        domain: 'circle',
+        metric: 'circle_group_membership_list',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'state'},
+      ),
+  'circle.circle_group_membership.RejectCircleGroupMember':
+      OperationPrivacyPolicy(
+        operationId: 'circle.circle_group_membership.RejectCircleGroupMember',
+        domain: 'circle',
+        metric: 'circle_group_membership_reject',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
+  'circle.circle_group_membership.RemoveCircleGroupMember':
+      OperationPrivacyPolicy(
+        operationId: 'circle.circle_group_membership.RemoveCircleGroupMember',
+        domain: 'circle',
+        metric: 'circle_group_membership_remove',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'role'},
+      ),
+  'circle.circle_group_membership.UpdateCircleGroupMemberRole':
+      OperationPrivacyPolicy(
+        operationId:
+            'circle.circle_group_membership.UpdateCircleGroupMemberRole',
+        domain: 'circle',
+        metric: 'circle_group_membership_role_update',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'target_role'},
+      ),
   'circle.circle_membership.ApproveCircleMember': OperationPrivacyPolicy(
     operationId: 'circle.circle_membership.ApproveCircleMember',
     domain: 'circle',
@@ -1181,15 +1393,16 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'outcome'},
   ),
-  'circle.circle_membership.ListPendingCircleMemberships': OperationPrivacyPolicy(
-    operationId: 'circle.circle_membership.ListPendingCircleMemberships',
-    domain: 'circle',
-    metric: 'circle_membership_pending_list',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
+  'circle.circle_membership.ListPendingCircleMemberships':
+      OperationPrivacyPolicy(
+        operationId: 'circle.circle_membership.ListPendingCircleMemberships',
+        domain: 'circle',
+        metric: 'circle_membership_pending_list',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
   'circle.circle_membership.ListPersonaCircles': OperationPrivacyPolicy(
     operationId: 'circle.circle_membership.ListPersonaCircles',
     domain: 'circle',
@@ -1721,15 +1934,17 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'outcome', 'post_id'},
   ),
-  'content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter': OperationPrivacyPolicy(
-    operationId: 'content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter',
-    domain: 'content',
-    metric: 'content_account_closure_dead_letter_recover',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
+  'content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter',
+        domain: 'content',
+        metric: 'content_account_closure_dead_letter_recover',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
   'content.content_behavior_fact.ReportBehaviors': OperationPrivacyPolicy(
     operationId: 'content.content_behavior_fact.ReportBehaviors',
     domain: 'content',
@@ -1775,78 +1990,100 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'actor_dimension', 'outcome'},
   ),
-  'content.filter_catalog_release.ActivateFilterCatalogRelease': OperationPrivacyPolicy(
-    operationId: 'content.filter_catalog_release.ActivateFilterCatalogRelease',
-    domain: 'content',
-    metric: 'content_filter_catalog_activate',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'replayed'},
-  ),
-  'content.filter_catalog_release.GetActiveFilterCatalog': OperationPrivacyPolicy(
-    operationId: 'content.filter_catalog_release.GetActiveFilterCatalog',
-    domain: 'content',
-    metric: 'content_filter_catalog_get',
-    requestClassification: OperationPrivacyClass.public,
-    responseClassification: OperationPrivacyClass.public,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'release_id_hash'},
-  ),
-  'content.filter_catalog_release.RollbackFilterCatalogRelease': OperationPrivacyPolicy(
-    operationId: 'content.filter_catalog_release.RollbackFilterCatalogRelease',
-    domain: 'content',
-    metric: 'content_filter_catalog_rollback',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'replayed'},
-  ),
-  'content.filter_catalog_release.StageFilterCatalogRelease': OperationPrivacyPolicy(
-    operationId: 'content.filter_catalog_release.StageFilterCatalogRelease',
-    domain: 'content',
-    metric: 'content_filter_catalog_stage',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'category_count', 'outcome', 'preset_count', 'replayed'},
-  ),
-  'content.intersection_visit_state.GetMyIntersectionSummary': OperationPrivacyPolicy(
-    operationId: 'content.intersection_visit_state.GetMyIntersectionSummary',
-    domain: 'content',
-    metric: 'content_intersection_summary_get',
-    requestClassification: OperationPrivacyClass.pii,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'dimension_count', 'outcome'},
-  ),
-  'content.intersection_visit_state.GetObjectIntersections': OperationPrivacyPolicy(
-    operationId: 'content.intersection_visit_state.GetObjectIntersections',
-    domain: 'content',
-    metric: 'content_object_intersection_get',
-    requestClassification: OperationPrivacyClass.pii,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'object_type', 'outcome', 'result_count'},
-  ),
-  'content.intersection_visit_state.ListMyIntersections': OperationPrivacyPolicy(
-    operationId: 'content.intersection_visit_state.ListMyIntersections',
-    domain: 'content',
-    metric: 'content_intersection_list',
-    requestClassification: OperationPrivacyClass.pii,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'dimension', 'filter', 'outcome', 'result_count'},
-  ),
-  'content.intersection_visit_state.MarkIntersectionsVisited': OperationPrivacyPolicy(
-    operationId: 'content.intersection_visit_state.MarkIntersectionsVisited',
-    domain: 'content',
-    metric: 'content_intersection_visit_mark',
-    requestClassification: OperationPrivacyClass.pii,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'dimension', 'outcome'},
-  ),
+  'content.filter_catalog_release.ActivateFilterCatalogRelease':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.filter_catalog_release.ActivateFilterCatalogRelease',
+        domain: 'content',
+        metric: 'content_filter_catalog_activate',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'replayed'},
+      ),
+  'content.filter_catalog_release.GetActiveFilterCatalog':
+      OperationPrivacyPolicy(
+        operationId: 'content.filter_catalog_release.GetActiveFilterCatalog',
+        domain: 'content',
+        metric: 'content_filter_catalog_get',
+        requestClassification: OperationPrivacyClass.public,
+        responseClassification: OperationPrivacyClass.public,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'release_id_hash'},
+      ),
+  'content.filter_catalog_release.RollbackFilterCatalogRelease':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.filter_catalog_release.RollbackFilterCatalogRelease',
+        domain: 'content',
+        metric: 'content_filter_catalog_rollback',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'replayed'},
+      ),
+  'content.filter_catalog_release.StageFilterCatalogRelease':
+      OperationPrivacyPolicy(
+        operationId: 'content.filter_catalog_release.StageFilterCatalogRelease',
+        domain: 'content',
+        metric: 'content_filter_catalog_stage',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'category_count',
+          'outcome',
+          'preset_count',
+          'replayed',
+        },
+      ),
+  'content.intersection_visit_state.GetMyIntersectionSummary':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.intersection_visit_state.GetMyIntersectionSummary',
+        domain: 'content',
+        metric: 'content_intersection_summary_get',
+        requestClassification: OperationPrivacyClass.pii,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'dimension_count', 'outcome'},
+      ),
+  'content.intersection_visit_state.GetObjectIntersections':
+      OperationPrivacyPolicy(
+        operationId: 'content.intersection_visit_state.GetObjectIntersections',
+        domain: 'content',
+        metric: 'content_object_intersection_get',
+        requestClassification: OperationPrivacyClass.pii,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'object_type', 'outcome', 'result_count'},
+      ),
+  'content.intersection_visit_state.ListMyIntersections':
+      OperationPrivacyPolicy(
+        operationId: 'content.intersection_visit_state.ListMyIntersections',
+        domain: 'content',
+        metric: 'content_intersection_list',
+        requestClassification: OperationPrivacyClass.pii,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'dimension',
+          'filter',
+          'outcome',
+          'result_count',
+        },
+      ),
+  'content.intersection_visit_state.MarkIntersectionsVisited':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.intersection_visit_state.MarkIntersectionsVisited',
+        domain: 'content',
+        metric: 'content_intersection_visit_mark',
+        requestClassification: OperationPrivacyClass.pii,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'dimension', 'outcome'},
+      ),
   'content.media_asset.DiscardMediaAsset': OperationPrivacyPolicy(
     operationId: 'content.media_asset.DiscardMediaAsset',
     domain: 'content',
@@ -1928,51 +2165,65 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'access_policy', 'outcome'},
   ),
-  'content.media_image_reprocess_run.GetMediaImageReprocessRun': OperationPrivacyPolicy(
-    operationId: 'content.media_image_reprocess_run.GetMediaImageReprocessRun',
-    domain: 'content',
-    metric: 'content_media_image_reprocess_get',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'status'},
-  ),
-  'content.media_image_reprocess_run.PauseMediaImageReprocessRun': OperationPrivacyPolicy(
-    operationId: 'content.media_image_reprocess_run.PauseMediaImageReprocessRun',
-    domain: 'content',
-    metric: 'content_media_image_reprocess_pause',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
-  'content.media_image_reprocess_run.ResumeMediaImageReprocessRun': OperationPrivacyPolicy(
-    operationId: 'content.media_image_reprocess_run.ResumeMediaImageReprocessRun',
-    domain: 'content',
-    metric: 'content_media_image_reprocess_resume',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
-  'content.media_image_reprocess_run.RollbackMediaImageReprocessRun': OperationPrivacyPolicy(
-    operationId: 'content.media_image_reprocess_run.RollbackMediaImageReprocessRun',
-    domain: 'content',
-    metric: 'content_media_image_reprocess_rollback',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'activated_asset_count', 'outcome'},
-  ),
-  'content.media_image_reprocess_run.StartMediaImageReprocessRun': OperationPrivacyPolicy(
-    operationId: 'content.media_image_reprocess_run.StartMediaImageReprocessRun',
-    domain: 'content',
-    metric: 'content_media_image_reprocess_start',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'asset_count', 'outcome', 'target_policy_version'},
-  ),
+  'content.media_image_reprocess_run.GetMediaImageReprocessRun':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.media_image_reprocess_run.GetMediaImageReprocessRun',
+        domain: 'content',
+        metric: 'content_media_image_reprocess_get',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'status'},
+      ),
+  'content.media_image_reprocess_run.PauseMediaImageReprocessRun':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.media_image_reprocess_run.PauseMediaImageReprocessRun',
+        domain: 'content',
+        metric: 'content_media_image_reprocess_pause',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
+  'content.media_image_reprocess_run.ResumeMediaImageReprocessRun':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.media_image_reprocess_run.ResumeMediaImageReprocessRun',
+        domain: 'content',
+        metric: 'content_media_image_reprocess_resume',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
+  'content.media_image_reprocess_run.RollbackMediaImageReprocessRun':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.media_image_reprocess_run.RollbackMediaImageReprocessRun',
+        domain: 'content',
+        metric: 'content_media_image_reprocess_rollback',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'activated_asset_count', 'outcome'},
+      ),
+  'content.media_image_reprocess_run.StartMediaImageReprocessRun':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.media_image_reprocess_run.StartMediaImageReprocessRun',
+        domain: 'content',
+        metric: 'content_media_image_reprocess_start',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'asset_count',
+          'outcome',
+          'target_policy_version',
+        },
+      ),
   'content.media_upload_session.AbortMediaUpload': OperationPrivacyPolicy(
     operationId: 'content.media_upload_session.AbortMediaUpload',
     domain: 'content',
@@ -2009,15 +2260,17 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'media_type', 'outcome'},
   ),
-  'content.original_access_quota.ReserveOriginalImageAccessGrant': OperationPrivacyPolicy(
-    operationId: 'content.original_access_quota.ReserveOriginalImageAccessGrant',
-    domain: 'content',
-    metric: 'content_media_original_access_request',
-    requestClassification: OperationPrivacyClass.pii,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'access_policy', 'outcome', 'purpose'},
-  ),
+  'content.original_access_quota.ReserveOriginalImageAccessGrant':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.original_access_quota.ReserveOriginalImageAccessGrant',
+        domain: 'content',
+        metric: 'content_media_original_access_request',
+        requestClassification: OperationPrivacyClass.pii,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'access_policy', 'outcome', 'purpose'},
+      ),
   'content.outbound_share_fact.AppendOutboundShareFact': OperationPrivacyPolicy(
     operationId: 'content.outbound_share_fact.AppendOutboundShareFact',
     domain: 'content',
@@ -2025,7 +2278,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.pii,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'actor_dimension', 'channel', 'destination_kind', 'outcome'},
+    telemetryAttributes: <String>{
+      'actor_dimension',
+      'channel',
+      'destination_kind',
+      'outcome',
+    },
   ),
   'content.post.DeletePost': OperationPrivacyPolicy(
     operationId: 'content.post.DeletePost',
@@ -2171,24 +2429,28 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.redacted,
     telemetryAttributes: <String>{'decision', 'outcome'},
   ),
-  'content.post_moderation_case.GetCurrentPostModerationCase': OperationPrivacyPolicy(
-    operationId: 'content.post_moderation_case.GetCurrentPostModerationCase',
-    domain: 'content',
-    metric: 'content_moderation_case_get',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'outcome', 'status'},
-  ),
-  'content.post_moderation_case.GetPostPublicationEligibility': OperationPrivacyPolicy(
-    operationId: 'content.post_moderation_case.GetPostPublicationEligibility',
-    domain: 'content',
-    metric: 'content_moderation_publication_eligibility_get',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'eligible'},
-  ),
+  'content.post_moderation_case.GetCurrentPostModerationCase':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.post_moderation_case.GetCurrentPostModerationCase',
+        domain: 'content',
+        metric: 'content_moderation_case_get',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'outcome', 'status'},
+      ),
+  'content.post_moderation_case.GetPostPublicationEligibility':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.post_moderation_case.GetPostPublicationEligibility',
+        domain: 'content',
+        metric: 'content_moderation_publication_eligibility_get',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'eligible'},
+      ),
   'content.post_moderation_case.OpenPostModerationCase': OperationPrivacyPolicy(
     operationId: 'content.post_moderation_case.OpenPostModerationCase',
     domain: 'content',
@@ -2198,51 +2460,59 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'outcome'},
   ),
-  'content.post_moderation_case.ReviewPostModerationCase': OperationPrivacyPolicy(
-    operationId: 'content.post_moderation_case.ReviewPostModerationCase',
-    domain: 'content',
-    metric: 'content_moderation_case_review',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'outcome'},
-  ),
-  'content.post_moderation_case.SupersedePostModerationCase': OperationPrivacyPolicy(
-    operationId: 'content.post_moderation_case.SupersedePostModerationCase',
-    domain: 'content',
-    metric: 'content_moderation_case_supersede',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
-  'content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived': OperationPrivacyPolicy(
-    operationId: 'content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived',
-    domain: 'content',
-    metric: 'content_profile_interaction_received_list',
-    requestClassification: OperationPrivacyClass.pii,
-    responseClassification: OperationPrivacyClass.pii,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'activity_type', 'outcome'},
-  ),
-  'content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent': OperationPrivacyPolicy(
-    operationId: 'content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent',
-    domain: 'content',
-    metric: 'content_profile_interaction_sent_list',
-    requestClassification: OperationPrivacyClass.pii,
-    responseClassification: OperationPrivacyClass.pii,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'activity_type', 'outcome'},
-  ),
-  'content.profile_interaction_read_fact.AppendProfileInteractionReadFact': OperationPrivacyPolicy(
-    operationId: 'content.profile_interaction_read_fact.AppendProfileInteractionReadFact',
-    domain: 'content',
-    metric: 'content_profile_interaction_state_update',
-    requestClassification: OperationPrivacyClass.pii,
-    responseClassification: OperationPrivacyClass.pii,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'state'},
-  ),
+  'content.post_moderation_case.ReviewPostModerationCase':
+      OperationPrivacyPolicy(
+        operationId: 'content.post_moderation_case.ReviewPostModerationCase',
+        domain: 'content',
+        metric: 'content_moderation_case_review',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'outcome'},
+      ),
+  'content.post_moderation_case.SupersedePostModerationCase':
+      OperationPrivacyPolicy(
+        operationId: 'content.post_moderation_case.SupersedePostModerationCase',
+        domain: 'content',
+        metric: 'content_moderation_case_supersede',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
+  'content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.profile_interaction_activity_view.ListProfileInteractionActivitiesReceived',
+        domain: 'content',
+        metric: 'content_profile_interaction_received_list',
+        requestClassification: OperationPrivacyClass.pii,
+        responseClassification: OperationPrivacyClass.pii,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'activity_type', 'outcome'},
+      ),
+  'content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.profile_interaction_activity_view.ListProfileInteractionActivitiesSent',
+        domain: 'content',
+        metric: 'content_profile_interaction_sent_list',
+        requestClassification: OperationPrivacyClass.pii,
+        responseClassification: OperationPrivacyClass.pii,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'activity_type', 'outcome'},
+      ),
+  'content.profile_interaction_read_fact.AppendProfileInteractionReadFact':
+      OperationPrivacyPolicy(
+        operationId:
+            'content.profile_interaction_read_fact.AppendProfileInteractionReadFact',
+        domain: 'content',
+        metric: 'content_profile_interaction_state_update',
+        requestClassification: OperationPrivacyClass.pii,
+        responseClassification: OperationPrivacyClass.pii,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'state'},
+      ),
   'content.report.AuthorizeGatheringSafetyTermination': OperationPrivacyPolicy(
     operationId: 'content.report.AuthorizeGatheringSafetyTermination',
     domain: 'content',
@@ -2333,15 +2603,17 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.redacted,
     telemetryAttributes: <String>{'action', 'outcome'},
   ),
-  'entity.homepage.EvaluateEntityHomepageGatheringHostAuthority': OperationPrivacyPolicy(
-    operationId: 'entity.homepage.EvaluateEntityHomepageGatheringHostAuthority',
-    domain: 'entity',
-    metric: 'entity_homepage_gathering_host_authority_evaluate',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'action', 'outcome'},
-  ),
+  'entity.homepage.EvaluateEntityHomepageGatheringHostAuthority':
+      OperationPrivacyPolicy(
+        operationId:
+            'entity.homepage.EvaluateEntityHomepageGatheringHostAuthority',
+        domain: 'entity',
+        metric: 'entity_homepage_gathering_host_authority_evaluate',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'action', 'outcome'},
+      ),
   'entity.homepage.GetEntityImpact': OperationPrivacyPolicy(
     operationId: 'entity.homepage.GetEntityImpact',
     domain: 'entity',
@@ -2459,33 +2731,36 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'homepage_id', 'outcome'},
   ),
-  'entity.homepage_claim_request.CreateHomepageClaimRequest': OperationPrivacyPolicy(
-    operationId: 'entity.homepage_claim_request.CreateHomepageClaimRequest',
-    domain: 'entity',
-    metric: 'entity_homepage_claim_create',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'claim_tier', 'homepage_id', 'outcome'},
-  ),
-  'entity.homepage_claim_request.ListHomepageClaimRequests': OperationPrivacyPolicy(
-    operationId: 'entity.homepage_claim_request.ListHomepageClaimRequests',
-    domain: 'entity',
-    metric: 'entity_homepage_claim_queue',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'outcome', 'status'},
-  ),
-  'entity.homepage_claim_request.ReviewHomepageClaimRequest': OperationPrivacyPolicy(
-    operationId: 'entity.homepage_claim_request.ReviewHomepageClaimRequest',
-    domain: 'entity',
-    metric: 'entity_homepage_claim_review',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'homepage_id', 'outcome'},
-  ),
+  'entity.homepage_claim_request.CreateHomepageClaimRequest':
+      OperationPrivacyPolicy(
+        operationId: 'entity.homepage_claim_request.CreateHomepageClaimRequest',
+        domain: 'entity',
+        metric: 'entity_homepage_claim_create',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'claim_tier', 'homepage_id', 'outcome'},
+      ),
+  'entity.homepage_claim_request.ListHomepageClaimRequests':
+      OperationPrivacyPolicy(
+        operationId: 'entity.homepage_claim_request.ListHomepageClaimRequests',
+        domain: 'entity',
+        metric: 'entity_homepage_claim_queue',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'outcome', 'status'},
+      ),
+  'entity.homepage_claim_request.ReviewHomepageClaimRequest':
+      OperationPrivacyPolicy(
+        operationId: 'entity.homepage_claim_request.ReviewHomepageClaimRequest',
+        domain: 'entity',
+        metric: 'entity_homepage_claim_review',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'homepage_id', 'outcome'},
+      ),
   'entity.homepage_review.CreateHomepageReview': OperationPrivacyPolicy(
     operationId: 'entity.homepage_review.CreateHomepageReview',
     domain: 'entity',
@@ -2531,231 +2806,326 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'homepage_id', 'outcome'},
   ),
-  'entity.homepage_status_report.CreateHomepageStatusReport': OperationPrivacyPolicy(
-    operationId: 'entity.homepage_status_report.CreateHomepageStatusReport',
-    domain: 'entity',
-    metric: 'entity_homepage_status_report_create',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'homepage_id', 'outcome', 'reason'},
-  ),
-  'entity.homepage_status_report.ListHomepageStatusReports': OperationPrivacyPolicy(
-    operationId: 'entity.homepage_status_report.ListHomepageStatusReports',
-    domain: 'entity',
-    metric: 'entity_homepage_status_report_queue',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'outcome', 'status'},
-  ),
-  'entity.homepage_status_report.ReviewHomepageStatusReport': OperationPrivacyPolicy(
-    operationId: 'entity.homepage_status_report.ReviewHomepageStatusReport',
-    domain: 'entity',
-    metric: 'entity_homepage_status_report_review',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'homepage_id', 'outcome'},
-  ),
-  'integration.connector_authorization.CompleteNativeConnectorAuthorization': OperationPrivacyPolicy(
-    operationId: 'integration.connector_authorization.CompleteNativeConnectorAuthorization',
-    domain: 'integration',
-    metric: 'integration_connector_authorization_command',
-    requestClassification: OperationPrivacyClass.secret,
-    responseClassification: OperationPrivacyClass.secret,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'authorization_mode', 'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'integration.connector_authorization.CompleteOAuthConnectorAuthorization': OperationPrivacyPolicy(
-    operationId: 'integration.connector_authorization.CompleteOAuthConnectorAuthorization',
-    domain: 'integration',
-    metric: 'integration_connector_authorization_command',
-    requestClassification: OperationPrivacyClass.secret,
-    responseClassification: OperationPrivacyClass.secret,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'authorization_mode', 'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'integration.connector_authorization.GetConnectorAuthorization': OperationPrivacyPolicy(
-    operationId: 'integration.connector_authorization.GetConnectorAuthorization',
-    domain: 'integration',
-    metric: 'integration_connector_authorization_query',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'integration.connector_authorization.StartConnectorAuthorization': OperationPrivacyPolicy(
-    operationId: 'integration.connector_authorization.StartConnectorAuthorization',
-    domain: 'integration',
-    metric: 'integration_connector_authorization_command',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'authorization_mode', 'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'integration.connector_connection.CreateConnectorConnection': OperationPrivacyPolicy(
-    operationId: 'integration.connector_connection.CreateConnectorConnection',
-    domain: 'integration',
-    metric: 'integration_connector_connection_command',
-    requestClassification: OperationPrivacyClass.secret,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'integration.connector_connection.GetConnectorConnection': OperationPrivacyPolicy(
-    operationId: 'integration.connector_connection.GetConnectorConnection',
-    domain: 'integration',
-    metric: 'integration_connector_connection_query',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'integration.connector_connection.ListConnectorConnections': OperationPrivacyPolicy(
-    operationId: 'integration.connector_connection.ListConnectorConnections',
-    domain: 'integration',
-    metric: 'integration_connector_connection_query',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'integration.connector_connection.ResolveConnectorCapabilityGrant': OperationPrivacyPolicy(
-    operationId: 'integration.connector_connection.ResolveConnectorCapabilityGrant',
-    domain: 'integration',
-    metric: 'integration_connector_capability_resolution',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'reason', 'surface_kind'},
-  ),
-  'integration.connector_connection.RevokeConnectorConnection': OperationPrivacyPolicy(
-    operationId: 'integration.connector_connection.RevokeConnectorConnection',
-    domain: 'integration',
-    metric: 'integration_connector_connection_command',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'integration.connector_definition.GetConnectorDefinition': OperationPrivacyPolicy(
-    operationId: 'integration.connector_definition.GetConnectorDefinition',
-    domain: 'integration',
-    metric: 'integration_connector_catalog_query',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.public,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'integration.connector_definition.ListConnectorDefinitions': OperationPrivacyPolicy(
-    operationId: 'integration.connector_definition.ListConnectorDefinitions',
-    domain: 'integration',
-    metric: 'integration_connector_catalog_query',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.public,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'integration.connector_definition.PublishConnectorDefinition': OperationPrivacyPolicy(
-    operationId: 'integration.connector_definition.PublishConnectorDefinition',
-    domain: 'integration',
-    metric: 'integration_connector_catalog_command',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.public,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'integration.connector_invocation.ContinueConnectorInvocation': OperationPrivacyPolicy(
-    operationId: 'integration.connector_invocation.ContinueConnectorInvocation',
-    domain: 'integration',
-    metric: 'integration_connector_invocation_command',
-    requestClassification: OperationPrivacyClass.secret,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'capability', 'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'integration.connector_invocation.GetConnectorInvocation': OperationPrivacyPolicy(
-    operationId: 'integration.connector_invocation.GetConnectorInvocation',
-    domain: 'integration',
-    metric: 'integration_connector_invocation_query',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'integration.connector_invocation.InvokeConnectorCapability': OperationPrivacyPolicy(
-    operationId: 'integration.connector_invocation.InvokeConnectorCapability',
-    domain: 'integration',
-    metric: 'integration_connector_invocation_command',
-    requestClassification: OperationPrivacyClass.secret,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'capability', 'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'integration.connector_invocation.ListConnectorInvocations': OperationPrivacyPolicy(
-    operationId: 'integration.connector_invocation.ListConnectorInvocations',
-    domain: 'integration',
-    metric: 'integration_connector_invocation_query',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'integration.external_interaction.GetExternalInteractionMetricsSnapshot': OperationPrivacyPolicy(
-    operationId: 'integration.external_interaction.GetExternalInteractionMetricsSnapshot',
-    domain: 'integration',
-    metric: 'integration_external_interaction_metrics_read',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
-  'integration.external_interaction.GetExternalInteractionRequest': OperationPrivacyPolicy(
-    operationId: 'integration.external_interaction.GetExternalInteractionRequest',
-    domain: 'integration',
-    metric: 'integration_external_interaction_request_read',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'operation', 'outcome'},
-  ),
-  'integration.external_interaction.ListExternalInteractionAttempts': OperationPrivacyPolicy(
-    operationId: 'integration.external_interaction.ListExternalInteractionAttempts',
-    domain: 'integration',
-    metric: 'integration_external_interaction_attempt_list',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'result_count'},
-  ),
-  'integration.external_interaction.ListExternalInteractionDeadLetters': OperationPrivacyPolicy(
-    operationId: 'integration.external_interaction.ListExternalInteractionDeadLetters',
-    domain: 'integration',
-    metric: 'integration_external_interaction_dead_letter_list',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'operation', 'outcome', 'result_count'},
-  ),
-  'integration.external_interaction.RecoverExternalInteractionDeadLetter': OperationPrivacyPolicy(
-    operationId: 'integration.external_interaction.RecoverExternalInteractionDeadLetter',
-    domain: 'integration',
-    metric: 'integration_external_interaction_dead_letter_recover',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'operation', 'outcome'},
-  ),
-  'integration.external_interaction.SubmitExternalInteractionRequest': OperationPrivacyPolicy(
-    operationId: 'integration.external_interaction.SubmitExternalInteractionRequest',
-    domain: 'integration',
-    metric: 'integration_external_interaction_submit',
-    requestClassification: OperationPrivacyClass.secret,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'caller_service', 'operation', 'outcome'},
-  ),
+  'entity.homepage_status_report.CreateHomepageStatusReport':
+      OperationPrivacyPolicy(
+        operationId: 'entity.homepage_status_report.CreateHomepageStatusReport',
+        domain: 'entity',
+        metric: 'entity_homepage_status_report_create',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'homepage_id', 'outcome', 'reason'},
+      ),
+  'entity.homepage_status_report.ListHomepageStatusReports':
+      OperationPrivacyPolicy(
+        operationId: 'entity.homepage_status_report.ListHomepageStatusReports',
+        domain: 'entity',
+        metric: 'entity_homepage_status_report_queue',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'outcome', 'status'},
+      ),
+  'entity.homepage_status_report.ReviewHomepageStatusReport':
+      OperationPrivacyPolicy(
+        operationId: 'entity.homepage_status_report.ReviewHomepageStatusReport',
+        domain: 'entity',
+        metric: 'entity_homepage_status_report_review',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'homepage_id', 'outcome'},
+      ),
+  'integration.connector_authorization.CompleteNativeConnectorAuthorization':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_authorization.CompleteNativeConnectorAuthorization',
+        domain: 'integration',
+        metric: 'integration_connector_authorization_command',
+        requestClassification: OperationPrivacyClass.secret,
+        responseClassification: OperationPrivacyClass.secret,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'authorization_mode',
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'integration.connector_authorization.CompleteOAuthConnectorAuthorization':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_authorization.CompleteOAuthConnectorAuthorization',
+        domain: 'integration',
+        metric: 'integration_connector_authorization_command',
+        requestClassification: OperationPrivacyClass.secret,
+        responseClassification: OperationPrivacyClass.secret,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'authorization_mode',
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'integration.connector_authorization.GetConnectorAuthorization':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_authorization.GetConnectorAuthorization',
+        domain: 'integration',
+        metric: 'integration_connector_authorization_query',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'integration.connector_authorization.StartConnectorAuthorization':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_authorization.StartConnectorAuthorization',
+        domain: 'integration',
+        metric: 'integration_connector_authorization_command',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'authorization_mode',
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'integration.connector_connection.CreateConnectorConnection':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_connection.CreateConnectorConnection',
+        domain: 'integration',
+        metric: 'integration_connector_connection_command',
+        requestClassification: OperationPrivacyClass.secret,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'integration.connector_connection.GetConnectorConnection':
+      OperationPrivacyPolicy(
+        operationId: 'integration.connector_connection.GetConnectorConnection',
+        domain: 'integration',
+        metric: 'integration_connector_connection_query',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'integration.connector_connection.ListConnectorConnections':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_connection.ListConnectorConnections',
+        domain: 'integration',
+        metric: 'integration_connector_connection_query',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'integration.connector_connection.ResolveConnectorCapabilityGrant':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_connection.ResolveConnectorCapabilityGrant',
+        domain: 'integration',
+        metric: 'integration_connector_capability_resolution',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'reason',
+          'surface_kind',
+        },
+      ),
+  'integration.connector_connection.RevokeConnectorConnection':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_connection.RevokeConnectorConnection',
+        domain: 'integration',
+        metric: 'integration_connector_connection_command',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'integration.connector_definition.GetConnectorDefinition':
+      OperationPrivacyPolicy(
+        operationId: 'integration.connector_definition.GetConnectorDefinition',
+        domain: 'integration',
+        metric: 'integration_connector_catalog_query',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.public,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'integration.connector_definition.ListConnectorDefinitions':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_definition.ListConnectorDefinitions',
+        domain: 'integration',
+        metric: 'integration_connector_catalog_query',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.public,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'integration.connector_definition.PublishConnectorDefinition':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_definition.PublishConnectorDefinition',
+        domain: 'integration',
+        metric: 'integration_connector_catalog_command',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.public,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'integration.connector_invocation.ContinueConnectorInvocation':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_invocation.ContinueConnectorInvocation',
+        domain: 'integration',
+        metric: 'integration_connector_invocation_command',
+        requestClassification: OperationPrivacyClass.secret,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'capability',
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'integration.connector_invocation.GetConnectorInvocation':
+      OperationPrivacyPolicy(
+        operationId: 'integration.connector_invocation.GetConnectorInvocation',
+        domain: 'integration',
+        metric: 'integration_connector_invocation_query',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'integration.connector_invocation.InvokeConnectorCapability':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_invocation.InvokeConnectorCapability',
+        domain: 'integration',
+        metric: 'integration_connector_invocation_command',
+        requestClassification: OperationPrivacyClass.secret,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'capability',
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'integration.connector_invocation.ListConnectorInvocations':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.connector_invocation.ListConnectorInvocations',
+        domain: 'integration',
+        metric: 'integration_connector_invocation_query',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'integration.external_interaction.GetExternalInteractionMetricsSnapshot':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.external_interaction.GetExternalInteractionMetricsSnapshot',
+        domain: 'integration',
+        metric: 'integration_external_interaction_metrics_read',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
+  'integration.external_interaction.GetExternalInteractionRequest':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.external_interaction.GetExternalInteractionRequest',
+        domain: 'integration',
+        metric: 'integration_external_interaction_request_read',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'operation', 'outcome'},
+      ),
+  'integration.external_interaction.ListExternalInteractionAttempts':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.external_interaction.ListExternalInteractionAttempts',
+        domain: 'integration',
+        metric: 'integration_external_interaction_attempt_list',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'result_count'},
+      ),
+  'integration.external_interaction.ListExternalInteractionDeadLetters':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.external_interaction.ListExternalInteractionDeadLetters',
+        domain: 'integration',
+        metric: 'integration_external_interaction_dead_letter_list',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'operation', 'outcome', 'result_count'},
+      ),
+  'integration.external_interaction.RecoverExternalInteractionDeadLetter':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.external_interaction.RecoverExternalInteractionDeadLetter',
+        domain: 'integration',
+        metric: 'integration_external_interaction_dead_letter_recover',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'operation', 'outcome'},
+      ),
+  'integration.external_interaction.SubmitExternalInteractionRequest':
+      OperationPrivacyPolicy(
+        operationId:
+            'integration.external_interaction.SubmitExternalInteractionRequest',
+        domain: 'integration',
+        metric: 'integration_external_interaction_submit',
+        requestClassification: OperationPrivacyClass.secret,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'caller_service', 'operation', 'outcome'},
+      ),
   'integration.location.GetNearbyLocations': OperationPrivacyPolicy(
     operationId: 'integration.location.GetNearbyLocations',
     domain: 'integration',
@@ -2837,69 +3207,87 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'message_type', 'outcome'},
   ),
-  'notification.notification.RecoverNotificationAccountClosureDeadLetter': OperationPrivacyPolicy(
-    operationId: 'notification.notification.RecoverNotificationAccountClosureDeadLetter',
-    domain: 'notification',
-    metric: 'notification_account_closure_dead_letter_recover',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
-  'notification.notification_delivery_job.AckIncomingCallPresentation': OperationPrivacyPolicy(
-    operationId: 'notification.notification_delivery_job.AckIncomingCallPresentation',
-    domain: 'notification',
-    metric: 'notification_incoming_call_presentation_ack',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'grace_bucket', 'outcome', 'raced', 'status'},
-  ),
-  'notification.notification_delivery_job.GetIncomingCallDeliveryTimeline': OperationPrivacyPolicy(
-    operationId: 'notification.notification_delivery_job.GetIncomingCallDeliveryTimeline',
-    domain: 'notification',
-    metric: 'notification_incoming_call_timeline_read',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'result_count'},
-  ),
-  'notification.notification_delivery_job.GetNotificationDeliveryJobMetrics': OperationPrivacyPolicy(
-    operationId: 'notification.notification_delivery_job.GetNotificationDeliveryJobMetrics',
-    domain: 'notification',
-    metric: 'notification_delivery_job_metrics_read',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'dead_job_bucket', 'outcome'},
-  ),
-  'notification.notification_delivery_job.ListNotificationDeliveryJobDeadLetters': OperationPrivacyPolicy(
-    operationId: 'notification.notification_delivery_job.ListNotificationDeliveryJobDeadLetters',
-    domain: 'notification',
-    metric: 'notification_delivery_job_dead_letter_list',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'event_type', 'outcome', 'result_count'},
-  ),
-  'notification.notification_delivery_job.RecoverNotificationDeliveryJob': OperationPrivacyPolicy(
-    operationId: 'notification.notification_delivery_job.RecoverNotificationDeliveryJob',
-    domain: 'notification',
-    metric: 'notification_delivery_job_recovery',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'attempt_epoch', 'outcome', 'replayed'},
-  ),
-  'ops.account_enforcement_case.GetAccountEnforcementCase': OperationPrivacyPolicy(
-    operationId: 'ops.account_enforcement_case.GetAccountEnforcementCase',
-    domain: 'ops',
-    metric: 'ops_account_enforcement_case_read',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'operation', 'outcome'},
-  ),
+  'notification.notification.RecoverNotificationAccountClosureDeadLetter':
+      OperationPrivacyPolicy(
+        operationId:
+            'notification.notification.RecoverNotificationAccountClosureDeadLetter',
+        domain: 'notification',
+        metric: 'notification_account_closure_dead_letter_recover',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
+  'notification.notification_delivery_job.AckIncomingCallPresentation':
+      OperationPrivacyPolicy(
+        operationId:
+            'notification.notification_delivery_job.AckIncomingCallPresentation',
+        domain: 'notification',
+        metric: 'notification_incoming_call_presentation_ack',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'grace_bucket',
+          'outcome',
+          'raced',
+          'status',
+        },
+      ),
+  'notification.notification_delivery_job.GetIncomingCallDeliveryTimeline':
+      OperationPrivacyPolicy(
+        operationId:
+            'notification.notification_delivery_job.GetIncomingCallDeliveryTimeline',
+        domain: 'notification',
+        metric: 'notification_incoming_call_timeline_read',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'result_count'},
+      ),
+  'notification.notification_delivery_job.GetNotificationDeliveryJobMetrics':
+      OperationPrivacyPolicy(
+        operationId:
+            'notification.notification_delivery_job.GetNotificationDeliveryJobMetrics',
+        domain: 'notification',
+        metric: 'notification_delivery_job_metrics_read',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'dead_job_bucket', 'outcome'},
+      ),
+  'notification.notification_delivery_job.ListNotificationDeliveryJobDeadLetters':
+      OperationPrivacyPolicy(
+        operationId:
+            'notification.notification_delivery_job.ListNotificationDeliveryJobDeadLetters',
+        domain: 'notification',
+        metric: 'notification_delivery_job_dead_letter_list',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'event_type', 'outcome', 'result_count'},
+      ),
+  'notification.notification_delivery_job.RecoverNotificationDeliveryJob':
+      OperationPrivacyPolicy(
+        operationId:
+            'notification.notification_delivery_job.RecoverNotificationDeliveryJob',
+        domain: 'notification',
+        metric: 'notification_delivery_job_recovery',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'attempt_epoch', 'outcome', 'replayed'},
+      ),
+  'ops.account_enforcement_case.GetAccountEnforcementCase':
+      OperationPrivacyPolicy(
+        operationId: 'ops.account_enforcement_case.GetAccountEnforcementCase',
+        domain: 'ops',
+        metric: 'ops_account_enforcement_case_read',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'operation', 'outcome'},
+      ),
   'ops.account_enforcement_case.OpenAccountAppealCase': OperationPrivacyPolicy(
     operationId: 'ops.account_enforcement_case.OpenAccountAppealCase',
     domain: 'ops',
@@ -2909,33 +3297,38 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.redacted,
     telemetryAttributes: <String>{'operation', 'outcome'},
   ),
-  'ops.account_enforcement_case.OpenAccountModerationCase': OperationPrivacyPolicy(
-    operationId: 'ops.account_enforcement_case.OpenAccountModerationCase',
-    domain: 'ops',
-    metric: 'ops_account_enforcement_case_command',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'operation', 'outcome'},
-  ),
-  'ops.account_enforcement_case.RetryAccountEnforcementDelivery': OperationPrivacyPolicy(
-    operationId: 'ops.account_enforcement_case.RetryAccountEnforcementDelivery',
-    domain: 'ops',
-    metric: 'ops_account_enforcement_delivery_recovery',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'operation', 'outcome'},
-  ),
-  'ops.account_enforcement_case.ReviewAccountEnforcementCase': OperationPrivacyPolicy(
-    operationId: 'ops.account_enforcement_case.ReviewAccountEnforcementCase',
-    domain: 'ops',
-    metric: 'ops_account_enforcement_case_command',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'operation', 'outcome'},
-  ),
+  'ops.account_enforcement_case.OpenAccountModerationCase':
+      OperationPrivacyPolicy(
+        operationId: 'ops.account_enforcement_case.OpenAccountModerationCase',
+        domain: 'ops',
+        metric: 'ops_account_enforcement_case_command',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'operation', 'outcome'},
+      ),
+  'ops.account_enforcement_case.RetryAccountEnforcementDelivery':
+      OperationPrivacyPolicy(
+        operationId:
+            'ops.account_enforcement_case.RetryAccountEnforcementDelivery',
+        domain: 'ops',
+        metric: 'ops_account_enforcement_delivery_recovery',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'operation', 'outcome'},
+      ),
+  'ops.account_enforcement_case.ReviewAccountEnforcementCase':
+      OperationPrivacyPolicy(
+        operationId:
+            'ops.account_enforcement_case.ReviewAccountEnforcementCase',
+        domain: 'ops',
+        metric: 'ops_account_enforcement_case_command',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'operation', 'outcome'},
+      ),
   'ops.app_release.GetAppRecoveryVersion': OperationPrivacyPolicy(
     operationId: 'ops.app_release.GetAppRecoveryVersion',
     domain: 'ops',
@@ -2954,15 +3347,16 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.redacted,
     telemetryAttributes: <String>{'operation', 'outcome'},
   ),
-  'ops.config_instance_report.GetPlatformProjectionSummary': OperationPrivacyPolicy(
-    operationId: 'ops.config_instance_report.GetPlatformProjectionSummary',
-    domain: 'ops',
-    metric: 'ops_platform_projection_summary',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'operation', 'outcome'},
-  ),
+  'ops.config_instance_report.GetPlatformProjectionSummary':
+      OperationPrivacyPolicy(
+        operationId: 'ops.config_instance_report.GetPlatformProjectionSummary',
+        domain: 'ops',
+        metric: 'ops_platform_projection_summary',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'operation', 'outcome'},
+      ),
   'ops.config_instance_report.GetPlatformTriageSummary': OperationPrivacyPolicy(
     operationId: 'ops.config_instance_report.GetPlatformTriageSummary',
     domain: 'ops',
@@ -2972,15 +3366,16 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.redacted,
     telemetryAttributes: <String>{'operation', 'outcome'},
   ),
-  'ops.config_instance_report.IngestAlertmanagerWebhook': OperationPrivacyPolicy(
-    operationId: 'ops.config_instance_report.IngestAlertmanagerWebhook',
-    domain: 'ops',
-    metric: 'ops_platform_alert_ingest',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'operation', 'outcome'},
-  ),
+  'ops.config_instance_report.IngestAlertmanagerWebhook':
+      OperationPrivacyPolicy(
+        operationId: 'ops.config_instance_report.IngestAlertmanagerWebhook',
+        domain: 'ops',
+        metric: 'ops_platform_alert_ingest',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'operation', 'outcome'},
+      ),
   'ops.config_instance_report.ListActiveAlerts': OperationPrivacyPolicy(
     operationId: 'ops.config_instance_report.ListActiveAlerts',
     domain: 'ops',
@@ -2990,15 +3385,16 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.redacted,
     telemetryAttributes: <String>{'operation', 'outcome'},
   ),
-  'ops.config_instance_report.ListConfigInstanceReports': OperationPrivacyPolicy(
-    operationId: 'ops.config_instance_report.ListConfigInstanceReports',
-    domain: 'ops',
-    metric: 'ops_platform_config_instance_reports',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'operation', 'outcome'},
-  ),
+  'ops.config_instance_report.ListConfigInstanceReports':
+      OperationPrivacyPolicy(
+        operationId: 'ops.config_instance_report.ListConfigInstanceReports',
+        domain: 'ops',
+        metric: 'ops_platform_config_instance_reports',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{'operation', 'outcome'},
+      ),
   'ops.config_instance_report.ListPlatformApprovals': OperationPrivacyPolicy(
     operationId: 'ops.config_instance_report.ListPlatformApprovals',
     domain: 'ops',
@@ -3051,7 +3447,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'environment', 'operation', 'outcome', 'service'},
+    telemetryAttributes: <String>{
+      'environment',
+      'operation',
+      'outcome',
+      'service',
+    },
   ),
   'ops.config_snapshot.GetConfigSnapshot': OperationPrivacyPolicy(
     operationId: 'ops.config_snapshot.GetConfigSnapshot',
@@ -3060,7 +3461,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'environment', 'operation', 'outcome', 'service'},
+    telemetryAttributes: <String>{
+      'environment',
+      'operation',
+      'outcome',
+      'service',
+    },
   ),
   'ops.config_snapshot.GetGrayRoutingPolicy': OperationPrivacyPolicy(
     operationId: 'ops.config_snapshot.GetGrayRoutingPolicy',
@@ -3141,17 +3547,28 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'environment', 'operation', 'outcome', 'service'},
+    telemetryAttributes: <String>{
+      'environment',
+      'operation',
+      'outcome',
+      'service',
+    },
   ),
-  'ops.config_snapshot.ResolveEffectiveConfigForInstance': OperationPrivacyPolicy(
-    operationId: 'ops.config_snapshot.ResolveEffectiveConfigForInstance',
-    domain: 'ops',
-    metric: 'ops_platform_config_resolve_instance',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'environment', 'operation', 'outcome', 'service'},
-  ),
+  'ops.config_snapshot.ResolveEffectiveConfigForInstance':
+      OperationPrivacyPolicy(
+        operationId: 'ops.config_snapshot.ResolveEffectiveConfigForInstance',
+        domain: 'ops',
+        metric: 'ops_platform_config_resolve_instance',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{
+          'environment',
+          'operation',
+          'outcome',
+          'service',
+        },
+      ),
   'ops.event_record.GetEventDrilldown': OperationPrivacyPolicy(
     operationId: 'ops.event_record.GetEventDrilldown',
     domain: 'ops',
@@ -3303,7 +3720,14 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.public,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'phase', 'platform', 'recovery_lifecycle', 'recovery_mount', 'runtime_env'},
+    telemetryAttributes: <String>{
+      'outcome',
+      'phase',
+      'platform',
+      'recovery_lifecycle',
+      'recovery_mount',
+      'runtime_env',
+    },
   ),
   'ops.experiment.CreateExperiment': OperationPrivacyPolicy(
     operationId: 'ops.experiment.CreateExperiment',
@@ -3332,15 +3756,21 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.redacted,
     telemetryAttributes: <String>{'experiment_id', 'operation', 'outcome'},
   ),
-  'ops.experiment_assignment_fact.GetExperimentAssignment': OperationPrivacyPolicy(
-    operationId: 'ops.experiment_assignment_fact.GetExperimentAssignment',
-    domain: 'ops',
-    metric: 'ops_experiment_assignment_read',
-    requestClassification: OperationPrivacyClass.public,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.redacted,
-    telemetryAttributes: <String>{'actor_dimension', 'experiment_id', 'operation', 'outcome'},
-  ),
+  'ops.experiment_assignment_fact.GetExperimentAssignment':
+      OperationPrivacyPolicy(
+        operationId: 'ops.experiment_assignment_fact.GetExperimentAssignment',
+        domain: 'ops',
+        metric: 'ops_experiment_assignment_read',
+        requestClassification: OperationPrivacyClass.public,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.redacted,
+        telemetryAttributes: <String>{
+          'actor_dimension',
+          'experiment_id',
+          'operation',
+          'outcome',
+        },
+      ),
   'ops.experiment_assignment_fact.GetExperimentStats': OperationPrivacyPolicy(
     operationId: 'ops.experiment_assignment_fact.GetExperimentStats',
     domain: 'ops',
@@ -3447,7 +3877,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'transport'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'transport',
+    },
   ),
   'realtime.connection.Metrics': OperationPrivacyPolicy(
     operationId: 'realtime.connection.Metrics',
@@ -3467,15 +3902,17 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.none,
     telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
   ),
-  'realtime.connection.RecoverRealtimeAccountClosureDeadLetter': OperationPrivacyPolicy(
-    operationId: 'realtime.connection.RecoverRealtimeAccountClosureDeadLetter',
-    domain: 'realtime',
-    metric: 'realtime_account_closure_dead_letter_recover',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
+  'realtime.connection.RecoverRealtimeAccountClosureDeadLetter':
+      OperationPrivacyPolicy(
+        operationId:
+            'realtime.connection.RecoverRealtimeAccountClosureDeadLetter',
+        domain: 'realtime',
+        metric: 'realtime_account_closure_dead_letter_recover',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
   'realtime.connection.WebSocketUpgrade': OperationPrivacyPolicy(
     operationId: 'realtime.connection.WebSocketUpgrade',
     domain: 'realtime',
@@ -3483,7 +3920,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'transport'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'transport',
+    },
   ),
   'realtime.presence_view.GetPersonaPresence': OperationPrivacyPolicy(
     operationId: 'realtime.presence_view.GetPersonaPresence',
@@ -3494,105 +3936,131 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'operation', 'outcome'},
   ),
-  'recommendation.ranked_recommendation_window.CreateRankedRecommendationWindow': OperationPrivacyPolicy(
-    operationId: 'recommendation.ranked_recommendation_window.CreateRankedRecommendationWindow',
-    domain: 'recommendation',
-    metric: 'recommendation_ranked_window_create',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'replayed', 'scenario'},
-  ),
-  'recommendation.ranked_recommendation_window.GetRankedRecommendationPage': OperationPrivacyPolicy(
-    operationId: 'recommendation.ranked_recommendation_window.GetRankedRecommendationPage',
-    domain: 'recommendation',
-    metric: 'recommendation_ranked_window_read',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'scenario'},
-  ),
-  'recommendation.recommendation_feature_profile_view.GetRecommendationAuthorImpact': OperationPrivacyPolicy(
-    operationId: 'recommendation.recommendation_feature_profile_view.GetRecommendationAuthorImpact',
-    domain: 'recommendation',
-    metric: 'recommendation_author_impact_read',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
-  'recommendation.recommendation_feature_profile_view.GetRecommendationIntersectionSupply': OperationPrivacyPolicy(
-    operationId: 'recommendation.recommendation_feature_profile_view.GetRecommendationIntersectionSupply',
-    domain: 'recommendation',
-    metric: 'recommendation_intersection_supply_read',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'supply_key'},
-  ),
-  'recommendation.recommendation_feature_profile_view.ListRecommendationAuthorImpactEvidence': OperationPrivacyPolicy(
-    operationId: 'recommendation.recommendation_feature_profile_view.ListRecommendationAuthorImpactEvidence',
-    domain: 'recommendation',
-    metric: 'recommendation_author_impact_evidence_read',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
-  'recommendation.recommendation_feature_profile_view.ListRecommendationObjectIntersections': OperationPrivacyPolicy(
-    operationId: 'recommendation.recommendation_feature_profile_view.ListRecommendationObjectIntersections',
-    domain: 'recommendation',
-    metric: 'recommendation_object_intersection_reason_read',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'object_type', 'outcome'},
-  ),
-  'recommendation.recommendation_feature_profile_view.ListRecommendationSubjectIntersections': OperationPrivacyPolicy(
-    operationId: 'recommendation.recommendation_feature_profile_view.ListRecommendationSubjectIntersections',
-    domain: 'recommendation',
-    metric: 'recommendation_intersection_reason_read',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'channel', 'intersection_class', 'outcome'},
-  ),
-  'recommendation.recommendation_model_release.ActivateRecommendationModelRelease': OperationPrivacyPolicy(
-    operationId: 'recommendation.recommendation_model_release.ActivateRecommendationModelRelease',
-    domain: 'recommendation',
-    metric: 'recommendation_model_release_activate',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'replayed', 'scenario'},
-  ),
-  'recommendation.recommendation_model_release.BatchScoreRecommendationCandidates': OperationPrivacyPolicy(
-    operationId: 'recommendation.recommendation_model_release.BatchScoreRecommendationCandidates',
-    domain: 'recommendation',
-    metric: 'recommendation_model_batch_score',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'scenario'},
-  ),
-  'recommendation.recommendation_model_release.ScoreRecommendationCandidates': OperationPrivacyPolicy(
-    operationId: 'recommendation.recommendation_model_release.ScoreRecommendationCandidates',
-    domain: 'recommendation',
-    metric: 'recommendation_model_score',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'scenario'},
-  ),
-  'recommendation.recommendation_model_release.StageRecommendationModelRelease': OperationPrivacyPolicy(
-    operationId: 'recommendation.recommendation_model_release.StageRecommendationModelRelease',
-    domain: 'recommendation',
-    metric: 'recommendation_model_release_stage',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome', 'replayed', 'scenario'},
-  ),
+  'recommendation.ranked_recommendation_window.CreateRankedRecommendationWindow':
+      OperationPrivacyPolicy(
+        operationId:
+            'recommendation.ranked_recommendation_window.CreateRankedRecommendationWindow',
+        domain: 'recommendation',
+        metric: 'recommendation_ranked_window_create',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'replayed', 'scenario'},
+      ),
+  'recommendation.ranked_recommendation_window.GetRankedRecommendationPage':
+      OperationPrivacyPolicy(
+        operationId:
+            'recommendation.ranked_recommendation_window.GetRankedRecommendationPage',
+        domain: 'recommendation',
+        metric: 'recommendation_ranked_window_read',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'scenario'},
+      ),
+  'recommendation.recommendation_feature_profile_view.GetRecommendationAuthorImpact':
+      OperationPrivacyPolicy(
+        operationId:
+            'recommendation.recommendation_feature_profile_view.GetRecommendationAuthorImpact',
+        domain: 'recommendation',
+        metric: 'recommendation_author_impact_read',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
+  'recommendation.recommendation_feature_profile_view.GetRecommendationIntersectionSupply':
+      OperationPrivacyPolicy(
+        operationId:
+            'recommendation.recommendation_feature_profile_view.GetRecommendationIntersectionSupply',
+        domain: 'recommendation',
+        metric: 'recommendation_intersection_supply_read',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'supply_key'},
+      ),
+  'recommendation.recommendation_feature_profile_view.ListRecommendationAuthorImpactEvidence':
+      OperationPrivacyPolicy(
+        operationId:
+            'recommendation.recommendation_feature_profile_view.ListRecommendationAuthorImpactEvidence',
+        domain: 'recommendation',
+        metric: 'recommendation_author_impact_evidence_read',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
+  'recommendation.recommendation_feature_profile_view.ListRecommendationObjectIntersections':
+      OperationPrivacyPolicy(
+        operationId:
+            'recommendation.recommendation_feature_profile_view.ListRecommendationObjectIntersections',
+        domain: 'recommendation',
+        metric: 'recommendation_object_intersection_reason_read',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'object_type', 'outcome'},
+      ),
+  'recommendation.recommendation_feature_profile_view.ListRecommendationSubjectIntersections':
+      OperationPrivacyPolicy(
+        operationId:
+            'recommendation.recommendation_feature_profile_view.ListRecommendationSubjectIntersections',
+        domain: 'recommendation',
+        metric: 'recommendation_intersection_reason_read',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'channel',
+          'intersection_class',
+          'outcome',
+        },
+      ),
+  'recommendation.recommendation_model_release.ActivateRecommendationModelRelease':
+      OperationPrivacyPolicy(
+        operationId:
+            'recommendation.recommendation_model_release.ActivateRecommendationModelRelease',
+        domain: 'recommendation',
+        metric: 'recommendation_model_release_activate',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'replayed', 'scenario'},
+      ),
+  'recommendation.recommendation_model_release.BatchScoreRecommendationCandidates':
+      OperationPrivacyPolicy(
+        operationId:
+            'recommendation.recommendation_model_release.BatchScoreRecommendationCandidates',
+        domain: 'recommendation',
+        metric: 'recommendation_model_batch_score',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'scenario'},
+      ),
+  'recommendation.recommendation_model_release.ScoreRecommendationCandidates':
+      OperationPrivacyPolicy(
+        operationId:
+            'recommendation.recommendation_model_release.ScoreRecommendationCandidates',
+        domain: 'recommendation',
+        metric: 'recommendation_model_score',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'scenario'},
+      ),
+  'recommendation.recommendation_model_release.StageRecommendationModelRelease':
+      OperationPrivacyPolicy(
+        operationId:
+            'recommendation.recommendation_model_release.StageRecommendationModelRelease',
+        domain: 'recommendation',
+        metric: 'recommendation_model_release_stage',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome', 'replayed', 'scenario'},
+      ),
   'rtc.call_session.AnswerCall': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.AnswerCall',
     domain: 'rtc',
@@ -3600,7 +4068,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.CancelCall': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.CancelCall',
@@ -3609,7 +4082,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.GetCall': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.GetCall',
@@ -3627,7 +4105,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.InitiateCall': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.InitiateCall',
@@ -3636,7 +4119,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.InviteToCall': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.InviteToCall',
@@ -3645,7 +4133,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.JoinCall': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.JoinCall',
@@ -3654,7 +4147,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.LeaveCall': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.LeaveCall',
@@ -3663,7 +4161,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.ListCalls': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.ListCalls',
@@ -3690,7 +4193,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.ReportMediaConnected': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.ReportMediaConnected',
@@ -3699,7 +4207,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.StartScreenShare': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.StartScreenShare',
@@ -3708,7 +4221,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.StopScreenShare': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.StopScreenShare',
@@ -3717,7 +4235,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.ToggleCamera': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.ToggleCamera',
@@ -3726,7 +4249,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'rtc.call_session.ToggleMute': OperationPrivacyPolicy(
     operationId: 'rtc.call_session.ToggleMute',
@@ -3735,7 +4263,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'search.recent_search_state.ClearRecentSearches': OperationPrivacyPolicy(
     operationId: 'search.recent_search_state.ClearRecentSearches',
@@ -3800,15 +4333,17 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'outcome', 'result_count'},
   ),
-  'search.search_request_fact.RecoverSearchAccountClosureDeadLetter': OperationPrivacyPolicy(
-    operationId: 'search.search_request_fact.RecoverSearchAccountClosureDeadLetter',
-    domain: 'search',
-    metric: 'search_account_closure_dead_letter_recover',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
-  ),
+  'search.search_request_fact.RecoverSearchAccountClosureDeadLetter':
+      OperationPrivacyPolicy(
+        operationId:
+            'search.search_request_fact.RecoverSearchAccountClosureDeadLetter',
+        domain: 'search',
+        metric: 'search_account_closure_dead_letter_recover',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'outcome'},
+      ),
   'tag.tag_feedback_fact.ReportTagFeedback': OperationPrivacyPolicy(
     operationId: 'tag.tag_feedback_fact.ReportTagFeedback',
     domain: 'tag',
@@ -3951,26 +4486,38 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'error_code', 'idempotent_replay', 'operation', 'outcome'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'idempotent_replay',
+      'operation',
+      'outcome',
+    },
   ),
-  'user.account_appeal_intake.IssueAccountAppealCredential': OperationPrivacyPolicy(
-    operationId: 'user.account_appeal_intake.IssueAccountAppealCredential',
-    domain: 'user',
-    metric: 'user_account_appeal_credential_command',
-    requestClassification: OperationPrivacyClass.secret,
-    responseClassification: OperationPrivacyClass.secret,
-    logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'user.account_appeal_intake.SubmitAccountAppealIntake': OperationPrivacyPolicy(
-    operationId: 'user.account_appeal_intake.SubmitAccountAppealIntake',
-    domain: 'user',
-    metric: 'user_account_appeal_intake_command',
-    requestClassification: OperationPrivacyClass.secret,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'error_code', 'idempotent_replay', 'operation', 'outcome'},
-  ),
+  'user.account_appeal_intake.IssueAccountAppealCredential':
+      OperationPrivacyPolicy(
+        operationId: 'user.account_appeal_intake.IssueAccountAppealCredential',
+        domain: 'user',
+        metric: 'user_account_appeal_credential_command',
+        requestClassification: OperationPrivacyClass.secret,
+        responseClassification: OperationPrivacyClass.secret,
+        logPolicy: OperationLogPolicy.none,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'user.account_appeal_intake.SubmitAccountAppealIntake':
+      OperationPrivacyPolicy(
+        operationId: 'user.account_appeal_intake.SubmitAccountAppealIntake',
+        domain: 'user',
+        metric: 'user_account_appeal_intake_command',
+        requestClassification: OperationPrivacyClass.secret,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.none,
+        telemetryAttributes: <String>{
+          'error_code',
+          'idempotent_replay',
+          'operation',
+          'outcome',
+        },
+      ),
   'user.account_session.LoginAnonymous': OperationPrivacyPolicy(
     operationId: 'user.account_session.LoginAnonymous',
     domain: 'user',
@@ -3987,7 +4534,13 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.secret,
     responseClassification: OperationPrivacyClass.secret,
     logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'environment', 'error_code', 'outcome', 'platform', 'vendor'},
+    telemetryAttributes: <String>{
+      'environment',
+      'error_code',
+      'outcome',
+      'platform',
+      'vendor',
+    },
   ),
   'user.account_session.LoginWithAlipay': OperationPrivacyPolicy(
     operationId: 'user.account_session.LoginWithAlipay',
@@ -3996,7 +4549,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.secret,
     responseClassification: OperationPrivacyClass.secret,
     logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'environment', 'error_code', 'outcome', 'platform'},
+    telemetryAttributes: <String>{
+      'environment',
+      'error_code',
+      'outcome',
+      'platform',
+    },
   ),
   'user.account_session.LoginWithPhone': OperationPrivacyPolicy(
     operationId: 'user.account_session.LoginWithPhone',
@@ -4005,7 +4563,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.secret,
     responseClassification: OperationPrivacyClass.secret,
     logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'environment', 'error_code', 'outcome', 'platform'},
+    telemetryAttributes: <String>{
+      'environment',
+      'error_code',
+      'outcome',
+      'platform',
+    },
   ),
   'user.account_session.LoginWithQq': OperationPrivacyPolicy(
     operationId: 'user.account_session.LoginWithQq',
@@ -4014,7 +4577,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.secret,
     responseClassification: OperationPrivacyClass.secret,
     logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'environment', 'error_code', 'outcome', 'platform'},
+    telemetryAttributes: <String>{
+      'environment',
+      'error_code',
+      'outcome',
+      'platform',
+    },
   ),
   'user.account_session.LoginWithWechat': OperationPrivacyPolicy(
     operationId: 'user.account_session.LoginWithWechat',
@@ -4023,7 +4591,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.secret,
     responseClassification: OperationPrivacyClass.secret,
     logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'environment', 'error_code', 'outcome', 'platform'},
+    telemetryAttributes: <String>{
+      'environment',
+      'error_code',
+      'outcome',
+      'platform',
+    },
   ),
   'user.account_session.Logout': OperationPrivacyPolicy(
     operationId: 'user.account_session.Logout',
@@ -4043,24 +4616,38 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.none,
     telemetryAttributes: <String>{'error_code', 'outcome'},
   ),
-  'user.authentication_challenge.CreateAlipayAuthorizationRequest': OperationPrivacyPolicy(
-    operationId: 'user.authentication_challenge.CreateAlipayAuthorizationRequest',
-    domain: 'user',
-    metric: 'user_auth_alipay_authorization',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.secret,
-    logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'environment', 'error_code', 'outcome', 'platform'},
-  ),
-  'user.authentication_challenge.ResolveOneTapLoginHint': OperationPrivacyPolicy(
-    operationId: 'user.authentication_challenge.ResolveOneTapLoginHint',
-    domain: 'user',
-    metric: 'user_auth_one_tap_hint',
-    requestClassification: OperationPrivacyClass.secret,
-    responseClassification: OperationPrivacyClass.pii,
-    logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'environment', 'error_code', 'outcome', 'platform', 'vendor'},
-  ),
+  'user.authentication_challenge.CreateAlipayAuthorizationRequest':
+      OperationPrivacyPolicy(
+        operationId:
+            'user.authentication_challenge.CreateAlipayAuthorizationRequest',
+        domain: 'user',
+        metric: 'user_auth_alipay_authorization',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.secret,
+        logPolicy: OperationLogPolicy.none,
+        telemetryAttributes: <String>{
+          'environment',
+          'error_code',
+          'outcome',
+          'platform',
+        },
+      ),
+  'user.authentication_challenge.ResolveOneTapLoginHint':
+      OperationPrivacyPolicy(
+        operationId: 'user.authentication_challenge.ResolveOneTapLoginHint',
+        domain: 'user',
+        metric: 'user_auth_one_tap_hint',
+        requestClassification: OperationPrivacyClass.secret,
+        responseClassification: OperationPrivacyClass.pii,
+        logPolicy: OperationLogPolicy.none,
+        telemetryAttributes: <String>{
+          'environment',
+          'error_code',
+          'outcome',
+          'platform',
+          'vendor',
+        },
+      ),
   'user.authentication_challenge.SendOtp': OperationPrivacyPolicy(
     operationId: 'user.authentication_challenge.SendOtp',
     domain: 'user',
@@ -4068,35 +4655,44 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.pii,
     responseClassification: OperationPrivacyClass.pii,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'delivery_status', 'environment', 'error_code', 'outcome', 'platform'},
+    telemetryAttributes: <String>{
+      'delivery_status',
+      'environment',
+      'error_code',
+      'outcome',
+      'platform',
+    },
   ),
-  'user.contact_discovery_record.DismissContactDiscovery': OperationPrivacyPolicy(
-    operationId: 'user.contact_discovery_record.DismissContactDiscovery',
-    domain: 'user',
-    metric: 'user_contact_discovery_command',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'user.contact_discovery_record.GetLatestContactDiscovery': OperationPrivacyPolicy(
-    operationId: 'user.contact_discovery_record.GetLatestContactDiscovery',
-    domain: 'user',
-    metric: 'user_contact_discovery_query',
-    requestClassification: OperationPrivacyClass.public,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'user.contact_discovery_record.InitiateContactDiscovery': OperationPrivacyPolicy(
-    operationId: 'user.contact_discovery_record.InitiateContactDiscovery',
-    domain: 'user',
-    metric: 'user_contact_discovery_command',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
+  'user.contact_discovery_record.DismissContactDiscovery':
+      OperationPrivacyPolicy(
+        operationId: 'user.contact_discovery_record.DismissContactDiscovery',
+        domain: 'user',
+        metric: 'user_contact_discovery_command',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'user.contact_discovery_record.GetLatestContactDiscovery':
+      OperationPrivacyPolicy(
+        operationId: 'user.contact_discovery_record.GetLatestContactDiscovery',
+        domain: 'user',
+        metric: 'user_contact_discovery_query',
+        requestClassification: OperationPrivacyClass.public,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'user.contact_discovery_record.InitiateContactDiscovery':
+      OperationPrivacyPolicy(
+        operationId: 'user.contact_discovery_record.InitiateContactDiscovery',
+        domain: 'user',
+        metric: 'user_contact_discovery_command',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
   'user.credential_binding.BindCarrierPhoneCredential': OperationPrivacyPolicy(
     operationId: 'user.credential_binding.BindCarrierPhoneCredential',
     domain: 'user',
@@ -4115,15 +4711,22 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.none,
     telemetryAttributes: <String>{'error_code', 'outcome'},
   ),
-  'user.credential_binding.CompleteFederatedPhoneBinding': OperationPrivacyPolicy(
-    operationId: 'user.credential_binding.CompleteFederatedPhoneBinding',
-    domain: 'user',
-    metric: 'user_federated_phone_binding_complete',
-    requestClassification: OperationPrivacyClass.secret,
-    responseClassification: OperationPrivacyClass.secret,
-    logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'environment', 'error_code', 'outcome', 'platform', 'provider'},
-  ),
+  'user.credential_binding.CompleteFederatedPhoneBinding':
+      OperationPrivacyPolicy(
+        operationId: 'user.credential_binding.CompleteFederatedPhoneBinding',
+        domain: 'user',
+        metric: 'user_federated_phone_binding_complete',
+        requestClassification: OperationPrivacyClass.secret,
+        responseClassification: OperationPrivacyClass.secret,
+        logPolicy: OperationLogPolicy.none,
+        telemetryAttributes: <String>{
+          'environment',
+          'error_code',
+          'outcome',
+          'platform',
+          'provider',
+        },
+      ),
   'user.credential_binding.ListCredentials': OperationPrivacyPolicy(
     operationId: 'user.credential_binding.ListCredentials',
     domain: 'user',
@@ -4142,15 +4745,21 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'error_code', 'outcome'},
   ),
-  'user.device_registration.InvalidateDevicePushEndpoint': OperationPrivacyPolicy(
-    operationId: 'user.device_registration.InvalidateDevicePushEndpoint',
-    domain: 'user',
-    metric: 'user_push_endpoint_invalidate',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'endpoint_kind', 'error_code', 'idempotent_replay', 'outcome'},
-  ),
+  'user.device_registration.InvalidateDevicePushEndpoint':
+      OperationPrivacyPolicy(
+        operationId: 'user.device_registration.InvalidateDevicePushEndpoint',
+        domain: 'user',
+        metric: 'user_push_endpoint_invalidate',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'endpoint_kind',
+          'error_code',
+          'idempotent_replay',
+          'outcome',
+        },
+      ),
   'user.device_registration.RemoveDevicePushEndpoint': OperationPrivacyPolicy(
     operationId: 'user.device_registration.RemoveDevicePushEndpoint',
     domain: 'user',
@@ -4158,17 +4767,28 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'endpoint_kind', 'error_code', 'idempotent_replay', 'outcome'},
+    telemetryAttributes: <String>{
+      'endpoint_kind',
+      'error_code',
+      'idempotent_replay',
+      'outcome',
+    },
   ),
-  'user.device_registration.ResolveIncomingCallPushDestinations': OperationPrivacyPolicy(
-    operationId: 'user.device_registration.ResolveIncomingCallPushDestinations',
-    domain: 'user',
-    metric: 'user_incoming_call_push_destinations_resolve',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'destination_count', 'error_code', 'outcome'},
-  ),
+  'user.device_registration.ResolveIncomingCallPushDestinations':
+      OperationPrivacyPolicy(
+        operationId:
+            'user.device_registration.ResolveIncomingCallPushDestinations',
+        domain: 'user',
+        metric: 'user_incoming_call_push_destinations_resolve',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'destination_count',
+          'error_code',
+          'outcome',
+        },
+      ),
   'user.device_registration.ResolvePushEndpointSecret': OperationPrivacyPolicy(
     operationId: 'user.device_registration.ResolvePushEndpointSecret',
     domain: 'user',
@@ -4185,17 +4805,29 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.secret,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.none,
-    telemetryAttributes: <String>{'endpoint_kind', 'error_code', 'idempotent_replay', 'outcome'},
+    telemetryAttributes: <String>{
+      'endpoint_kind',
+      'error_code',
+      'idempotent_replay',
+      'outcome',
+    },
   ),
-  'user.followed_subject_visit_state.MarkFollowedSubjectVisited': OperationPrivacyPolicy(
-    operationId: 'user.followed_subject_visit_state.MarkFollowedSubjectVisited',
-    domain: 'user',
-    metric: 'user_followed_subject_visit_command',
-    requestClassification: OperationPrivacyClass.internal,
-    responseClassification: OperationPrivacyClass.internal,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'subject_type'},
-  ),
+  'user.followed_subject_visit_state.MarkFollowedSubjectVisited':
+      OperationPrivacyPolicy(
+        operationId:
+            'user.followed_subject_visit_state.MarkFollowedSubjectVisited',
+        domain: 'user',
+        metric: 'user_followed_subject_visit_command',
+        requestClassification: OperationPrivacyClass.internal,
+        responseClassification: OperationPrivacyClass.internal,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'subject_type',
+        },
+      ),
   'user.following_subject.ListFollowingSubjects': OperationPrivacyPolicy(
     operationId: 'user.following_subject.ListFollowingSubjects',
     domain: 'user',
@@ -4266,7 +4898,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'channel', 'error_code', 'operation', 'outcome'},
+    telemetryAttributes: <String>{
+      'channel',
+      'error_code',
+      'operation',
+      'outcome',
+    },
   ),
   'user.invitation.GenerateInvitation': OperationPrivacyPolicy(
     operationId: 'user.invitation.GenerateInvitation',
@@ -4275,7 +4912,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'channel', 'error_code', 'operation', 'outcome'},
+    telemetryAttributes: <String>{
+      'channel',
+      'error_code',
+      'operation',
+      'outcome',
+    },
   ),
   'user.invitation.GetInvitationByCode': OperationPrivacyPolicy(
     operationId: 'user.invitation.GetInvitationByCode',
@@ -4284,7 +4926,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.public,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'channel', 'error_code', 'operation', 'outcome'},
+    telemetryAttributes: <String>{
+      'channel',
+      'error_code',
+      'operation',
+      'outcome',
+    },
   ),
   'user.invitation.ListInvitations': OperationPrivacyPolicy(
     operationId: 'user.invitation.ListInvitations',
@@ -4365,7 +5012,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'idempotent_replay', 'operation', 'outcome'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'idempotent_replay',
+      'operation',
+      'outcome',
+    },
   ),
   'user.persona_relationship.FollowUser': OperationPrivacyPolicy(
     operationId: 'user.persona_relationship.FollowUser',
@@ -4374,7 +5026,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'idempotent_replay', 'operation', 'outcome'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'idempotent_replay',
+      'operation',
+      'outcome',
+    },
   ),
   'user.persona_relationship.GetRelationship': OperationPrivacyPolicy(
     operationId: 'user.persona_relationship.GetRelationship',
@@ -4428,7 +5085,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'idempotent_replay', 'operation', 'outcome'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'idempotent_replay',
+      'operation',
+      'outcome',
+    },
   ),
   'user.persona_relationship.UnfollowUser': OperationPrivacyPolicy(
     operationId: 'user.persona_relationship.UnfollowUser',
@@ -4437,7 +5099,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'idempotent_replay', 'operation', 'outcome'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'idempotent_replay',
+      'operation',
+      'outcome',
+    },
   ),
   'user.profile_update_proposal.ApplyProposal': OperationPrivacyPolicy(
     operationId: 'user.profile_update_proposal.ApplyProposal',
@@ -4446,7 +5113,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'user.profile_update_proposal.ConfirmProposal': OperationPrivacyPolicy(
     operationId: 'user.profile_update_proposal.ConfirmProposal',
@@ -4455,35 +5127,48 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
-  'user.profile_update_proposal.CreateProfileUpdateProposal': OperationPrivacyPolicy(
-    operationId: 'user.profile_update_proposal.CreateProfileUpdateProposal',
-    domain: 'user',
-    metric: 'user_profile_proposal_command',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
-  ),
-  'user.profile_update_proposal.GetProfileUpdateProposal': OperationPrivacyPolicy(
-    operationId: 'user.profile_update_proposal.GetProfileUpdateProposal',
-    domain: 'user',
-    metric: 'user_profile_proposal_query',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
-  'user.profile_update_proposal.ListProfileUpdateProposals': OperationPrivacyPolicy(
-    operationId: 'user.profile_update_proposal.ListProfileUpdateProposals',
-    domain: 'user',
-    metric: 'user_profile_proposal_query',
-    requestClassification: OperationPrivacyClass.sensitive,
-    responseClassification: OperationPrivacyClass.sensitive,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
-  ),
+  'user.profile_update_proposal.CreateProfileUpdateProposal':
+      OperationPrivacyPolicy(
+        operationId: 'user.profile_update_proposal.CreateProfileUpdateProposal',
+        domain: 'user',
+        metric: 'user_profile_proposal_command',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{
+          'error_code',
+          'operation',
+          'outcome',
+          'replayed',
+        },
+      ),
+  'user.profile_update_proposal.GetProfileUpdateProposal':
+      OperationPrivacyPolicy(
+        operationId: 'user.profile_update_proposal.GetProfileUpdateProposal',
+        domain: 'user',
+        metric: 'user_profile_proposal_query',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
+  'user.profile_update_proposal.ListProfileUpdateProposals':
+      OperationPrivacyPolicy(
+        operationId: 'user.profile_update_proposal.ListProfileUpdateProposals',
+        domain: 'user',
+        metric: 'user_profile_proposal_query',
+        requestClassification: OperationPrivacyClass.sensitive,
+        responseClassification: OperationPrivacyClass.sensitive,
+        logPolicy: OperationLogPolicy.metadataOnly,
+        telemetryAttributes: <String>{'error_code', 'operation', 'outcome'},
+      ),
   'user.profile_update_proposal.RejectProposal': OperationPrivacyPolicy(
     operationId: 'user.profile_update_proposal.RejectProposal',
     domain: 'user',
@@ -4491,7 +5176,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'user.profile_update_proposal.RollbackProposal': OperationPrivacyPolicy(
     operationId: 'user.profile_update_proposal.RollbackProposal',
@@ -4500,7 +5190,12 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.sensitive,
     responseClassification: OperationPrivacyClass.sensitive,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'operation', 'outcome', 'replayed'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'operation',
+      'outcome',
+      'replayed',
+    },
   ),
   'user.subject_follow.FollowSubject': OperationPrivacyPolicy(
     operationId: 'user.subject_follow.FollowSubject',
@@ -4509,7 +5204,13 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'idempotent_replay', 'operation', 'outcome', 'subject_type'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'idempotent_replay',
+      'operation',
+      'outcome',
+      'subject_type',
+    },
   ),
   'user.subject_follow.UnfollowSubject': OperationPrivacyPolicy(
     operationId: 'user.subject_follow.UnfollowSubject',
@@ -4518,7 +5219,13 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     requestClassification: OperationPrivacyClass.internal,
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'error_code', 'idempotent_replay', 'operation', 'outcome', 'subject_type'},
+    telemetryAttributes: <String>{
+      'error_code',
+      'idempotent_replay',
+      'operation',
+      'outcome',
+      'subject_type',
+    },
   ),
   'user.user_account.CheckAccountSecurityAuthority': OperationPrivacyPolicy(
     operationId: 'user.user_account.CheckAccountSecurityAuthority',

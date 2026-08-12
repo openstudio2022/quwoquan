@@ -10,6 +10,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from content.execution.campaign.source_pool_binding import (
+    bind_scale_source_pool,
+    materialize_bound_scale_source_pool,
+    validate_bound_scale_source_pool,
+    validate_capsule_scale_source_pool,
+)
 from content.source.research.scale_source_pool import (
     SOURCE_POOL_CREATE_ONCE_COLLISION,
     SOURCE_POOL_EVIDENCE_INVALID,
@@ -22,11 +28,8 @@ from content.source.research.scale_source_pool import (
     validate_scale_source_pool_evidence,
     write_create_once_scale_source_pool,
 )
-from content.execution.campaign.source_pool_binding import (
-    bind_scale_source_pool,
-    materialize_bound_scale_source_pool,
-    validate_bound_scale_source_pool,
-    validate_capsule_scale_source_pool,
+from content.release.canonical.pool_source_ready_input import (  # noqa: E402
+    load_source_ready_input,
 )
 
 IDENTITY = {
@@ -42,6 +45,26 @@ CLI = DATA_ROOT / "scripts" / "cli.py"
 
 def _digest(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _source_attribution(carrier: str, index: int) -> dict[str, object]:
+    return {
+        "isOriginal": False,
+        "originalCreatorName": f"source-author-{index}",
+        "platform": f"{carrier}-source",
+        "sourcePostUrl": f"https://source.example/{carrier}/{index}",
+        "originalAssetUrl": f"https://source.example/{carrier}/{index}/asset",
+        "attributionText": f"source-author-{index} / {carrier}-source",
+        "rightsBasis": "public research reference",
+        "commercialAuthorizationStatus": "unverified",
+        "publicationAdmission": "research_release",
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "2026-08-08T00:00:00Z",
+        "takedownPolicy": "remove on substantiated request",
+    }
 
 
 EVIDENCE_PAYLOADS = {
@@ -121,6 +144,9 @@ def _candidate(carrier: str, index: int, *, provider: str) -> dict[str, object]:
         "playabilityFileSha256": None,
         "videoReadiness": None,
     }
+    if carrier in {"homepage", "article"}:
+        candidate["sourceReadyEvidenceRootRef"] = "."
+        candidate["sourceAttribution"] = _source_attribution(carrier, index)
     if carrier == "video":
         candidate.update(
             {
@@ -207,25 +233,11 @@ def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_milestone_new_pool_counts_are_exact_oversampled_differences() -> None:
-    assert required_candidate_counts("M100") == {
-        "homepage": 180,
-        "article": 180,
-        "image": 180,
-        "video": 18,
-    }
-    assert required_candidate_counts("M1000") == {
-        "homepage": 1620,
-        "article": 1620,
-        "image": 1620,
-        "video": 162,
-    }
-    assert required_candidate_counts("M10000") == {
-        "homepage": 16200,
-        "article": 16200,
-        "image": 16200,
-        "video": 1620,
-    }
+def test_source_pool_uses_a_rolling_wave_default_not_milestone_oversampling() -> None:
+    expected = {"homepage": 12, "article": 12, "image": 12, "video": 12}
+    assert required_candidate_counts("M100") == expected
+    assert required_candidate_counts("M1000") == expected
+    assert required_candidate_counts("M10000") == expected
 
 
 def test_m100_pool_closes_identity_mix_video_and_zero_duplicate_gates() -> None:
@@ -239,7 +251,8 @@ def test_m100_pool_closes_identity_mix_video_and_zero_duplicate_gates() -> None:
     assert validation["duplicateCount"] == 0
     assert validation["entityMismatchCount"] == 0
     assert validation["videoPopularityReadyCount"] == 18
-    assert validation["videoPlayableMotionPremiumCount"] == 18
+    assert validation["videoPlayableMotionCount"] == 18
+    assert validation["videoPremiumEligibleCount"] == 18
     mix = validation["professionalImageSourceMix"]
     assert mix["pinterestCandidateCount"] == 80
     assert mix["tuchongCandidateCount"] == 20
@@ -248,16 +261,48 @@ def test_m100_pool_closes_identity_mix_video_and_zero_duplicate_gates() -> None:
     assert mix["maxProviderCandidateRatio"] <= 0.7
 
 
-def test_pool_shortfall_is_typed_and_never_substitutes_old_receipt() -> None:
+def test_smaller_current_wave_is_valid_and_never_substitutes_old_receipt() -> None:
     candidates = _m100_candidates()
     candidates.pop()
 
-    with pytest.raises(ScaleSourcePoolError) as captured:
-        _plan(candidates)
+    validation = validate_scale_source_pool(_plan(candidates))
 
-    assert captured.value.code == SOURCE_POOL_SHORTFALL
-    assert "video source-ready pool shortfall: required=18 actual=17" in str(
-        captured.value
+    counts = {
+        row["carrier"]: row["actualCandidateCount"]
+        for row in validation["candidateCounts"]
+    }
+    assert counts["video"] == 17
+    assert validation["decision"] == "GO"
+
+
+def test_pending_delivery_object_is_not_redispatched_as_semantic_work(
+    tmp_path: Path,
+) -> None:
+    output = tmp_path / "output"
+    evidence = _write_evidence_root(output / "evidence-root")
+    plan = _plan()
+    plan_ref = "data/source-pools/m100.json"
+    plan_path = output / plan_ref
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(
+        json.dumps(plan, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    consumed_ref = str(plan["candidates"][0]["objectRef"])
+
+    _input, candidates = load_source_ready_input(
+        output_root=output,
+        publish_root=tmp_path / "publish",
+        milestone="M100",
+        source_pool_ref=plan_ref,
+        evidence_root_ref=evidence.relative_to(output).as_posix(),
+        consumed_object_refs=frozenset({consumed_ref}),
+    )
+
+    assert all(
+        row["objectRef"] != consumed_ref
+        for rows in candidates.values()
+        for row in rows
     )
 
 
@@ -296,32 +341,49 @@ def test_pool_rejects_identity_duplicates_and_entity_mismatch(
     assert captured.value.code == SOURCE_POOL_SHORTFALL
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("shareCount", None),
-        ("observedAt", ""),
-        ("popularityPercentile", None),
-        ("playable", False),
-        ("motion", False),
-        ("premiumEligible", False),
-    ],
-)
-def test_m100_video_requires_five_signals_observation_percentile_and_media(
+@pytest.mark.parametrize("field", ["shareCount", "observedAt", "popularityPercentile"])
+def test_video_popularity_incompleteness_is_statistical(
     field: str,
-    value: object,
 ) -> None:
     candidates = _m100_candidates()
     video = next(row for row in candidates if row["carrier"] == "video")
     readiness = video["videoReadiness"]
     assert isinstance(readiness, dict)
-    readiness[field] = value
+    readiness[field] = None
+
+    validation = validate_scale_source_pool(_plan(candidates))
+
+    assert validation["decision"] == "GO"
+    assert validation["videoPopularityReadyCount"] == 17
+
+
+@pytest.mark.parametrize("field", ["playable", "motion"])
+def test_video_physical_playability_remains_a_hard_object_gate(field: str) -> None:
+    candidates = _m100_candidates()
+    video = next(row for row in candidates if row["carrier"] == "video")
+    readiness = video["videoReadiness"]
+    assert isinstance(readiness, dict)
+    readiness[field] = False
 
     with pytest.raises(ScaleSourcePoolError) as captured:
         _plan(candidates)
 
     assert captured.value.code in {SOURCE_POOL_INVALID, SOURCE_POOL_SHORTFALL}
-    assert field in str(captured.value) or "playable motion Premium" in str(captured.value)
+    assert "playable motion media" in str(captured.value)
+
+
+def test_video_premium_eligibility_is_statistical() -> None:
+    candidates = _m100_candidates()
+    video = next(row for row in candidates if row["carrier"] == "video")
+    readiness = video["videoReadiness"]
+    assert isinstance(readiness, dict)
+    readiness["premiumEligible"] = False
+
+    validation = validate_scale_source_pool(_plan(candidates))
+
+    assert validation["decision"] == "GO"
+    assert validation["videoPlayableMotionCount"] == 18
+    assert validation["videoPremiumEligibleCount"] == 17
 
 
 @pytest.mark.parametrize(
@@ -333,7 +395,7 @@ def test_m100_video_requires_five_signals_observation_percentile_and_media(
         ["Pinterest"] * 130 + ["图虫"] * 10 + ["Pexels"] * 40,
     ],
 )
-def test_image_pool_enforces_professional_mix(providers: list[str]) -> None:
+def test_image_provider_mix_is_statistical(providers: list[str]) -> None:
     candidates = [
         row for row in _m100_candidates() if row["carrier"] != "image"
     ]
@@ -342,10 +404,10 @@ def test_image_pool_enforces_professional_mix(providers: list[str]) -> None:
         for index, provider in enumerate(providers)
     )
 
-    with pytest.raises(ScaleSourcePoolError) as captured:
-        _plan(candidates)
+    validation = validate_scale_source_pool(_plan(candidates))
 
-    assert captured.value.code == SOURCE_POOL_SHORTFALL
+    assert validation["decision"] == "GO"
+    assert validation["professionalImageSourceMix"]["totalCandidateCount"] == 180
 
 
 def test_plan_is_create_once_digest_bound_and_rejects_legacy_fields(

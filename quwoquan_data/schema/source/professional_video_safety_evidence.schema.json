@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_video_safety_evidence.schema.json",
+  "type": "object",
+  "required": [
+    "schema", "assetId", "entityId", "observedEntityId", "sourcePageUrl",
+    "fileRef", "fileSha256",
+    "bytes", "contactSheetRef", "contactSheetSha256", "mediaProbe",
+    "status", "entityMatch", "privacyRisk", "minorRisk", "maliciousMediaRisk",
+    "watermarkStatus", "reviewedAt", "reviewer"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.manual_asset_safety_evidence"},
+    "assetId": {"type": "string", "minLength": 1},
+    "entityId": {"type": "string", "minLength": 1},
+    "observedEntityId": {"type": "string", "minLength": 1},
+    "sourcePageUrl": {"type": "string", "pattern": "^https://"},
+    "fileRef": {
+      "oneOf": [
+        {"const": ""},
+        {"$ref": "#/$defs/relativeRef"}
+      ]
+    },
+    "fileSha256": {"$ref": "#/$defs/sha256"},
+    "bytes": {"type": "integer", "minimum": 1},
+    "contactSheetRef": {"$ref": "#/$defs/relativeRef"},
+    "contactSheetSha256": {"$ref": "#/$defs/sha256"},
+    "sourceContentSha256": {"$ref": "#/$defs/sha256"},
+    "transformation": {"type": "string", "minLength": 1},
+    "mediaProbe": {
+      "type": "object",
+      "required": [
+        "width", "height", "frameCount", "framesPerSecond", "durationMs",
+        "codec", "hasAudio", "sampleCount", "distinctFrameCount",
+        "movingTransitionCount", "meanTransitionDelta", "motionVideo",
+        "staticImageSequence", "playable", "premiumPlayableEligible"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1},
+        "frameCount": {"type": "integer", "minimum": 1},
+        "framesPerSecond": {"type": "number", "exclusiveMinimum": 0},
+        "durationMs": {"type": "integer", "minimum": 1},
+        "codec": {"type": "string", "minLength": 1},
+        "hasAudio": {"type": "boolean"},
+        "sampleCount": {"type": "integer", "minimum": 1},
+        "distinctFrameCount": {"type": "integer", "minimum": 1},
+        "movingTransitionCount": {"type": "integer", "minimum": 0},
+        "meanTransitionDelta": {"type": "number", "minimum": 0},
+        "motionVideo": {"type": "boolean"},
+        "staticImageSequence": {"type": "boolean"},
+        "playable": {"type": "boolean"},
+        "premiumPlayableEligible": {"type": "boolean"}
+      }
+    },
+    "status": {"enum": ["passed", "blocked", "pending"]},
+    "entityMatch": {"enum": ["matched", "mismatch", "unknown"]},
+    "privacyRisk": {"enum": ["none", "present", "unknown"]},
+    "minorRisk": {"enum": ["none", "present", "unknown"]},
+    "maliciousMediaRisk": {"enum": ["none", "present", "unknown"]},
+    "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
+    "reviewedAt": {"type": "string", "minLength": 1},
+    "reviewer": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "relativeRef": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+    }
+  }
+}

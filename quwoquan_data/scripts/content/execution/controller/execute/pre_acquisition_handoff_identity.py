@@ -1,12 +1,15 @@
 """Source-identity guard for acquisition manifests."""
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from core import paths
-from core.source_digest import SourceDigest, content_source_revision
+from core.source_digest import (
+    ExecutionBundleIdentity,
+    SourceDefinitionSnapshot,
+    content_source_revision,
+)
 
 from .pre_acquisition_handoff_document import (
     _identity_drift,
@@ -19,23 +22,34 @@ def guard_acquisition_source_identity(
     manifest: Mapping[str, Any],
     *,
     handoff_ref: Path | None,
-    repo_root: Path | None = None,
-    source_digest_resolver: Callable[..., SourceDigest],
+    frozen_external_input: bool = False,
 ) -> dict[str, Any]:
-    """Reject stale manifest/handoff identity before any receipt or CAS write."""
+    """Reject manifest/handoff drift without consulting a later live worktree."""
     if handoff_ref is None:
         raise _typed("HANDOFF_REQUIRED", "acquisition requires explicit handoffRef")
-    source = source_digest_resolver(
-        repo_root=(repo_root or paths.REPO_ROOT).expanduser().resolve()
-    )
     manifest_source = str(manifest.get("sourceDigest") or "")
+    manifest_bundle = manifest.get("executionBundle")
     catalog_digest = str(manifest.get("entityCatalogDigest") or "")
     manifest_revision = str(manifest.get("sourceRevision") or "")
-    if manifest_source != source.digest:
+    handoff = load_pre_acquisition_handoff(handoff_ref.expanduser().resolve())
+    source = SourceDefinitionSnapshot.from_document(handoff.get("sourceDigest"))
+    bundle = ExecutionBundleIdentity.from_document(handoff.get("executionBundle"))
+    if manifest_source != source.digest and not frozen_external_input:
         raise _typed(
             "SOURCE_IDENTITY_DRIFT",
-            "manifest sourceDigest differs from current_source_digest",
+            "manifest sourceDigest differs from frozen handoff snapshot",
         )
+    if (
+        manifest_bundle is not None
+        and manifest_bundle != bundle.to_document()
+        and not frozen_external_input
+    ):
+        raise _typed(
+            "SOURCE_IDENTITY_DRIFT",
+            "manifest executionBundle differs from frozen handoff bundle",
+        )
+    if frozen_external_input:
+        return handoff
     expected_revision = content_source_revision(
         source_digest=source.digest,
         entity_catalog_digest=catalog_digest,
@@ -46,7 +60,6 @@ def guard_acquisition_source_identity(
             "manifest sourceRevision does not match sourceDigest + "
             "entityCatalogDigest",
         )
-    handoff = load_pre_acquisition_handoff(handoff_ref.expanduser().resolve())
     drift = _identity_drift(
         handoff,
         source_revision=manifest_revision,

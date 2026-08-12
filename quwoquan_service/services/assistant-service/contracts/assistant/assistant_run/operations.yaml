@@ -317,6 +317,7 @@ api_routes:
     - {name: resumeToken, field: resumeToken, required: false}
   response_entity: AssistantStreamEventWire
   transport: sse
+  transport_role: sse
   streaming:
     resume_request_field: resumeToken
     resume_response_field: eventId

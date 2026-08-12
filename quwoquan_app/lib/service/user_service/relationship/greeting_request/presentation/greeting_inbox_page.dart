@@ -26,6 +26,7 @@ import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
         journeyEventTrackerProvider;
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:uuid/uuid.dart';
 
 part 'greeting_inbox_page_widgets.dart';
 
@@ -42,6 +43,7 @@ class GreetingInboxPage extends ConsumerStatefulWidget {
 
 class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
   final Set<String> _busyRequestIds = <String>{};
+  final Map<String, String> _actionIntentKeys = <String, String>{};
   List<GreetingRequestViewData> _received = const <GreetingRequestViewData>[];
   List<GreetingRequestViewData> _sent = const <GreetingRequestViewData>[];
   _GreetingBox _box = _GreetingBox.received;
@@ -89,28 +91,25 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
     await _runAction(
       request,
       action: 'reply_greeting',
-      operation: () async {
+      operation: (idempotencyKey) async {
         final result = await ref
             .read(greetingRepositoryProvider)
-            .replyGreeting(request.id);
-        final now = DateTime.now().toUtc();
-        _replaceReceived(
-          request.copyWith(
-            status: 'replied',
-            promotedConversationId: result.conversationId,
-            decisionAt: now,
-            updatedAt: now,
-          ),
+            .replyGreeting(request.id, idempotencyKey: idempotencyKey);
+        final readback = await _readbackReceived(
+          request.id,
+          expectedStatus: 'replied',
         );
+        final conversationId = readback.promotedConversationId?.trim() ?? '';
+        if (conversationId.isEmpty || conversationId != result.conversationId) {
+          throw StateError('Greeting reply Remote readback did not converge');
+        }
+        _replaceReceived(readback);
         ref.read(greetingInboxRefreshProvider).refreshPendingInbox();
         if (!mounted) {
           return;
         }
         AppToast.show(context, ChatText.chatGreetingReplySucceeded);
-        final conversationId = result.conversationId.trim();
-        if (conversationId.isNotEmpty) {
-          context.push(AppRoutePaths.chatDetail(id: conversationId));
-        }
+        context.push(AppRoutePaths.chatDetail(id: conversationId));
       },
     );
   }
@@ -119,11 +118,18 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
     await _runAction(
       request,
       action: 'ignore_greeting',
-      operation: () async {
-        final updated = await ref
+      operation: (idempotencyKey) async {
+        await ref
             .read(greetingRepositoryProvider)
-            .ignoreGreeting(request.id);
-        _replaceReceived(updated);
+            .ignoreGreeting(request.id, idempotencyKey: idempotencyKey);
+        final readback = await _readbackReceived(
+          request.id,
+          expectedStatus: 'ignored',
+        );
+        if ((readback.promotedConversationId?.trim() ?? '').isNotEmpty) {
+          throw StateError('Ignored GreetingRequest created a conversation');
+        }
+        _replaceReceived(readback);
         ref.read(greetingInboxRefreshProvider).refreshPendingInbox();
         if (mounted) {
           AppToast.show(context, ChatText.chatGreetingIgnored);
@@ -157,11 +163,18 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
     await _runAction(
       request,
       action: 'cancel_greeting',
-      operation: () async {
-        final updated = await ref
+      operation: (idempotencyKey) async {
+        await ref
             .read(greetingRepositoryProvider)
-            .cancelGreeting(request.id);
-        _replaceSent(updated);
+            .cancelGreeting(request.id, idempotencyKey: idempotencyKey);
+        final readback = await _readbackSent(
+          request.id,
+          expectedStatus: 'cancelled',
+        );
+        if ((readback.promotedConversationId?.trim() ?? '').isNotEmpty) {
+          throw StateError('Cancelled GreetingRequest created a conversation');
+        }
+        _replaceSent(readback);
         if (mounted) {
           AppToast.show(context, ChatText.chatGreetingCancelled);
         }
@@ -172,15 +185,22 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
   Future<void> _runAction(
     GreetingRequestViewData request, {
     required String action,
-    required Future<void> Function() operation,
+    required Future<void> Function(String idempotencyKey) operation,
   }) async {
     if (_busyRequestIds.contains(request.id)) {
       return;
     }
     setState(() => _busyRequestIds.add(request.id));
+    final intentSlot = '$action:${request.id}';
+    final idempotencyKey = _actionIntentKeys.putIfAbsent(
+      intentSlot,
+      () => const Uuid().v4(),
+    );
     final startedAt = DateTime.now();
+    Object? failure;
     try {
-      await operation();
+      await operation(idempotencyKey);
+      _actionIntentKeys.remove(intentSlot);
       unawaited(
         ref
             .read(journeyEventTrackerProvider)
@@ -199,6 +219,7 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
             ),
       );
     } catch (error) {
+      failure = error;
       if (!mounted) {
         return;
       }
@@ -222,26 +243,73 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
               },
             ),
       );
-      await AppActionErrorFeedback.show(
-        context,
-        semantic: runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.submit,
-          scope: UiErrorScope.dialog,
-        ),
-        onAction: (errorAction) async {
-          if (errorAction.type == UiErrorActionType.retry ||
-              errorAction.type == UiErrorActionType.resubmit) {
-            await _runAction(request, action: action, operation: operation);
-          }
-        },
-      );
     } finally {
       if (mounted) {
         setState(() => _busyRequestIds.remove(request.id));
       }
     }
+    if (failure == null || !mounted) {
+      return;
+    }
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: runtimeErrorSemantic(
+        context,
+        error: failure,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.dialog,
+      ),
+      onAction: (errorAction) async {
+        if (errorAction.type == UiErrorActionType.retry ||
+            errorAction.type == UiErrorActionType.resubmit) {
+          await _runAction(request, action: action, operation: operation);
+        }
+      },
+    );
+  }
+
+  Future<GreetingRequestViewData> _readbackReceived(
+    String requestId, {
+    required String expectedStatus,
+  }) async {
+    final items = await ref
+        .read(greetingRepositoryProvider)
+        .listInbox(status: '', limit: 100);
+    return _requireConvergedRequest(
+      items,
+      requestId: requestId,
+      expectedStatus: expectedStatus,
+    );
+  }
+
+  Future<GreetingRequestViewData> _readbackSent(
+    String requestId, {
+    required String expectedStatus,
+  }) async {
+    final items = await ref
+        .read(greetingRepositoryProvider)
+        .listOutbox(status: '', limit: 100);
+    return _requireConvergedRequest(
+      items,
+      requestId: requestId,
+      expectedStatus: expectedStatus,
+    );
+  }
+
+  GreetingRequestViewData _requireConvergedRequest(
+    List<GreetingRequestViewData> items, {
+    required String requestId,
+    required String expectedStatus,
+  }) {
+    final matches = items
+        .where((item) => item.id == requestId)
+        .toList(growable: false);
+    if (matches.length != 1 || matches.single.status != expectedStatus) {
+      throw StateError(
+        'GreetingRequest $requestId did not converge to $expectedStatus',
+      );
+    }
+    return matches.single;
   }
 
   void _replaceReceived(GreetingRequestViewData updated) {

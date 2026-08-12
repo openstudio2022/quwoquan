@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260812--travel-homepage-m100--china--scale-008",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/城市/四川省乐山市沙湾区",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:c8efbc8ecf0e5233eab17e236d591a5d1ab8954571037d20f9d9055bd37af75f"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:8bd9aed45d84966ad65eeec587f48b45f7bdfd03ebe9d395150e000deb0c49f7"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:efab8b761ef998fc31e346aaf9cf273294efd345e92f34a2cf0c91036b120fd3"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:1c1fe39d9859a03b95ee51d5c1991ff20756198bce1dbd636e612df3ab5d586b"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:0c047ea53683ebab9193b5c574e4039223c3e9ff548c5ec727c668761d87aa9c"
+    }
+  ]
+}

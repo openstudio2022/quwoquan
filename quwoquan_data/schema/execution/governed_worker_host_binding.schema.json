@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/governed_worker_host_binding.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["hostSetId", "generation", "fencingToken", "hostSetDigest", "transportBinding", "hosts"],
+  "properties": {
+    "hostSetId": {"type": "string", "minLength": 1},
+    "generation": {"type": "integer", "minimum": 1},
+    "fencingToken": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "hostSetDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "transportBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mongoTransportDigest", "redisTransportDigest"],
+      "properties": {
+        "mongoTransportDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "redisTransportDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "hosts": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["hostScopeId", "workerCount", "partitionKeys", "runtimeProfileDigest", "executorBundleRef", "executorBundleDigest", "executorBundleFileSha256", "sourceCapsuleId", "sourceCapsuleDigest"],
+        "properties": {
+          "hostScopeId": {"type": "string", "minLength": 1},
+          "workerCount": {"type": "integer", "minimum": 1},
+          "partitionKeys": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^(0|[1-9][0-9]{0,2})$"}},
+          "runtimeProfileDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "executorBundleRef": {"type": "string", "minLength": 1},
+          "executorBundleDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "executorBundleFileSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "sourceCapsuleId": {"type": "string", "minLength": 1},
+          "sourceCapsuleDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    }
+  }
+}

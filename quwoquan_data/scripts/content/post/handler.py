@@ -81,6 +81,8 @@ def _apply_writing_intent_override(brief, override):
     merged = dict(brief)
     for field in (
         "writingIntent",
+        "articleCategory",
+        "tagRefs",
         "baseSourceRef",
         "baseSourceReusePolicy",
         "carrier",
@@ -88,7 +90,6 @@ def _apply_writing_intent_override(brief, override):
         "assetRefs",
         "sourceVideo",
         "sourceMode",
-        "tagRefs",
         "authorId",
         "creatorProfileId",
         "creatorArchetype",

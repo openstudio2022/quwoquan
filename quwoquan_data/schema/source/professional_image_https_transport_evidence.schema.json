@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_https_transport_evidence.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "admissionRevision", "admissionMode", "requestedUrl", "finalUrl",
+    "requestHost", "finalHost", "resolvedAddresses", "peerAddress", "tls",
+    "httpStatus", "contentType", "responseBytes", "responseSha256"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_https_transport_evidence"},
+    "admissionRevision": {"const": "professional-image-network-admission-v1"},
+    "admissionMode": {"enum": ["public_dns", "managed_network_extension"]},
+    "requestedUrl": {"type": "string", "pattern": "^https://"},
+    "finalUrl": {"type": "string", "pattern": "^https://"},
+    "requestHost": {"type": "string", "minLength": 1},
+    "finalHost": {"type": "string", "minLength": 1},
+    "resolvedAddresses": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"type": "string", "format": "ip-address"}
+    },
+    "peerAddress": {"type": "string", "format": "ip-address"},
+    "tls": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "serverHostname", "version", "cipher", "peerCertificateSha256",
+        "systemTrustVerified", "hostnameVerified"
+      ],
+      "properties": {
+        "serverHostname": {"type": "string", "minLength": 1},
+        "version": {"enum": ["TLSv1.2", "TLSv1.3"]},
+        "cipher": {"type": "string", "minLength": 1},
+        "peerCertificateSha256": {"$ref": "#/$defs/sha256"},
+        "systemTrustVerified": {"const": true},
+        "hostnameVerified": {"const": true}
+      }
+    },
+    "httpStatus": {"type": "integer", "minimum": 200, "maximum": 299},
+    "contentType": {"type": "string", "minLength": 1},
+    "responseBytes": {"type": "integer", "minimum": 1},
+    "responseSha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

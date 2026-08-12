@@ -125,7 +125,9 @@ func (runtime *externalInteractionContractRuntime) forwardToLocalCapture(
 		"payload": map[string]string{
 			"recipient":  secret.Phone,
 			"code":       secret.Code,
-			"templateId": "sms_otp_login",
+			"templateId": "sms_otp_login_acceptance",
+			"platform":   request.Platform,
+			"requestRef": request.RequestRef,
 		},
 	})
 	if err != nil {
@@ -198,7 +200,9 @@ func (runtime *externalInteractionContractRuntime) handleExternalInteractionRequ
 		strings.TrimSpace(payload.Payload["codeRef"]) == "" ||
 		payload.Payload["phoneHash"] != payload.PayloadDigest ||
 		strings.TrimSpace(payload.Payload["maskedRecipient"]) == "" ||
-		payload.Payload["templateId"] != "sms_otp_login" {
+		payload.Payload["templateId"] != "sms_otp_login_acceptance" ||
+		payload.Payload["platform"] != "acceptance" ||
+		payload.Payload["requestRef"] != payload.RequestID {
 		http.Error(writer, "external interaction contract rejected", http.StatusBadRequest)
 		return
 	}
@@ -232,6 +236,8 @@ func TestExternalInteractionContractRuntime_ProductionClientSubmitsSecretReferen
 		CodeRef:        codeRef,
 		PhoneHash:      strings.Repeat("a", 64),
 		MaskedPhone:    "+86****3901",
+		Platform:       "acceptance",
+		RequestRef:     "otp_req_contract",
 		IdempotencyKey: "otp:contract:202607140125",
 		ExpiresAt:      expiresAt,
 	})

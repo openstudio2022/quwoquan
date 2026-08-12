@@ -12,16 +12,24 @@ final class RecoveryVersionRequest {
   final int buildNumber;
 }
 
+enum RecoveryUpdateState { none, available, required }
+
 final class RecoveryVersionResponse {
   const RecoveryVersionResponse({
     required this.latestVersion,
     required this.latestBuild,
+    required this.minimumSupportedVersion,
+    required this.minimumSupportedBuild,
+    required this.updateState,
     required this.updateUrl,
     required this.recoveryUrl,
   });
 
   final String latestVersion;
   final int latestBuild;
+  final String minimumSupportedVersion;
+  final int minimumSupportedBuild;
+  final RecoveryUpdateState updateState;
   final String updateUrl;
   final String recoveryUrl;
 }

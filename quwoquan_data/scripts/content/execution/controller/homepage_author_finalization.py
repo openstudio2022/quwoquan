@@ -13,10 +13,13 @@ def _write_homepage_repair_report(
     object_dir: Path,
     ref: str,
     materialization_messages: tuple[str, ...],
+    repair_strategy: str,
 ) -> Path:
     """Persist typed, object-scoped feedback for the next homepage author run."""
     from content.execution.stage_reports import build_repair_report
 
+    if repair_strategy not in {"local_edit", "rebuild_from_frozen_base"}:
+        raise ValueError("homepage repair strategy is invalid")
     issues = tuple(
         data_issue(
             DataIssueCode.QUALITY_FAILED,
@@ -25,6 +28,7 @@ def _write_homepage_repair_report(
             recovery=DataRecoveryAction.RETRY_AGENT,
             ref=ref,
             message=message,
+            attributes={"repairStrategy": repair_strategy},
         )
         for message in materialization_messages
     )
@@ -136,6 +140,7 @@ def _finalize_managed_homepage_outputs(
                 object_dir=draft_dir.parent,
                 ref=job_outcome.ref,
                 materialization_messages=messages,
+                repair_strategy="rebuild_from_frozen_base",
             )
             finalized.append(job_outcome.with_gate_issues(messages))
             continue
@@ -164,6 +169,7 @@ def _finalize_managed_homepage_outputs(
                     object_dir=draft_dir.parent,
                     ref=job_outcome.ref,
                     materialization_messages=messages,
+                    repair_strategy="rebuild_from_frozen_base",
                 )
                 finalized.append(job_outcome.with_gate_issues(messages))
                 continue
@@ -229,6 +235,7 @@ def _finalize_managed_homepage_outputs(
                 object_dir=draft_dir.parent,
                 ref=job_outcome.ref,
                 materialization_messages=messages,
+                repair_strategy="rebuild_from_frozen_base",
             )
             finalized.append(job_outcome.with_gate_issues(messages))
             continue
@@ -287,6 +294,7 @@ def _finalize_managed_homepage_outputs(
                 object_dir=draft_dir.parent,
                 ref=job_outcome.ref,
                 materialization_messages=messages,
+                repair_strategy="rebuild_from_frozen_base",
             )
             finalized.append(
                 job_outcome.with_gate_issues(

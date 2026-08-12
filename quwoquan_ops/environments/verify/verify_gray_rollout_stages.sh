@@ -12,7 +12,7 @@ fi
 
 # 基本结构检查
 grep -q '^stages:' "$YAML" || { echo "FAIL: missing stages"; exit 1; }
-grep -q 'name: gray-initial' "$YAML" || { echo "FAIL: missing gray-initial stage"; exit 1; }
+grep -q 'name: canary' "$YAML" || { echo "FAIL: missing canary stage"; exit 1; }
 
 # Python 解析
 python3 -c "
@@ -20,7 +20,10 @@ import yaml
 with open('$YAML') as f:
     cfg = yaml.safe_load(f)
 assert 'stages' in cfg, 'stages required'
-expected = {'gray-initial': (5, 'gray'), 'carry-on': (25, 'gray'), 'full': (100, 'prod')}
+expected = {
+    'canary': (0, 'candidate'), '5': (5, 'candidate'), '20': (20, 'candidate'),
+    '50': (50, 'candidate'), '100': (100, 'stable'),
+}
 actual = {
     stage.get('name'): (stage.get('step'), stage.get('execution_target'))
     for stage in cfg['stages']

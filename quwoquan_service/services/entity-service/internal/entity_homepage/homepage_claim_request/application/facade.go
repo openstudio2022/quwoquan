@@ -157,6 +157,32 @@ func (f *Facade) ListQueue(
 	return result, nil
 }
 
+// GetMyPending 返回当前 persona 在指定主页唯一待审认领申请。
+func (f *Facade) GetMyPending(
+	ctx context.Context,
+	homepageID string,
+	actorPersonaID string,
+) (ClaimRequestView, error) {
+	homepageID = strings.TrimSpace(homepageID)
+	actorID, err := requiredPersona(actorPersonaID)
+	if err != nil {
+		return ClaimRequestView{}, err
+	}
+	if homepageID == "" {
+		return ClaimRequestView{}, generated.AppErrorFromInvalidArgument("homepageId is required")
+	}
+	aggregate, found, loadErr := f.data.Aggregates.FindPending(ctx, homepageID, actorID)
+	if loadErr != nil {
+		return ClaimRequestView{}, unavailable(loadErr)
+	}
+	if !found {
+		return ClaimRequestView{}, claimgenerated.AppErrorFromClaimNotFound(
+			fmt.Sprintf("pending claim request for homepage %s was not found", homepageID),
+		)
+	}
+	return viewFromAggregate(aggregate), nil
+}
+
 func (f *Facade) Create(ctx context.Context, command CreateCommand) (ClaimRequestView, error) {
 	command = normalizeCreate(command)
 	actorID, err := requiredPersona(command.ActorPersonaID)

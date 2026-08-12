@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260812--travel-homepage-m100--china--scale-010",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/九寨沟",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:5327ecfd34ae96c9d186c391247eb735e35abfd045211a9b546f21668a2ff86b"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:38a34e1b398482420a25b04b3a5cba4b249672ca6413b18a3f25d6faa647b0f2"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:04fac26b70ac2331e2181d7805772117893ef00d2cb72b1ac1a3bc7006ebe119"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:cfa7ee508ecd3e7758be9eb6d143f885c636d4f59c7fbd01364101c9146bf8f0"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:0b7d1e215a6fcc8bbdbcb1248b5a94d4ea6fdce4eeb1bb13a76e9f2b97202dca"
+    }
+  ]
+}

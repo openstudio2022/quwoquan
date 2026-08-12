@@ -66,3 +66,5 @@ def test_entity_page_input__uses_execution_object_root_without_retired_sop__cont
     assert not {"sopDir", "sopTemplate", "sopGuide", "sopExample"} & payload.keys()
     assert "SOP" not in payload["editingInstruction"]
     assert "改写约 20%-30%" in payload["editingInstruction"]
+    assert "先按原顺序恢复完整底稿" in payload["editingInstruction"]
+    assert "每个底稿段落至少保留三分之二原句骨架" in payload["editingInstruction"]

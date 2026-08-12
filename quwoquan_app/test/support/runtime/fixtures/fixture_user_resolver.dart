@@ -1,8 +1,8 @@
-import 'object_scenario_seed_reader.dart';
+import 'object_contract_example_reader.dart';
 
 /// 仅供 local_contract 使用的用户身份与资料索引。
 ///
-/// 数据通过 [ObjectScenarioSeedReader] 从 user-service canonical 场景按需读取，
+/// 数据通过 [ObjectContractExampleReader] 从 user-service canonical 场景按需读取，
 /// 不生成或编译 App fixture bundle。
 final class FixtureUserResolver {
   FixtureUserResolver._();
@@ -79,7 +79,7 @@ final class FixtureUserResolver {
   }
 
   static Map<String, Map<String, dynamic>> _buildUserIndex() {
-    final profiles = objectScenarioSeedReader.requireSeedSet(
+    final profiles = objectContractExampleReader.requireExample(
       'user',
       'user_profile_core',
     )['profiles'];

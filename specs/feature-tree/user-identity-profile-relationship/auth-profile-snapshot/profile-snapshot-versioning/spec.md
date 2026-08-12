@@ -38,7 +38,8 @@
 ### REQ-003 资料搜索投影可恢复收敛
 
 - 用户资料创建、资料更新或头像更新已持久化后，搜索投影暂时不可用不得回滚或伪造资料写入成功。
-- 搜索投影恢复后必须幂等收敛到资料权威版本，不得永久遗漏已提交的资料变化。
+- Persona/User 资料事实与自包含公共投影快照必须同事务写入 `user_profile_search_outbox`；User relay 只发布 durable typed event，不得直接写 Elasticsearch/OpenSearch。
+- Search 独占 Provider 投影与 checkpoint；失败不确认 stream，同 event 幂等重放，低版本忽略，资料更新覆盖当前版本，账号关闭以 delete tombstone 防止旧 update 复活。
 
 ## 4. 契约引用
 
@@ -61,7 +62,7 @@
 - WHEN 用户创建资料、更新资料或更新头像。
 - THEN 资料写入保持已提交，搜索投影不丢失该变化。
 - WHEN 搜索投影恢复并执行重放。
-- THEN 搜索结果幂等收敛到该用户的当前资料版本。
+- THEN Search consumer 以同一 eventId/profileVersion 幂等收敛到该用户的当前资料版本，Search checkpoint 只在 Provider upsert/delete 成功后推进。
 
 ## 6. 依赖
 

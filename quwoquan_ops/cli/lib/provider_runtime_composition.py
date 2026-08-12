@@ -219,6 +219,7 @@ def validate_provider_runtime_composition(
     *,
     expected_environment: str,
     expected_target: str,
+    require_current_contracts: bool = True,
 ) -> dict[str, Any]:
     """Validate a packaged composition without rereading workspace Bindings."""
 
@@ -310,7 +311,9 @@ def validate_provider_runtime_composition(
     }
     workload_roles: set[str] = set()
     represented_capabilities: set[str] = set()
-    canonical_contracts = _load_endpoint_contracts(CONTRACT_ROOT)
+    canonical_contracts = (
+        _load_endpoint_contracts(CONTRACT_ROOT) if require_current_contracts else {}
+    )
     for workload in workloads:
         if not isinstance(workload, dict) or set(workload) != WORKLOAD_FIELDS:
             raise ValueError("Provider runtime composition workload fields mismatch")
@@ -381,23 +384,24 @@ def validate_provider_runtime_composition(
             raise ValueError(
                 "Provider runtime composition endpoint material mismatch"
             )
-        canonical_contract = canonical_contracts.get(role)
-        if canonical_contract is None:
-            raise ValueError(
-                f"Provider runtime composition workload contract is unknown: {role}"
-            )
-        for field in (
-            "composeProfiles",
-            "contractRef",
-            "contractDigest",
-            "composeRef",
-            "composeDigest",
-        ):
-            if workload[field] != canonical_contract[field]:
+        if require_current_contracts:
+            canonical_contract = canonical_contracts.get(role)
+            if canonical_contract is None:
                 raise ValueError(
-                    "Provider runtime composition canonical workload drift: "
-                    f"{role} {field}"
+                    f"Provider runtime composition workload contract is unknown: {role}"
                 )
+            for field in (
+                "composeProfiles",
+                "contractRef",
+                "contractDigest",
+                "composeRef",
+                "composeDigest",
+            ):
+                if workload[field] != canonical_contract[field]:
+                    raise ValueError(
+                        "Provider runtime composition canonical workload drift: "
+                        f"{role} {field}"
+                    )
     if [str(workload["role"]) for workload in workloads] != sorted(workload_roles):
         raise ValueError("Provider runtime composition workloads are not canonical")
 

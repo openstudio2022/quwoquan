@@ -22,6 +22,8 @@
 - 删除任意验证码、debugCode、sandbox phone allowlist 与 pass-through 旁路。
 - LoginWithSocialProvider 微信/支付宝/QQ 票据置换与首登资料同步。
 - LoginWithAlipay / LoginWithQq metadata 契约与 codegen。
+- 手机号 OTP 发码的单轨幂等、异步投递结果回流、端侧短期恢复与 iOS/Android 双端异常恢复。
+- 手机号页 OTP delivery readiness、验证码页单一信息投影、安全系统自动填充与模拟器受保护输入能力。
 
 ### Out of Scope
 
@@ -84,6 +86,7 @@
 ### REQ-008 登录商业可观测、采样与保留契约
 
 - 登录漏斗、各 provider 请求结果、非 2xx 比率、P95 与 USER 错误码在同一 L2 大盘可查。
+- 发码指标必须至少区分 `accepted / idempotent_replay / delivery_confirming / sent_unconfirmed / delivery_failed / rate_limited / decode_contract_violation / login_success`，并监控 Provider 结果延迟、15 秒未知率、发码失败率和登录完成率。
 - provider 非 2xx 比率超过 2%，或挑战/登录 P95 超过 1.2s/1.5s，连续两个 5 分钟窗口后触发告警。
 - `sys.user.auth.success_detail_sample_ratio` 只拥有登录成功明细采样策略并支持 progressive rollout；物理 Logstore 保留期只引用 product-ops `event_record/storage.yaml`，user-service 不复制或覆盖。
 - 登录观测不得依赖已退役的 product-ops `event_records` Mongo 集合；运行时采样和 product-ops 保留合同必须由正式单轨实现证明。
@@ -113,6 +116,30 @@
 - 当前只完成 `sys.user.auth.success_detail_sample_ratio` 配置契约与环境种子；事件 TTL 由 product-ops `event_record/storage.yaml` 统一拥有。在 product-ops 运行时消费采样比例的证据补齐前，不得把静态配置声明视为采样策略已生效。
 - 微信、QQ、支付宝、阿里云一键登录在生产凭据、受控 SDK、真实网络真机 UAT、provider 后台结果与回滚演练齐全前保持 `GATE_BLOCK`。
 - prod 用户协议/隐私政策必须由法务/运营提供真实获批主体信息并通过 legal-static CLI 生成与线上 URL 探测；不得猜测主体、地址、电话、ICP备案号，也不得把占位包当作登录商用证据。
+
+<a id="req-011"></a>
+### REQ-011 手机号 OTP 发码幂等、投递回流与端侧可恢复登录
+
+- `SendOtp` 必须要求不含手机号的随机 128-bit `Idempotency-Key`，总 deadline 为 3 秒、最多 2 次幂等传输尝试；同 key 重放只返回原 challenge、原 delivery request、当前投递状态和精确冷却剩余，不重复计数或投递。
+- 不同 key 在 60 秒冷却期返回 `otp_rate_limited` 与精确剩余秒数；同 key 跨手机号、purpose 或 binding scope 复用返回 typed `otp_idempotency_conflict`。
+- 成功响应始终包含 `retryAfterSeconds`；`deliveryStatus` 是 `queued / sent_unconfirmed / delivered / failed` 闭集，不允许以自由字符串或缺字段响应逃逸。
+- `AuthenticationChallenge` 在同一权威行保存 `deliveryRequestId / deliveryStatus / deliveryUpdatedAt / lastDeliveryEventId`；User Service 只通过 `ExternalInteractionResultReported` durable consumer 接收最终 Provider 结果，重复、乱序和终态倒退均为幂等 no-op。明确 `failed / dead_letter` 必须原子标记投递失败并取消仍 pending 的 challenge。
+- App 将 OTP 投递状态与验证码验证状态分离。发送网络错误、响应超时或未知结果必须进入验证码页并允许输入已收到的验证码；5 秒、15 秒及恢复前台时用同一 key 做有界确认，15 秒后停止自动确认而不显示无限 spinner。
+- App 在安全存储中只保存 5 分钟有效的 PendingOtpAttempt（手机号、脱敏手机号、key、challenge/request ID、状态与倒计时），永不保存 OTP。冷启动可恢复同一验证码页；登录成功、更换手机号、过期或退出流程必须清除。
+- `LoginWithPhone` 网络错误或响应超时必须保留完整 6 位验证码和“重新验证”动作；服务端对同凭据重复验证 completed challenge 返回同一成功语义且不增加失败次数。
+- `confirming / queued` 使用中性提示并通过 live region 播报，只有明确失败使用错误色；忙碌状态同时显示 spinner 与文字。iOS/Android 均保留 `oneTimeCode` 自动填充和第六位自动验证。
+
+<a id="req-012"></a>
+### REQ-012 手机号登录可理解恢复、发码就绪门与安全自动填充
+
+- 手机号页必须通过公开只读 `GetOtpDeliveryReadiness` 在发码前确认认证投递链可用；检查进行时不阻止输入，`temporarily_unavailable`、网络失败或超时均留在手机号页并只显示 `登录服务暂时不可用，请稍后重试`，用户点击 `重试` 只重新检查，不暗中发码。
+- 验证码页只能消费一个 `OtpPagePresentation`。账号终态、验证中、验证错误、明确发码失败、发码进度和普通输入引导按固定优先级投影为至多一条提示与一组恢复动作；禁止同时渲染 delivery notice 和 verification feedback。
+- 用户可见文案不得出现“结果确认”“状态保留”“challenge”“Provider”“requestId”等内部概念，并删除黄色未知状态。说明文字不可点击，恢复动作必须是最小 44pt 的明确按钮。脱敏手机号与“更换手机号”同一行，恢复动作不与底部第三方登录混排。
+- 验证码错误清空并聚焦第一格；验证网络失败或超时只在当前页面内存中保留可见的六位输入并提供唯一 `重新验证` 动作，不把 OTP 写入 PendingOtpAttempt。倒计时结束后才并排提供 `重新验证 / 重新获取`。
+- 第六位输入、粘贴、iOS 系统 AutoFill 与 Android Retriever 均只能触发一次验证；用户修改输入即清除旧错误。登录成功、更换手机号、过期或退出时停止监听并清理 challenge、key、倒计时和提示。
+- iOS 只使用 `oneTimeCode` 与 domain-bound SMS 的系统建议，不申请或读取短信权限。Android 只使用 SMS Retriever，不申请 `READ_SMS / RECEIVE_SMS`；只接受当前 `requestId` 对应的非敏感 `requestRef`、六位码和候选签名绑定 app hash，旧短信、错 ref、重复消息均忽略。
+- `SendOtpCommand.platform` 必须是 `ios / android / web / acceptance` typed enum。短信 domain、Android app hash 和模板由候选绑定的服务端可信配置选择，客户端不得上传这些值。
+- 模拟器登录只经 typed `PHONE_OTP_LOGIN_TARGET` capability：Android Emulator 通过受管 adapter 注入完整 SMS 并实际经过 Retriever；iOS Simulator 只能由 protected broker 一次性交给 Patrol 输入框，CaseResult 必须标记 `inputMode=protected_harness`，不得冒充 iOS SMS AutoFill。
 
 ## 4. 契约引用
 
@@ -154,6 +181,22 @@
 - GIVEN alpha、beta、gamma 与 prod 分别构建并执行登录路径。
 - WHEN 验证 alpha/beta/gamma local-capture 随机 OTP 的受保护一次性读取、prod 正式 Provider、首登资料同步和失败恢复。
 - THEN local-capture workload、凭据、路由与捕获存储不可达 Prod 包、SBOM 和部署图；三测试环境 Green 可由替代边界 E2E 提升，但真实 Provider 集成与 Prod readiness 只由 Prod 正式 Provider 回执和可复验真机证据提升。
+
+<a id="gwt-011"></a>
+### GWT-011 发码响应丢失、Provider 终态与冷启动恢复
+
+- GIVEN User Service 已按唯一 key 创建 challenge 并提交短信，App 可能在响应到达前超时、退后台或被杀死。
+- WHEN App 使用同一 key 自动重试、前台确认或冷启动恢复，且 Provider 随后报告成功、失败、重复或乱序结果。
+- THEN 只有一个 challenge、一个 Provider request 和一次配额；用户始终可以输入已收到的验证码，明确失败和限频显示精确倒计时，未知状态在 15 秒后停止自动确认且倒计时结束后才允许用新 key 重发。
+- AND 发送与验证响应丢失均可回到正常登录路径，安全存储、日志、指标和回执不包含 OTP、手机号明文或 Provider raw body。
+
+<a id="gwt-012"></a>
+### GWT-012 登录依赖不可用、验证失败与双端自动填充均有唯一恢复路径
+
+- GIVEN 用户从手机号页开始登录，认证投递链可能停止、短信可能延迟，验证请求也可能错误、断网或超时。
+- WHEN App 执行 readiness、发码、输入或系统自动填入、验证、重发与更换手机号。
+- THEN 每一时刻页面至多显示一条用户可理解的提示和一组不重复的恢复按钮；依赖不可用不进入验证码页，结果未知不显示黄色警告，验证码错误可立即重输，网络失败可直接重新验证。
+- AND iOS 真机只消费系统验证码建议，Android 真机只消费与当前 requestRef 精确绑定的 Retriever 消息；模拟器证据诚实区分 protected harness 与真实短信 AutoFill，任一路径均只提交一次且不泄露手机号或 OTP。
 
 ## 6. 依赖
 

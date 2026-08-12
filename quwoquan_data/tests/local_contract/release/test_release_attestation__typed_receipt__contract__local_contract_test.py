@@ -9,6 +9,7 @@ SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+from content.release.canonical.object_source_identity import source_identity_set
 from content.release.canonical.release_attestation import (
     ReleaseAttestation,
     ReleaseAttestationError,
@@ -88,6 +89,108 @@ def test_release_attestation__allows_post_only_lane_release__contract__local_con
 
     assert receipt.entity_count == 0
     assert receipt.post_count == 100
+
+
+def test_release_attestation__accepts_research_pool_identity_set__contract() -> None:
+    document = _receipt().to_document()
+    execution_ids = list(document["executionIds"])
+    first_digest = str(document.pop("sourceDigest"))
+    first_identity = {
+        "executionId": execution_ids[0],
+        "sourceRevision": str(document.pop("sourceRevision")),
+        "sourceDigest": first_digest,
+        "entityCatalogDigest": str(document.pop("entityCatalogDigest")),
+    }
+    second_digest = "sha256:" + "c" * 64
+    second_identity = {
+        "executionId": execution_ids[1],
+        "sourceRevision": content_source_revision(
+            source_digest=second_digest,
+            entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+        ),
+        "sourceDigest": second_digest,
+        "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+    }
+    identities, identity_set_digest = source_identity_set(
+        [first_identity, second_identity]
+    )
+    second_source_digest = dict(document["sourceDigests"][0])
+    second_source_digest["digest"] = second_digest
+    document.update(
+        {
+            "sourceDigests": sorted(
+                [document["sourceDigests"][0], second_source_digest],
+                key=lambda row: str(row["digest"]),
+            ),
+            "sourceIdentities": identities,
+            "sourceIdentitySetDigest": identity_set_digest,
+        }
+    )
+
+    receipt = ReleaseAttestation.from_document(document)
+
+    assert receipt.to_document() == document
+
+
+def test_release_attestation__rejects_historical_inputs_for_scalar_identity__contract() -> None:
+    document = _receipt().to_document()
+    document["sourceDigests"][0]["inputs"] = ["quwoquan_data/scripts"]
+
+    try:
+        ReleaseAttestation.from_document(document)
+    except ReleaseAttestationError as exc:
+        assert "fixed repository inputs" in str(exc)
+    else:
+        raise AssertionError("scalar source identity must bind current repository inputs")
+
+
+def test_release_attestation__accepts_object_level_legacy_identity_set__contract() -> None:
+    document = _receipt().to_document()
+    document["sourceDigests"][0]["inputs"] = [
+        "quwoquan_data/historical/pre-contract-source"
+    ]
+    execution_id = str(document["executionIds"][0])
+    document["executionIds"] = [execution_id]
+    source_digest = str(document.pop("sourceDigest"))
+    document.pop("sourceRevision")
+    document.pop("entityCatalogDigest")
+    identities, identity_set_digest = source_identity_set(
+        [
+            {
+                "identityKind": "legacy_canonical_migration",
+                "executionId": execution_id,
+                "sourceDigest": source_digest,
+                "canonicalObjectDigest": "sha256:" + digit * 64,
+                "migrationEvidenceDigest": "sha256:" + evidence * 64,
+            }
+            for digit, evidence in (("1", "2"), ("3", "4"))
+        ]
+    )
+    document["sourceIdentities"] = identities
+    document["sourceIdentitySetDigest"] = identity_set_digest
+
+    assert ReleaseAttestation.from_document(document).to_document() == document
+
+
+def test_release_attestation__rejects_scalar_and_set_identity_together__contract() -> None:
+    document = _receipt().to_document()
+    execution_id = str(document["executionIds"][0])
+    identity = {
+        "executionId": execution_id,
+        "sourceRevision": str(document["sourceRevision"]),
+        "sourceDigest": str(document["sourceDigest"]),
+        "entityCatalogDigest": str(document["entityCatalogDigest"]),
+    }
+    identities, identity_set_digest = source_identity_set([identity])
+    document["sourceIdentities"] = identities
+    document["sourceIdentitySetDigest"] = identity_set_digest
+
+    try:
+        ReleaseAttestation.from_document(document)
+    except ReleaseAttestationError as exc:
+        assert "forbids scalar source identity" in str(exc)
+    else:
+        raise AssertionError("scalar and set identity modes must be mutually exclusive")
 
 
 def test_release_attestation__rejects_mixed_execution_source_digests__contract() -> None:

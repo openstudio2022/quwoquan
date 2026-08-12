@@ -219,7 +219,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
                 provider_conformance,
                 "can_reuse_package",
                 return_value=(False, "package content digest mismatch"),
-            ),
+            ) as package_reuse,
         ):
             stale_package = provider_conformance.resolve_nonprod_active_candidate(
                 environment="alpha",
@@ -230,6 +230,7 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             )
         self.assertFalse(stale_package["active"])
         self.assertIn("package content digest mismatch", str(stale_package["reason"]))
+        package_reuse.assert_called_once_with("alpha", "alpha-local")
         claimed_active = {
             "candidateStatus": "active_immutable",
             "candidateReceiptRef": ".qwq_output/env/alpha/process/startup_attempt.json",

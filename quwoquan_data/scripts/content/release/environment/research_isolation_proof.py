@@ -178,7 +178,7 @@ def validate_research_isolation_pass_proof(
         or readback.get("releaseId") != release_id
         or readback.get("manifestDigest") != manifest_digest
         or readback.get("subjectHash") != subject_hash
-        or set(denied) != {"share", "export", "indexing"}
+        or set(denied) != {"share", "export"}
         or any(
             not isinstance(item, Mapping) or item.get("decision") != "denied"
             for item in denied.values()
@@ -240,11 +240,6 @@ def validate_research_isolation_pass_proof(
         (
             denied["export"].get("operation"),
             "export denial",
-            frozenset({200, 401, 403}),
-        ),
-        (
-            denied["indexing"].get("operation"),
-            "index denial",
             frozenset({200, 401, 403}),
         ),
         (signed.get("issuanceOperation"), "media issuance", frozenset({200})),

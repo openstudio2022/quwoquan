@@ -270,6 +270,12 @@ final accountSessionLifecycleCommandWriterProvider =
       return ref.watch(accountSessionCommandWriterProvider);
     });
 
+/// Alpha Research 短期身份签发；production composition 仍只经 generated client。
+final accountSessionResearchIdentityWriterProvider =
+    Provider<AccountSessionResearchIdentityWriter>((ref) {
+      return ref.watch(accountSessionCommandWriterProvider);
+    });
+
 /// UserAccount 生命周期终态写面（CloseAccount，Apple 5.1.1(v) 注销）。
 /// production Remote-only；alpha/test 经 ProviderScope override 注入替身。
 final accountLifecycleCommandWriterProvider =
@@ -295,11 +301,13 @@ final authenticationChallengeCommandWriterProvider =
       >(
         UserProductionAdapter.authenticationChallenge,
         client: ref.watch(unauthenticatedGeneratedCloudOperationClientProvider),
-        invocationContext: (clientPageId) => _reportInvocationContext(
-          ref,
-          surface: AppUiSurfaces.login,
-          clientPageId: clientPageId,
-        ),
+        invocationContext: (clientPageId, {String? idempotencyKey}) =>
+            _reportInvocationContext(
+              ref,
+              surface: AppUiSurfaces.login,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey,
+            ),
       );
     });
 
@@ -309,7 +317,9 @@ CloudOperationInvocationContext _accountSessionInvocationContext(
 ) {
   final surface =
       clientPageId == UserRequestPageIds.loginAnonymous ||
-          clientPageId == UserRequestPageIds.refreshToken
+          clientPageId == UserRequestPageIds.refreshToken ||
+          clientPageId ==
+              UserRequestPageIds.issueWhitelistedResearchSession
       ? AppUiSurfaces.appShell
       : clientPageId == UserRequestPageIds.logout
       ? AppUiSurfaces.settingsHome
@@ -597,11 +607,13 @@ final greetingRequestRemoteProvider =
     Provider.family<AppProductionGreetingRequestFacets, AppUiSurface>(
       (ref, surface) => UserProductionComposition.greetingRequestFacets(
         client: ref.watch(generatedCloudOperationClientProvider),
-        invocationContext: (clientPageId) => _reportInvocationContext(
-          ref,
-          surface: surface,
-          clientPageId: clientPageId,
-        ),
+        invocationContext: (clientPageId, {String? idempotencyKey}) =>
+            _reportInvocationContext(
+              ref,
+              surface: surface,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey,
+            ),
       ),
     );
 
@@ -793,6 +805,7 @@ CloudOperationInvocationContext _reportInvocationContext(
   Ref ref, {
   required AppUiSurface surface,
   required String clientPageId,
+  String? idempotencyKey,
 }) {
   final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
   final persona = ref.read(activePersonaContextProvider).asData?.value;
@@ -801,7 +814,7 @@ CloudOperationInvocationContext _reportInvocationContext(
     surfaceId: surface.id,
     clientPageId: clientPageId,
     routeId: surface.routeId,
-    idempotencyKey: const Uuid().v4(),
+    idempotencyKey: idempotencyKey ?? const Uuid().v4(),
     actor: CloudOperationActorContext(
       accountId: accountId.isEmpty ? null : accountId,
       personaId: personaId.isEmpty ? null : personaId,

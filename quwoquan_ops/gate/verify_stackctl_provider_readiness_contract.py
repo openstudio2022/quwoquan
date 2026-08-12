@@ -66,11 +66,11 @@ def main() -> int:
         deploy.find("deploy_result = run("),
     )
     if preflight_call < 0:
-        issues.append("prod gray-initial deploy must invoke Provider readiness")
+        issues.append("prod canary deploy must invoke Provider readiness")
     elif any(action < 0 or preflight_call > action for action in release_actions):
         issues.append("prod Provider readiness must precede package or remote release actions")
-    if 'if rollout_stage == "gray-initial":' not in deploy:
-        issues.append("prod Provider readiness must be scoped to gray-initial")
+    if 'if rollout_stage == "canary":' not in deploy:
+        issues.append("prod Provider readiness must be scoped to canary")
     if '"providerReadiness": provider_readiness' not in deploy:
         issues.append("prod deploy report must include sanitized Provider readiness")
 

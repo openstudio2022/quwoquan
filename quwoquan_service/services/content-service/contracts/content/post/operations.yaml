@@ -3,6 +3,51 @@ commercial_defaults:
   block_reason: canonical operation awaits object-centered commercial migration
   gap_id: CONTENT_POST_COMMERCIAL_EVIDENCE
   target_story: app-cloud-business-object-commercial-closure
+graphql_queries:
+  - operation: GetPostSemantic
+    operation_type: query
+    application: {kind: query, facet: PostQueryFacet, method: getPost, reader: PostDetailReader, slice: PostDetailSlice}
+    authorization: {principal: public, ownership_policy: visibility_filtered}
+    commercial: {status: ready}
+    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    error_codes: [CONTENT.USER.post_not_found, CONTENT.USER.content_deleted, CONTENT.USER.invalid_argument, CONTENT.SYSTEM.storage_read_failed, CONTENT.SYSTEM.internal_error]
+    privacy: {request_classification: PII, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_post_detail_semantic_graphql_get, trace: true, attributes: [outcome, content_type]}
+    slo: {latency_p95_ms: 500, availability_percent: 99.9}
+    response_entity: ContentPostDetailSlice
+  - operation: GetPostMedia
+    operation_type: query
+    application: {kind: query, facet: PostQueryFacet, method: getPost, reader: PostDetailReader, slice: PostDetailSlice}
+    authorization: {principal: public, ownership_policy: visibility_filtered}
+    commercial: {status: ready}
+    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    error_codes: [CONTENT.USER.post_not_found, CONTENT.USER.content_deleted, CONTENT.USER.invalid_argument, CONTENT.SYSTEM.storage_read_failed, CONTENT.SYSTEM.internal_error]
+    privacy: {request_classification: PII, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_post_detail_media_graphql_get, trace: true, attributes: [outcome, content_type]}
+    slo: {latency_p95_ms: 500, availability_percent: 99.9}
+    response_entity: ContentPostDetailSlice
+  - operation: GetPostArticleRenderAssets
+    operation_type: query
+    application: {kind: query, facet: PostQueryFacet, method: getPost, reader: PostDetailReader, slice: PostDetailSlice}
+    authorization: {principal: public, ownership_policy: visibility_filtered}
+    commercial: {status: ready}
+    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    error_codes: [CONTENT.USER.post_not_found, CONTENT.USER.content_deleted, CONTENT.USER.invalid_argument, CONTENT.SYSTEM.storage_read_failed, CONTENT.SYSTEM.internal_error]
+    privacy: {request_classification: PII, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_post_detail_article_render_assets_graphql_get, trace: true, attributes: [outcome, content_type]}
+    slo: {latency_p95_ms: 500, availability_percent: 99.9}
+    response_entity: ContentPostDetailSlice
+  - operation: GetPostArticleEntities
+    operation_type: query
+    application: {kind: query, facet: PostQueryFacet, method: getPost, reader: PostDetailReader, slice: PostDetailSlice}
+    authorization: {principal: public, ownership_policy: visibility_filtered}
+    commercial: {status: ready}
+    reliability: {timeout_ms: 1500, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+    error_codes: [CONTENT.USER.post_not_found, CONTENT.USER.content_deleted, CONTENT.USER.invalid_argument, CONTENT.SYSTEM.storage_read_failed, CONTENT.SYSTEM.internal_error]
+    privacy: {request_classification: PII, response_classification: INTERNAL, log_policy: metadata_only}
+    telemetry: {metric: content_post_detail_article_entities_graphql_get, trace: true, attributes: [outcome, content_type]}
+    slo: {latency_p95_ms: 500, availability_percent: 99.9}
+    response_entity: ContentPostDetailSlice
 description: 内容发布、浏览、互动、评论与媒体管理
 externalDependencies:
   - capability: content.embedding.generation
@@ -53,6 +98,39 @@ externalDependencies:
     operations: [appendDurable, consumeDurable]
     scenes: [general, realtime]
 api_routes:
+  - method: GET
+    path: /content/research/readback
+    operation: GetResearchReleaseReadback
+    actor: account
+    application:
+      kind: query
+      facet: ResearchReleaseReadbackQueryFacet
+      method: getResearchReleaseReadback
+      reader: ActiveSupplyReader
+      slice: ResearchReleaseReadbackView
+    authorization:
+      principal: account
+      ownership_policy: authenticated_account_research_attestation
+    commercial:
+      status: blocked
+      block_reason: research-only internal App readback is never a commercial content surface
+      gap_id: CONTENT_POST_RESEARCH_ONLY
+      target_story: multi-carrier-release
+    reliability: {timeout_ms: 800, cancellation: supported, retry_mode: none, max_attempts: 1, idempotency: none}
+    error_codes: [CONTENT.USER.unauthorized, CONTENT.USER.research_identity_invalid, CONTENT.SYSTEM.required_dependency_unavailable, CONTENT.SYSTEM.internal_error]
+    privacy: {request_classification: SECRET, response_classification: INTERNAL, log_policy: none}
+    telemetry: {metric: content_research_release_readback, trace: true, attributes: [environment, outcome, error_code]}
+    slo: {latency_p95_ms: 500, availability_percent: 99.9}
+    description: 已认证且持有短期白名单研究态签名的内部 App 读取当前 Research release 精确绑定；匿名、过期、签名漂移或非 Research active release 一律 fail closed
+    request_bindings:
+      header:
+        - {name: X-Research-Identity-Attestation, field: researchIdentityAttestation, required: true}
+    response_entity: ResearchReleaseReadbackView
+    response_body: ResearchReleaseReadbackView
+    response_body_kind: object
+    security: {auth_mode: required, principal: owner, token_transport: bearer, anonymous_policy: deny, visibility: private}
+    request_entity: ResearchReleaseReadbackQuery
+    request_body_kind: none
   - method: GET
     path: /content/feed
     operation: GetFeed
@@ -1033,6 +1111,22 @@ consumers:
     capabilities:
       - read_post
 readiness_cases:
+  - case_id: get-research-release-readback-local
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetResearchReleaseReadback}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/application/research_release_readback__security__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-research-release-readback-app-local
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetResearchReleaseReadback}
+    runner_source_path: quwoquan_app/test/local_contract/service/content_service/content/post/research_release_readback__security__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
   - case_id: apply-post-lifecycle-events-local
     spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
     producer: service

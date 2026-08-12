@@ -7,15 +7,17 @@ import (
 )
 
 type CreateChallengeCommand struct {
-	ID               string
-	AccountID        string
-	Purpose          string
-	Channel          string
-	DestinationHash  string
-	SecretRef        string
-	BindingTicketRef string
-	IdempotencyKey   string
-	ExpiresAt        time.Time
+	ID                string
+	AccountID         string
+	Purpose           string
+	Channel           string
+	DestinationHash   string
+	SecretRef         string
+	BindingTicketRef  string
+	DeliveryRequestID string
+	DeliveryStatus    challengemodel.DeliveryStatus
+	IdempotencyKey    string
+	ExpiresAt         time.Time
 }
 
 // VerifyChallengeCommand 支持按 challengeId 精确验证，也支持调用方只持有
@@ -31,6 +33,13 @@ type VerifyChallengeCommand struct {
 
 type CancelChallengeCommand struct {
 	ChallengeID string
+}
+
+type ReportDeliveryResultCommand struct {
+	EventID    string
+	RequestID  string
+	Status     challengemodel.DeliveryStatus
+	OccurredAt time.Time
 }
 
 type ChallengeCommandResult struct {

@@ -101,6 +101,14 @@
 - THEN 成功与重放只产生一个新群主，后续 ListMembers 与 roster revision 读取收敛到同一角色集合，原群主不再保留 owner 权限。
 - AND 越权、无效目标、来源不符、并发冲突或依赖失败时页面回滚到提交前角色集合并刷新服务端事实，不保留本地半转让状态。
 
+<a id="gwt-005"></a>
+### GWT-005 群公告以同一意图写入并由 Conversation 权威回读
+
+- GIVEN 私建群 owner/admin 已从 production Remote 读取当前公告，且页面持有本次编辑的稳定意图身份。
+- WHEN owner/admin 提交新公告、重放同一意图，或发生越权、会话不存在与依赖失败。
+- THEN generated client 只调用 UpdateAnnouncement，成功与同意图重放返回同一 Conversation 公告事实，随后 GetConversation 权威回读公告内容与更新身份；服务端另以 canonical `system_announcement` 消息负责成员触达，App 不本地合成触达成功。
+- AND 失败返回 canonical failure，保留提交前公告并允许用户重试同一意图，不写入或展示伪成功公告。
+
 ## 6. 依赖
 
 - 前置要求：[`group-creation-member-management`](../spec.md) 的范围、要求与 SIT。
@@ -116,4 +124,4 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：尚缺验收证据：同一候选下真实群主、管理员与普通成员完成成功、越权、并发及失败恢复的双端用户验收结果；现有源码只表达 production Remote 路径，不能替代该结果。
-- 完成判定：`GWT-002`、`GWT-003`、`GWT-004` 均由 production Remote user_acceptance 直接绑定，并分别取得 Android 与 iPhone physical ResultBundle；缺环境、身份、Provider 或候选摘要时保持 BLOCK。
+- 完成判定：`GWT-002`、`GWT-003`、`GWT-004`、`GWT-005` 均由 production Remote user_acceptance 直接绑定，并分别取得 Android 与 iPhone physical ResultBundle；缺环境、身份、Provider 或候选摘要时保持 BLOCK。

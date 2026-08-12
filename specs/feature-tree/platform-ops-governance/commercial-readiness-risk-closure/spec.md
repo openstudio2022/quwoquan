@@ -93,7 +93,7 @@
 - prod-hosted 第一方容器预验证只消费 reviewed main 的不可变 Service Pipeline 制品，并在镜像传输前执行主机硬门禁。
 - Service Pipeline 只把已固定 OCI/config/SBOM/provenance 的 `component-ready` 服务组件包作为 GHCR OCI 制品交付，不得提前声称它是整应用可部署清单。
 - `stackctl package --env prod --target prod-hosted --kind release-manifest` 必须在该组件包上原位绑定 Alpha/Beta/Gamma/Prod 四环境 App 包及其真实 payload、ContractGraph、真实 Provider readiness 与三层测试证据；全部 schema、内容摘要和不可变 OCI 来源通过后，同一 `ReleaseEvidenceManifest`（`schema=release-evidence-manifest`）才转为 `candidate-ready`。
-- Alpha、Beta、Gamma 的 package/up/health/verify 可在隔离 runner 并行执行，但三份环境回执必须按顺序聚合并绑定同一 `candidateId`；全部通过且 rollback readiness 有效后才转为 `deployable`。Prod 的 5%、25%、100% 回执全部完成后才转为 `released`，自动回滚则转为 `rolled-back` 或 `rollback-failed`。
+- Alpha、Beta、Gamma 的 package/up/health/verify 可在隔离 runner 并行执行，但三份环境回执必须按顺序聚合并绑定同一 `candidateId`；全部通过且 rollback readiness 有效后才转为 `deployable`。Prod 的 `canary、5、20、50、100` 回执全部完成后才转为 `released`，自动回滚则转为 `rolled-back` 或 `rollback-failed`。
 - Actions Artifact 只允许保存短期诊断，不得承担 App 包、Provider、测试或环境回执的阶段传递；正式证据必须由不可变 OCI 或 hosted ledger 回读，也不得通过占位文件或本地重生服务清单绕过。
 - 受限单机可把声明允许的旧 `Created/Exited` 容器和未使用镜像计入可回收空间，但必须在镜像传输前完成精确回收和二次实测；数据恢复容器与全部 volume 必须保留。
 - 预验证与正式 rollout transaction、ledger/receipt 和 Provider readiness 分轨；容器验证通过不能改变 release `GATE_BLOCK`。
@@ -136,7 +136,7 @@
 - GIVEN CI action 固定 commit SHA，工作流最小权限和 CODEOWNERS 已声明。
 - WHEN service/app/portal/config 进入 pre-release 与生产 rollout。
 - THEN `ReleaseEvidenceManifest` 绑定 Git commit、OCI 镜像、四环境配置包与 App 包、ContractGraph、Provider、测试、环境回执、rollout 和 rollback evidence digest。
-- THEN gray-initial/carry-on/full 只消费同一 manifest，禁止 latest 与部署时重建。
+- THEN canary/5/20/50/100 只消费同一 manifest，禁止 latest 与部署时重建。
 - THEN Service Pipeline 的 `component-ready` 包与四环境 App payload、ContractGraph、真实 Provider readiness、三层测试完成原位总装后形成 `candidate-ready`；Alpha/Beta/Gamma 回执与 rollback readiness 齐备后形成 `deployable`，Prod 回执完成后形成 `released`，每一状态都以新的 GHCR OCI digest 或 hosted ledger 事实交付。
 - THEN Actions Artifact 无容量时仍 fail-closed 地消费不可变 OCI/ledger 内容，不允许在部署 job 重建服务组件、App payload、Provider 或测试证据。
 
@@ -145,7 +145,7 @@
 
 - GIVEN ReleaseManifest 与上一稳定 digest 已验证。
 - GIVEN 全局 lock 和 CAS release ledger 可用。
-- WHEN 执行 gray-initial、carry-on、full 或自动回滚。
+- WHEN 执行 canary、5、20、50、100 或自动回滚。
 - THEN 并发发布被拒绝，stage 只能按 CAS 顺序推进。
 - THEN SLO 只从 Prometheus 读取且满足最小样本/窗口。
 - THEN 超阈值自动回滚并生成不可变 receipt。
@@ -274,7 +274,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：构建与部署不是同一不可变制品
-- 完成判定：`SIT-003` 的可观察验收通过，gray-initial/carry-on/full 只消费同一 `ReleaseEvidenceManifest`，部署不重建制品。
+- 完成判定：`SIT-003` 的可观察验收通过，canary/5/20/50/100 只消费同一 `ReleaseEvidenceManifest`，部署不重建制品。
 
 <a id="open-011"></a>
 ### OPEN-011 缺少获批 Prod 发布与真实灰度回滚回执
@@ -337,7 +337,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍须在获批 Prod 环境执行 gray-initial→carry-on→full、阈值回滚与 rollback failure 演练并保留 hosted receipt；本地合同已覆盖 hosted receipt CAS、摘要回读和候选绑定。
+- 影响或价值：仍须在获批 Prod 环境执行 canary→5→20→50→100、阈值回滚与 rollback failure 演练并为每阶段保留 hosted receipt；本地合同已覆盖 hosted receipt CAS、摘要回读和候选绑定。
 - 完成判定：`SIT-004` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-019"></a>

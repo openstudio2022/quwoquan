@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import stat
 import sys
 import tempfile
 from pathlib import Path
@@ -369,6 +370,30 @@ def test_release_object_media_binding_preserves_frozen_asset_review_bytes() -> N
     )
 
     assert receipt_path.read_bytes() == frozen
+
+
+def test_release_object_media_binding_preserves_read_only_unrelated_json(
+    tmp_path: Path,
+) -> None:
+    objects = tmp_path / "objects"
+    definition_path = objects / "tags/Topic/地理/_definition.json"
+    write_json(
+        definition_path,
+        {
+            "schema": "quwoquan_data.tag_definition",
+            "tagRef": "Topic/地理",
+        },
+    )
+    definition_path.chmod(0o444)
+    frozen = definition_path.read_bytes()
+
+    bind_release_object_media_assets(
+        objects_root=objects,
+        manifest={"assets": []},
+    )
+
+    assert definition_path.read_bytes() == frozen
+    assert stat.S_IMODE(definition_path.stat().st_mode) == 0o444
 
 
 def test_image_variant_profiles_are_loaded_from_canonical_metadata() -> None:

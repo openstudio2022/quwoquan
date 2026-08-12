@@ -478,7 +478,7 @@ tables:
     publication_role: transactional_outbox
     entity: UserAccount
     infrastructure_only: true
-    description: UserProfileUpdated 与 UserAvatarUpdated 的 search projection durable outbox；资料事实与投影坐标在同一事务提交，租约 relay 只在 Elasticsearch/OpenSearch 幂等 upsert 或 delete 成功后确认 checkpoint，失败保留为可重放记录。
+    description: UserProfileUpdated、UserAvatarUpdated 与 UserAccountClosed 的 Search projection durable outbox；资料事实、自包含公共快照与投影坐标在同一事务提交，租约 relay 只在 UserProfileSearchProjectionRequested 已追加到 durable stream 后确认 published_at。Search 独占 Provider 写入与消费 checkpoint，失败记录保留可重放，User 禁止直写 Elasticsearch/OpenSearch。
     columns:
     - name: event_id
       type: VARCHAR(64)
@@ -495,6 +495,10 @@ tables:
       - NOT_NULL
     - name: event_type
       type: VARCHAR(96)
+      constraints:
+      - NOT_NULL
+    - name: payload_json
+      type: JSONB
       constraints:
       - NOT_NULL
     - name: occurred_at
@@ -656,14 +660,26 @@ redis_cache:
   ttl_seconds: 1800
   type: string
   description: 登录失败滑动窗口计数
-- key: otp:resend:{phone}
+- key: otp:resend:{phoneDigest}
   ttl_seconds: 60
+  entity: UserAccount
   type: string
-  description: 手机号发码的单次冷却占位；只承载 UserAccount 认证编排的短期限流状态，不持久化 OTP。
-- key: otp:quota:{phone}
+  description: 手机号 SHA-256 摘要维度的发码冷却截止毫秒；只承载 UserAccount 认证编排的短期限流状态，不持久化手机号或 OTP。
+- key: otp:quota:{phoneDigest}
   ttl_seconds: 3600
+  entity: UserAccount
   type: string
-  description: 手机号发码的一小时原子计数；只承载 UserAccount 认证编排的短期配额，不持久化 OTP。
+  description: 手机号 SHA-256 摘要维度的一小时原子发码计数；只承载 UserAccount 认证编排的短期配额，不持久化手机号或 OTP。
+- key: otp:quota-deadline:{phoneDigest}
+  ttl_seconds: 3600
+  entity: UserAccount
+  type: string
+  description: 与 otp:quota 同窗创建的一小时配额截止毫秒，用于返回精确剩余秒数；不持久化手机号或 OTP。
+- key: otp:idempotency:{idempotencyKeyDigest}
+  ttl_seconds: 86400
+  entity: UserAccount
+  type: string
+  description: SendOtp 幂等准入记录的 JSON 字符串；key 使用 opaque Idempotency-Key 的 SHA-256 摘要，pending claim 仅租约 10 秒，完成结果保留 24 小时，value 不含手机号或 OTP。
 role: authoritative
 codegen:
   enabled: true

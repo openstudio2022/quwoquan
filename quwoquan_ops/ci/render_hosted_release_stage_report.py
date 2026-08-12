@@ -94,7 +94,7 @@ def render(
             and receipt.get("fromCandidateDigest") == candidate
             and receipt.get("toCandidateDigest")
             == receipt.get("lastGoodCandidateDigest")
-            and receipt.get("stage") == "full"
+            and receipt.get("stage") == "100"
             and rollback_evidence["durationMs"] <= ROLLBACK_BUDGET_MS
         ):
             raise ValueError(
@@ -159,6 +159,7 @@ def render(
         ],
         "rollbackPostChecks": rollback_post_checks,
         "sloReadback": receipt["sloReadback"],
+        "promotionEvidence": (receipt["sloReadback"].get("promotionEvidence") or {}),
         "rollback": rollback_report,
         "replayed": True,
         "projectionPurpose": "terminal-sealing-only",

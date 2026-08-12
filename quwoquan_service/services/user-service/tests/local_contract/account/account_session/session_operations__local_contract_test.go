@@ -5,6 +5,8 @@ package local_contract
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -45,14 +47,15 @@ func TestRefreshAndLogoutUseAccountSessionFacadeAndAuthoritativeAccountState(t *
 		IsActive:    true,
 		Version:     1,
 	}}
-	signer, err := rtauth.NewHS256Signer(rtauth.TokenConfig{
+	tokenConfig := rtauth.TokenConfig{
 		Secret:       []byte("account-session-local-secret-32bytes"),
 		Issuer:       "https://auth.quwoquan.local",
 		Audience:     "quwoquan-api",
 		Type:         rtauth.TokenTypeAccess,
 		TokenVersion: 1,
 		TTL:          30 * time.Minute,
-	})
+	}
+	signer, err := rtauth.NewHS256Signer(tokenConfig)
 	if err != nil {
 		t.Fatalf("access signer: %v", err)
 	}
@@ -76,6 +79,22 @@ func TestRefreshAndLogoutUseAccountSessionFacadeAndAuthoritativeAccountState(t *
 		rotated.ActivePersona == nil || rotated.ActivePersona["personaId"] != "session-persona" ||
 		store.activeCountForLineage(issued.LineageID) != 1 {
 		t.Fatalf("rotated session did not preserve authoritative identity: %+v", rotated)
+	}
+	verifier, err := rtauth.NewHS256Verifier(tokenConfig)
+	if err != nil {
+		t.Fatalf("access verifier: %v", err)
+	}
+	claims, err := verifier.Verify(rotated.AccessToken)
+	if err != nil {
+		t.Fatalf("verify refreshed access token: %v", err)
+	}
+	wantDeviceDigest := sha256.Sum256([]byte("qwq-device-actor-v1:session-device"))
+	if claims.DeviceActorID != hex.EncodeToString(wantDeviceDigest[:16]) {
+		t.Fatalf(
+			"refreshed access token did=%q want=%q",
+			claims.DeviceActorID,
+			hex.EncodeToString(wantDeviceDigest[:16]),
+		)
 	}
 
 	if err := service.Logout(context.Background(), "session-owner", rotated.RefreshToken); err != nil {

@@ -74,6 +74,26 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request, homepageID stri
 	writeJSON(w, http.StatusCreated, view)
 }
 
+func (h *Handler) GetMine(w http.ResponseWriter, r *http.Request, homepageID string) {
+	actor, ok := personaActor(r)
+	if !ok {
+		writeError(w, r, entitygenerated.AppErrorFromPermissionDenied(
+			"GetMyPendingHomepageClaimRequest requires trusted persona actor",
+		))
+		return
+	}
+	view, err := h.facade.GetMyPending(
+		r.Context(),
+		strings.TrimSpace(homepageID),
+		actor,
+	)
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
 func (h *Handler) Review(
 	w http.ResponseWriter,
 	r *http.Request,

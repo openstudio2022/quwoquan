@@ -93,7 +93,7 @@ class DeviceMatrixDomainProjectionLocalContractTest(unittest.TestCase):
             "--gateway-health-url",
         ):
             self.assertEqual(command[command.index(argument) + 1], canonical)
-        self.assertIn("--skip-beta-services", command)
+        self.assertNotIn("--skip-beta-services", command)
 
     def test_chat_android_reverses_canonical_local_authority_ports(self) -> None:
         device = {"id": "emulator-5554", "targetPlatform": "android-arm64"}

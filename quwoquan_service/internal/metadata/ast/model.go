@@ -28,6 +28,29 @@ const (
 	OperationKindSession OperationKind = "session"
 )
 
+// TransportRole is the explicit closed set for non-business HTTP surfaces.
+// An empty role means the route is a business operation and therefore remains
+// subject to the GraphQL-read/REST-command single-track gate.
+type TransportRole string
+
+const (
+	TransportRoleBinaryDownload   TransportRole = "binary_download"
+	TransportRoleBinaryUpload     TransportRole = "binary_upload"
+	TransportRoleCDN              TransportRole = "cdn"
+	TransportRoleHealth           TransportRole = "health"
+	TransportRoleLiveness         TransportRole = "liveness"
+	TransportRoleMetrics          TransportRole = "metrics"
+	TransportRoleMinimumBuild     TransportRole = "minimum_build"
+	TransportRoleOAuthCallback    TransportRole = "oauth_callback"
+	TransportRoleProviderCallback TransportRole = "provider_callback"
+	TransportRoleReadiness        TransportRole = "readiness"
+	TransportRoleRecovery         TransportRole = "recovery"
+	TransportRoleSSE              TransportRole = "sse"
+	TransportRoleStaticResource   TransportRole = "static_resource"
+	TransportRoleUpgrade          TransportRole = "upgrade"
+	TransportRoleWebSocket        TransportRole = "websocket"
+)
+
 // Catalog 是 loader 产生、尚未做跨文件图校验的规范化 AST。
 type Catalog struct {
 	Objects            []Object                  `json:"objects"`
@@ -215,6 +238,7 @@ type Object struct {
 	Name           string               `json:"name"`
 	Kind           ObjectKind           `json:"kind"`
 	KindExplicit   bool                 `json:"kindExplicit"`
+	ModelVersion   string               `json:"modelVersion,omitempty"`
 	AggregateOwner string               `json:"aggregateOwner,omitempty"`
 	StorageBackend string               `json:"storageBackend,omitempty"`
 	SourcePath     string               `json:"sourcePath"`
@@ -299,6 +323,7 @@ type Operation struct {
 	RequestEntity          string                   `json:"requestEntity,omitempty"`
 	RequestBodyKind        string                   `json:"requestBodyKind,omitempty"`
 	Transport              string                   `json:"transport"`
+	TransportRole          TransportRole            `json:"transportRole,omitempty"`
 	Streaming              *StreamingPolicy         `json:"streaming,omitempty"`
 	RequestBindings        *RequestBindings         `json:"requestBindings,omitempty"`
 	RequestConstants       *RequestConstants        `json:"requestConstants,omitempty"`

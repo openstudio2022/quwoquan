@@ -11,6 +11,57 @@ commercial_defaults:
   gap_id: USER_AUTHENTICATION_CHALLENGE_COMMERCIAL_EVIDENCE
   target_story: app-cloud-business-object-commercial-closure
 api_routes:
+  - method: GET
+    path: /auth/otp/readiness
+    operation: GetOtpDeliveryReadiness
+    actor: none
+    application:
+      kind: query
+      facet: AuthenticationChallengeQueryFacade
+      method: getOtpDeliveryReadiness
+      reader: OtpDeliveryReadinessReader
+      slice: OtpDeliveryReadiness
+    description: 只读确认手机号验证码投递链是否可接受新请求，不暴露 Provider 或内部依赖检查
+    response_fields:
+      - availability
+      - retryAfterSeconds
+    authorization:
+      principal: public
+      ownership_policy: authentication_challenge_bootstrap
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1200
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: user_auth_otp_delivery_readiness
+      trace: true
+      attributes:
+        - environment
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: public
+      principal: public
+      token_transport: none
+      anonymous_policy: allow
+      visibility: private
+    response_entity: OtpDeliveryReadiness
+    response_body: OtpDeliveryReadiness
+    response_body_kind: object
+    request_entity: OtpDeliveryReadinessQuery
+    request_body_kind: none
   - method: POST
     path: /auth/otp/send
     operation: SendOtp
@@ -36,14 +87,15 @@ api_routes:
     commercial:
       status: ready
     reliability:
-      timeout_ms: 1200
+      timeout_ms: 3000
       cancellation: supported
-      retry_mode: none
-      max_attempts: 1
-      idempotency: none
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
     error_codes:
       - USER.USER.invalid_argument
       - USER.AUTH.otp_rate_limited
+      - USER.AUTH.otp_idempotency_conflict
       - USER.AUTH.otp_provider_failed
       - USER.SYSTEM.internal_error
     privacy:
@@ -59,6 +111,7 @@ api_routes:
         - outcome
         - error_code
         - delivery_status
+        - idempotent_replay
     slo:
       latency_p95_ms: 1200
       availability_percent: 99.9

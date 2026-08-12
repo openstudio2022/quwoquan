@@ -4,9 +4,9 @@ import os
 from pathlib import Path
 
 from content.execution.agent import agent_worker
-from core.control_types import AgentFailureKind, AgentRunStatus
 from content.execution.context import ExecutionContext
 from content.execution.workspace import execution_root
+from core.control_types import AgentFailureKind, AgentRunStatus
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
 
 
@@ -28,6 +28,7 @@ def test_managed_agent_subprocess_imports_from_the_data_scripts_root(monkeypatch
         captured["args"] = args
         captured["env"] = kwargs["env"]
         captured["cwd"] = kwargs["cwd"]
+        captured["stdin"] = kwargs["stdin"]
         return _CompletedProcess()
 
     monkeypatch.setattr(agent_worker.subprocess, "Popen", fake_popen)
@@ -50,3 +51,6 @@ def test_managed_agent_subprocess_imports_from_the_data_scripts_root(monkeypatch
     python_path = str(captured["env"]["PYTHONPATH"]).split(os.pathsep)[0]
     assert Path(python_path) == Path(__file__).resolve().parents[3] / "scripts"
     assert Path(str(captured["cwd"])) == execution_root(ctx.execution_id)
+    assert captured["stdin"] is agent_worker.subprocess.DEVNULL
+    assert "CURSOR_API_KEY" not in captured["env"]
+    assert "QWQ_CURSOR_API_KEY_FD" not in captured["env"]

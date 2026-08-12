@@ -17,7 +17,11 @@ from content.source.research.scale_source_pool import (
 from content.source import professional_image_acquisition as image_acquisition
 from content.source import professional_video_acquisition as video_acquisition
 from core.io import write_json
-from core.source_digest import SourceDigest, content_source_revision
+from core.source_digest import (
+    ExecutionBundleIdentity,
+    SourceDefinitionSnapshot,
+    content_source_revision,
+)
 
 SOURCE_A = "sha256:" + "a" * 64
 SOURCE_B = "sha256:" + "b" * 64
@@ -31,7 +35,12 @@ TARGETS = {
 
 
 def _source_document(digest: str = SOURCE_A) -> dict[str, object]:
-    return SourceDigest(digest=digest).to_document()
+    document = SourceDefinitionSnapshot(digest=digest).to_document()
+    return document
+
+
+def _execution_bundle_document() -> dict[str, object]:
+    return ExecutionBundleIdentity(digest="sha256:" + "d" * 64).to_document()
 
 
 def _write_handoff(
@@ -55,6 +64,7 @@ def _write_handoff(
         campaign_sequence=1,
         campaign_retry_of=None,
         source_digest=_source_document(),
+        execution_bundle=_execution_bundle_document(),
         entity_catalog_digest=CATALOG,
         workload_targets=workload_targets or campaign_workload_targets(scale),
         output_root=output_root,
@@ -237,6 +247,7 @@ def test_handoff_revision_is_create_once_and_preserves_superseded_bytes(
             campaign_sequence=1,
             campaign_retry_of=None,
             source_digest=_source_document(),
+            execution_bundle=_execution_bundle_document(),
             entity_catalog_digest=CATALOG,
             workload_targets=TARGETS,
             output_root=output_root,
@@ -360,7 +371,6 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
 
 def test_shared_guard_accepts_exact_identity_and_rejects_stale_source(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output_root = tmp_path / "output"
     handoff, handoff_path = _write_handoff(output_root)
@@ -372,22 +382,13 @@ def test_shared_guard_accepts_exact_identity_and_rejects_stale_source(
             entity_catalog_digest=CATALOG,
         ),
     }
-    monkeypatch.setattr(
-        handoffs,
-        "current_source_digest",
-        lambda **_kwargs: SourceDigest(digest=SOURCE_A),
-    )
     assert handoffs.guard_acquisition_source_identity(
         manifest,
         handoff_ref=handoff_path,
         repo_root=tmp_path,
     ) == handoff
 
-    monkeypatch.setattr(
-        handoffs,
-        "current_source_digest",
-        lambda **_kwargs: SourceDigest(digest=SOURCE_B),
-    )
+    manifest["sourceDigest"] = SOURCE_B
     with pytest.raises(
         handoffs.PreAcquisitionHandoffError,
         match="SOURCE_IDENTITY_DRIFT",
@@ -406,7 +407,7 @@ def test_stale_identity_blocks_image_and_video_before_any_output_write(
     output_root = tmp_path / "output"
     _handoff, handoff_path = _write_handoff(output_root)
     manifest = {
-        "sourceDigest": SOURCE_A,
+        "sourceDigest": SOURCE_B,
         "entityCatalogDigest": CATALOG,
         "sourceRevision": content_source_revision(
             source_digest=SOURCE_A,
@@ -416,11 +417,6 @@ def test_stale_identity_blocks_image_and_video_before_any_output_write(
     }
     manifest_path = tmp_path / "inputs/stale-manifest.json"
     write_json(manifest_path, manifest)
-    monkeypatch.setattr(
-        handoffs,
-        "current_source_digest",
-        lambda **_kwargs: SourceDigest(digest=SOURCE_B),
-    )
     monkeypatch.setattr(
         image_acquisition,
         "assert_valid",

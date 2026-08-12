@@ -2,20 +2,20 @@ import 'package:quwoquan_app/service/user_service/profile_projection/following_s
 import 'package:quwoquan_app/service/user_service/relationship/followed_subject_visit_state/application/public/followed_subject_visit_state_writer.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 /// Alpha-only 关注主体读面与访问回执；状态只来自不可变 contract fixture。
 final class InMemoryFollowingSubjectFacet
     implements FollowingSubjectReader, FollowedSubjectVisitStateWriter {
-  InMemoryFollowingSubjectFacet({ObjectScenarioSeedReader? fixtures})
-    : _items = _load(fixtures ?? objectScenarioSeedReader);
+  InMemoryFollowingSubjectFacet({ObjectContractExampleReader? fixtures})
+    : _items = _load(fixtures ?? objectContractExampleReader);
 
   final List<FollowingSubjectItemView> _items;
 
   static List<FollowingSubjectItemView> _load(
-    ObjectScenarioSeedReader fixtures,
+    ObjectContractExampleReader fixtures,
   ) {
-    final seed = fixtures.requireSeedSet('user', 'following_subject_core');
+    final seed = fixtures.requireExample('user', 'following_subject_core');
     final rawItems = seed['items'];
     if (rawItems is! List<Object?>) {
       throw const FormatException(

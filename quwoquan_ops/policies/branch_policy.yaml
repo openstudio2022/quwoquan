@@ -1,6 +1,8 @@
 allowed_local_branches:
-  - dev1.0
+  - main
 
 allowed_remote_branches:
-  - dev1.0
   - main
+
+pull_request_branch_prefixes:
+  - codex/

@@ -15,7 +15,7 @@ from core.paths import (
 from core.schema import assert_valid
 from core.video_source_admission import (
     VIDEO_SOURCE_KINDS,
-    assert_video_source_admitted,
+    assert_video_distribution_use_allowed,
 )
 from governance.coverage.distribution import (
     ProductLifecycleState,
@@ -142,7 +142,7 @@ def write_admitted_sourced_video_unit(
     if source_kind not in VIDEO_SOURCE_KINDS:
         raise ValueError(f"unsupported sourced video sourceKind: {source_kind}")
     source_id = str(source_unit.get("sourceId") or "").strip()
-    assert_video_source_admitted(
+    assert_video_distribution_use_allowed(
         load_content_source_registry(),
         source_id=source_id,
         source_kind=source_kind,

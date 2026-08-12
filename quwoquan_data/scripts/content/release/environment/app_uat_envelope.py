@@ -258,6 +258,7 @@ def build_app_uat_envelope(
     bindings: list[object],
     homepage_report: Mapping[str, Any],
     queries_by_name: Mapping[str, Mapping[str, Any]],
+    video_query_name: str,
     verified_playable_video_ids: set[str],
     illustrated_article_ids: set[str],
     verified_image_work_ids: set[str],
@@ -265,6 +266,11 @@ def build_app_uat_envelope(
     product_lifecycle_state: str,
 ) -> dict[str, str]:
     """Project exact canonical App UAT fields from release objects and readbacks."""
+
+    if video_query_name not in {"typed_video", "premium_stream"}:
+        raise AppUatEnvelopeError(
+            f"unsupported appUatEnvelope video query: {video_query_name}"
+        )
 
     homepage_id, homepage_title = _homepage_identity(
         release_root=release_root,
@@ -293,12 +299,13 @@ def build_app_uat_envelope(
     videos = [
         row
         for row in candidates["video"]
-        if row[1] in query_ids.get("premium_stream", set())
+        if row[1] in query_ids.get(video_query_name, set())
         and row[1] in verified_playable_video_ids
     ]
     if not articles or not images or not videos:
         raise AppUatEnvelopeError(
-            "appUatEnvelope lacks exact-query-bound article/image/Premium playable video"
+            "appUatEnvelope lacks exact-query-bound article/image/"
+            f"{video_query_name} playable video"
         )
     article_ref, article_id, article = articles[0]
     _image_ref, image_id, image = images[0]

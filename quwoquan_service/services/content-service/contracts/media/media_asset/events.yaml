@@ -1,5 +1,6 @@
 events:
 - name: MediaAssetCreated
+  wire_event_type: content.media_asset.created
   description: 已验证的上传会话物化为独立 MediaAsset；media-processing 处理权威快照中处于 processing 的图片或视频，终态重放仅推进 checkpoint。
   delivery_semantics: transactional_outbox
   payload_entity: MediaAsset
@@ -12,6 +13,7 @@ events:
   - sha256
   - processingStatus
 - name: MediaAssetProcessingUpdated
+  wire_event_type: content.media_asset.processing_updated
   description: 图片解码/方向归一/压缩或视频转码/扫描/预览轨处理更新资产处理状态。
   delivery_semantics: transactional_outbox
   payload_entity: MediaAsset
@@ -21,6 +23,7 @@ events:
   - processingStatus
   - processedAt
 - name: MediaAssetAccessPolicyUpdated
+  wire_event_type: content.media_asset.access_policy_updated
   description: owner 修改资产访问策略。
   delivery_semantics: transactional_outbox
   payload_entity: MediaAsset
@@ -30,6 +33,7 @@ events:
   - ownerId
   - accessPolicy
 - name: MediaAssetDiscarded
+  wire_event_type: content.media_asset.discarded
   description: owner 放弃未被有效内容引用的资产；同事务写入逻辑删除与 outbox，media-processing 按同序 cursor 完成可重放物理清理。
   delivery_semantics: transactional_outbox
   payload_entity: MediaAsset

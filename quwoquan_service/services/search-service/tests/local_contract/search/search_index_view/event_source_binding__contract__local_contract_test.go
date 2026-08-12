@@ -35,10 +35,11 @@ func TestSearchIndexProjectionDeclaresOnlyAssembledProductionSources(t *testing.
 	}
 	want := []string{
 		"ops.experiment.ExperimentPolicyActivated",
+		"user.user_account.UserProfileSearchProjectionRequested",
 		"user.user_account.UserSuspended",
 		"user.user_account.UserRestored",
 	}
-	if len(document.Lifecycle.EventConsumers) != 2 ||
+	if len(document.Lifecycle.EventConsumers) != 3 ||
 		document.Lifecycle.EventConsumers[0].Name != "ApplySearchExperimentPolicy" ||
 		document.Lifecycle.EventConsumers[0].Kind != "projector" ||
 		document.Lifecycle.EventConsumers[0].Facet != "ExperimentPolicyConsumer" ||
@@ -49,6 +50,11 @@ func TestSearchIndexProjectionDeclaresOnlyAssembledProductionSources(t *testing.
 		document.Lifecycle.EventConsumers[1].Facet != "UserAccountRestrictionConsumer" ||
 		document.Lifecycle.EventConsumers[1].Method != "processOnce" ||
 		document.Lifecycle.EventConsumers[1].Idempotency != "event_id" ||
+		document.Lifecycle.EventConsumers[2].Name != "ApplyUserProfileSearchProjection" ||
+		document.Lifecycle.EventConsumers[2].Kind != "projector" ||
+		document.Lifecycle.EventConsumers[2].Facet != "UserProfileSearchProjection" ||
+		document.Lifecycle.EventConsumers[2].Method != "processOnce" ||
+		document.Lifecycle.EventConsumers[2].Idempotency != "event_id" ||
 		!reflect.DeepEqual(document.Lifecycle.SourceEvents, want) {
 		t.Fatalf("search index lifecycle event binding drifted: %+v", document.Lifecycle)
 	}

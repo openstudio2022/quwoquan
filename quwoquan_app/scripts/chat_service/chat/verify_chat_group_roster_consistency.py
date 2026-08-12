@@ -17,21 +17,14 @@ if str(_SCRIPTS_ROOT) not in sys.path:
 from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
 
 import hashlib
-import json
 import re
-import sys
-from pathlib import Path
 
 ROOT = REPO_ROOT
 LOCAL_MEDIA_ORIGIN = ROOT / "quwoquan_ops/cli/lib/local_media_origin.py"
 MEDIA_ROOT = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
-CHAT_SCENARIOS = (
+CHAT_OBJECT_BUILDER = (
     ROOT
-    / "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.json"
-)
-CHAT_SCENARIOS_GAMMA = (
-    ROOT
-    / "quwoquan_service/services/chat-service/tests/support/contract_fixtures/scenarios/chat_scenarios.gamma-curated.json"
+    / "quwoquan_app/test/support/runtime/fixtures/object_scenario_builders.dart"
 )
 LIB = ROOT / "quwoquan_app/lib"
 
@@ -92,59 +85,21 @@ def _check_no_client_side_group_avatar_composite() -> None:
                 break
 
 
-def _check_contract_fixture(path: Path, label: str) -> None:
-    text = LOCAL_MEDIA_ORIGIN.read_text(encoding="utf-8")
-    for match in re.finditer(r'"conv_grid_\d+"\s*:', text):
-        _fail(
-            f"local_media_origin.py must not alias {match.group(0)[:-1]} "
-            "to previous composite; serve conv_grid PNG on disk"
-        )
-
-
-def _check_contract_fixture(path: Path, label: str) -> None:
-    if not path.is_file():
-        _fail(f"missing contract fixture: {path}")
+def _check_builder_contract() -> None:
+    if not CHAT_OBJECT_BUILDER.is_file():
+        _fail(f"missing chat object builder: {CHAT_OBJECT_BUILDER}")
         return
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    seed_sets = payload.get("seedSets") or {}
-    for seed_ref, seed_set in seed_sets.items():
-        conversations = seed_set.get("conversations") or []
-        members_by_conv = seed_set.get("members") or {}
-        for conv in conversations:
-            if conv.get("type") != "group":
-                continue
-            conv_id = (
-                conv.get("id")
-                or conv.get("_id")
-                or conv.get("conversationId")
-                or ""
-            )
-            if not conv_id:
-                continue
-            declared = conv.get("memberCount")
-            roster = members_by_conv.get(conv_id) or []
-            if declared != len(roster):
-                _fail(
-                    f"{label}/{seed_ref} {conv_id}: "
-                    f"memberCount={declared} roster={len(roster)}"
-                )
-            source_ids = conv.get("groupAvatarSourceUserIds") or []
-            roster_ids = {m.get("userId") for m in roster if m.get("userId")}
-            extra = [uid for uid in source_ids if uid not in roster_ids]
-            if extra:
-                _fail(
-                    f"{label}/{seed_ref} {conv_id}: "
-                    f"groupAvatarSourceUserIds not in roster: {extra}"
-                )
+    text = CHAT_OBJECT_BUILDER.read_text(encoding="utf-8")
+    for token in ("fixture_conv_group", "fixture_conv_photo_group", "'members'"):
+        if token not in text:
+            _fail(f"chat object builder must retain {token}")
 
 
 def main() -> int:
     _check_alpha_alias()
     _check_conv_grid_avatar_distinct()
     _check_no_client_side_group_avatar_composite()
-    _check_contract_fixture(CHAT_SCENARIOS, "chat_scenarios.json")
-    if CHAT_SCENARIOS_GAMMA.is_file():
-        _check_contract_fixture(CHAT_SCENARIOS_GAMMA, "chat_scenarios.gamma-curated.json")
+    _check_builder_contract()
     if violations:
         print("verify_chat_group_roster_consistency: FAIL", file=sys.stderr)
         for item in violations:

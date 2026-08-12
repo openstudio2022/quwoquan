@@ -8,7 +8,7 @@ services:
       - --wiredTigerCacheSizeGB
       - "${QWQ_DATA_FLEET_MONGO_CACHE_SIZE_GB:-0.25}"
     ports:
-      - "${QWQ_DATA_FLEET_MONGO_PORT:?QWQ_DATA_FLEET_MONGO_PORT is required}:27017"
+      - "127.0.0.1:${QWQ_DATA_FLEET_MONGO_PORT:?QWQ_DATA_FLEET_MONGO_PORT is required}:27017"
     volumes:
       - mongodb:/data/db
     healthcheck:
@@ -38,7 +38,7 @@ services:
     image: "${QWQ_DATA_FLEET_REDIS_IMAGE:-docker.io/library/redis:7.2-alpine}"
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "${QWQ_DATA_FLEET_REDIS_PORT:?QWQ_DATA_FLEET_REDIS_PORT is required}:6379"
+      - "127.0.0.1:${QWQ_DATA_FLEET_REDIS_PORT:?QWQ_DATA_FLEET_REDIS_PORT is required}:6379"
     volumes:
       - redis:/data
     healthcheck:

@@ -24,11 +24,16 @@ import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
     show
         homepageClaimRequestCommandWriterProvider,
+        homepageClaimRequestQueryReaderProvider,
         homepageWriteTargetReaderProvider;
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/auth/homepage_write_access.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/homepage_product_action_tracker.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show HomepageClaimRequestView, HomepageClaimReviewStatus;
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import 'package:uuid/uuid.dart';
 
 class HomepageClaimPage extends ConsumerStatefulWidget {
   const HomepageClaimPage({super.key, required this.homepageId});
@@ -55,6 +60,8 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
   UiErrorSemantic? _submitErrorSemantic;
   String? _phoneValidationMessage;
   String _claimTier = 'basic';
+  String? _pendingSubmitIntentId;
+  int? _pendingSubmitFingerprint;
 
   bool get _hasUnsavedChanges =>
       _claimTier != 'basic' ||
@@ -467,25 +474,51 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
       });
       return;
     }
+    final draft = HomepageClaimRequestDraft(
+      claimTier: _claimTier,
+      contactPhone: phone,
+      businessLicenseUrl: _licenseController.text.trim(),
+      identityCardFrontUrl: _idFrontController.text.trim(),
+      identityCardBackUrl: _idBackController.text.trim(),
+      note: _noteController.text.trim(),
+    );
+    final fingerprint = Object.hashAll(<Object?>[
+      widget.homepageId,
+      draft.claimTier,
+      draft.contactPhone,
+      draft.businessLicenseUrl,
+      draft.identityCardFrontUrl,
+      draft.identityCardBackUrl,
+      draft.note,
+    ]);
+    if (_pendingSubmitFingerprint != fingerprint ||
+        (_pendingSubmitIntentId ?? '').isEmpty) {
+      _pendingSubmitFingerprint = fingerprint;
+      _pendingSubmitIntentId = const Uuid().v4();
+    }
+    final submitIntentId = _pendingSubmitIntentId!;
     setState(() {
       _isSubmitting = true;
       _submitErrorSemantic = null;
     });
     final startedAt = DateTime.now();
     try {
-      await ref
+      final receipt = await ref
           .read(homepageClaimRequestCommandWriterProvider)
           .createClaimRequest(
             homepageId: widget.homepageId,
-            draft: HomepageClaimRequestDraft(
-              claimTier: _claimTier,
-              contactPhone: phone,
-              businessLicenseUrl: _licenseController.text.trim(),
-              identityCardFrontUrl: _idFrontController.text.trim(),
-              identityCardBackUrl: _idBackController.text.trim(),
-              note: _noteController.text.trim(),
-            ),
+            draft: draft,
+            clientRequestId: submitIntentId,
           );
+      if (!_isCanonicalPendingClaimReceipt(receipt)) {
+        throw _invalidClaimReceiptFailure(receipt);
+      }
+      final readback = await ref
+          .read(homepageClaimRequestQueryReaderProvider)
+          .getMyPendingClaimRequest(homepageId: widget.homepageId);
+      if (!_isSamePendingClaim(receipt, readback)) {
+        throw _invalidClaimReadbackFailure(receipt, readback);
+      }
       if (!mounted) {
         return;
       }
@@ -500,6 +533,8 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
       if (!mounted) {
         return;
       }
+      _pendingSubmitIntentId = null;
+      _pendingSubmitFingerprint = null;
       AppToast.show(context, ObjectHomepageText.homepageClaimSubmitted);
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -507,11 +542,13 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
         return;
       }
       setState(() {
-        _submitErrorSemantic = runtimeErrorSemantic(
-          context,
-          error: error,
-          category: UiErrorCategory.submit,
-          scope: UiErrorScope.section,
+        _submitErrorSemantic = ensureRetryUiErrorSemantic(
+          runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.submit,
+            scope: UiErrorScope.section,
+          ),
         );
       });
       await trackHomepageProductAction(
@@ -530,6 +567,97 @@ class _HomepageClaimPageState extends ConsumerState<HomepageClaimPage> {
         });
       }
     }
+  }
+
+  bool _isCanonicalPendingClaimReceipt(HomepageClaimRequestView receipt) {
+    return receipt.claimRequestId.trim().isNotEmpty &&
+        receipt.homepageId == widget.homepageId &&
+        receipt.claimTier.wireName == _claimTier &&
+        receipt.status == HomepageClaimReviewStatus.pendingReview &&
+        receipt.reviewedAt == null;
+  }
+
+  bool _isSamePendingClaim(
+    HomepageClaimRequestView receipt,
+    HomepageClaimRequestView readback,
+  ) {
+    return _isCanonicalPendingClaimReceipt(readback) &&
+        readback.claimRequestId == receipt.claimRequestId &&
+        readback.requesterPersonaId == receipt.requesterPersonaId &&
+        readback.createdAt.isAtSameMomentAs(receipt.createdAt);
+  }
+
+  RuntimeFailure _invalidClaimReceiptFailure(HomepageClaimRequestView receipt) {
+    return RuntimeFailure(
+      code: RuntimeFailureCodes.appContractInvalidResponse,
+      semanticReason: 'homepage_claim_receipt_not_pending',
+      origin: RuntimeFailureOrigin.remoteDependency,
+      kind: RuntimeFailureKind.contract,
+      nature: RuntimeFailureNature.bug,
+      location: const RuntimeFailureLocation(
+        businessObject: 'entity.homepage_claim_request',
+        functionModule: 'homepage_claim_page',
+      ),
+      context: RuntimeFailureContext(
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(
+            key: 'homepageMatches',
+            value: (receipt.homepageId == widget.homepageId).toString(),
+          ),
+          RuntimeContextAttribute(
+            key: 'status',
+            value: receipt.status.wireName,
+          ),
+          RuntimeContextAttribute(
+            key: 'claimTierMatches',
+            value: (receipt.claimTier.wireName == _claimTier).toString(),
+          ),
+        ],
+      ),
+      recovery: const RuntimeRecoveryDirective(
+        action: 'retry',
+        disruptionLevel: 'inlineCard',
+      ),
+    );
+  }
+
+  RuntimeFailure _invalidClaimReadbackFailure(
+    HomepageClaimRequestView receipt,
+    HomepageClaimRequestView readback,
+  ) {
+    return RuntimeFailure(
+      code: RuntimeFailureCodes.appContractInvalidResponse,
+      semanticReason: 'homepage_claim_readback_not_converged',
+      origin: RuntimeFailureOrigin.remoteDependency,
+      kind: RuntimeFailureKind.contract,
+      nature: RuntimeFailureNature.bug,
+      location: const RuntimeFailureLocation(
+        businessObject: 'entity.homepage_claim_request',
+        functionModule: 'homepage_claim_page',
+      ),
+      context: RuntimeFailureContext(
+        attributes: <RuntimeContextAttribute>[
+          RuntimeContextAttribute(
+            key: 'requestIdMatches',
+            value: (readback.claimRequestId == receipt.claimRequestId)
+                .toString(),
+          ),
+          RuntimeContextAttribute(
+            key: 'requesterMatches',
+            value: (readback.requesterPersonaId == receipt.requesterPersonaId)
+                .toString(),
+          ),
+          RuntimeContextAttribute(
+            key: 'status',
+            value: readback.status.wireName,
+          ),
+        ],
+      ),
+      recovery: const RuntimeRecoveryDirective(
+        action: 'retry',
+        disruptionLevel: 'inlineCard',
+      ),
+    );
   }
 
   Future<void> _handleSubmitErrorAction(UiErrorAction action) async {

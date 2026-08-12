@@ -44,7 +44,7 @@ func (i *ESIndex) UpsertIfNewer(
 ) (bool, error) {
 	if current, found, err := i.currentVersion(ctx, item.HomepageID); err != nil {
 		return false, err
-	} else if found && current >= item.SourceVersion {
+	} else if found && current > item.SourceVersion {
 		return false, nil
 	}
 	document := rtsearch.Document{
@@ -81,7 +81,7 @@ func (i *ESIndex) DeleteIfNotOlder(
 ) (bool, error) {
 	if current, found, err := i.currentVersion(ctx, homepageID); err != nil {
 		return false, err
-	} else if found && current >= sourceVersion {
+	} else if found && current > sourceVersion {
 		return false, nil
 	}
 	if err := i.indexer.Apply(ctx, es.ChangeEvent{

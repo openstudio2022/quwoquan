@@ -8,7 +8,7 @@ import (
 
 	"quwoquan_service/runtime/operation"
 	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application/homepage_orchestration"
-	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/testsupport"
+	testsupport "quwoquan_service/services/entity-service/tests/support/homepagefixture"
 )
 
 func importedSightInput(title string) application.ImportedHomepageInput {

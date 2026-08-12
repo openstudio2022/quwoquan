@@ -242,6 +242,228 @@ func TestContractGraphPreservesCanonicalSSETransport(t *testing.T) {
 	}
 }
 
+func TestContractGraphPreservesExplicitNonBusinessTransportRole(t *testing.T) {
+	metadataDir := t.TempDir()
+	operation := strings.Replace(
+		commercialQuery("Post", "GetPost", "/content/posts/{postId}"),
+		"    actor: persona_or_device\n",
+		"    actor: persona_or_device\n    transport_role: metrics\n",
+		1,
+	)
+	writeObjectFixture(
+		t,
+		metadataDir,
+		"content/content/post",
+		aggregateObject("Post"),
+		operation,
+	)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contractGraph := graph.Build(catalog)
+	if len(contractGraph.Operations) != 1 {
+		t.Fatalf("operations=%d, want 1", len(contractGraph.Operations))
+	}
+	if got := contractGraph.Operations[0].TransportRole; got != "metrics" {
+		t.Fatalf("transportRole=%q, want metrics", got)
+	}
+	if issues, err := validate.MetadataSchemas(metadataDir); err != nil {
+		t.Fatal(err)
+	} else if len(issues) != 0 {
+		t.Fatalf("operations schema rejected canonical transport_role: %+v", issues)
+	}
+	if err := validate.ContractGraphSchema(metadataDir, contractGraph); err != nil {
+		t.Fatalf("validate ContractGraph schema: %v", err)
+	}
+}
+
+func TestContractGraphRejectsUnknownTransportRole(t *testing.T) {
+	metadataDir := t.TempDir()
+	operation := strings.Replace(
+		commercialQuery("Post", "GetPost", "/content/posts/{postId}"),
+		"    actor: persona_or_device\n",
+		"    actor: persona_or_device\n    transport_role: business_dashboard\n",
+		1,
+	)
+	writeObjectFixture(
+		t,
+		metadataDir,
+		"content/content/post",
+		aggregateObject("Post"),
+		operation,
+	)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issues := validate.Run(graph.Build(catalog), validate.ProfileBaseline); !hasIssueCode(issues, "CONTRACT.TRANSPORT.ROLE_UNKNOWN") {
+		t.Fatalf("expected unknown transport role, got %+v", issues)
+	}
+	if issues, err := validate.MetadataSchemas(metadataDir); err != nil {
+		t.Fatal(err)
+	} else if len(issues) == 0 {
+		t.Fatal("operations schema accepted unknown transport_role")
+	}
+}
+
+func TestContractGraphRejectsSSETransportRoleOnJSONRoute(t *testing.T) {
+	metadataDir := t.TempDir()
+	operation := strings.Replace(
+		commercialQuery("Post", "GetPost", "/content/posts/{postId}"),
+		"    actor: persona_or_device\n",
+		"    actor: persona_or_device\n    transport_role: sse\n",
+		1,
+	)
+	writeObjectFixture(
+		t,
+		metadataDir,
+		"content/content/post",
+		aggregateObject("Post"),
+		operation,
+	)
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if issues := validate.Run(graph.Build(catalog), validate.ProfileBaseline); !hasIssueCode(issues, "CONTRACT.TRANSPORT.ROLE_MISMATCH") {
+		t.Fatalf("expected transport role mismatch, got %+v", issues)
+	}
+}
+
+func TestContractGraphCompilesDistinctGraphQLQueriesOnOneEndpoint(t *testing.T) {
+	metadataDir := t.TempDir()
+	operations := commandOperation("Post", "CreatePost", "/content/posts") + `
+graphql_queries:
+  - operation: GetPostSemantic
+    operation_type: query
+    request_entity: Post
+    request_body_kind: object
+    response_entity: PostDetailSlice
+    response_body_kind: object
+    authorization:
+      principal: public
+      ownership_policy: visibility_filtered
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [CONTENT.SYSTEM.unavailable]
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: content_post_graphql_semantic_total
+      trace: true
+      attributes: [outcome, content_type]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    application:
+      kind: query
+      facet: PostQueryFacet
+      method: getPostSemantic
+      reader: PostDetailReader
+      slice: PostDetailSlice
+  - operation: GetPostMedia
+    operation_type: query
+    request_entity: Post
+    request_body_kind: object
+    response_entity: PostDetailSlice
+    response_body_kind: object
+    authorization:
+      principal: public
+      ownership_policy: visibility_filtered
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [CONTENT.SYSTEM.unavailable]
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: content_post_graphql_media_total
+      trace: true
+      attributes: [outcome, content_type]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    application:
+      kind: query
+      facet: PostQueryFacet
+      method: getPostMedia
+      reader: PostDetailReader
+      slice: PostDetailSlice
+`
+	writeObjectFixture(t, metadataDir, "content/content/post", aggregateObject("Post"), operations)
+	writeFile(t, filepath.Join(metadataDir, "content/content/post/errors.yaml"), `
+errors:
+  - code: CONTENT.SYSTEM.fixture_post_unavailable
+    reason: fixture_post_unavailable
+    http_status: 503
+    emitted_by:
+      - surface: http
+        operations: [CreatePost]
+      - surface: graphql
+        operations: [GetPostSemantic, GetPostMedia]
+    recovery_action: retry
+    disruption_level: snackbar
+    recovery_after_seconds: 1
+    user_message: {zh: "暂时不可用，请稍后重试", en: "Temporarily unavailable, please retry"}
+`)
+
+	catalog, err := load.Load(metadataDir)
+	if err != nil {
+		t.Fatalf("load GraphQL query operations: %v", err)
+	}
+	contractGraph := graph.Build(catalog)
+	if len(contractGraph.Operations) != 3 {
+		t.Fatalf("operations=%d, want 3", len(contractGraph.Operations))
+	}
+	for _, operation := range contractGraph.Operations {
+		if operation.LocalID == "CreatePost" {
+			continue
+		}
+		if operation.Method != "POST" || operation.PathTemplate != "/graphql" ||
+			operation.Transport != "graphql" || operation.Kind != "query" ||
+			operation.AuthMode != "public" || operation.RequestEntity != "Post" ||
+			operation.RequestBodyKind != "object" {
+			t.Fatalf("unexpected GraphQL operation: %+v", operation)
+		}
+	}
+	snapshots, err := contractopenapi.Generate(contractGraph)
+	if err != nil {
+		t.Fatalf("generate OpenAPI without GraphQL operations: %v", err)
+	}
+	if len(snapshots) != 1 || snapshots[0].OperationCount != 1 {
+		t.Fatalf("OpenAPI included GraphQL operations: %+v", snapshots)
+	}
+	if err := contractopenapi.WriteDirectory(metadataDir, snapshots); err != nil {
+		t.Fatalf("write OpenAPI fixture: %v", err)
+	}
+	issues, err := validate.All(contractGraph, validate.ProfileCommercial, metadataDir)
+	if err != nil {
+		t.Fatalf("validate GraphQL query operations: %v", err)
+	}
+	if len(issues) != 0 {
+		t.Fatalf("GraphQL query validation issues: %+v", issues)
+	}
+	if err := validate.ContractGraphSchema(metadataDir, contractGraph); err != nil {
+		t.Fatalf("validate GraphQL ContractGraph schema: %v", err)
+	}
+}
+
 func TestContractGraphAcceptsUpgradeResponseWithStreamBudget(t *testing.T) {
 	issues := webSocketUpgradeIssues(
 		t,

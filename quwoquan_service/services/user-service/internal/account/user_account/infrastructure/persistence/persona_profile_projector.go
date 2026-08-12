@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"time"
 
@@ -134,6 +135,23 @@ FOR UPDATE`, personaID, aggregateVersion).Scan(&eventType, &projectedAt); err !=
 	if nextProfileVersion < persona.Version {
 		nextProfileVersion = persona.Version
 	}
+	retainedSearchVersion, err := loadUserProfileSearchProjectionHighWatermark(
+		ctx,
+		tx,
+		persona.UserID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if nextProfileVersion <= retainedSearchVersion {
+		if retainedSearchVersion == math.MaxInt64 {
+			return nil, fmt.Errorf(
+				"UserProfile search projection version exhausted: %s",
+				persona.UserID,
+			)
+		}
+		nextProfileVersion = retainedSearchVersion + 1
+	}
 	if nextProfileVersion <= 0 {
 		nextProfileVersion = 1
 	}
@@ -186,6 +204,16 @@ WHERE user_id=$1`,
 		ProfileVersion: nextProfileVersion,
 		EventType:      userevent.UserProfileUpdated,
 		OccurredAt:     projectionTime,
+		Payload: userports.UserProfileSearchProjectionPayload{
+			Operation:     "upsert",
+			Nickname:      persona.DisplayName,
+			AvatarURL:     persona.AvatarURL,
+			Bio:           persona.Bio,
+			IdentityTags:  append([]string(nil), persona.IdentityTags...),
+			FollowerCount: profile.FollowerCount,
+			PostCount:     profile.PostCount,
+			UpdatedAt:     projectionTime,
+		},
 	}}
 	if oldAvatarURL != strings.TrimSpace(persona.AvatarURL) ||
 		oldAvatarAssetID != strings.TrimSpace(persona.AvatarMediaAssetID) {
@@ -194,6 +222,16 @@ WHERE user_id=$1`,
 			ProfileVersion: nextProfileVersion,
 			EventType:      userevent.UserAvatarUpdated,
 			OccurredAt:     projectionTime,
+			Payload: userports.UserProfileSearchProjectionPayload{
+				Operation:     "upsert",
+				Nickname:      persona.DisplayName,
+				AvatarURL:     persona.AvatarURL,
+				Bio:           persona.Bio,
+				IdentityTags:  append([]string(nil), persona.IdentityTags...),
+				FollowerCount: profile.FollowerCount,
+				PostCount:     profile.PostCount,
+				UpdatedAt:     projectionTime,
+			},
 		})
 	}
 	if err := appendUserProfileSearchProjections(ctx, tx, searchEvents); err != nil {
@@ -337,6 +375,24 @@ func loadUserProfileForProjection(
 		return nil, fmt.Errorf("UserAccount profile projection target not found: %s", userID)
 	}
 	return profile, nil
+}
+
+func loadUserProfileSearchProjectionHighWatermark(
+	ctx context.Context,
+	tx pgx.Tx,
+	userID string,
+) (int64, error) {
+	var highWatermark int64
+	if err := tx.QueryRow(ctx, `
+SELECT COALESCE(MAX(profile_version), 0)
+FROM user_profile_search_outbox
+WHERE user_id=$1`, userID).Scan(&highWatermark); err != nil {
+		return 0, fmt.Errorf(
+			"load UserProfile search projection high watermark: %w",
+			err,
+		)
+	}
+	return highWatermark, nil
 }
 
 func markPersonaProfileProjectionComplete(

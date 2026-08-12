@@ -30,6 +30,26 @@ def _digest(value: object) -> str:
     return "sha256:" + hashlib.sha256(body).hexdigest()
 
 
+def _source_attribution(carrier: str) -> dict[str, object]:
+    return {
+        "isOriginal": False,
+        "originalCreatorName": "source-author",
+        "platform": f"{carrier}-source",
+        "sourcePostUrl": f"https://source.example/{carrier}",
+        "originalAssetUrl": f"https://source.example/{carrier}/asset",
+        "attributionText": f"source-author / {carrier}-source",
+        "rightsBasis": "public research reference",
+        "commercialAuthorizationStatus": "unverified",
+        "publicationAdmission": "research_release",
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "2026-08-08T00:00:00Z",
+        "takedownPolicy": "remove on substantiated request",
+    }
+
+
 def _candidate(carrier: str) -> dict[str, object]:
     identity = f"{carrier}-1"
     entity_ref = f"/entity/地点/景区/{identity}"
@@ -70,6 +90,11 @@ def _candidate(carrier: str) -> dict[str, object]:
         "playabilityFileSha256": None,
         "videoReadiness": None,
     }
+    if carrier in {"homepage", "article"}:
+        value["sourceReadyEvidenceRootRef"] = "."
+        value["sourceAttribution"] = _source_attribution(carrier)
+    if carrier == "article":
+        value["publishMediaMode"] = "text_only"
     if carrier == "video":
         value.update(
             {
@@ -179,6 +204,7 @@ def test_four_carrier_projection_is_deterministic_and_plan_consumable(tmp_path):
         "image",
         "video",
     ]
+    assert first["activeCarriers"] == ["homepage", "article", "image", "video"]
     destination = tmp_path / "candidates.json"
     frozen = write_create_once_scale_source_pool_candidates(destination, first)
     assert write_create_once_scale_source_pool_candidates(destination, second) == frozen
@@ -227,6 +253,79 @@ def test_projection_rejects_cross_carrier_identity_and_duplicate_content():
     assert "duplicate cross-carrier contentSha256" in str(captured.value)
 
 
+def test_current_wave_selects_only_active_carriers_without_video_evidence():
+    homepage_article, image_video = _projections()
+    image_video["candidates"] = [image_video["candidates"][0]]
+    image_video["candidateCount"] = 1
+    stable = {
+        key: value for key, value in image_video.items() if key != "projectionDigest"
+    }
+    image_video["projectionDigest"] = _digest(stable)
+
+    result = build_scale_source_pool_candidates(
+        target_scale="M100",
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+        homepage_article_projection=homepage_article,
+        image_video_projection=image_video,
+        active_carriers=("homepage", "article", "image"),
+    )
+
+    assert result["activeCarriers"] == ["homepage", "article", "image"]
+    assert [row["candidateCount"] for row in result["candidateCounts"]] == [
+        1,
+        1,
+        1,
+        0,
+    ]
+    assert {row["carrier"] for row in result["candidates"]} == {
+        "homepage",
+        "article",
+        "image",
+    }
+    assert validate_scale_source_pool_candidates(result) == result
+    from content.source.research.scale_source_pool import (
+        build_scale_source_pool_plan,
+        validate_scale_source_pool,
+    )
+
+    plan = build_scale_source_pool_plan(
+        pool_id="m100-current-wave",
+        target_scale="M100",
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+        created_at="2026-08-11T00:00:00Z",
+        candidates=result["candidates"],
+    )
+    validation = validate_scale_source_pool(plan)
+    assert [
+        row["actualCandidateCount"] for row in validation["candidateCounts"]
+    ] == [1, 1, 1, 0]
+
+
+def test_active_carrier_without_physical_candidate_fails_closed():
+    homepage_article, image_video = _projections()
+    image_video["candidates"] = [image_video["candidates"][0]]
+    image_video["candidateCount"] = 1
+    stable = {
+        key: value for key, value in image_video.items() if key != "projectionDigest"
+    }
+    image_video["projectionDigest"] = _digest(stable)
+
+    with pytest.raises(ScaleSourcePoolError, match="every active carrier"):
+        build_scale_source_pool_candidates(
+            target_scale="M100",
+            source_revision=IDENTITY["sourceRevision"],
+            source_digest=IDENTITY["sourceDigest"],
+            entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+            homepage_article_projection=homepage_article,
+            image_video_projection=image_video,
+            active_carriers=("homepage", "article", "image", "video"),
+        )
+
+
 def test_create_once_collision_is_typed(tmp_path):
     destination = tmp_path / "candidates.json"
     destination.write_text("{}\n", encoding="utf-8")
@@ -243,6 +342,12 @@ def test_project_candidates_cli_dispatches_both_canonical_projectors(
     import content.source.research.handler_cli as handler
 
     homepage_article, image_video = _projections()
+    image_video["candidates"] = [image_video["candidates"][0]]
+    image_video["candidateCount"] = 1
+    stable = {
+        key: value for key, value in image_video.items() if key != "projectionDigest"
+    }
+    image_video["projectionDigest"] = _digest(stable)
     monkeypatch.setattr(
         handler,
         "project_scale_source_pool_homepage_article",
@@ -267,10 +372,18 @@ def test_project_candidates_cli_dispatches_both_canonical_projectors(
             IDENTITY["sourceDigest"],
             "--entity-catalog-digest",
             IDENTITY["entityCatalogDigest"],
+            "--entity-catalog-ref",
+            "quwoquan_data/reference/travel/entities/china",
             "--evidence-root",
             str(tmp_path),
             "--output-root",
             str(tmp_path / "output"),
+            "--active-carrier",
+            "homepage",
+            "--active-carrier",
+            "article",
+            "--active-carrier",
+            "image",
             "--homepage-catalog-ref",
             "catalogs/homepage.json",
             "--homepage-catalog-digest",
@@ -295,18 +408,17 @@ def test_project_candidates_cli_dispatches_both_canonical_projectors(
             "acquisition/image.json",
             "--image-review-ref",
             "review/image.json",
-            "--video-acquisition-ref",
-            "acquisition/video.json",
-            "--video-catalog-ref",
-            "catalog/video.json",
-            "--video-review-ref",
-            "review/video.json",
         ]
     )
     arguments.handler(arguments)
     receipt = json.loads(capsys.readouterr().out)
     candidate_path = tmp_path / "output" / receipt["candidatesRef"]
     assert candidate_path.is_file()
+    assert receipt["activeCarriers"] == ["homepage", "article", "image"]
+    assert receipt["candidateCounts"][-1] == {
+        "carrier": "video",
+        "candidateCount": 0,
+    }
     assert validate_scale_source_pool_candidates(
         json.loads(candidate_path.read_text(encoding="utf-8"))
     )["candidatesDigest"] == receipt["candidatesDigest"]

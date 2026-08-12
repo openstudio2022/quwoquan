@@ -1,13 +1,8 @@
-"""Create-once supersession for a campaign whose four lanes failed terminally."""
+"""Create-once reconciliation for terminal campaign boundaries."""
 
 from __future__ import annotations
 
-import argparse
-import fcntl
-import json
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
-from datetime import datetime, timezone
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -16,12 +11,19 @@ from core.io import read_json, write_json
 from core.schema import assert_valid
 from core.source_digest import current_source_digest
 
-from content.execution.campaign.failed_execution_reconciliation_claimed import (
-    claimed_execution_source_drift_evidence,
+from content.execution.campaign.failed_execution_reconciliation_cli import (
+    register_reconcile_failed_campaign_parser,
 )
-from content.execution.campaign.failed_execution_reconciliation_controller import (
-    controller_interrupted_before_claim_evidence,
-    failed_campaign_execution_absence,
+from content.execution.campaign.failed_execution_reconciliation_common import (
+    _ERROR_CODES,
+    SCHEMA,
+    _file_binding,
+    _lock,
+    _now,
+    terminal_unpublished_receipt_path,
+)
+from content.execution.campaign.failed_execution_reconciliation_dispatch import (
+    failed_campaign_evidence,
 )
 from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.runtime_process import _pid_alive
@@ -33,7 +35,6 @@ from content.execution.campaign.submission_reconciliation_contract import (
     predecessor_campaign_root_execution_id,
     reconciliation_receipt_path,
     resolve_ref,
-    safe_regular_ref,
     source_identity,
     submission_evidence,
     typed,
@@ -41,33 +42,7 @@ from content.execution.campaign.submission_reconciliation_contract import (
 from content.execution.identity import parse_execution_id
 from content.execution.workspace import entity_catalog_digest
 
-SCHEMA = "quwoquan_data.campaign_failed_execution_reconciliation_receipt"
-_ERROR_CODES = {
-    "source_drift": "DATA.CAMPAIGN.FAILED_EXECUTION_SOURCE_DRIFT",
-    "controller_interrupted_before_claim": "DATA.CAMPAIGN.CONTROLLER_INTERRUPTED_BEFORE_CLAIM",
-    "claimed_execution_source_drift": "DATA.CAMPAIGN.CLAIMED_EXECUTION_SOURCE_DRIFT",
-}
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-@contextmanager
-def _lock(path: Path) -> Iterator[None]:
-    lock = path.parent / ".lock"
-    lock.parent.mkdir(parents=True, exist_ok=True)
-    with lock.open("a+", encoding="utf-8") as handle:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-def _file_binding(path: Path, *, output_root: Path, label: str) -> dict[str, str]:
-    return {
-        "ref": safe_regular_ref(
-            path,
-            output_root=output_root,
-            label=label,
-        ),
-        "sha256": file_digest(path),
-    }
+
 def _source_drift_successor(
     plan: Mapping[str, Any],
     report: Mapping[str, Any],
@@ -370,27 +345,28 @@ def validate_failed_campaign_reconciliation_receipt(
         root_execution_id=root_id,
     )
     reason = payload["reason"]
-    if reason == "controller_interrupted_before_claim":
-        campaign_evidence, report = controller_interrupted_before_claim_evidence(
-            root_id, submissions, original, output_root=output_root
-        )
-        execution_evidence = failed_campaign_execution_absence(
-            submissions, output_root=output_root
-        )
-    elif reason == "claimed_execution_source_drift":
-        campaign_evidence, execution_evidence, report = (
-            claimed_execution_source_drift_evidence(
-                root_id, submissions, original, output_root=output_root
-            )
-        )
-    else:
-        campaign_evidence, report = _failed_campaign_evidence(
+    if reason == "terminal_unpublished_source_drift":
+        expected_path = terminal_unpublished_receipt_path(
             root_id,
+            payload["observedSourceIdentity"]["sourceRevision"],
             output_root=output_root,
         )
-        execution_evidence = failed_campaign_execution_absence(
-            submissions, output_root=output_root
-        )
+        if path.resolve() != expected_path.resolve():
+            raise typed(
+                "ROOT_DRIFT",
+                "terminal unpublished receipt is not at its observed identity path",
+            )
+    campaign_evidence, execution_evidence, report = failed_campaign_evidence(
+        reason,
+        root_id,
+        submissions,
+        original,
+        output_root=output_root,
+        fallback=lambda value: _failed_campaign_evidence(
+            value,
+            output_root=output_root,
+        ),
+    )
     if (
         payload.get("submissions") != rows
         or payload.get("originalSourceIdentity") != original
@@ -398,6 +374,10 @@ def validate_failed_campaign_reconciliation_receipt(
         or payload.get("executionEvidence") != execution_evidence
         or report.get("sourceDigest") != original["sourceDigest"]["digest"]
         or report.get("entityCatalogDigest") != original["entityCatalogDigest"]
+        or (
+            reason == "terminal_unpublished_source_drift"
+            and payload.get("observedSourceIdentity") == original
+        )
     ):
         raise typed("DIGEST_DRIFT", "failed campaign reconciliation evidence drifted")
     blocker = payload.get("blockerEvidence")
@@ -413,6 +393,30 @@ def validate_failed_campaign_reconciliation_receipt(
         and blocker != campaign_evidence["runtimeSnapshot"]
     ):
         raise typed("DIGEST_DRIFT", "controller blocker is not the runtime snapshot")
+    if (
+        payload["reason"] == "post_publish_partial_terminal"
+        and blocker != execution_evidence["partialPublish"]["executionState"]
+    ):
+        raise typed("DIGEST_DRIFT", "post-publish blocker is not article state")
+    if payload["reason"] == "mixed_finalized_partial_terminal":
+        failed_lane = next(
+            row
+            for row in execution_evidence["lanes"]
+            if row.get("terminalStatus") == "failed"
+        )
+        if blocker != failed_lane["claim"]:
+            raise typed(
+                "DIGEST_DRIFT",
+                "mixed terminal blocker is not the failed lane claim",
+            )
+    if (
+        payload["reason"] == "terminal_unpublished_source_drift"
+        and blocker != campaign_evidence["report"]
+    ):
+        raise typed(
+            "DIGEST_DRIFT",
+            "terminal unpublished blocker is not the campaign report",
+        )
     return payload
 def reconcile_failed_campaign(
     root_execution_id: str,
@@ -433,9 +437,12 @@ def reconcile_failed_campaign(
         root_id,
         output_root=resolved_output,
     )
-    existing_payload = read_json(receipt_path) if receipt_path.is_file() else None
-    if isinstance(existing_payload, Mapping) and existing_payload.get("reason") != reason:
-        raise typed("CREATE_ONCE_COLLISION", "existing failed receipt reason differs")
+    if reason != "terminal_unpublished_source_drift" and receipt_path.is_file():
+        existing_payload = read_json(receipt_path)
+        if not isinstance(existing_payload, Mapping) or existing_payload.get(
+            "reason"
+        ) != reason:
+            raise typed("CREATE_ONCE_COLLISION", "existing failed receipt reason differs")
     with _lock(receipt_path):
         if reason == "source_drift":
             _terminalize_dead_source_drift_claims(
@@ -452,27 +459,17 @@ def reconcile_failed_campaign(
         output_root=resolved_output,
         root_execution_id=root_id,
     )
-    if reason == "controller_interrupted_before_claim":
-        campaign_evidence, report = controller_interrupted_before_claim_evidence(
-            root_id, submissions, original, output_root=resolved_output
-        )
-        execution_evidence = failed_campaign_execution_absence(
-            submissions, output_root=resolved_output
-        )
-    elif reason == "claimed_execution_source_drift":
-        campaign_evidence, execution_evidence, report = (
-            claimed_execution_source_drift_evidence(
-                root_id, submissions, original, output_root=resolved_output
-            )
-        )
-    else:
-        campaign_evidence, report = _failed_campaign_evidence(
-            root_id,
+    campaign_evidence, execution_evidence, report = failed_campaign_evidence(
+        reason,
+        root_id,
+        submissions,
+        original,
+        output_root=resolved_output,
+        fallback=lambda value: _failed_campaign_evidence(
+            value,
             output_root=resolved_output,
-        )
-        execution_evidence = failed_campaign_execution_absence(
-            submissions, output_root=resolved_output
-        )
+        ),
+    )
     observed_source = current_source_digest(repo_root=source_repo).to_document()
     representative = submissions["homepage"]
     discovery = (
@@ -490,6 +487,20 @@ def reconcile_failed_campaign(
     )
     if reason in {"source_drift", "claimed_execution_source_drift"} and observed == original:
         raise typed("REASON_INVALID", "failed campaign source identity has not drifted")
+    if reason == "terminal_unpublished_source_drift" and observed == original:
+        raise typed(
+            "REASON_INVALID",
+            "terminal unpublished campaign source identity has not drifted",
+        )
+    if reason == "terminal_unpublished_source_drift":
+        receipt_path = terminal_unpublished_receipt_path(
+            root_id,
+            observed["sourceRevision"],
+            output_root=resolved_output,
+        )
+    existing_payload = read_json(receipt_path) if receipt_path.is_file() else None
+    if isinstance(existing_payload, Mapping) and existing_payload.get("reason") != reason:
+        raise typed("CREATE_ONCE_COLLISION", "existing failed receipt reason differs")
     if reason == "controller_interrupted_before_claim":
         blocker = campaign_evidence["runtimeSnapshot"]
         if blocker_evidence is not None:
@@ -513,6 +524,30 @@ def reconcile_failed_campaign(
             output_root=resolved_output,
             label="failed campaign blocker evidence",
         )
+        if (
+            reason == "post_publish_partial_terminal"
+            and blocker != execution_evidence["partialPublish"]["executionState"]
+        ):
+            raise typed("BLOCKER_INVALID", "post-publish blocker must be article state")
+        if reason == "mixed_finalized_partial_terminal":
+            failed_lane = next(
+                row
+                for row in execution_evidence["lanes"]
+                if row.get("terminalStatus") == "failed"
+            )
+            if blocker != failed_lane["claim"]:
+                raise typed(
+                    "BLOCKER_INVALID",
+                    "mixed terminal blocker must be the failed lane claim",
+                )
+        if (
+            reason == "terminal_unpublished_source_drift"
+            and blocker != campaign_evidence["report"]
+        ):
+            raise typed(
+                "BLOCKER_INVALID",
+                "terminal unpublished blocker must be the campaign report",
+            )
     if report.get("sourceDigest") != original["sourceDigest"]["digest"]:
         raise typed("IDENTITY_DRIFT", "campaign report source digest drifted")
     stable = {
@@ -556,44 +591,4 @@ def reconcile_failed_campaign(
         output_root=resolved_output,
     )
     return receipt, receipt_path
-def _handle(args: argparse.Namespace) -> None:
-    receipt, path = reconcile_failed_campaign(
-        str(args.campaign_root_execution_id),
-        blocker_evidence=(
-            Path(str(args.blocker_evidence)) if args.blocker_evidence else None
-        ),
-        reason=str(args.reason),
-    )
-    print(
-        json.dumps(
-            {
-                "rootExecutionId": receipt["rootExecutionId"],
-                "decision": receipt["decision"],
-                "reason": receipt["reason"],
-                "predecessorExecutionIds": {
-                    carrier: receipt["submissions"][carrier]["executionId"]
-                    for carrier in CAMPAIGN_CARRIERS
-                },
-                "receiptRef": path.relative_to(paths.OUTPUT_ROOT).as_posix(),
-                "receiptDigest": receipt["receiptDigest"],
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
-def register_reconcile_failed_campaign_parser(
-    subparsers: argparse._SubParsersAction,
-) -> None:
-    parser = subparsers.add_parser(
-        "reconcile-failed-campaign",
-        help="对 terminal failed campaign 写 create-once supersession",
-    )
-    parser.add_argument("--campaign-root-execution-id", required=True)
-    parser.add_argument(
-        "--reason",
-        choices=tuple(_ERROR_CODES),
-        default="source_drift",
-    )
-    parser.add_argument("--blocker-evidence")
-    parser.set_defaults(handler=_handle)
 __all__ = ["reconcile_failed_campaign", "register_reconcile_failed_campaign_parser", "validate_failed_campaign_reconciliation_receipt"]

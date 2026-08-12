@@ -3,8 +3,8 @@ package search
 import (
 	"context"
 	"math"
+	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -78,6 +78,9 @@ type RetrieveFilters struct {
 type PageRequest struct {
 	Limit  int    `json:"limit,omitempty"`
 	Cursor string `json:"cursor,omitempty"`
+	// Offset is internal execution state decoded from an owner-sealed cursor.
+	// It is never accepted from or serialized to an external caller.
+	Offset int `json:"-"`
 }
 
 // RetrieveRequest is the unified object retrieval contract shared by AI tools
@@ -150,6 +153,12 @@ type RetrieveHit struct {
 	MatchedTags  []string       `json:"matchedTags,omitempty"`
 	Evidence     []Evidence     `json:"evidence,omitempty"`
 	Payload      map[string]any `json:"payload,omitempty"`
+	// DeepLink / ThumbnailURL are internal flat-card projection inputs. They are
+	// deliberately excluded from RetrieveHit JSON: the public REST wire remains
+	// owned by search-service, while owner-query projection may expose only the
+	// canonical DeepLink and the bounded thumbnail/cover fields.
+	DeepLink     string `json:"-"`
+	ThumbnailURL string `json:"-"`
 	// Location dimension (cross-object): Geo/PlaceName surface the candidate's
 	// structured place when present; DistanceKm is populated only under a Near
 	// (附近) query as the haversine distance from the pin. All are zero/nil for
@@ -295,11 +304,9 @@ func PlanRequest(req RetrieveRequest, viewer Viewer) (RetrievePlan, []DegradeSig
 	if limit <= 0 {
 		limit = 20
 	}
-	offset := 0
-	if c := strings.TrimSpace(req.Page.Cursor); c != "" {
-		if v, err := strconv.Atoi(c); err == nil && v > 0 {
-			offset = v
-		}
+	offset := req.Page.Offset
+	if offset < 0 {
+		offset = 0
 	}
 
 	plan := RetrievePlan{
@@ -365,6 +372,17 @@ func Retrieve(ctx context.Context, req RetrieveRequest, backend RecallBackend, v
 		DegradeSignals: degrade,
 		Provenance:     provenance,
 	}, nil
+}
+
+// LimitResponse trims one over-fetched result after the canonical sort and
+// refreshes citations so pagination never leaks a hit from the following page.
+func LimitResponse(response RetrieveResponse, limit int) (RetrieveResponse, bool) {
+	if limit <= 0 || len(response.Hits) <= limit {
+		return response, false
+	}
+	response.Hits = append([]RetrieveHit{}, response.Hits[:limit]...)
+	response.Citations = retrieveCitations(response.Hits)
+	return response, true
 }
 
 // rankAndMerge is the shared CrossTypeRanker + filter + permission gate.
@@ -494,6 +512,8 @@ func rankAndMerge(plan RetrievePlan, candidates []RecallCandidate) ([]RetrieveHi
 			MatchedTags:  matchedTagList,
 			Evidence:     []Evidence{{Field: matchedField, Snippet: truncate(snippet, 180)}},
 			Payload:      fieldsToPayload(doc.Fields),
+			DeepLink:     strings.TrimSpace(doc.DeepLink),
+			ThumbnailURL: boundedFlatCardThumbnailURL(doc.Fields),
 			Geo:          doc.Geo,
 			DistanceKm:   distanceKm,
 			PlaceName:    strings.TrimSpace(doc.Fields["placeName"]),
@@ -561,6 +581,23 @@ func fieldsToPayload(fields map[string]string) map[string]any {
 		out[k] = v
 	}
 	return out
+}
+
+const maxFlatCardThumbnailURLBytes = 2048
+
+func boundedFlatCardThumbnailURL(fields map[string]string) string {
+	for _, key := range []string{"thumbnailUrl", "coverUrl"} {
+		value := strings.TrimSpace(fields[key])
+		if value == "" || len(value) > maxFlatCardThumbnailURLBytes {
+			continue
+		}
+		parsed, err := url.ParseRequestURI(value)
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") {
+			continue
+		}
+		return value
+	}
+	return ""
 }
 
 func matchedTermsFor(plan RetrievePlan, doc Document) []string {
@@ -755,6 +792,7 @@ func retrieveCitations(hits []RetrieveHit) []Citation {
 			ObjectID:   hit.ObjectID,
 			Title:      hit.Title,
 			Snippet:    hit.Snippet,
+			DeepLink:   hit.DeepLink,
 			Score:      hit.Score,
 		})
 	}

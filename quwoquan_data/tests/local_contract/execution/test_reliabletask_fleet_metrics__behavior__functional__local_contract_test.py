@@ -14,12 +14,15 @@ DATA_ROOT = next(
 if str(DATA_ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(DATA_ROOT / "scripts"))
 
+from content.execution import store as execution_store  # noqa: E402
+from content.execution.controller import metrics as metrics_module  # noqa: E402
 from content.execution.controller.metrics import (  # noqa: E402
     _reliabletask_accepted_throughput,
 )
-from content.execution.controller import metrics as metrics_module  # noqa: E402
 from content.execution.queue.reliabletask import fleet as reliabletask_fleet
-from content.execution.queue.reliabletask.report import ReliableTaskFleetReport  # noqa: E402
+from content.execution.queue.reliabletask.report import (
+    ReliableTaskFleetReport,  # noqa: E402
+)
 from content.execution.queue.reliabletask.transport import (  # noqa: E402
     ReliableTaskFleetTransport,
 )
@@ -32,6 +35,11 @@ def _bind_attempt_report_fixture(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    monkeypatch.setattr(
+        execution_store,
+        "load_spec",
+        lambda _execution_id: {"executionPolicy": {}},
+    )
     monkeypatch.setattr(
         metrics_module,
         "latest_attempt_report_path_from_root",
@@ -158,6 +166,19 @@ def test_metrics_accept_research_only_canonical_fleet_report(tmp_path: Path) -> 
     assert measured["commercialAcceptedCount"] == 0
 
 
+def test_loader_rejects_finalized_only_publish_pass() -> None:
+    report = _report(research_accepted=0, commercial_accepted=0)
+    report["passed"] = True
+    report["acceptedContentThroughputStatus"] = "MEASURED"
+    report["finalizedObjectCount"] = 10
+
+    with pytest.raises(
+        ValueError,
+        match="publish pass differs from canonical acceptance",
+    ):
+        ReliableTaskFleetReport.from_document(report)
+
+
 def test_loader_preserves_historical_report_without_research_count(
     tmp_path: Path,
 ) -> None:
@@ -231,7 +252,7 @@ def test_metrics_reject_accepted_below_quota(tmp_path: Path) -> None:
     """未达配额必须报清楚“已达标 / 配额”。"""
     write_json(
         tmp_path / "evidence/reliabletask/publish_fleet_report.json",
-        _report(required_quota=9, commercial_accepted=5),
+        _report(passed=False, required_quota=9, commercial_accepted=5),
     )
 
     with pytest.raises(ValueError, match="已达标 5 / 配额 9"):
@@ -339,7 +360,7 @@ def test_failed_publish_fleet_report_remains_projectable(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage, *, required_workers: {
+        lambda _execution_id, _stage, *, required_workers, host_scope_id=None: {
             "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
             "requiredWorkers": required_workers,
@@ -349,11 +370,10 @@ def test_failed_publish_fleet_report_remains_projectable(
             "jobs": [{} for _index in range(10)],
         },
     )
-    monkeypatch.setattr(reliabletask_fleet, "execution_root", lambda _value: tmp_path)
     monkeypatch.setattr(
         reliabletask_fleet,
         "_fleet_command",
-        lambda _execution_id: (["fleet"], tmp_path),
+        lambda _execution_id, **_kwargs: (["fleet"], tmp_path),
     )
     monkeypatch.setattr(
         reliabletask_fleet,
@@ -428,7 +448,7 @@ def test_nonterminal_fleet_receipt_restarts_after_backend_interruption(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage, *, required_workers: {
+        lambda _execution_id, _stage, *, required_workers, host_scope_id=None: {
             "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
             "requiredWorkers": required_workers,
@@ -438,11 +458,10 @@ def test_nonterminal_fleet_receipt_restarts_after_backend_interruption(
             "jobs": [{} for _index in range(10)],
         },
     )
-    monkeypatch.setattr(reliabletask_fleet, "execution_root", lambda _value: tmp_path)
     monkeypatch.setattr(
         reliabletask_fleet,
         "_fleet_command",
-        lambda _execution_id: (["fleet"], tmp_path),
+        lambda _execution_id, **_kwargs: (["fleet"], tmp_path),
     )
     monkeypatch.setattr(
         reliabletask_fleet,
@@ -480,6 +499,94 @@ def test_nonterminal_fleet_receipt_restarts_after_backend_interruption(
         / "runtime-report-001.json"
     )
     assert archived.is_file()
+
+
+def test_audited_dead_task_recovery_does_not_reuse_terminal_report(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    execution_id = "20260728--travel-homepage-supply--test-region-a--pilot-001"
+    terminal = _report(
+        passed=False,
+        required_quota=1,
+        commercial_accepted=0,
+        execution_id=execution_id,
+        stage="publish",
+    )
+    terminal["taskOutcomes"] = [
+        {
+            "jobId": f"job-{index}",
+            "status": "dead",
+            "attempts": 2,
+            "failureCode": "RELIABLETASK.WORKER.handler_failed",
+        }
+        for index in range(10)
+    ]
+    recovered = _report(
+        passed=True,
+        required_quota=1,
+        research_accepted=10,
+        commercial_accepted=0,
+        execution_id=execution_id,
+        stage="publish",
+    )
+    evidence_dir = tmp_path / "evidence/reliabletask/publish" / ("b" * 64)
+    write_json(evidence_dir / "report.json", terminal)
+    request = {
+        "campaignScale": "M1",
+        "objectTimeoutMilliseconds": 1_000,
+        "requiredWorkers": 1,
+        "jobSetEnvelopeDigest": "sha256:" + "a" * 64,
+        "jobSetDigest": "sha256:" + "b" * 64,
+        "actualTaskDigest": "sha256:" + "b" * 64,
+        "recoverDeadTasks": True,
+        "jobs": [{} for _index in range(10)],
+    }
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "resolve_reliabletask_fleet_transport",
+        lambda: ReliableTaskFleetTransport(
+            target="test",
+            mongo_uri="mongodb://127.0.0.1:27017/quwoquan",
+            redis_addr="127.0.0.1:6379",
+        ),
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "build_fleet_request",
+        lambda *_args, **_kwargs: request,
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "_fleet_command",
+        lambda _execution_id, **_kwargs: (["fleet"], tmp_path),
+    )
+    monkeypatch.setattr(
+        reliabletask_fleet,
+        "_fleet_agent_python",
+        lambda: Path("/usr/bin/python3"),
+    )
+    invocations: list[list[str]] = []
+
+    def _run(command: list[str], **_kwargs: object) -> int:
+        invocations.append(command)
+        write_json(Path(command[-1]), recovered)
+        return 0
+
+    monkeypatch.setattr(reliabletask_fleet, "_run_fleet_process", _run)
+
+    decoded = reliabletask_fleet.run_reliabletask_fleet(
+        execution_id,
+        QueueJobStage.PUBLISH,
+        workers=1,
+        completion_grace_seconds=1,
+    )
+
+    assert decoded.passed is True
+    assert len(invocations) == 1
+    request_index = invocations[0].index("--request") + 1
+    assert Path(invocations[0][request_index]).name == "recovery-request.json"
+    assert (evidence_dir / "runtime-report-000.json").is_file()
 
 
 def test_runtime_interruptions_do_not_exhaust_startup_failure_budget(
@@ -529,7 +636,7 @@ def test_runtime_interruptions_do_not_exhaust_startup_failure_budget(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage, *, required_workers: {
+        lambda _execution_id, _stage, *, required_workers, host_scope_id=None: {
             "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
             "requiredWorkers": required_workers,
@@ -539,11 +646,10 @@ def test_runtime_interruptions_do_not_exhaust_startup_failure_budget(
             "jobs": [{} for _index in range(10)],
         },
     )
-    monkeypatch.setattr(reliabletask_fleet, "execution_root", lambda _value: tmp_path)
     monkeypatch.setattr(
         reliabletask_fleet,
         "_fleet_command",
-        lambda _execution_id: (["fleet"], tmp_path),
+        lambda _execution_id, **_kwargs: (["fleet"], tmp_path),
     )
     monkeypatch.setattr(
         reliabletask_fleet,
@@ -627,7 +733,7 @@ def test_zero_exit_nonterminal_receipt_is_not_false_completion(
     monkeypatch.setattr(
         reliabletask_fleet,
         "build_fleet_request",
-        lambda _execution_id, _stage, *, required_workers: {
+        lambda _execution_id, _stage, *, required_workers, host_scope_id=None: {
             "campaignScale": "M1",
             "objectTimeoutMilliseconds": 1_000,
             "requiredWorkers": required_workers,
@@ -637,11 +743,10 @@ def test_zero_exit_nonterminal_receipt_is_not_false_completion(
             "jobs": [{} for _index in range(10)],
         },
     )
-    monkeypatch.setattr(reliabletask_fleet, "execution_root", lambda _value: tmp_path)
     monkeypatch.setattr(
         reliabletask_fleet,
         "_fleet_command",
-        lambda _execution_id: (["fleet"], tmp_path),
+        lambda _execution_id, **_kwargs: (["fleet"], tmp_path),
     )
     monkeypatch.setattr(
         reliabletask_fleet,

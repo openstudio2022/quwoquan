@@ -181,10 +181,10 @@ WHERE session_id=$1`, sessionID); err != nil {
 	default:
 		return sessionports.IssuedSession{}, sessionports.ErrSessionExpired
 	}
-
+	rotatedAt := time.Now().UTC()
 	if _, err := tx.Exec(ctx, `
-UPDATE account_sessions SET status='rotated', updated_at=NOW(), version=version+1
-WHERE session_id=$1`, sessionID); err != nil {
+UPDATE account_sessions SET status='rotated', updated_at=$2, version=version+1
+WHERE session_id=$1`, sessionID, rotatedAt); err != nil {
 		return sessionports.IssuedSession{}, err
 	}
 	nextSessionID, err := randomSessionID()
@@ -206,6 +206,15 @@ INSERT INTO account_sessions (
 		nextSessionID, accountID, deviceID, nextTokenHash, lineageID,
 		currentTokenHash, issued.ExpiresAt,
 	); err != nil {
+		return sessionports.IssuedSession{}, err
+	}
+	if err := appendSessionEvent(ctx, tx, sessionID, version+1,
+		sessionports.AccountSessionRotatedEvent, sessionEventPayload{
+			SessionID: sessionID, AccountID: accountID,
+			DeviceID: deviceID, LineageID: lineageID,
+			RotatedToSessionID: nextSessionID,
+			RotatedAt:          &rotatedAt,
+		}); err != nil {
 		return sessionports.IssuedSession{}, err
 	}
 	return issued, tx.Commit(ctx)
@@ -359,6 +368,8 @@ type sessionEventPayload struct {
 	AuthenticationSubject string     `json:"authenticationSubject,omitempty"`
 	IdentityOrigin        string     `json:"identityOrigin,omitempty"`
 	IssuedAt              *time.Time `json:"issuedAt,omitempty"`
+	RotatedToSessionID    string     `json:"rotatedToSessionId,omitempty"`
+	RotatedAt             *time.Time `json:"rotatedAt,omitempty"`
 	RevokedAt             *time.Time `json:"revokedAt,omitempty"`
 	Reason                string     `json:"reason,omitempty"`
 }

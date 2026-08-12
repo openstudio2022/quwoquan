@@ -124,16 +124,15 @@ def _positive_proof(
         "deniedCapabilities": {
             "share": {"decision": "denied", "operation": _operation(7, status=403)},
             "export": {"decision": "denied", "operation": _operation(8, status=403)},
-            "indexing": {"decision": "denied", "operation": _operation(9, status=403)},
         },
         "signedMedia": {
             "assetId": "asset-a",
             "signedUrlHash": "sha256:" + "4" * 64,
             "ttlSeconds": 300,
             "auditEventId": "audit-a",
-            "issuanceOperation": _operation(10),
-            "accessOperation": _operation(11, status=206),
-            "auditReadbackOperation": _operation(12),
+            "issuanceOperation": _operation(9),
+            "accessOperation": _operation(10, status=206),
+            "auditReadbackOperation": _operation(11),
         },
         "positiveReadback": {
             "releaseId": RELEASE_ID,
@@ -142,7 +141,7 @@ def _positive_proof(
             "entityRefs": ["entity-a"],
             "postIds": ["post-a"],
             "mediaAssetIds": ["asset-a"],
-            "operation": _operation(13),
+            "operation": _operation(12),
         },
     }
 
@@ -338,6 +337,29 @@ def test_writer_is_create_once_and_requires_canonical_run_path(tmp_path: Path) -
         )
 
 
+def test_writer_keeps_missing_same_run_runtime_proof_as_typed_gate_block(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    release = _release(tmp_path)
+    monkeypatch.setattr(isolation, "_identity_contract_available", lambda: True)
+
+    path = write_research_isolation_verification(
+        environment=ENVIRONMENT,
+        release_id=RELEASE_ID,
+        verify_run_id=VERIFY_RUN_ID,
+        release_root=release,
+        output_root=tmp_path,
+        output_path=_output_path(tmp_path),
+        runtime_proof_path=_runtime_proof_path(tmp_path),
+    )
+
+    receipt = read_json(path)
+    assert receipt["outcome"] == "GATE_BLOCK"
+    assert receipt["blocker"]["code"] == "DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE"
+    assert not _runtime_proof_path(tmp_path).exists()
+
+
 def test_writer_freezes_only_an_explicit_complete_runtime_proof(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -388,7 +410,6 @@ def test_writer_freezes_only_an_explicit_complete_runtime_proof(
                     receipt["networkExposureReadback"]["operation"],
                     receipt["deniedCapabilities"]["share"]["operation"],
                     receipt["deniedCapabilities"]["export"]["operation"],
-                    receipt["deniedCapabilities"]["indexing"]["operation"],
                     receipt["signedMedia"]["issuanceOperation"],
                     receipt["signedMedia"]["accessOperation"],
                     receipt["signedMedia"]["auditReadbackOperation"],
@@ -396,7 +417,7 @@ def test_writer_freezes_only_an_explicit_complete_runtime_proof(
                 )
             }
         )
-        == 13
+        == 12
     )
 
 
@@ -490,7 +511,7 @@ def test_schema_rejects_success_claim_without_runtime_proofs_or_with_token(
         validator.validate(leaked)
 
 
-def test_positive_proof_validator_requires_all_thirteen_unique_live_operations(
+def test_positive_proof_validator_requires_all_twelve_unique_live_operations(
     tmp_path: Path,
 ) -> None:
     repository_root = tmp_path / "repository"
@@ -576,3 +597,17 @@ def test_positive_proof_validator_requires_all_thirteen_unique_live_operations(
                 repository_root=repository_root,
                 identity_contract=identity_contract,
             )
+
+
+def test_signed_media_detector_tracks_canonical_original_access_quota_owner() -> None:
+    assert isolation._SIGNED_MEDIA_CONTRACT == (
+        ROOT
+        / "quwoquan_service/services/content-service/contracts/media/"
+        "original_access_quota/operations.yaml"
+    )
+    assert isolation._SIGNED_MEDIA_POLICY == (
+        ROOT
+        / "quwoquan_service/services/content-service/contracts/media/"
+        "original_access_quota/original_access_policy.yaml"
+    )
+    assert isolation._signed_media_contract_available() is True

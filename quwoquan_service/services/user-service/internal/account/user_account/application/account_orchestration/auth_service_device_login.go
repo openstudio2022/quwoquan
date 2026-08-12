@@ -203,7 +203,7 @@ func (s *AuthService) LoginAnonymously(
 	); err != nil {
 		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("persist anonymous device binding: %v", err))
 	}
-	return s.issueLoginResult(ctx, ownerID, credentialAnonymousDevice, "", deviceFingerprintHash)
+	return s.issueLoginResult(ctx, ownerID, credentialAnonymousDevice, "", installID)
 }
 
 func validateAnonymousDeviceMetadata(platform, appVersion string) (string, string, error) {

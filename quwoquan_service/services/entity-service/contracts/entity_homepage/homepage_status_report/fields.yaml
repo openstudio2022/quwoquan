@@ -139,6 +139,20 @@ types:
       - {name: reviewNote, type: string, constraints: [NULLABLE]}
       - {name: createdAt, type: timestamp, constraints: [NOT_NULL]}
       - {name: reviewedAt, type: timestamp, constraints: [NULLABLE]}
+  GetMyPendingHomepageStatusReportQuery:
+    fields:
+      - name: homepageId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: reason
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
   ReviewHomepageStatusReportCommand:
     fields:
       - name: homepageId

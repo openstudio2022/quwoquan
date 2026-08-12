@@ -6,12 +6,14 @@ package io.flutter.plugins.videoplayer.platformview;
 
 import android.content.Context;
 import android.os.Build;
+import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.OptIn;
+import androidx.annotation.VisibleForTesting;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
 import io.flutter.plugin.platform.PlatformView;
@@ -35,23 +37,13 @@ public final class PlatformVideoView implements PlatformView {
   @OptIn(markerClass = UnstableApi.class)
   public PlatformVideoView(@NonNull Context context, @NonNull ExoPlayer exoPlayer) {
     this.exoPlayer = exoPlayer;
-    surfaceView = new SurfaceView(context);
+    surfaceView = new VideoSurfaceView(context, exoPlayer);
 
-    if (Build.VERSION.SDK_INT == Build.VERSION_CODES.P) {
-      // Workaround for rendering issues on Android 9 (API 28).
-      // On Android 9, using setVideoSurfaceView seems to lead to issues where the first frame is
-      // not displayed if the video is paused initially.
-      // To ensure the first frame is visible, the surface is directly set using holder.getSurface()
-      // when the surface is created, and ExoPlayer seeks to a position to force rendering of the
-      // first frame.
-      setupSurfaceWithCallback(exoPlayer);
-    } else {
-      if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.N_MR1) {
-        // Avoid blank space instead of a video on Android versions below 8 by adjusting video's
-        // z-layer within the Android view hierarchy:
-        surfaceView.setZOrderMediaOverlay(true);
-      }
-      exoPlayer.setVideoSurfaceView(surfaceView);
+    setupSurfaceWithCallback(exoPlayer);
+    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.N_MR1) {
+      // Avoid blank space instead of a video on Android versions below 8 by adjusting video's
+      // z-layer within the Android view hierarchy:
+      surfaceView.setZOrderMediaOverlay(true);
     }
   }
 
@@ -63,9 +55,8 @@ public final class PlatformVideoView implements PlatformView {
             if (disposed) {
               return;
             }
-            exoPlayer.setVideoSurface(holder.getSurface());
-            // Force first frame rendering:
-            exoPlayer.seekTo(1);
+            bindPlayerToSurface(exoPlayer, holder.getSurface());
+            forceFirstFrameForAndroid9(exoPlayer);
           }
 
           @Override
@@ -77,11 +68,52 @@ public final class PlatformVideoView implements PlatformView {
           @Override
           public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
             if (!disposed) {
-              exoPlayer.setVideoSurface(null);
+              // Do not clear a newer surface installed during a visibility transition.
+              exoPlayer.clearVideoSurface(holder.getSurface());
             }
           }
         };
     surfaceView.getHolder().addCallback(surfaceCallback);
+  }
+
+  /** Binds only a live framework-owned surface to the decoder. */
+  @VisibleForTesting
+  static void bindPlayerToSurface(@NonNull ExoPlayer exoPlayer, @NonNull Surface surface) {
+    if (surface.isValid()) {
+      exoPlayer.setVideoSurface(surface);
+    }
+  }
+
+  /** Forces Android 9 to flush a paused decoder after a surface handoff. */
+  @VisibleForTesting
+  static void forceFirstFrameForAndroid9(@NonNull ExoPlayer exoPlayer) {
+    if (Build.VERSION.SDK_INT == Build.VERSION_CODES.P && !exoPlayer.getPlayWhenReady()) {
+      long position = exoPlayer.getCurrentPosition();
+      exoPlayer.seekTo(position == 0 ? 1 : position);
+    }
+  }
+
+  /**
+   * Re-attaches the current surface after a route or platform-view visibility transition.
+   *
+   * <p>Platform views can become visible without receiving a new {@code surfaceCreated} callback.
+   * Binding here prevents a stale decoder surface from advancing playback behind a black frame.
+   */
+  private final class VideoSurfaceView extends SurfaceView {
+    @NonNull private final ExoPlayer player;
+
+    VideoSurfaceView(@NonNull Context context, @NonNull ExoPlayer player) {
+      super(context);
+      this.player = player;
+    }
+
+    @Override
+    protected void onVisibilityChanged(@NonNull View changedView, int visibility) {
+      super.onVisibilityChanged(changedView, visibility);
+      if (!disposed && visibility == View.VISIBLE && isShown()) {
+        bindPlayerToSurface(player, getHolder().getSurface());
+      }
+    }
   }
 
   /**
@@ -112,7 +144,6 @@ public final class PlatformVideoView implements PlatformView {
       surfaceView.getHolder().removeCallback(surfaceCallback);
       surfaceCallback = null;
     }
-    exoPlayer.clearVideoSurfaceView(surfaceView);
-    exoPlayer.setVideoSurface(null);
+    exoPlayer.clearVideoSurface(surfaceView.getHolder().getSurface());
   }
 }

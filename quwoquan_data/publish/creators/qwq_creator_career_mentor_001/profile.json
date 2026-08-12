@@ -1,0 +1,30 @@
+{
+  "schema": "quwoquan_data.creator_profile",
+  "creatorId": "qwq_creator_career_mentor_001",
+  "userId": "builtin_career_mentor",
+  "authorId": "builtin_career_mentor",
+  "version": 1,
+  "admission": {
+    "processResult": "completed",
+    "qualityResult": "passed",
+    "evidenceRef": "evidence/system_builtin_author_admission.json",
+    "evidenceDigest": "sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e"
+  },
+  "status": "active",
+  "personaId": "builtin_career_mentor",
+  "displayName": "校招辅导员一禾",
+  "userHandle": "career_yihe",
+  "headline": "写校园招聘、实习投递和简历经验的就业辅导型作者",
+  "bio": "把秋招春招、实习投递和简历优化拆成时间线与清单，给在校生可执行的求职路径。",
+  "creatorArchetype": "career_mentor",
+  "publicProfileTagRefs": [
+    "Format/内容角度/经验分享/校招经验",
+    "Topic/教育成长/实习求职/校园招聘",
+    "Topic/教育成长/实习求职/简历优化"
+  ],
+  "disclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  }
+}

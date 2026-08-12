@@ -14,6 +14,7 @@
     "selector",
     "quota",
     "count",
+    "workerHostSetBinding",
     "targetNames",
     "sourceProviders",
     "semanticSelectionId",
@@ -22,6 +23,7 @@
     "gitCommitSha",
     "sourceRevision",
     "sourceDigest",
+    "executionBundle",
     "entityCatalogDigest",
     "externalInputRefs",
     "externalInputsDigest",
@@ -61,6 +63,12 @@
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
     },
+    "workerHostSetBinding": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "governed_worker_host_binding.schema.json"}
+      ]
+    },
     "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
     "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
     "sourcePoolSelection": {"$ref": "scale_source_pool_selection.schema.json"},
@@ -76,10 +84,10 @@
       "items": { "type": "string", "minLength": 1 }
     },
     "semanticSelectionId": {
-      "enum": ["default", "cursor_auto", "not_applicable"]
+      "enum": ["default", "cursor_grok", "cursor_auto", "not_applicable"]
     },
     "semanticPreflightReceipt": {
-      "$ref": "semantic_preflight_receipt_ref.schema.json"
+      "$ref": "semantic_provider_preflight_receipt_ref.schema.json"
     },
     "retryOf": { "type": ["string", "null"] },
     "gitBranch": { "type": "string", "minLength": 1 },
@@ -99,6 +107,16 @@
         }
       }
     },
+    "executionBundle": {
+      "type": "object",
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
     "entityCatalogDigest": {
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
@@ -113,6 +131,9 @@
     },
     "predecessorReconciliation": {
       "$ref": "campaign_submission_reconciliation_ref.schema.json"
+    },
+    "m100AlphaAcceptance": {
+      "$ref": "m100_alpha_acceptance_binding.schema.json"
     },
     "reviewedClosureAdoption": {
       "$ref": "reviewed_closure_adoption_campaign_binding.schema.json"
@@ -142,7 +163,7 @@
           "capacityPlanDigest"
         ],
         "properties": {
-          "semanticSelectionId": { "enum": ["default", "cursor_auto"] }
+          "semanticSelectionId": { "enum": ["default", "cursor_grok", "cursor_auto"] }
         }
       },
       "else": {
@@ -154,12 +175,41 @@
     {
       "if": {
         "properties": {
-          "semanticSelectionId": { "enum": ["default", "cursor_auto"] }
+          "semanticSelectionId": { "enum": ["default", "cursor_grok", "cursor_auto"] }
         },
         "required": ["semanticSelectionId"]
       },
       "then": {
         "required": ["semanticPreflightReceipt"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "scale": {"const": "M1000"},
+          "operation": {
+            "enum": [
+              "homepage.generate", "article.generate", "image.generate", "video.generate"
+            ]
+          }
+        },
+        "required": ["scale", "operation"]
+      },
+      "then": {"required": ["m100AlphaAcceptance"]},
+      "else": {"not": {"required": ["m100AlphaAcceptance"]}}
+    },
+    {
+      "if": {"required": ["scaleSourcePool"]},
+      "then": {
+        "required": ["sourcePoolEvidenceRootRef", "sourcePoolSelection"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["sourcePoolSelection"]}
+          ]
+        }
       }
     },
     {
@@ -176,11 +226,6 @@
         },
         "required": ["executionId", "operation"]
       },
-      "then": {
-        "required": [
-          "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
-        ]
-      },
       "else": {
         "not": {
           "anyOf": [
@@ -189,6 +234,26 @@
             {"required": ["sourcePoolSelection"]}
           ]
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "executionId": {
+            "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(?:homepage|article|image|video)-m10000--"
+          },
+          "operation": {
+            "enum": [
+              "homepage.generate", "article.generate", "image.generate", "video.generate"
+            ]
+          }
+        },
+        "required": ["executionId", "operation"]
+      },
+      "then": {
+        "required": [
+          "scaleSourcePool", "sourcePoolEvidenceRootRef", "sourcePoolSelection"
+        ]
       }
     }
   ]

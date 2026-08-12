@@ -6,7 +6,7 @@ description: >
   - 运行时平面真相源：quwoquan_ops/environments/prod/runtime.yaml（subnets: edge/media/service/data）。
   - workload 来自服务/external/platform 的 prod deploy 入口扫描，plane 由运行职责推导。
   本层只引用上述 workload id，把运行时四平面映射到 prod ECS 上的最小权限 Linux service 账号，远端唯一托管目标为 prod-hosted（backend=ssh-hosted）。
-  成本约束保留项：gray-initial 与 full 共享同一物理 ECS/集群；隔离强度为「账号 + rollout stage + compose 项目命名空间」级逻辑隔离，非物理隔离。
+  成本约束保留项：canary 与 100 共享同一物理 ECS/集群；隔离强度为「账号 + rollout stage + compose 项目命名空间」级逻辑隔离，非物理隔离。
 
 # 远端唯一托管目标：取消远端 gamma 后，只有 prod-hosted 一个远端访问面。
 target: prod-hosted
@@ -38,7 +38,7 @@ deploymentInstances:
         - id: r0
           hostId: prod-host-01
   gray:
-    rolloutStages: [gray-initial, carry-on]
+    rolloutStages: [canary, "5", "20", "50"]
     replicas:
       service:
         - id: r0
@@ -47,7 +47,7 @@ deploymentInstances:
         - id: r0
           hostId: prod-host-01
   prod:
-    rolloutStages: [full]
+    rolloutStages: ["100"]
     replicas:
       service:
         - id: r0
@@ -66,8 +66,8 @@ relayAccount:
   notes: 只在一次性 bootstrap 与凭据分发时使用；日常发布由各平面账号自登录完成。
 
 # rollout stage 维度（对齐 stackctl up --rollout-mode 与 prod rolloutStagePolicy）。
-# gray-initial：取同集群一个实例验证，承接原远端 gamma 的真实远端集成验证职责。
-rolloutStages: [gray-initial, carry-on, full]
+# canary：取 candidate 单实例验证；后续 5/20/50 仅扩大 API Edge 分配阈值，100 提升为 stable。
+rolloutStages: [canary, "5", "20", "50", "100"]
 
 # 第一方容器预验证是独立、不可提升的运行投影。它只证明 reviewed main 的
 # Service Pipeline 制品能在 prod-hosted 主机上以 rootless 容器运行；不得作为
@@ -223,7 +223,7 @@ planes:
       caddyfile: runtime/Caddyfile
       mediaStateRef: process/volumes/media
       modelCacheRoot: runtime/model-cache
-    appliesToStages: [gray-initial, carry-on, full]
+    appliesToStages: [canary, "5", "20", "50", "100"]
     summary: >-
       实时长连接与 RTC 控制面使用独立 rootless compose 项目；镜像由 source package
       provenance、SPDX SBOM 和本地/远端 content digest 同一发布步骤校验，只操作
@@ -241,7 +241,7 @@ planes:
     governedWorkloads: [livekit, coturn, rtc-service]
     rootlessGovernedComposeServices: []
     rootlessSupportComposeServices: []
-    appliesToStages: [gray-initial, carry-on, full]
+    appliesToStages: [canary, "5", "20", "50", "100"]
     summary: 媒体转发面（SFU/TURN，UDP），独立 compose 项目，仅操作本平面工作负载。
 
   - plane: service
@@ -378,7 +378,7 @@ planes:
       mediaStateRef: process/volumes/media
       webStaticRoot: runtime/public-web
       modelCacheRoot: runtime/model-cache
-    appliesToStages: [gray-initial, carry-on, full]
+    appliesToStages: [canary, "5", "20", "50", "100"]
     summary: >
       当前 prod-hosted 首波 rootless 接管按 onebox split-services 真实运行面落地：
       governed compose services = api-edge/recommendation/content/chat/circle/user/assistant/product-ops/platform-ops/search/tag/entity/integration/notification，

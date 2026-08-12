@@ -135,11 +135,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
       onFlushDirty: (reason) => _saveDraft(silent: true, flushReason: reason),
       onFlushFailure: (error, stackTrace, reason) {
         unawaited(
-          ref.read(exceptionTelemetryPortProvider).recordHandledException(
-            source: 'content.create.draft_autosave.$reason',
-            error: error,
-            stackTrace: stackTrace,
-          ),
+          ref
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'content.create.draft_autosave.$reason',
+                error: error,
+                stackTrace: stackTrace,
+              ),
         );
       },
     )..start();
@@ -625,11 +627,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
       );
     } catch (error, stackTrace) {
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'content.create.video_thumbnail',
-          error: error,
-          stackTrace: stackTrace,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'content.create.video_thumbnail',
+              error: error,
+              stackTrace: stackTrace,
+            ),
       );
       return null;
     }
@@ -650,11 +654,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
       );
     } catch (error, stackTrace) {
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'content.create.video_metadata',
-          error: error,
-          stackTrace: stackTrace,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'content.create.video_metadata',
+              error: error,
+              stackTrace: stackTrace,
+            ),
       );
       return _VideoMetadataProbe.empty;
     } finally {
@@ -693,11 +699,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
           );
         } catch (error, stackTrace) {
           unawaited(
-            ref.read(exceptionTelemetryPortProvider).recordHandledException(
-              source: 'content.create.capture_metadata_extract',
-              error: error,
-              stackTrace: stackTrace,
-            ),
+            ref
+                .read(exceptionTelemetryPortProvider)
+                .recordHandledException(
+                  source: 'content.create.capture_metadata_extract',
+                  error: error,
+                  stackTrace: stackTrace,
+                ),
           );
         }
       }
@@ -709,11 +717,13 @@ class _CreatePageState extends ConsumerState<CreatePage>
     } catch (error, stackTrace) {
       circleLoadUnavailable = true;
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'content.create.publish_circle_options',
-          error: error,
-          stackTrace: stackTrace,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'content.create.publish_circle_options',
+              error: error,
+              stackTrace: stackTrace,
+            ),
       );
     }
     if (!mounted) {

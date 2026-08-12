@@ -1,0 +1,105 @@
+description: 只读 persisted query 请求、发布绑定与最小 GraphQL 响应。
+fields:
+- {name: requestId, source: trustedRequestId, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: queryHash, source: extensions.persistedQuery.sha256Hash, type: string, constraints: [NOT_NULL], format: canonical_sha256, classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: read, role: authoritative_state}
+- {name: operationName, source: operationName, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read, role: authoritative_state}
+- {name: variables, source: variables, type: object, constraints: [NULLABLE], classification: SENSITIVE, log_policy: none, api_exposure: write, ops_exposure: none, role: authoritative_state}
+- {name: canonicalOperationId, source: registry.canonicalOperationId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: objectIds, source: registry.objectIds, type: '[]string', constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: transport_only}
+- {name: costModelVersion, source: registry.costModelVersion, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: costPlanDigest, source: registry.costPlanDigest, type: string, constraints: [NOT_NULL], format: canonical_sha256, classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: maxOwnerCalls, source: registry.cost.maxOwnerCalls, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: maxBatchKeys, source: registry.cost.maxBatchKeys, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: maxResponseBytes, source: registry.cost.maxResponseBytes, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: authoritative_state}
+- {name: sloRef, source: registry.cost.sloRef, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: transport_only}
+- {name: depthExceptionRef, source: registry.cost.depthExceptionRef, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: transport_only}
+- {name: topLevelExceptionRef, source: registry.cost.topLevelExceptionRef, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: transport_only}
+- {name: complexityExceptionRef, source: registry.cost.complexityExceptionRef, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: transport_only}
+- {name: costPlan, source: registry.costPlan, type: PersistedQueryCostPlan, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read, role: authoritative_state}
+types:
+  PersistedQueryDescriptor:
+    description: 标准 persisted query extension；只接受版本 1 与 64 位小写十六进制 SHA-256。
+    fields:
+    - {name: version, type: int, constraints: [NOT_NULL]}
+    - {name: sha256Hash, type: string, constraints: [NOT_NULL], format: canonical_sha256}
+  PersistedQueryExtensions:
+    fields:
+    - {name: persistedQuery, type: PersistedQueryDescriptor, constraints: [NOT_NULL]}
+  PersistedGraphQLRequest:
+    description: query text 不属于该请求契约；operationName 可省略但提供时必须与 registry 一致。
+    fields:
+    - {name: operationName, type: string, constraints: [NULLABLE]}
+    - {name: variables, type: object, constraints: [NULLABLE], classification: SENSITIVE, log_policy: none}
+    - {name: extensions, type: PersistedQueryExtensions, constraints: [NOT_NULL]}
+  GraphQLReadResponse:
+    description: 已登记执行器返回的只读 Query Slice data；owner failure 使用 canonical runtime error 边界。
+    fields:
+    - {name: data, type: object, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only}
+  SearchPageInput:
+    fields:
+    - {name: query, source: input.query, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: none, api_exposure: write, ops_exposure: none}
+    - {name: first, source: input.first, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: after, source: input.after, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: none}
+    - {name: objectTypes, source: input.objectTypes, type: '[]string', constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+  SearchPageItem:
+    fields:
+    - {name: objectRef, source: searchOwner.objectRef, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: resultType, source: searchOwner.objectType, type: enum, enum_ref: SearchPageObjectType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: title, source: searchOwner.title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: none, api_exposure: read, ops_exposure: none}
+    - {name: subtitle, source: gatewayProjection.subtitle, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: none, api_exposure: read, ops_exposure: none, description: 当前 owner flat-card 未声明独立 subtitle 时保持 null，禁止从 contentType 或 snippet 伪造。}
+    - {name: snippet, source: searchOwner.snippet, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: none, api_exposure: read, ops_exposure: none}
+    - {name: thumbnailUrl, source: searchOwner.thumbnailUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: action, source: searchOwner.action, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, description: 只接受 owner canonical DeepLink；缺失时整个 Query Slice fail-closed。}
+  SearchPageFacet:
+    fields:
+    - {name: key, source: searchOwner.facets.key, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: count, source: searchOwner.facets.count, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  SearchPageSlice:
+    fields:
+    - {name: items, source: searchOwner.hits, type: '[]SearchPageItem', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: facets, source: searchOwner.facets, type: '[]SearchPageFacet', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: suggestions, source: searchOwner.interpretedQuery.variants, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: none, api_exposure: read, ops_exposure: none}
+    - {name: nextCursor, source: searchOwner.nextCursor, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+  PersistedQueryAuthorizationBinding:
+    fields:
+    - {name: principal, type: string, constraints: [NOT_NULL]}
+    - {name: scopes, type: '[]string', constraints: [NOT_NULL]}
+    - {name: ownershipPolicy, type: string, constraints: [NOT_NULL]}
+  PersistedQueryCostBudget:
+    fields:
+    - {name: depth, type: int, constraints: [NOT_NULL]}
+    - {name: topLevelFields, type: int, constraints: [NOT_NULL]}
+    - {name: complexity, type: int, constraints: [NOT_NULL]}
+    - {name: variablesMaxBytes, type: int, constraints: [NOT_NULL]}
+    - {name: pageSizeMax, type: int, constraints: [NOT_NULL]}
+    - {name: maxOwnerCalls, type: int, constraints: [NOT_NULL]}
+    - {name: maxBatchKeys, type: int, constraints: [NOT_NULL]}
+    - {name: maxResponseBytes, type: int, constraints: [NOT_NULL]}
+    - {name: sloRef, type: string, constraints: [NOT_NULL]}
+    - {name: depthExceptionRef, type: string, constraints: [NULLABLE]}
+    - {name: topLevelExceptionRef, type: string, constraints: [NULLABLE]}
+    - {name: complexityExceptionRef, type: string, constraints: [NULLABLE]}
+  PersistedQueryListMultiplier:
+    description: 列表规模变量对实际 complexity 的签名线性贡献；缺失变量使用 defaultValue。
+    fields:
+    - {name: variablePath, type: string, constraints: [NOT_NULL]}
+    - {name: coefficient, type: int, constraints: [NOT_NULL]}
+    - {name: defaultValue, type: int, constraints: [NOT_NULL]}
+    - {name: maximumValue, type: int, constraints: [NOT_NULL]}
+  PersistedQueryCostPlan:
+    description: 按 canonical JSON 计算 costPlanDigest 的运行期重算计划。
+    fields:
+    - {name: baseComplexity, type: int, constraints: [NOT_NULL]}
+    - {name: listMultipliers, type: '[]PersistedQueryListMultiplier', constraints: [NOT_NULL]}
+    - {name: maxOwnerCalls, type: int, constraints: [NOT_NULL]}
+    - {name: maxBatchKeys, type: int, constraints: [NOT_NULL]}
+    - {name: maxResponseBytes, type: int, constraints: [NOT_NULL]}
+  PersistedQueryExecutionUsage:
+    description: executor 返回并由 API Edge 在响应前核验的实际执行用量。
+    fields:
+    - {name: ownerCalls, type: int, constraints: [NOT_NULL]}
+    - {name: batchKeys, type: int, constraints: [NOT_NULL]}
+    - {name: responseBytes, type: int, constraints: [NOT_NULL]}
+enums:
+  SearchPageObjectType:
+    values: [CIRCLE, CIRCLE_GROUP, CONTENT_POST, ENTITY_HOMEPAGE, LOCATION_PLACE, USER_PROFILE]

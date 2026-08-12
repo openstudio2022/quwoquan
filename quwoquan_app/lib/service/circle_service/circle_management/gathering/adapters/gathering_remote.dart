@@ -5,7 +5,8 @@ import 'package:quwoquan_app/service/circle_service/circle_management/gathering/
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/gathering_board_ports.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart' as cloud;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    as cloud;
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 typedef GatheringInvocationContextFactory =
@@ -53,9 +54,7 @@ final class RemoteGatheringFacet
   }
 
   @override
-  Future<GatheringCommandResult> createDraft(
-    GatheringCreateDraftInput input,
-  ) {
+  Future<GatheringCommandResult> createDraft(GatheringCreateDraftInput input) {
     return _mapCommand(
       client.circleGatheringCreateGatheringDraft(
         createDraftCommandToWire(input),
@@ -138,7 +137,7 @@ final class RemoteGatheringFacet
 
   @override
   Future<GatheringCommandResult> watchAvailability(
-    GatheringVersionCommandInput input,
+    GatheringAvailabilityWatchCommandInput input,
   ) {
     return _mapCommand(
       client.circleGatheringWatchGatheringAvailability(
@@ -300,13 +299,14 @@ final class RemoteGatheringFacet
             input.idempotencyKey,
           ),
         ),
-      GatheringOutcomeStatus.endedEarly => client.circleGatheringEndGatheringEarly(
-        reasonCommand,
-        context: _commandContext(
-          CircleRequestPageIds.endGatheringEarly,
-          input.idempotencyKey,
+      GatheringOutcomeStatus.endedEarly =>
+        client.circleGatheringEndGatheringEarly(
+          reasonCommand,
+          context: _commandContext(
+            CircleRequestPageIds.endGatheringEarly,
+            input.idempotencyKey,
+          ),
         ),
-      ),
       GatheringOutcomeStatus.safetyTerminated =>
         client.circleGatheringSafetyTerminateGathering(
           reasonCommand,
@@ -373,7 +373,11 @@ final class RemoteGatheringFacet
   Future<GatheringBoardCircleSlice> loadCircle(String gatheringId) async {
     final normalized = gatheringId.trim();
     if (normalized.isEmpty) {
-      throw ArgumentError.value(gatheringId, 'gatheringId', 'must not be blank');
+      throw ArgumentError.value(
+        gatheringId,
+        'gatheringId',
+        'must not be blank',
+      );
     }
     final wire = await _loadPrivateDetailWire(
       normalized,

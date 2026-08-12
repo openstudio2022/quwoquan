@@ -21,6 +21,24 @@ events:
   - profileVersion
   - updatedAt
   no_consumer_reason: 该瞬时提示没有 durable consumer 义务；搜索索引消费独立的事务性 profile projection coordinate，不消费此 channel。
+- name: UserProfileSearchProjectionRequested
+  description: Persona materialize 后与 user_profile_search_outbox 同事务形成的自包含 Search 投影事实；User relay 只追加 durable stream，Search 按 eventId/profileVersion 幂等消费与重放，User 禁止直写 Elasticsearch/OpenSearch。
+  delivery_semantics: transactional_outbox
+  wire_event_type: UserProfileSearchProjectionRequested
+  topic: events.user.profile_search
+  payload_entity: UserProfileSearchProjectionEvent
+  payload_fields:
+  - eventId
+  - userId
+  - profileVersion
+  - operation
+  - nickname
+  - avatarUrl
+  - bio
+  - identityTags
+  - followerCount
+  - postCount
+  - updatedAt
 - name: UserProfileTagsChanged
   description: 用户职业/兴趣标签与资料状态原子提交后的 durable 投影事件；tag-service 独占 object_tag_index 写入
   delivery_semantics: transactional_outbox

@@ -105,6 +105,7 @@ class DistributedLaneSession:
     _stop: threading.Event
     _heartbeat_thread: threading.Thread | None = None
     _finished: bool = False
+    _replace_claim_id: str | None = None
 
     @property
     def path(self) -> Path:
@@ -121,9 +122,27 @@ class DistributedLaneSession:
                 previous.get("claimId") != self.claim_id
                 or previous.get("planDigest") != self.plan_digest
             ):
-                raise RuntimeError(
-                    f"DATA.CAMPAIGN.LANE_FENCED carrier={self.carrier}"
+                can_replace_terminal = (
+                    self._replace_claim_id is not None
+                    and previous.get("claimId") == self._replace_claim_id
+                    and previous.get("planDigest") == self.plan_digest
+                    and previous.get("rootExecutionId") == self.root_execution_id
+                    and previous.get("executionId") == self.execution_id
+                    and previous.get("carrier") == self.carrier
+                    and previous.get("campaignRunId") == self.run_id
+                    and previous.get("campaignGeneration") == self.generation
+                    and previous.get("campaignFencingToken") == self.fencing_token
+                    and int(previous.get("claimAttempt") or 0) + 1
+                    == self.claim_attempt
+                    and previous.get("status")
+                    in {"delivery_pending", "failed", "timed_out", "interrupted"}
+                    and changes.get("status") == "active"
+                    and changes.get("phase") == "claim"
                 )
+                if not can_replace_terminal:
+                    raise RuntimeError(
+                        f"DATA.CAMPAIGN.LANE_FENCED carrier={self.carrier}"
+                    )
             now = _utc_now()
             payload = {
                 "schema": "quwoquan_data.content_campaign_lane_claim",
@@ -167,6 +186,7 @@ class DistributedLaneSession:
                 label=f"campaign lane claim:{self.carrier}",
             )
             write_json(self.path, payload)
+            self._replace_claim_id = None
             return payload
 
     def lane_checkpoint(
@@ -342,6 +362,11 @@ def campaign_lane_claim_session(
             process_termination_timeout_seconds=process_termination_timeout_seconds,
             _mutex=threading.RLock(),
             _stop=threading.Event(),
+            _replace_claim_id=(
+                str(previous.get("claimId") or "")
+                if previous is not None
+                else None
+            ),
         )
         session._write(status="active", phase="claim")
         session._heartbeat_thread = threading.Thread(

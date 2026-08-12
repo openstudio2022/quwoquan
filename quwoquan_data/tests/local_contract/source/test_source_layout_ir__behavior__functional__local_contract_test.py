@@ -202,6 +202,122 @@ def test_mediawiki_fidelity_matches_same_prose_across_heading_levels() -> None:
     assert assess_source_content_fidelity(rendered, candidate).complete
 
 
+def test_mediawiki_cleaning_keeps_target_prose_merged_with_boilerplate_token() -> None:
+    from content.post.article.evidence_text import clean_source_markdown
+    from content.source.handler_fetch_contract import source_content_fidelity_issue
+
+    first = (
+        "测试景区的公共交通覆盖两个入口，接驳线路按节假日客流动态加密，"
+        "游客可以在到站前核对运营时段与换乘位置。"
+    )
+    middle = (
+        "景区公共服务平台上线统一身份登录机制，办理团队预约时会记录申请状态，"
+        "但不会改变现场核验规则。"
+    )
+    last = (
+        "测试景区同时保留人工咨询窗口，并在主要换乘点提供无障碍指引，"
+        "临时交通调整由现场公告与公共服务平台同步更新。"
+    )
+    rendered = f"{first}\n\n{middle}\n\n{last}"
+    # MediaWiki layout IR 可把同一小节的相邻段落合并为一行。
+    merged_candidate = f"{first} {middle} {last}"
+
+    clean_rendered = clean_source_markdown(
+        rendered,
+        raw_format="mediawiki_api_json",
+    )
+    clean_candidate = clean_source_markdown(
+        merged_candidate,
+        raw_format="mediawiki_api_json",
+    )
+
+    assert middle not in clean_rendered
+    assert first in clean_candidate and last in clean_candidate
+    assert source_content_fidelity_issue(
+        {"source_id": "article-city", "researchLane": "article"},
+        entity_id="测试景区",
+        rendered_text=clean_rendered,
+        candidate_text=clean_candidate,
+    ) is None
+
+
+def test_mediawiki_cleaning_still_rejects_real_target_paragraph_loss() -> None:
+    from content.post.article.evidence_text import clean_source_markdown
+    from content.source.handler_fetch_contract import source_content_fidelity_issue
+
+    first = (
+        "测试景区的公共交通覆盖两个入口，接驳线路按节假日客流动态加密，"
+        "游客可以在到站前核对运营时段与换乘位置。"
+    )
+    middle = (
+        "景区公共服务平台上线统一身份登录机制，办理团队预约时会记录申请状态，"
+        "但不会改变现场核验规则。"
+    )
+    missing = (
+        "测试景区同时保留人工咨询窗口，并在主要换乘点提供无障碍指引，"
+        "临时交通调整由现场公告与公共服务平台同步更新。"
+    )
+    clean_rendered = clean_source_markdown(
+        f"{first}\n\n{middle}\n\n{missing}",
+        raw_format="mediawiki_api_json",
+    )
+    clean_candidate = clean_source_markdown(
+        f"{first} {middle}",
+        raw_format="mediawiki_api_json",
+    )
+
+    issue = source_content_fidelity_issue(
+        {"source_id": "article-city", "researchLane": "article"},
+        entity_id="测试景区",
+        rendered_text=clean_rendered,
+        candidate_text=clean_candidate,
+    )
+
+    assert issue is not None
+    assert issue.code.value == "DATA.SOURCE.CONTENT_INCOMPLETE"
+
+
+def test_incomplete_mediawiki_source_is_an_object_rejection_not_batch_abort() -> None:
+    from core.data_issue import DataIssueCode, DataRecoveryAction
+    from content.source.handler_fetch_contract import source_content_fidelity_issue
+
+    issue = source_content_fidelity_issue(
+        {"source_id": "article-a", "researchLane": "article"},
+        entity_id="成都大熊猫繁育研究基地",
+        rendered_text="第一段完整事实。\n\n第二段必须保留的事实。",
+        candidate_text="第一段完整事实。",
+    )
+
+    assert issue is not None
+    assert issue.code is DataIssueCode.SOURCE_CONTENT_INCOMPLETE
+    assert issue.recovery is DataRecoveryAction.REPLACE_SOURCE
+    assert issue.lane.value == "article"
+
+
+def test_mediawiki_fidelity_ignores_missing_unrelated_broad_page_section() -> None:
+    from content.source.handler_fetch_contract import source_content_fidelity_issue
+
+    source = {"source_id": "article-city", "researchLane": "article"}
+    rendered = (
+        "成都大熊猫繁育研究基地提供大熊猫迁地保护事实。\n\n"
+        "成都曾举办多项体育赛事，这一段与熊猫基地无关。"
+    )
+    candidate = "成都大熊猫繁育研究基地提供大熊猫迁地保护事实。"
+
+    assert source_content_fidelity_issue(
+        source,
+        entity_id="成都大熊猫繁育研究基地",
+        rendered_text=rendered,
+        candidate_text=candidate,
+    ) is None
+    assert source_content_fidelity_issue(
+        source,
+        entity_id="成都大熊猫繁育研究基地",
+        rendered_text=rendered,
+        candidate_text="成都曾举办多项体育赛事，这一段与熊猫基地无关。",
+    ) is not None
+
+
 def test_wikitext_infobox_yields_cover_candidate_and_blocks_locator_map() -> None:
     layout = parse_wikitext_layout(_HUANGLONG_WIKITEXT)
     figures = layout_figures(layout)
@@ -466,6 +582,7 @@ def test_write_source_unit_asset_entries_carry_cover_candidate_fields(monkeypatc
                 "ext": ".jpg",
                 "url": "https://upload.wikimedia.org/a.jpg",
                 "caption": "黄龙五彩池",
+                "visualSubject": "Huanglong Scenic and Historic Interest Area pools",
                 "placeholderId": "source-inline-001",
                 "placementType": "infoboxLead",
                 "coverCandidateRank": 1,
@@ -499,7 +616,7 @@ def test_write_source_unit_asset_entries_carry_cover_candidate_fields(monkeypatc
     assert lead["coverCandidateRank"] == 1
     assert lead["isMapLike"] is False
     assert lead["isRepresentativeVisual"] is True
-    assert lead["visualSubject"] == "黄龙五彩池"
+    assert lead["visualSubject"] == "Huanglong Scenic and Historic Interest Area pools"
     map_entry = entries[1]
     assert map_entry["coverCandidateRank"] == -1
     assert map_entry["isMapLike"] is True

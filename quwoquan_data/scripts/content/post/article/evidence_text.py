@@ -1,18 +1,17 @@
 """Normalize and assess source text before it enters content evidence aggregation."""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from pathlib import Path
 import re
-from typing import Any, Iterable, Mapping, Sequence
-from core.io import read_json
+from dataclasses import dataclass
+from typing import Any, Mapping, Sequence
+
 from core.localization import fold_to_simplified
-from core.paths import execution_root
 from core.qunar_template import (
     QUNAR_FRESH_STALE_OVER_3Y,
     QUNAR_PAGE_SEARCH_RESULT,
     qunar_template_metadata,
 )
+
 
 @dataclass(frozen=True)
 class SourceAssessment:
@@ -263,6 +262,7 @@ _STRUCTURAL_FIGURE_LINE_RE = re.compile(r"^\s*(?::::|!\[[^\]]*\]\(asset://)")
 # 分隔行不含字母数字，会被「无字母→样板噪声」误删，必须整体豁免。
 _GFM_TABLE_LINE_RE = re.compile(r"^\s*\|.*\|\s*$")
 _INLINE_HTTP_URL_RE = re.compile(r"https?://[^\s<>()]+", re.IGNORECASE)
+_SENTENCE_END_RE = re.compile(r"[。！？!?；;]")
 # wikitable cell 属性残留行：`valign=top|…`、`avlign=top|…`、`style="…"|…`。
 # 解析层已按语法位置剥离；此处是 clean 层兜底，防旧产物/其它前端漏网。
 _CELL_ATTR_RESIDUE_RE = re.compile(
@@ -278,7 +278,18 @@ def _is_structural_figure_line(line: str) -> bool:
 def _is_gfm_table_line(line: str) -> bool:
     return bool(_GFM_TABLE_LINE_RE.match(str(line or "")))
 
-def source_line_is_boilerplate(line: str) -> bool:
+def _is_substantive_merged_prose(line: str) -> bool:
+    """识别 MediaWiki IR 合并后仍应保留的多句事实正文。"""
+    without_urls = _INLINE_HTTP_URL_RE.sub("", str(line or ""))
+    lexical = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", without_urls)
+    return len(lexical) >= 80 and len(_SENTENCE_END_RE.findall(without_urls)) >= 3
+
+
+def source_line_is_boilerplate(
+    line: str,
+    *,
+    preserve_substantive_merged_prose: bool = False,
+) -> bool:
     """判断一行是否为导航/页脚/广告/纯链接等样板噪声（净化与底稿提取共用）。"""
     compact = re.sub(r"\s+", "", line)
     letters = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", compact)
@@ -289,7 +300,14 @@ def source_line_is_boilerplate(line: str) -> bool:
     if _QUNAR_TAG_LINE_RE.match(compact):
         return True
     if any(marker in line for marker in SOURCE_BOILERPLATE_MARKERS):
-        return True
+        # MediaWiki 的 rendered extract 保留原始段落边界，而 layout IR 可能把
+        # 同一小节的多个段落合并为一行。若其中一小句恰含公告/导航词，不能把
+        # 整行多句事实正文都当作 chrome 丢弃；真正的短公告仍沿用严格删除。
+        if not (
+            preserve_substantive_merged_prose
+            and _is_substantive_merged_prose(line)
+        ):
+            return True
     without_urls = _INLINE_HTTP_URL_RE.sub("", line)
     url_free_letters = re.sub(
         r"[^\u4e00-\u9fffA-Za-z0-9]",
@@ -362,7 +380,12 @@ def clean_source_markdown(text: str, *, raw_format: str = "") -> str:
             if rest:
                 kept.append(f"{attr_residue.group('marker') or ''}{rest}".strip())
             continue
-        if source_line_is_boilerplate(line):
+        if source_line_is_boilerplate(
+            line,
+            preserve_substantive_merged_prose=(
+                str(raw_format or "").strip() == "mediawiki_api_json"
+            ),
+        ):
             continue
         # A factual paragraph may legitimately cite an inline URL.  The URL is
         # not publishable prose, but it must not cause the entire paragraph to

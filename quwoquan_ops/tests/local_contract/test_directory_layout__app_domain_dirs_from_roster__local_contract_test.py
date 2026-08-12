@@ -76,7 +76,7 @@ class AppDomainTestDirsFromRosterContractTest(unittest.TestCase):
     def test_object_test_dirs_are_service_container_and_cross_cutting_roots(
         self,
     ) -> None:
-        expected = {"service", "runtime", "design_system"}
+        expected = {"service", "runtime", "design_system", "l10n"}
         self.assertEqual(self.verifier.app_object_test_dirs(), expected)
 
     def test_every_layer_accepts_the_service_container(self) -> None:

@@ -198,8 +198,7 @@ void main() {
             '{id}',
             ':id',
           ),
-          builder: (_, _) =>
-              HomepageMaintenancePage(homepageId: _homepageId),
+          builder: (_, _) => HomepageMaintenancePage(homepageId: _homepageId),
         ),
         GoRoute(
           path: AppRoutePaths.loginPathTemplate,
@@ -256,8 +255,7 @@ Widget _buildApp({
           '{id}',
           ':id',
         ),
-        builder: (_, _) =>
-            HomepageMaintenancePage(homepageId: _homepageId),
+        builder: (_, _) => HomepageMaintenancePage(homepageId: _homepageId),
       ),
       GoRoute(
         path: AppRoutePaths.loginPathTemplate,

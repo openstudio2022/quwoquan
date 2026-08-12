@@ -114,6 +114,59 @@ api_routes:
       anonymous_policy: deny
       visibility: private
     request_body_kind: object
+  - method: GET
+    path: /homepages/{homepageId}/claim-requests/mine
+    operation: GetMyPendingHomepageClaimRequest
+    commercial:
+      status: ready
+    actor: persona
+    application:
+      kind: query
+      facet: HomepageClaimQueryFacade
+      method: getMyPending
+      reader: MyPendingHomepageClaimRequestReader
+      slice: HomepageClaimRequestSlice
+    authorization:
+      principal: persona
+      ownership_policy: author_self
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - ENTITY.USER.claim_not_found
+      - ENTITY.USER.permission_denied
+      - ENTITY.USER.invalid_argument
+      - ENTITY.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: redacted
+    telemetry:
+      metric: entity_homepage_claim_mine_get
+      trace: true
+      attributes:
+        - homepage_id
+        - outcome
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.5
+    request_bindings:
+      path:
+        - name: homepageId
+          field: homepageId
+    description: 当前 persona 对该主页唯一 pending_review 认领申请；不存在时返回 canonical claim_not_found
+    request_entity: GetMyPendingHomepageClaimRequestQuery
+    response_entity: HomepageClaimRequestView
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_body_kind: none
   - method: POST
     path: /homepages/{homepageId}/claim-requests/{claimRequestId}:review
     operation: ReviewHomepageClaimRequest
@@ -175,6 +228,7 @@ consumers:
   - name: app
     capabilities:
       - create_homepage_claim_request
+      - get_my_pending_homepage_claim_request
   - name: platform-ops
     capabilities:
       - list_homepage_claim_requests
@@ -212,6 +266,22 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_claim_request/mongo_store__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-my-pending-homepage-claim-request-local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetMyPendingHomepageClaimRequest}
+    runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage_claim_request/facade__functional__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-my-pending-homepage-claim-request-api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetMyPendingHomepageClaimRequest}
+    runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_claim_request/mongo_store__data_consistency__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: review-homepage-claim-request-local
     spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-001
     producer: service
@@ -241,6 +311,22 @@ readiness_cases:
     producer: app
     layer: api_integration
     target: {kind: operation, id: CreateHomepageClaimRequest}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage_claim_request/homepage_claim_request_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_claim_request_get_my_pending_homepage_claim_request_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetMyPendingHomepageClaimRequest}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_claim_request/homepage_claim_request_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_claim_request_get_my_pending_homepage_claim_request_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-002
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetMyPendingHomepageClaimRequest}
     runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage_claim_request/homepage_claim_request_remote__api_integration_test.dart
     executions:
       - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

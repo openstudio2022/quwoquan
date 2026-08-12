@@ -1,0 +1,37 @@
+{
+  "schema": "quwoquan_data.object_source_catalog",
+  "policyRevision": "encyclopedia-primary",
+  "primaryEvidenceRef": "evidence/sources/homepage-source-e9e80b3d93cd2ba5e97c/meta.json",
+  "primarySource": {
+    "schema": "quwoquan_data.object_source_evidence",
+    "sourceUnitId": "homepage-source-e9e80b3d93cd2ba5e97c",
+    "entityName": "四川省乐山市沙湾区",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%BE%E5%8C%BA",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%BE%E5%8C%BA",
+    "title": "维基百科",
+    "fetchedAt": "2026-08-12T05:21:35Z",
+    "snapshotHash": "sha256:8ad4efe55b30960b44f630bea7fa1926fcbae17e806f4185a94ca31e9531e2d5",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only",
+    "evidenceRef": "evidence/sources/homepage-source-e9e80b3d93cd2ba5e97c/meta.json"
+  },
+  "sources": [
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "homepage-source-e9e80b3d93cd2ba5e97c",
+      "entityName": "四川省乐山市沙湾区",
+      "sourceKind": "wikipedia",
+      "extractor": "wikipedia_api",
+      "canonicalUrl": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%BE%E5%8C%BA",
+      "sourceUrl": "https://zh.wikipedia.org/wiki/%E6%B2%99%E6%B9%BE%E5%8C%BA",
+      "title": "维基百科",
+      "fetchedAt": "2026-08-12T05:21:35Z",
+      "snapshotHash": "sha256:8ad4efe55b30960b44f630bea7fa1926fcbae17e806f4185a94ca31e9531e2d5",
+      "policyRevision": "encyclopedia-primary",
+      "sourceUseMode": "factual_reference_only",
+      "evidenceRef": "evidence/sources/homepage-source-e9e80b3d93cd2ba5e97c/meta.json"
+    }
+  ]
+}

@@ -15,6 +15,8 @@ const (
 	processJobSetEnvelopeDigest = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	processJobSetDigest         = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 	processActualTaskDigest     = "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+	processWorkerHostSetDigest  = "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	processWorkerFencingToken   = "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 )
 
 func TestMain(m *testing.M) {
@@ -40,6 +42,11 @@ func TestDataContentProcessExecutorRunsTypedWorkerBoundary(t *testing.T) {
 		JobSetEnvelopeDigest: processJobSetEnvelopeDigest,
 		JobSetDigest:         processJobSetDigest,
 		ActualTaskDigest:     processActualTaskDigest,
+		MaxAttempts:          3,
+		WorkerHostSetDigest:  processWorkerHostSetDigest,
+		WorkerHostGeneration: 2,
+		WorkerFencingToken:   processWorkerFencingToken,
+		WorkerHostScopeID:    "worker-host-a",
 	}
 	result, err := (DataContentProcessExecutor{
 		Command:     []string{os.Args[0], "-test.run=^TestDataContentProcessExecutorHelper$"},
@@ -85,6 +92,38 @@ func TestDataContentProcessExecutorIncludesOnlyProtocolWorkerDiagnostic(t *testi
 	}
 }
 
+func TestDataContentCanonicalResultRequiresPoolDeliveryIntentLineage(t *testing.T) {
+	item := DataContentWorkItem{
+		ExecutionID: "20260711--travel-homepage-cold-start--cn-test--scale-001",
+		JobID:       "job-publish-1",
+		Stage:       "publish",
+	}
+	result := DataContentExecutionResult{
+		ExecutionID:           item.ExecutionID,
+		JobID:                 item.JobID,
+		CanonicalObjectRef:    "entities/地点/景区/真实地点",
+		CanonicalObjectSHA256: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		ObjectTransactionID:   "transaction-1",
+		ResultEnvelopeRef:     "data/local/apply_report.json",
+		AcceptanceClass:       DataContentAcceptanceResearchCanonical,
+		CompletedAt:           time.Now().UTC(),
+	}
+	if err := result.validate(item); err == nil || !strings.Contains(err.Error(), "poolDeliveryIntentId") {
+		t.Fatalf("missing pool-delivery lineage was accepted: %v", err)
+	}
+	result.PoolDeliveryIntentID = "not-a-digest"
+	if err := result.validate(item); err == nil || !strings.Contains(err.Error(), "valid poolDeliveryIntentId") {
+		t.Fatalf("invalid pool-delivery lineage was accepted: %v", err)
+	}
+	result.PoolDeliveryIntentID = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	if err := result.validate(item); err != nil {
+		t.Fatalf("valid pool-delivery lineage rejected: %v", err)
+	}
+	if got := result.document()["poolDeliveryIntentId"]; got != result.PoolDeliveryIntentID {
+		t.Fatalf("pool-delivery lineage not persisted: %q", got)
+	}
+}
+
 func TestDataContentProcessExecutorHelper(t *testing.T) {
 	t.Helper()
 }
@@ -108,7 +147,12 @@ func runDataContentProcessExecutorHelper(mode string) int {
 	if mode == "valid" &&
 		(fmt.Sprint(item["jobSetEnvelopeDigest"]) != processJobSetEnvelopeDigest ||
 			fmt.Sprint(item["jobSetDigest"]) != processJobSetDigest ||
-			fmt.Sprint(item["actualTaskDigest"]) != processActualTaskDigest) {
+			fmt.Sprint(item["actualTaskDigest"]) != processActualTaskDigest ||
+			fmt.Sprint(item["maxAttempts"]) != "3" ||
+			fmt.Sprint(item["workerHostSetDigest"]) != processWorkerHostSetDigest ||
+			fmt.Sprint(item["workerHostGeneration"]) != "2" ||
+			fmt.Sprint(item["workerFencingToken"]) != processWorkerFencingToken ||
+			fmt.Sprint(item["workerHostScopeId"]) != "worker-host-a") {
 		return 8
 	}
 	response := map[string]any{

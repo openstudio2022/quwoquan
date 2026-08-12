@@ -18,8 +18,7 @@ from pathlib import Path
 
 from core.paths import DATA_CACHE_ROOT, REPO_ROOT
 
-_INPUT_ROOTS = (
-    "quwoquan_data/scripts",
+_SOURCE_DEFINITION_INPUT_ROOTS = (
     "quwoquan_data/schema",
     "quwoquan_data/control_plane",
     "quwoquan_data/prompts",
@@ -32,6 +31,18 @@ _INPUT_ROOTS = (
     "quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml",
     "quwoquan_service/services/recommendation-service/contracts/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml",
 )
+_EXECUTION_BUNDLE_INPUT_ROOTS = (
+    "quwoquan_data/scripts",
+    "quwoquan_data/requirements.txt",
+    "quwoquan_data/requirements-cursor.txt",
+    "quwoquan_ops/policies/branch_policy.yaml",
+    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/spec.md",
+    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md",
+    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md",
+)
+# Kept for terminal legacy evidence only. New candidates bind the two identities
+# separately so executor refactors do not pretend that content semantics changed.
+_INPUT_ROOTS = ("quwoquan_data/scripts", *_SOURCE_DEFINITION_INPUT_ROOTS)
 # Data execution identity is deliberately environment-neutral. Environment
 # topology and readiness policy apply only when an immutable release is shipped.
 _DIGEST_PREFIX = "sha256:"
@@ -140,9 +151,162 @@ class SourceDigest:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class ExecutionBundleIdentity:
+    """Immutable identity of the code/policy bundle that executes a snapshot."""
+
+    digest: str
+
+    @classmethod
+    def build(cls, *, repo_root: Path = REPO_ROOT) -> ExecutionBundleIdentity:
+        return cls(
+            digest=_digest_roots(
+                repo_root.expanduser().resolve(),
+                _EXECUTION_BUNDLE_INPUT_ROOTS,
+            )
+        )
+
+    @classmethod
+    def from_document(cls, value: object) -> ExecutionBundleIdentity:
+        if not isinstance(value, Mapping):
+            raise SourceDigestError("executionBundle must be an object")
+        if set(value) != {"algorithm", "digest", "inputs"}:
+            raise SourceDigestError("executionBundle fields are invalid")
+        if value.get("algorithm") != "sha256":
+            raise SourceDigestError("executionBundle.algorithm must be sha256")
+        digest = value.get("digest")
+        if not isinstance(digest, str) or not _is_sha256(digest):
+            raise SourceDigestError("executionBundle.digest must be a sha256 digest")
+        if tuple(value.get("inputs") or ()) != _EXECUTION_BUNDLE_INPUT_ROOTS:
+            raise SourceDigestError(
+                "executionBundle.inputs must name the fixed execution inputs"
+            )
+        return cls(digest=digest)
+
+    def to_document(self) -> dict[str, object]:
+        return {
+            "algorithm": "sha256",
+            "digest": self.digest,
+            "inputs": list(_EXECUTION_BUNDLE_INPUT_ROOTS),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SourceDefinitionSnapshot:
+    """Content-semantic and physical-source definitions frozen for a candidate."""
+
+    digest: str
+
+    @classmethod
+    def build(cls, *, repo_root: Path = REPO_ROOT) -> SourceDefinitionSnapshot:
+        return cls(
+            digest=_digest_roots(
+                repo_root.expanduser().resolve(),
+                _SOURCE_DEFINITION_INPUT_ROOTS,
+            )
+        )
+
+    @classmethod
+    def from_document(cls, value: object) -> SourceDefinitionSnapshot:
+        if not isinstance(value, Mapping):
+            raise SourceDigestError("sourceDigest must be an object")
+        if set(value) != {"algorithm", "digest", "inputs"}:
+            raise SourceDigestError("sourceDigest fields are invalid")
+        if value.get("algorithm") != "sha256":
+            raise SourceDigestError("sourceDigest.algorithm must be sha256")
+        digest = value.get("digest")
+        if not isinstance(digest, str) or not _is_sha256(digest):
+            raise SourceDigestError("sourceDigest.digest must be a sha256 digest")
+        if tuple(value.get("inputs") or ()) != _SOURCE_DEFINITION_INPUT_ROOTS:
+            raise SourceDigestError(
+                "sourceDigest.inputs must name the fixed source-definition inputs"
+            )
+        return cls(digest=digest)
+
+    def to_document(self) -> dict[str, object]:
+        return {
+            "algorithm": "sha256",
+            "digest": self.digest,
+            "inputs": list(_SOURCE_DEFINITION_INPUT_ROOTS),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class FrozenSourceDigest:
+    """A validated historical input closure bound to legacy object evidence."""
+
+    digest: str
+    inputs: tuple[str, ...]
+
+    @classmethod
+    def from_document(cls, value: object) -> FrozenSourceDigest:
+        if not isinstance(value, Mapping):
+            raise SourceDigestError("frozen sourceDigest must be an object")
+        if set(value) != {"algorithm", "digest", "inputs"}:
+            raise SourceDigestError("frozen sourceDigest fields are invalid")
+        if value.get("algorithm") != "sha256":
+            raise SourceDigestError("frozen sourceDigest.algorithm must be sha256")
+        digest = value.get("digest")
+        if not isinstance(digest, str) or not _is_sha256(digest):
+            raise SourceDigestError(
+                "frozen sourceDigest.digest must be a sha256 digest"
+            )
+        raw_inputs = value.get("inputs")
+        if not isinstance(raw_inputs, list) or not raw_inputs:
+            raise SourceDigestError("frozen sourceDigest.inputs must not be empty")
+        inputs = tuple(str(item or "").strip() for item in raw_inputs)
+        if (
+            any(
+                not item
+                or item.startswith("/")
+                or any(part in {".", ".."} for part in item.split("/"))
+                for item in inputs
+            )
+            or len(inputs) != len(set(inputs))
+        ):
+            raise SourceDigestError("frozen sourceDigest.inputs are invalid")
+        return cls(digest=digest, inputs=inputs)
+
+    def to_document(self) -> dict[str, object]:
+        return {
+            "algorithm": "sha256",
+            "digest": self.digest,
+            "inputs": list(self.inputs),
+        }
+
+
+def parse_source_digest_document(
+    value: object,
+    *,
+    frozen_digest_allowlist: frozenset[str] = frozenset(),
+) -> SourceDigest | FrozenSourceDigest:
+    """Parse current input truth or an explicitly bound historical closure."""
+    try:
+        return SourceDigest.from_document(value)
+    except SourceDigestError:
+        if (
+            not isinstance(value, Mapping)
+            or str(value.get("digest") or "") not in frozen_digest_allowlist
+        ):
+            raise
+        return FrozenSourceDigest.from_document(value)
+
+
 def current_source_digest(*, repo_root: Path = REPO_ROOT) -> SourceDigest:
     """Return the only source digest used by execution and release evidence."""
     return SourceDigest.build(repo_root=repo_root)
+
+
+def current_source_definition_snapshot(
+    *, repo_root: Path = REPO_ROOT
+) -> SourceDefinitionSnapshot:
+    return SourceDefinitionSnapshot.build(repo_root=repo_root)
+
+
+def current_execution_bundle_identity(
+    *, repo_root: Path = REPO_ROOT
+) -> ExecutionBundleIdentity:
+    return ExecutionBundleIdentity.build(repo_root=repo_root)
 
 
 def content_source_revision(
@@ -176,6 +340,23 @@ def _iter_files(root: Path) -> tuple[Path, ...]:
         for path in sorted(root.rglob("*"))
         if path.is_file() and not any(part in _EXCLUDED_PARTS for part in path.parts)
     )
+
+
+def _digest_roots(repo_root: Path, roots: tuple[str, ...]) -> str:
+    digest = hashlib.sha256()
+    for relative_root in roots:
+        root = repo_root / relative_root
+        if not root.exists():
+            raise SourceDigestError(
+                f"source identity input is missing: {relative_root}"
+            )
+        for path in _iter_files(root):
+            relative = path.relative_to(repo_root).as_posix()
+            digest.update(relative.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(_file_sha256(path).encode("ascii"))
+            digest.update(b"\n")
+    return _DIGEST_PREFIX + digest.hexdigest()
 
 
 def _file_sha256(path: Path) -> str:
@@ -267,8 +448,14 @@ def _is_sha256(value: str) -> bool:
 
 
 __all__ = [
+    "ExecutionBundleIdentity",
+    "FrozenSourceDigest",
     "SourceDigest",
+    "SourceDefinitionSnapshot",
     "SourceDigestError",
     "content_source_revision",
+    "current_execution_bundle_identity",
+    "current_source_definition_snapshot",
     "current_source_digest",
+    "parse_source_digest_document",
 ]

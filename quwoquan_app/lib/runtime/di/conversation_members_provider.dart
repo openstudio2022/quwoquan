@@ -9,12 +9,12 @@ import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 
 /// 会话成员及设置的 Notifier（family by conversationId）
-/// 提供乐观更新写操作，失败时自动回滚
+/// 所有治理写入均以 Remote 权威读回为成功边界。
 class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
   ConversationMembersNotifier(this._conversationId);
 
   final String _conversationId;
-  int _pendingWrites = 0;
+  int _loadGeneration = 0;
 
   ChatMemberRepository get _memberRepo =>
       ref.read(chatMemberRepositoryProvider);
@@ -28,12 +28,19 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
   ConversationMembersState build() {
     ref.watch(chatMemberRepositoryProvider);
     ref.watch(currentUserIdProvider);
-    Future<void>.microtask(load);
+    Future<void>.microtask(() async {
+      // 测试、route 或调用方可能在同一 event turn 显式请求加载；避免自动
+      // load 随后启动并把已 await 的请求标记为 stale。
+      if (_loadGeneration == 0) {
+        await load();
+      }
+    });
     return ConversationMembersState(isLoading: true);
   }
 
   /// 加载成员列表和群组设置
-  Future<void> load() async {
+  Future<bool> load() async {
+    final generation = ++_loadGeneration;
     state = state.copyWith(isLoading: true, error: null);
     try {
       final results = await Future.wait([
@@ -44,8 +51,7 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
         ),
         _adminRepo.getGroupSettings(_conversationId),
       ]);
-      // 若有乐观写操作进行中，跳过覆盖，避免竞态
-      if (_pendingWrites > 0) return;
+      if (generation != _loadGeneration) return false;
       final raw = results[0] as List<ConversationMemberListRow>;
       final members = raw
           .map(
@@ -61,43 +67,63 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
         groupSettings: results[1] as ChatGroupSettingsViewData,
         isLoading: false,
       );
+      return true;
     } catch (e) {
+      if (generation != _loadGeneration) return false;
       state = state.copyWith(
         isLoading: false,
         error: runtimeErrorDisplayMessage(e),
       );
+      return false;
     }
   }
 
-  /// 乐观更新管理员列表；失败时回滚
-  Future<void> updateGroupAdmins(List<String> adminIds) async {
-    final previous = state;
-    _pendingWrites++;
-    state = state.copyWith(members: _applyAdminChange(state.members, adminIds));
-    try {
-      await _adminRepo.updateGroupAdmins(_conversationId, adminIds);
-    } catch (e) {
-      state = previous;
-      rethrow;
-    } finally {
-      _pendingWrites--;
-    }
-  }
-
-  /// 乐观更新群主转让；失败时回滚
-  Future<void> transferOwnership(String newOwnerId) async {
-    final previous = state;
-    _pendingWrites++;
-    state = state.copyWith(
-      members: _applyOwnerTransfer(state.members, newOwnerId),
+  /// 发送同一幂等意图，并以完整 Remote roster 读回作为唯一成功判定。
+  Future<void> updateGroupAdmins(
+    List<String> adminIds, {
+    required String idempotencyKey,
+  }) async {
+    final expected = adminIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    await _adminRepo.updateGroupAdmins(
+      _conversationId,
+      expected.toList(growable: false),
+      idempotencyKey: idempotencyKey,
     );
-    try {
-      await _adminRepo.transferOwnership(_conversationId, newOwnerId);
-    } catch (e) {
-      state = previous;
-      rethrow;
-    } finally {
-      _pendingWrites--;
+    if (!await load()) {
+      throw StateError('group admin authoritative readback failed');
+    }
+    final actual = state.members
+        .where((member) => member.role == 'admin')
+        .map((member) => member.userId)
+        .toSet();
+    if (!_sameIdentitySet(actual, expected)) {
+      throw StateError('group admin authoritative readback did not converge');
+    }
+  }
+
+  /// 转让仅在 Remote roster 读回恰好一个目标 owner 后成功。
+  Future<void> transferOwnership(
+    String newOwnerId, {
+    required String idempotencyKey,
+  }) async {
+    final target = newOwnerId.trim();
+    await _adminRepo.transferOwnership(
+      _conversationId,
+      target,
+      idempotencyKey: idempotencyKey,
+    );
+    if (!await load()) {
+      throw StateError('ownership authoritative readback failed');
+    }
+    final owners = state.members
+        .where((member) => member.role == 'owner')
+        .map((member) => member.userId)
+        .toList(growable: false);
+    if (owners.length != 1 || owners.single != target) {
+      throw StateError('ownership authoritative readback did not converge');
     }
   }
 
@@ -106,15 +132,24 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
     await _conversationRepo.updateConversationTitle(_conversationId, newTitle);
   }
 
-  /// 乐观更新群组设置；失败时回滚
-  Future<void> updateGroupSettings(ChatGroupSettingsViewData next) async {
-    final previous = state;
-    state = state.copyWith(groupSettings: next);
-    try {
-      await _adminRepo.updateGroupSettings(_conversationId, next);
-    } catch (e) {
-      state = previous;
-      rethrow;
+  /// 设置变更以 Remote Conversation 读回收敛为成功，不安装本地乐观真相。
+  Future<void> updateGroupSettings(
+    ChatGroupSettingsViewData next, {
+    required String idempotencyKey,
+  }) async {
+    await _adminRepo.updateGroupSettings(
+      _conversationId,
+      next,
+      idempotencyKey: idempotencyKey,
+    );
+    if (!await load()) {
+      throw StateError('group settings authoritative readback failed');
+    }
+    if (state.groupSettings.nameEditableByAdminOnly !=
+        next.nameEditableByAdminOnly) {
+      throw StateError(
+        'group settings authoritative readback did not converge',
+      );
     }
   }
 
@@ -145,35 +180,10 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
   Future<void> updateAnnouncement(String announcement) async {
     await _adminRepo.updateAnnouncement(_conversationId, announcement);
   }
-
-  static List<ConversationMemberListRow> _applyAdminChange(
-    List<ConversationMemberListRow> members,
-    List<String> adminIds,
-  ) {
-    return members.map((m) {
-      if (m.role == 'owner') return m;
-      return _copyMember(
-        m,
-        role: adminIds.contains(m.userId) ? 'admin' : 'member',
-      );
-    }).toList();
-  }
-
-  static List<ConversationMemberListRow> _applyOwnerTransfer(
-    List<ConversationMemberListRow> members,
-    String newOwnerId,
-  ) {
-    return members.map((m) {
-      if (m.isCurrentUser) {
-        return _copyMember(m, role: 'member');
-      }
-      if (m.userId == newOwnerId) {
-        return _copyMember(m, role: 'owner');
-      }
-      return m;
-    }).toList();
-  }
 }
+
+bool _sameIdentitySet(Set<String> left, Set<String> right) =>
+    left.length == right.length && left.containsAll(right);
 
 ConversationMemberListRow _copyMember(
   ConversationMemberListRow source, {

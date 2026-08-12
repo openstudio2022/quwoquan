@@ -180,7 +180,7 @@ func buildMediaRuntime(
 	if processorErr != nil {
 		log.Fatalf("content-service media processing pipeline unavailable: %v", processorErr)
 	}
-	mediaProcessingWorker := mediaprocessing.NewWorker(
+	mediaProcessingHandler := mediaprocessing.NewMediaProcessingHandler(
 		mediaStore,
 		mediaStore,
 		mediaStore,
@@ -195,12 +195,12 @@ func buildMediaRuntime(
 		workerInterval = 2 * time.Second
 	}
 	go func() {
-		if err := mediaProcessingWorker.Run(ctx, workerInterval); err != nil && ctx.Err() == nil {
+		if err := mediaProcessingHandler.Run(ctx, workerInterval); err != nil && ctx.Err() == nil {
 			logger.Error("content media processing worker stopped", "error", err)
 		}
 	}()
 	healthChecker.Register("content_media_processing_worker", func(_ context.Context) error {
-		return mediaProcessingWorker.Ready(15 * time.Minute)
+		return mediaProcessingHandler.Ready(15 * time.Minute)
 	})
 	log.Printf("content-service media processing worker enabled interval=%s", workerInterval)
 

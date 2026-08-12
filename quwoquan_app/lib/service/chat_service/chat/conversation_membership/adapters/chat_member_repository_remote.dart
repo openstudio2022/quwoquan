@@ -19,6 +19,7 @@ final class RemoteChatMemberRepository implements ChatMemberRepository {
   final ChatConversationMembershipQuery _memberSearchQuery;
   final ChatConversationMembershipCommandWriter _membershipCommandWriter;
   final String Function() _idempotencyKeyFactory;
+  static const int _maximumMemberPages = 20;
 
   String _idempotencyKey() {
     final value = _idempotencyKeyFactory().trim();
@@ -36,16 +37,14 @@ final class RemoteChatMemberRepository implements ChatMemberRepository {
     String? role,
     String? sort,
   }) async {
-    final page = await _membershipQuery.listMembers(
-      ChatListConversationMembersQuery(
-        conversationId: conversationId,
-        cursor: cursor,
-        limit: limit,
-        role: role,
-        sort: sort ?? 'joined_asc',
-      ),
+    return _listEveryMemberPage(
+      query: _membershipQuery,
+      conversationId: conversationId,
+      cursor: cursor,
+      limit: limit,
+      role: role,
+      sort: sort ?? 'joined_asc',
     );
-    return page.items;
   }
 
   @override
@@ -54,15 +53,65 @@ final class RemoteChatMemberRepository implements ChatMemberRepository {
     required String query,
     int limit = ChatListConversationMembersQuery.maximumLimit,
   }) async {
-    final page = await _memberSearchQuery.listMembers(
-      ChatListConversationMembersQuery(
-        conversationId: conversationId,
-        query: query.trim(),
-        limit: limit.clamp(1, ChatListConversationMembersQuery.maximumLimit),
-        sort: 'display_name_asc',
-      ),
+    return _listEveryMemberPage(
+      query: _memberSearchQuery,
+      conversationId: conversationId,
+      limit: limit,
+      searchQuery: query.trim(),
+      sort: 'display_name_asc',
     );
-    return page.items;
+  }
+
+  Future<List<ConversationMemberListRow>> _listEveryMemberPage({
+    required ChatConversationMembershipQuery query,
+    required String conversationId,
+    String? cursor,
+    required int limit,
+    String? role,
+    required String sort,
+    String? searchQuery,
+  }) async {
+    var nextCursor = cursor?.trim() ?? '';
+    final seenCursors = <String>{if (nextCursor.isNotEmpty) nextCursor};
+    final membersByID = <String, ConversationMemberListRow>{};
+    final pageLimit = limit.clamp(
+      1,
+      ChatListConversationMembersQuery.maximumLimit,
+    );
+    for (var pageIndex = 0; pageIndex < _maximumMemberPages; pageIndex++) {
+      final page = await query.listMembers(
+        ChatListConversationMembersQuery(
+          conversationId: conversationId,
+          cursor: nextCursor.isEmpty ? null : nextCursor,
+          limit: pageLimit,
+          role: role,
+          sort: sort,
+          query: searchQuery?.isEmpty == true ? null : searchQuery,
+        ),
+      );
+      for (final member in page.items) {
+        final memberID = member.userId.trim();
+        if (memberID.isEmpty || membersByID.containsKey(memberID)) {
+          throw const FormatException(
+            'ListMembers returned an empty or duplicate member identity',
+          );
+        }
+        membersByID[memberID] = member;
+      }
+      final candidate = page.nextCursor?.trim() ?? '';
+      if (candidate.isEmpty) {
+        return List<ConversationMemberListRow>.unmodifiable(membersByID.values);
+      }
+      if (!seenCursors.add(candidate)) {
+        throw const FormatException(
+          'ListMembers returned a cyclic cursor progression',
+        );
+      }
+      nextCursor = candidate;
+    }
+    throw const FormatException(
+      'ListMembers exceeded the bounded pagination window',
+    );
   }
 
   @override

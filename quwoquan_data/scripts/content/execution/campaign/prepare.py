@@ -11,6 +11,7 @@ from typing import Any
 from core import paths
 from core.io import read_json
 from core.source_digest import current_source_digest
+
 from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.request_envelope import (
     normalize_execution_scope,
@@ -18,12 +19,11 @@ from content.execution.campaign.request_envelope import (
 )
 from content.execution.campaign.scale import (
     campaign_workload_targets,
-    resolve_campaign_scale,
 )
-from content.execution.model_contract import SEMANTIC_SELECTION_IDS
 from content.execution.controller.execute.pre_acquisition_handoff import (
     write_pre_acquisition_handoff,
 )
+from content.execution.model_contract import SEMANTIC_SELECTION_IDS
 from content.execution.workspace import entity_catalog_digest
 
 
@@ -100,6 +100,14 @@ def _summary(paths: dict[str, Path]) -> dict[str, Any]:
             "--stage",
             "submit-only",
         ]
+        host_binding = envelope.get("workerHostSetBinding")
+        if isinstance(host_binding, dict):
+            command.extend(
+                [
+                    "--worker-host-set-binding-json",
+                    json.dumps(host_binding, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+                ]
+            )
         if envelope.get("retryOf"):
             command.extend(["--retry-of", str(envelope["retryOf"])])
         if envelope.get("topic"):
@@ -154,6 +162,7 @@ def _summary(paths: dict[str, Path]) -> dict[str, Any]:
         "preAcquisitionHandoff": homepage["preAcquisitionHandoff"],
         "semanticSelectionId": homepage["semanticSelectionId"],
         "semanticPreflightReceipt": homepage["semanticPreflightReceipt"],
+        "m100AlphaAcceptance": homepage.get("m100AlphaAcceptance"),
         "articleExternalInputMode": "execution_source_unit_freeze",
         "envelopes": {
             carrier: {
@@ -201,11 +210,14 @@ def _require_phase_args(args: argparse.Namespace) -> None:
             for name in (
                 "handoff_ref",
                 "semantic_preflight_receipt",
+                "capacity_host_set",
                 "homepage_image_input",
                 "image_input",
                 "video_input",
                 "predecessor_reconciliation_receipt",
                 "promotion_receipt",
+                "alpha_m100_readiness_receipt",
+                "alpha_m100_app_uat_receipt",
                 "scale_source_pool",
                 "source_pool_evidence_root",
             )
@@ -262,12 +274,32 @@ def _require_phase_args(args: argparse.Namespace) -> None:
         getattr(args, "scale_source_pool", None),
         getattr(args, "source_pool_evidence_root", None),
     )
-    if scale in {"M100", "M1000", "M10000"} and not all(pool_values):
+    if any(pool_values) and not all(pool_values):
         raise ValueError(
-            "M100+ envelopes require --scale-source-pool and --source-pool-evidence-root"
+            "--scale-source-pool and --source-pool-evidence-root must be provided together"
+        )
+    if scale == "M10000" and not all(pool_values):
+        raise ValueError(
+            "M10000 envelopes require --scale-source-pool and --source-pool-evidence-root"
         )
     if scale not in {"M100", "M1000", "M10000"} and any(pool_values):
         raise ValueError("below-M100 envelopes forbid scale source pool inputs")
+    host_set = getattr(args, "capacity_host_set", None)
+    if scale == "M10000" and not host_set:
+        raise ValueError("M10000 envelopes require --capacity-host-set")
+    if scale not in {"M1000", "M10000"} and host_set:
+        raise ValueError("non-governed-scale envelopes forbid --capacity-host-set")
+    alpha_receipts = (
+        getattr(args, "alpha_m100_readiness_receipt", None),
+        getattr(args, "alpha_m100_app_uat_receipt", None),
+    )
+    if scale == "M1000" and not all(alpha_receipts):
+        raise ValueError(
+            "M1000 envelopes require --alpha-m100-readiness-receipt and "
+            "--alpha-m100-app-uat-receipt"
+        )
+    if scale != "M1000" and any(alpha_receipts):
+        raise ValueError("only M1000 envelopes accept M100 Alpha receipts")
 
 
 def _workload_targets(scale: str) -> dict[str, int]:
@@ -287,7 +319,15 @@ def _handle_handoff(args: argparse.Namespace) -> None:
     )
     if not discovery.is_dir():
         raise ValueError(f"region reference does not exist: {region_ref}")
-    source = current_source_digest(repo_root=repo_root).to_document()
+    from core.source_digest import (
+        current_execution_bundle_identity,
+        current_source_definition_snapshot,
+    )
+
+    source = current_source_definition_snapshot(repo_root=repo_root).to_document()
+    execution_bundle = current_execution_bundle_identity(
+        repo_root=repo_root
+    ).to_document()
     handoff, handoff_path = write_pre_acquisition_handoff(
         handoff_id=str(args.handoff_id),
         handoff_revision=int(args.handoff_revision),
@@ -309,6 +349,7 @@ def _handle_handoff(args: argparse.Namespace) -> None:
             else None
         ),
         source_digest=source,
+        execution_bundle=execution_bundle,
         entity_catalog_digest=entity_catalog_digest(
             discovery.relative_to(repo_root).as_posix()
         ),
@@ -357,6 +398,11 @@ def _handle_envelopes(args: argparse.Namespace) -> None:
         sequence=int(args.sequence),
         semantic_selection_id=str(args.semantic_selection_id),
         semantic_preflight_receipt=preflight,
+        capacity_host_set=(
+            Path(str(args.capacity_host_set)).expanduser().resolve()
+            if str(getattr(args, "capacity_host_set", "") or "").strip()
+            else None
+        ),
         predecessor_execution_ids_by_carrier=_retry_predecessors(args),
         predecessor_reconciliation_receipt=(
             Path(str(args.predecessor_reconciliation_receipt))
@@ -368,6 +414,16 @@ def _handle_envelopes(args: argparse.Namespace) -> None:
         promotion_receipt=(
             Path(str(args.promotion_receipt)).expanduser().resolve()
             if str(args.promotion_receipt or "").strip()
+            else None
+        ),
+        alpha_m100_readiness_receipt=(
+            Path(str(args.alpha_m100_readiness_receipt)).expanduser().resolve()
+            if str(args.alpha_m100_readiness_receipt or "").strip()
+            else None
+        ),
+        alpha_m100_app_uat_receipt=(
+            Path(str(args.alpha_m100_app_uat_receipt)).expanduser().resolve()
+            if str(args.alpha_m100_app_uat_receipt or "").strip()
             else None
         ),
         pre_acquisition_handoff=Path(str(args.handoff_ref))
@@ -430,8 +486,11 @@ def register_prepare_campaign_parser(sub: argparse._SubParsersAction) -> None:
     parser.add_argument("--campaign-retry-of")
     parser.add_argument("--handoff-ref")
     parser.add_argument("--semantic-preflight-receipt")
+    parser.add_argument("--capacity-host-set")
     parser.add_argument("--predecessor-reconciliation-receipt")
     parser.add_argument("--promotion-receipt")
+    parser.add_argument("--alpha-m100-readiness-receipt")
+    parser.add_argument("--alpha-m100-app-uat-receipt")
     parser.add_argument("--scale-source-pool")
     parser.add_argument("--source-pool-evidence-root")
     for carrier in CAMPAIGN_CARRIERS:

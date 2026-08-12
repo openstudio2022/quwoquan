@@ -168,6 +168,7 @@ func principalFromClaims(claims Claims) Principal {
 	case TokenTypeAccess:
 		actor.AccountID = strings.TrimSpace(claims.Subject)
 		actor.PersonaID = strings.TrimSpace(claims.Persona)
+		actor.DeviceActorID = strings.TrimSpace(claims.DeviceActorID)
 	case TokenTypeDevice:
 		actor.DeviceActorID = strings.TrimSpace(claims.DeviceActorID)
 	}

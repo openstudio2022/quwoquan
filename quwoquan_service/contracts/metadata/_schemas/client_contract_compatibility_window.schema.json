@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/client_contract_compatibility_window.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "baselineContractGraphDigest",
+    "minimumSupportedBuilds",
+    "operations"
+  ],
+  "properties": {
+    "schema": { "const": "client-contract-compatibility-window" },
+    "baselineContractGraphDigest": { "$ref": "#/$defs/digest" },
+    "minimumSupportedBuilds": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "enum": ["android", "ios", "web"] },
+      "additionalProperties": { "type": "integer", "minimum": 1 }
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operationId",
+          "windowClosed",
+          "usageCount",
+          "affectedAppBuilds"
+        ],
+        "properties": {
+          "operationId": { "type": "string", "minLength": 1 },
+          "windowClosed": { "type": "boolean" },
+          "usageCount": { "type": "integer", "minimum": 0 },
+          "affectedAppBuilds": {
+            "type": "object",
+            "minProperties": 1,
+            "propertyNames": { "enum": ["android", "ios", "web"] },
+            "additionalProperties": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

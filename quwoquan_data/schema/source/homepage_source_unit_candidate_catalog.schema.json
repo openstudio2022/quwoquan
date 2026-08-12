@@ -70,6 +70,7 @@
         "assetId", "entityRef", "observedEntityRef", "sourceUnitRef", "sourceUnitDigest",
         "assetRef", "originalAssetUrl", "sourcePageUrl", "platform", "provider", "creator",
         "capturedAt", "contentSha256", "license", "termsUrl", "authorizationProof",
+        "usageScope", "modelReleaseStatus",
         "authorizationRequired", "rightsStatus", "rightsIssues", "acquisitionStatus",
         "distributionDecision", "qualityStatus", "safetyStatus", "generated", "accessEvidence"
       ],
@@ -90,6 +91,8 @@
         "license": {"type": "string", "minLength": 1},
         "termsUrl": {"type": "string", "pattern": "^https://"},
         "authorizationProof": {"type": "string"},
+        "usageScope": {"enum": ["internal_reference", "app_publish", "editorial"]},
+        "modelReleaseStatus": {"enum": ["not_required", "obtained", "editorial_only"]},
         "authorizationRequired": {"type": "boolean"},
         "rightsStatus": {"enum": ["verified", "unverified", "unknown"]},
         "rightsIssues": {"type": "array", "items": {"type": "string", "minLength": 1}},
@@ -133,7 +136,7 @@
       "additionalProperties": false,
       "required": [
         "candidateId", "entityRef", "observedEntityRef", "sourceRevision", "sourceDigest",
-        "entityCatalogDigest", "primarySource", "structuredFacts", "factEvidence",
+        "entityCatalogDigest", "sourceAttribution", "primarySource", "structuredFacts", "factEvidence",
         "factConflicts", "hero"
       ],
       "properties": {
@@ -143,6 +146,7 @@
         "sourceRevision": {"$ref": "#/$defs/sha256"},
         "sourceDigest": {"$ref": "#/$defs/sha256"},
         "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "sourceAttribution": {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"},
         "primarySource": {"$ref": "#/$defs/primarySource"},
         "structuredFacts": {"$ref": "../publish/entity.schema.json#/properties/structuredFacts"},
         "factEvidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/factEvidence"}},

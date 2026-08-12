@@ -33,6 +33,7 @@ type DomainEvent struct {
 // SupportedEventTypes lists all event types published by the chat service.
 var SupportedEventTypes = []string{
 	conversationevent.ConversationCreated,
+	conversationevent.CircleGroupConversationProvisioned,
 	conversationevent.ConversationRosterUpdated,
 	conversationevent.GatheringConversationPolicyChanged,
 	conversationevent.ConversationAvatarUpdated,

@@ -6,6 +6,34 @@ import (
 	"testing"
 )
 
+func TestPrivacySettings_DefaultBlockedKeywordsIsArray(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "settings_user_default", "settings_user_default")
+
+	getRec := doRequest(
+		t,
+		http.MethodGet,
+		"/user/settings/privacy",
+		"",
+		authHeaders("settings_user_default"),
+	)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf(
+			"get default privacy settings: expected 200, got %d: %s",
+			getRec.Code,
+			getRec.Body.String(),
+		)
+	}
+	body := parseJSON(t, getRec)
+	blocked, ok := body["blockedKeywords"].([]any)
+	if !ok || len(blocked) != 0 {
+		t.Fatalf(
+			"expected default blockedKeywords empty array, got %#v",
+			body["blockedKeywords"],
+		)
+	}
+}
+
 func TestPrivacySettings_BlockedKeywordsRoundTrip(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "settings_user_1", "settings_user_1")

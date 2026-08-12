@@ -45,7 +45,7 @@ class HostedReleaseStageReportTest(unittest.TestCase):
             "service": self.service,
             "fromCandidateDigest": self.from_candidate,
             "toCandidateDigest": candidate or self.candidate,
-            "step": {"gray-initial": 5, "carry-on": 25, "full": 100}[stage],
+            "step": {"canary": 0, "5": 5, "20": 20, "50": 50, "100": 100}[stage],
             "stage": stage,
             "triggerStage": trigger_stage or stage,
             "fromReleaseEvidenceRef": (
@@ -95,7 +95,7 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                 }
             ],
             "lastGoodCandidateDigest": (
-                self.candidate if stage == "full" else self.from_candidate
+                self.candidate if stage == "100" else self.from_candidate
             ),
             "verifiedAt": "2026-07-28T00:10:00Z",
             "receiptId": "",
@@ -121,7 +121,7 @@ class HostedReleaseStageReportTest(unittest.TestCase):
             receipt["lastGoodCandidateDigest"] = self.from_candidate
         else:
             receipt = self._receipt(
-                "full",
+                "100",
                 decision="rolled_back",
                 rollback_outcome="rolled_back",
                 trigger_stage=stage,
@@ -193,25 +193,25 @@ class HostedReleaseStageReportTest(unittest.TestCase):
         self.assertEqual(sealed["environment"]["status"], "passed")
         self.assertEqual(sealed["rollout"]["status"], "passed")
         self.assertEqual(sealed["rollback"]["status"], "not_triggered")
-        self.assertTrue(reports["full"][1]["replayed"])
+        self.assertTrue(reports["100"][1]["replayed"])
         self.assertEqual(
-            reports["full"][1]["projectionPurpose"], "terminal-sealing-only"
+            reports["100"][1]["projectionPurpose"], "terminal-sealing-only"
         )
         self.assertEqual(
-            reports["full"][1]["sourceAuthority"], lifecycle.HOSTED_AUTHORITY
+            reports["100"][1]["sourceAuthority"], lifecycle.HOSTED_AUTHORITY
         )
 
     def test_hosted_rollback_receipt_replays_without_a_local_stage_report(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            gray_receipt = self._receipt("gray-initial")
-            rollback_receipt = self._rollback_receipt("carry-on")
+            gray_receipt = self._receipt("canary")
+            rollback_receipt = self._rollback_receipt("5")
             reports = {}
             readbacks = {}
             with patch.object(stage_report, "validate_manifest"):
                 for stage, receipt in (
-                    ("gray-initial", gray_receipt),
-                    ("carry-on", rollback_receipt),
+                    ("canary", gray_receipt),
+                    ("5", rollback_receipt),
                 ):
                     readback = self._readback(receipt)
                     report = stage_report.render(
@@ -249,8 +249,8 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                     rollback_budget_seconds=300,
                 )
 
-        replay = reports["carry-on"][1]
-        self.assertEqual(replay["terminalStage"], "full")
+        replay = reports["5"][1]
+        self.assertEqual(replay["terminalStage"], "100")
         self.assertEqual(replay["rolloutDecision"], "rollback")
         self.assertEqual(replay["rollback"]["durationMs"], 60_000)
         self.assertEqual(replay["rollbackPostChecks"][0]["exitCode"], 0)
@@ -258,25 +258,25 @@ class HostedReleaseStageReportTest(unittest.TestCase):
         self.assertEqual(sealed["rollback"]["status"], "rolled_back")
 
     def test_hosted_rollback_failure_projects_its_real_terminal_evidence(self) -> None:
-        receipt = self._rollback_receipt("carry-on", failed=True)
+        receipt = self._rollback_receipt("5", failed=True)
         with patch.object(stage_report, "validate_manifest"):
             report = stage_report.render(
                 manifest=self._manifest(),
                 stage_readback=self._readback(receipt),
-                stage="carry-on",
+                stage="5",
                 service=self.service,
             )
 
         self.assertNotEqual(report["exitCode"], 0)
-        self.assertEqual(report["terminalStage"], "carry-on")
+        self.assertEqual(report["terminalStage"], "5")
         self.assertEqual(report["rollback"]["durationMs"], 60_000)
         self.assertEqual(report["rollbackPostChecks"][0]["exitCode"], 1)
 
     def test_hosted_rollback_replay_rejects_budget_or_stable_candidate_drift(self) -> None:
-        over_budget = self._rollback_receipt("carry-on")
+        over_budget = self._rollback_receipt("5")
         over_budget["rollbackEvidence"]["durationMs"] = 300_001
         over_budget["receiptId"] = lifecycle._receipt_id(over_budget)
-        stable_drift = self._rollback_receipt("carry-on")
+        stable_drift = self._rollback_receipt("5")
         stable_drift["lastGoodCandidateDigest"] = "sha256:" + "9" * 64
         stable_drift["receiptId"] = lifecycle._receipt_id(stable_drift)
 
@@ -288,15 +288,15 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                     stage_report.render(
                         manifest=self._manifest(),
                         stage_readback=self._readback(receipt),
-                        stage="carry-on",
+                        stage="5",
                         service=self.service,
                     )
 
     def test_pause_rollback_and_failed_postcheck_cannot_project_success(self) -> None:
         cases = (
-            self._receipt("carry-on", decision="pause"),
-            self._receipt("carry-on", rollback_outcome="rolled_back"),
-            self._receipt("carry-on"),
+            self._receipt("5", decision="pause"),
+            self._receipt("5", rollback_outcome="rolled_back"),
+            self._receipt("5"),
         )
         cases[2]["postChecks"][0]["status"] = "failed"
         cases[2]["receiptId"] = lifecycle._receipt_id(cases[2])
@@ -309,16 +309,16 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                     stage_report.render(
                         manifest=self._manifest(),
                         stage_readback=self._readback(receipt),
-                        stage="carry-on",
+                        stage="5",
                         service=self.service,
                     )
 
     def test_candidate_artifact_stage_and_trigger_drift_are_rejected(self) -> None:
         mismatches = (
-            self._receipt("gray-initial", candidate="sha256:" + "6" * 64),
-            self._receipt("gray-initial", artifact="sha256:" + "7" * 64),
-            self._receipt("carry-on"),
-            self._receipt("gray-initial", trigger_stage="full"),
+            self._receipt("canary", candidate="sha256:" + "6" * 64),
+            self._receipt("canary", artifact="sha256:" + "7" * 64),
+            self._receipt("5"),
+            self._receipt("canary", trigger_stage="100"),
         )
         with patch.object(stage_report, "validate_manifest"):
             for receipt in mismatches:
@@ -328,12 +328,12 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                     stage_report.render(
                         manifest=self._manifest(),
                         stage_readback=self._readback(receipt),
-                        stage="gray-initial",
+                        stage="canary",
                         service=self.service,
                     )
 
     def test_hosted_readback_authority_and_receipt_identity_are_reused(self) -> None:
-        receipt = self._receipt("gray-initial")
+        receipt = self._receipt("canary")
         readback = self._readback(receipt)
         readback["authority"] = "runner-local"
         with patch.object(stage_report, "validate_manifest"), self.assertRaisesRegex(
@@ -342,7 +342,7 @@ class HostedReleaseStageReportTest(unittest.TestCase):
             stage_report.render(
                 manifest=self._manifest(),
                 stage_readback=readback,
-                stage="gray-initial",
+                stage="canary",
                 service=self.service,
             )
 
@@ -352,7 +352,7 @@ class HostedReleaseStageReportTest(unittest.TestCase):
             manifest = self._write(root / "manifest.json", self._manifest())
             readback = self._write(
                 root / "readback.json",
-                self._readback(self._receipt("gray-initial")),
+                self._readback(self._receipt("canary")),
             )
             output = root / "stage-report.json"
             argv = [
@@ -362,7 +362,7 @@ class HostedReleaseStageReportTest(unittest.TestCase):
                 "--stage-readback",
                 str(readback),
                 "--stage",
-                "gray-initial",
+                "canary",
                 "--service",
                 self.service,
                 "--output",

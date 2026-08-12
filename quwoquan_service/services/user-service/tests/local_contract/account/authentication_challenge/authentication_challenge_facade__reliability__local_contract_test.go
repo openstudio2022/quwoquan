@@ -266,6 +266,20 @@ func (store *fakeAuthenticationChallengeStore) LoadLatest(
 	return latest, found, nil
 }
 
+func (store *fakeAuthenticationChallengeStore) LoadByDeliveryRequestID(
+	_ context.Context,
+	requestID string,
+) (challengemodel.AuthenticationChallenge, bool, error) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	for _, challenge := range store.byID {
+		if challenge.Snapshot().DeliveryRequestID == requestID {
+			return challenge, true, nil
+		}
+	}
+	return challengemodel.AuthenticationChallenge{}, false, nil
+}
+
 func (store *fakeAuthenticationChallengeStore) Commit(
 	_ context.Context,
 	expectedVersion int64,

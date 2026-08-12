@@ -303,29 +303,26 @@ class MediaPublicationLifecycleProbeContractTest(unittest.TestCase):
         )
 
     def test_media_viewer_uses_second_candidate_bound_account(self) -> None:
-        expected = probe_support.LocalAcceptanceSession(
-            owner_id="acceptance-viewer",
-            persona_id="acceptance-viewer",
-            access_token="token",
-        )
-        with mock.patch.object(
-            probe_support,
-            "open_reference_acceptance_session",
-            return_value=expected,
-        ) as open_session:
+        with mock.patch.dict(
+            probe_support.os.environ,
+            {
+                "QWQ_TEST_DATA_MEMBER_OWNER_ID": "acceptance-viewer-owner",
+                "QWQ_TEST_DATA_MEMBER_PERSONA_ID": "acceptance-viewer-persona",
+                "QWQ_TEST_DATA_MEMBER_ACCESS_TOKEN": "viewer-token",
+                "QWQ_TEST_DATA_MEMBER_REFRESH_TOKEN": "viewer-refresh-token",
+            },
+            clear=False,
+        ):
             actual = probe_support.media_viewer_session(
                 environment="beta",
                 base_url="https://api.beta.example.invalid",
                 target_name="beta-local",
             )
 
-        self.assertEqual(actual.owner_id, expected.owner_id)
-        self.assertEqual(actual.persona_id, expected.persona_id)
-        self.assertEqual(
-            open_session.call_args.kwargs["actor_index"],
-            1,
-        )
-        self.assertNotIn("profile", open_session.call_args.kwargs)
+        self.assertEqual(actual.owner_id, "acceptance-viewer-owner")
+        self.assertEqual(actual.persona_id, "acceptance-viewer-persona")
+        self.assertEqual(actual.access_token, "viewer-token")
+        self.assertEqual(actual.refresh_token, "viewer-refresh-token")
 
     def test_moderation_operator_uses_dedicated_least_privilege_profile(self) -> None:
         expected = probe_support.LocalAcceptanceSession(

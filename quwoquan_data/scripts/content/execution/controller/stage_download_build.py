@@ -1,73 +1,60 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
+
 from core.control_types import ExecutionStage, StageStatus
 from core.data_issue import DataIssue
+
+from content.execution.controller.stage_download_issue_routing import (
+    media_validation_fallback,
+    source_digest_drift_issue,
+    typed_media_validation_issues,
+)
 from content.execution.diagnostics import unexpected_stage_issue
+from content.execution.support import (
+    AUTO,
+    Any,
+    DataIssueCode,
+    DataIssueStage,
+    DataRecoveryAction,
+    ExecutionContext,
+    Mapping,
+    StageResult,
+    _active_spec,
+    _entity_homepages_per_target,
+    _prune_inactive_entity_homepage_artifacts,
+    data_issue,
+    issue_messages,
+    stage_issues,
+)
 from content.execution.workspace import ExecutionSourceDigestDriftError
-from content.execution.support import AUTO, Any, DataIssueCode, DataIssueStage, DataRecoveryAction, ExecutionContext, Mapping, StageResult, _active_spec, _entity_homepages_per_target, _prune_inactive_entity_homepage_artifacts, data_issue, issue_messages, stage_issues
-
-_MEDIA_RECOVERY_BY_CODE = {
-    DataIssueCode.MEDIA_ENUMERATION_INCOMPLETE: DataRecoveryAction.REWIND_DOWNLOAD,
-    DataIssueCode.MEDIA_DOWNLOAD_INCOMPLETE: DataRecoveryAction.REWIND_DOWNLOAD,
-    DataIssueCode.MEDIA_CAPTION_INVALID: DataRecoveryAction.REWIND_COMPOSE,
-    DataIssueCode.MEDIA_COVER_CONFLICT: DataRecoveryAction.REWIND_COMPOSE,
-}
-
-
-def _typed_media_validation_issues(
-    media_report: Mapping[str, Any],
-) -> tuple[DataIssue, ...]:
-    return tuple(
-        DataIssue(
-            code=issue.code,
-            stage=DataIssueStage.BUILD_VALIDATE,
-            message=issue.message,
-            ref=issue.ref,
-            lane=issue.lane,
-            recovery=_MEDIA_RECOVERY_BY_CODE.get(issue.code, DataRecoveryAction.STOP),
-            attributes=issue.attributes,
-        )
-        for issue in (
-            DataIssue.from_dict(row)
-            for row in (media_report.get("issues") or [])
-            if isinstance(row, Mapping)
-        )
-    )
-
-
-def _media_validation_fallback(issues: tuple[DataIssue, ...]) -> ExecutionStage:
-    codes = {issue.code for issue in issues}
-    if DataIssueCode.MEDIA_ENUMERATION_INCOMPLETE in codes:
-        return ExecutionStage.DOWNLOAD_PLAN
-    if DataIssueCode.MEDIA_DOWNLOAD_INCOMPLETE in codes:
-        return ExecutionStage.DOWNLOAD_FETCH
-    return ExecutionStage.BUILD_HOMEPAGE
-
-
-def _source_digest_drift_issue(
-    error: ExecutionSourceDigestDriftError,
-) -> DataIssue:
-    """Render immutable input drift without treating it as a source retry."""
-    return data_issue(
-        DataIssueCode.CONTRACT_INVALID,
-        stage=DataIssueStage.DOWNLOAD_FETCH,
-        recovery=DataRecoveryAction.STOP,
-        message="execution source digest drift; execution must be recreated",
-        attributes={"contract": "sourceDigest", "reason": str(error)},
-    )
 
 
 def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
-    from content.execution.agent.auto_research import _download_auto_research_lanes, _entity_ids_grouped_by_type, _refresh_stale_source_plans_for_fetch
-    from content.execution.recovery.download_freshness import _content_plan_source_shortfall_entity_ids, _download_content_capacity_preflight, _download_fetch_stale_entity_ids, _resolve_download_content_capacity_shortfall
-    from content.execution.recovery.download_gate import _build_prepare_homepage_retry_entity_ids, _download_repair_path, _download_retry_entity_ids, _download_retry_lane, _download_stage_gate_issues
+    from content.execution.agent.auto_research import (
+        _download_auto_research_lanes,
+        _entity_ids_grouped_by_type,
+        _refresh_stale_source_plans_for_fetch,
+    )
+    from content.execution.recovery.download_freshness import (
+        _content_plan_source_shortfall_entity_ids,
+        _download_content_capacity_preflight,
+        _download_fetch_stale_entity_ids,
+        _resolve_download_content_capacity_shortfall,
+    )
+    from content.execution.recovery.download_gate import (
+        _build_prepare_homepage_retry_entity_ids,
+        _download_repair_path,
+        _download_retry_entity_ids,
+        _download_retry_lane,
+        _download_stage_gate_issues,
+    )
     from content.execution.recovery.download_repair import _record_download_repair
     from content.execution.recovery.download_unresolved import (
-        absorb_download_shortfall_if_any_ready,
         _write_download_availability,
+        absorb_download_shortfall_if_any_ready,
     )
-    from content.source.handler import handle_download
     from content.source.gate import gate_download
+    from content.source.handler import handle_download
 
     # A prior fetch pass may have already produced an auditable frozen-pool
     # partition with enough homepage-ready targets. Do not requeue its
@@ -78,6 +65,19 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
         {},
         source="download_fetch_resume",
     )
+    # Artifact readiness alone cannot close download_fetch: a previously
+    # downloaded Article pool may still have zero admissible source units once
+    # semantic, canonical-duplicate, safety and same-source image gates run.
+    # Re-evaluate that canonical capacity gate before the ready-target fast
+    # path, otherwise resume can overwrite the earlier shortfall as ready and
+    # defer the identical deterministic failure to content_plan.
+    if int(persisted_availability.get("readyTargetCount") or 0) > 0:
+        persisted_capacity_result = _resolve_download_content_capacity_shortfall(
+            ctx,
+            _download_content_capacity_preflight(ctx),
+        )
+        if persisted_capacity_result is not None:
+            return persisted_capacity_result
     persisted_absorbed = absorb_download_shortfall_if_any_ready(
         ctx,
         persisted_availability,
@@ -221,7 +221,7 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
                 source="download_fetch_failed",
             )
     except ExecutionSourceDigestDriftError as exc:
-        issue = _source_digest_drift_issue(exc)
+        issue = source_digest_drift_issue(exc)
         _record_download_repair(ctx, [issue])
         _write_download_availability(ctx, {}, source="download_fetch_contract_invalid")
         return StageResult(
@@ -274,7 +274,10 @@ def _run_download_fetch(ctx: ExecutionContext) -> StageResult:
     )
 
 def _run_build_prepare(ctx: ExecutionContext) -> StageResult:
-    from content.homepage.homepage import homepage_runtime_spec, validate_entity_page_inputs
+    from content.homepage.homepage import (
+        homepage_runtime_spec,
+        validate_entity_page_inputs,
+    )
     from content.homepage.homepage_prepare import prepare_entity_pages
     if _entity_homepages_per_target(ctx) <= 0:
         return StageResult(
@@ -315,13 +318,13 @@ def _qualified_entity_names(verdict: Any) -> tuple[str, ...]:
 
 def _write_homepage_independent_review_repairs(ctx: ExecutionContext) -> None:
     """Turn failed independent reviews into object-bound author retry input."""
+    from core.io import read_json
     from governance.coverage.entity_extract import entity_ref, require_domain_etype
 
     from content.execution.controller.homepage_author_finalization import (
         _write_homepage_repair_report,
     )
     from content.homepage.homepage_review import _entity_draft_dir
-    from core.io import read_json
 
     for target in ctx.spec.scope.coverage_targets:
         domain, entity_type = require_domain_etype(
@@ -352,17 +355,21 @@ def _write_homepage_independent_review_repairs(ctx: ExecutionContext) -> None:
             object_dir=draft_dir.parent,
             ref=entity_ref(domain, entity_type, target.name),
             materialization_messages=issues,
+            repair_strategy="local_edit",
         )
 
 
 def _run_build_validate(ctx: ExecutionContext) -> StageResult:
+    from verify.verify_homepage_media_completeness import (
+        homepage_media_completeness_report,
+    )
+
+    from content.execution.controller.homepage_authoring import homepage_quota_verdict
     from content.execution.controller.homepage_review_stage import (
         independent_reviewer_precondition_issues,
         run_homepage_independent_reviews,
     )
-    from content.execution.controller.homepage_authoring import homepage_quota_verdict
     from content.homepage.homepage import homepage_runtime_spec
-    from verify.verify_homepage_media_completeness import homepage_media_completeness_report
     if _entity_homepages_per_target(ctx) <= 0:
         return StageResult(
             ExecutionStage.BUILD_VALIDATE,
@@ -402,14 +409,14 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
         publishable_names=_qualified_entity_names(verdict),
     )
     if not bool(media_report.get("passed")):
-        typed_issues = _typed_media_validation_issues(media_report)
+        typed_issues = typed_media_validation_issues(media_report)
         media_issues = issue_messages(typed_issues)
         return StageResult(
             ExecutionStage.BUILD_VALIDATE,
             AUTO,
             StageStatus.FAILED,
             "主页图片完整性门未过:\n  - " + "\n  - ".join(media_issues[:10]),
-            fallback_stage=_media_validation_fallback(typed_issues),
+            fallback_stage=media_validation_fallback(typed_issues),
             issue_records=typed_issues or stage_issues(
                 ExecutionStage.BUILD_VALIDATE,
                 ["homepage media completeness report did not pass"],
@@ -455,6 +462,24 @@ def _run_build_validate(ctx: ExecutionContext) -> StageResult:
                 code=DataIssueCode.AGENT_REVIEW_INVALID,
                 recovery=DataRecoveryAction.REWIND_COMPOSE,
             ),
+        )
+    from content.execution.controller.professional_asset_independent_review import (
+        run_professional_asset_independent_reviews,
+    )
+
+    asset_review_issues = run_professional_asset_independent_reviews(
+        ctx,
+        [f"/entity/{ref}" for ref in reviewed.qualified_refs],
+    )
+    if asset_review_issues:
+        return StageResult(
+            ExecutionStage.BUILD_VALIDATE,
+            AUTO,
+            StageStatus.FAILED,
+            "主页专业素材独立审阅未过:\n  - "
+            + "\n  - ".join(issue_messages(asset_review_issues[:10])),
+            fallback_stage=ExecutionStage.BUILD_HOMEPAGE,
+            issue_records=asset_review_issues,
         )
     if not reviewed.passed:
         print(

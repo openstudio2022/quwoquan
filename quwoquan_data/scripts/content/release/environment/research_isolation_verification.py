@@ -29,18 +29,18 @@ _IDENTITY_CONTRACT = (
 )
 _SIGNED_MEDIA_CONTRACT = (
     REPO_ROOT / "quwoquan_service/services/content-service/contracts/media/"
-    "media_original_access_fact/operations.yaml"
+    "original_access_quota/operations.yaml"
 )
 _SIGNED_MEDIA_POLICY = (
     REPO_ROOT / "quwoquan_service/services/content-service/contracts/media/"
-    "media_original_access_fact/original_access_policy.yaml"
+    "original_access_quota/original_access_policy.yaml"
 )
 _REQUIRED_IDENTITY_OPERATION = "IssueWhitelistedResearchSession"
+_REQUIRED_SIGNED_MEDIA_OPERATION = "ReserveOriginalImageAccessGrant"
 _REQUIRED_TRUE = (
     "identityWhitelistRequired",
     "sharingDisabled",
     "exportDisabled",
-    "searchIndexingDisabled",
     "internalAppSignatureRequired",
     "researchBadgeRequired",
     "shortLivedSignedMediaUrlsRequired",
@@ -50,6 +50,7 @@ _REQUIRED_FALSE = (
     "anonymousContentAccess",
     "anonymousMediaAccess",
     "publicContentDistribution",
+    "searchIndexingDisabled",
 )
 _SECRET_KEY_PARTS = ("token", "authorization", "credential", "password", "secret")
 
@@ -235,7 +236,7 @@ def _signed_media_contract_available() -> bool:
         security = raw.get("security")
         fields = raw.get("response_fields")
         if (
-            raw.get("operation") == "RequestOriginalImageAccess"
+            raw.get("operation") == _REQUIRED_SIGNED_MEDIA_OPERATION
             and isinstance(security, Mapping)
             and security.get("auth_mode") == "required"
             and security.get("anonymous_policy") == "deny"
@@ -513,23 +514,21 @@ def write_research_isolation_verification(
         expected_runtime_proof = expected_output.with_name(
             "research-isolation-runtime-proof.json"
         )
-        if (
-            runtime_proof_path.is_symlink()
-            or runtime_proof_path.resolve() != expected_runtime_proof.resolve()
-        ):
+        if runtime_proof_path.resolve() != expected_runtime_proof.resolve():
             raise ResearchIsolationVerificationError(
                 "research isolation runtime proof must use the canonical "
                 "create-once verify run path"
             )
-        _proof, proof_bytes = _load_runtime_proof(
-            runtime_proof_path,
-            environment=environment,
-            release_id=release_id,
-            verify_run_id=verify_run_id,
-            manifest_digest=manifest_digest,
-        )
-        _write_create_once(output_path, proof_bytes)
-        return output_path
+        if runtime_proof_path.exists() or runtime_proof_path.is_symlink():
+            _proof, proof_bytes = _load_runtime_proof(
+                runtime_proof_path,
+                environment=environment,
+                release_id=release_id,
+                verify_run_id=verify_run_id,
+                manifest_digest=manifest_digest,
+            )
+            _write_create_once(output_path, proof_bytes)
+            return output_path
 
     policy_path, policy_digest, policy_issues, _policy_ttl = _policy_snapshot(
         environment

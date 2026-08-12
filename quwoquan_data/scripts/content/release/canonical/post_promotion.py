@@ -9,7 +9,16 @@ from content.execution.workspace import execution_root, write_publish_ref
 from content.release.canonical.application import apply_object_transaction
 from content.release.canonical.canonical_inventory import (
     assert_canonical_image_unique,
+    assert_canonical_video_unique,
     load_or_bootstrap_inventory,
+)
+from content.release.canonical.content_pool_record import (
+    append_pool_record,
+    build_canonical_pool_record,
+    is_pool_record_admitted,
+    iter_pool_records,
+    latest_pool_record,
+    pool_payload_digest,
 )
 from content.release.canonical.object_transaction_audit import audit_object_transaction
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
@@ -22,6 +31,42 @@ from content.release.canonical.post_transaction import (
 from core.io import read_json
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT
 from core.tree_integrity import tree_integrity_stats
+
+
+def _repair_applied_pool_record_drift(
+    *,
+    package_root: Path,
+    canonical_post: Path,
+    canonical_ref: str,
+) -> bool:
+    """Append one governed readback repair after an exact applied object upgrade."""
+
+    package_object = package_root / "object"
+    if pool_payload_digest(package_object) != pool_payload_digest(canonical_post):
+        raise ObjectTransactionError(
+            f"completed post transaction canonical object drift: {canonical_ref}"
+        )
+    try:
+        record = latest_pool_record(canonical_post, "content")
+    except ObjectTransactionError as exc:
+        if str(exc) != "DATA.POOL.PAYLOAD_DIGEST_DRIFT":
+            raise
+        package_records = iter_pool_records(package_object, object_type="content")
+        canonical_records = iter_pool_records(canonical_post, object_type="content")
+        if canonical_records != package_records or not canonical_records:
+            raise ObjectTransactionError(
+                "DATA.POOL.PAYLOAD_DIGEST_DRIFT: transaction record lineage drift"
+            ) from exc
+        repaired = build_canonical_pool_record(
+            object_root=canonical_post,
+            object_type="content",
+            object_ref=canonical_ref,
+        )
+        append_pool_record(object_root=canonical_post, record=repaired)
+        return True
+    if not is_pool_record_admitted(record):
+        raise ObjectTransactionError("DATA.POOL.OBJECT_NOT_ADMITTED")
+    return False
 
 
 def _assert_cross_publish_image_unique(
@@ -41,6 +86,31 @@ def _assert_cross_publish_image_unique(
             "canonical post is outside the publish root"
         ) from exc
     assert_canonical_image_unique(
+        publish_root=PUBLISH_ROOT,
+        manifest=package_manifest,
+        excluded_manifest_path=f"{excluded}/manifest.json",
+    )
+
+
+def _assert_cross_publish_video_unique(
+    *,
+    package_root: Path,
+    canonical_post: Path,
+) -> None:
+    """Reject exact video-content or poster reuse across canonical posts."""
+
+    package_manifest = read_json(package_root / "object/manifest.json")
+    if not isinstance(package_manifest, Mapping):
+        raise ObjectTransactionError("post transaction manifest must be an object")
+    if str(package_manifest.get("contentType") or "").strip() != "video":
+        return
+    try:
+        excluded = canonical_post.relative_to(PUBLISH_ROOT).as_posix()
+    except ValueError as exc:
+        raise ObjectTransactionError(
+            "canonical post is outside the publish root"
+        ) from exc
+    assert_canonical_video_unique(
         publish_root=PUBLISH_ROOT,
         manifest=package_manifest,
         excluded_manifest_path=f"{excluded}/manifest.json",
@@ -70,7 +140,12 @@ def _qualified_post_refs(execution_id: str) -> tuple[str, ...]:
 
 
 @canonical_publish_serialized
-def promote_post_object(execution_id: str, post_ref: str) -> dict[str, str]:
+def promote_post_object(
+    execution_id: str,
+    post_ref: str,
+    *,
+    pool_delivery_intent: Mapping[str, object],
+) -> dict[str, str]:
     """Atomically promote one reviewed post and return fenced result evidence."""
     root = execution_root(execution_id)
     normalized_ref = str(post_ref or "").strip().strip("/")
@@ -108,19 +183,23 @@ def promote_post_object(execution_id: str, post_ref: str) -> dict[str, str]:
         object_ref=normalized_ref,
         transaction_id=transaction_id,
         package_root=package_root,
+        pool_delivery_intent=pool_delivery_intent,
+    )
+    _assert_cross_publish_video_unique(
+        package_root=package_root,
+        canonical_post=canonical_post,
     )
     _assert_cross_publish_image_unique(
         package_root=package_root,
         canonical_post=canonical_post,
     )
-    package_merkle = tree_integrity_stats(package_root / "object")["merkleRoot"]
     canonical_ready = (canonical_post / "manifest.json").is_file()
     if canonical_ready:
-        canonical_merkle = tree_integrity_stats(canonical_post)["merkleRoot"]
-        if canonical_merkle != package_merkle:
-            raise ObjectTransactionError(
-                f"completed post transaction canonical object drift: {normalized_ref}"
-            )
+        _repair_applied_pool_record_drift(
+            package_root=package_root,
+            canonical_post=canonical_post,
+            canonical_ref=normalized_ref,
+        )
         # Idempotent resume: fleet/publish may have written the canonical object
         # before apply_report landed under OUTPUT_ROOT. Matching merkle is enough.
         applied = (
@@ -165,9 +244,28 @@ def promote_execution_posts(execution_id: str) -> tuple[str, ...]:
     refs = _qualified_post_refs(execution_id)
     promoted: list[str] = []
     failures: list[str] = []
+    intent_root = execution_root(execution_id) / "_shared/pool_delivery_intents"
+    intent_by_ref: dict[str, dict[str, object]] = {}
+    for path in sorted(intent_root.glob("*.json")):
+        payload = read_json(path)
+        if isinstance(payload, dict):
+            relative = str(payload.get("contentObjectDir") or "").removeprefix(
+                "posts/"
+            )
+            if relative:
+                intent_by_ref[relative] = payload
     for post_ref in refs:
         try:
-            promote_post_object(execution_id, post_ref)
+            intent = intent_by_ref.get(post_ref)
+            if intent is None:
+                raise ObjectTransactionError(
+                    f"pool delivery intent is missing: {post_ref}"
+                )
+            promote_post_object(
+                execution_id,
+                post_ref,
+                pool_delivery_intent=intent,
+            )
             promoted.append(post_ref)
         except ObjectTransactionError as exc:
             # Canonical existence is not success evidence.  promote_post_object

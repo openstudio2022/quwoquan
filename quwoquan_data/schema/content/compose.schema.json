@@ -112,6 +112,7 @@
     "rightsAuditIssues": { "type": "array", "items": { "type": "string" } },
     "publishLayout": { "type": "string", "enum": ["travel", "campus", "image", "gallery", "video"] },
     "publishAngle": { "type": "string" },
+    "articleCategory": {"const": "photography"},
     "publishTitle": { "type": "string" },
     "publishSeq": { "type": "integer" },
     "articleRenderProfile": { "type": "object" },

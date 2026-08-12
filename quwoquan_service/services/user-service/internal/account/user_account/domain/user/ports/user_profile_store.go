@@ -45,24 +45,43 @@ type UserProfileTagProjection struct {
 	OccurredAt        time.Time
 }
 
-// UserProfileSearchProjection is a durable, payload-free coordinate for the
-// authoritative profile to be reconciled into the shared search index.
+// UserProfileSearchProjection is a durable coordinate plus the exact public
+// snapshot that must be committed with it.
 type UserProfileSearchProjection struct {
 	UserID         string
 	ProfileVersion int64
 	EventType      string
 	OccurredAt     time.Time
+	Payload        UserProfileSearchProjectionPayload
+}
+
+// UserProfileSearchProjectionPayload is the public, self-contained snapshot
+// committed with the User-owned outbox. Search owns the mapping into its
+// provider document and never reads User storage while consuming this event.
+type UserProfileSearchProjectionPayload struct {
+	EventID        string    `json:"eventId"`
+	UserID         string    `json:"userId"`
+	ProfileVersion int64     `json:"profileVersion"`
+	Operation      string    `json:"operation"`
+	Nickname       string    `json:"nickname"`
+	AvatarURL      string    `json:"avatarUrl"`
+	Bio            string    `json:"bio"`
+	IdentityTags   []string  `json:"identityTags"`
+	FollowerCount  int64     `json:"followerCount"`
+	PostCount      int64     `json:"postCount"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }
 
 // UserProfileSearchOutboxEvent is a lease-claimed, replayable projection
-// coordinate. EventID is the stable dedupe key for observability; ES document
-// idempotency is derived from the authoritative UserProfile object ID.
+// coordinate. EventID is the stable transport dedupe key; PayloadJSON is the
+// immutable snapshot persisted in the same transaction as the profile fact.
 type UserProfileSearchOutboxEvent struct {
 	EventID         string
 	UserID          string
 	ProfileVersion  int64
 	EventType       string
 	OccurredAt      time.Time
+	PayloadJSON     []byte
 	DeliveryAttempt int
 }
 
@@ -70,7 +89,7 @@ type UserProfileSearchOutboxFailureCode string
 
 const (
 	UserProfileSearchOutboxFailureClaim       UserProfileSearchOutboxFailureCode = "claim"
-	UserProfileSearchOutboxFailureProject     UserProfileSearchOutboxFailureCode = "search_project"
+	UserProfileSearchOutboxFailurePublish     UserProfileSearchOutboxFailureCode = "stream_publish"
 	UserProfileSearchOutboxFailurePublishAck  UserProfileSearchOutboxFailureCode = "publish_ack"
 	UserProfileSearchOutboxFailureRetryRecord UserProfileSearchOutboxFailureCode = "retry_record"
 	UserProfileSearchOutboxFailureHealthStore UserProfileSearchOutboxFailureCode = "health_store"

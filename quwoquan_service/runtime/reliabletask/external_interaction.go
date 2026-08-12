@@ -408,6 +408,8 @@ func DefaultExternalInteractionPayloadAllowlist() []string {
 		"phoneHash",
 		"maskedRecipient",
 		"templateId",
+		"platform",
+		"requestRef",
 		"notificationId",
 		"recipientId",
 		"providerHint",

@@ -84,6 +84,7 @@ func RenderOperationSecurityGo(
 				"ContractGraphSHA256",
 				graphSHA256,
 			)
+			writeGoStringField(&output, "Transport", operation.Transport)
 			writeGoStringField(&output, "Method", operation.Method)
 			writeGoStringField(
 				&output,

@@ -178,6 +178,35 @@ def test_coverage_range_fit_topic_hit_beats_miss_and_nationwide_is_neutral():
     assert miss < neutral < hit
 
 
+def test_parent_travel_tag_does_not_claim_specialist_subtopic_coverage():
+    reg = _registry()
+    highland = reg.creators["qwq_creator_highland_travel_blogger_001"]
+    nationwide = reg.creators["qwq_creator_travel_blogger_001"]
+    specialist = coverage_range_fit(
+        highland,
+        region="china",
+        tag_refs=["Topic/旅行", "Topic/地理/行政区/中国/china"],
+    )
+    neutral = coverage_range_fit(
+        nationwide,
+        region="china",
+        tag_refs=["Topic/旅行", "Topic/地理/行政区/中国/china"],
+    )
+    creator = match_creator(
+        reg,
+        {"carrier": "article", "vertical": "travel", "creatorPersona": {}},
+        carrier="article",
+        tag_refs=["Topic/旅行", "Topic/地理/行政区/中国/china"],
+        region="china",
+        vertical="travel",
+        seed="generic-travel-plan",
+        preferred_archetype="",
+        selection_mode="spread",
+    )
+    assert specialist < neutral
+    assert creator["creatorProfileId"] != "qwq_creator_highland_travel_blogger_001"
+
+
 def _run_all() -> None:
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

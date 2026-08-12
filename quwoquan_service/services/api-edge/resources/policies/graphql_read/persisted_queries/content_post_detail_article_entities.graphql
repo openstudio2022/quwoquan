@@ -1,0 +1,14 @@
+query ContentPostDetailArticleEntities($postId: ID!, $entityMentionFirst: Int! = 30) {
+  contentPostDetailArticleEntities(postId: $postId) {
+    postId
+    contentType
+    entityMentions(first: $entityMentionFirst) {
+      subjectType
+      subjectId
+      homepageId
+      displayName
+      rangeStart
+      rangeEnd
+    }
+  }
+}

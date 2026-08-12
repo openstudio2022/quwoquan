@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/auth/terminal_account_cleanup_receipt_store.dart';
@@ -100,6 +101,70 @@ void main() {
     expect(find.text('home-safe-state'), findsOneWidget);
     await tester.pump(const Duration(seconds: 4));
   });
+
+  testWidgets('回执持久化失败时不清凭据且重试只恢复同一终态清理', (tester) async {
+    final harness = await _AccountSecurityHarness.mount(
+      tester,
+      resultState: AccountState.closed,
+      failReceiptSave: true,
+    );
+    addTearDown(harness.dispose);
+
+    await _confirmAccountClosure(tester);
+
+    expect(harness.lifecycle.closeCalls, 1);
+    expect(harness.cleanupReceiptStore.saveCalls, 1);
+    expect(harness.sessionStore.clearCalls, 0);
+    expect(harness.purgeProbe.operationCalls, 0);
+    expect(
+      harness.router.routeInformationProvider.value.uri.path,
+      _accountSecurityPath,
+    );
+    expect(find.byType(AppPageErrorState), findsOneWidget);
+    expect(find.text(SettingsText.settingsCloseAccountDoneToast), findsNothing);
+
+    harness.cleanupReceiptStore.failSave = false;
+    await tester.tap(find.text(ContentText.tryAgain));
+    await tester.pumpAndSettle();
+
+    expect(harness.lifecycle.closeCalls, 1);
+    expect(harness.cleanupReceiptStore.saveCalls, 2);
+    expect(harness.cleanupReceiptStore.clearCalls, 1);
+    expect(harness.sessionStore.clearCalls, 1);
+    expect(harness.purgeProbe.operationCalls, 5);
+    expect(
+      harness.router.routeInformationProvider.value.uri.path,
+      AppRoutePaths.home,
+    );
+    await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('本地清理失败时保留回执、不报成功并由恢复器重试', (tester) async {
+    final harness = await _AccountSecurityHarness.mount(
+      tester,
+      resultState: AccountState.closed,
+      failPurge: true,
+    );
+    addTearDown(harness.dispose);
+
+    await _confirmAccountClosure(tester);
+
+    expect(harness.lifecycle.closeCalls, 1);
+    expect(harness.sessionStore.clearCalls, 1);
+    expect(harness.purgeProbe.operationCalls, greaterThanOrEqualTo(5));
+    expect(await harness.cleanupReceiptStore.read(), isNotNull);
+    expect(harness.cleanupReceiptStore.clearCalls, 0);
+    expect(find.text(SettingsText.settingsCloseAccountDoneToast), findsNothing);
+    expect(
+      harness.router.routeInformationProvider.value.uri.path,
+      AppRoutePaths.home,
+    );
+
+    harness.purgeProbe.fail = false;
+    await harness.container.read(accountClosureLocalCleanupRecoveryProvider)();
+    expect(await harness.cleanupReceiptStore.read(), isNull);
+    expect(harness.cleanupReceiptStore.clearCalls, 1);
+  });
 }
 
 const _accountSecurityPath = '/account-security-test';
@@ -138,11 +203,14 @@ final class _AccountSecurityHarness {
   static Future<_AccountSecurityHarness> mount(
     WidgetTester tester, {
     required AccountState resultState,
+    bool failReceiptSave = false,
+    bool failPurge = false,
   }) async {
     final lifecycle = _RecordingAccountLifecycleWriter(resultState);
     final sessionStore = _TestAuthSessionStore();
-    final purgeProbe = _ClosurePurgeProbe();
-    final cleanupReceiptStore = _MemoryTerminalCleanupReceiptStore();
+    final purgeProbe = _ClosurePurgeProbe()..fail = failPurge;
+    final cleanupReceiptStore = _MemoryTerminalCleanupReceiptStore()
+      ..failSave = failReceiptSave;
     final container = ProviderContainer(
       overrides: [
         ...sealedCloudBoundaryOverrides(),
@@ -155,6 +223,12 @@ final class _AccountSecurityHarness {
         accountClosureLocalDataPurgerProvider.overrideWithValue(
           purgeProbe.purger,
         ),
+        accountClosureLocalDataPurgerForActorProvider.overrideWith((
+          ref,
+          actor,
+        ) {
+          return purgeProbe.purger;
+        }),
         terminalAccountCleanupReceiptStoreProvider.overrideWithValue(
           cleanupReceiptStore,
         ),
@@ -239,9 +313,13 @@ final class _ClosurePurgeProbe {
 
   late final AccountClosureLocalDataPurger purger;
   int operationCalls = 0;
+  bool fail = false;
 
   Future<void> _record() async {
     operationCalls += 1;
+    if (fail) {
+      throw StateError('terminal cleanup failure');
+    }
   }
 }
 
@@ -250,6 +328,7 @@ final class _MemoryTerminalCleanupReceiptStore
   TerminalAccountCleanupReceipt? receipt;
   int saveCalls = 0;
   int clearCalls = 0;
+  bool failSave = false;
 
   @override
   Future<TerminalAccountCleanupReceipt?> read() async => receipt;
@@ -257,6 +336,9 @@ final class _MemoryTerminalCleanupReceiptStore
   @override
   Future<void> save(TerminalAccountCleanupReceipt receipt) async {
     saveCalls += 1;
+    if (failSave) {
+      throw StateError('terminal cleanup receipt persistence failure');
+    }
     this.receipt = receipt;
   }
 

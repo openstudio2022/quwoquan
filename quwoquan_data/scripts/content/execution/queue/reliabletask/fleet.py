@@ -10,71 +10,46 @@ from pathlib import Path
 
 from core.control_types import QueueBackend, QueueJobStage, QueueJobState
 from core.io import read_json, write_json
-from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REPO_ROOT, execution_root
+from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, REPO_ROOT
 from core.python_environment import resolve_data_agent_python
 from core.schema import assert_valid
+from governance.coverage.distribution import (
+    ProductLifecycleState,
+    load_content_distribution_policy,
+)
 
-from content.execution.identity import parse_execution_id
 from content.execution.queue.backend import load_execution_queue_backend
+from content.execution.queue.core import _load_jobs
 from content.execution.queue.reliabletask.attempt import (
     attempt_evidence_dir,
     select_or_freeze_job_set_attempt,
     write_attempt_document_create_once,
 )
-from content.execution.queue.core import _load_jobs
+from content.execution.queue.reliabletask.fleet_host_binding import (
+    allocate_worker_host_quotas,
+    fleet_job_document,
+    require_fleet_carrier,
+    select_worker_host_slice,
+)
 from content.execution.queue.reliabletask.report import ReliableTaskFleetReport
-from content.execution.runtime_contract import canonical_sha256
 from content.execution.queue.reliabletask.transport import (
     ReliableTaskFleetTransport,
     _wait_for_fleet_transport,
     reliabletask_fleet_preflight,
     resolve_reliabletask_fleet_transport,
 )
+from content.execution.runtime_contract import canonical_sha256
 from content.execution.runtime_evidence.reliabletask_process import (
     OBSERVER_BINARY_REF_ENV,
     OBSERVER_BINARY_SHA256_ENV,
     load_frozen_campaign_worker_binary_binding,
     load_frozen_observer_binary_binding,
-    validate_frozen_observer_binary,
-)
-from governance.coverage.distribution import (
-    ProductLifecycleState,
-    load_content_distribution_policy,
 )
 
 _RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE = {
     QueueJobStage.AUTHOR: frozenset({"build_homepage", "post_author"}),
     QueueJobStage.PUBLISH: frozenset({"publish"}),
 }
-
-
-def _fleet_job_document(job: object) -> dict[str, str]:
-    from content.execution.queue.model import QueueJob
-
-    if not isinstance(job, QueueJob):
-        raise TypeError("ReliableTask fleet job 必须为 QueueJob")
-    reliable_ref = job.reliable_task_ref_document()
-    payload = reliable_ref.get("payload") if isinstance(reliable_ref, Mapping) else None
-    if not isinstance(payload, Mapping):
-        raise TypeError(f"ReliableTask job 缺 typed payload：{job.job_id}")
-    fields = (
-        "entityRef",
-        "carrier",
-        "sourceRevision",
-        "idempotencyKey",
-        "jobId",
-        "executionId",
-        "ref",
-        "stage",
-        "partitionKey",
-    )
-    document = {field: str(payload.get(field) or "").strip() for field in fields}
-    missing = [field for field, value in document.items() if not value]
-    if missing:
-        raise ValueError(
-            f"ReliableTask job payload 不完整：{job.job_id}: {', '.join(missing)}"
-        )
-    return document
 
 
 def _has_audited_remote_recovery(
@@ -113,28 +88,15 @@ def _object_timeout_seconds(jobs: list[object]) -> int:
     return timeout_seconds
 
 
-def _fleet_carrier(execution_id: str, jobs: list[object]) -> str:
-    """Bind every request job to the carrier frozen into executionId."""
-    from content.execution.queue.model import QueueJob
+def _attempt_request_name(*, recover_dead_tasks: bool) -> str:
+    """Keep audited recovery input separate from the immutable first attempt."""
 
-    expected = parse_execution_id(execution_id).content_type.value
-    carriers = {
-        job.carrier.value
-        for job in jobs
-        if isinstance(job, QueueJob) and job.carrier is not None
-    }
-    if len(carriers) != 1 or carriers != {expected} or len(jobs) < 1:
-        raise ValueError(
-            f"ReliableTask fleet carrier 必须与 executionId 一致："
-            f"expected={expected}, jobs={sorted(carriers)}"
-        )
-    return expected
+    return "recovery-request.json" if recover_dead_tasks else "request.json"
 
 
-def _required_quota(
+def _remaining_quota(
     execution_id: str,
     stage: QueueJobStage,
-    attempt_job_count: int,
     active_job_count: int,
 ) -> int:
     """Remaining approved quota this fleet invocation must still deliver.
@@ -164,12 +126,17 @@ def _required_quota(
             f"execution {execution_id} 已达 {stage.value} 准出配额 "
             f"{approved}（已接受 {already_accepted}），无需再派发 fleet"
         )
-    if remaining > active_job_count:
+    if remaining > active_job_count and stage is not QueueJobStage.PUBLISH:
         raise ValueError(
             f"候选池耗尽，区域实体供给不足：{stage.value} 剩余配额 {remaining} "
             f"超过待执行 job 数 {active_job_count}"
         )
-    return min(remaining, attempt_job_count)
+    # Publication consumes the immutable review-qualified closure.  The
+    # semantic approvedQuota is a milestone target, not authority to suppress
+    # already qualified objects when the reviewed closure is partial.  Deliver
+    # every frozen publish job and leave the remaining milestone gap to a new
+    # source/semantic wave; author acquisition remains strict above.
+    return min(remaining, active_job_count)
 
 
 def build_fleet_request(
@@ -177,7 +144,9 @@ def build_fleet_request(
     stage: QueueJobStage,
     *,
     required_workers: int,
+    host_scope_id: str | None = None,
 ) -> dict[str, object]:
+    recover_dead_tasks = _has_audited_remote_recovery(execution_id, stage)
     stage_jobs = [
         job
         for job in _load_jobs(execution_id)
@@ -187,17 +156,18 @@ def build_fleet_request(
     jobs = [
         job
         for job in stage_jobs
-        if job.state not in {QueueJobState.SUCCEEDED, QueueJobState.DEAD}
+        if job.state is not QueueJobState.SUCCEEDED
+        and (recover_dead_tasks or job.state is not QueueJobState.DEAD)
     ]
     if not jobs:
         raise ValueError(
             f"execution 无待执行 ReliableTask {stage.value} jobs：{execution_id}"
         )
-    _fleet_carrier(execution_id, jobs)
+    require_fleet_carrier(execution_id, jobs)
     object_timeout_seconds = _object_timeout_seconds(jobs)
     backend_envelope = load_execution_queue_backend(execution_id)
     active_documents = [
-        _fleet_job_document(job)
+        fleet_job_document(job)
         for job in sorted(jobs, key=lambda item: item.job_id)
     ]
     job_set_envelope = select_or_freeze_job_set_attempt(
@@ -206,31 +176,40 @@ def build_fleet_request(
         required_workers=required_workers,
         active_tasks=active_documents,
     )
-    campaign_fields = (
-        "rootExecutionId",
-        "campaignRunId",
-        "campaignGeneration",
-        "campaignFencingToken",
-        "campaignPlanDigest",
-        "campaignSourceRevision",
-        "campaignEntityCatalogDigest",
-    )
-    present = tuple(
-        field for field in campaign_fields if field in backend_envelope
-    )
-    if present and len(present) != len(campaign_fields):
-        raise ValueError("ReliableTask campaign queue binding is incomplete")
     frozen_tasks = job_set_envelope.get("expectedTasks")
     if not isinstance(frozen_tasks, list):
         raise TypeError("ReliableTask frozen expectedTasks is invalid")
-    request_jobs = list(frozen_tasks)
+    request_jobs, worker_host_binding, request_workers = select_worker_host_slice(
+        frozen_tasks,
+        job_set_envelope.get("workerHostSetBinding"),
+        host_scope_id=host_scope_id,
+        default_workers=int(job_set_envelope["requiredWorkers"]),
+    )
+    global_required_quota = _remaining_quota(
+        execution_id,
+        stage,
+        len(jobs),
+    )
+    required_quota = global_required_quota
+    if worker_host_binding is not None:
+        host_quotas = allocate_worker_host_quotas(
+            frozen_tasks,
+            job_set_envelope["workerHostSetBinding"],
+            global_required_quota=global_required_quota,
+        )
+        required_quota = host_quotas[str(worker_host_binding["hostScopeId"])]
     actual_task_digest = canonical_sha256(request_jobs)
-    if actual_task_digest != job_set_envelope.get("jobSetDigest"):
-        raise ValueError("ReliableTask attempt actual task digest drift")
+    request_name = _attempt_request_name(
+        recover_dead_tasks=recover_dead_tasks,
+    )
     request_path = attempt_evidence_dir(
         execution_id,
         job_set_envelope,
-    ) / "request.json"
+    ) / (
+        f"hosts/{host_scope_id}/{request_name}"
+        if worker_host_binding
+        else request_name
+    )
     if request_path.is_file():
         existing = read_json(request_path)
         assert_valid(existing, "execution", "data_content_fleet_request", label="data_content_fleet_request")
@@ -238,7 +217,11 @@ def build_fleet_request(
             existing.get("jobSetEnvelopeDigest") != job_set_envelope.get("envelopeDigest")
             or existing.get("jobSetDigest") != job_set_envelope.get("jobSetDigest")
             or existing.get("actualTaskDigest") != actual_task_digest
+            or existing.get("workerHostBinding") != worker_host_binding
+            or existing.get("globalRequiredQuota") != global_required_quota
+            or existing.get("requiredQuota") != required_quota
             or existing.get("jobs") != request_jobs
+            or existing.get("recoverDeadTasks") is not recover_dead_tasks
         ):
             raise ValueError("ReliableTask attempt request identity drift")
         return existing
@@ -251,7 +234,7 @@ def build_fleet_request(
         "jobSetEnvelopeDigest": job_set_envelope["envelopeDigest"],
         "jobSetDigest": job_set_envelope["jobSetDigest"],
         "actualTaskDigest": actual_task_digest,
-        "requiredWorkers": job_set_envelope["requiredWorkers"],
+        "requiredWorkers": request_workers,
         "partitionCount": job_set_envelope["partitionCount"],
         "partitionAlgorithm": job_set_envelope["partitionAlgorithm"],
         "checkpointPolicy": job_set_envelope["checkpointPolicy"],
@@ -260,24 +243,19 @@ def build_fleet_request(
             and load_content_distribution_policy().product_lifecycle_state
             is ProductLifecycleState.COMMERCIAL
         ),
-        "recoverDeadTasks": _has_audited_remote_recovery(execution_id, stage),
+        "recoverDeadTasks": recover_dead_tasks,
         "objectTimeoutMilliseconds": object_timeout_seconds * 1000,
-        "requiredQuota": _required_quota(
-            execution_id,
-            stage,
-            len(request_jobs),
-            len(jobs),
-        ),
+        "globalRequiredQuota": global_required_quota,
+        "requiredQuota": required_quota,
         "jobs": request_jobs,
     }
-    if present:
-        source_digest = backend_envelope.get("sourceDigest")
-        if not isinstance(source_digest, Mapping):
-            raise TypeError("ReliableTask campaign sourceDigest is invalid")
-        payload["campaignBinding"] = {
-            **{field: backend_envelope[field] for field in campaign_fields},
-            "campaignSourceDigest": source_digest.get("digest"),
-        }
+    if worker_host_binding is not None:
+        payload["workerHostBinding"] = worker_host_binding
+    campaign_binding = job_set_envelope.get("campaignBinding")
+    if campaign_binding is not None:
+        if not isinstance(campaign_binding, Mapping):
+            raise TypeError("ReliableTask campaign pool delivery binding is invalid")
+        payload["campaignBinding"] = dict(campaign_binding)
     assert_valid(
         payload,
         "execution",
@@ -287,13 +265,32 @@ def build_fleet_request(
     return payload
 
 
-def _fleet_command(execution_id: str) -> tuple[list[str], Path]:
+def _fleet_command(
+    execution_id: str,
+    *,
+    stage: QueueJobStage | None = None,
+) -> tuple[list[str], Path]:
     # A campaign capsule deliberately excludes Service implementation source.
     # The controller already freezes the exact data-content-worker executable
     # (the same command exposes both the read-only observer and fleet modes),
     # so a lane must consume that attested binary instead of falling back to
     # ``go run`` against an incomplete capsule tree.  A partial binding fails
     # closed through ``load_frozen_observer_binary_binding``.
+    if stage is QueueJobStage.PUBLISH:
+        from content.execution.preflight.pool_delivery import (
+            load_current_pool_delivery_preflight_receipt,
+        )
+        from content.execution.runtime_evidence.reliabletask_process import (
+            ReliableTaskObserverBinaryBinding,
+            validate_frozen_observer_binary,
+        )
+
+        receipt, _path = load_current_pool_delivery_preflight_receipt(execution_id)
+        binding = ReliableTaskObserverBinaryBinding(
+            ref=str(receipt["workerRef"]),
+            sha256=str(receipt["workerSha256"]),
+        )
+        return [str(validate_frozen_observer_binary(binding))], REPO_ROOT
     if any(
         str(os.environ.get(name) or "").strip()
         for name in (OBSERVER_BINARY_REF_ENV, OBSERVER_BINARY_SHA256_ENV)
@@ -413,12 +410,13 @@ def discard_reliabletask_execution(execution_id: str) -> None:
         )
 
 
-def run_reliabletask_fleet(
+def _run_reliabletask_host(
     execution_id: str,
     stage: QueueJobStage,
     *,
     workers: int,
     completion_grace_seconds: int,
+    host_scope_id: str | None = None,
 ) -> ReliableTaskFleetReport:
     if workers < 1:
         raise ValueError("ReliableTask workers 必须为正整数")
@@ -429,13 +427,14 @@ def run_reliabletask_fleet(
         execution_id,
         stage,
         required_workers=workers,
+        host_scope_id=host_scope_id,
     )
     object_timeout_milliseconds = request["objectTimeoutMilliseconds"]
     if not isinstance(object_timeout_milliseconds, int):
         raise TypeError("ReliableTask fleet request object timeout is invalid")
     batch_timeout_seconds = fleet_batch_timeout_seconds(
         job_count=len(request["jobs"]),
-        workers=workers,
+        workers=int(request["requiredWorkers"]),
         object_timeout_seconds=object_timeout_milliseconds // 1000,
         completion_grace_seconds=completion_grace_seconds,
     )
@@ -443,7 +442,12 @@ def run_reliabletask_fleet(
         "stage": stage.value,
         "jobSetDigest": request["jobSetDigest"],
     })
-    request_path = evidence_dir / "request.json"
+    worker_binding = request.get("workerHostBinding")
+    if isinstance(worker_binding, Mapping):
+        evidence_dir = evidence_dir / "hosts" / str(worker_binding["hostScopeId"])
+    request_path = evidence_dir / _attempt_request_name(
+        recover_dead_tasks=bool(request.get("recoverDeadTasks")),
+    )
     report_path = evidence_dir / "report.json"
     write_attempt_document_create_once(request_path, request)
     if report_path.is_file():
@@ -465,16 +469,19 @@ def run_reliabletask_fleet(
         )
         if not exact_attempt:
             raise ValueError("ReliableTask fleet report attempt identity drift")
-        if existing.passed or all(
+        if existing.passed or (
+            not bool(request.get("recoverDeadTasks"))
+            and all(
             outcome.status in {"succeeded", "dead"}
             for outcome in existing.outcomes
+            )
         ):
             return existing
         write_attempt_document_create_once(
             evidence_dir / "runtime-report-000.json",
             existing_report,
         )
-    command, cwd = _fleet_command(execution_id)
+    command, cwd = _fleet_command(execution_id, stage=stage)
     environment = {
         **os.environ,
         "PYTHONDONTWRITEBYTECODE": "1",
@@ -491,7 +498,6 @@ def run_reliabletask_fleet(
     from core.runtime_policy import active_runtime_policy
 
     policy = active_runtime_policy()
-    environment["QWQ_DATA_FLEET_MAX_ATTEMPTS"] = str(policy.queue_max_attempts)
     startup_failure_limit = policy.queue_max_startup_failures
     restart_deadline = time.monotonic() + min(
         batch_timeout_seconds,
@@ -584,6 +590,25 @@ def run_reliabletask_fleet(
     raise RuntimeError(
         "ReliableTask fleet recovery exceeded campaign deadline"
         f"（executionId={execution_id}）"
+    )
+
+
+def run_reliabletask_fleet(
+    execution_id: str,
+    stage: QueueJobStage,
+    *,
+    workers: int,
+    completion_grace_seconds: int,
+) -> ReliableTaskFleetReport:
+    from content.execution.queue.reliabletask.fleet_multi_host import (
+        run_multi_host_fleet,
+    )
+
+    return run_multi_host_fleet(
+        execution_id,
+        stage,
+        workers=workers,
+        completion_grace_seconds=completion_grace_seconds,
     )
 
 

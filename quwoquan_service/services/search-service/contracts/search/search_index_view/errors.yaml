@@ -27,3 +27,16 @@ errors:
   user_message:
     zh: 搜索暂时不可用，请稍后再试
     en: Search is temporarily unavailable, please retry later
+- code: SEARCH.USER.forbidden
+  reason: forbidden
+  http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [Search]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: searchForbidden
+  go_const: ErrSearchForbidden
+  user_message:
+    zh: 当前身份不能执行该检索模式
+    en: The current principal cannot use this search mode

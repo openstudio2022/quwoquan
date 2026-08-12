@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260809--travel-image-m1--china-panda-base-research-fefb5847-not-m100--scale-003",
+  "executionBinding": "frozen",
+  "objectRef": "成都大熊猫繁育研究基地_image",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:7ae923d337f0250f435c182395701ad3439add3c678885c588f3e95bf761691e"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:7c0d41eb13247a381d39dba200caf9509749be3521ef5d522a6a80bc2e3e04eb"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:9a96832f2adcfac6e7278bfb5f5f8c0e556f08f7c5411f867876bb9df4dcf36b"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:882fa13e8abf946f423b09f7fbfba0f48ce6404ec58501737dc891d7b7a32564"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:74e7ea4c02535f3c3cf2149a9966d77a61c7d219eaf0772cff6c075b3e8875b1"
+    }
+  ]
+}

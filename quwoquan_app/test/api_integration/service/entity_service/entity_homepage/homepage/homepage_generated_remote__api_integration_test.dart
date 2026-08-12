@@ -414,6 +414,28 @@ final class _HomepageApiContractHarness {
                 '$clientPageId requires an explicit idempotency scope',
               )),
         ),
+        claimRequestInvocationContext:
+            (clientPageId, surface, {idempotencyKey}) => invocationContext(
+              surface,
+              clientPageId,
+              idempotencyKey:
+                  idempotencyKey ??
+                  activeIdempotencyKey ??
+                  (throw StateError(
+                    '$clientPageId requires an explicit idempotency scope',
+                  )),
+            ),
+        statusReportInvocationContext:
+            (clientPageId, surface, {idempotencyKey}) => invocationContext(
+              surface,
+              clientPageId,
+              idempotencyKey:
+                  idempotencyKey ??
+                  activeIdempotencyKey ??
+                  (throw StateError(
+                    '$clientPageId requires an explicit idempotency scope',
+                  )),
+            ),
       );
       final accountLifecycle = RemoteAccountLifecycleCommandWriter(
         client: client,

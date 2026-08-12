@@ -803,7 +803,6 @@ def resolve_nonprod_active_candidate(
         reusable, reuse_reason = can_reuse_package(
             environment,
             target,
-            require_workspace_match=False,
         )
         if not reusable:
             return _inactive_candidate(

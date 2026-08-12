@@ -29,6 +29,23 @@ class EnvironmentTopologyUserPostgresContractTest(unittest.TestCase):
             issues,
         )
 
+    def test_local_media_upload_role_rejects_non_object_storage_port(self) -> None:
+        topology = copy.deepcopy(load_environment_topology())
+        topology["targets"]["alpha-local"]["resolvedUrlRoles"]["mediaUpload"][
+            "portRole"
+        ] = "media-edge"
+
+        issues = validate_environment_topology(topology)
+
+        self.assertTrue(
+            any(
+                "alpha-local: resolvedUrlRoles.mediaUpload.portRole must be "
+                "object-storage-edge" in issue
+                for issue in issues
+            ),
+            issues,
+        )
+
     def test_hosted_import_without_user_postgres_dsn_env_fails_closed(self) -> None:
         topology = copy.deepcopy(load_environment_topology())
         del topology["targets"]["prod-hosted"]["dataRelease"]["userPostgresDsnEnv"]

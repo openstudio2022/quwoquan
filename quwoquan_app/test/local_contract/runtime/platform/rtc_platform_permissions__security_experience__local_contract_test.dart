@@ -154,6 +154,11 @@ void main() {
       '${appRoot.path}/vendor/plugins/flutter_callkit_incoming/ios/'
       'flutter_callkit_incoming/Classes/SwiftFlutterCallkitIncomingPlugin.swift',
     ).readAsStringSync();
+    final androidCallKitPlugin = File(
+      '${appRoot.path}/vendor/plugins/flutter_callkit_incoming/android/src/'
+      'main/kotlin/com/hiennv/flutter_callkit_incoming/'
+      'FlutterCallkitIncomingPlugin.kt',
+    ).readAsStringSync();
     final decodedPolicy = jsonDecode(pluginPolicy) as Map<String, Object?>;
     final eagerPlugins = (decodedPolicy['eagerRuntime'] as List).cast<String>();
     final deferredRtcPlugins = (decodedPolicy['rtc'] as List).cast<String>();
@@ -252,6 +257,29 @@ void main() {
     expect(
       iosCallKitPlugin,
       contains('guard !registeredMessengerIds.contains(messengerId)'),
+    );
+    final attachedToEngineBody = RegExp(
+      r'override fun onAttachedToEngine\([^\{]+\) \{(?<body>.*?)\n    \}',
+      dotAll: true,
+    ).firstMatch(androidCallKitPlugin)?.namedGroup('body');
+    expect(attachedToEngineBody, isNotNull);
+    expect(attachedToEngineBody, contains('sharePluginWithRegister'));
+    expect(attachedToEngineBody, contains('schedulePhoneAccountRegistration'));
+    expect(
+      attachedToEngineBody,
+      isNot(contains('.registerPhoneAccount()')),
+      reason: 'Telecom Binder 注册不得阻塞 Flutter 主线程的 engine attach',
+    );
+    expect(
+      androidCallKitPlugin,
+      contains('phoneAccountRegistrationInFlight.compareAndSet(false, true)'),
+    );
+    expect(androidCallKitPlugin, contains('Executors.newSingleThreadExecutor'));
+    expect(androidCallKitPlugin, contains('isDaemon = true'));
+    expect(androidCallKitPlugin, contains('registrationExecutor.shutdown()'));
+    expect(
+      androidCallKitPlugin,
+      contains('PhoneAccount registration failed off the main thread.'),
     );
   });
 }

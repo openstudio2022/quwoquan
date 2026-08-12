@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from content.execution.controller.stage_download_build import (
-    _media_validation_fallback,
-    _source_digest_drift_issue,
-    _typed_media_validation_issues,
+from content.execution.controller.stage_download_issue_routing import (
+    media_validation_fallback,
+    source_digest_drift_issue,
+    typed_media_validation_issues,
 )
 from content.execution.workspace import ExecutionSourceDigestDriftError
 from core.control_types import ExecutionStage
@@ -25,18 +25,18 @@ def _wire_issue(code: DataIssueCode) -> dict[str, object]:
 
 
 def test_cover_conflict_preserves_code_and_rewinds_homepage_build() -> None:
-    issues = _typed_media_validation_issues(
+    issues = typed_media_validation_issues(
         {"issues": [_wire_issue(DataIssueCode.MEDIA_COVER_CONFLICT)]}
     )
 
     assert issues[0].code is DataIssueCode.MEDIA_COVER_CONFLICT
     assert issues[0].stage is DataIssueStage.BUILD_VALIDATE
     assert issues[0].recovery is DataRecoveryAction.REWIND_COMPOSE
-    assert _media_validation_fallback(issues) is ExecutionStage.BUILD_HOMEPAGE
+    assert media_validation_fallback(issues) is ExecutionStage.BUILD_HOMEPAGE
 
 
 def test_download_issue_takes_precedence_over_cover_rebuild() -> None:
-    issues = _typed_media_validation_issues(
+    issues = typed_media_validation_issues(
         {
             "issues": [
                 _wire_issue(DataIssueCode.MEDIA_COVER_CONFLICT),
@@ -49,11 +49,11 @@ def test_download_issue_takes_precedence_over_cover_rebuild() -> None:
         DataIssueCode.MEDIA_COVER_CONFLICT,
         DataIssueCode.MEDIA_DOWNLOAD_INCOMPLETE,
     }
-    assert _media_validation_fallback(issues) is ExecutionStage.DOWNLOAD_FETCH
+    assert media_validation_fallback(issues) is ExecutionStage.DOWNLOAD_FETCH
 
 
 def test_source_digest_drift_is_a_stopped_contract_issue() -> None:
-    issue = _source_digest_drift_issue(
+    issue = source_digest_drift_issue(
         ExecutionSourceDigestDriftError("execution manifest sourceDigest drift")
     )
 

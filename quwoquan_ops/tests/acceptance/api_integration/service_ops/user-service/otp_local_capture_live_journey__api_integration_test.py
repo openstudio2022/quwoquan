@@ -1,6 +1,7 @@
 """Live SendOtp → local_capture → protected read → LoginWithPhone journey.
 
 spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-009
+spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-011.t3
 """
 
 from __future__ import annotations
@@ -23,7 +24,8 @@ from quwoquan_ops.cli.lib.deployment_candidate_manifest import (  # noqa: E402
     load_candidate_manifest,
 )
 from quwoquan_ops.cli.lib.local_environment_auth import (  # noqa: E402
-    open_local_phone_acceptance_session,
+    close_test_data_acceptance_actor,
+    open_test_data_acceptance_session,
 )
 from quwoquan_ops.cli.lib.output_paths import (  # noqa: E402
     active_deployment_candidate,
@@ -55,6 +57,22 @@ def _probe(
             return 200 <= int(response.status) < 500
     except (urllib.error.URLError, TimeoutError, ValueError):
         return False
+
+
+def _runtime_probes(
+    *,
+    api_base: str,
+    user_health: str,
+    integration_health: str,
+    substitute_health: str,
+    local_tls: ssl.SSLContext,
+) -> tuple[tuple[str, str, ssl.SSLContext | None], ...]:
+    return (
+        ("api-edge", api_base + "/healthz" if api_base else "", local_tls),
+        ("user-service", user_health, None),
+        ("integration-service", integration_health, None),
+        ("sms-provider-substitute", substitute_health, local_tls),
+    )
 
 
 def _gate_block(
@@ -99,7 +117,7 @@ def _required_environment() -> str:
 
 def _load_package_bound_runtime(
     environment: str,
-) -> tuple[str, dict[str, Any], dict[str, Any], str]:
+) -> tuple[str, dict[str, Any], dict[str, Any], str, dict[str, Any]]:
     target_name = f"{environment}-local"
     active = active_deployment_candidate(target_name)
     if active is None:
@@ -178,15 +196,19 @@ def _load_package_bound_runtime(
         or startup.get("attemptId") == "unknown"
     ):
         raise RuntimeError("running full startup receipt is not candidate-bound")
-    return target_name, runtime, manifest, baseline_id
+    return target_name, runtime, manifest, baseline_id, startup
 
 
 def main() -> int:
     try:
         environment = _required_environment()
-        target_name, runtime, manifest, baseline_id = _load_package_bound_runtime(
-            environment
-        )
+        (
+            target_name,
+            runtime,
+            manifest,
+            baseline_id,
+            startup,
+        ) = _load_package_bound_runtime(environment)
     except (RuntimeError, ValueError) as exc:
         return _gate_block(str(exc))
     try:
@@ -211,11 +233,12 @@ def main() -> int:
             target=target_name,
         )
 
-    probes = (
-        ("api-edge", api_base + "/healthz" if api_base else "", None),
-        ("user-service", user_health, None),
-        ("integration-service", integration_health, None),
-        ("sms-provider-substitute", substitute_health, local_tls),
+    probes = _runtime_probes(
+        api_base=api_base,
+        user_health=user_health,
+        integration_health=integration_health,
+        substitute_health=substitute_health,
+        local_tls=local_tls,
     )
     missing = [
         name
@@ -228,15 +251,15 @@ def main() -> int:
             target=target_name,
             missing=missing,
         )
+    instance_id = "otp-" + hashlib.sha256(
+        f"{target_name}\0{baseline_id}\0{startup['attemptId']}".encode("utf-8")
+    ).hexdigest()[:40]
     try:
-        actor = open_local_phone_acceptance_session(
+        actor = open_test_data_acceptance_session(
             api_base,
             environment=environment,
             target_name=target_name,
-            dataset_epoch=hashlib.sha256(
-                f"{target_name}/{baseline_id}".encode("utf-8")
-            ).hexdigest(),
-            dataset_id="nonprod_reference_identity",
+            test_data_instance_id=instance_id,
             actor_role="primary",
             actor_index=0,
         )
@@ -255,22 +278,34 @@ def main() -> int:
             "SendOtp response is missing challengeId",
             target=target_name,
         )
-    print(
-        json.dumps(
-            {
+    receipt = {
                 "schema": "otp-local-capture-live-journey",
                 "status": "passed",
                 "target": target_name,
                 "baselineId": baseline_id,
+                "sourceRevision": manifest["sourceRevision"],
                 "runtimeConfigDigest": manifest["runtimeConfigDigest"],
+                "configurationDigest": manifest["configurationDigest"],
+                "providerRuntimeDigest": manifest["providerRuntime"][
+                    "composition"
+                ]["runtimeCompositionDigest"],
+                "startupAttemptId": startup["attemptId"],
                 "challengePresent": True,
                 "sessionPresent": True,
                 "nonPromotable": True,
-            },
-            ensure_ascii=False,
-            indent=2,
+    }
+    try:
+        close_test_data_acceptance_actor(
+            api_base,
+            actor=actor,
+            test_data_instance_id=instance_id,
         )
-    )
+    except (OSError, RuntimeError, ValueError):
+        return _gate_block(
+            "isolated OTP acceptance actor cleanup failed",
+            target=target_name,
+        )
+    print(json.dumps(receipt, ensure_ascii=False, indent=2))
     return 0
 
 

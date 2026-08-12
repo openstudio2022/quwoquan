@@ -136,10 +136,15 @@ class _RecordingAnnouncementRepository extends MockChatRepository {
   @override
   Future<void> updateAnnouncement(
     String conversationId,
-    String announcement,
-  ) async {
+    String announcement, {
+    String? idempotencyKey,
+  }) async {
     published.add((conversationId, announcement));
-    await super.updateAnnouncement(conversationId, announcement);
+    await super.updateAnnouncement(
+      conversationId,
+      announcement,
+      idempotencyKey: idempotencyKey,
+    );
   }
 }
 

@@ -39,6 +39,9 @@ func Generate(contractGraph *graph.ContractGraph) ([]Snapshot, error) {
 	operationsByDomain := map[string][]ast.Operation{}
 	transportOwners := map[string]string{}
 	for _, operation := range contractGraph.Operations {
+		if operation.Transport == "graphql" {
+			continue
+		}
 		if !isVersionedTransport(operation.PathTemplate) {
 			continue
 		}

@@ -120,7 +120,7 @@
 - 环境集合精确等于 alpha/beta/gamma/prod，不存在 dev 或 prod-gray
 - prod gray 仅是 rollout stage
 - 每个服务以 environments/<env> 作为该环境唯一入口，四环境只依赖公共 config/resources/deploy 基线，环境之间不继承
-- 公共资源、Data release 与 artifact 引用职责分离；Alpha/Beta/Gamma 的候选绑定验收数据只经真实非生产主体和领域公开 command/event 创建，Prod 只接受真实用户或正式运营行为且不含 fixture、测试 seed 或非生产 runner
+- 公共资源、Data release 与 artifact 引用职责分离。同源表示相同 canonical publish、immutable release、importer、公开契约和 readback，不表示复制 Prod 数据库。Creator 是 release 内容身份而非登录 Actor。Alpha/Beta/Gamma 的 Actor 与候选绑定交易数据只经真实非生产主体和领域公开 command/event 创建，Prod 只接受真实用户或正式运营行为且不含 fixture、测试 seed 或非生产 runner
 - 第一方服务部署归服务 deploy/base 与 environments/<env>/deploy；Ops 环境目录只做可执行装配，不维护第一方 workload/topology 注册表
 - 14×4 个服务环境入口和4个 Ops 环境装配均可独立构建
 - 删除 .qwq_output 后仍可从版本控制真相源重建配置、资源与部署包；`.qwq_output` 只保存可再生运行证据、过程记录和缓存，渲染配置、临时 `.env`、TLS 与 secret 仅能位于受控仓外 `QWQ_DEPLOY_WORK_ROOT`
@@ -220,7 +220,7 @@
 - THEN 环境集合精确等于 alpha/beta/gamma/prod，不存在 dev 或 prod-gray
 - THEN prod gray 仅是 rollout stage
 - THEN 每个服务以 environments/<env> 作为该环境唯一入口，环境之间不存在引用或继承
-- THEN 公共资源、Data release 与 artifact 引用职责分离；Alpha/Beta/Gamma 验收数据只经真实非生产主体和领域公开 command/event 创建，Prod 不含 fixture、测试 seed 或非生产 runner
+- THEN 公共资源、Data release 与 artifact 引用职责分离。同源不复制 Prod 数据库，Creator 不充当登录 Actor。Alpha/Beta/Gamma 验收 Actor 与交易数据只经真实非生产主体和领域公开 command/event 创建，Prod 不含 fixture、测试 seed 或非生产 runner
 - THEN 14×4 个服务环境入口和4个 Ops 环境装配均可独立构建
 - THEN 删除 .qwq_output 后仍可从版本控制真相源重建配置、资源与部署包，`.qwq_output` 只保存可再生运行证据、过程记录和缓存，渲染配置、临时 `.env`、TLS 与 secret 位于受控仓外 `QWQ_DEPLOY_WORK_ROOT`
 - THEN `QWQ_DEPLOY_WORK_ROOT` 解析后为仓库和 `QWQ_OUTPUT_ROOT` 外的绝对 target-scoped 目录，符号链接逃逸和对根目录的 destructive cleanup 均 fail-closed

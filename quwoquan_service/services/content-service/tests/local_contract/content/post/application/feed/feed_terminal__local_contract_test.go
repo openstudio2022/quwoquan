@@ -3,6 +3,7 @@ package feed_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -231,6 +232,18 @@ func TestListFeedInitialRecommendWithoutActiveReleaseReturnsCanonicalEmpty(t *te
 		response.EmptyReason != FeedEmptyReasonNoActiveRelease ||
 		len(response.Items) != 0 {
 		t.Fatalf("unexpected no-release response: %+v", response)
+	}
+	wire, marshalErr := json.Marshal(response)
+	if marshalErr != nil {
+		t.Fatalf("marshal no-release response: %v", marshalErr)
+	}
+	var envelope map[string]any
+	if unmarshalErr := json.Unmarshal(wire, &envelope); unmarshalErr != nil {
+		t.Fatalf("unmarshal no-release response: %v", unmarshalErr)
+	}
+	objectCards, present := envelope["objectCards"].([]any)
+	if !present || len(objectCards) != 0 {
+		t.Fatalf("no-release wire objectCards = %#v, want required empty list", envelope["objectCards"])
 	}
 	if active.calls != 1 {
 		t.Fatalf("active supply calls = %d, want 1", active.calls)

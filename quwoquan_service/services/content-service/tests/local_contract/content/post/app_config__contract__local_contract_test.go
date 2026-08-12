@@ -35,6 +35,25 @@ func TestProductionImagePackagesRecommendationMetadata(t *testing.T) {
 	}
 }
 
+func TestProductionImagePackagesCandidateBoundContentImporter(t *testing.T) {
+	dockerfile, err := os.ReadFile(filepath.Join(
+		quwoquanServiceRoot(t),
+		"services/content-service/build/Dockerfile",
+	))
+	if err != nil {
+		t.Fatalf("read production Dockerfile: %v", err)
+	}
+	content := string(dockerfile)
+	for _, required := range []string{
+		"go build ${GO_BUILD_FLAGS} -o /content-import ./services/content-service/cmd/import/",
+		"COPY --from=builder /content-import /usr/local/bin/content-import",
+	} {
+		if !strings.Contains(content, required) {
+			t.Fatalf("production image must package candidate-bound importer %q", required)
+		}
+	}
+}
+
 func TestGetAppConfigUsesGenericCanaryMatrixPayload(t *testing.T) {
 	service := postapp.NewPostService(
 		postapp.BindDataPorts(testsupport.NewPostStore(nil)),

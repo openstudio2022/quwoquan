@@ -1,31 +1,33 @@
 """Materialize one approved formal video object."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import hashlib
 import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 
+from core.intersection_signal import build_intersection_hints
+from core.io import read_json, write_json
+from core.paths import execution_root
+from core.schema import assert_valid
+from governance.content_supply_policy import load_content_supply_policy
+
+from content.execution.identity import parse_execution_id
 from content.execution.runtime_contract import stage_execution_context
 from content.post.materialize_contract import _normalized_runtime_entity_refs
 from content.post.review_evidence import write_review_evidence
+from content.post.video.authoring import video_script_path
 from content.post.video.codec import (
     VideoScriptDraft,
     VideoWritingPack,
     load_video_draft_meta,
     load_video_writing_pack,
 )
-from content.post.video.authoring import video_script_path
 from content.post.video.source_video import SourcedVideoAsset
 from content.post.video.sourced_package import (
     SourcedVideoPackageRequest,
     render_sourced_video_package,
 )
-from content.execution.identity import parse_execution_id
-from core.intersection_signal import build_intersection_hints
-from core.io import read_json, write_json
-from core.paths import execution_root
-from core.schema import assert_valid
-from governance.content_supply_policy import load_content_supply_policy
 
 
 def _source_video(
@@ -114,6 +116,9 @@ def materialize_video_post(
     story_spine = compose_payload.get("storySpine")
     manifest.update(
         {
+            "contentId": "qwq_data_"
+            + hashlib.sha256(f"{execution_id}|{ref}".encode()).hexdigest()[:24],
+            "version": 1,
             "normalizedEntityRefs": _normalized_runtime_entity_refs(entity_refs),
             "reviewDecision": "approved",
             "publishLayout": "video",
@@ -134,6 +139,13 @@ def materialize_video_post(
         value = creator_payload.get(field)
         if value not in (None, "", {}):
             manifest[field] = value
+    from content.execution.planning.rewrite import apply_execution_rewrite_identity
+
+    manifest = apply_execution_rewrite_identity(
+        manifest,
+        execution_id=execution_id,
+        ref=ref,
+    )
     manifest["intersectionHints"] = build_intersection_hints(manifest)
     assert_valid(manifest, "content", "post_manifest", label=f"video_manifest:{ref}")
     write_json(manifest_path, manifest)

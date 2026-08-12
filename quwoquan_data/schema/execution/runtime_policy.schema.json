@@ -31,23 +31,44 @@
             },
             "explicitSelections": {
               "type": "array",
-              "minItems": 1,
+              "minItems": 2,
               "items": { "$ref": "#/$defs/explicitSemanticSelection" },
-              "contains": {
-                "type": "object",
-                "properties": {
-                  "selectionId": { "const": "cursor_auto" },
-                  "provider": { "const": "cursor_sdk" },
-                  "model": { "const": "auto" },
-                  "modelParameters": { "const": [] },
-                  "runtime": { "const": "local" },
-                  "requiresNewRetryOf": { "const": false }
+              "allOf": [
+                {
+                  "contains": {
+                    "type": "object",
+                    "properties": {
+                      "selectionId": { "const": "cursor_grok" },
+                      "provider": { "const": "cursor_sdk" },
+                      "model": { "const": "grok-4.5" },
+                      "modelParameters": { "const": [] },
+                      "runtime": { "const": "local" },
+                      "requiresNewRetryOf": { "const": false }
+                    },
+                    "required": [
+                      "selectionId", "provider", "model", "modelParameters",
+                      "runtime", "requiresNewRetryOf"
+                    ]
+                  }
                 },
-                "required": [
-                  "selectionId", "provider", "model", "modelParameters",
-                  "runtime", "requiresNewRetryOf"
-                ]
-              }
+                {
+                  "contains": {
+                    "type": "object",
+                    "properties": {
+                      "selectionId": { "const": "cursor_auto" },
+                      "provider": { "const": "cursor_sdk" },
+                      "model": { "const": "auto" },
+                      "modelParameters": { "const": [] },
+                      "runtime": { "const": "local" },
+                      "requiresNewRetryOf": { "const": true }
+                    },
+                    "required": [
+                      "selectionId", "provider", "model", "modelParameters",
+                      "runtime", "requiresNewRetryOf"
+                    ]
+                  }
+                }
+              ]
             },
             "capacity": {
               "type": "object",

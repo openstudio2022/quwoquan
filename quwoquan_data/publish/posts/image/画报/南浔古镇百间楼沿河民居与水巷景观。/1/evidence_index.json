@@ -1,0 +1,34 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260808--travel-image-m1--china-nanxun-town-bootstrap-not-m100--scale-003",
+  "executionBinding": "frozen",
+  "objectRef": "南浔镇_image",
+  "evidence": [
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:75ba355b62f6d7baa0e09cbc15dc0c8e17dc2f82cd9674cae89578e1f1560d96"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:8cb9614f0720aae1f96b560094d41cbf48305e24a3d9294b4bb1c30d04936cea"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:ffba3d6ff442cbddccab405ce29fdecac4251958e65ad11142dc4a6c34cf1ee5"
+    },
+    {
+      "kind": "runtime_review",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:bb048f44bf1cc9fb59397cf78c904279ad75f25e316f14e296c86f5f14b381f8"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:26831bd7fce281c700a84a31edb2da3410011d6f75d5ced984d5a375a29a9782"
+    }
+  ]
+}

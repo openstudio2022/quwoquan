@@ -81,6 +81,7 @@ def test_process_worker_keeps_stdout_protocol_clean(
         "jobSetEnvelopeDigest": "sha256:" + "b" * 64,
         "jobSetDigest": "sha256:" + "c" * 64,
         "actualTaskDigest": "sha256:" + "c" * 64,
+        "maxAttempts": 3,
     }
     monkeypatch.setattr(
         sys,
@@ -335,11 +336,12 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
                 "idempotencyKey": payload["idempotencyKey"],
                 "jobId": job.job_id,
             "executionId": EXECUTION_ID,
-            "ref": ref,
-            "stage": "author",
-            "partitionKey": partition_key("article", ref, 16),
-        }
-    ]
+                "ref": ref,
+                "stage": "author",
+                "partitionKey": partition_key("article", ref, 16),
+                "maxAttempts": job.max_attempts,
+            }
+        ]
     result = execute_work_item(
         DataContentWorkItem.from_document(
             {
@@ -431,11 +433,12 @@ def test_post_author_evidence_binds_output_and_stable_job(monkeypatch) -> None:
                 "idempotencyKey": publish_payload["idempotencyKey"],
                 "jobId": publish_job.job_id,
             "executionId": EXECUTION_ID,
-            "ref": ref,
-            "stage": "publish",
-            "partitionKey": partition_key("article", ref, 16),
-        }
-    ]
+                "ref": ref,
+                "stage": "publish",
+                "partitionKey": partition_key("article", ref, 16),
+                "maxAttempts": publish_job.max_attempts,
+            }
+        ]
     publish_result = execute_work_item(
         DataContentWorkItem.from_document(
             {

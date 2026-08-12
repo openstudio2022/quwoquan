@@ -15,29 +15,38 @@ from typing import Any
 from core import paths
 from core.io import read_json, write_json
 from core.schema import assert_valid
-from core.source_digest import current_source_digest
+from core.source_digest import (
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
+)
 
 from content.execution.campaign.external_inputs import (
     content_source_revision,
     external_inputs_digest,
     verify_external_input_refs,
 )
+from content.execution.campaign.m100_alpha_acceptance import (
+    validate_m100_alpha_acceptance_binding,
+)
 from content.execution.campaign.scale import execution_campaign_scale
+from content.execution.closure.adoption_campaign_contract import (
+    ADOPTION_OPERATIONS,
+    CAMPAIGN_ADOPTION_FIELD,
+)
 from content.execution.identity import parse_execution_id, validate_execution_id
 from content.execution.model_contract import (
     CURSOR_AUTO_SEMANTIC_SELECTION_ID,
     DEFAULT_SEMANTIC_SELECTION_ID,
     normalize_semantic_selection_id,
 )
-from content.execution.request import RuntimeExecutionRequest
-from content.execution.closure.adoption_campaign_contract import (
-    ADOPTION_OPERATIONS,
-    CAMPAIGN_ADOPTION_FIELD,
-)
 from content.execution.planning.semantic_preflight_admission import (
     bind_semantic_preflight_receipt,
     validate_semantic_preflight_binding_at,
 )
+from content.execution.planning.semantic_failover_admission import (
+    require_cursor_auto_retry_admission,
+)
+from content.execution.request import RuntimeExecutionRequest
 from content.execution.workspace import entity_catalog_digest
 
 SUBMISSION_SCHEMA = "quwoquan_data.content_execution_submission"
@@ -117,13 +126,17 @@ def _git_branch(repo_root: Path) -> str:
 def _require_stable_source_inputs(
     source_document: dict[str, object],
     *,
+    execution_bundle: dict[str, object],
     repo_root: Path,
 ) -> None:
     """Reject digest drift without requiring a shared worktree to be clean."""
-    observed = current_source_digest(repo_root=repo_root).to_document()
-    if observed != source_document:
+    observed = current_source_definition_snapshot(repo_root=repo_root).to_document()
+    observed_bundle = current_execution_bundle_identity(
+        repo_root=repo_root
+    ).to_document()
+    if observed != source_document or observed_bundle != execution_bundle:
         raise ValueError(
-            "campaign submission sourceDigest inputs changed during freeze"
+            "campaign submission source snapshot/execution bundle changed during freeze"
         )
 
 
@@ -197,8 +210,15 @@ def write_submission(
                 "GATE_BLOCK DATA.CAMPAIGN.EXTERNAL_INPUT_RETRY_INVALID: "
                 "retryOf must preserve vertical and carrier"
             )
-    source = current_source_digest(repo_root=source_repo).to_document()
-    _require_stable_source_inputs(source, repo_root=source_repo)
+    source = current_source_definition_snapshot(repo_root=source_repo).to_document()
+    execution_bundle = current_execution_bundle_identity(
+        repo_root=source_repo
+    ).to_document()
+    _require_stable_source_inputs(
+        source,
+        execution_bundle=execution_bundle,
+        repo_root=source_repo,
+    )
     discovery = (
         source_repo
         / "quwoquan_data"
@@ -241,6 +261,11 @@ def write_submission(
             "requiredWorkers": request.required_workers,
             "partitionCount": request.partition_count,
             "capacityPlanDigest": request.capacity_plan_digest,
+            "workerHostSetBinding": (
+                dict(request.worker_host_set_binding)
+                if request.worker_host_set_binding is not None
+                else None
+            ),
             "scaleSourcePool": (
                 dict(request.scale_source_pool)
                 if request.scale_source_pool is not None
@@ -262,8 +287,10 @@ def write_submission(
             "gitCommitSha": _git_commit(source_repo),
             "sourceRevision": source_revision,
             "sourceDigest": source,
+            "executionBundle": execution_bundle,
             "entityCatalogDigest": catalog_digest,
             "predecessorReconciliation": envelope.get("predecessorReconciliation"),
+            "m100AlphaAcceptance": envelope.get("m100AlphaAcceptance"),
         }
         drift = [
             key
@@ -339,6 +366,7 @@ def write_submission(
             current_source_identity = {
                 "sourceRevision": source_revision,
                 "sourceDigest": source,
+                "executionBundle": execution_bundle,
                 "entityCatalogDigest": catalog_digest,
             }
             expected_predecessor_scope = {
@@ -368,6 +396,12 @@ def write_submission(
                     "GATE_BLOCK DATA.CAMPAIGN.SUBMISSION_RECONCILIATION_DRIFT: "
                     "predecessor receipt lineage/target/scope binding drift"
                 )
+        alpha_acceptance = envelope.get("m100AlphaAcceptance")
+        if alpha_acceptance is not None:
+            validate_m100_alpha_acceptance_binding(
+                alpha_acceptance,
+                output_root=(semantic_preflight_output_root or paths.OUTPUT_ROOT),
+            )
     else:
         external_refs = []
         frozen_semantic_selection_id = (
@@ -381,6 +415,11 @@ def write_submission(
             )
             if semantic_preflight_receipt is not None
             else None
+        )
+    if frozen_semantic_selection_id == CURSOR_AUTO_SEMANTIC_SELECTION_ID:
+        require_cursor_auto_retry_admission(
+            retry_of,
+            output_root=(semantic_preflight_output_root or paths.OUTPUT_ROOT),
         )
     if (
         semantic_preflight_binding is None
@@ -414,6 +453,11 @@ def write_submission(
         "requiredWorkers": request.required_workers,
         "partitionCount": request.partition_count,
         "capacityPlanDigest": request.capacity_plan_digest,
+        "workerHostSetBinding": (
+            dict(request.worker_host_set_binding)
+            if request.worker_host_set_binding is not None
+            else None
+        ),
         "topic": request.topic,
         "targetNames": list(request.target_names),
         "sourceProviders": list(request.source_providers),
@@ -423,6 +467,7 @@ def write_submission(
         "gitCommitSha": _git_commit(source_repo),
         "sourceRevision": source_revision,
         "sourceDigest": source,
+        "executionBundle": execution_bundle,
         "entityCatalogDigest": catalog_digest,
         "externalInputRefs": external_refs,
         "externalInputsDigest": external_inputs_digest(external_refs),
@@ -433,6 +478,8 @@ def write_submission(
         stable["sourcePoolSelection"] = dict(request.source_pool_selection or {})
     if semantic_preflight_binding is not None:
         stable["semanticPreflightReceipt"] = dict(semantic_preflight_binding)
+    if campaign_envelope is not None and campaign_envelope.get("m100AlphaAcceptance") is not None:
+        stable["m100AlphaAcceptance"] = dict(campaign_envelope["m100AlphaAcceptance"])
     if (
         campaign_envelope is not None
         and campaign_envelope.get("predecessorReconciliation") is not None
@@ -447,7 +494,11 @@ def write_submission(
         root=campaigns_dir,
     )
     with _submission_lock(campaigns_dir):
-        _require_stable_source_inputs(source, repo_root=source_repo)
+        _require_stable_source_inputs(
+            source,
+            execution_bundle=execution_bundle,
+            repo_root=source_repo,
+        )
         _assert_no_cross_campaign_collision(
             campaigns_dir=campaigns_dir,
             root_execution_id=root_identity.execution_id,

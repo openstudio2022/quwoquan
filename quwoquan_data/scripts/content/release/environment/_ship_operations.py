@@ -7,7 +7,10 @@ import argparse
 from content.release.environment._ship_operation_dependencies import (
     ShipOperationDependencies,
 )
-from content.release.environment.consistency import report_to_text, scan_release_contract
+from content.release.environment.consistency import (
+    report_to_text,
+    scan_release_contract,
+)
 from content.release.environment.homepage_verification_cases import (
     HomepageVerificationCaseError,
 )
@@ -19,10 +22,9 @@ from content.release.model import (
     ImportMode,
 )
 from core.control_types import ReleaseRunKind, ReleaseRunStatus
-from core.io import write_json
+from core.io import read_json, write_json
 from core.paths import release_ref
 from core.release_layout import payload_digest, payload_file
-from core.io import read_json
 
 
 def apply_release(
@@ -65,6 +67,11 @@ def apply_release(
     if dependencies.release_requires_full_sync(release) and not full_sync:
         raise SystemExit("[ship] immutable release requires --full-sync")
     for env in envs:
+        dependencies.assert_environment_release_policy(
+            release=release,
+            contract=contract,
+            environment=env,
+        )
         target = dependencies.resolve_environment_release_target(env)
         dependencies.assert_target_action_allowed(
             target=target,
@@ -80,14 +87,11 @@ def apply_release(
             kind=ReleaseRunKind.APPLY,
         )
         if args.import_to_db and not args.dry_run:
-            readiness_phase = (
-                ShipReadinessPhase.RESEARCH
-                if lifecycle_evidence["releaseClass"] == "research"
-                else ShipReadinessPhase.IMPORT
-            )
+            # Lifecycle-specific readback is post-import evidence owned by
+            # ``ship verify``; pre-import readiness only proves import capability.
             dependencies.require_environment_readiness(
                 environment=target.environment,
-                phase=readiness_phase,
+                phase=ShipReadinessPhase.IMPORT,
                 run=run,
                 release_id=release_id,
                 manifest_digest=lifecycle_evidence["manifestDigest"],
@@ -138,8 +142,7 @@ def apply_release(
                 env=env,
                 run=run,
                 mongo_uri=target.mongo_uri,
-                redis_addr=target.redis_addr,
-                redis_database=target.redis_database,
+                media_avatar_base_url=target.media_delivery_base_url,
                 media_image_base_url=target.media_delivery_base_url,
                 media_video_base_url=target.media_delivery_base_url,
                 dry_run=bool(args.dry_run),
@@ -259,6 +262,11 @@ def rollback_release(
         "manifestDigest": payload_digest(release),
     }
     env = str(args.env)
+    dependencies.assert_environment_release_policy(
+        release=release,
+        contract=contract,
+        environment=env,
+    )
     target = dependencies.resolve_environment_release_target(env)
     if (
         env == DeploymentEnvironment.PROD
@@ -288,14 +296,11 @@ def rollback_release(
         kind=ReleaseRunKind.ROLLBACK,
     )
     if args.import_to_db and not args.dry_run:
-        readiness_phase = (
-            ShipReadinessPhase.RESEARCH
-            if lifecycle_evidence["releaseClass"] == "research"
-            else ShipReadinessPhase.IMPORT
-        )
+        # A rollback imports the target desired state before it can produce any
+        # lifecycle-specific readback; ``ship verify`` closes that later phase.
         dependencies.require_environment_readiness(
             environment=target.environment,
-            phase=readiness_phase,
+            phase=ShipReadinessPhase.IMPORT,
             run=run,
             release_id=target_id,
             manifest_digest=lifecycle_evidence["manifestDigest"],
@@ -356,8 +361,7 @@ def rollback_release(
             env=env,
             run=run,
             mongo_uri=target.mongo_uri,
-            redis_addr=target.redis_addr,
-            redis_database=target.redis_database,
+            media_avatar_base_url=target.media_delivery_base_url,
             media_image_base_url=target.media_delivery_base_url,
             media_video_base_url=target.media_delivery_base_url,
             dry_run=bool(args.dry_run),

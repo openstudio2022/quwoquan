@@ -47,11 +47,11 @@ def asset_sha(row: Mapping[str, Any]) -> str:
     return str(row.get("sha256") or "").removeprefix("sha256:").strip().lower()
 
 
-def _canonical_article_asset_issue(
+def _canonical_image_asset_issue(
     source_dir: Path,
     row: Mapping[str, Any],
 ) -> str:
-    """Reject a global canonical duplicate before it enters a frozen plan."""
+    """Reject a global canonical duplicate before any image enters a plan."""
     from content.post.article.route_assets import _canonical_image_conflict
 
     return _canonical_image_conflict(
@@ -110,7 +110,7 @@ def article_asset_claims(
         asset_path = root / ref
         if not asset_path.is_file():
             continue
-        if _canonical_article_asset_issue(source_dir, row):
+        if _canonical_image_asset_issue(source_dir, row):
             continue
         verdict = _assess_content_plan_publish_image(asset_path, ctx)
         if verdict.blocks_image_publish:
@@ -123,6 +123,17 @@ def article_asset_claims(
     if len(refs) < 2:
         return [], [], [], []
     return refs, shas, collection_ids, refs
+
+
+def normalize_article_media_claims(
+    claims: tuple[list[str], list[str], list[str], list[str]],
+) -> tuple[list[str], list[str], list[str], list[str], str]:
+    """Keep an illustrated closure or atomically downgrade it to text-only."""
+
+    refs, shas, collections, asset_refs = claims
+    if len(asset_refs) < 2:
+        return [], [], [], [], "text_only"
+    return refs, shas, collections, asset_refs, "illustrated"
 
 
 def claims_conflict(

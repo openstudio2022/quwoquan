@@ -271,9 +271,22 @@ class HomeMultiFormFeed extends ConsumerWidget {
     }
 
     if (feedPosts.isEmpty && !isFeedLoading && !hasBlockingError) {
-      return channelId == 'following'
-          ? _HomeFollowingFeedEmptyState(isDark: isDark)
-          : _HomeFeedCompletedEmptyState(isDark: isDark);
+      if (channelId == 'following') {
+        return _HomeFollowingFeedEmptyState(isDark: isDark);
+      }
+      if (emptyReason == ContentFeedEmptyReason.noActiveRelease) {
+        return _HomeFeedNoActiveReleaseState(
+          isDark: isDark,
+          onRetry: () {
+            unawaited(
+              ref
+                  .read(discoveryFeedMapProvider.notifier)
+                  .load(channelId, force: true),
+            );
+          },
+        );
+      }
+      return _HomeFeedCompletedEmptyState(isDark: isDark);
     }
 
     // 任务 B · 首屏 TTI：内容首帧落地时上报首屏可交互耗时（每 channel 一次）。
@@ -308,7 +321,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
         : AppSpacing.zero;
     // Impression gate 可能在子树 dispose 时补报弱曝光。此处捕获与本批卡片同源的
     // tracker/频道归因快照，禁止在 deactivated element 的回调里再次通过 ref 查祖先。
-    final behaviorTracker = ref.read(contentBehaviorTrackerProvider);
+    final behaviorTracker = ref.watch(contentBehaviorTrackerProvider);
     final impressionFeedRequestId = feedAsync.value?.feedRequestId;
     final impressionPolicyDigest = feedAsync.value?.policyDigest;
 

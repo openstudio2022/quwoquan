@@ -302,21 +302,30 @@ func seedConfigSnapshotTree(t *testing.T) string {
 	mustWrite(filepath.Join(root, "quwoquan_ops", "platform", "deploy", "base", "kustomization.yaml"), "resources: []\n")
 	mustWrite(filepath.Join(root, "quwoquan_ops", "environments", "prod", "rollout", "routing_policy.yaml"), `policy:
   enabled: true
-  grayUpstream: http://gray.internal
-  grayUpstreamTlsInsecureSkipVerify: false
-  stageDimensions:
-    gray-initial: {appVersions: [], userIds: [canary], provinces: [], carriers: []}
-    carry-on: {appVersions: ["1.1.0"], userIds: [canary], provinces: [], carriers: []}
-    full: {appVersions: [], userIds: [], provinces: [], carriers: []}
+  campaignId: release-test-001
+  candidateDigest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  allocationKeyId: rollout-test-001
+  subjectKind: device_actor
+  stage: "5"
+  status: active
+  candidateUpstream: http://candidate.internal
+  assignmentTtlDaysAfterCampaign: 30
+  internalCanary: {accountIds: [canary], deviceActorIds: []}
+  stages:
+    canary: {basisPoints: 0, appVersions: {mode: supported, values: []}, platforms: {mode: include, values: [android, ios, web]}, regions: {mode: all, values: []}, carriers: {mode: all, values: []}}
+    "5": {basisPoints: 500, appVersions: {mode: supported, values: []}, platforms: {mode: include, values: [android, ios, web]}, regions: {mode: all, values: []}, carriers: {mode: all, values: []}}
+    "20": {basisPoints: 2000, appVersions: {mode: supported, values: []}, platforms: {mode: include, values: [android, ios, web]}, regions: {mode: all, values: []}, carriers: {mode: all, values: []}}
+    "50": {basisPoints: 5000, appVersions: {mode: supported, values: []}, platforms: {mode: include, values: [android, ios, web]}, regions: {mode: all, values: []}, carriers: {mode: all, values: []}}
+    "100": {basisPoints: 10000, appVersions: {mode: supported, values: []}, platforms: {mode: include, values: [android, ios, web]}, regions: {mode: all, values: []}, carriers: {mode: all, values: []}}
 `)
 	mustWrite(filepath.Join(root, "quwoquan_ops", "environments", "prod", "access-isolation.yaml"), `schema: prod-plane-access-isolation
 target: prod-hosted
 relayAccount: {name: prod-ops}
 planes:
-  - {plane: edge, account: prod-edge-svc, sshKeySecret: PROD_EDGE_SSH_KEY, access: read-write, runtimeContainer: rootless-podman, appliesToStages: [gray-initial, carry-on, full]}
-  - {plane: media, account: prod-media-svc, sshKeySecret: PROD_MEDIA_SSH_KEY, access: read-write, runtimeContainer: rootless-podman, appliesToStages: [gray-initial, carry-on, full]}
-  - {plane: service, account: prod-service-svc, sshKeySecret: PROD_SERVICE_SSH_KEY, access: read-write, runtimeContainer: rootless-podman, appliesToStages: [gray-initial, carry-on, full]}
-  - {plane: data, account: prod-data-svc, sshKeySecret: PROD_DATA_SSH_KEY, access: read-only-audit, runtimeContainer: rootless-podman, appliesToStages: [gray-initial, carry-on, full]}
+  - {plane: edge, account: prod-edge-svc, sshKeySecret: PROD_EDGE_SSH_KEY, access: read-write, runtimeContainer: rootless-podman, appliesToStages: [canary, "5", "20", "50", "100"]}
+  - {plane: media, account: prod-media-svc, sshKeySecret: PROD_MEDIA_SSH_KEY, access: read-write, runtimeContainer: rootless-podman, appliesToStages: [canary, "5", "20", "50", "100"]}
+  - {plane: service, account: prod-service-svc, sshKeySecret: PROD_SERVICE_SSH_KEY, access: read-write, runtimeContainer: rootless-podman, appliesToStages: [canary, "5", "20", "50", "100"]}
+  - {plane: data, account: prod-data-svc, sshKeySecret: PROD_DATA_SSH_KEY, access: read-only-audit, runtimeContainer: rootless-podman, appliesToStages: [canary, "5", "20", "50", "100"]}
 `)
 	mustWrite(filepath.Join(root, "quwoquan_app", "configs", "gamma", "app_runtime.yaml"),
 		"gatewayBaseUrl: https://gamma.example.test\n")

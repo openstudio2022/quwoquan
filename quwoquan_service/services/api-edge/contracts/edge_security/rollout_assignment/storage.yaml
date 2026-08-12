@@ -1,0 +1,13 @@
+backend: redis
+role: runtime
+description: >-
+  定向 audience 的 candidate assignment 在共享 Redis 中用 SET NX 建立。
+  Redis 必须启用复制和持久化；stable/candidate API Edge 共享同一 scene。
+redis_cache:
+- key: edge:rollout:{campaignId}:{subjectDigest}
+  ttl_seconds: 2592000
+  type: string
+  scene: general
+  description: >-
+    value 恒为 candidate。TTL 由 campaign 预计结束时间加 30 天派生；
+    不得在每次请求中延长，不得持久化原始 deviceActorId。

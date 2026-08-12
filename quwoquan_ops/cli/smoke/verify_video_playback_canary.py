@@ -63,9 +63,9 @@ def _required_secret_env(name: str) -> None:
 
 def _required_rollout_stage(name: str) -> str:
     stage = os.environ.get(name, "").strip()
-    if stage != "gray-initial":
+    if stage != "canary":
         raise ValueError(
-            f"required prod rollout stage is gray-initial, got {stage or '<missing>'} from {name}"
+            f"required prod rollout stage is canary, got {stage or '<missing>'} from {name}"
         )
     return stage
 

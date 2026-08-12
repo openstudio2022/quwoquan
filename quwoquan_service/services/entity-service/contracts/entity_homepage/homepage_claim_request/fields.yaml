@@ -166,6 +166,14 @@ types:
       - {name: reviewNote, type: string, constraints: [NULLABLE]}
       - {name: createdAt, type: timestamp, constraints: [NOT_NULL]}
       - {name: reviewedAt, type: timestamp, constraints: [NULLABLE]}
+  GetMyPendingHomepageClaimRequestQuery:
+    fields:
+      - name: homepageId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
   ReviewHomepageClaimRequestCommand:
     fields:
       - name: homepageId

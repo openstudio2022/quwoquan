@@ -320,6 +320,39 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /homepages/{homepageId}/claim-requests/mine:
+        get:
+            operationId: GetMyPendingHomepageClaimRequest
+            x-contract-operation-id: entity.homepage_claim_request.GetMyPendingHomepageClaimRequest
+            x-object-id: entity.homepage_claim_request
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: HomepageClaimQueryFacade
+                method: getMyPending
+                reader: MyPendingHomepageClaimRequestReader
+                slice: HomepageClaimRequestSlice
+            parameters:
+                - name: homepageId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageClaimRequestView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /homepages/{homepageId}/claimed-basics:
         patch:
             operationId: UpdateClaimedHomepageBasics
@@ -797,6 +830,44 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/HomepageStatusReport'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /homepages/{homepageId}/status-reports/mine:
+        get:
+            operationId: GetMyPendingHomepageStatusReport
+            x-contract-operation-id: entity.homepage_status_report.GetMyPendingHomepageStatusReport
+            x-object-id: entity.homepage_status_report
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: HomepageStatusReportQueryFacade
+                method: getMyPending
+                reader: MyPendingHomepageStatusReportReader
+                slice: HomepageStatusReportSlice
+            parameters:
+                - name: homepageId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: reason
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HomepageStatusReportView'
                 default:
                     description: Runtime failure
                     content:

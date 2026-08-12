@@ -21,6 +21,7 @@ from core.content_source_registry import homepage_source_can_seed_base_draft
 from content.post.article.evidence_text import clean_source_markdown, score_source_markdown
 from governance.coverage.entity_extract import entity_ref as build_entity_ref, require_domain_etype
 from core.source_catalog import (
+    ARTICLE_BASE_SOURCE_CATEGORIES,
     coverage_issues,
     platform_category,
     source_category_coverage,
@@ -127,21 +128,6 @@ def _homepage_plan_authority_issues(
         issues.append(f"{entity_id}: homepage research needs primary authority encyclopedia evidence")
     return issues
 
-_ARTICLE_BASE_CATEGORIES = {
-    "travelogue",
-    "guidebook",
-    "travel_guide",
-    "wikivoyage",
-    "official_article",
-    "vertical_professional",
-    "ugc_longform",
-    "community_post",
-    "media_article",
-    "platform_article",
-    "forum_thread",
-    "review_note",
-}
-
 def _article_plan_quality_issues(
     planned_sources: list[Mapping[str, Any]],
     *,
@@ -165,7 +151,7 @@ def _article_plan_quality_issues(
             or platform_category(str(source.get("platform") or ""))
             or ""
         )
-        if category and category not in _ARTICLE_BASE_CATEGORIES:
+        if category and category not in ARTICLE_BASE_SOURCE_CATEGORIES:
             issues.append(
                 f"{entity_id}: article source {source.get('source_id')}: "
                 f"base source category must be article-quality, got {category}"

@@ -4,6 +4,7 @@ package local_contract
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -29,12 +30,18 @@ func TestSubmitSMSOTPSetsRequiredIdempotencyKeyHeader(t *testing.T) {
 	}
 
 	var capturedIdempotency string
+	var captured struct {
+		Payload map[string]string `json:"payload"`
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		capturedIdempotency = r.Header.Get("Idempotency-Key")
 		if r.Header.Get("Authorization") == "" {
 			t.Fatalf("authorization header missing")
 		}
-		_, _ = io.ReadAll(r.Body)
+		raw, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(raw, &captured); err != nil {
+			t.Fatalf("decode external interaction request: %v", err)
+		}
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"requestId":"otp_req_test","status":"accepted","acceptedAt":"2026-08-04T00:00:00Z"}`))
 	}))
@@ -57,11 +64,18 @@ func TestSubmitSMSOTPSetsRequiredIdempotencyKeyHeader(t *testing.T) {
 		CodeRef:        "sealed",
 		IdempotencyKey: "otp:hash:202608041200",
 		ExpiresAt:      time.Now().UTC().Add(5 * time.Minute),
+		Platform:       "android",
+		RequestRef:     "otp_req_test",
 	}); err != nil {
 		t.Fatalf("submit: %v", err)
 	}
 	if capturedIdempotency != "otp:hash:202608041200" {
 		t.Fatalf("Idempotency-Key = %q, want otp:hash:202608041200", capturedIdempotency)
+	}
+	if captured.Payload["platform"] != "android" ||
+		captured.Payload["requestRef"] != "otp_req_test" ||
+		captured.Payload["templateId"] != "sms_otp_login_android_retriever" {
+		t.Fatalf("unexpected typed SMS template payload: %#v", captured.Payload)
 	}
 }
 

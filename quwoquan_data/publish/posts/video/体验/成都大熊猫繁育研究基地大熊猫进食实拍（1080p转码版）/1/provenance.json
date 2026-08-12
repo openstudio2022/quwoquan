@@ -1,0 +1,42 @@
+{
+  "executionId": "20260809--travel-video-m1--china-panda-base-research-92eed002-epoch5-not-m100--scale-001",
+  "agentRunId": "run-61bce31a-7d08-44b0-877c-fab191700783",
+  "agentModel": "auto",
+  "renderStrategy": "sourced_video_transcode",
+  "outputAudioStatus": "preserved_authorized",
+  "sources": [
+    {
+      "assetRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__cb969ea7/assets/source.mp4",
+      "sourceRef": "https://commons.wikimedia.org/wiki/File:Chengdu_Research_Base_of_Giant_Panda_Breeding-P1680515_Date_2019-12-27.webm",
+      "rightsRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__cb969ea7/rights/permission_evidence.json",
+      "mediaProbeRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__cb969ea7/media/probe.json",
+      "watermarkEvidenceRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__cb969ea7/media/watermark_evidence.json",
+      "audioRightsEvidenceRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__cb969ea7/rights/audio_rights_evidence.json",
+      "sha256": "sha256:445aeaf9445f85ae3f9ef1d67eebd2bb8b0ebb64285dda331b85659044c3dbd7",
+      "isOriginal": false,
+      "originalCreatorId": null,
+      "originalCreatorName": "Josep Panadero",
+      "originalCreatorProfileUrl": null,
+      "platform": "Wikimedia Commons",
+      "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:Chengdu_Research_Base_of_Giant_Panda_Breeding-P1680515_Date_2019-12-27.webm",
+      "originalAssetUrl": "https://commons.wikimedia.org/wiki/File:Chengdu_Research_Base_of_Giant_Panda_Breeding-P1680515_Date_2019-12-27.webm",
+      "attributionText": "成都大熊猫繁育研究基地大熊猫进食实拍（1080p转码版） — Josep Panadero — CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:Chengdu_Research_Base_of_Giant_Panda_Breeding-P1680515_Date_2019-12-27.webm",
+      "rightsBasis": "CC BY-SA 4.0",
+      "commercialAuthorizationStatus": "verified",
+      "publicationAdmission": "research_release",
+      "authorizationProofUrl": "https://commons.wikimedia.org/wiki/File:Chengdu_Research_Base_of_Giant_Panda_Breeding-P1680515_Date_2019-12-27.webm",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "riskAcceptanceId": null,
+      "watermarkStatus": "absent",
+      "audioRightsStatus": "unverified",
+      "modelReleaseStatus": "not_required",
+      "propertyReleaseStatus": "not_required",
+      "collectedAt": "2026-08-09T06:34:01.159132+00:00",
+      "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+      "directDownload": true,
+      "accessControlBypassed": false,
+      "drmDetected": false,
+      "basis": "CC BY-SA 4.0"
+    }
+  ]
+}

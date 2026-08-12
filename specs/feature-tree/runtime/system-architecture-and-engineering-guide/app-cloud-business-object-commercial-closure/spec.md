@@ -126,6 +126,7 @@
 - 对象 `privacy.yaml` 必须派生五端字段策略 catalog；Go 与 App 运行时按 operation 所属 object 应用 `allow/drop/mask/truncate/count/drop_if_gt`，不得保留手写敏感键表或另一套字段策略。
 - `first_party_service_internal` 是第一方服务内部字段的 canonical 可见性。事件 payload 与 lifecycle consumer 的字段可见性必须逐字段闭合；`content.post.moderationStatus` 只允许第一方服务内部和 platform ops 消费，App wire 继续不可见。
 - `transactional_outbox` 的 `wire_event_type` 必须由 owning event 声明、全局唯一并生成 producer/consumer 常量；production 并行字面量必须在唯一 fresh generation 后硬切清零。
+- 每个 authored lifecycle consumer 必须从 owning object 的 `application/` 或 `adapters/` 唯一绑定真实 production facet/method 与 source path/SHA；`content.media_asset.ProcessMediaOutbox` 由同一生产 `MediaProcessingHandler.process` 消费并复用 durable lease、checkpoint、重放与健康检查，禁止 marker handler、对象 allowlist 或未进入生产组合的壳实现。
 - Go、App 与 Ops 的全部 production/governance storage consumer 必须经 `storagecontract.Decode` 或其 strict JSON view 读取 object-local `storage.yaml`；timeout、nonzero、empty、nonJSON、stderr、keyset drift 与 source TOCTOU 均 fail-closed，Python 直接解析 authoring YAML 或本地键表 fallback 必须为零。
 - `storage.yaml.indexes` 必须与 production create/query/unique guard 的键、顺序、唯一性与 partial predicate 语义等价；声明未建立、建立未使用或仅名字相等均不得通过。
 - authoring source、生成器模板和静态门通过只证明机制实现；generated catalog、运行时消费与结果证据必须绑定同一稳定 source hash。
@@ -231,19 +232,6 @@
 - 上述任一结构、依赖、测试、覆盖率或证据边界未闭环时，本 OPEN 不得删除，也不得声明 `MODEL_GOVERNANCE_READY`。
 - 完成判定：`GWT-001` 与 `GWT-007` 对应行为满足且真实测试 `spec_ref` 有效。
 
-<a id="open-007"></a>
-### OPEN-007 lifecycle consumer implementation 已全量强制绑定，等待 Data media handler
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`block`
-- 影响或价值：尚缺 Data 冻结的 `content.media_asset` lifecycle handler 生产实现；其余非冻结 consumer 已能由 loader 解析到唯一 production facet/method 与 repo-relative path/SHA，但这一个缺口仍会使完整 source view fail-closed。
-- `bindLifecycleEntrypointImplementations` 现在覆盖全部 authored lifecycle event consumer，而不只覆盖 sole-ingress projection。缺失、方法漂移、同一 facet/method 多实现或非 production path 均在 metadata load 阶段阻断，ContractGraph 的 consumer `implementation` 也成为 required evidence。
-- implementation binding 与 object entrypoint 是两层语义：每个 lifecycle consumer 都必须绑定真实实现；只有没有 HTTP/runtime operation 的 sole-ingress projection 才用这些实现边关闭 `operation.entrypoint`，有其他入口的对象不重复造 projector operation。
-- 当前唯一未闭合项是 `content.media_asset` 的 `MediaProcessingHandler` owning application/adapters facet，受 Data source/content 冻结约束，不得用错误方法名、假 handler、对象 allowlist 或忽略 binder error 代替。
-- 关闭方式是 Data 明确释放后补齐该真实 handler，令完整 current roster 的每条 lifecycle consumer 都有唯一 path/SHA，并使 metadata load、Graph、validate 与正负 implementation binding tests 同一 source hash 通过。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
-
 <a id="open-003"></a>
 ### OPEN-003 服务端从可信 principal 执行 operation 与对象授权
 
@@ -273,17 +261,6 @@
 - `targetStory` 指向其他最低可关闭 Story 的 blocked operation 仍由其所属节点独占，当前 OPEN 不代持其 Provider、外部批准、产品行为或 UAT 证据。
 - 完成判定：`GWT-006` 对应行为满足且真实测试 `spec_ref` 有效。
 
-<a id="open-009"></a>
-### OPEN-009 WebSocket stream budget 已落源，等待唯一 fresh generated descriptor 验收
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`block`
-- 影响或价值：当前尚缺唯一 fresh generation 的 descriptor、lock 与 manifest 验收证据。Cloud source 与 runtime 已完成单轨切换：`realtime.connection.WebSocketUpgrade` 声明 `stream_budget` 为 `handshake_ms=5000`、`idle_ms=90000`、`max_duration_ms=1800000`，旧 `timeout_ms` 已删除。generated descriptor admission、`BudgetGuard` 与 hijack 后 connection deadline 均已有 source 与 focused realtime test checkpoint。
-- 当前不再存在 WebSocket 预算表达或 runtime 强制缺口；尚缺的是由稳定 source 产生、可验收且未受并发写入污染的 descriptor、lock 与 manifest 结果证据。当前并发生成产物已被判定为 `INVALID_INTERMEDIATE`，不得据其接受任何生成结果。
-- 关闭方式是等待 App、Cloud 与 codegen source writer 全部停写后，由唯一 generation owner 从稳定 source 双遍 fresh generate；尚缺的验收证据必须证明 WebSocket descriptor 精确携带三元组、第二遍零 diff，且 ContractGraph、OpenAPI、operation security、App lock 与 generated manifest 使用同一 source hash。
-- 完成判定：`GWT-005` 的 source/runtime focused tests继续有效，且唯一 fresh generation 的 descriptor/lock/manifest 一致性门通过；在此之前本 OPEN 保持 `block`，不得把 source 完成包装为 generated 准出完成。
-
 <a id="open-010"></a>
 ### OPEN-010 lifecycle consumer 已唯一绑定生产实现，仍缺逐边运行时可达回执
 
@@ -295,22 +272,8 @@
 - api_integration/ResultBundle 必须逐 edge 证明 producer 写入、真实 delivery、目标 facet/method 执行、idempotency replay、checkpoint/receipt 推进，以及 retry/DLQ 或同步失败的最终恢复状态；仅 publicationDelivery、outbox 被读取、索引存在或方法名扫描均不足以通过。
 - 同步端口、同进程投影、跨服务 relay 与异步 outbox 可采用不同执行形态，但每条 edge 只能有一条 canonical 路径；不得为消红新建第二 relay、撤掉真实反向边或用对象 allowlist 替代结果证据。
 - `no_consumer_reason` 必须收敛为可校验的受控 reason class，不能继续用自由散文代替「按设计无消费者」的机器可判定事实。
-- `content.media_asset` handler 的 source implementation 缺口只由 [OPEN-007](#open-007) 承担，本 OPEN 不重复代持 Data blocker。
+- `content.media_asset` 已由生产 `MediaProcessingHandler.process` 闭合 source implementation；本 OPEN 只追踪同一 edge 的真实投递、重放与 checkpoint/receipt 结果，不重复代持已关闭的 source 缺口。
 - 完成判定：`GWT-001` 对应行为满足；current roster 每条 lifecycle edge 都有绑定同一 candidate/Graph 的真实 api_integration 或 ResultBundle，且 producer、consumer、idempotency、checkpoint/receipt 与 retry/DLQ 终态可逐边审计。
-
-<a id="open-011"></a>
-### OPEN-011 字段隐私派生已落源，等待唯一 fresh catalog 与双端运行时产物验收
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`block`
-- 影响或价值：尚缺唯一 fresh generated catalog 与双端 production 消费验收；字段级声明到强制点的 source 机制已经闭合，但当前 generated catalog 仍属 stale/INVALID_INTERMEDIATE，不能证明稳定候选实际消费了同一份策略。
-- `codegen_observability_catalog` 已从 object-local `privacy.yaml` 派生 `fieldPrivacyPolicies` 到五端 catalog；Go `field_privacy_redactor` 与 App 生成模板支持 `allow`、`drop`、`mask`、`truncate`、`count_only` 与 `drop_if_gt_100chars`，并按 `operationId -> objectId` 选择对象策略。
-- App 手写 `_sensitiveKeyTokens` 已删除；不得恢复手写敏感键表、第二套字段 emitter 或未绑定 object identity 的 fallback。
-- `first_party_service_internal` 已成为 canonical 可见性，`content.post.moderationStatus` 的声明、事件载荷与 lifecycle consumer 已逐字段对齐；这部分事实已转入 [REQ-013](#req-013) 与 [L2 DEC-024](../design.md#dec-024)，不再作为 OPEN。
-- 当前唯一日志策略阻断是 fresh generation 与实际产物验收：必须从冻结 source 双遍生成五端 catalog，证明字节幂等、source hash 一致，并由 Go 与 App production redactor 的正负测试覆盖全部策略分支和未登记对象 fail-closed。
-- `content.media_asset` 的 lifecycle/wire 与擦除时序仍受 Data 冻结约束，属于独立 Data 缺口，不得用日志 catalog 结果代替。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-016"></a>
 ### OPEN-016 发件箱线上身份已落 authoring 与 generator，等待 Data 与 production literal 单轨切换
@@ -326,13 +289,15 @@
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-018"></a>
-### OPEN-018 storage index 语义门已闭合非冻结对象，等待 Data media 两项
+### OPEN-018 storage index 语义已零缺口，等待 dead-letter 环境迁移与受控恢复发现
 
 - 类型：`capability_gap`
 - 优先级：`P3`
 - 准出影响：`track`
-- 影响或价值：尚缺 Data 冻结的两条 media index production usage；严格语义 index 门已按 [L2 DEC-024](../design.md#dec-024) 同时核验声明、production create 与 production use，并按键、顺序、唯一性和 partial predicate 的语义等价判定。
-- 当前稳定 118-root source 统计为 644 declarations / 644 created / 642 used；两条未闭 usage 都属于 Data 冻结的 `content.media_asset` media-processing dead-letter 索引。AssistantRun Durable Hook 增量已同时具备声明、建立与使用，不构成缺口。
+- 影响或价值：尚缺实现：canonical controlled replay/discovery 尚未通过公开 owner 边界形成可执行恢复能力。尚缺验收证据：alpha/beta/gamma/prod 尚无同一候选绑定的旧索引迁移、备份与 hosted readback receipt。严格语义 index 门已按 [L2 DEC-024](../design.md#dec-024) 同时核验声明、production create 与 production use，并按键、顺序、唯一性和 partial predicate 的语义等价判定。当前 live 派生结果已无 usage 缺口，不在规格固化易漂移的聚合计数。
+- `content.media_asset` 的 media-processing dead-letter 当前只有按事件身份幂等隔离的生产写入，没有按 consumer/time 或 aggregate/time 的生产查询、排序或聚合，因此两条二级索引已从 canonical storage 和创建路径删除；不得为恢复旧索引或消除门禁制造伪查询。
+- 对象级 quiesced migration 已能幂等删除已部署 Mongo 中遗留的两条二级索引并回读验证事实不丢失，但 alpha/beta/gamma/prod 尚无同一候选绑定的迁移执行、备份与 hosted readback receipt，不能仅凭源码或真实 Mongo 测试宣称环境完成。
+- canonical controlled replay/discovery 尚未实现；索引退役只消除无消费者的写放大，不等于已提供 dead-letter 枚举、审计或恢复命令。后续若准入该能力，必须先定义 object-owned query/command、权限和恢复语义，再按真实访问模式声明索引。
 - 已撤出的 `assistant.skill_trigger_delivery` INVALID_INTERMEDIATE 不得计入统计、基线或准出；未来若重新准入，必须同批完成三层实现与全部索引 create/use。
-- 关闭条件是 Data 明确解冻后为两条 media 索引补真实生产查询语义或按事实删除无用声明，并使门禁达到 declarations=created=used；不得添加 allowance、baseline 或伪查询。
-- 完成判定：`GWT-001` 对应行为满足，严格 storage index governance 在同一稳定 source hash 上零缺口，且 Data 对应 focused production tests 通过。
+- 关闭条件是严格 storage index governance 在同一稳定 source hash 上保持零缺口，四环境完成受控旧索引迁移与事实 readback，并由 canonical replay/discovery 通过公开 owner 边界形成真实恢复结果；不得添加 allowance、baseline、启动期随意删除或伪查询。
+- 完成判定：`GWT-001` 对应行为满足，四环境迁移 receipt 与 focused production/API tests 证明旧索引清零、dead-letter 事实保留且受控恢复可达。

@@ -234,7 +234,7 @@ func TestImportedPostBindingsAreCompleteAndDeterministic(t *testing.T) {
 		if strings.HasPrefix(binding.PostRef, "posts/") {
 			t.Fatalf("binding %d must emit object-relative postRef without posts/ prefix: %+v", index, binding)
 		}
-		if binding.PostID != RuntimePostID("posts/"+binding.PostRef) {
+		if binding.PostID != RuntimePostID(binding.ContentID, "posts/"+binding.PostRef) {
 			t.Fatalf("binding %d runtime identity drift: %+v", index, binding)
 		}
 		if index > 0 && bindings[index-1].PostRef >= binding.PostRef {

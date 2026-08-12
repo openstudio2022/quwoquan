@@ -39,6 +39,9 @@ func testCheckpointPolicy() map[string]any {
 }
 
 func bindFrozenJobSet(job reliabletask.DataContentJob) reliabletask.DataContentJob {
+	if job.MaxAttempts == 0 {
+		job.MaxAttempts = 3
+	}
 	job.JobSetEnvelopeDigest = "sha256:" + strings.Repeat("d", 64)
 	job.JobSetDigest = "sha256:" + strings.Repeat("c", 64)
 	job.ActualTaskDigest = job.JobSetDigest
@@ -78,8 +81,9 @@ func TestDataFleetReadRequestAcceptsBoundAuthorAndPublishJobs(t *testing.T) {
 		"requireCommercial":         true,
 		"recoverDeadTasks":          false,
 		"objectTimeoutMilliseconds": 120000,
+		"globalRequiredQuota":       1,
 		"requiredQuota":             1,
-		"jobs": []map[string]string{
+		"jobs": []map[string]any{
 			{
 				"entityRef":      entityRef,
 				"carrier":        "image",
@@ -90,6 +94,7 @@ func TestDataFleetReadRequestAcceptsBoundAuthorAndPublishJobs(t *testing.T) {
 				"ref":            "image-source-001",
 				"stage":          "publish",
 				"partitionKey":   testPartitionKey("image", "image-source-001", 16),
+				"maxAttempts":    3,
 			},
 		},
 	}
@@ -120,7 +125,84 @@ func TestDataFleetReadRequestAcceptsBoundAuthorAndPublishJobs(t *testing.T) {
 	}
 }
 
-func TestDataFleetReadRequestCopiesCampaignBindingAndRejectsJobOverride(t *testing.T) {
+func TestDataFleetReadRequestAcceptsOnlyExactHostPartitionSlice(t *testing.T) {
+	executionID := "20260720--travel-image-m1000--cn-zhejiang--scale-990"
+	entityRef := "/entity/地点/景区/西湖"
+	sourceRevision := "sha256:" + strings.Repeat("a", 64)
+	partition := testPartitionKey("image", "image-source-host-001", 16)
+	job := map[string]any{
+		"entityRef": entityRef, "carrier": "image", "sourceRevision": sourceRevision,
+		"idempotencyKey": executionID + "|" + entityRef + "|image|" + sourceRevision + "|author",
+		"jobId":          "job-author-host-001", "executionId": executionID,
+		"ref": "image-source-host-001", "stage": "author", "partitionKey": partition,
+		"maxAttempts": 3,
+	}
+	request := map[string]any{
+		"schema": importer.FleetRequestSchema, "executionId": executionID,
+		"campaignScale": "M1000", "scaleClass": "M100_PLUS",
+		"executionEnvelopeDigest": "sha256:" + strings.Repeat("e", 64),
+		"jobSetEnvelopeDigest":    "sha256:" + strings.Repeat("d", 64),
+		"jobSetDigest":            "sha256:" + strings.Repeat("c", 64),
+		"requiredWorkers":         1, "partitionCount": 16,
+		"partitionAlgorithm": "sha256_carrier_object_ref_mod_v1",
+		"checkpointPolicy":   testCheckpointPolicy(), "requireCommercial": false,
+		"recoverDeadTasks": false, "objectTimeoutMilliseconds": 120000,
+		"globalRequiredQuota": 1, "requiredQuota": 1,
+		"campaignBinding": map[string]any{
+			"rootExecutionId": "20260720--travel-homepage-m1000--cn-zhejiang--scale-990",
+			"campaignRunId":   "campaign-run-990", "campaignGeneration": 1,
+			"campaignFencingToken":        "sha256:" + strings.Repeat("1", 64),
+			"campaignPlanDigest":          "sha256:" + strings.Repeat("2", 64),
+			"campaignSourceRevision":      "sha256:" + strings.Repeat("3", 64),
+			"campaignSourceDigest":        "sha256:" + strings.Repeat("4", 64),
+			"campaignEntityCatalogDigest": "sha256:" + strings.Repeat("5", 64),
+		},
+		"workerHostBinding": map[string]any{
+			"hostSetId": "m1000-workers", "generation": 2,
+			"fencingToken":  "sha256:" + strings.Repeat("6", 64),
+			"hostSetDigest": "sha256:" + strings.Repeat("7", 64),
+			"transportBinding": map[string]any{
+				"mongoTransportDigest": "sha256:" + strings.Repeat("8", 64),
+				"redisTransportDigest": "sha256:" + strings.Repeat("9", 64),
+			},
+			"hostScopeId": "worker-alpha", "workerCount": 1,
+			"partitionKeys":            []string{partition},
+			"runtimeProfileDigest":     "sha256:" + strings.Repeat("a", 64),
+			"executorBundleRef":        "data/executor-bundles/worker",
+			"executorBundleDigest":     "sha256:" + strings.Repeat("b", 64),
+			"executorBundleFileSha256": "sha256:" + strings.Repeat("c", 64),
+			"sourceCapsuleId":          "source-snapshot-m1000",
+			"sourceCapsuleDigest":      "sha256:" + strings.Repeat("d", 64),
+		},
+		"jobs": []map[string]any{job},
+	}
+	bindFleetRequestTaskDigests(t, request)
+	request["jobSetDigest"] = "sha256:" + strings.Repeat("f", 64)
+	write := func() string {
+		payload, err := json.Marshal(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(t.TempDir(), "request.json")
+		if err := os.WriteFile(path, payload, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	decoded, err := importer.ReadFleetRequest(write())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.WorkerHostBinding == nil || decoded.WorkerHostBinding.HostScopeID != "worker-alpha" || decoded.ActualTaskDigest == decoded.JobSetDigest {
+		t.Fatalf("host-specific fleet binding drift: %#v", decoded)
+	}
+	request["workerHostBinding"].(map[string]any)["partitionKeys"] = []string{"15"}
+	if _, err := importer.ReadFleetRequest(write()); err == nil || !strings.Contains(err.Error(), "not assigned") {
+		t.Fatalf("unassigned partition was not rejected: %v", err)
+	}
+}
+
+func TestDataFleetReadRequestCopiesCampaignBindingAndAcceptsStandaloneDispatch(t *testing.T) {
 	executionID := "20260720--travel-image-m100--cn-zhejiang--scale-902"
 	entityRef := "/entity/地点/景区/西湖"
 	sourceRevision := "sha256:" + strings.Repeat("a", 64)
@@ -134,6 +216,7 @@ func TestDataFleetReadRequestCopiesCampaignBindingAndRejectsJobOverride(t *testi
 		"ref":            "image-source-001",
 		"stage":          "publish",
 		"partitionKey":   testPartitionKey("image", "image-source-001", 16),
+		"maxAttempts":    3,
 	}
 	binding := map[string]any{
 		"rootExecutionId":             "20260720--travel-homepage-m100--cn-zhejiang--scale-902",
@@ -173,6 +256,7 @@ func TestDataFleetReadRequestCopiesCampaignBindingAndRejectsJobOverride(t *testi
 		"requireCommercial":         true,
 		"recoverDeadTasks":          false,
 		"objectTimeoutMilliseconds": 120000,
+		"globalRequiredQuota":       1,
 		"requiredQuota":             1,
 		"campaignBinding":           binding,
 		"jobs":                      []map[string]any{job},
@@ -191,9 +275,12 @@ func TestDataFleetReadRequestCopiesCampaignBindingAndRejectsJobOverride(t *testi
 	}
 
 	delete(request, "campaignBinding")
-	if _, err := importer.ReadFleetRequest(write(request)); err == nil ||
-		!strings.Contains(err.Error(), "requires campaign binding") {
-		t.Fatalf("M100 request without campaign binding was not rejected: %v", err)
+	standalone, err := importer.ReadFleetRequest(write(request))
+	if err != nil {
+		t.Fatalf("standalone M100 dispatch was rejected: %v", err)
+	}
+	if standalone.CampaignBinding != nil || !standalone.Jobs[0].Campaign.IsEmpty() {
+		t.Fatalf("standalone dispatch invented a campaign binding: %#v", standalone)
 	}
 	request["campaignBinding"] = binding
 	job["campaignBinding"] = binding
@@ -218,6 +305,7 @@ func TestDataFleetReadRequestAcceptsM10000AndRejectsPartitionDrift(t *testing.T)
 		"ref":            objectRef,
 		"stage":          "author",
 		"partitionKey":   testPartitionKey("video", objectRef, 256),
+		"maxAttempts":    3,
 	}
 	request := map[string]any{
 		"schema":                    importer.FleetRequestSchema,
@@ -234,6 +322,7 @@ func TestDataFleetReadRequestAcceptsM10000AndRejectsPartitionDrift(t *testing.T)
 		"requireCommercial":         false,
 		"recoverDeadTasks":          false,
 		"objectTimeoutMilliseconds": 120000,
+		"globalRequiredQuota":       1,
 		"requiredQuota":             1,
 		"campaignBinding": map[string]any{
 			"rootExecutionId":             "20260720--travel-homepage-m10000--china--scale-903",
@@ -288,8 +377,8 @@ func TestDataFleetReadRequestBoundsRequiredQuotaToFrozenJobs(t *testing.T) {
 	executionID := "20260720--travel-image-publish--cn-zhejiang--canary-902"
 	entityRef := "/entity/地点/景区/西湖"
 	sourceRevision := "sha256:" + strings.Repeat("a", 64)
-	job := func(jobID string) map[string]string {
-		return map[string]string{
+	job := func(jobID string) map[string]any {
+		return map[string]any{
 			"entityRef":      entityRef,
 			"carrier":        "image",
 			"sourceRevision": sourceRevision,
@@ -299,6 +388,7 @@ func TestDataFleetReadRequestBoundsRequiredQuotaToFrozenJobs(t *testing.T) {
 			"ref":            "image-source-001",
 			"stage":          "publish",
 			"partitionKey":   testPartitionKey("image", "image-source-001", 16),
+			"maxAttempts":    3,
 		}
 	}
 	writeRequest := func(t *testing.T, quota any) string {
@@ -318,7 +408,8 @@ func TestDataFleetReadRequestBoundsRequiredQuotaToFrozenJobs(t *testing.T) {
 			"requireCommercial":         true,
 			"recoverDeadTasks":          false,
 			"objectTimeoutMilliseconds": 120000,
-			"jobs":                      []map[string]string{job("job-publish-001"), job("job-publish-002")},
+			"globalRequiredQuota":       2,
+			"jobs":                      []map[string]any{job("job-publish-001"), job("job-publish-002")},
 		}
 		if quota != nil {
 			request["requiredQuota"] = quota
@@ -592,7 +683,6 @@ func TestDataFleetConfigFailsClosedAndLoadsTypedValues(t *testing.T) {
 			"QWQ_DATA_FLEET_EVIDENCE_ROOT":       "/workspace/.qwq_output",
 			"QWQ_DATA_FLEET_WORKERS":             "16",
 			"QWQ_DATA_FLEET_BATCH_TIMEOUT_MS":    "120000",
-			"QWQ_DATA_FLEET_MAX_ATTEMPTS":        "4",
 			"QWQ_DATA_FLEET_LEASE_TTL_MS":        "30000",
 			"QWQ_DATA_FLEET_PENDING_MIN_IDLE_MS": "500",
 		},
@@ -605,7 +695,6 @@ func TestDataFleetConfigFailsClosedAndLoadsTypedValues(t *testing.T) {
 	}
 	if cfg.Workers != 16 ||
 		cfg.BatchTimeout.Milliseconds() != 120000 ||
-		cfg.MaxAttempts != 4 ||
 		cfg.LeaseTTL.Milliseconds() != 30000 ||
 		cfg.PendingMinIdle.Milliseconds() != 500 {
 		t.Fatalf("typed worker config drift: %#v", cfg)

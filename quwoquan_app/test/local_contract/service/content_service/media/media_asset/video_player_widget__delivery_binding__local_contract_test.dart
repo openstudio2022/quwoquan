@@ -35,8 +35,9 @@ import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 /// 内层传输故意直接抛错，把「意外发起真实下载」变成显式测试失败。
 CloudHttpClient _unreachableDataPlaneClient() => CloudHttpClient(
   client: MockClient(
-    (request) async =>
-        throw StateError('MediaDownloadCache double must not perform network IO'),
+    (request) async => throw StateError(
+      'MediaDownloadCache double must not perform network IO',
+    ),
   ),
 );
 
@@ -207,6 +208,63 @@ void main() {
       0,
       reason: 'dispose 后不得泄漏控制器槽',
     );
+  });
+
+  testWidgets('有效播放业务回调抛错也必须完成 native dispose 并归还槽位', (tester) async {
+    VideoPlayerWidget.debugResetControllerSlots();
+    final previousPlatform = VideoPlayerPlatform.instance;
+    final fakePlatform = FakeVideoPlayerPlatform();
+    VideoPlayerPlatform.instance = fakePlatform;
+    addTearDown(() {
+      VideoPlayerPlatform.instance = previousPlatform;
+      VideoPlayerWidget.debugResetControllerSlots();
+    });
+    final container = ProviderContainer(overrides: _boundaryOverrides());
+    addTearDown(container.dispose);
+    var now = DateTime.utc(2026, 8, 10, 2);
+    final playbackSession = VideoPlaybackSession(now: () => now);
+    var effectivePlaybackCallbacks = 0;
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, _) => CupertinoApp(
+            home: SizedBox(
+              width: 390,
+              height: 220,
+              child: VideoPlayerWidget(
+                deliveryReference: delivery,
+                playbackSession: playbackSession,
+                initialize: true,
+                autoPlay: true,
+                onEffectivePlayback: (_) {
+                  effectivePlaybackCallbacks += 1;
+                  throw StateError('injected disposed consumer callback');
+                },
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(playbackSession.snapshot.isPlaying, isTrue);
+    now = now.add(const Duration(seconds: 6));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump();
+
+    expect(effectivePlaybackCallbacks, 1);
+    expect(fakePlatform.disposeCount, 1);
+    expect(VideoPlayerWidget.debugActiveControllerCount, 0);
+    playbackSession.dispose();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('异步 native dispose 完成前保持控制器释放在途', (tester) async {
@@ -437,6 +495,68 @@ void main() {
     expect(widget.deliveryReference.kind, MediaDeliveryKind.video);
     expect(widget.deliveryReference.url, contains('video-primary-0001'));
     expect(widget.adaptiveDeliveryReference, isNull);
+  });
+
+  testWidgets('渲染器变更会原子替换控制器而不双占槽位', (tester) async {
+    VideoPlayerWidget.debugResetControllerSlots();
+    final previousPlatform = VideoPlayerPlatform.instance;
+    final fakePlatform = FakeVideoPlayerPlatform();
+    VideoPlayerPlatform.instance = fakePlatform;
+    addTearDown(() {
+      VideoPlayerPlatform.instance = previousPlatform;
+      VideoPlayerWidget.debugResetControllerSlots();
+    });
+    final container = ProviderContainer(
+      overrides: _boundaryOverrides(
+        extra: <Override>[
+          platformCapabilitiesProvider.overrideWithValue(
+            CapabilityProfile.mobile,
+          ),
+          contentFeatureFlagProvider(
+            hlsCmafAdaptivePlaybackFeatureFlag,
+          ).overrideWithValue(false),
+        ],
+      ),
+    );
+    addTearDown(container.dispose);
+    final controllers = <VideoPlayerController>[];
+
+    Widget player(VideoViewType viewType) => UncontrolledProviderScope(
+      container: container,
+      child: ScreenUtilInit(
+        designSize: const Size(390, 844),
+        builder: (_, _) => CupertinoApp(
+          home: SizedBox(
+            width: 390,
+            height: 220,
+            child: VideoPlayerWidget(
+              deliveryReference: delivery,
+              viewType: viewType,
+              onControllerCreated: controllers.add,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(player(VideoViewType.platformView));
+    await tester.pumpAndSettle();
+    expect(controllers, hasLength(1));
+    expect(controllers.single.viewType, VideoViewType.platformView);
+    expect(VideoPlayerWidget.debugActiveControllerCount, 1);
+
+    await tester.pumpWidget(player(VideoViewType.textureView));
+    await tester.pump();
+    await tester.runAsync(() async {
+      for (var attempt = 0; attempt < 20 && controllers.length < 2; attempt++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await tester.pumpAndSettle();
+    expect(controllers, hasLength(2));
+    expect(controllers.last.viewType, VideoViewType.textureView);
+    expect(fakePlatform.disposeCount, 1);
+    expect(VideoPlayerWidget.debugActiveControllerCount, 1);
   });
 
   testWidgets('feature flag 变化不重建没有 adaptive descriptor 的 MP4', (tester) async {

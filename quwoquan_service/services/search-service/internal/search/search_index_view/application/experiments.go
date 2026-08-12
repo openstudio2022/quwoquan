@@ -19,6 +19,11 @@ const SearchRankingExperimentID = "search_ranking"
 const (
 	BucketControl  = "control"
 	BucketTermHeat = "term_heat"
+	// ControlFallbackPolicyDigest binds opaque cursors to the exact deterministic
+	// ranking semantics used when no active ExperimentPolicy has been projected.
+	// Serving a control page while returning an empty policy identity makes every
+	// result set larger than one page fail cursor creation.
+	ControlFallbackPolicyDigest = "sha256:cf9ca87718520e7cb220f9df445c355febd0915dd05f4c8729e8185cc10a4cdf"
 )
 
 type ExperimentPolicyVariant struct {
@@ -134,6 +139,21 @@ func (e *Experiments) Healthy() error {
 		return errors.New("search ranking Experiment policy is not active")
 	}
 	return nil
+}
+
+// PolicyDigest returns the exact ranking identity used for assignment and
+// opaque cursor binding. Missing or inactive policy uses the canonical control
+// identity because Decorate serves that same deterministic control semantics.
+func (e *Experiments) PolicyDigest() string {
+	if e == nil {
+		return ControlFallbackPolicyDigest
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.policy == nil || e.policy.Status != "running" || !insidePolicyWindow(*e.policy, e.now().UTC()) {
+		return ControlFallbackPolicyDigest
+	}
+	return strings.TrimSpace(e.policy.Digest)
 }
 
 func CanonicalExperimentPolicy(policy ExperimentPolicy) (ExperimentPolicy, error) {

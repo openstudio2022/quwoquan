@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/pool_attribution_repair_bindings.schema.json",
+  "title": "Exact canonical object to source-ready candidate repair bindings",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "repairId", "items", "bindingsDigest"],
+  "properties": {
+    "schema": {"const": "quwoquan_data.pool_attribution_repair_bindings"},
+    "repairId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["objectType", "objectRef", "canonicalObjectDigest", "candidateId"],
+        "properties": {
+          "objectType": {"enum": ["homepage", "content"]},
+          "objectRef": {"type": "string", "minLength": 1},
+          "canonicalObjectDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+          "candidateId": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "bindingsDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

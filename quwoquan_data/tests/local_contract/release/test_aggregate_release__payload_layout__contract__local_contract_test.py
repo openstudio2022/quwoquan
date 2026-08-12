@@ -17,12 +17,22 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from content.release.canonical import (
-    aggregate_release,
+    aggregate_release_pool_closure,
+    aggregate_release_result,
     handler,
     integrity,
 )
 from content.release.canonical.aggregate_release import (
     build_aggregate_release,
+    build_pool_release,
+)
+from content.release.canonical.content_pool_record import (
+    append_pool_record,
+    build_canonical_pool_record,
+)
+from content.release.canonical.object_source_identity import (
+    source_identity_digest,
+    source_identity_set,
 )
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
@@ -57,7 +67,12 @@ def _use_research_distribution(
         release_class=distribution.ReleaseClass.RESEARCH,
     )
     monkeypatch.setattr(
-        aggregate_release,
+        aggregate_release_pool_closure,
+        "load_content_distribution_policy",
+        lambda: research_policy,
+    )
+    monkeypatch.setattr(
+        aggregate_release_result,
         "load_content_distribution_policy",
         lambda: research_policy,
     )
@@ -131,6 +146,26 @@ def _research_rights(asset: dict[str, object]) -> dict[str, object]:
         "authorizationProof": "",
         "rightsAuditStatus": "unverified",
         "rightsAuditIssues": ["commercial authorization pending"],
+    }
+
+
+def _source_attribution(content_type: str) -> dict[str, object]:
+    return {
+        "isOriginal": False,
+        "originalCreatorName": "Research Creator",
+        "platform": "Research Media",
+        "sourcePostUrl": f"https://media.example/{content_type}",
+        "originalAssetUrl": f"https://media.example/{content_type}/asset",
+        "attributionText": "Research Creator / Research Media",
+        "rightsBasis": "unknown",
+        "commercialAuthorizationStatus": "unverified",
+        "publicationAdmission": "research_release",
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "unverified" if content_type == "video" else "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "2026-08-05T00:00:00Z",
+        "takedownPolicy": "remove on substantiated request",
     }
 
 
@@ -481,6 +516,16 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         entity_root / "manifest.json",
         {
             "schema": "quwoquan_data.entity_manifest",
+            "entityId": entity_ref,
+            "version": 1,
+            "admission": {
+                "processResult": "completed",
+                "qualityResult": "passed",
+                "usageScope": "research",
+                "evidenceRef": "homepage-admission.json",
+                "evidenceDigest": "sha256:" + "c" * 64,
+            },
+            "status": "active",
             "finalContentRef": "page.md",
             "sourceCatalogRef": "source_catalog.json",
             "rightsRef": "rights.json",
@@ -518,7 +563,16 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
     _write_json(
         creator_root / "profile.json",
         {
+            "authorId": creator_ref,
             "userId": creator_ref,
+            "version": 1,
+            "admission": {
+                "processResult": "completed",
+                "qualityResult": "passed",
+                "evidenceRef": "author-admission.json",
+                "evidenceDigest": "sha256:" + "a" * 64,
+            },
+            "status": "active",
             "avatarAsset": {
                 "assetId": avatar_asset["assetId"],
                 "kind": "avatar",
@@ -542,6 +596,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         entities: list[str],
         posts: list[str],
         source_digest: dict[str, object] | None = None,
+        record_execution: bool = True,
     ) -> None:
         source_digest = source_digest or frozen_source_digest
         for kind, refs in (("entities", entities), ("posts", posts)):
@@ -550,8 +605,55 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
                 manifest["executionId"] = execution_id
                 manifest["sourceDigest"] = source_digest
+                source_identity = {
+                    "executionId": execution_id,
+                    "sourceRevision": content_source_revision(
+                        source_digest=str(source_digest["digest"]),
+                        entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+                    ),
+                    "sourceDigest": str(source_digest["digest"]),
+                    "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+                }
+                manifest["sourceIdentity"] = {
+                    **source_identity,
+                    "identityDigest": source_identity_digest(source_identity),
+                }
+                if kind == "entities":
+                    manifest["sourceAttribution"] = _source_attribution(
+                        "homepage"
+                    )
+                admission = manifest.get("admission")
+                if isinstance(admission, dict):
+                    evidence_path = manifest_path.parent / str(
+                        admission["evidenceRef"]
+                    )
+                    if not evidence_path.is_file():
+                        _write_json(
+                            evidence_path,
+                            {
+                                "schema": "quwoquan_data.test_release_admission_evidence",
+                                "executionId": execution_id,
+                                "result": "passed",
+                            },
+                        )
+                    admission["evidenceDigest"] = (
+                        "sha256:"
+                        + hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+                    )
                 _write_json(manifest_path, manifest)
-        executions.append(execution_id)
+                if kind in {"entities", "posts"}:
+                    append_pool_record(
+                        object_root=manifest_path.parent,
+                        record=build_canonical_pool_record(
+                            object_root=manifest_path.parent,
+                            object_type=(
+                                "homepage" if kind == "entities" else "content"
+                            ),
+                            object_ref=ref,
+                        ),
+                    )
+        if record_execution:
+            executions.append(execution_id)
 
     add_execution(
         "20260718--travel-homepage-coverage--test-region-a--scale-901",
@@ -603,7 +705,23 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
                 "contentIdentity": "work",
                 "vertical": "travel",
                 "contentType": content_type,
+                "contentId": f"content-{content_type}",
+                "version": 1,
+                "sourceType": "data",
                 "creatorProfileId": creator_ref,
+                "authorId": creator_ref,
+                "reviewDecision": "approved",
+                    "entityRefs": [f"/entity/{entity_ref}"],
+                    "sourceAttribution": _source_attribution(content_type),
+                "variantPurpose": "original",
+                "admission": {
+                    "processResult": "completed",
+                    "qualityResult": "passed",
+                    "usageScope": "research",
+                    "evidenceRef": "attestation.json",
+                    "evidenceDigest": "sha256:" + "b" * 64,
+                },
+                "status": "active",
                 "finalContentRef": "content.md",
                 "sourceCatalogRef": "source_catalog.json",
                 "rightsRef": "rights.json",
@@ -665,6 +783,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         release_root=release_root,
         release_id="20260718--travel-multi-carrier--test-release-b--001",
         execution_ids=executions,
+        target_environment="alpha",
         **_release_source_identity(str(frozen_source_digest["digest"])),
     )
 
@@ -686,6 +805,15 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
     release_header = json.loads(payload_file(release, "release.json").read_text(encoding="utf-8"))
     assert release_header["sourceOwner"] == "qwq_data"
     assert release_header["sourceDigests"] == [frozen_source_digest]
+    assert release_header["targetEnvironment"] == "alpha"
+    assert release_header["releaseMode"] == "research"
+    assert release_header["counts"] == {
+        "article": 1,
+        "image": 1,
+        "video": 1,
+        "total": 3,
+    }
+    assert result["poolEligibleCount"] == 3
     monkeypatch.setattr(integrity.paths, "PUBLISH_ROOT", publish_root)
     integrity_report = integrity._release_integrity(result["releaseId"], release)
     stats = integrity_report["stats"]
@@ -702,6 +830,7 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
         publish_root / "posts/article/测试实体甲/guide/manifest.json"
     )
     article_manifest = json.loads(article_manifest_path.read_text(encoding="utf-8"))
+    original_article_manifest = json.loads(json.dumps(article_manifest))
     article_manifest["sourceDigest"] = alternate_source_digest
     _write_json(article_manifest_path, article_manifest)
     with pytest.raises(ObjectTransactionError, match="one frozen sourceDigest"):
@@ -712,3 +841,278 @@ def test_release__multi_carrier_object_closure__contract__local_contract(
             execution_ids=executions,
             **_release_source_identity(str(frozen_source_digest["digest"])),
         )
+    article_manifest = original_article_manifest
+    _write_json(article_manifest_path, article_manifest)
+
+    standalone_entity_ref = "地点/景区/独立实体乙"
+    standalone_execution = (
+        "20260718--travel-homepage-coverage--test-region-b--scale-902"
+    )
+    standalone_root = publish_root / "entities" / standalone_entity_ref
+    _standalone_key, standalone_asset = _write_cas(
+        publish_root, b"standalone-entity-homepage-hero"
+    )
+    standalone_asset["role"] = "cover"
+    _write_json(
+        standalone_root / "manifest.json",
+        {
+            "schema": "quwoquan_data.entity_manifest",
+            "entityId": standalone_entity_ref,
+            "version": 1,
+            "executionId": standalone_execution,
+            "sourceDigest": frozen_source_digest,
+            "admission": {
+                "processResult": "completed",
+                "qualityResult": "passed",
+                "usageScope": "research",
+                "evidenceRef": "homepage-admission.json",
+                "evidenceDigest": "sha256:" + "d" * 64,
+            },
+            "status": "active",
+            "finalContentRef": "page.md",
+            "sourceCatalogRef": "source_catalog.json",
+            "rightsRef": "rights.json",
+            "creatorRefsRef": "creator.refs.json",
+            "tagRefsRef": "tag.refs.json",
+            "assetRefsRef": "asset.refs.json",
+            "assets": [standalone_asset],
+        },
+    )
+    (standalone_root / "page.md").write_text("# standalone entity\n", encoding="utf-8")
+    _write_json(standalone_root / "source_catalog.json", {"sources": []})
+    _write_json(
+        standalone_root / "rights.json",
+        {"assets": [_research_rights(standalone_asset)]},
+    )
+    _write_json(
+        standalone_root / "creator.refs.json", {"creatorRefs": [creator_ref]}
+    )
+    _write_json(standalone_root / "tag.refs.json", {"tagRefs": []})
+    _write_json(standalone_root / "asset.refs.json", {"assets": [standalone_asset]})
+    _write_rights_snapshot(standalone_root, standalone_asset)
+    add_execution(
+        standalone_execution,
+        entities=[standalone_entity_ref],
+        posts=[],
+        source_digest=alternate_source_digest,
+        record_execution=False,
+    )
+
+    independent_creator_ref = "test_creator_independent"
+    independent_tag_ref = "Topic/旅行/独立作者"
+    independent_creator_root = publish_root / "creators" / independent_creator_ref
+    _write_json(
+        independent_creator_root / "_creator.json",
+        {
+            "schema": "quwoquan_data.creator_object",
+            "creatorId": independent_creator_ref,
+            "profileRef": "profile.json",
+            "assetsRef": "assets.refs.json",
+            "worksRefsRef": "works.refs.ndjson",
+            "tagRefs": [independent_tag_ref],
+            "entityRefs": [],
+        },
+    )
+    _write_json(
+        independent_creator_root / "profile.json",
+        {
+            "authorId": independent_creator_ref,
+            "userId": independent_creator_ref,
+            "version": 1,
+            "admission": {
+                "processResult": "completed",
+                "qualityResult": "passed",
+                "evidenceRef": "author-admission.json",
+                "evidenceDigest": "sha256:" + "e" * 64,
+            },
+            "status": "active",
+        },
+    )
+    _write_json(independent_creator_root / "assets.refs.json", {"assets": []})
+    (independent_creator_root / "works.refs.ndjson").write_text(
+        "", encoding="utf-8"
+    )
+    _write_json(
+        publish_root / "tags" / independent_tag_ref / "_definition.json",
+        {"label": "独立作者", "labelEn": "independent-author"},
+    )
+
+    pool_result = build_pool_release(
+        publish_root=publish_root,
+        release_root=release_root,
+        release_id="20260718--travel-pool-alpha--001",
+        target_environment="alpha",
+    )
+    assert pool_result["postCount"] == 3
+    assert pool_result["entityCount"] == 2
+    assert pool_result["counts"] == {
+        "article": 1,
+        "image": 1,
+        "video": 1,
+        "total": 3,
+    }
+    assert pool_result["targetEnvironment"] == "alpha"
+    pool_header = json.loads(
+        payload_file(
+            release_root / pool_result["releaseId"],
+            "release.json",
+        ).read_text(encoding="utf-8")
+    )
+    assert pool_header["poolDigest"] == pool_result["poolDigest"]
+    assert pool_header["executionIds"] == sorted([*executions, standalone_execution])
+    expected_source_identities, expected_source_identity_set_digest = (
+        source_identity_set(
+            [
+                {
+                    "executionId": execution_id,
+                    "sourceRevision": content_source_revision(
+                        source_digest=str(frozen_source_digest["digest"]),
+                        entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+                    ),
+                    "sourceDigest": str(frozen_source_digest["digest"]),
+                    "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+                }
+                for execution_id in executions
+            ]
+            + [
+                {
+                    "executionId": standalone_execution,
+                    "sourceRevision": content_source_revision(
+                        source_digest=str(alternate_source_digest["digest"]),
+                        entity_catalog_digest=ENTITY_CATALOG_DIGEST,
+                    ),
+                    "sourceDigest": str(alternate_source_digest["digest"]),
+                    "entityCatalogDigest": ENTITY_CATALOG_DIGEST,
+                }
+            ]
+        )
+    )
+    assert pool_header["sourceIdentities"] == expected_source_identities
+    assert (
+        pool_header["sourceIdentitySetDigest"]
+        == expected_source_identity_set_digest
+    )
+    assert {
+        "sourceRevision",
+        "sourceDigest",
+        "entityCatalogDigest",
+    }.isdisjoint(pool_header)
+    pool_attestation = json.loads(
+        (
+            release_root
+            / pool_result["releaseId"]
+            / "attestations/release.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert {
+        "sourceIdentities",
+        "sourceIdentitySetDigest",
+    }.issubset(pool_attestation)
+    assert pool_attestation["sourceIdentities"] == expected_source_identities
+    assert (
+        pool_attestation["sourceIdentitySetDigest"]
+        == expected_source_identity_set_digest
+    )
+    assert {
+        "sourceRevision",
+        "sourceDigest",
+        "entityCatalogDigest",
+    }.isdisjoint(pool_attestation)
+    assert pool_header["authors"] == [
+        {"authorId": creator_ref, "version": 1, "creatorRef": creator_ref},
+        {
+            "authorId": independent_creator_ref,
+            "version": 1,
+            "creatorRef": independent_creator_ref,
+        },
+    ]
+    pool_desired = json.loads(
+        payload_file(
+            release_root / pool_result["releaseId"],
+            "desired_state.json",
+        ).read_text(encoding="utf-8")
+    )
+    assert pool_desired["desiredRefs"]["tags"] == [independent_tag_ref]
+    assert {
+        (item["contentId"], item["version"], item["postRef"])
+        for item in pool_header["contents"]
+    } == {
+        (
+            f"content-{ref.split('/', 1)[0]}",
+            1,
+            ref,
+        )
+        for ref in (
+            "article/测试实体甲/guide",
+            "image/测试实体甲/gallery",
+            "video/测试实体甲/short",
+        )
+    }
+    assert build_pool_release(
+        publish_root=publish_root,
+        release_root=release_root,
+        release_id=pool_result["releaseId"],
+        target_environment="alpha",
+    )["idempotent"] is True
+
+    invalid_article = json.loads(
+        article_manifest_path.read_text(encoding="utf-8")
+    )
+    invalid_article.pop("mediaClosure", None)
+    invalid_article.pop("articleRenderProfile", None)
+    _write_json(article_manifest_path, invalid_article)
+    media_partial = build_pool_release(
+        publish_root=publish_root,
+        release_root=release_root,
+        release_id="20260718--travel-pool-alpha-media-partial--001",
+        target_environment="alpha",
+    )
+    assert media_partial["postCount"] == 2
+    assert media_partial["excludedCount"] == 1
+    assert media_partial["excluded"][0]["postRef"] == "article/测试实体甲/guide"
+    _write_json(article_manifest_path, article_manifest)
+
+    invalid_manifest_path = (
+        publish_root / "posts/video/测试实体甲/short/manifest.json"
+    )
+    invalid_manifest = json.loads(
+        invalid_manifest_path.read_text(encoding="utf-8")
+    )
+    invalid_manifest["admission"]["qualityResult"] = "failed"
+    _write_json(invalid_manifest_path, invalid_manifest)
+    append_pool_record(
+        object_root=invalid_manifest_path.parent,
+        record=build_canonical_pool_record(
+            object_root=invalid_manifest_path.parent,
+            object_type="content",
+            object_ref="video/测试实体甲/short",
+        ),
+    )
+    partial_result = build_pool_release(
+        publish_root=publish_root,
+        release_root=release_root,
+        release_id="20260718--travel-pool-alpha-partial--001",
+        target_environment="alpha",
+    )
+    assert partial_result["postCount"] == 2
+    assert partial_result["excludedCount"] == 1
+    assert partial_result["excluded"] == [
+        {
+            "postRef": "video/测试实体甲/short",
+            "category": "quality",
+            "code": "DATA.POOL.QUALITY_FAILED",
+            "message": "DATA.POOL.QUALITY_FAILED: postRef=video/测试实体甲/short",
+        }
+    ]
+    partial_header = json.loads(
+        payload_file(
+            release_root / partial_result["releaseId"],
+            "release.json",
+        ).read_text(encoding="utf-8")
+    )
+    assert partial_header["counts"] == {
+        "article": 1,
+        "image": 1,
+        "video": 0,
+        "total": 2,
+    }

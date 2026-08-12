@@ -1,6 +1,12 @@
 creatorProfileId: qwq_creator_geo_editor_001
 personaId: builtin_travel_geo_editor
 authorId: builtin_travel_geo_editor
+version: 1
+admission:
+  processResult: completed
+  qualityResult: passed
+  evidenceRef: evidence/system_builtin_author_admission.json
+  evidenceDigest: sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e
 isSystemBuiltin: true
 displayName: 地理编辑南川
 userHandle: geo_editor_nanchuan
@@ -53,4 +59,4 @@ avatarAsset:
   objectKey: media/objects/sha256/3d/c3/3dc30246e996c12039b1b07af6ccf4097866620d281ef9daa7699698899c4b93.webp
   bytes: 430336
   mimeType: image/webp
-  rightsSnapshotRef: evidence/avatar_rights/qwq_creator_geo_editor_001/3dc30246e996c12039b1b07af6ccf4097866620d281ef9daa7699698899c4b93.json
+  evidenceRef: evidence/avatar_rights/qwq_creator_geo_editor_001/3dc30246e996c12039b1b07af6ccf4097866620d281ef9daa7699698899c4b93.json

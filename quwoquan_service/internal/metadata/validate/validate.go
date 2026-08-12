@@ -125,11 +125,30 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 				operation.PathTemplate,
 			))
 		}
-		if operation.Transport != "json" && operation.Transport != "sse" {
+		if operation.Transport != "json" && operation.Transport != "sse" &&
+			operation.Transport != "graphql" {
 			issues = append(issues, issue(
 				"CONTRACT.TRANSPORT.INVALID_KIND",
 				operation.SourcePath,
 				"operation %q uses unsupported transport %q", operation.ID, operation.Transport,
+			))
+		}
+		if !allowedTransportRole(operation.TransportRole) {
+			issues = append(issues, issue(
+				"CONTRACT.TRANSPORT.ROLE_UNKNOWN",
+				operation.SourcePath,
+				"operation %q declares unknown non-business transport role %q",
+				operation.ID,
+				operation.TransportRole,
+			))
+		}
+		if operation.TransportRole == ast.TransportRoleSSE && operation.Transport != "sse" {
+			issues = append(issues, issue(
+				"CONTRACT.TRANSPORT.ROLE_MISMATCH",
+				operation.SourcePath,
+				"operation %q declares transport role sse but uses transport %q",
+				operation.ID,
+				operation.Transport,
 			))
 		}
 		if operation.Transport == "sse" {
@@ -182,15 +201,20 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 		}
 		issues = append(issues, streamBudgetIssues(operation)...)
 		issues = append(issues, successStatusIssues(operation)...)
-		transportKey := operation.Method + " " + operation.PathTemplate
-		if previous, exists := transportKeys[transportKey]; exists {
-			issues = append(issues, issue(
-				"CONTRACT.DUPLICATE.TRANSPORT",
-				operation.SourcePath,
-				"%s is owned by both %s and %s", transportKey, previous, operation.ID,
-			))
-		} else {
-			transportKeys[transportKey] = operation.ID
+		// Persisted GraphQL operations intentionally share the one API Edge
+		// endpoint. Their canonical identity is the operation ID + signed query
+		// hash, not a fake per-query HTTP route.
+		if operation.Transport != "graphql" {
+			transportKey := operation.Method + " " + operation.PathTemplate
+			if previous, exists := transportKeys[transportKey]; exists {
+				issues = append(issues, issue(
+					"CONTRACT.DUPLICATE.TRANSPORT",
+					operation.SourcePath,
+					"%s is owned by both %s and %s", transportKey, previous, operation.ID,
+				))
+			} else {
+				transportKeys[transportKey] = operation.ID
+			}
 		}
 		if profile == ProfileCommercial {
 			issues = append(
@@ -297,6 +321,30 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 
 	sortIssues(issues)
 	return issues
+}
+
+func allowedTransportRole(role ast.TransportRole) bool {
+	switch role {
+	case "",
+		ast.TransportRoleBinaryDownload,
+		ast.TransportRoleBinaryUpload,
+		ast.TransportRoleCDN,
+		ast.TransportRoleHealth,
+		ast.TransportRoleLiveness,
+		ast.TransportRoleMetrics,
+		ast.TransportRoleMinimumBuild,
+		ast.TransportRoleOAuthCallback,
+		ast.TransportRoleProviderCallback,
+		ast.TransportRoleReadiness,
+		ast.TransportRoleRecovery,
+		ast.TransportRoleSSE,
+		ast.TransportRoleStaticResource,
+		ast.TransportRoleUpgrade,
+		ast.TransportRoleWebSocket:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateRuntimeEntrypoint(

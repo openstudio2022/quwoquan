@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	httpadapter "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/adapters/inbound/http"
-	"quwoquan_service/services/entity-service/internal/entity_homepage/homepage/infrastructure/testsupport"
+	testsupport "quwoquan_service/services/entity-service/tests/support/homepagefixture"
 )
 
 func TestHomepageSearchUsesCanonicalSearchSignals(t *testing.T) {

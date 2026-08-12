@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-002
 library;
 
 import 'package:flutter_test/flutter_test.dart';
@@ -15,7 +16,7 @@ const _callId = String.fromEnvironment('QWQ_PROVIDER_UAT_CALL_ID');
 void main() {
   patrolTest(
     '两设备 Remote 通话经替代 Provider 完成建连与挂断',
-    tags: const ['provider', 'rtc', 'two_device'],
+    tags: const ['provider', 'rtc', 'two-device'],
     skip: !kRunPatrolAcceptance,
     ($) async {
       expect(_callId.trim(), isNotEmpty);

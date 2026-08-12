@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -9,11 +11,25 @@ from types import SimpleNamespace
 
 import content.execution.campaign.request_envelope as envelopes
 import pytest
+from content.execution.campaign import (
+    m100_alpha_acceptance,
+    request_envelope_build,
+    request_envelope_writer,
+)
+from content.execution.campaign.external_inputs import (
+    content_source_revision,
+    external_inputs_digest,
+)
 from content.execution.campaign.scale import CampaignScaleError, resolve_campaign_scale
-from content.execution.scale.capacity_plan import throughput_basis_digest
+from content.execution.preflight.receipt import _digest as semantic_preflight_digest
 from content.execution.scale import promotion as scale_promotion
-from core.paths import research_scale_promotions_root
+from content.execution.scale.capacity_plan import throughput_basis_digest
+from content.execution.scale.host_set import build_governed_host_set
+from content.execution.scale.source_capsule import (
+    build_governed_host_source_capsule,
+)
 from core.io import read_json, write_json
+from core.paths import research_scale_promotions_root
 from core.runtime_policy import active_runtime_policy
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
@@ -42,8 +58,6 @@ def _capacity_throughput_row(
 
 
 def _patch_envelope_deps(monkeypatch) -> None:
-    from content.execution.campaign import request_envelope_build
-
     monkeypatch.setattr(
         envelopes,
         "_require_stable_source_inputs",
@@ -73,12 +87,12 @@ def _patch_envelope_deps(monkeypatch) -> None:
         )(),
     )
     monkeypatch.setattr(
-        envelopes,
+        request_envelope_build,
         "entity_catalog_digest",
         lambda _ref: "sha256:" + ("b" * 64),
     )
     monkeypatch.setattr(
-        envelopes,
+        request_envelope_build,
         "freeze_carrier_pre_acquisition_inputs",
         lambda *_args, **_kwargs: (
             [],
@@ -116,6 +130,106 @@ def _patch_envelope_deps(monkeypatch) -> None:
         return binding, "data/local/workspace/source-pool/evidence", selection
 
     monkeypatch.setattr(request_envelope_build, "bind_scale_source_pool", bind_pool)
+    monkeypatch.setattr(m100_alpha_acceptance, "assert_valid", lambda *_args, **_kwargs: None)
+
+
+def _document_digest(document: dict[str, object]) -> str:
+    encoded = json.dumps(
+        document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _alpha_acceptance_kwargs(
+    root: Path, promotion_path: Path
+) -> dict[str, Path]:
+    promotion = read_json(promotion_path)
+    evidence_root = root / "alpha-m100-acceptance"
+    readiness_path = evidence_root / "release-readiness.json"
+    app_uat_path = evidence_root / "app-uat.json"
+    post_ids = [f"post-{index:03d}" for index in range(210)]
+    entity_refs = [f"homepage-{index:03d}" for index in range(100)]
+    app_envelope = {"releaseId": promotion["releaseId"], "sample": "m100"}
+    app_envelope_digest = _document_digest(app_envelope)
+    activation = {
+        "environment": "alpha",
+        "releaseId": promotion["releaseId"],
+        "manifestDigest": promotion["manifestDigest"],
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "readinessPhase": "research",
+        "appUatEnvelopeDigest": app_envelope_digest,
+    }
+    readiness: dict[str, object] = {
+        "schema": "quwoquan_data.environment_release_readiness",
+        "environment": "alpha",
+        "releaseId": promotion["releaseId"],
+        "manifestDigest": promotion["manifestDigest"],
+        "releaseClass": "research",
+        "productLifecycleState": "research",
+        "readinessPhase": "research",
+        "passed": True,
+        "counts": {
+            "entities": 100,
+            "posts": 210,
+            "premiumPlayableVideos": 10,
+        },
+        "entityRefs": entity_refs,
+        "postIds": post_ids,
+        "activationEnvelope": activation,
+        "activationEnvelopeDigest": _document_digest(activation),
+        "appUatEnvelope": app_envelope,
+        "appUatEnvelopeDigest": app_envelope_digest,
+    }
+    readiness["verificationChecksum"] = _document_digest(readiness)
+    write_json(readiness_path, readiness)
+    readiness_digest = _document_digest(readiness)
+    app_plan = {"releaseId": promotion["releaseId"], "sample": "alpha-m100"}
+    app_uat = {
+        "schema": "quwoquan_ops.app_content_uat_receipt",
+        "status": "passed",
+        "targets": ["alpha-local"],
+        "releaseId": promotion["releaseId"],
+        "manifestDigest": promotion["manifestDigest"],
+        "appUatEnvelopeDigest": app_envelope_digest,
+        "readinessReceiptDigests": [readiness_digest],
+        "appUatPlan": app_plan,
+        "appUatPlanDigest": _document_digest(app_plan),
+        "preflights": [
+            {
+                "target": "alpha-local",
+                "environment": "alpha",
+                "status": "passed",
+                "exitCode": 0,
+                "launchPolicy": "test_live",
+                "contentBindingState": "bound",
+                "releaseId": promotion["releaseId"],
+                "manifestDigest": promotion["manifestDigest"],
+                "readinessReceiptDigest": readiness_digest,
+                "appUatEnvelope": app_envelope,
+                "appUatPlan": app_plan,
+                "appUatPlanDigest": _document_digest(app_plan),
+            }
+        ],
+        "runtimeBindings": {
+            "alpha-local": {
+                "environment": "alpha",
+                "contentBindingState": "bound",
+                "releaseId": promotion["releaseId"],
+                "manifestDigest": promotion["manifestDigest"],
+                "readinessPhase": "research",
+            }
+        },
+        "runs": [{"target": "alpha-local", "suite": "app-core-readback", "exitCode": 0}],
+        "executed": 1,
+        "skipped": 0,
+    }
+    write_json(app_uat_path, app_uat)
+    return {
+        "alpha_m100_readiness_receipt": readiness_path,
+        "alpha_m100_app_uat_receipt": app_uat_path,
+        "alpha_m100_acceptance_output_root": root,
+    }
 
 
 def _pool_kwargs(tmp_path: Path) -> dict[str, Path]:
@@ -125,8 +239,68 @@ def _pool_kwargs(tmp_path: Path) -> dict[str, Path]:
     }
 
 
+def _capacity_host_set(tmp_path: Path) -> Path:
+    source_digest = "sha256:" + "a" * 64
+    catalog_digest = "sha256:" + "b" * 64
+    capsule = build_governed_host_source_capsule(
+        capsule_id="request-envelope-source-capsule",
+        source_revision=content_source_revision(
+            source_digest=source_digest,
+            entity_catalog_digest=catalog_digest,
+        ),
+        source_digest={
+            "algorithm": "sha256",
+            "digest": source_digest,
+            "inputs": ["quwoquan_data/scripts"],
+        },
+        entity_catalog_digest=catalog_digest,
+        executor_bundle_ref="data/executor/content-worker",
+        executor_bundle_digest="sha256:" + "c" * 64,
+        executor_bundle_file_sha256="sha256:" + "d" * 64,
+    )
+    hosts = []
+    for host_id in ("worker-alpha", "worker-beta"):
+        receipt_path, _binding = ready_semantic_preflight(
+            "cursor_auto",
+            output_root=tmp_path / host_id,
+            effective_concurrency=4,
+        )
+        receipt = read_json(receipt_path)
+        receipt["evidence"]["workspaceSmoke"]["runs"] = [
+            {"lane": "homepage", "workspace": host_id, "status": "FINISHED"}
+        ]
+        receipt["evidenceDigest"] = semantic_preflight_digest(receipt["evidence"])
+        receipt["receiptId"] = semantic_preflight_digest({
+            key: value for key, value in receipt.items() if key != "receiptId"
+        })
+        hosts.append({
+            "hostScopeId": host_id,
+            "preflightReceipt": receipt,
+            "sourceCapsule": capsule,
+            "mongoTransportDigest": "sha256:" + "8" * 64,
+            "redisTransportDigest": "sha256:" + "9" * 64,
+        })
+    document = build_governed_host_set(
+        host_set_id="request-envelope-workers",
+        source_revision=content_source_revision(
+            source_digest=source_digest,
+            entity_catalog_digest=catalog_digest,
+        ),
+        source_digest=source_digest,
+        entity_catalog_digest=catalog_digest,
+        hosts=hosts,
+    )
+    path = tmp_path / "governed-host-set.json"
+    write_json(path, document)
+    return path
+
+
 def _expected_count(quota: int) -> int:
     return math.ceil(quota * active_runtime_policy().oversample_factor)
+
+
+def _wave_targets(prefix: str = "wave", count: int = 12) -> tuple[str, ...]:
+    return tuple(f"{prefix}-target-{index:03d}" for index in range(count))
 
 
 def test_campaign_source_freeze_allows_dirty_tree_when_content_digest_is_stable(
@@ -339,7 +513,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
             "releaseClass": "research",
             "productLifecycleState": "research",
             "manifestDigest": "sha256:" + ("c" * 64),
-            "sourceRevision": envelopes.content_source_revision(
+            "sourceRevision": content_source_revision(
                 source_digest=source_digest or ("sha256:" + ("a" * 64)),
                 entity_catalog_digest="sha256:" + ("b" * 64),
             ),
@@ -356,7 +530,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                 _capacity_throughput_row(
                     carrier=carrier,
                     measured_scale="M100",
-                    source_revision=envelopes.content_source_revision(
+                    source_revision=content_source_revision(
                         source_digest=source_digest or ("sha256:" + ("a" * 64)),
                         entity_catalog_digest="sha256:" + ("b" * 64),
                     ),
@@ -394,7 +568,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                 },
                 "videoPopularity": {
                     "statistical": True,
-                    "nonBlocking": False,
+                    "nonBlocking": True,
                     "signalAvailability": [
                         {
                             "signal": signal,
@@ -434,7 +608,7 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                 },
                 "automaticRecoveryRate": {
                     "statistical": True,
-                    "nonBlocking": False,
+                    "nonBlocking": True,
                     "status": "MEASURED",
                     "eligibleCount": 20,
                     "automaticCount": 19,
@@ -475,6 +649,12 @@ def _research_m100_receipt(path: Path, *, source_digest: str | None = None) -> P
                     {"provider": "tuchong", "acceptedAssetCount": 20, "acceptedAssetRatio": 0.2},
                     {"provider": "wikimedia commons", "acceptedAssetCount": 20, "acceptedAssetRatio": 0.2},
                 ],
+                "policyObservations": {
+                    "pinterestUniqueLargest": True,
+                    "tuchongPresent": True,
+                    "pinterestTuchongAtLeastHalf": True,
+                    "providerAboveSeventyPercent": [],
+                },
             },
             "duplicateAssetCount": 0,
             "crossLaneWriteCount": 0,
@@ -522,7 +702,7 @@ def _research_m1000_receipt(path: Path) -> Path:
             "predecessorSourcePoolDigests": ["sha256:" + "4" * 64],
             "scaleStartedAt": "2026-08-05T00:00:00Z",
             "scaleCompletedAt": "2026-08-08T00:00:00Z",
-            "wallClockBudgetSeconds": 259200,
+            "wallClockBudgetSeconds": None,
             "wallClockSeconds": 259200,
             "nextScaleEligible": "M10000",
             "campaignEvidenceRef": "data/local/campaign/m1000-evidence.json",
@@ -612,6 +792,7 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
         repo_root=repo,
         output_root=tmp_path,
         day="20260731",
+        target_names=_wave_targets(),
         **_pool_kwargs(tmp_path),
     )
     assert set(first) == {"homepage", "article", "image", "video"}
@@ -619,11 +800,11 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
     payload = homepage.read_text(encoding="utf-8")
     assert "submit-only" in payload
     assert "执行实体内容生成" in payload
-    assert '"quota": 100' in payload
-    assert f'"count": {_expected_count(100)}' in payload
+    assert '"quota": 12' in payload
+    assert f'"count": {_expected_count(12)}' in payload
     assert '"vertical": "travel"' in payload
-    assert "travel/M100/homepage.json" in homepage.as_posix()
-    video_payload = envelopes.read_json(first["video"])
+    assert "travel/M100/china/sequence-001/homepage.json" in homepage.as_posix()
+    video_payload = read_json(first["video"])
     assert video_payload["quota"] == 10
     assert video_payload["count"] == _expected_count(10)
 
@@ -633,6 +814,7 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
         repo_root=repo,
         output_root=tmp_path,
         day="20260731",
+        target_names=_wave_targets(),
         **_pool_kwargs(tmp_path),
     )
     assert second["homepage"] == homepage
@@ -645,6 +827,25 @@ def test_campaign_request_envelope_freeze__contract__local_contract_test(
         day="20260731",
     )
     assert set(named) == {"M1", "M100000"}
+    first_scope = envelopes.write_scale_envelopes(
+        "M1",
+        region_ref="china",
+        topic="first-scope",
+        repo_root=repo,
+        output_root=tmp_path,
+        day="20260731",
+    )
+    second_scope = envelopes.write_scale_envelopes(
+        "M1",
+        region_ref="china",
+        topic="second-scope",
+        repo_root=repo,
+        output_root=tmp_path,
+        day="20260731",
+    )
+    assert first_scope["homepage"] != second_scope["homepage"]
+    assert "china-first-scope/sequence-001" in first_scope["homepage"].as_posix()
+    assert "china-second-scope/sequence-001" in second_scope["homepage"].as_posix()
     m1 = envelopes.build_envelope(
         scale="M1",
         carrier="homepage",
@@ -749,7 +950,7 @@ def test_campaign_envelope_freeze_rejects_cross_lane_handoff_drift(
         )
 
     monkeypatch.setattr(
-        envelopes,
+        request_envelope_build,
         "freeze_carrier_pre_acquisition_inputs",
         bind,
     )
@@ -761,6 +962,7 @@ def test_campaign_envelope_freeze_rejects_cross_lane_handoff_drift(
             repo_root=repo,
             output_root=tmp_path,
             day="20260731",
+            target_names=_wave_targets(),
             **_pool_kwargs(tmp_path),
         )
     assert not tuple(tmp_path.rglob("*.json"))
@@ -783,15 +985,15 @@ def test_campaign_retry_envelope_requires_one_matching_predecessor(
             day="20260805",
             predecessor_execution_id=predecessor,
         )
-    with pytest.raises(ValueError, match="sequence>1 requires"):
-        envelopes.build_envelope(
-            scale="M3",
-            carrier="image",
-            region_ref="china",
-            repo_root=repo,
-            day="20260805",
-            sequence=2,
-        )
+    rolling = envelopes.build_envelope(
+        scale="M3",
+        carrier="image",
+        region_ref="china",
+        repo_root=repo,
+        day="20260805",
+        sequence=2,
+    )
+    assert rolling["retryOf"] is None
 
     retry = envelopes.build_envelope(
         scale="M3",
@@ -943,7 +1145,7 @@ def test_campaign_retry_write_requires_four_predecessors_and_separate_path(
 
     assert second == first
     for carrier, path in first.items():
-        assert f"travel/M3/retry-002/{carrier}.json" in path.as_posix()
+        assert f"travel/M3/china/sequence-002/{carrier}.json" in path.as_posix()
         payload = envelopes.load_campaign_envelope(path)
         assert payload["retryOf"] == predecessors[carrier]
         assert payload["executionId"].endswith("--scale-002")
@@ -965,7 +1167,7 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
         "rootExecutionId": predecessors["homepage"],
         "reason": "source_drift",
         "originalSourceIdentity": {
-            "sourceRevision": envelopes.content_source_revision(
+            "sourceRevision": content_source_revision(
                 source_digest="sha256:" + "d" * 64,
                 entity_catalog_digest="sha256:" + "b" * 64,
             ),
@@ -977,7 +1179,7 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
             "entityCatalogDigest": "sha256:" + "b" * 64,
         },
         "observedSourceIdentity": {
-            "sourceRevision": envelopes.content_source_revision(
+            "sourceRevision": content_source_revision(
                 source_digest="sha256:" + "c" * 64,
                 entity_catalog_digest="sha256:" + "b" * 64,
             ),
@@ -1047,7 +1249,7 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
         )
 
     current_identity = {
-        "sourceRevision": envelopes.content_source_revision(
+        "sourceRevision": content_source_revision(
             source_digest="sha256:" + "a" * 64,
             entity_catalog_digest="sha256:" + "b" * 64,
         ),
@@ -1071,7 +1273,7 @@ def test_campaign_retry_envelopes_bind_submission_reconciliation_targets(
         )
 
 
-def test_travel_video_m1000_requires_matching_m100_promotion(
+def test_travel_video_m1000_requires_promotion_and_alpha_acceptance(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -1088,10 +1290,34 @@ def test_travel_video_m1000_requires_matching_m100_promotion(
         )
 
     approved = _research_m100_receipt(tmp_path / "m100.json")
-    preflight_root = tmp_path / "semantic-output"
+    with pytest.raises(ValueError, match="ALPHA_M100_ACCEPTANCE_MISSING"):
+        envelopes.build_envelope(
+            scale="M1000",
+            carrier="video",
+            region_ref="china",
+            repo_root=repo,
+            day="20260731",
+            promotion_receipt=approved,
+            promotion_output_root=_promotion_output_root(approved),
+        )
+    preflight_root = _promotion_output_root(approved)
     preflight_path, _binding = ready_semantic_preflight(
         "cursor_auto", output_root=preflight_root, effective_concurrency=8
     )
+    alpha_acceptance = _alpha_acceptance_kwargs(preflight_root, approved)
+    with pytest.raises(ValueError, match="ALPHA_M100_ACCEPTANCE_MISSING"):
+        envelopes.build_envelope(
+            scale="M1000",
+            carrier="video",
+            region_ref="china",
+            repo_root=repo,
+            day="20260731",
+            promotion_receipt=approved,
+            promotion_output_root=_promotion_output_root(approved),
+            alpha_m100_readiness_receipt=alpha_acceptance[
+                "alpha_m100_readiness_receipt"
+            ],
+        )
     envelope = envelopes.build_envelope(
         scale="M1000",
         carrier="video",
@@ -1103,26 +1329,126 @@ def test_travel_video_m1000_requires_matching_m100_promotion(
         semantic_selection_id="cursor_auto",
         semantic_preflight_receipt=preflight_path,
         semantic_preflight_output_root=preflight_root,
+        capacity_host_set=_capacity_host_set(tmp_path / "capacity-hosts"),
+        target_names=_wave_targets("video"),
+        **alpha_acceptance,
         **_pool_kwargs(tmp_path),
     )
-    assert envelope["quota"] == 90
-    assert envelope["count"] == _expected_count(90)
+    assert envelope["quota"] == 12
+    assert envelope["count"] == _expected_count(12)
     assert envelope["researchScalePromotion"]["promotionId"] == "research-m100-1"
 
-    drifted = _research_m100_receipt(
-        tmp_path / "m100-drifted.json",
-        source_digest="sha256:" + ("e" * 64),
+
+def test_m100_and_m1000_are_create_once_current_waves_without_campaign_wide_pool_or_host(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repo = Path(__file__).resolve().parents[4]
+    _patch_envelope_deps(monkeypatch)
+
+    m100 = envelopes.write_scale_envelopes(
+        "M100",
+        region_ref="china",
+        repo_root=repo,
+        output_root=tmp_path / "m100-wave",
+        day="20260811",
+        target_names=_wave_targets("m100"),
     )
-    with pytest.raises(ValueError, match="identity drift"):
-        envelopes.build_envelope(
-            scale="M1000",
-            carrier="video",
-            region_ref="china",
-            repo_root=repo,
-            day="20260731",
-            promotion_receipt=drifted,
-            promotion_output_root=_promotion_output_root(drifted),
+    for path in m100.values():
+        payload = read_json(path)
+        assert "scaleSourcePool" not in payload
+        assert payload["workerHostSetBinding"] is None
+        assert payload["quota"] <= 12
+
+    promotion = _research_m100_receipt(tmp_path / "promotion")
+    preflight_root = _promotion_output_root(promotion)
+    preflight, _binding = ready_semantic_preflight(
+        "cursor_auto", output_root=preflight_root, effective_concurrency=8
+    )
+    common = {
+        "region_ref": "china",
+        "repo_root": repo,
+        "day": "20260811",
+        "promotion_receipt": promotion,
+        "promotion_output_root": _promotion_output_root(promotion),
+        "semantic_selection_id": "cursor_auto",
+        "semantic_preflight_receipt": preflight,
+        "semantic_preflight_output_root": preflight_root,
+        **_alpha_acceptance_kwargs(preflight_root, promotion),
+    }
+    first = envelopes.write_scale_envelopes(
+        "M1000",
+        output_root=tmp_path / "m1000-waves",
+        sequence=1,
+        target_names=_wave_targets("first"),
+        **common,
+    )
+    second = envelopes.write_scale_envelopes(
+        "M1000",
+        output_root=tmp_path / "m1000-waves",
+        sequence=2,
+        target_names=_wave_targets("second"),
+        **common,
+    )
+
+    for carrier in ("homepage", "article", "image", "video"):
+        first_payload = read_json(first[carrier])
+        second_payload = read_json(second[carrier])
+        assert first_payload["workerHostSetBinding"] is None
+        assert second_payload["workerHostSetBinding"] is None
+        assert "scaleSourcePool" not in first_payload
+        assert "scaleSourcePool" not in second_payload
+        assert first_payload["quota"] == second_payload["quota"] == 12
+        assert first_payload["capacityPlanDigest"] == second_payload["capacityPlanDigest"]
+        assert first_payload["executionId"] != second_payload["executionId"]
+        assert first_payload["requestDigest"] != second_payload["requestDigest"]
+        assert "wallClockBudgetSeconds" not in second_payload
+        assert second_payload["retryOf"] is None
+
+    envelopes.load_campaign_envelope(
+        first["homepage"], semantic_preflight_output_root=preflight_root
+    )
+    app_uat_path = common["alpha_m100_app_uat_receipt"]
+    app_uat = read_json(app_uat_path)
+    app_uat["status"] = "gate_block"
+    write_json(app_uat_path, app_uat)
+    with pytest.raises(ValueError, match="APP_UAT_DRIFT"):
+        envelopes.load_campaign_envelope(
+            first["homepage"], semantic_preflight_output_root=preflight_root
         )
+
+
+def test_explicit_m1000_host_set_remains_cross_lane_identity_strict(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repo = Path(__file__).resolve().parents[4]
+    _patch_envelope_deps(monkeypatch)
+    promotion = _research_m100_receipt(tmp_path / "promotion")
+    preflight_root = _promotion_output_root(promotion)
+    preflight, _binding = ready_semantic_preflight(
+        "cursor_auto", output_root=preflight_root, effective_concurrency=8
+    )
+    paths = envelopes.write_scale_envelopes(
+        "M1000",
+        region_ref="china",
+        repo_root=repo,
+        output_root=tmp_path / "governed",
+        day="20260811",
+        target_names=_wave_targets("governed"),
+        promotion_receipt=promotion,
+        promotion_output_root=_promotion_output_root(promotion),
+        semantic_selection_id="cursor_auto",
+        semantic_preflight_receipt=preflight,
+        semantic_preflight_output_root=preflight_root,
+        capacity_host_set=_capacity_host_set(tmp_path / "capacity-hosts"),
+        **_alpha_acceptance_kwargs(preflight_root, promotion),
+    )
+    payloads = {carrier: read_json(path) for carrier, path in paths.items()}
+    payloads["video"]["workerHostSetBinding"]["hostSetDigest"] = "sha256:" + "0" * 64
+
+    with pytest.raises(ValueError, match="host-set identity changed"):
+        request_envelope_writer._assert_one_capacity_plan(payloads)
 
 
 def test_predecessor_loader_rejects_noncanonical_path_and_count_arithmetic(
@@ -1156,7 +1482,7 @@ def test_predecessor_loader_rejects_noncanonical_path_and_count_arithmetic(
         )
 
 
-def test_travel_image_m1000_requires_matching_m100_promotion(
+def test_travel_image_m1000_requires_promotion_and_alpha_acceptance(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -1173,7 +1499,7 @@ def test_travel_image_m1000_requires_matching_m100_promotion(
         )
 
     approved = _research_m100_receipt(tmp_path / "m100.json")
-    preflight_root = tmp_path / "semantic-output"
+    preflight_root = _promotion_output_root(approved)
     preflight_path, _binding = ready_semantic_preflight(
         "cursor_auto", output_root=preflight_root
     )
@@ -1188,27 +1514,15 @@ def test_travel_image_m1000_requires_matching_m100_promotion(
         semantic_selection_id="cursor_auto",
         semantic_preflight_receipt=preflight_path,
         semantic_preflight_output_root=preflight_root,
+        capacity_host_set=_capacity_host_set(tmp_path / "capacity-hosts"),
+        target_names=_wave_targets("image"),
+        **_alpha_acceptance_kwargs(preflight_root, approved),
         **_pool_kwargs(tmp_path),
     )
 
-    assert envelope["count"] == _expected_count(900)
-    assert envelope["quota"] == 900
+    assert envelope["count"] == _expected_count(12)
+    assert envelope["quota"] == 12
     assert envelope["researchScalePromotion"]["releaseId"] == "research-release-1"
-
-    drifted = _research_m100_receipt(tmp_path / "m100-drifted.json")
-    drifted_doc = envelopes.read_json(drifted)
-    drifted_doc["entityCatalogDigest"] = "sha256:" + ("d" * 64)
-    write_json(drifted, drifted_doc)
-    with pytest.raises(ValueError, match="identity drift"):
-        envelopes.build_envelope(
-            scale="M1000",
-            carrier="image",
-            region_ref="china",
-            repo_root=repo,
-            day="20260731",
-            promotion_receipt=drifted,
-            promotion_output_root=_promotion_output_root(drifted),
-        )
 
 
 def test_m10000_consumes_m1000_cumulative_counts_as_delta(
@@ -1234,6 +1548,7 @@ def test_m10000_consumes_m1000_cumulative_counts_as_delta(
         semantic_selection_id="cursor_auto",
         semantic_preflight_receipt=preflight_path,
         semantic_preflight_output_root=preflight_root,
+        capacity_host_set=_capacity_host_set(tmp_path / "capacity-hosts"),
         **_pool_kwargs(tmp_path),
     )
     video = envelopes.build_envelope(
@@ -1247,6 +1562,7 @@ def test_m10000_consumes_m1000_cumulative_counts_as_delta(
         semantic_selection_id="cursor_auto",
         semantic_preflight_receipt=preflight_path,
         semantic_preflight_output_root=preflight_root,
+        capacity_host_set=_capacity_host_set(tmp_path / "capacity-hosts"),
         **_pool_kwargs(tmp_path),
     )
 
@@ -1406,10 +1722,11 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             "requiredWorkers": 1,
             "partitionCount": 16,
             "capacityPlanDigest": "sha256:" + "7" * 64,
+            "workerHostSetBinding": None,
             "scaleSourcePool": {
                 "poolId": "pool-local-contract",
                 "targetScale": "M100",
-                "sourceRevision": envelopes.content_source_revision(
+                "sourceRevision": content_source_revision(
                     source_digest=str(approved["sourceDigest"]["digest"]),
                     entity_catalog_digest=str(approved["entityCatalogDigest"]),
                 ),
@@ -1427,7 +1744,7 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                 "selectionDigest": "sha256:" + "6" * 64,
             },
             "topic": None,
-            "targetNames": [],
+            "targetNames": list(_wave_targets("promotion")),
             "sourceProviders": [],
             "semanticSelectionId": "default",
             "retryOf": None,
@@ -1438,7 +1755,7 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
             "gitBranch": approved["gitBranch"],
             "gitCommitSha": approved["gitCommitSha"],
             "sourceDigest": approved["sourceDigest"],
-            "sourceRevision": envelopes.content_source_revision(
+            "sourceRevision": content_source_revision(
                 source_digest=str(approved["sourceDigest"]["digest"]),
                 entity_catalog_digest=str(approved["entityCatalogDigest"]),
             ),
@@ -1454,7 +1771,7 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                 "handoffFileDigest": "sha256:" + "8" * 64,
             },
             "externalInputRefs": [],
-            "externalInputsDigest": envelopes.external_inputs_digest([]),
+            "externalInputsDigest": external_inputs_digest([]),
             "allowedStage": "submit-only",
             "operatorPrompt": "执行视频内容生成",
             "requestDigest": approved["predecessorInputDigest"],
@@ -1485,10 +1802,11 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                 "requiredWorkers": 1,
                 "partitionCount": 16,
                 "capacityPlanDigest": "sha256:" + "7" * 64,
+                "workerHostSetBinding": None,
                 "scaleSourcePool": {
                     "poolId": "pool-local-contract",
                     "targetScale": "M100",
-                    "sourceRevision": envelopes.content_source_revision(
+                    "sourceRevision": content_source_revision(
                         source_digest=str(approved["sourceDigest"]["digest"]),
                         entity_catalog_digest=str(approved["entityCatalogDigest"]),
                     ),
@@ -1506,7 +1824,7 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                     "selectionDigest": "sha256:" + "6" * 64,
                 },
                 "topic": None,
-                "targetNames": [],
+                "targetNames": list(_wave_targets("promotion")),
                 "sourceProviders": [],
                 "semanticSelectionId": "default",
                 "retryOf": None,
@@ -1517,7 +1835,7 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                 "gitBranch": approved["gitBranch"],
                 "gitCommitSha": approved["gitCommitSha"],
                 "sourceDigest": approved["sourceDigest"],
-                "sourceRevision": envelopes.content_source_revision(
+                "sourceRevision": content_source_revision(
                     source_digest=str(approved["sourceDigest"]["digest"]),
                     entity_catalog_digest=str(
                         approved["entityCatalogDigest"]
@@ -1535,7 +1853,7 @@ def test_video_scale_promotion_writes_immutable_m100_receipt(
                     "handoffFileDigest": "sha256:" + "8" * 64,
                 },
                 "externalInputRefs": [],
-                "externalInputsDigest": envelopes.external_inputs_digest([]),
+                "externalInputsDigest": external_inputs_digest([]),
                 "allowedStage": "submit-only",
                 "operatorPrompt": "执行视频内容生成",
                 "requestDigest": approved["predecessorInputDigest"],

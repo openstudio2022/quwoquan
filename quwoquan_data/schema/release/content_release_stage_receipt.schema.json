@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/content_release_stage_receipt.schema.json",
+  "title": "Content release staged activation receipt",
+  "description": "Content candidate 从 prepared 到 active 的逐阶段脱敏回执；失败必须保留成功数、耗时、checkpoint 与首个 typed blocker，且不得覆盖 previous active。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "environment",
+    "releaseId",
+    "manifestDigest",
+    "stage",
+    "outcome",
+    "durationMs",
+    "attemptedCount",
+    "successfulCount",
+    "checkpoint",
+    "recordedAt"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan.content_release_stage_receipt"},
+    "environment": {"type": "string", "minLength": 1},
+    "releaseId": {"type": "string", "minLength": 1},
+    "manifestDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "stage": {"enum": ["prepared", "imported", "projected", "verified", "active"]},
+    "outcome": {"enum": ["passed", "failed"]},
+    "durationMs": {"type": "integer", "minimum": 0},
+    "attemptedCount": {"type": "integer", "minimum": 0},
+    "successfulCount": {"type": "integer", "minimum": 0},
+    "checkpoint": {"type": "string", "minLength": 1},
+    "recordedAt": {"type": "string", "minLength": 1},
+    "firstBlocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "checkpoint", "attributes"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*(?:\\.[A-Z][A-Z0-9_]*){2,}$"},
+        "checkpoint": {"type": "string", "minLength": 1},
+        "attributes": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "failed"}}, "required": ["outcome"]},
+      "then": {"required": ["firstBlocker"]}
+    }
+  ]
+}

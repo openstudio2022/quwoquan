@@ -46,8 +46,6 @@ final class InMemoryContactDiscoveryFacet
     if (_latest?.id == command.discoveryId) {
       _latest = null;
     }
-    return ContactDiscoveryDismissResult(
-      status: DiscoveryStatus.dismissed,
-    );
+    return ContactDiscoveryDismissResult(status: DiscoveryStatus.dismissed);
   }
 }

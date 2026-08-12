@@ -15,6 +15,7 @@ import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.da
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_player_widget.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_playback_session_models.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/interactive_intersection_text.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
@@ -472,6 +473,7 @@ ContentPostViewData _articleLayoutPost({
     authorVerified: false,
     title: '川西路线长文标题',
     body: bodyValue,
+    summary: bodyValue,
     coverUrl: coverUrlValue,
     likeCount: 1,
     commentCount: 2,
@@ -1060,6 +1062,44 @@ void main() {
     );
   });
 
+  testWidgets('test_live 无 active release 显示 typed unavailable 并可重试', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final notifier = _NoActiveReleaseFeedMapNotifier();
+
+    await tester.pumpWidget(
+      _buildFeedScope(notifier: () => notifier, scopeId: 'no-active-release'),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('home-feed-no-active-release')),
+      findsOneWidget,
+    );
+    expect(
+      find.text(SearchText.recoveryContentUnavailableTitle),
+      findsOneWidget,
+    );
+    expect(
+      find.text(SearchText.recoveryContentUnavailableMessage),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('home-feed-completed-empty')),
+      findsNothing,
+    );
+    expect(notifier.forceLoadCalls, 0);
+
+    await tester.tap(
+      find.byKey(const ValueKey('home-feed-no-active-release-retry')),
+    );
+    await tester.pump();
+
+    expect(notifier.forceLoadCalls, 1);
+  });
+
   testWidgets('feed 离线、超时和依赖不可用使用准确恢复组且不展示技术字段', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -1618,6 +1658,41 @@ void main() {
     expect(video.width, greaterThan((card.width - 32) * 0.55));
   });
 
+  testWidgets('首页视频卸载后的有效播放回调复用活跃帧端口，不读取失效 WidgetRef', (tester) async {
+    final behaviorRepo = RecordingContentBehaviorRepository();
+    final tracker = ContentBehaviorTracker(
+      reporter: behaviorRepo,
+      maxBatchSize: 1,
+      enablePeriodicFlush: false,
+    );
+    addTearDown(tracker.dispose);
+
+    await tester.pumpWidget(
+      _buildFeed(_videoPost(width: 1080, height: 1920), tracker: tracker),
+    );
+    await tester.pump();
+    final player = tester.widget<VideoPlayerWidget>(
+      find.byType(VideoPlayerWidget),
+    );
+    final reportEffectivePlayback = player.onEffectivePlayback!;
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    reportEffectivePlayback(
+      const VideoEffectivePlaybackEvidence(
+        playbackSessionId: 'video-session-after-home-deactivate',
+        effectivePlayMs: 6000,
+        consumedRatio: 0.35,
+        totalUnits: 17,
+      ),
+    );
+    await tracker.flush();
+
+    expect(tester.takeException(), isNull);
+    final event = behaviorRepo.recorded.single;
+    expect(event.action, BehaviorEventType.effectivePlay);
+    expect(event.playbackSessionId, 'video-session-after-home-deactivate');
+  });
+
   test('视频 post 外层播放按钮只属于未初始化静态封面态', () {
     final source = File(
       'lib/service/content_service/content/post/presentation/home_multi_form_feed_media_grid.dart',
@@ -2036,6 +2111,36 @@ class _RecommendCanonicalEmptyFeedMapNotifier extends DiscoveryFeedMapNotifier {
     terminal: DiscoveryFeedLoadTerminal.canonicalEmpty,
     generation: 0,
   );
+}
+
+class _NoActiveReleaseFeedMapNotifier extends DiscoveryFeedMapNotifier {
+  int forceLoadCalls = 0;
+
+  @override
+  Map<String, AsyncValue<DiscoveryFeedState>> build() {
+    return <String, AsyncValue<DiscoveryFeedState>>{
+      'recommend': const AsyncData(
+        DiscoveryFeedState(
+          items: <ContentPostViewData>[],
+          emptyReason: ContentFeedEmptyReason.noActiveRelease,
+        ),
+      ),
+    };
+  }
+
+  @override
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async {
+    if (force) {
+      forceLoadCalls += 1;
+    }
+    return DiscoveryFeedLoadResult(
+      terminal: DiscoveryFeedLoadTerminal.canonicalEmpty,
+      generation: 0,
+    );
+  }
 }
 
 class _BlockingErrorFeedMapNotifier extends DiscoveryFeedMapNotifier {

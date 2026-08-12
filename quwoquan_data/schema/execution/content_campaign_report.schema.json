@@ -101,6 +101,8 @@
         "selectedCount",
         "discardedCount",
         "shortfallCount",
+        "deliveryPendingCount",
+        "deliveryIntentRefs",
         "error"
       ],
       "additionalProperties": false,
@@ -113,6 +115,7 @@
             "reviewed",
             "review_qualified",
             "partial",
+            "delivery_pending",
             "published",
             "finalized",
             "blocked"
@@ -151,6 +154,16 @@
         "selectedCount": { "type": ["integer", "null"], "minimum": 0 },
         "discardedCount": { "type": ["integer", "null"], "minimum": 0 },
         "shortfallCount": { "type": ["integer", "null"], "minimum": 0 },
+        "deliveryPendingCount": { "type": "integer", "minimum": 0 },
+        "deliveryIntentRefs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+          }
+        },
         "error": { "type": ["string", "null"] }
       }
     }

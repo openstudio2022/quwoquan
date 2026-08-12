@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
 	rtgov "quwoquan_service/runtime/governance"
 	rthttp "quwoquan_service/runtime/http"
@@ -151,12 +152,22 @@ func buildAssistantExternalClients(
 			runtime.config.UserService.BaseURL,
 		)
 	})
+	searchAuthorization, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		runtime.accessTokenConfig,
+		"assistant-service",
+		[]string{"assistant.search.search_index_view.read"},
+	)
+	if err != nil {
+		return nil, dependencyError("search-service", "credentials", err)
+	}
 	canonicalSearch, err := searchclient.New(
 		runtime.config.SearchService.BaseURL,
 		newObservedEgressClient(
 			"assistant-service.search-query",
 			runtime.config.SearchService.TimeoutMs,
 		),
+		searchAuthorization,
+		"sha256:"+operationsecurity.ContractGraphSHA256,
 	)
 	if err != nil {
 		return nil, dependencyError("search-service", "initialization", err)

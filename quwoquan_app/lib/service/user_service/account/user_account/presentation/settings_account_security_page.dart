@@ -40,6 +40,9 @@ class _SettingsAccountSecurityPageState
     extends ConsumerState<SettingsAccountSecurityPage> {
   late Future<ListCredentialsSlice> _credentials;
   bool _closingAccount = false;
+  bool _terminalCleanupRunning = false;
+  TerminalAccountCleanupReceipt? _pendingTerminalCleanupReceipt;
+  Object? _terminalCleanupError;
 
   @override
   void initState() {
@@ -56,6 +59,7 @@ class _SettingsAccountSecurityPageState
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
+    final pendingCleanup = _pendingTerminalCleanupReceipt;
     return SettingsInsetFormPageScaffold(
       isDark: isDark,
       title: SettingsText.settingsAccountSecurity,
@@ -63,39 +67,68 @@ class _SettingsAccountSecurityPageState
       body: WebPageMaxWidthFrame(
         child: SafeArea(
           bottom: false,
-          child: FutureBuilder<ListCredentialsSlice>(
-            future: _credentials,
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return AppPageErrorState(
-                  semantic: UiErrorSemanticResolver.resolve(
-                    context,
-                    error: snapshot.error!,
-                    category: UiErrorCategory.pageLoad,
-                    scope: UiErrorScope.page,
-                  ),
-                  onRecovery: (action) async {
-                    if (action.type == UiErrorActionType.retry) {
-                      setState(_reload);
-                      return UiRecoveryOutcome.superseded;
+          child: pendingCleanup != null
+              ? _buildPendingTerminalCleanup(pendingCleanup)
+              : FutureBuilder<ListCredentialsSlice>(
+                  future: _credentials,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return AppPageErrorState(
+                        semantic: UiErrorSemanticResolver.resolve(
+                          context,
+                          error: snapshot.error!,
+                          category: UiErrorCategory.pageLoad,
+                          scope: UiErrorScope.page,
+                        ),
+                        onRecovery: (action) async {
+                          if (action.type == UiErrorActionType.retry) {
+                            setState(_reload);
+                            return UiRecoveryOutcome.superseded;
+                          }
+                          return UiRecoveryOutcome.cancelled;
+                        },
+                      );
                     }
-                    return UiRecoveryOutcome.cancelled;
+                    if (!snapshot.hasData) {
+                      return AppRequestFeedback.section();
+                    }
+                    return _buildCredentials(
+                      isDark,
+                      snapshot.data!.credentials
+                          .where((item) => item.isActive)
+                          .toList(),
+                    );
                   },
-                );
-              }
-              if (!snapshot.hasData) {
-                return AppRequestFeedback.section();
-              }
-              return _buildCredentials(
-                isDark,
-                snapshot.data!.credentials
-                    .where((item) => item.isActive)
-                    .toList(),
-              );
-            },
-          ),
+                ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPendingTerminalCleanup(TerminalAccountCleanupReceipt receipt) {
+    if (_terminalCleanupRunning) {
+      return AppRequestFeedback.section();
+    }
+    return AppPageErrorState(
+      semantic: ensureRetryUiErrorSemantic(
+        runtimeErrorSemantic(
+          context,
+          error:
+              _terminalCleanupError ??
+              StateError('terminal account cleanup is pending'),
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.page,
+        ),
+      ),
+      onRecovery: (action) async {
+        if (action.type != UiErrorActionType.retry &&
+            action.type != UiErrorActionType.resubmit) {
+          return UiRecoveryOutcome.cancelled;
+        }
+        return await _completeTerminalAccountCleanup(receipt)
+            ? UiRecoveryOutcome.superseded
+            : UiRecoveryOutcome.stillBlocked;
+      },
     );
   }
 
@@ -245,19 +278,32 @@ class _SettingsAccountSecurityPageState
     final closureActor = AccountClosureLocalActorContext.fromSession(
       ref.read(authSessionControllerProvider),
     );
+    await _completeTerminalAccountCleanup(
+      TerminalAccountCleanupReceipt(
+        accountId: closureActor.accountId,
+        personaId: closureActor.personaId,
+        installId: closureActor.installId,
+      ),
+    );
+  }
+
+  Future<bool> _completeTerminalAccountCleanup(
+    TerminalAccountCleanupReceipt receipt,
+  ) async {
+    if (_terminalCleanupRunning) return false;
+    if (mounted) {
+      setState(() {
+        _terminalCleanupRunning = true;
+        _closingAccount = true;
+        _pendingTerminalCleanupReceipt = receipt;
+        _terminalCleanupError = null;
+      });
+    }
     final cleanupReceiptStore = ref.read(
       terminalAccountCleanupReceiptStoreProvider,
     );
-    var cleanupReceiptPersisted = false;
     try {
-      await cleanupReceiptStore.save(
-        TerminalAccountCleanupReceipt(
-          accountId: closureActor.accountId,
-          personaId: closureActor.personaId,
-          installId: closureActor.installId,
-        ),
-      );
-      cleanupReceiptPersisted = true;
+      await cleanupReceiptStore.save(receipt);
     } catch (error, stackTrace) {
       unawaited(
         ref
@@ -269,6 +315,14 @@ class _SettingsAccountSecurityPageState
               operationId: AppCloudOperationIds.userUserAccountCloseAccount,
             ),
       );
+      if (mounted) {
+        setState(() {
+          _terminalCleanupRunning = false;
+          _closingAccount = false;
+          _terminalCleanupError = error;
+        });
+      }
+      return false;
     }
     final sessionController = ref.read(authSessionControllerProvider.notifier);
     final localDataPurger = ref.read(accountClosureLocalDataPurgerProvider);
@@ -287,11 +341,11 @@ class _SettingsAccountSecurityPageState
             ),
       );
     }
+    var cleanupCompleted = false;
     try {
       await localDataPurger.purge();
-      if (cleanupReceiptPersisted) {
-        await cleanupReceiptStore.clear();
-      }
+      await cleanupReceiptStore.clear();
+      cleanupCompleted = true;
     } catch (error, stackTrace) {
       unawaited(
         ref
@@ -303,14 +357,23 @@ class _SettingsAccountSecurityPageState
               operationId: AppCloudOperationIds.userUserAccountCloseAccount,
             ),
       );
-      if (cleanupReceiptPersisted) {
-        unawaited(ref.read(accountClosureLocalCleanupRecoveryProvider)());
-      }
+      unawaited(ref.read(accountClosureLocalCleanupRecoveryProvider)());
     }
 
-    if (!mounted) return;
-    AppToast.show(context, SettingsText.settingsCloseAccountDoneToast);
+    if (!mounted) return cleanupCompleted;
+    setState(() {
+      _terminalCleanupRunning = false;
+      _closingAccount = false;
+      if (cleanupCompleted) {
+        _pendingTerminalCleanupReceipt = null;
+        _terminalCleanupError = null;
+      }
+    });
+    if (cleanupCompleted) {
+      AppToast.show(context, SettingsText.settingsCloseAccountDoneToast);
+    }
     context.go(AppRoutePaths.home);
+    return cleanupCompleted;
   }
 
   Future<void> _confirmUnbind(CredentialBindingView credential) async {

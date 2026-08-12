@@ -48,8 +48,38 @@
 
 - 提供网关统一入口、鉴权限流、防护策略与跨服务编排基础能力。
 - 网关为端侧唯一入口，业务服务不得直连暴露。
-- 编排输出结构必须稳定；禁止协议版本分支与 wire 兼容窗口（只认当前契约形状）。
+- 编排输出结构必须稳定；禁止兼容握手、请求期领域模型声明、多版本 wire 信封、字段双键读取和长期 shim。minimum 仍支持的历史 App 所使用 operation 是当前正式契约，须保留到支持窗口关闭。
 - request/trace/page/session/user/device 字段必须全链路透传。
+
+<a id="req-003"></a>
+### REQ-003 可信安装身份与最低 App Build 门禁
+
+- Android、iOS、Web 首次安装或首次打开站点生成可重置 UUID v4 install ID；重启、登录、退出和账号切换保持，卸载重装、清除 App 数据或浏览器站点数据后重新生成，不读取硬件或广告标识。
+- 登录、匿名 bootstrap 和 refresh session 均绑定 install ID；服务端使用冻结算法派生不可逆 `deviceActorId`，access token 以可选签名 `did` claim 同时承载 account、persona 和 device actor。网关必须先删除入站裸设备身份 header，验签后再从 principal 重建可信上下文。
+- 老 access token 缺少 `did` 时请求固定进入 stable 并计入 missing subject，不得使用请求级随机 fallback；`deviceActorId` 只用于分桶、去重及已声明的设备 actor 行为，不作为认证凭证或授权条件。
+- API Edge 对低于平台 minimum supported Build 的普通业务请求返回 HTTP 426 和 canonical `client_upgrade_required`；版本查询、更新下载、恢复页、官网和完成更新所必需的认证入口不受阻断。
+
+<a id="req-004"></a>
+### REQ-004 API Edge 拥有生产灰度裁决
+
+- 公网入口只处理 TLS、静态资源与可信代理链；必须删除入站设备、地域和运营商声明，业务 stable/candidate 路由只由 API Edge 基于可信 principal、平台 Build 和可信源 IP 派生属性裁决。
+- 请求顺序固定为 credential verification、minimum Build gate、operation/persisted query authorization、共享 admission、rollout decision、owner proxy；stable/candidate 使用同一 admission scene 和共享业务存储，stage 不得进入限流 key。
+- Android、iOS、Web 按可信安装实例分平台确定性分桶；同一 campaign 的 candidate assignment 单调保持，地域、运营商或网络变化不使已入组实例回到 stable。
+- WebSocket/SSE 只在建连时确定服务池，连接生命周期内不切换。普通请求只粘滞服务池，不粘滞单实例。
+- assignment store 故障/丢失、candidate identity 漂移或非法缩小 cohort 时必须使 campaign 自动 rollback；不得让 Caddy、业务 owner 或进程内 fallback 复制灰度判断。
+
+<a id="req-005"></a>
+### REQ-005 App/public GraphQL 读面、typed owner 读取与 REST command 写入分离
+
+- App 与公众业务读面的统一入口为 `POST /graphql`；Query root 只按有用户查询价值、授权边界和成本预算的 Query Slice 暴露，不按聚合根或对象类别机械开放，且不提供 GraphQL Mutation。
+- Prod 只接受随受审计发布包签名并登记的 persisted query hash；hash 必须精确绑定 operation、对象集合、授权和成本预算，未知 hash、任意 query text、在线注册、超成本查询和 mutation 全部拒绝。
+- `POST /graphql` 的 canonical operation 只能在签名 registry 解出 persisted query hash 后由 GraphQL 专属 authorizer 裁决；通用 REST method/path guard 不得把共享 `/graphql` 路径误判为重复路由，也不得代替 registry 猜测具体 operation。普通 REST route 仍须保持 method/path 唯一并在冲突时 fail-closed。
+- GraphQL 专属 authorizer 的部署描述符集合必须包含 gateway-owned persisted query operation；它不因 gateway 缺少 REST owner upstream 而从 ContractGraph 授权集合消失，同时不得把 gateway operation 注入通用 REST owner proxy。
+- 嵌套字段只能读取父 Query Slice 或使用批量 DataLoader，不得由 resolver 逐字段跨服务远程调用；所有状态变更继续进入 canonical REST command/write owner。
+- 跨服务业务读取使用对象 owner 的 typed query，可经进程内 application port 或受限内部 HTTP 传输，不绕行 App GraphQL。内部 HTTP 必须绑定 canonical operation/Reader/Slice、验签 service principal、最小 scope、`internal` visibility 与 ContractGraph operation identity，且不进入 App/public exposure。
+- 运营控制面读取可保留明确的 typed REST query，但必须使用验签 operator/admin principal、显式 scope 与 canonical operation，不得作为 App 或公众业务读面。非业务 HTTP 入口另行声明闭集 `transport_role`，且不得返回普通业务 Query Slice。路径名称不产生隐式豁免。
+- 历史 App 的 REST read 在其 Build 仍受支持期间是正式契约；迁移必须按对象执行“新增 persisted query、新 App 切换、验证、minimum 提升、删除旧 REST read”，同一 App Build 不得长期双读或择优返回。
+- 领域模型 `major.minor`、ContractGraph digest 只用于 build/deploy/release evidence 与变更门禁，不进入请求、路由、GraphQL response 或 App UI；端云组合仅由受支持 operation、当前 stable 集成验证和 minimum Build 治理。
 
 ## 6. 领域验收
 
@@ -59,6 +89,7 @@
 - 条件：本领域收到有效输入且前置领域事实成立。
 - 可观察结果：领域边界、上下游依赖、工程映射和服务治理清晰。
 - 禁止结果：不得绕过本领域公开 command/query/event 写入其拥有事实。
+- 可观察结果：历史支持 App 对 candidate 云、新 App 对当前 stable 云、以及同版本端云三种组合均通过对应 persisted query/REST command 证据；不存在握手或请求期模型协商。
 
 ## 7. 工程归属
 

@@ -3,10 +3,12 @@ import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/ada
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_operation_ports.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/adapters/homepage_claim_request_remote.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_command_writer.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_query_reader.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_review/adapters/homepage_review_remote.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_review/application/public/homepage_review_operation_ports.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/adapters/homepage_status_report_remote.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_command_writer.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_status_report/application/public/homepage_status_report_query_reader.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef EntityHomepageInvocationContextFactory =
@@ -38,6 +40,17 @@ final class AppProductionHomepageCommandFacets {
   final HomepageCandidateCommandWriter candidateWriter;
   final HomepageClaimRequestCommandWriter claimRequestWriter;
   final HomepageStatusReportCommandWriter statusReportWriter;
+}
+
+/// 主页认领与状态上报提交后的本人待审权威读面。
+final class AppProductionHomepageSubmissionQueryFacets {
+  const AppProductionHomepageSubmissionQueryFacets({
+    required this.claimRequestReader,
+    required this.statusReportReader,
+  });
+
+  final HomepageClaimRequestQueryReader claimRequestReader;
+  final HomepageStatusReportQueryReader statusReportReader;
 }
 
 /// 共享同一 HomepageReview Remote 实例的 public ports。
@@ -93,6 +106,10 @@ final class EntityProductionComposition {
   static AppProductionHomepageCommandFacets homepageCommandFacets({
     required GeneratedCloudOperationClient client,
     required HomepageCommandInvocationContextFactory invocationContext,
+    required HomepageClaimRequestInvocationContextFactory
+    claimRequestInvocationContext,
+    required HomepageStatusReportInvocationContextFactory
+    statusReportInvocationContext,
   }) {
     final candidateWriter = RemoteHomepageCommandWriter(
       client: client,
@@ -102,11 +119,31 @@ final class EntityProductionComposition {
       candidateWriter: candidateWriter,
       claimRequestWriter: RemoteHomepageClaimRequestWriter(
         client: client,
-        invocationContext: invocationContext,
+        invocationContext: claimRequestInvocationContext,
       ),
       statusReportWriter: RemoteHomepageStatusReportWriter(
         client: client,
-        invocationContext: invocationContext,
+        invocationContext: statusReportInvocationContext,
+      ),
+    );
+  }
+
+  static AppProductionHomepageSubmissionQueryFacets
+  homepageSubmissionQueryFacets({
+    required GeneratedCloudOperationClient client,
+    required HomepageClaimRequestInvocationContextFactory
+    claimRequestInvocationContext,
+    required HomepageStatusReportInvocationContextFactory
+    statusReportInvocationContext,
+  }) {
+    return AppProductionHomepageSubmissionQueryFacets(
+      claimRequestReader: RemoteHomepageClaimRequestReader(
+        client: client,
+        invocationContext: claimRequestInvocationContext,
+      ),
+      statusReportReader: RemoteHomepageStatusReportReader(
+        client: client,
+        invocationContext: statusReportInvocationContext,
       ),
     );
   }

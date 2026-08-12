@@ -39,7 +39,35 @@ groups:
           summary: "登录 Provider {{ $labels.route }} 错误率连续两个窗口 > 2%"
           description: "当前非 2xx 比率 {{ $value | humanizePercentage }}。立即验证该 provider 降级、短信验证码恢复入口与配置回滚。"
 
+      - alert: AuthChallengeLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="user-service",route="/auth/otp/send"}[5m])) by (le)
+          ) > 1.2
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "验证码发送 P95 延迟连续两个窗口超过 1.2 秒"
+          description: "检查 User Service 幂等重放、Integration 投递和短信 Provider 延迟；客户端总 deadline 仍为 3 秒。"
 
+      - alert: AuthLoginLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="user-service",route=~"/auth/login/(phone|wechat|alipay|qq|one-tap.*)"}[5m])) by (le, route)
+          ) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "登录校验 P95 延迟连续两个窗口超过 1.5 秒"
+          description: "按 route 定位手机号或第三方登录延迟，并验证 session 签发与 readback；客户端超时后必须保留验证码或恢复动作。"
 
       - alert: LoginClientStateStalled
         expr: |
@@ -80,6 +108,54 @@ groups:
         annotations:
           summary: "客户端登录操作 {{ $labels.operation }} 失败率超过 5%"
           description: "按 failure_kind 下钻 OTP、运营商或第三方授权失败，并用 Elasticsearch 运维事件关联 sourceCode/requestId/traceId。"
+
+      - alert: OtpDeliveryConfirmationUnknownHigh
+        expr: |
+          (
+            sum(rate(ops_login_operation_events_total{operation="confirm_otp_delivery_15s",result="delivery_confirming"}[10m]))
+            / clamp_min(sum(rate(ops_login_operation_events_total{operation=~"confirm_otp_delivery(_5s|_15s)?"}[10m])), 0.001)
+          ) > 0.02
+          and sum(increase(ops_login_operation_events_total{operation=~"confirm_otp_delivery(_5s|_15s)?"}[10m])) >= 20
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "验证码发送结果 15 秒未知率超过 2%"
+          description: "客户端已停止自动确认但仍允许输入已收到的验证码；检查 User Service durable consumer、Integration result 延迟和短信 Provider backlog。"
+
+      - alert: OtpDeliveryFailureRateHigh
+        expr: |
+          (
+            sum(rate(ops_login_operation_events_total{operation=~"send_otp|confirm_otp_delivery(_5s|_15s)?",result="delivery_failed"}[10m]))
+            / clamp_min(sum(rate(ops_login_operation_events_total{operation=~"send_otp|confirm_otp_delivery(_5s|_15s)?"}[10m])), 0.001)
+          ) > 0.02
+          and sum(increase(ops_login_operation_events_total{operation=~"send_otp|confirm_otp_delivery(_5s|_15s)?"}[10m])) >= 20
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "验证码投递失败率超过 2%"
+          description: "按 operation 区分初次发码与 5/15 秒状态确认，检查 delivery_failed、Provider dead letter 与精确冷却恢复。"
+
+      - alert: LoginCompletionRateLow
+        expr: |
+          (
+            sum(rate(ops_login_funnel_events_total{action="login_terminal",result="login_success"}[15m]))
+            / clamp_min(sum(rate(ops_login_funnel_events_total{action="login_flow_exposed",result="exposed"}[15m])), 0.001)
+          ) < 0.80
+          and sum(increase(ops_login_funnel_events_total{action="login_flow_exposed",result="exposed"}[15m])) >= 20
+        for: 15m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "登录完成率低于 80%"
+          description: "按 send_otp、confirm_otp_delivery、verify_login_otp 与 failure_kind 下钻，确认短信、校验和 session readback 均可恢复。"
 
       - alert: LoginPhoneBindingAbandonmentHigh
         expr: |

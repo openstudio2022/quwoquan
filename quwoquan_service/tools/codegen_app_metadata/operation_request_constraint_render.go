@@ -587,7 +587,68 @@ func loadCanonicalRequestEnumValues() (map[string][]string, error) {
 			result[name] = values
 		}
 	}
+	var searchContract struct {
+		Modes []struct {
+			ID string `yaml:"id"`
+		} `yaml:"modes"`
+	}
+	if err := activeMetadataSource.Decode(
+		"_shared/search_contract.yaml",
+		&searchContract,
+	); err != nil {
+		return nil, fmt.Errorf("decode App Search mode exposure: %w", err)
+	}
+	appSearchModes := make([]string, 0, len(searchContract.Modes))
+	for _, mode := range searchContract.Modes {
+		if value := strings.TrimSpace(mode.ID); value != "" {
+			appSearchModes = append(appSearchModes, value)
+		}
+	}
+	if err := restrictCanonicalSearchModeToAppExposure(
+		result,
+		appSearchModes,
+	); err != nil {
+		return nil, err
+	}
 	return result, nil
+}
+
+func restrictCanonicalSearchModeToAppExposure(
+	values map[string][]string,
+	appModes []string,
+) error {
+	ownerModes := values["CanonicalSearchMode"]
+	if len(ownerModes) == 0 {
+		return fmt.Errorf("canonical owner enum CanonicalSearchMode is empty")
+	}
+	ownerSet := make(map[string]struct{}, len(ownerModes))
+	for _, mode := range ownerModes {
+		ownerSet[mode] = struct{}{}
+	}
+	seen := make(map[string]struct{}, len(appModes))
+	allowed := make([]string, 0, len(appModes))
+	for _, rawMode := range appModes {
+		mode := strings.TrimSpace(rawMode)
+		if mode == "" {
+			continue
+		}
+		if _, exists := ownerSet[mode]; !exists {
+			return fmt.Errorf(
+				"App Search exposure contains unknown owner mode %q",
+				mode,
+			)
+		}
+		if _, duplicate := seen[mode]; duplicate {
+			return fmt.Errorf("App Search exposure repeats mode %q", mode)
+		}
+		seen[mode] = struct{}{}
+		allowed = append(allowed, mode)
+	}
+	if len(allowed) == 0 {
+		return fmt.Errorf("App Search mode exposure is empty")
+	}
+	values["CanonicalSearchMode"] = allowed
+	return nil
 }
 
 func normalizeRequestEnumCatalog(raw any) map[string]any {

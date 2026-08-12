@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-004
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -180,6 +181,27 @@ void main() {
       }
       tester.takeException();
     });
+
+    testWidgets('失败重试复用同一幂等意图并等待 Remote roster 收敛', (tester) async {
+      _suppressImageErrors();
+      final repo = _RetryTransferRepo();
+      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.tap(find.text('契约同伴一'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(FoundationText.confirm));
+      await tester.pumpAndSettle();
+
+      expect(find.text(ContentText.tryAgain), findsOneWidget);
+      await tester.tap(find.text(ContentText.tryAgain));
+      await tester.pumpAndSettle();
+
+      expect(repo.idempotencyKeys, hasLength(2));
+      expect(repo.idempotencyKeys[0], isNotEmpty);
+      expect(repo.idempotencyKeys[1], repo.idempotencyKeys[0]);
+    });
   });
 
   group('TransferOwnershipPage — 错误态渲染', () {
@@ -226,5 +248,26 @@ class _EmptyMembersRepo extends MockChatRepository {
     String? sort,
   }) async {
     return [];
+  }
+}
+
+class _RetryTransferRepo extends MockChatRepository {
+  final List<String> idempotencyKeys = <String>[];
+
+  @override
+  Future<void> transferOwnership(
+    String conversationId,
+    String newOwnerId, {
+    String? idempotencyKey,
+  }) async {
+    idempotencyKeys.add(idempotencyKey ?? '');
+    if (idempotencyKeys.length == 1) {
+      throw Exception('transient transfer failure');
+    }
+    await super.transferOwnership(
+      conversationId,
+      newOwnerId,
+      idempotencyKey: idempotencyKey,
+    );
   }
 }

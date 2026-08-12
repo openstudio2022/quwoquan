@@ -1106,7 +1106,11 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 mock.patch.object(
                     local_gamma_release_consumer,
                     "run_release_consumer",
-                    return_value={"status": "passed", "exitCode": 0},
+                    return_value={
+                        "status": "passed",
+                        "mutationPolicy": "read_only",
+                        "exitCode": 0,
+                    },
                 ),
                 mock.patch.object(
                     local_gamma_release_consumer,
@@ -1164,6 +1168,7 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                     "run_release_consumer",
                     return_value={
                         "status": "passed",
+                        "mutationPolicy": "read_only",
                         "exitCode": 0,
                         "command": ["ship", "verify"],
                     },
@@ -2154,7 +2159,8 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 "productOps": "https://ops.gamma.example.invalid",
             },
         }
-        session = mock.Mock(access_token="ephemeral-local-bearer")
+        actor = mock.Mock()
+        actor.session.access_token = "ephemeral-local-bearer"
 
         with (
             mock.patch("quwoquan_ops.cli.stackctl.get_target", return_value=target),
@@ -2163,9 +2169,12 @@ class StackctlUpRuntimeTest(unittest.TestCase):
                 return_value="",
             ),
             mock.patch(
-                "quwoquan_ops.cli.stackctl.open_reference_acceptance_session",
-                return_value=session,
+                "quwoquan_ops.cli.stackctl.open_test_data_acceptance_session",
+                return_value=actor,
             ) as login,
+            mock.patch(
+                "quwoquan_ops.cli.stackctl.close_test_data_acceptance_actor",
+            ) as close_actor,
             mock.patch(
                 "quwoquan_ops.cli.stackctl._run_script_probe",
                 return_value=({}, "", []),
@@ -2185,6 +2194,14 @@ class StackctlUpRuntimeTest(unittest.TestCase):
             "https://api.gamma.quwoquan.com:19000",
             environment="gamma",
             target_name="gamma-local",
+            test_data_instance_id=mock.ANY,
+            actor_role="primary",
+            actor_index=0,
+        )
+        close_actor.assert_called_once_with(
+            "https://api.gamma.quwoquan.com:19000",
+            actor=actor,
+            test_data_instance_id=mock.ANY,
         )
         kwargs = run_probe.call_args.kwargs
         self.assertNotIn("--test-auth-token", kwargs["argv"])

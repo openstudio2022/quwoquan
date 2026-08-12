@@ -58,11 +58,16 @@
       "type": "object", "additionalProperties": false,
       "required": ["playCount", "likeCount", "commentCount", "shareCount", "favoriteCount", "popularityScore", "popularityPercentile", "comparisonCandidateCount"],
       "properties": {
-        "playCount": {"type": "integer", "minimum": 0}, "likeCount": {"type": "integer", "minimum": 0},
-        "commentCount": {"type": "integer", "minimum": 0}, "shareCount": {"type": "integer", "minimum": 0},
-        "favoriteCount": {"type": "integer", "minimum": 0}, "popularityScore": {"type": "integer", "minimum": 0},
-        "popularityPercentile": {"type": "number", "minimum": 0, "maximum": 1},
-        "comparisonCandidateCount": {"type": "integer", "minimum": 2}
+        "playCount": {"type": ["integer", "null"], "minimum": 0}, "likeCount": {"type": ["integer", "null"], "minimum": 0},
+        "commentCount": {"type": ["integer", "null"], "minimum": 0}, "shareCount": {"type": ["integer", "null"], "minimum": 0},
+        "favoriteCount": {"type": ["integer", "null"], "minimum": 0}, "popularityScore": {"type": ["number", "null"], "minimum": 0},
+        "popularityPercentile": {
+          "anyOf": [
+            {"type": "number", "minimum": 0, "maximum": 1},
+            {"type": "null"}
+          ]
+        },
+        "comparisonCandidateCount": {"type": "integer", "minimum": 0}
       }
     },
     "probe": {

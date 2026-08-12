@@ -1,6 +1,6 @@
 import 'package:quwoquan_cloud_contracts/chat_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 import 'conversation_state_typed_double.dart';
 
 /// local_contract Message command 薄适配器。
@@ -10,7 +10,7 @@ final class InMemoryChatMessageCommandWriter
     implements ChatMessageCommandWriter {
   InMemoryChatMessageCommandWriter({
     InMemoryChatStateEngine? engine,
-    ObjectScenarioSeedReader? fixtures,
+    ObjectContractExampleReader? fixtures,
   }) : _engine = engine ?? InMemoryChatStateEngine(fixtures: fixtures);
 
   final InMemoryChatStateEngine _engine;

@@ -47,7 +47,7 @@ def _args(tmp_path: Path, **overrides: object) -> argparse.Namespace:
         "no_semantic_agent_startup": False,
         "semantic_agent_startup": True,
         "soak": True,
-        "workspace_smoke": False,
+        "workspace_smoke": True,
         "report_out": str(tmp_path / "compact.json"),
         "receipt_out": str(tmp_path / "receipt.json"),
     }
@@ -79,25 +79,17 @@ def _ready_preflight(**kwargs: object) -> dict[str, object]:
             "runtime": runtime,
             "issues": [],
         },
-        "reliableTaskFleet": {
-            "checked": True,
-            "ready": True,
-            "target": "beta-local",
-            "mongo": True,
-            "redis": True,
-            "owned": True,
-            "issues": [],
-        },
         "ready": True,
         "issues": [],
     }
 
 
-def test_selector_resolves_default_sol_and_cursor_auto_without_fallback() -> None:
+def test_selector_resolves_default_sol_grok_and_auto_without_fallback() -> None:
     default = resolve_semantic_preflight_selection("default")
     calibration = resolve_semantic_preflight_selection(
         CALIBRATION_SEMANTIC_SELECTION_ID
     )
+    grok = resolve_semantic_preflight_selection("cursor_grok")
     cursor = resolve_semantic_preflight_selection("cursor_auto")
 
     assert default.provider is AgentProvider.CODEX_SDK
@@ -106,16 +98,21 @@ def test_selector_resolves_default_sol_and_cursor_auto_without_fallback() -> Non
     assert calibration.provider is AgentProvider.CODEX_SDK
     assert calibration.model_selection.model_id == "gpt-5.6-sol"
     assert calibration.requires_new_retry_of is False
+    assert grok.provider is AgentProvider.CURSOR_SDK
+    assert grok.model_selection.model_id == "grok-4.5"
+    assert grok.model_selection.parameters_document() == []
+    assert grok.requires_new_retry_of is False
     assert cursor.provider is AgentProvider.CURSOR_SDK
     assert cursor.model_selection.model_id == "auto"
-    assert cursor.requires_new_retry_of is False
+    assert cursor.requires_new_retry_of is True
     assert len(
         {
             default.selection_digest,
             calibration.selection_digest,
+            grok.selection_digest,
             cursor.selection_digest,
         }
-    ) == 3
+    ) == 4
     with pytest.raises(ValueError, match="unknown explicit semantic selection"):
         resolve_semantic_preflight_selection("unmanaged")
 
@@ -135,6 +132,69 @@ def test_cli_parser_exposes_governed_sol_calibration_selection() -> None:
     )
 
     assert parsed.semantic_selection_id == CALIBRATION_SEMANTIC_SELECTION_ID
+
+
+def test_cli_parser_exposes_exact_cursor_grok_selection() -> None:
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="task_command", required=True)
+    register_task_preflight_parser(commands)
+
+    parsed = parser.parse_args(
+        [
+            "preflight",
+            "--semantic-selection-id",
+            "cursor_grok",
+            "--no-semantic-agent-startup",
+        ]
+    )
+
+    assert parsed.semantic_selection_id == "cursor_grok"
+
+
+def test_cli_parser_routes_pool_delivery_without_semantic_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from content.execution.preflight import pool_delivery
+
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="task_command", required=True)
+    register_task_preflight_parser(commands)
+    execution_id = "20260811--travel-article-m100--china--scale-001"
+    args = parser.parse_args(
+        [
+            "preflight",
+            "--profile",
+            "pool-delivery",
+            "--execution-id",
+            execution_id,
+            "--json",
+        ]
+    )
+    monkeypatch.setattr(
+        pool_delivery,
+        "run_pool_delivery_preflight",
+        lambda actual_args: {
+            "schema": "quwoquan_data.pool_delivery_preflight",
+            "preflightProfile": "pool-delivery",
+            "executionId": actual_args.execution_id,
+            "poolDeliveryReady": True,
+            "ready": True,
+            "issueCode": None,
+            "issues": [],
+        },
+    )
+    monkeypatch.setattr(
+        preflight_handler,
+        "prepare_data_runtime_cache",
+        lambda **_kwargs: pytest.fail("pool delivery must not prepare semantic runtime"),
+    )
+
+    preflight_handler.handle_ready(args)
+
+    report = json.loads(capsys.readouterr().out)
+    assert report["preflightProfile"] == "pool-delivery"
+    assert report["executionId"] == execution_id
 
 
 def test_cursor_runtime_dependency_gap_fails_closed(
@@ -206,6 +266,18 @@ def test_cursor_auto_preflight_and_soak_bind_exact_runtime_and_receipt(
         }
 
     monkeypatch.setattr(preflight_handler, "semantic_agent_probe_suite", fake_soak)
+    monkeypatch.setattr(
+        preflight_handler,
+        "semantic_agent_workspace_probe_suite",
+        lambda **_kwargs: {
+            "ready": True,
+            "workspaceCount": 4,
+            "successCount": 4,
+            "configuredConcurrency": 4,
+            "effectiveConcurrency": 4,
+            "issues": [],
+        },
+    )
 
     preflight_handler.handle_ready(_args(tmp_path))
 
@@ -233,16 +305,19 @@ def test_cursor_auto_preflight_and_soak_bind_exact_runtime_and_receipt(
     assert receipt["model"] == "auto"
     assert receipt["soakRequested"] is True
     assert receipt["capacitySoakReady"] is True
-    assert receipt["executionAdmissionReady"] is True
+    assert receipt["schema"] == "quwoquan_data.semantic_provider_preflight_receipt"
+    assert receipt["preflightProfile"] == "semantic"
+    assert receipt["semanticExecutionReady"] is True
+    assert "reliableTaskFleet" not in receipt["evidence"]
     validate_semantic_preflight_receipt(
         receipt,
         expected_selection=resolve_semantic_preflight_selection("cursor_auto"),
-        require_execution_admission=True,
+        require_semantic_execution_ready=True,
     )
     with pytest.raises(ValueError, match="outside its validity window"):
         validate_semantic_preflight_receipt(
             receipt,
-            require_execution_admission=True,
+            require_semantic_execution_ready=True,
             now=datetime.now(timezone.utc) + timedelta(hours=1),
         )
 
@@ -257,7 +332,7 @@ def test_existing_manifest_review_to_run_and_resume_reuse_expired_binding(
     receipt = {
         "receiptId": "sha256:" + "1" * 64,
         "selectionDigest": selection.selection_digest,
-        "executionAdmissionReady": True,
+        "semanticExecutionReady": True,
     }
     receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
     binding = {
@@ -272,11 +347,11 @@ def test_existing_manifest_review_to_run_and_resume_reuse_expired_binding(
         _receipt: object,
         *,
         expected_selection: object,
-        require_execution_admission: bool,
+        require_semantic_execution_ready: bool,
     ) -> None:
         assert expected_selection == selection
-        freshness_checks.append(require_execution_admission)
-        if require_execution_admission:
+        freshness_checks.append(require_semantic_execution_ready)
+        if require_semantic_execution_ready:
             raise ValueError("semantic preflight receipt is outside its validity window")
 
     monkeypatch.setattr(
@@ -390,11 +465,18 @@ def test_frozen_campaign_admission_allows_delayed_first_lane_but_direct_expires(
     assert first_manifest_binding == binding
 
 
-def test_failed_fleet_preflight_does_not_write_admission_receipt(
+def test_semantic_preflight_ignores_queue_and_environment_status(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    from content.execution.queue.reliabletask import fleet
+
+    monkeypatch.setattr(
+        fleet,
+        "reliabletask_fleet_preflight",
+        lambda: pytest.fail("semantic preflight must not probe ReliableTask"),
+    )
     monkeypatch.setattr(
         preflight_handler,
         "prepare_data_runtime_cache",
@@ -406,9 +488,8 @@ def test_failed_fleet_preflight_does_not_write_admission_receipt(
         lambda *_args: (True, []),
     )
 
-    def failed_fleet(**kwargs: object) -> dict[str, object]:
+    def provider_ready_with_hostile_fleet(**kwargs: object) -> dict[str, object]:
         report = _ready_preflight(**kwargs)
-        report["ready"] = False
         report["reliableTaskFleet"] = {
             "checked": True,
             "ready": False,
@@ -418,27 +499,54 @@ def test_failed_fleet_preflight_does_not_write_admission_receipt(
             "owned": False,
             "issues": ["beta-local has no active immutable candidate"],
         }
-        report["issues"] = ["beta-local has no active immutable candidate"]
         return report
 
     monkeypatch.setattr(
         preflight_handler,
         "semantic_agent_environment_preflight",
-        failed_fleet,
+        provider_ready_with_hostile_fleet,
+    )
+    monkeypatch.setattr(
+        preflight_handler,
+        "semantic_agent_probe_suite",
+        lambda **_kwargs: {
+            "attempts": 8,
+            "successCount": 8,
+            "effectiveConcurrency": _cursor_required_concurrency(),
+            "bridgeDisconnectCount": 0,
+            "issues": [],
+            "ready": True,
+        },
+    )
+    monkeypatch.setattr(
+        preflight_handler,
+        "semantic_agent_workspace_probe_suite",
+        lambda **_kwargs: {
+            "ready": True,
+            "workspaceCount": 4,
+            "successCount": 4,
+            "configuredConcurrency": 4,
+            "effectiveConcurrency": 4,
+            "issues": [],
+        },
     )
 
-    with pytest.raises(SystemExit) as stopped:
-        preflight_handler.handle_ready(_args(tmp_path))
+    preflight_handler.handle_ready(_args(tmp_path))
 
-    assert stopped.value.code == 1
     output = json.loads(capsys.readouterr().out)
     compact = json.loads((tmp_path / "compact.json").read_text(encoding="utf-8"))
-    assert output["ready"] is False
-    assert compact["reliableTaskFleet"]["ready"] is False
-    assert compact["reliableTaskFleet"]["issues"] == [
-        "beta-local has no active immutable candidate"
-    ]
-    assert not (tmp_path / "receipt.json").exists()
+    receipt = json.loads((tmp_path / "receipt.json").read_text(encoding="utf-8"))
+    assert output["ready"] is True
+    assert compact["workspaceSmoke"]["ready"] is True
+    assert "reliableTaskFleet" not in compact
+    assert "reliableTaskFleet" not in receipt["evidence"]
+    assert receipt["semanticExecutionReady"] is True
+    mixed_receipt = {
+        **receipt,
+        "evidence": {**receipt["evidence"], "mongoReady": False},
+    }
+    with pytest.raises(ValueError, match="mongoReady"):
+        validate_semantic_preflight_receipt(mixed_receipt)
 
 
 def test_sol_calibration_preflight_binds_exact_model_without_real_provider_call(
@@ -475,6 +583,18 @@ def test_sol_calibration_preflight_binds_exact_model_without_real_provider_call(
             "ready": True,
         },
     )
+    monkeypatch.setattr(
+        preflight_handler,
+        "semantic_agent_workspace_probe_suite",
+        lambda **_kwargs: {
+            "ready": True,
+            "workspaceCount": 4,
+            "successCount": 4,
+            "configuredConcurrency": 4,
+            "effectiveConcurrency": 4,
+            "issues": [],
+        },
+    )
 
     preflight_handler.handle_ready(
         _args(tmp_path, semantic_selection_id=CALIBRATION_SEMANTIC_SELECTION_ID)
@@ -498,7 +618,7 @@ def test_sol_calibration_preflight_binds_exact_model_without_real_provider_call(
     validate_semantic_preflight_receipt(
         receipt,
         expected_selection=selection,
-        require_execution_admission=True,
+        require_semantic_execution_ready=True,
     )
 
 
@@ -534,6 +654,18 @@ def test_preflight_receipt_is_create_once(
             "ready": True,
         },
     )
+    monkeypatch.setattr(
+        preflight_handler,
+        "semantic_agent_workspace_probe_suite",
+        lambda **_kwargs: {
+            "ready": True,
+            "workspaceCount": 4,
+            "successCount": 4,
+            "configuredConcurrency": 4,
+            "effectiveConcurrency": 4,
+            "issues": [],
+        },
+    )
     args = _args(tmp_path, json=False, report_out=None, receipt_out=str(destination))
     preflight_handler.handle_ready(args)
     preflight_handler.handle_ready(args)
@@ -553,19 +685,10 @@ def test_preflight_receipt_is_create_once(
             "provider": default.provider.value,
             "ready": True,
             "runtime": {"ready": True, "resolvedPython": sys.executable},
-                "semanticAgentCredential": {},
-                "network": {},
-                "semanticAgentStartup": {},
-                "reliableTaskFleet": {
-                    "checked": True,
-                    "ready": True,
-                    "target": "beta-local",
-                    "mongo": True,
-                    "redis": True,
-                    "owned": True,
-                    "issues": [],
-                },
-                "issues": [],
+            "semanticAgentCredential": {},
+            "network": {},
+            "semanticAgentStartup": {},
+            "issues": [],
         },
         "provider": default.provider.value,
         "semanticAgentCredential": {},
@@ -588,43 +711,20 @@ def test_preflight_receipt_is_create_once(
             },
             default,
         ),
-        "workspaceSmoke": {},
+        "workspaceSmoke": {
+            "ready": True,
+            "workspaceCount": 4,
+            "successCount": 4,
+            "configuredConcurrency": 4,
+            "effectiveConcurrency": 4,
+            "cleanupStatus": "cleaned",
+            "issues": [],
+        },
         "startupRequested": True,
         "soakRequested": True,
-        "workspaceSmokeRequested": False,
+        "workspaceSmokeRequested": True,
         "ready": True,
     }
-    unwritable_fleet_report = {
-        **default_report,
-        "preflight": {
-            **default_report["preflight"],
-            "reliableTaskFleet": {
-                **default_report["preflight"]["reliableTaskFleet"],
-                "ready": False,
-                "redis": False,
-            },
-        },
-    }
-    with pytest.raises(ValueError, match="requires writable ReliableTask fleet"):
-        build_semantic_preflight_receipt(
-            selection=default,
-            report=unwritable_fleet_report,
-        )
-    unowned_fleet_report = {
-        **default_report,
-        "preflight": {
-            **default_report["preflight"],
-            "reliableTaskFleet": {
-                **default_report["preflight"]["reliableTaskFleet"],
-                "owned": False,
-            },
-        },
-    }
-    with pytest.raises(ValueError, match="requires writable ReliableTask fleet"):
-        build_semantic_preflight_receipt(
-            selection=default,
-            report=unowned_fleet_report,
-        )
     inconsistent_report = {
         **default_report,
         "preflight": {**default_report["preflight"], "ready": False},
@@ -633,6 +733,37 @@ def test_preflight_receipt_is_create_once(
         build_semantic_preflight_receipt(
             selection=default,
             report=inconsistent_report,
+        )
+    with pytest.raises(ValueError, match="requires workspaceSmokeReady"):
+        build_semantic_preflight_receipt(
+            selection=default,
+            report={
+                **default_report,
+                "workspaceSmoke": {
+                    **default_report["workspaceSmoke"],
+                    "workspaceCount": 3,
+                    "successCount": 3,
+                },
+            },
+        )
+    skipped_startup = build_semantic_preflight_receipt(
+        selection=default,
+        report={
+            **default_report,
+            "semanticAgentStartup": {
+                **default_report["semanticAgentStartup"],
+                "checked": False,
+                "ready": False,
+            },
+            "startupRequested": False,
+        },
+    )
+    assert skipped_startup["ready"] is True
+    assert skipped_startup["semanticExecutionReady"] is False
+    with pytest.raises(ValueError, match="not execution-ready"):
+        validate_semantic_preflight_receipt(
+            skipped_startup,
+            require_semantic_execution_ready=True,
         )
     conflicting = build_semantic_preflight_receipt(
         selection=default,

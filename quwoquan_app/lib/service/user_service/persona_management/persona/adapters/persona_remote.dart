@@ -16,18 +16,20 @@ final class RemotePersonaCommandWriter
   final PersonaInvocationContextFactory invocationContext;
 
   @override
-  Future<PersonaManagementItemView> createPersona(CreatePersonaCommand command) =>
-      client.userPersonaCreatePersona(
-        command,
-        context: invocationContext(UserRequestPageIds.createPersona),
-      );
+  Future<PersonaManagementItemView> createPersona(
+    CreatePersonaCommand command,
+  ) => client.userPersonaCreatePersona(
+    command,
+    context: invocationContext(UserRequestPageIds.createPersona),
+  );
 
   @override
-  Future<PersonaManagementItemView> updatePersona(UpdatePersonaCommand command) =>
-      client.userPersonaUpdatePersona(
-        command,
-        context: invocationContext(UserRequestPageIds.updatePersona),
-      );
+  Future<PersonaManagementItemView> updatePersona(
+    UpdatePersonaCommand command,
+  ) => client.userPersonaUpdatePersona(
+    command,
+    context: invocationContext(UserRequestPageIds.updatePersona),
+  );
 
   @override
   Future<PersonaProfileSyncResult> applyPersonaProfileSync(
@@ -38,11 +40,12 @@ final class RemotePersonaCommandWriter
   );
 
   @override
-  Future<PersonaLifecycleGuardView> retirePersona(RetirePersonaCommand command) =>
-      client.userPersonaRetirePersona(
-        command,
-        context: invocationContext(UserRequestPageIds.retirePersona),
-      );
+  Future<PersonaLifecycleGuardView> retirePersona(
+    RetirePersonaCommand command,
+  ) => client.userPersonaRetirePersona(
+    command,
+    context: invocationContext(UserRequestPageIds.retirePersona),
+  );
 
   @override
   Future<ActivePersonaContextView> activatePersona(

@@ -33,7 +33,7 @@ import (
 
 const (
 	localCaptureProviderName = "local_capture_sms"
-	localCaptureTemplateID   = "sms_otp_login"
+	localCaptureTemplateID   = "sms_otp_login_acceptance"
 )
 
 type memoryReferenceStore struct {
@@ -458,6 +458,8 @@ func (h *protocolHarness) assertExpiredRequestRejected(t *testing.T) {
 			"recipient":  "+8610000000008",
 			"code":       code,
 			"templateId": localCaptureTemplateID,
+			"platform":   "acceptance",
+			"requestRef": requestID,
 		},
 	}
 	response := h.perform(
@@ -543,6 +545,8 @@ func (h *protocolHarness) request(
 		Payload: map[string]string{
 			"challengeId": challengeID,
 			"templateId":  localCaptureTemplateID,
+			"platform":    "acceptance",
+			"requestRef":  requestID,
 		},
 	}
 }

@@ -1,5 +1,11 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md#gwt-002
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-011.t2
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-012.t1
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-012.t2
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md#gwt-012.t3
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-004
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +20,7 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/runtime/di/login_dependencies.dart';
 import 'package:quwoquan_app/runtime/platform/native_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/one_tap_login_native_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/otp_autofill_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart'
@@ -26,6 +33,7 @@ import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracke
 import 'package:quwoquan_app/service/user_service/account/account_session/application/public/account_session_ports.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/presentation/login_page.dart';
 import 'package:quwoquan_app/service/user_service/account/authentication_challenge/application/public/authentication_challenge_writer.dart';
+import 'package:quwoquan_app/service/user_service/account/authentication_challenge/application/public/pending_otp_attempt_store.dart';
 import 'package:quwoquan_app/service/user_service/account/credential_binding/application/public/credential_binding_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
@@ -78,7 +86,7 @@ void main() {
         origin: LoginFailureOrigin.otpVerify,
         locale: 'zh',
       );
-      expect(mismatch.message, '验证码不正确');
+      expect(mismatch.message, '验证码不正确，请重新输入');
       expect(mismatch.copyKey, 'loginOtpMismatch');
       expect(mismatch.recoveryAction, 'reenterOtp');
       expect(mismatch.clearOtp, isTrue);
@@ -88,10 +96,10 @@ void main() {
       expect(mismatch.traceId, 'trace-1');
 
       final cases = <UserErrorCode, (String, String)>{
-        UserErrorCode.otpExpired: ('验证码已失效', 'resendOtp'),
-        UserErrorCode.challengeConsumed: ('验证码已失效', 'resendOtp'),
-        UserErrorCode.otpAttemptsExceeded: ('尝试次数较多', 'waitThenResendOtp'),
-        UserErrorCode.otpProviderFailed: ('验证码发送失败', 'resendOtp'),
+        UserErrorCode.otpExpired: ('验证码已过期，请重新获取', 'resendOtp'),
+        UserErrorCode.challengeConsumed: ('验证码已失效，请重新获取', 'resendOtp'),
+        UserErrorCode.otpAttemptsExceeded: ('尝试次数过多，请重新获取验证码', 'resendOtp'),
+        UserErrorCode.otpProviderFailed: ('验证码发送失败，请重试', 'resendOtp'),
         UserErrorCode.wechatAuthFailed: ('授权未完成', 'retryAuthorization'),
         UserErrorCode.credentialConflict: ('这个手机号已绑定其他账号', 'changePhone'),
       };
@@ -117,7 +125,7 @@ void main() {
         origin: LoginFailureOrigin.otpVerify,
         locale: 'zh',
       );
-      expect(feedback.message, '暂时无法验证验证码');
+      expect(feedback.message, '网络连接失败，请重试');
       expect(feedback.preserveOtp, isTrue);
       expect(feedback.sourceCode, isNull);
       expect(feedback.failureKind, RuntimeFailureKind.network.name);
@@ -126,13 +134,10 @@ void main() {
 
     test('OTP 发送的网络、超时、服务不可用与 Provider 失败保持分轨', () {
       final cases = <RuntimeFailureKind, (String, String)>{
-        RuntimeFailureKind.network: (
-          '网络连接异常，请检查后重试',
-          'loginNetworkUnavailable',
-        ),
-        RuntimeFailureKind.timeout: ('请求超时，请重试', 'loginRequestTimeout'),
+        RuntimeFailureKind.network: ('网络连接失败，请重试', 'loginNetworkUnavailable'),
+        RuntimeFailureKind.timeout: ('网络连接超时，请重试', 'loginRequestTimeout'),
         RuntimeFailureKind.unavailable: (
-          '登录服务暂不可用，请重试',
+          '登录服务暂时不可用，请稍后重试',
           'loginOtpServiceUnavailable',
         ),
       };
@@ -154,12 +159,12 @@ void main() {
         origin: LoginFailureOrigin.otpSend,
         locale: 'zh',
       );
-      expect(provider.message, '验证码发送失败');
+      expect(provider.message, '验证码发送失败，请重试');
       expect(provider.copyKey, 'loginOtpSendFailed');
       expect(provider.sourceCode, UserErrorCode.otpProviderFailed.code);
     });
 
-    test('account_suspended 固定使用 generated 安全文案且与注销、临时锁定分轨', () {
+    test('account_suspended 固定使用 generated 安全文案且与注销分轨', () {
       final suspended = loginFeedbackForError(
         CloudException(
           type: CloudErrorType.forbidden,
@@ -180,20 +185,12 @@ void main() {
         origin: LoginFailureOrigin.otpVerify,
         locale: 'zh',
       );
-      final locked = loginFeedbackForError(
-        _cloudError(UserErrorCode.loginLocked),
-        origin: LoginFailureOrigin.otpVerify,
-        locale: 'zh',
-      );
-
       expect(suspended.message, UserErrorCode.accountSuspended.defaultMessage);
       expect(suspended.message, isNot(contains('secret')));
       expect(suspended.copyKey, 'loginAccountSuspended');
       expect(suspended.recoveryAction, 'openSupport');
       expect(deleted.copyKey, 'loginAccountDeleted');
       expect(deleted.recoveryAction, 'changeMethod');
-      expect(locked.copyKey, 'loginAccountTemporarilyLocked');
-      expect(locked.recoveryAction, 'waitThenChangeMethod');
     });
 
     test('产品漏斗与运维失败事件分轨且不记录敏感输入', () async {
@@ -399,7 +396,7 @@ void main() {
       );
       expect(tester.takeException(), isNull);
       expect(
-        find.byKey(const ValueKey<String>('loginOtpResendSlot')),
+        find.byKey(const ValueKey<String>('loginOtpResend')),
         findsOneWidget,
       );
       expect(
@@ -412,7 +409,28 @@ void main() {
       );
     });
 
-    testWidgets('五组新高保共 20 个明暗状态冻结为开发基线', (tester) async {
+    testWidgets('登录服务未就绪时停留手机号页且重试不发送验证码', (tester) async {
+      final auth = _RecordingAuthFacets(
+        readinessAvailability:
+            OtpDeliveryReadinessAvailability.temporarilyUnavailable,
+      );
+      await _pumpHost(tester, auth: auth);
+      await _enterPhone(tester, '18013819016');
+      await tester.pump();
+
+      expect(find.text('登录服务暂时不可用，请稍后重试'), findsOneWidget);
+      expect(find.text('重试'), findsOneWidget);
+      expect(find.text('输入验证码'), findsNothing);
+      expect(auth.sendOtpCalls, 0);
+
+      await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
+      await tester.pump();
+      expect(auth.readinessCalls, greaterThanOrEqualTo(2));
+      expect(auth.sendOtpCalls, 0);
+      expect(find.text('输入验证码'), findsNothing);
+    });
+
+    testWidgets('手机号登录 22 个明暗与异常状态冻结为开发基线', (tester) async {
       await tester.binding.setSurfaceSize(const Size(393, 852));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       for (final scenario in _goldenScenarios()) {
@@ -432,6 +450,180 @@ void main() {
   });
 
   group('手机号、协议与验证码交互', () {
+    testWidgets('发码超时进入可输入页并以同一 key 后台确认', (tester) async {
+      final firstResponse = Completer<OtpChallengeIssueResult>();
+      final auth = _RecordingAuthFacets(
+        sendOtpHandler: (call, _) {
+          if (call == 1) return firstResponse.future;
+          return Future<OtpChallengeIssueResult>.value(
+            OtpChallengeIssueResult(
+              maskedPhone: '180****9016',
+              expiresInSeconds: 300,
+              deliveryStatus: OtpDeliveryStatus.sentUnconfirmed,
+              retryAfterSeconds: 55,
+              requestId: 'request-confirmed',
+              challengeId: 'challenge-confirmed',
+            ),
+          );
+        },
+      );
+      await _pumpHost(tester, auth: auth);
+      await _enterPhone(tester, '18013819016');
+      await tester.tap(find.byIcon(CupertinoIcons.circle));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
+      await tester.pump();
+
+      expect(find.text('正在发送验证码…'), findsOneWidget);
+      expect(find.byType(CupertinoActivityIndicator), findsWidgets);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump();
+      expect(find.text('输入验证码'), findsOneWidget);
+      expect(find.text('验证码发送中，请稍候'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('loginOtpHiddenField')),
+        findsOneWidget,
+      );
+
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pump();
+      expect(auth.sendOtpCalls, 2);
+      expect(auth.idempotencyKeys, hasLength(2));
+      expect(auth.idempotencyKeys.toSet(), hasLength(1));
+      expect(find.text('验证码已发出，请查看短信'), findsOneWidget);
+    });
+
+    testWidgets('排队状态持续同 key 确认并在 15 秒后停止自动轮询', (tester) async {
+      final auth = _RecordingAuthFacets();
+      final recorder = RecordingAppTelemetryRecorder();
+      await _pumpHost(tester, auth: auth, recorder: recorder);
+      await _enterPhone(tester, '18013819016');
+      await tester.tap(find.byIcon(CupertinoIcons.circle));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('验证码发送中，请稍候'), findsOneWidget);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(auth.sendOtpCalls, 2);
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pump();
+      expect(auth.sendOtpCalls, 3);
+      expect(auth.idempotencyKeys.toSet(), hasLength(1));
+      expect(find.text('验证码发送中，请稍候'), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pump();
+      expect(auth.sendOtpCalls, 3);
+      expect(auth.idempotencyKeys.toSet(), hasLength(1));
+      expect(find.text(FoundationText.loginOtpDeliveryUnknown), findsOneWidget);
+      final exhaustedConfirmations = recorder.recorded.where(
+        (event) =>
+            event.eventType == 'login_operation' &&
+            event.extensions['operationId'] == 'confirm_otp_delivery_15s' &&
+            event.extensions['result'] == 'delivery_confirming',
+      );
+      expect(exhaustedConfirmations, hasLength(1));
+      expect(
+        exhaustedConfirmations.single.extensions['durationMs'],
+        greaterThanOrEqualTo(15000),
+      );
+
+      await tester.pump(const Duration(seconds: 30));
+      await tester.pump();
+      expect(auth.sendOtpCalls, 3);
+    });
+
+    testWidgets('排队后的 Provider 明确失败回流为红色倒计时', (tester) async {
+      final auth = _RecordingAuthFacets(
+        sendOtpHandler: (call, _) => Future<OtpChallengeIssueResult>.value(
+          OtpChallengeIssueResult(
+            maskedPhone: '180****9016',
+            expiresInSeconds: 300,
+            deliveryStatus: call == 1
+                ? OtpDeliveryStatus.queued
+                : OtpDeliveryStatus.failed,
+            retryAfterSeconds: call == 1 ? 60 : 54,
+            requestId: 'request-delivery-failure',
+            challengeId: 'challenge-delivery-failure',
+          ),
+        ),
+      );
+      await _pumpHost(tester, auth: auth);
+      await _enterPhone(tester, '18013819016');
+      await tester.tap(find.byIcon(CupertinoIcons.circle));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 6));
+      await tester.pump();
+
+      expect(auth.sendOtpCalls, 2);
+      expect(auth.idempotencyKeys.toSet(), hasLength(1));
+      expect(find.textContaining('验证码发送失败，请在'), findsOneWidget);
+    });
+
+    testWidgets('手机号页限频显示精确倒计时且换号可恢复', (tester) async {
+      final auth = _RecordingAuthFacets(
+        sendOtpHandler: (_, _) =>
+            Future<OtpChallengeIssueResult>.error(_otpRateLimitedError(42)),
+      );
+      await _pumpHost(tester, auth: auth);
+      await _enterPhone(tester, '18013819016');
+      await tester.tap(find.byIcon(CupertinoIcons.circle));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.textContaining('验证码获取太频繁，请在 42 秒后再试'), findsOneWidget);
+      final limitedButton = tester.widget<LoginActionButton>(
+        find.byKey(const ValueKey<String>('loginPhonePrimary')),
+      );
+      expect(limitedButton.enabled, isFalse);
+
+      await _enterPhone(tester, '13900000000');
+      expect(find.textContaining('验证码获取太频繁'), findsNothing);
+      final recoveredButton = tester.widget<LoginActionButton>(
+        find.byKey(const ValueKey<String>('loginPhonePrimary')),
+      );
+      expect(recoveredButton.enabled, isTrue);
+    });
+
+    testWidgets('五分钟内冷启动恢复原验证码页与倒计时', (tester) async {
+      final now = DateTime.now();
+      final pendingStore = _MemoryPendingOtpAttemptStore(
+        PendingOtpAttempt(
+          phone: '18013819016',
+          maskedPhone: '180****9016',
+          idempotencyKey: 'restored-idempotency-key-000001',
+          challengeId: 'challenge-restored',
+          requestId: 'request-restored',
+          deliveryStatus: 'queued',
+          resendDeadlineEpochMs: now
+              .add(const Duration(seconds: 37))
+              .millisecondsSinceEpoch,
+          expiresAtEpochMs: now
+              .add(const Duration(minutes: 5))
+              .millisecondsSinceEpoch,
+        ),
+      );
+      await _pumpHost(
+        tester,
+        auth: _RecordingAuthFacets(),
+        pendingStore: pendingStore,
+      );
+
+      expect(find.text('输入验证码'), findsOneWidget);
+      expect(find.text('验证码发送中，请稍候'), findsOneWidget);
+      expect(
+        _resendCountdownText(tester),
+        matches(RegExp(r'^3[5-7] 秒后可重新获取$')),
+      );
+    });
+
     testWidgets('协议未勾选时弹 sheet，取消不执行，确认只恢复一次发码', (tester) async {
       final auth = _RecordingAuthFacets();
       await _pumpHost(tester, auth: auth);
@@ -461,8 +653,8 @@ void main() {
       expect(auth.sendOtpCalls, 1);
       expect(auth.lastSendOtp?.phone, '+8618013819016');
       expect(find.text('输入验证码'), findsOneWidget);
-      expect(find.text('60秒后可重新获取'), findsOneWidget);
-      expect(find.text('重新获取验证码'), findsNothing);
+      expect(find.text('60 秒后可重新获取'), findsOneWidget);
+      expect(find.text('重新获取'), findsNothing);
     });
 
     testWidgets('输入第六位后自动验证，不出现多余登录按钮', (tester) async {
@@ -499,7 +691,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('验证码不正确'), findsOneWidget);
+      expect(find.text('验证码不正确，请重新输入'), findsOneWidget);
       expect(
         tester
             .widget<CupertinoTextField>(
@@ -510,7 +702,7 @@ void main() {
         isEmpty,
       );
       expect(_resendCountdownText(tester), countdownBefore);
-      expect(find.text('重新获取验证码'), findsNothing);
+      expect(find.text('重新获取'), findsNothing);
       final context = tester.element(
         find.byKey(const ValueKey<String>('loginOtpBox0')),
       );
@@ -545,7 +737,9 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('暂时无法验证验证码'), findsOneWidget);
+      expect(find.text('网络连接失败，请重试'), findsOneWidget);
+      expect(find.textContaining('验证码已保留'), findsNothing);
+      expect(find.textContaining('暂时无法确认'), findsNothing);
       expect(find.text('重新验证'), findsOneWidget);
       expect(
         tester
@@ -557,7 +751,7 @@ void main() {
         '123456',
       );
       await tester.tap(
-        find.byKey(const ValueKey<String>('loginOtpRetryVerify')),
+        find.byKey(const ValueKey<String>('loginOtpRecovery-retryVerify')),
       );
       await tester.pump();
       expect(auth.phoneLoginCalls, 2);
@@ -576,13 +770,10 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('验证码已失效'), findsOneWidget);
-      expect(find.text('重新获取验证码'), findsOneWidget);
+      expect(find.text('验证码已过期，请重新获取'), findsOneWidget);
+      expect(find.text('未收到验证码？'), findsNothing);
       expect(
-        find.descendant(
-          of: find.byKey(const ValueKey<String>('loginOtpResendSlot')),
-          matching: find.text('重新获取验证码'),
-        ),
+        find.byKey(const ValueKey<String>('loginOtpRecovery-resend')),
         findsOneWidget,
       );
     });
@@ -874,6 +1065,7 @@ Future<void> _pumpHost(
   VoidCallback? onDismiss,
   String? reason,
   bool disableAnimations = false,
+  PendingOtpAttemptStore? pendingStore,
 }) async {
   final authStore = store ?? _MutableAuthStore();
   final credential = credentialWriter ?? _RecordingCredentialWriter();
@@ -887,6 +1079,9 @@ Future<void> _pumpHost(
         authenticationChallengeCommandWriterProvider.overrideWithValue(auth),
         appCredentialBindingCommandWriterProvider.overrideWithValue(credential),
         oneTapLoginClientProvider.overrideWithValue(oneTapClient),
+        otpAutofillGatewayProvider.overrideWithValue(
+          const SystemOtpAutofillGateway(),
+        ),
         accountRestrictionSupportLauncherProvider.overrideWithValue(
           supportLauncher ?? _RecordingSupportLauncher(),
         ),
@@ -896,6 +1091,9 @@ Future<void> _pumpHost(
         ),
         loginJourneyEventTrackerProvider.overrideWithValue(
           JourneyEventTracker(telemetryReporter: telemetry),
+        ),
+        pendingOtpAttemptStoreProvider.overrideWithValue(
+          pendingStore ?? _MemoryPendingOtpAttemptStore(),
         ),
       ],
       child: CupertinoApp(
@@ -917,6 +1115,17 @@ Future<void> _pumpHost(
   );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 20));
+  // LoginFrameHost enters the phone surface first, then resolves the bounded
+  // OTP readiness probe. Wait for that explicit UI state instead of racing a
+  // disabled "正在准备…" button in interaction tests.
+  for (var attempt = 0; attempt < 8; attempt++) {
+    final primary = find.byKey(const ValueKey<String>('loginPhonePrimary'));
+    if (primary.evaluate().isNotEmpty) {
+      final button = tester.widget<LoginActionButton>(primary);
+      if (!button.busy) break;
+    }
+    await tester.pump(const Duration(milliseconds: 20));
+  }
 }
 
 Future<void> _enterPhone(WidgetTester tester, String phone) async {
@@ -932,9 +1141,19 @@ Future<void> _reachOtp(WidgetTester tester) async {
   await tester.tap(find.byIcon(CupertinoIcons.circle));
   await tester.pump();
   await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
-  await tester.pump();
-  await tester.pump();
+  await _pumpUntil(tester, () => find.text('输入验证码').evaluate().isNotEmpty);
   expect(find.text('输入验证码'), findsOneWidget);
+}
+
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition, {
+  int maxPumps = 16,
+  Duration step = const Duration(milliseconds: 20),
+}) async {
+  for (var attempt = 0; attempt < maxPumps && !condition(); attempt++) {
+    await tester.pump(step);
+  }
 }
 
 Future<void> _startSocial(WidgetTester tester, String label) async {
@@ -946,7 +1165,7 @@ Future<void> _startSocial(WidgetTester tester, String label) async {
 }
 
 String _resendCountdownText(WidgetTester tester) {
-  final regexp = RegExp(r'^\d+秒后可重新获取$');
+  final regexp = RegExp(r'^\d+ 秒后可重新获取$');
   final finder = find.byWidgetPredicate(
     (widget) => widget is Text && regexp.hasMatch(widget.data ?? ''),
   );
@@ -1019,6 +1238,24 @@ CloudException _cloudErrorWithoutCode({required RuntimeFailureKind kind}) {
   );
 }
 
+CloudException _otpRateLimitedError(int seconds) {
+  return CloudException(
+    type: CloudErrorType.server,
+    message: UserErrorCode.otpRateLimited.code,
+    code: UserErrorCode.otpRateLimited.code,
+    runtimeFailure: testRuntimeFailure(
+      code: UserErrorCode.otpRateLimited.code,
+      kind: RuntimeFailureKind.validation,
+      nature: RuntimeFailureNature.requiresUserAction,
+      recovery: RuntimeRecoveryDirective(
+        action: 'retry',
+        afterSeconds: seconds,
+        disruptionLevel: 'inlineCard',
+      ),
+    ),
+  );
+}
+
 AuthSessionGrant _grant({String origin = 'phone'}) =>
     decodeAuthSessionGrant(<String, dynamic>{
       'accessToken': 'access-$origin',
@@ -1046,8 +1283,10 @@ class _RecordingAuthFacets
   _RecordingAuthFacets({
     this.phoneLoginError,
     this.socialError,
+    this.readinessAvailability = OtpDeliveryReadinessAvailability.ready,
     FederatedLoginOutcome? socialOutcome,
     OtpChallengeIssueResult? otpResult,
+    this.sendOtpHandler,
   }) : socialOutcome =
            socialOutcome ??
            FederatedLoginOutcome(
@@ -1060,7 +1299,7 @@ class _RecordingAuthFacets
            OtpChallengeIssueResult(
              maskedPhone: '180****9016',
              expiresInSeconds: 300,
-             deliveryStatus: 'queued',
+             deliveryStatus: OtpDeliveryStatus.queued,
              retryAfterSeconds: 60,
              requestId: 'request-1',
              challengeId: 'challenge-1',
@@ -1068,19 +1307,39 @@ class _RecordingAuthFacets
 
   final Object? phoneLoginError;
   final Object? socialError;
+  final OtpDeliveryReadinessAvailability readinessAvailability;
   final FederatedLoginOutcome socialOutcome;
   final OtpChallengeIssueResult otpResult;
+  final Future<OtpChallengeIssueResult> Function(int call, String key)?
+  sendOtpHandler;
   int sendOtpCalls = 0;
+  int readinessCalls = 0;
   int phoneLoginCalls = 0;
   int socialLoginCalls = 0;
   int refreshTokenCalls = 0;
   SendOtpCommand? lastSendOtp;
   LoginWithPhoneCommand? lastPhoneLogin;
+  final List<String> idempotencyKeys = <String>[];
 
   @override
-  Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) async {
+  Future<OtpDeliveryReadinessSnapshot> getOtpDeliveryReadiness() async {
+    readinessCalls += 1;
+    return OtpDeliveryReadinessSnapshot(
+      availability: readinessAvailability,
+      retryAfterSeconds: 0,
+    );
+  }
+
+  @override
+  Future<OtpChallengeIssueResult> sendOtp(
+    SendOtpCommand command, {
+    required String idempotencyKey,
+  }) async {
     sendOtpCalls += 1;
     lastSendOtp = command;
+    idempotencyKeys.add(idempotencyKey);
+    final handler = sendOtpHandler;
+    if (handler != null) return handler(sendOtpCalls, idempotencyKey);
     return otpResult;
   }
 
@@ -1278,6 +1537,25 @@ class _MutableAuthStore implements AuthSessionStore {
   Future<void> markForegroundAuthCheckNow() async {}
 }
 
+final class _MemoryPendingOtpAttemptStore implements PendingOtpAttemptStore {
+  _MemoryPendingOtpAttemptStore([this.attempt]);
+
+  PendingOtpAttempt? attempt;
+
+  @override
+  Future<PendingOtpAttempt?> read() async => attempt;
+
+  @override
+  Future<void> write(PendingOtpAttempt attempt) async {
+    this.attempt = attempt;
+  }
+
+  @override
+  Future<void> clear() async {
+    attempt = null;
+  }
+}
+
 class _UnavailableOneTapLoginClient implements OneTapLoginClient {
   const _UnavailableOneTapLoginClient();
 
@@ -1414,19 +1692,22 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
       flowId: 'g06',
       code: '286419',
       operation: LoginOperation.verifyingOtp,
+      deliveryState: OtpDeliveryState.sent,
     ),
   ),
   _GoldenScenario(
     '07_otp_mismatch',
     () => _otpGoldenState(
       flowId: 'g07',
-      feedback: _feedback('验证码不正确', 'loginOtpMismatch'),
+      deliveryState: OtpDeliveryState.sent,
+      feedback: _feedback('验证码不正确，请重新输入', 'loginOtpMismatch'),
     ),
   ),
   _GoldenScenario(
     '08_otp_resend',
     () => _otpGoldenState(
       flowId: 'g08',
+      deliveryState: OtpDeliveryState.sent,
       challengeState: OtpChallengeState.resendAvailable,
       deadline: DateTime.now(),
     ),
@@ -1435,28 +1716,23 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
     '09_otp_expired',
     () => _otpGoldenState(
       flowId: 'g09',
+      deliveryState: OtpDeliveryState.sent,
       challengeState: OtpChallengeState.expired,
       deadline: DateTime.now(),
-      feedback: _feedback('验证码已失效', 'loginOtpExpired'),
+      feedback: _feedback('验证码已失效，请重新获取', 'loginOtpExpired'),
     ),
   ),
   _GoldenScenario(
     '10_send_failed',
-    () => LoginFlowState(
-      step: LoginStep.phoneEntry,
-      flowId: 'g10',
-      phone: '18013819016',
-      maskedPhone: '180****9016',
-      consentState: LoginConsentState.accepted,
-      feedback: _feedback('验证码发送失败', 'loginOtpSendFailed'),
-    ),
+    () =>
+        _otpGoldenState(flowId: 'g10', deliveryState: OtpDeliveryState.failed),
   ),
   _GoldenScenario(
     '11_rate_limited',
     () => _otpGoldenState(
       flowId: 'g11',
       challengeState: OtpChallengeState.rateLimited,
-      feedback: _feedback('尝试次数较多', 'loginOtpRateLimited'),
+      feedback: _feedback('获取过于频繁，请在 60 秒后再试', 'loginOtpRateLimited'),
     ),
   ),
   _GoldenScenario(
@@ -1532,7 +1808,8 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
     '19_dark_otp_mismatch',
     () => _otpGoldenState(
       flowId: 'g19',
-      feedback: _feedback('验证码不正确', 'loginOtpMismatch'),
+      deliveryState: OtpDeliveryState.sent,
+      feedback: _feedback('验证码不正确，请重新输入', 'loginOtpMismatch'),
     ),
     brightness: Brightness.dark,
   ),
@@ -1548,6 +1825,21 @@ List<_GoldenScenario> _goldenScenarios() => <_GoldenScenario>[
     ),
     brightness: Brightness.dark,
   ),
+  _GoldenScenario(
+    '21_otp_confirming',
+    () => _otpGoldenState(
+      flowId: 'g21',
+      deliveryState: OtpDeliveryState.confirming,
+    ),
+  ),
+  _GoldenScenario(
+    '22_otp_confirmation_unknown',
+    () => _otpGoldenState(
+      flowId: 'g22',
+      deliveryState: OtpDeliveryState.confirming,
+      deliveryConfirmationExhausted: true,
+    ),
+  ),
 ];
 
 LoginFlowState _otpGoldenState({
@@ -1555,12 +1847,14 @@ LoginFlowState _otpGoldenState({
   LoginStep step = LoginStep.otp,
   LoginOperation operation = LoginOperation.idle,
   OtpChallengeState challengeState = OtpChallengeState.active,
+  OtpDeliveryState deliveryState = OtpDeliveryState.queued,
   LoginOtpPurpose purpose = LoginOtpPurpose.login,
   String code = '',
   String provider = '',
   String bindingTicket = '',
   DateTime? deadline,
   LoginFeedback? feedback,
+  bool deliveryConfirmationExhausted = false,
 }) {
   return LoginFlowState(
     step: step,
@@ -1577,7 +1871,9 @@ LoginFlowState _otpGoldenState({
         : DateTime.now().add(const Duration(minutes: 3)),
     otpPurpose: purpose,
     otpChallengeState: challengeState,
+    otpDeliveryState: deliveryState,
     resendDeadline: deadline ?? DateTime.now().add(const Duration(seconds: 60)),
     feedback: feedback,
+    deliveryConfirmationExhausted: deliveryConfirmationExhausted,
   );
 }

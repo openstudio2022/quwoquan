@@ -15,8 +15,20 @@ from content.source.professional_image_discovery_governed import (
     build_professional_image_governed_candidate_catalog,
     write_professional_image_governed_candidate_catalog,
 )
+from content.source.research.homepage_article_seed_selection_writer import (
+    register_seed_selection_parser,
+)
+from content.source.research.homepage_article_source_ready_acquisition import (
+    acquire_homepage_article_source_ready_batch,
+)
+from content.source.research.homepage_article_source_ready_aggregate import (
+    merge_homepage_article_source_ready_batches,
+)
 from content.source.research.homepage_article_source_ready_batch import (
     freeze_homepage_article_source_ready_batch,
+)
+from content.source.research.professional_image_manual_file_evidence_cli import (
+    register_professional_image_manual_file_evidence_parser,
 )
 from content.source.research.scale_source_pool import (
     SOURCE_POOL_INVALID,
@@ -197,31 +209,46 @@ def handle_write(args: argparse.Namespace) -> None:
 def handle_project_candidates(args: argparse.Namespace) -> None:
     try:
         evidence_root = Path(args.evidence_root).expanduser().absolute()
-        homepage_article = project_scale_source_pool_homepage_article(
-            evidence_root=evidence_root,
-            homepage_catalog_ref=args.homepage_catalog_ref,
-            homepage_catalog_digest=args.homepage_catalog_digest,
-            homepage_catalog_file_sha256=args.homepage_catalog_file_sha256,
-            article_catalog_ref=args.article_catalog_ref,
-            article_catalog_digest=args.article_catalog_digest,
-            article_catalog_file_sha256=args.article_catalog_file_sha256,
-            source_ready_set_ref=args.source_ready_set_ref,
-            source_ready_set_digest=args.source_ready_set_digest,
-            source_ready_set_file_sha256=args.source_ready_set_file_sha256,
-        )
-        image_video = project_scale_source_pool_image_video(
-            evidence_root=evidence_root,
-            target_scale=args.target_scale,
-            source_revision=args.source_revision,
-            source_digest=args.source_digest,
-            entity_catalog_digest=args.entity_catalog_digest,
-            image_catalog_refs=args.image_catalog_ref,
-            image_acquisition_refs=args.image_acquisition_ref,
-            image_review_refs=args.image_review_ref,
-            video_catalog_refs=args.video_catalog_ref,
-            video_acquisition_refs=args.video_acquisition_ref,
-            video_review_refs=args.video_review_ref,
-        )
+        active_carriers = tuple(args.active_carrier)
+        homepage_article = None
+        if set(active_carriers) & {"homepage", "article"}:
+            homepage_article = project_scale_source_pool_homepage_article(
+                evidence_root=evidence_root,
+                homepage_catalog_ref=args.homepage_catalog_ref,
+                homepage_catalog_digest=args.homepage_catalog_digest,
+                homepage_catalog_file_sha256=args.homepage_catalog_file_sha256,
+                article_catalog_ref=args.article_catalog_ref,
+                article_catalog_digest=args.article_catalog_digest,
+                article_catalog_file_sha256=args.article_catalog_file_sha256,
+                source_ready_set_ref=args.source_ready_set_ref,
+                source_ready_set_digest=args.source_ready_set_digest,
+                source_ready_set_file_sha256=args.source_ready_set_file_sha256,
+                active_carriers=tuple(
+                    carrier
+                    for carrier in active_carriers
+                    if carrier in {"homepage", "article"}
+                ),
+            )
+        image_video = None
+        if set(active_carriers) & {"image", "video"}:
+            if not args.entity_catalog_ref:
+                raise ValueError(
+                    "--entity-catalog-ref is required for Image/Video projection"
+                )
+            image_video = project_scale_source_pool_image_video(
+                evidence_root=evidence_root,
+                target_scale=args.target_scale,
+                source_revision=args.source_revision,
+                source_digest=args.source_digest,
+                entity_catalog_digest=args.entity_catalog_digest,
+                entity_catalog_ref=args.entity_catalog_ref,
+                image_catalog_refs=args.image_catalog_ref,
+                image_acquisition_refs=args.image_acquisition_ref,
+                image_review_refs=args.image_review_ref,
+                video_catalog_refs=args.video_catalog_ref,
+                video_acquisition_refs=args.video_acquisition_ref,
+                video_review_refs=args.video_review_ref,
+            )
         candidates = build_scale_source_pool_candidates(
             target_scale=args.target_scale,
             source_revision=args.source_revision,
@@ -229,6 +256,7 @@ def handle_project_candidates(args: argparse.Namespace) -> None:
             entity_catalog_digest=args.entity_catalog_digest,
             homepage_article_projection=homepage_article,
             image_video_projection=image_video,
+            active_carriers=active_carriers,
         )
         output_root = Path(
             args.output_root or SOURCE_ACQUISITION_ROOT
@@ -251,6 +279,7 @@ def handle_project_candidates(args: argparse.Namespace) -> None:
             "targetScale": frozen["targetScale"],
             "candidatesRef": destination.relative_to(output_root).as_posix(),
             "candidatesDigest": frozen["candidatesDigest"],
+            "activeCarriers": frozen["activeCarriers"],
             "candidateCounts": frozen["candidateCounts"],
             "projectionBindings": frozen["projectionBindings"],
         }
@@ -272,6 +301,54 @@ def handle_freeze_homepage_article_catalogs(args: argparse.Namespace) -> None:
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise SystemExit(
             "[source-pool freeze-homepage-article-catalogs] GATE_BLOCK "
+            f"{_typed_error(exc)}"
+        ) from exc
+    _print(result)
+
+
+def handle_merge_homepage_article(args: argparse.Namespace) -> None:
+    try:
+        result = merge_homepage_article_source_ready_batches(
+            batch_manifests=[Path(value) for value in args.source_ready_manifest],
+            output_root=Path(args.output_root or SOURCE_ACQUISITION_ROOT),
+            source_set_id=args.source_set_id,
+            target_scale=args.target_scale,
+            source_revision=args.source_revision,
+            source_digest=args.source_digest,
+            entity_catalog_digest=args.entity_catalog_digest,
+            created_at=args.created_at,
+        )
+    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        raise SystemExit(
+            "[source-pool merge-homepage-article] GATE_BLOCK "
+            f"{_typed_error(exc)}"
+        ) from exc
+    _print(result)
+
+
+def handle_acquire_homepage_article(args: argparse.Namespace) -> None:
+    try:
+        result = acquire_homepage_article_source_ready_batch(
+            coverage_run_dir=Path(args.coverage_run_dir),
+            output_root=Path(
+                args.output_root or SOURCE_ACQUISITION_ROOT
+            ),
+            source_set_id=args.source_set_id,
+            target_scale=args.target_scale,
+            source_revision=args.source_revision,
+            source_digest=args.source_digest,
+            entity_catalog_digest=args.entity_catalog_digest,
+            captured_at=args.captured_at,
+            homepage_count=args.homepage_count,
+            article_count=args.article_count,
+            seed_selection=Path(args.seed_selection),
+        )
+    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        checkpoint = getattr(exc, "checkpoint", None)
+        if isinstance(checkpoint, Mapping):
+            _print(checkpoint)
+        raise SystemExit(
+            "[source-pool acquire-homepage-article] GATE_BLOCK "
             f"{_typed_error(exc)}"
         ) from exc
     _print(result)
@@ -364,6 +441,46 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         help="离线冻结、验证并 create-once 写入四载体规模 source-ready pool",
     )
     commands = parser.add_subparsers(dest="source_pool_command", required=True)
+    register_seed_selection_parser(commands)
+
+    acquire_content = commands.add_parser(
+        "acquire-homepage-article",
+        help="从 current-identity coverage 与公开 MediaWiki 原始证据冻结 source-ready capsules",
+    )
+    acquire_content.add_argument("--coverage-run-dir", required=True)
+    acquire_content.add_argument("--source-set-id", required=True)
+    acquire_content.add_argument(
+        "--target-scale", choices=("M100", "M1000", "M10000"), required=True
+    )
+    acquire_content.add_argument("--source-revision", required=True)
+    acquire_content.add_argument("--source-digest", required=True)
+    acquire_content.add_argument("--entity-catalog-digest", required=True)
+    acquire_content.add_argument("--captured-at", required=True)
+    acquire_content.add_argument("--homepage-count", type=int, required=True)
+    acquire_content.add_argument("--article-count", type=int, required=True)
+    acquire_content.add_argument(
+        "--seed-selection",
+        required=True,
+        help="identity-free historical hints intersected with fresh coverage evidence",
+    )
+    acquire_content.add_argument("--output-root")
+    acquire_content.set_defaults(handler=handle_acquire_homepage_article)
+
+    merge_content = commands.add_parser(
+        "merge-homepage-article",
+        help="逐字节复验并 create-once 合并同 identity 的 source-ready batches",
+    )
+    merge_content.add_argument("--source-ready-manifest", action="append", required=True)
+    merge_content.add_argument("--source-set-id", required=True)
+    merge_content.add_argument(
+        "--target-scale", choices=("M100", "M1000", "M10000"), required=True
+    )
+    merge_content.add_argument("--source-revision", required=True)
+    merge_content.add_argument("--source-digest", required=True)
+    merge_content.add_argument("--entity-catalog-digest", required=True)
+    merge_content.add_argument("--created-at", required=True)
+    merge_content.add_argument("--output-root")
+    merge_content.set_defaults(handler=handle_merge_homepage_article)
 
     freeze_content = commands.add_parser(
         "freeze-homepage-article-catalogs",
@@ -392,6 +509,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     freeze_image.add_argument("--output-root")
     freeze_image.set_defaults(handler=handle_freeze_professional_image_catalog)
 
+    register_professional_image_manual_file_evidence_parser(commands)
+
     freeze_video = commands.add_parser(
         "freeze-professional-video-catalog",
         help="从 supported API metadata 与人工文件清单冻结热门视频 catalog",
@@ -407,29 +526,39 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     project = commands.add_parser(
         "project-candidates",
-        help="从四载体 catalog/evidence 确定性 create-once 投影候选文件",
+        help="从当前 wave 的 catalog/evidence 确定性 create-once 投影候选文件",
     )
     project.add_argument("--target-scale", choices=("M100", "M1000", "M10000"), required=True)
     project.add_argument("--source-revision", required=True)
     project.add_argument("--source-digest", required=True)
     project.add_argument("--entity-catalog-digest", required=True)
+    project.add_argument(
+        "--entity-catalog-ref",
+        help="版本控制实体主表 ref；Image/Video 投影必填且必须命中 digest",
+    )
     project.add_argument("--evidence-root", required=True)
     project.add_argument("--output-root")
-    project.add_argument("--homepage-catalog-ref", required=True)
-    project.add_argument("--homepage-catalog-digest", required=True)
-    project.add_argument("--homepage-catalog-file-sha256", required=True)
-    project.add_argument("--article-catalog-ref", required=True)
-    project.add_argument("--article-catalog-digest", required=True)
-    project.add_argument("--article-catalog-file-sha256", required=True)
-    project.add_argument("--source-ready-set-ref", required=True)
-    project.add_argument("--source-ready-set-digest", required=True)
-    project.add_argument("--source-ready-set-file-sha256", required=True)
-    project.add_argument("--image-catalog-ref", action="append", required=True)
-    project.add_argument("--image-acquisition-ref", action="append", required=True)
-    project.add_argument("--image-review-ref", action="append", required=True)
-    project.add_argument("--video-catalog-ref", action="append", required=True)
-    project.add_argument("--video-acquisition-ref", action="append", required=True)
-    project.add_argument("--video-review-ref", action="append", required=True)
+    project.add_argument(
+        "--active-carrier",
+        action="append",
+        choices=("homepage", "article", "image", "video"),
+        required=True,
+    )
+    project.add_argument("--homepage-catalog-ref")
+    project.add_argument("--homepage-catalog-digest")
+    project.add_argument("--homepage-catalog-file-sha256")
+    project.add_argument("--article-catalog-ref")
+    project.add_argument("--article-catalog-digest")
+    project.add_argument("--article-catalog-file-sha256")
+    project.add_argument("--source-ready-set-ref")
+    project.add_argument("--source-ready-set-digest")
+    project.add_argument("--source-ready-set-file-sha256")
+    project.add_argument("--image-catalog-ref", action="append")
+    project.add_argument("--image-acquisition-ref", action="append")
+    project.add_argument("--image-review-ref", action="append")
+    project.add_argument("--video-catalog-ref", action="append")
+    project.add_argument("--video-acquisition-ref", action="append")
+    project.add_argument("--video-review-ref", action="append")
     project.set_defaults(handler=handle_project_candidates)
 
     plan = commands.add_parser("plan", help="从已审核候选构建 digest-bound pool")
@@ -455,9 +584,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
 
 __all__ = [
+    "handle_acquire_homepage_article",
     "handle_freeze_homepage_article_catalogs",
     "handle_freeze_professional_image_catalog",
     "handle_freeze_professional_video_catalog",
+    "handle_merge_homepage_article",
     "handle_plan",
     "handle_project_candidates",
     "handle_validate",

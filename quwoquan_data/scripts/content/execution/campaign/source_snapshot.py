@@ -5,16 +5,15 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from core.source_digest import current_source_digest
-
-SNAPSHOT_FORMAT = "source-snapshot-v1"
-_IGNORED_NAMES = ("__pycache__", ".pytest_cache", ".DS_Store")
-_CAMPAIGN_GOVERNANCE_ROOTS = (
-    "quwoquan_data/requirements-cursor.txt",
-    "quwoquan_ops/policies/branch_policy.yaml",
-    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/spec.md",
-    "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/design.md",
+from core.source_digest import (
+    ExecutionBundleIdentity,
+    SourceDefinitionSnapshot,
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
 )
+
+SNAPSHOT_FORMAT = "source-capsule-v2"
+_IGNORED_NAMES = ("__pycache__", ".pytest_cache", ".DS_Store")
 
 
 def source_snapshot_roots(
@@ -23,7 +22,7 @@ def source_snapshot_roots(
     expected_digest: str,
 ) -> tuple[str, ...]:
     """Return the sole sourceDigest input closure after checking its identity."""
-    document = current_source_digest(repo_root=repo_root).to_document()
+    document = current_source_definition_snapshot(repo_root=repo_root).to_document()
     if document["digest"] != expected_digest:
         raise ValueError(
             "campaign source snapshot digest drift: "
@@ -39,20 +38,17 @@ def campaign_snapshot_roots(
     repo_root: Path,
     *,
     expected_digest: str,
+    expected_execution_bundle: str,
 ) -> tuple[str, ...]:
-    """Bind Data source roots plus the exact cross-repo execution policy."""
+    """Bind source definitions and the separate exact execution bundle."""
     source_roots = source_snapshot_roots(
         repo_root,
         expected_digest=expected_digest,
     )
-    for relative in _CAMPAIGN_GOVERNANCE_ROOTS:
-        path = repo_root / relative
-        if not path.is_file() or path.is_symlink():
-            raise ValueError(
-                "campaign governance input is missing or symbolic: "
-                f"{relative}"
-            )
-    return (*source_roots, *_CAMPAIGN_GOVERNANCE_ROOTS)
+    bundle = current_execution_bundle_identity(repo_root=repo_root).to_document()
+    if bundle["digest"] != expected_execution_bundle:
+        raise ValueError("campaign execution bundle drift before capsule freeze")
+    return tuple(dict.fromkeys((*source_roots, *bundle["inputs"])))
 
 
 def materialize_source_snapshot(
@@ -61,6 +57,7 @@ def materialize_source_snapshot(
     *,
     roots: tuple[str, ...],
     expected_digest: str,
+    expected_execution_bundle: str,
 ) -> None:
     """Copy each governed input once, then prove source and snapshot stayed equal."""
     if destination.exists() and any(destination.iterdir()):
@@ -80,12 +77,21 @@ def materialize_source_snapshot(
             shutil.copy2(source, target, follow_symlinks=False)
         else:
             raise ValueError(f"campaign source snapshot input is invalid: {relative}")
-    source_digest = current_source_digest(repo_root=repo_root).digest
-    snapshot_digest = current_source_digest(repo_root=destination).digest
-    if source_digest != expected_digest or snapshot_digest != expected_digest:
+    source_digest = current_source_definition_snapshot(repo_root=repo_root).digest
+    snapshot_digest = SourceDefinitionSnapshot.build(repo_root=destination).digest
+    source_bundle = current_execution_bundle_identity(repo_root=repo_root).digest
+    snapshot_bundle = ExecutionBundleIdentity.build(repo_root=destination).digest
+    if (
+        source_digest != expected_digest
+        or snapshot_digest != expected_digest
+        or source_bundle != expected_execution_bundle
+        or snapshot_bundle != expected_execution_bundle
+    ):
         raise ValueError(
             "campaign source snapshot changed during materialization: "
-            f"frozen={expected_digest} source={source_digest} snapshot={snapshot_digest}"
+            f"frozen={expected_digest}/{expected_execution_bundle} "
+            f"source={source_digest}/{source_bundle} "
+            f"snapshot={snapshot_digest}/{snapshot_bundle}"
         )
 
 

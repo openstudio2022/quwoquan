@@ -11,6 +11,7 @@
     "gitCommitSha",
     "sourceRevision",
     "sourceDigest",
+    "executionBundle",
     "entityCatalogDigest",
     "semanticSelectionId",
     "laneExternalInputs",
@@ -30,10 +31,23 @@
     "gitCommitSha": { "type": "string", "pattern": "^[a-f0-9]{40,64}$" },
     "sourceRevision": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "sourceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "executionBundle": {
+      "type": "object",
+      "required": ["algorithm", "digest", "inputs"],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
     "entityCatalogDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
-    "semanticSelectionId": {"enum": ["default", "cursor_auto", "not_applicable"]},
+    "semanticSelectionId": {"enum": ["default", "cursor_grok", "cursor_auto", "not_applicable"]},
     "semanticPreflightReceipt": {
-      "$ref": "semantic_preflight_receipt_ref.schema.json"
+      "$ref": "semantic_provider_preflight_receipt_ref.schema.json"
+    },
+    "m100AlphaAcceptance": {
+      "$ref": "m100_alpha_acceptance_binding.schema.json"
     },
     "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
     "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
@@ -109,7 +123,18 @@
     {
       "if": {
         "properties": {
-          "semanticSelectionId": {"enum": ["default", "cursor_auto"]}
+          "scale": {"const": "M1000"},
+          "semanticSelectionId": {"enum": ["default", "cursor_grok", "cursor_auto"]}
+        },
+        "required": ["scale", "semanticSelectionId"]
+      },
+      "then": {"required": ["m100AlphaAcceptance"]},
+      "else": {"not": {"required": ["m100AlphaAcceptance"]}}
+    },
+    {
+      "if": {
+        "properties": {
+          "semanticSelectionId": {"enum": ["default", "cursor_grok", "cursor_auto"]}
         },
         "required": ["semanticSelectionId"]
       },
@@ -126,6 +151,20 @@
       "else": {"not": {"required": ["distributedRun"]}}
     },
     {
+      "if": {"required": ["scaleSourcePool"]},
+      "then": {
+        "required": ["sourcePoolEvidenceRootRef", "laneSourcePoolSelections"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["sourcePoolEvidenceRootRef"]},
+            {"required": ["laneSourcePoolSelections"]}
+          ]
+        }
+      }
+    },
+    {
       "if": {
         "properties": {
           "rootExecutionId": {
@@ -133,11 +172,6 @@
           }
         },
         "required": ["rootExecutionId"]
-      },
-      "then": {
-        "required": [
-          "scaleSourcePool", "sourcePoolEvidenceRootRef", "laneSourcePoolSelections"
-        ]
       },
       "else": {
         "not": {
@@ -147,6 +181,21 @@
             {"required": ["laneSourcePoolSelections"]}
           ]
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rootExecutionId": {
+            "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-homepage-m10000--"
+          }
+        },
+        "required": ["rootExecutionId"]
+      },
+      "then": {
+        "required": [
+          "scaleSourcePool", "sourcePoolEvidenceRootRef", "laneSourcePoolSelections"
+        ]
       }
     }
   ],

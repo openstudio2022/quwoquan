@@ -3,9 +3,27 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from core.cursor_credentials import cursor_safe_subprocess_env
 from core.cursor_model import CursorModelSelection
 from core.runtime_policy import active_runtime_policy
-from content.execution.support import Callable, ExecutionContext, MANAGED_AGENT_TIMEOUT_SECONDS, Path, _MANAGED_AGENT_SUBPROCESS_LOCK, _MANAGED_AGENT_SUBPROCESS_PIDS, _normalize_managed_agent_provider, _resolve_managed_model, json, os, signal, subprocess, sys, tempfile, time
+
+from content.execution.support import (
+    _MANAGED_AGENT_SUBPROCESS_LOCK,
+    _MANAGED_AGENT_SUBPROCESS_PIDS,
+    MANAGED_AGENT_TIMEOUT_SECONDS,
+    Callable,
+    ExecutionContext,
+    Path,
+    _normalize_managed_agent_provider,
+    _resolve_managed_model,
+    json,
+    os,
+    signal,
+    subprocess,
+    sys,
+    tempfile,
+    time,
+)
 
 if TYPE_CHECKING:
     from content.execution.agent.outcome import AgentRunOutcome
@@ -46,6 +64,11 @@ def _managed_agent_worker_main() -> None:
         model_parameters=model_selection.parameters,
         agent_provider=agent_provider,
         semantic_role=semantic_role,
+        semantic_max_attempts=(
+            int(ctx_payload["semanticMaxAttempts"])
+            if ctx_payload.get("semanticMaxAttempts") is not None
+            else None
+        ),
         release_only=bool(ctx_payload.get("releaseOnly")),
     )
     outcome = _managed_agent_runner_for_provider(ctx, str(payload.get("prompt") or ""))
@@ -100,9 +123,10 @@ def _default_managed_agent_runner_isolated(
     completion_grace_seconds: float = 0,
 ) -> "AgentRunOutcome":
     """Run one provider adapter in a killable subprocess with a hard deadline."""
+    from core.control_types import AgentFailureKind, AgentProvider
+
     from content.execution.agent.agent_runner import _redact_managed_secret
     from content.execution.agent.outcome import AgentRunOutcome
-    from core.control_types import AgentFailureKind, AgentProvider
     from content.execution.workspace import execution_root
 
     provider = ctx.agent_provider
@@ -128,6 +152,7 @@ def _default_managed_agent_runner_isolated(
                         "modelParameters": ctx.model_selection.parameters_document(),
                         "agentProvider": _normalize_managed_agent_provider(ctx.agent_provider),
                         "semanticRole": ctx.semantic_role,
+                        "semanticMaxAttempts": ctx.semantic_max_attempts,
                         "releaseOnly": ctx.release_only,
                     },
                     "prompt": prompt,
@@ -137,7 +162,7 @@ def _default_managed_agent_runner_isolated(
             encoding="utf-8",
         )
         scripts_dir = str(Path(__file__).resolve().parents[3])
-        env = os.environ.copy()
+        env = cursor_safe_subprocess_env(os.environ)
         env["PYTHONPATH"] = (
             scripts_dir
             if not env.get("PYTHONPATH")
@@ -160,6 +185,7 @@ def _default_managed_agent_runner_isolated(
             # 运行受版本控制的控制器，绝不能成为 Agent 可写 workspace。
             cwd=str(agent_workspace),
             env=env,
+            stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,

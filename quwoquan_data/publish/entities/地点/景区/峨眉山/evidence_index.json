@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260812--travel-homepage-m100--china--scale-011",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/峨眉山",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:7c6595c371643306e797bad6eba7e7113315a147e32880b456ac4f5cbeb83ead"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:4bbf510907ed20dcdbfb685e19a66b4c92984ca4058d19e98872ddce599b0277"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:dc873f7d36507fff7384841618d1d394d858f801c562fbc07a26c431d9f94c89"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:b2cb2094c019c8ccf5331866301428262ea56b5c3c9cd2fc688617d6f39c5b76"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:e754597ed86cc7b2d3da3c2b63526d5ab5539e014bb190689e06496342ddc419"
+    }
+  ]
+}

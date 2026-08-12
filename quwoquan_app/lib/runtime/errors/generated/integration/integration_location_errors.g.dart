@@ -2,7 +2,6 @@
 // ignore_for_file: constant_identifier_names
 
 enum IntegrationLocationErrorCode {
-  locationUnavailable,
   invalidArgument,
   locationPermissionRequired,
   upstreamTimeout,
@@ -15,8 +14,6 @@ enum IntegrationLocationErrorCode {
   /// 枚举对应的云端错误码字符串，与 fromCode 互为逆变换
   String get code {
     switch (this) {
-      case IntegrationLocationErrorCode.locationUnavailable:
-        return 'INTEGRATION.USER.location_unavailable';
       case IntegrationLocationErrorCode.invalidArgument:
         return 'INTEGRATION.USER.invalid_argument';
       case IntegrationLocationErrorCode.locationPermissionRequired:
@@ -39,8 +36,6 @@ enum IntegrationLocationErrorCode {
   /// 从云端 code 字符串解析为枚举
   static IntegrationLocationErrorCode fromCode(String? code) {
     switch (code) {
-      case 'INTEGRATION.USER.location_unavailable':
-        return IntegrationLocationErrorCode.locationUnavailable;
       case 'INTEGRATION.USER.invalid_argument':
         return IntegrationLocationErrorCode.invalidArgument;
       case 'INTEGRATION.USER.location_permission_required':
@@ -66,7 +61,6 @@ class IntegrationLocationErrorMessages {
   const IntegrationLocationErrorMessages._();
 
   static const Map<IntegrationLocationErrorCode, String> zh = <IntegrationLocationErrorCode, String>{
-    IntegrationLocationErrorCode.locationUnavailable: '暂时无法获取当前位置，请稍后重试',
     IntegrationLocationErrorCode.invalidArgument: '请求参数无效，请检查后重试',
     IntegrationLocationErrorCode.locationPermissionRequired: '请在设置中为本应用开启定位权限',
     IntegrationLocationErrorCode.upstreamTimeout: '位置服务响应超时，请稍后重试',
@@ -77,7 +71,6 @@ class IntegrationLocationErrorMessages {
   };
 
   static const Map<IntegrationLocationErrorCode, String> en = <IntegrationLocationErrorCode, String>{
-    IntegrationLocationErrorCode.locationUnavailable: 'Current location is unavailable, please retry shortly',
     IntegrationLocationErrorCode.invalidArgument: 'Request parameters are invalid',
     IntegrationLocationErrorCode.locationPermissionRequired: 'Please enable location permission for this app in Settings',
     IntegrationLocationErrorCode.upstreamTimeout: 'Location upstream timed out, please retry',

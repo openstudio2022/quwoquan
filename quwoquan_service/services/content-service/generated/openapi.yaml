@@ -2197,6 +2197,39 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /content/research/readback:
+        get:
+            operationId: GetResearchReleaseReadback
+            x-contract-operation-id: content.post.GetResearchReleaseReadback
+            x-object-id: content.post
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ResearchReleaseReadbackQueryFacet
+                method: getResearchReleaseReadback
+                reader: ActiveSupplyReader
+                slice: ResearchReleaseReadbackView
+            parameters:
+                - name: X-Research-Identity-Attestation
+                  in: header
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ResearchReleaseReadbackView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /content/users/me/comments:
         get:
             operationId: ListCommentsByAuthor
@@ -3598,6 +3631,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RequestContentMediaOriginalAccessCommand
+            x-contract-placeholder: true
+        ResearchReleaseReadbackView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ResearchReleaseReadbackView
             x-contract-placeholder: true
         ResolveReportRequest:
             type: object

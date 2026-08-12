@@ -41,6 +41,9 @@ _API_HOSTS = {
     "wikimedia_commons": ("commons.wikimedia.org", "api.wikimedia.org"),
     "openverse": ("api.openverse.org",),
 }
+_SOURCE_PAGE_HOSTS = {
+    "openverse": (),
+}
 _THUMBNAIL_PATH = re.compile(
     r"(?:^|/)(?:thumb(?:nail)?s?|small|medium|236x|474x|564x|75x75)(?:/|$)",
     re.IGNORECASE,
@@ -65,6 +68,70 @@ _EVIDENCE_FIELDS = (
     "contentSha256",
     "originalAssetCandidate",
     "generated",
+)
+_PHYSICAL_API_EVIDENCE_FIELDS = (
+    "schema",
+    "candidateId",
+    "discoveryCandidateId",
+    "provider",
+    "providerAssetId",
+    "upstreamProvider",
+    "status",
+    "requestUrl",
+    "observedAt",
+    "sourcePageUrl",
+    "originalAssetUrl",
+    "creator",
+    "license",
+    "licenseVersion",
+    "attributionText",
+    "termsUrl",
+    "apiResponseRef",
+    "apiResponseSha256",
+    "apiResponseDigest",
+    "apiTransportEvidenceRef",
+    "apiTransportEvidenceSha256",
+    "originalAssetRef",
+    "originalTransportEvidenceRef",
+    "originalTransportEvidenceSha256",
+    "contentSha256",
+    "bytes",
+    "dimensions",
+    "perceptualHash",
+    "machineAssessmentRef",
+    "machineAssessmentSha256",
+    "reviewRequestRef",
+    "reviewRequestSha256",
+    "reviewerEvidenceRef",
+    "reviewerEvidenceSha256",
+    "safetyEvidenceRef",
+    "safetyEvidenceSha256",
+    "sourceAttribution",
+    "failureCode",
+)
+_MANUAL_EVIDENCE_FIELDS = _EVIDENCE_FIELDS + (
+    "evidenceId",
+    "evidenceDigest",
+    "sourceRevision",
+    "sourceDigest",
+    "executionBundle",
+    "entityCatalogDigest",
+    "handoffId",
+    "handoffRevision",
+    "handoffDigest",
+    "assetBytes",
+    "dimensions",
+    "rightsStatus",
+    "license",
+    "licenseSnapshot",
+    "usageScope",
+    "modelReleaseStatus",
+    "termsUrl",
+    "authorizationProof",
+    "rightsIssues",
+    "sourceAttributionFile",
+    "sourceAttributionFileSha256",
+    "sourceAttribution",
 )
 
 
@@ -136,7 +203,11 @@ def _host_matches(host: str, roots: tuple[str, ...]) -> bool:
 def _https_url(value: object, *, provider: str, asset: bool, label: str) -> str:
     rendered = _text(value, label=label)
     parsed = urlsplit(rendered)
-    roots = _ASSET_HOSTS[provider] if asset else _PROVIDER_HOSTS[provider]
+    roots = (
+        _ASSET_HOSTS[provider]
+        if asset
+        else _SOURCE_PAGE_HOSTS.get(provider, _PROVIDER_HOSTS[provider])
+    )
     if (
         parsed.scheme.lower() != "https"
         or not parsed.hostname
@@ -172,10 +243,30 @@ def _manual_file(value: object) -> str:
 
 def _evidence_candidate(
     document: Mapping[str, Any], *, evidence_ref: str, evidence_digest: str,
-    evidence_file_sha256: str,
+    evidence_file_sha256: str, evidence_root: Path, evidence_path: Path,
 ) -> dict[str, Any]:
-    unknown = set(document) - set(_EVIDENCE_FIELDS)
-    missing = set(_EVIDENCE_FIELDS) - set(document)
+    physical_api = (
+        document.get("schema")
+        == "quwoquan_data.professional_image_supported_api_evidence"
+        and "candidateId" in document
+        and "originalAssetRef" in document
+    )
+    path = (
+        "supported_api"
+        if physical_api
+        else _text(document.get("acquisitionPath"), label="acquisitionPath")
+    )
+    if path not in _EVIDENCE_SCHEMAS:
+        _fail("manual/API catalog forbids public_direct acquisition")
+    fields = (
+        _MANUAL_EVIDENCE_FIELDS
+        if path == "manual_file"
+        else _PHYSICAL_API_EVIDENCE_FIELDS
+        if physical_api
+        else _EVIDENCE_FIELDS
+    )
+    unknown = set(document) - set(fields)
+    missing = set(fields) - set(document)
     if unknown or missing:
         _fail(
             "manual/API evidence fields drift: "
@@ -184,12 +275,39 @@ def _evidence_candidate(
     provider = _text(document["provider"], label="provider").lower()
     if provider not in _PROVIDERS:
         _fail(f"unsupported professional image provider: {provider}")
-    path = _text(document["acquisitionPath"], label="acquisitionPath")
-    if path not in _EVIDENCE_SCHEMAS:
-        _fail("manual/API catalog forbids public_direct acquisition")
     if document["schema"] != _EVIDENCE_SCHEMAS[path]:
         _fail("manual/API evidence schema does not match acquisitionPath")
-    candidate_id = _text(document["discoveryCandidateId"], label="discoveryCandidateId")
+    if path == "manual_file":
+        try:
+            assert_valid(
+                dict(document),
+                "source",
+                "professional_image_manual_file_evidence",
+                label=f"professional image manual evidence:{evidence_ref}",
+            )
+        except (FileNotFoundError, TypeError, ValueError) as exc:
+            _fail(f"manual_file evidence schema is invalid: {exc}")
+        stable = {
+            key: value for key, value in document.items() if key != "evidenceDigest"
+        }
+        if document["evidenceDigest"] != _digest(stable):
+            _fail("manual_file evidenceDigest drift")
+    if physical_api:
+        if document["status"] != "accepted" or document["failureCode"]:
+            _fail("supported_api physical evidence must be accepted")
+        try:
+            assert_valid(
+                dict(document),
+                "source",
+                "professional_image_supported_api_evidence",
+                label=f"professional image supported API evidence:{evidence_ref}",
+            )
+        except (FileNotFoundError, TypeError, ValueError) as exc:
+            _fail(f"supported_api evidence schema is invalid: {exc}")
+    candidate_id = _text(
+        document["candidateId"] if physical_api else document["discoveryCandidateId"],
+        label="candidateId" if physical_api else "discoveryCandidateId",
+    )
     if not re.fullmatch(
         rf"{provider}:(?:[a-z0-9_-]+:)?[0-9a-f]{{16}}", candidate_id
     ):
@@ -198,22 +316,39 @@ def _evidence_candidate(
         document["sourcePageUrl"], provider=provider, asset=False, label="sourcePageUrl"
     )
     creator = _text(document["creator"], label="creator")
-    title = _text(document["title"], label="title")
+    title = (
+        _DISPLAY_NAMES[provider]
+        if physical_api
+        else _text(document["title"], label="title")
+    )
     observed_at = _timestamp(document["observedAt"], label="observedAt")
     content_sha = str(document["contentSha256"])
     if not _SHA256.fullmatch(content_sha):
         _fail("contentSha256 must identify the original asset bytes")
-    if document["originalAssetCandidate"] is not True:
-        _fail("candidate is not verified as an original asset")
-    if document["generated"] is not False:
-        _fail("generated image candidates are forbidden")
-    asset_url = str(document["assetUrl"] or "").strip()
-    manual_file = str(document["manualFile"] or "").strip()
-    api_evidence = str(document["apiEvidence"] or "").strip()
+    if not physical_api:
+        if document["originalAssetCandidate"] is not True:
+            _fail("candidate is not verified as an original asset")
+        if document["generated"] is not False:
+            _fail("generated image candidates are forbidden")
+    asset_url = str(
+        document["originalAssetUrl"] if physical_api else document["assetUrl"] or ""
+    ).strip()
+    manual_file = str(document.get("manualFile") or "").strip()
+    api_evidence = str(
+        document["requestUrl"] if physical_api else document["apiEvidence"] or ""
+    ).strip()
     if path == "manual_file":
         if asset_url or api_evidence:
             _fail("manual_file evidence forbids assetUrl/apiEvidence")
         manual_file = _manual_file(manual_file)
+        asset_path, _asset_ref = _safe_file(evidence_root, manual_file)
+        if _file_sha256(asset_path) != content_sha:
+            _fail("manualFile bytes differ from contentSha256")
+        attribution_path, _attribution_ref = _safe_file(
+            evidence_root, document["sourceAttributionFile"]
+        )
+        if _file_sha256(attribution_path) != document["sourceAttributionFileSha256"]:
+            _fail("sourceAttributionFile bytes differ from sourceAttributionFileSha256")
     else:
         if manual_file or not api_evidence:
             _fail("supported_api evidence requires apiEvidence and forbids manualFile")
@@ -229,6 +364,25 @@ def _evidence_candidate(
         )
         if transformed or pinterest_non_original or _THUMBNAIL_PATH.search(parsed.path):
             _fail("supported_api assetUrl is a thumbnail/transformation, not an original")
+        if physical_api:
+            physical_root = next(
+                (
+                    parent.parent.parent
+                    for parent in evidence_path.resolve().parents
+                    if parent.parent.name == "candidates"
+                ),
+                None,
+            )
+            if physical_root is None:
+                _fail("supported API evidence is outside one preparation candidates tree")
+            asset_path, _asset_ref = _safe_file(
+                physical_root, document["originalAssetRef"]
+            )
+            if _file_sha256(asset_path) != content_sha:
+                _fail("supported API original bytes differ from contentSha256")
+            # The acquisition wire field binds the local immutable evidence object;
+            # requestUrl remains validated inside that object and pathEvidence.
+            api_evidence = evidence_ref
     return {
         "candidateId": candidate_id,
         "provider": provider,
@@ -301,6 +455,8 @@ def build_professional_image_governed_candidate_catalog(
                 evidence_ref=ref,
                 evidence_digest=_digest(document),
                 evidence_file_sha256=_file_sha256(path),
+                evidence_root=root,
+                evidence_path=path,
             )
         )
     if not candidates:

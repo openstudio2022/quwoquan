@@ -32,10 +32,18 @@
 - SkillConsent owner 只使用可信 `accountId`；生效性只由 `revokedAt` 是否为空裁决，`granted` 仅是由此推导的 API projection。
 - SkillSubscription 创建与状态迁移必须消费 `clientRequestId`/`Idempotency-Key` 单一命令身份，将聚合版本、命令回执和生命周期 outbox 在同一 MongoDB 事务提交；同键同意图返回首个结果，同键异意图返回 canonical conflict，状态 no-op 只写回执而不推进版本或 `updatedAt`。
 
+<a id="req-002"></a>
+### REQ-002 日程任务只由订阅与已激活 Skill 目录联邦派生
+
+- `assistant.assistant_task_view` 不物化第二份任务 Store；它按可信账号读取 `SkillSubscription`，并用同一 active immutable `SkillCatalog` 补齐公开展示名称与描述。
+- 一条 Subscription 只生成一条同 ID 任务：`active -> in_progress`、`paused -> pending`、`archived -> completed`；`dueAt` 只来自 owner 的 `deliveryState.nextAttemptAt`，不得从 LearningFact、模型正文或 App 本地状态推断。
+- Subscription owner、状态、时间或 active catalog 任一缺失/漂移时整次读取 fail-closed；禁止返回 raw skillId 兜底、空成功或读取已退役 `rm_assistant_tasks` 投影。
+
 ## 4. 契约引用
 
 - operation：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_run/operations.yaml`
 - consent：`quwoquan_service/services/assistant-service/contracts/assistant/skill_consent/operations.yaml`
+- task view：`quwoquan_service/services/assistant-service/contracts/assistant/assistant_task_view/operations.yaml`
 
 ## 5. 验收场景
 
@@ -48,6 +56,14 @@
 - AND 敏感操作返回 canonical 授权失败，且不产生工具调用或成功事实。
 - AND Grant/Revoke 的首次提交、同键重放、同键冲突、撤权即时拒绝及事实/回执/事件原子性均有真实 PostgreSQL API integration 证据。
 - AND SkillSubscription 创建、状态迁移、no-op、同键重放与同键冲突均有真实 MongoDB API integration 证据，且聚合版本、命令回执和生命周期 outbox 的原子性可对账。
+
+<a id="gwt-002"></a>
+### GWT-002 日程任务联邦读取保持 owner、目录与时间单轨
+
+- GIVEN 当前账号具有 active、paused 与 archived 的真实 SkillSubscription，且其 Skill 都存在于同一 digest 验证的 active immutable catalog。
+- WHEN App 经 generated client 与 production Remote 调用 `ListAssistantTasks`，并按可选任务状态过滤。
+- THEN 每条结果与 Subscription ID、owner 状态、nextAttemptAt、updatedAt 和 catalog displayName/description 精确一致，按更新时间稳定排序，且其他账号任务不可见。
+- AND catalog 缺项、owner 漂移、未知状态或任一 owner reader 不可用时返回 canonical `task_projection_unavailable`，不得返回 raw ID、旧物化行或伪空成功。
 
 ## 6. 依赖
 

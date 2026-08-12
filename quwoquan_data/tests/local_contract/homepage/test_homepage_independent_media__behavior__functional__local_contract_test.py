@@ -440,6 +440,58 @@ def test_homepage_assets_exclude_non_cover_image_with_same_visual_subject(monkey
     assert selection.excluded[0].reason == "cover_visual_subject_conflict"
 
 
+def test_homepage_assets_record_unselected_source_unit_disposition(monkeypatch):
+    execution_id = "20260809--travel-homepage-media-enumeration--test-region-a--pilot-001"
+    entity = "完整处置景区"
+    build_execution_fixture(
+        execution_id,
+        targets=[{"name": entity, "entityType": "地点/景区"}],
+    )
+    ensure_execution_layout(execution_id)
+    candidates = [
+        {
+            "researchLane": "homepage",
+            "sourceRef": "sources/primary/source.md",
+            "sourceAssetRef": "sources/primary/assets/001.jpg",
+            "sourceAssetId": "primary-001",
+            "authorizationProof": "https://commons.wikimedia.org/wiki/File:Primary.jpg",
+            "caption": f"{entity}主图",
+            "sha256": sha256_text("primary image"),
+        },
+        {
+            "researchLane": "homepage_image",
+            "sourceRef": "sources/independent/source.md",
+            "sourceAssetRef": "sources/independent/assets/001.jpg",
+            "sourceAssetId": "independent-001",
+            "authorizationProof": "https://commons.wikimedia.org/wiki/File:Independent.jpg",
+            "caption": f"{entity}补充图",
+            "sha256": sha256_text("independent image"),
+        },
+    ]
+    monkeypatch.setattr(
+        "content.source.source_assets.object_image_candidates",
+        lambda *_args, **_kwargs: candidates,
+    )
+
+    selection = select_homepage_assets(
+        execution_id,
+        "地点",
+        "景区",
+        entity,
+        primary_ref="sources/primary/source.md",
+    )
+
+    assert [row["sourceAssetRef"] for row in selection.publishable] == [
+        "sources/primary/assets/001.jpg"
+    ]
+    assert len(selection.excluded) == 1
+    assert selection.excluded[0].source_asset_ref == (
+        "sources/independent/assets/001.jpg"
+    )
+    assert selection.excluded[0].disposition.value == "policyExcluded"
+    assert selection.excluded[0].reason == "not_selected_source_unit"
+
+
 def test_homepage_media_dispositions_allow_an_empty_observed_media_set(tmp_path: Path):
     write_homepage_media_dispositions(
         entity_dir=tmp_path,

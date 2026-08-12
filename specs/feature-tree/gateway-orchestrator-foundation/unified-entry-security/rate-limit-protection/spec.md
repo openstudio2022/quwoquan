@@ -61,4 +61,4 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：当前仓库已建立 `api-edge` 单轨入口、Redis Lua 跨副本原子准入、有界且脱敏的 `(environment, subject, operation)` bucket、显式状态故障策略与 canonical retry 语义。Caddy 业务 HTTP 只转发到 `api-edge`，owner 端仅保留资源并发背压。尚缺 `user_acceptance` 在真实公开入口和同一 immutable release digest 下的峰值压测、Redis 故障、指标与告警 readback 及回滚回执，因此当前仍不具备 `GWT-001` 商用准出证据。
-- 完成判定：canonical 统一入口先完成认证与 operation/可信主体解析，再以共享原子状态对同一 `(environment, subject, operation)` 执行一致限流。`local_contract` 覆盖主体/operation 隔离、并发原子性、key/TTL 上限、配置和共享状态故障策略，`api_integration` 证明至少两个业务副本以及 stable/gray 并存时总阈值不随实例数放大、typed `429` 与 retry 语义一致，`user_acceptance` 从公开入口完成同一 release digest 的峰值、故障、指标/告警 readback 与回滚验证。三层证据均直接引用 `GWT-001` 后方可关闭。
+- 完成判定：canonical 统一入口先完成认证与 operation/可信主体解析，再以共享原子状态对同一 `(environment, subject, operation)` 执行一致限流。`local_contract` 覆盖主体/operation 隔离、并发原子性、key/TTL 上限、配置和共享状态故障策略，`api_integration` 证明至少两个业务副本以及 stable/candidate 并存时总阈值不随实例数放大、typed `429` 与 retry 语义一致，`user_acceptance` 从公开入口完成同一 release digest 的峰值、故障、指标/告警 readback 与回滚验证。三层证据均直接引用 `GWT-001` 后方可关闭。

@@ -115,7 +115,9 @@ func TestHTTPExternalProviderNormalizesAcceptedSMSResponse(t *testing.T) {
 			ExpiresAt:      expiresAt,
 			Payload: map[string]string{
 				"challengeId": "challenge-001",
-				"templateId":  "sms_otp_login",
+				"templateId":  "sms_otp_login_acceptance",
+				"platform":    "acceptance",
+				"requestRef":  "sms-request-001",
 			},
 		},
 		reliabletask.ReliableAsyncTask{TaskID: "task-001"},
@@ -164,7 +166,9 @@ func TestHTTPExternalProviderNormalizesRemoteFailure(t *testing.T) {
 				"phoneHash": integrationsupport.CanonicalTestSHA256(
 					"+8618013813909",
 				),
-				"templateId": "sms_otp_login",
+				"templateId": "sms_otp_login_acceptance",
+				"platform":   "acceptance",
+				"requestRef": "sms-request-503",
 			},
 		},
 		reliabletask.ReliableAsyncTask{TaskID: "task-503"},
@@ -280,7 +284,9 @@ func TestHTTPExternalProviderRejectsTamperedOTPCodeRefWithoutCallingProvider(t *
 		ExpiresAt:      expiresAt,
 		Payload: map[string]string{
 			"challengeId": "challenge-tampered",
-			"templateId":  "sms_otp_login",
+			"templateId":  "sms_otp_login_acceptance",
+			"platform":    "acceptance",
+			"requestRef":  "sms-request-tampered",
 		},
 	}, reliabletask.ReliableAsyncTask{TaskID: "task-tampered"})
 	if err == nil || called {

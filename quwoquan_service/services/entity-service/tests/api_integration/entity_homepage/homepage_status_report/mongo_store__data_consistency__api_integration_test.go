@@ -1,6 +1,8 @@
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-002
 // readiness_case: list-homepage-status-reports-api
 // readiness_case: create-homepage-status-report-api
+// readiness_case: get-my-pending-homepage-status-report-api
 // readiness_case: review-homepage-status-report-api
 package api_integration
 
@@ -112,6 +114,16 @@ func TestHomepageStatusReportMongoPacket(t *testing.T) {
 	replayed, err := facade.Create(reportContext("report-create"), command)
 	if err != nil || replayed.ReportID != created.ReportID {
 		t.Fatalf("status report receipt replay mismatch: %+v err=%v", replayed, err)
+	}
+	mine, err := facade.GetMyPending(
+		ctx,
+		created.HomepageID,
+		command.ActorPersonaID,
+		command.Reason,
+	)
+	if err != nil || mine.ReportID != created.ReportID ||
+		mine.Status != reportmodel.StatusPendingReview {
+		t.Fatalf("read pending status report through MongoDB: %+v err=%v", mine, err)
 	}
 	changed := command
 	changed.Description = "different digest"

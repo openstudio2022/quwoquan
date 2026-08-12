@@ -24,6 +24,7 @@ import shlex
 import shutil
 import socket
 import ssl
+import stat
 import subprocess
 import sys
 import tempfile
@@ -33,8 +34,10 @@ import urllib.request
 import urllib.parse
 from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
+from uuid import uuid4
 
 sys.dont_write_bytecode = True
 
@@ -69,6 +72,7 @@ from quwoquan_ops.cli.prod import collect_release_artifact_descriptors
 from quwoquan_ops.cli.prod import finalize_mainline_release_artifact
 from quwoquan_ops.cli.prod import hosted_release_ledger
 from quwoquan_ops.cli.prod import oci_supply_chain
+from quwoquan_ops.cli.prod import rollout_stage_promotion_evidence
 from quwoquan_ops.cli.prod.prod_hosted_topology import (
     ProdHostedTopologyError,
     instance_for_stage as prod_hosted_instance_for_stage,
@@ -79,7 +83,11 @@ from quwoquan_ops.cli.prod.prod_hosted_topology import (
     validate_host_coverage as validate_prod_hosted_host_coverage,
 )
 from quwoquan_ops.cli.alpha import content_release_runtime as alpha_content_release_runtime
+from quwoquan_ops.cli.lib import active_content_release_outbox_repair
 from quwoquan_ops.cli.lib.compose_layout import compose_file_args, gamma_compose_files
+from quwoquan_ops.cli.lib.patrol_execution_lock import (
+    acquire_patrol_execution_lock,
+)
 from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENTS,
     TARGETS,
@@ -90,13 +98,17 @@ from quwoquan_ops.cli.lib.environment_topology import (
 from quwoquan_ops.cli.lib.experiment_policy_activation import (
     ExperimentPolicyActivationError,
     activate_search_experiment_policy,
+    activate_test_live_experiment_policies,
 )
 from quwoquan_ops.cli.lib.local_environment_auth import (
     LocalAcceptanceSession,
     LocalEnvironmentHTTPError,
+    close_test_data_acceptance_actor,
+    load_local_environment_auth,
     mint_local_filter_catalog_service_token,
     mint_local_product_ops_operator_token,
-    open_reference_acceptance_session,
+    open_local_phone_acceptance_session,
+    open_test_data_acceptance_session,
     prepare_local_environment_auth,
     request_local_environment_json,
 )
@@ -105,6 +117,7 @@ from quwoquan_ops.cli.lib.premium_pool_release import (
     execute_premium_pool_readback,
     execute_premium_pool_upsert,
     load_premium_pool_candidate_binding,
+    load_premium_pool_test_live_binding,
     open_premium_pool_operator_session,
 )
 from quwoquan_ops.cli.lib.local_gamma_object_storage import (
@@ -167,6 +180,14 @@ from quwoquan_ops.cli.lib.content_release_readiness import (
     VerificationProfile,
     load_content_release_readiness_policy,
 )
+from quwoquan_ops.cli.lib.app_content_uat_plan import build_app_content_uat_plan
+from quwoquan_ops.cli.lib.app_content_uat_release_samples import (
+    resolve_release_sample_requests,
+    validate_release_sample_probe,
+)
+from quwoquan_ops.cli.lib.content_delivery_verification import (
+    verify_content_delivery,
+)
 from quwoquan_ops.cli.lib.research_content_isolation import (
     verify_research_content_isolation,
 )
@@ -190,14 +211,27 @@ from quwoquan_ops.cli.lib.local_runtime_consumer_lease import (
     DEFAULT_BUILD_GRACE_SECONDS,
     acquire_consumer_lease,
     active_consumer_leases,
+    consumer_lease_dir,
     release_consumer_lease,
 )
 from quwoquan_ops.cli.lib import orphan_compose_teardown
+from quwoquan_ops.cli.lib import output_layout_reconciliation
+from quwoquan_ops.cli.lib import startup_health_failure_evidence
 from quwoquan_ops.cli.lib.startup_attempt_receipt import (
     image_composition_from_candidate_oci,
     load_startup_attempt,
     load_workload_startup_attempt,
+    startup_attempt_path,
+    startup_attempt_path_for_workload,
     transition_startup_attempt,
+)
+from quwoquan_ops.cli.lib.test_live_startup_attempt_receipt import (
+    load_test_live_startup_attempt,
+    transition_test_live_startup_attempt,
+)
+from quwoquan_ops.cli.lib.test_live_content_binding import (
+    create_test_live_content_binding,
+    load_test_live_content_binding,
 )
 from quwoquan_ops.cli.lib.local_env_gate_matrix import (
     CANONICAL_TARGETS as CANONICAL_LOCAL_GATE_TARGETS,
@@ -222,19 +256,37 @@ from quwoquan_ops.cli.lib.local_postgres_migration_drift import (
     probe_migration_drift,
 )
 from quwoquan_ops.cli.lib.package_reuse import (
+    PACKAGE_INPUT_CAPSULE_DIRECTORY,
     can_reuse_package,
-    workspace_drift_details,
-    workspace_snapshot,
+    deployment_input_roots,
+    materialize_package_input_capsule,
+    verify_package_input_capsule,
     write_package_fingerprint,
+)
+from quwoquan_ops.cli.lib.graphql_read_registry_package import (
+    materialize_graphql_read_runtime_config,
+    materialize_graphql_read_registry_package,
+    resolve_signing_material as resolve_graphql_read_signing_material,
+)
+from quwoquan_ops.cli.lib.graphql_read_registry_signing import (
+    SIGNING_KEY_ID_ENV as GRAPHQL_READ_SIGNING_KEY_ID_ENV,
+    SIGNING_PRIVATE_KEY_FILE_ENV as GRAPHQL_READ_SIGNING_PRIVATE_KEY_FILE_ENV,
+    TRUSTED_PUBLIC_KEYS_FILE_ENV as GRAPHQL_READ_TRUSTED_PUBLIC_KEYS_FILE_ENV,
+)
+from quwoquan_ops.cli.lib.local_graphql_read_registry_keys import (
+    prepare_local_graphql_read_registry_signing,
 )
 from quwoquan_ops.cli.lib.runtime_topology_package import (
     materialize_runtime_topology_package,
 )
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
+    RELEASE_INPUT_CLASSIFICATIONS,
+    canonical_contract_graph_digest,
     load_candidate_manifest,
     materialize_observability_log_sink_package,
     materialize_provider_runtime_package,
     provider_runtime_image_environment_key,
+    release_input_classification as classify_release_inputs,
     seal_provider_runtime_package_images,
     validate_observability_log_sink_package,
     validate_release_attestations,
@@ -244,18 +296,24 @@ from quwoquan_ops.cli.lib.provider_runtime_composition import (
     compile_provider_runtime_composition,
     validate_provider_runtime_composition,
 )
-from quwoquan_ops.cli.lib.nonprod_business_data import NONPROD_TARGETS
-from quwoquan_ops.cli.lib.nonprod_data_verification import (
-    run_nonprod_business_data_verification,
+from quwoquan_ops.cli.lib.test_data_verification import (
+    build_provider_evidence_document,
+    build_candidate_binding,
+    load_provider_evidence,
+    run_test_data_verification,
 )
-from quwoquan_ops.cli.lib.nonprod_data_evidence import (
-    PROVIDER_CAPABILITIES as NONPROD_PROVIDER_CAPABILITIES,
-    RELIABILITY_CASE_IDS as NONPROD_RELIABILITY_CASE_IDS,
-    assemble_nonprod_gate_evidence,
+from quwoquan_ops.cli.lib.test_data.api import TestDataSession
+from quwoquan_ops.cli.lib.test_data.capabilities.common import ActorRole
+from quwoquan_ops.cli.lib.test_data.capabilities.user_service import (
+    AUTHENTICATED_ACTORS,
+    AuthenticatedActorsParams,
 )
-from quwoquan_ops.cli.lib.nonprod_data_provisioner import (
-    NonprodCandidateIdentity,
-    NonprodDataProvisioner,
+from quwoquan_ops.cli.lib.test_data.cases import canonical_acceptance_suite
+from quwoquan_ops.cli.lib.test_data.model import CandidateBinding, TestDataContext
+from quwoquan_ops.cli.lib.test_data.operations import TestDataRuntime
+from quwoquan_ops.cli.lib.test_data.serialization import (
+    case_request_document,
+    load_case_requests,
 )
 from quwoquan_ops.cli.lib.dev_up import (
     DEV_UP_ENVS,
@@ -305,6 +363,7 @@ from quwoquan_ops.cli.lib.output_paths import (
     service_deployment_package_dir,
     web_deployment_package_dir,
     target_cache_dir,
+    target_local_dir,
     target_process_dir,
 )
 from quwoquan_ops.migrations.travel_to_gathering import (
@@ -312,6 +371,30 @@ from quwoquan_ops.migrations.travel_to_gathering import (
 )
 
 RUNTIME_CANDIDATE_ROOT_ENV = "QWQ_RUNTIME_CANDIDATE_ROOT"
+PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_ENV = (
+    "QWQ_PROVIDER_CONFORMANCE_RUNTIME_IDENTITY"
+)
+TEST_DATA_TARGETS = {
+    "alpha-local": "alpha",
+    "beta-local": "beta",
+    "gamma-local": "gamma",
+}
+
+
+class ProfileActorCaseId(StrEnum):
+    """Strong identities for profile commands that need one isolated actor."""
+
+    GAMMA_ONBOARDING_AUTHOR_IMPACT = "gamma-onboarding-author-impact"
+    GAMMA_SEARCH_REMOTE = "gamma-search-remote"
+    GAMMA_ASSISTANT_LEARNING = "gamma-assistant-learning"
+    GAMMA_PROFILE_PROPOSAL = "gamma-profile-proposal"
+    BETA_REPORT_FEEDBACK = "beta-report-feedback"
+    GAMMA_REPORT_FEEDBACK = "gamma-report-feedback"
+    BETA_MEDIA_PUBLICATION = "beta-media-publication"
+    GAMMA_MEDIA_PUBLICATION = "gamma-media-publication"
+    BETA_CHAT_GROUP = "beta-chat-group"
+    GAMMA_CHAT_GROUP = "gamma-chat-group"
+    APP_CONTENT_UAT = "app-content-uat"
 
 
 VERIFY_COMMAND_GROUPS = {
@@ -349,6 +432,7 @@ RELEASE_HOMEPAGE_UAT_TEST_TARGET = (
     "release_homepage__consumer_render__functional__user_acceptance_test.dart"
 )
 VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET = "test/user_acceptance/journeys/home_video_playback/video_playback_canary__user_acceptance_test.dart"
+HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET = "test/user_acceptance/journeys/home_video_playback/home_video_playback__user_acceptance_test.dart"
 DISCOVERY_FEED_UAT_TEST_TARGET = (
     "test/user_acceptance/service/content_service/content/feed_delivery_page/"
     "feed_load__user_acceptance_test.dart"
@@ -1311,6 +1395,7 @@ def _resolve_gamma_release_image_composition(
     return {
         "candidateId": str(manifest["candidateId"]),
         "artifactDigest": str(manifest["artifactDigest"]),
+        "contractGraphDigest": str(manifest["contractGraphDigest"]),
         "imageVersion": composition_version,
         "images": bound,
     }
@@ -1356,10 +1441,17 @@ def _apply_gamma_image_composition(
 def _bind_gamma_release_image_refs(
     manifest_path: Path,
     environment: dict[str, str],
+    *,
+    release_input_classification: str,
+    contract_graph_digest: str,
 ) -> dict[str, Any]:
     """Pull and bind exact candidate OCI refs for a formal local release."""
 
     composition = _resolve_gamma_release_image_composition(manifest_path)
+    if release_input_classification != "commercial_inputs":
+        raise ValueError("formal release requires commercial release inputs")
+    if composition.get("contractGraphDigest") != contract_graph_digest:
+        raise ValueError("formal release ContractGraph differs from the package")
     planned: list[tuple[str, str, str, str]] = []
     for service, environment_key in GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
         descriptor = composition["images"][service]
@@ -1792,6 +1884,13 @@ def _bind_gamma_down_parse_environment(environment: dict[str, str]) -> None:
             ),
             "QWQ_PUSH_TOKEN_ENCRYPTION_KEY": "down-not-used",
             "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": "down-not-used",
+            # Build/down only need deterministic Compose interpolation.  A
+            # running local environment receives the real shared User/Content
+            # key from prepare_local_environment_auth's target-scoped 0600
+            # secret file.
+            "CONTENT_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64": (
+                "ZG93bi1ub3QtdXNlZC1yZXNlYXJjaC1pZGVudGl0eS1rZXk="
+            ),
             "RTC_MEDIA_API_KEY": "down-not-used",
             "RTC_MEDIA_API_SECRET": "down-not-used",
             "INTEGRATION_SERVICE_MTLS_CA_FILE": "/tmp/down-not-used",
@@ -2028,7 +2127,12 @@ def _gamma_start_command(args: argparse.Namespace) -> list[str]:
     return command
 
 
-def _build_runtime_shared_package(env_name: str, *, target: str = "") -> Path:
+def _build_runtime_shared_package(
+    env_name: str,
+    *,
+    target: str = "",
+    source_root: Path = ROOT,
+) -> Path:
     """将运行栈共享静态配置封装为环境 package，禁止启动期直读仓内源文件。"""
     target_name = deployment_target_for_env(env_name, target=target)
     package_dir = runtime_shared_deployment_package_dir(
@@ -2043,11 +2147,11 @@ def _build_runtime_shared_package(env_name: str, *, target: str = "") -> Path:
         )
     package_dir.mkdir(parents=True, exist_ok=True)
     sources = (
-        ROOT / "quwoquan_service" / "runtime" / "reliabletask" / "resources" / "module_catalog.yaml",
-        ROOT / "quwoquan_service" / "runtime" / "reliabletask" / "resources" / "retention_policy.yaml",
-        ROOT / "quwoquan_ops" / "environments" / "compose" / "object-storage-lifecycle.json",
-        ROOT / "quwoquan_ops" / "external" / "livekit" / "base" / "livekit.yaml",
-        ROOT / "quwoquan_ops" / "environments" / "gamma" / "local" / "Caddyfile",
+        source_root / "quwoquan_service" / "runtime" / "reliabletask" / "resources" / "module_catalog.yaml",
+        source_root / "quwoquan_service" / "runtime" / "reliabletask" / "resources" / "retention_policy.yaml",
+        source_root / "quwoquan_ops" / "environments" / "compose" / "object-storage-lifecycle.json",
+        source_root / "quwoquan_ops" / "external" / "livekit" / "base" / "livekit.yaml",
+        source_root / "quwoquan_ops" / "environments" / "gamma" / "local" / "Caddyfile",
     )
     files: dict[str, dict[str, str]] = {}
     for source in sources:
@@ -2084,8 +2188,12 @@ def _build_package_bound_local_images(
     provider_runtime: Mapping[str, Any],
     observability_log_sink: Mapping[str, Any],
     candidate_root: Path,
+    candidate_digest: str,
+    source_root: Path = ROOT,
 ) -> tuple[Path, dict[str, Any]]:
     """Build and attest the exact local OCI inputs during package, never during up."""
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", candidate_digest) is None:
+        raise ValueError("package-bound OCI candidate digest is invalid")
     topology = load_environment_topology()
     environment = _gamma_env_from_port_manifest(topology, target_name)
     environment.update(
@@ -2114,6 +2222,7 @@ def _build_package_bound_local_images(
             ),
             "QWQ_WORKLOAD": "full",
             "QWQ_PRODUCT_TELEMETRY_AVAILABLE": "1",
+            "QWQ_RELEASE_CANDIDATE_DIGEST": candidate_digest,
             # Compose parses storage/provider variables while building, but no
             # build step may contact or persist them into an image.
             "LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT": "https://127.0.0.1",
@@ -2178,19 +2287,34 @@ def _build_package_bound_local_images(
     # Build exactly once when any source image is absent; otherwise attest the
     # already materialized immutable source set for every target package.
     images, missing_images = inspect_images()
+    build_result: subprocess.CompletedProcess[str] | None = None
     if missing_images:
-        result = run(command, env=environment)
-        if result.returncode != 0:
+        build_result = run(command, cwd=source_root, env=environment)
+        if build_result.returncode != 0:
             raise RuntimeError(
-                result.stderr.strip()
-                or result.stdout.strip()
-                or f"package-bound OCI build failed with exit={result.returncode}"
+                build_result.stderr.strip()
+                or build_result.stdout.strip()
+                or (
+                    "package-bound OCI build failed with "
+                    f"exit={build_result.returncode}"
+                )
             )
         images, missing_images = inspect_images()
     if missing_images:
-        raise RuntimeError(
+        details = [
             "package-bound OCI digest is unavailable: " + ", ".join(missing_images)
-        )
+        ]
+        if build_result is not None:
+            for stream_name, stream_value in (
+                ("stdout", build_result.stdout),
+                ("stderr", build_result.stderr),
+            ):
+                normalized = stream_value.strip()
+                if normalized:
+                    details.append(
+                        f"build-only {stream_name} tail: {normalized[-4000:]}"
+                    )
+        raise RuntimeError("\n".join(details))
     sealed_provider_runtime = seal_provider_runtime_package_images(
         env_name,
         target_name,
@@ -2399,6 +2523,7 @@ def build_parser() -> argparse.ArgumentParser:
             "distribution",
             "legal-static",
             "config-slo",
+            "content-delivery",
             "all",
         ],
         default="all",
@@ -2415,12 +2540,14 @@ def build_parser() -> argparse.ArgumentParser:
     verify_parser.add_argument("--data-verify-run-id", default="")
     verify_parser.add_argument("--data-manifest-digest", default="")
     verify_parser.add_argument(
-        "--nonprod-data-evidence",
+        "--test-data-request",
         default="",
-        help=(
-            "Alpha/Beta/Gamma integration profile 的 Provider/share/fault gate "
-            "evidence；只接受 QWQ_OUTPUT_ROOT 下的候选绑定 JSON"
-        ),
+        help="选中用例导出的强类型 test-data request graph JSON",
+    )
+    verify_parser.add_argument(
+        "--test-data-evidence",
+        default="",
+        help="请求依赖闭包所需的候选绑定 Provider evidence JSON",
     )
     verify_parser.add_argument(
         "--data-lifecycle-exit-ref",
@@ -2434,6 +2561,39 @@ def build_parser() -> argparse.ArgumentParser:
     )
     verify_parser.add_argument("--distribution-root", default="")
     verify_parser.add_argument("--verify-hosted", action="store_true")
+
+    test_data_request_parser = subparsers.add_parser(
+        "test-data-request",
+        help="生成七领域 canonical Journey 的强类型 test-data request graph",
+    )
+    test_data_request_parser.add_argument(
+        "--report-dir",
+        default=argparse.SUPPRESS,
+        help="可选输出目录；默认写入 repo 级可重建运行证据目录",
+    )
+
+    test_data_evidence_parser = subparsers.add_parser(
+        "test-data-evidence",
+        help="从当前 Provider conformance 投影选中 request 的候选绑定 evidence",
+    )
+    test_data_evidence_parser.add_argument(
+        "--report-dir",
+        default=argparse.SUPPRESS,
+    )
+    test_data_evidence_parser.add_argument(
+        "--env",
+        choices=("alpha", "beta", "gamma"),
+        required=True,
+    )
+    test_data_evidence_parser.add_argument(
+        "--target",
+        choices=tuple(TEST_DATA_TARGETS),
+        required=True,
+    )
+    test_data_evidence_parser.add_argument("--data-release-id", required=True)
+    test_data_evidence_parser.add_argument("--data-verify-run-id", required=True)
+    test_data_evidence_parser.add_argument("--data-manifest-digest", required=True)
+    test_data_evidence_parser.add_argument("--test-data-request", required=True)
 
     matrix_parser = subparsers.add_parser(
         "matrix",
@@ -2458,14 +2618,18 @@ def build_parser() -> argparse.ArgumentParser:
     matrix_parser.add_argument("--release-attestation", required=True)
     matrix_parser.add_argument("--rollback-release-attestation", required=True)
     matrix_parser.add_argument(
-        "--nonprod-data-evidence",
+        "--test-data-request",
         action="append",
         metavar="TARGET=PATH",
         required=True,
-        help=(
-            "full integration 必须消费的 Provider/share/reliability evidence；"
-            "Alpha/Beta/Gamma 各显式传入一次"
-        ),
+        help="Alpha/Beta/Gamma 各自选中用例的强类型 request graph",
+    )
+    matrix_parser.add_argument(
+        "--test-data-evidence",
+        action="append",
+        metavar="TARGET=PATH",
+        default=[],
+        help="仅为实际请求的外部 Provider 依赖提供候选绑定 evidence",
     )
     matrix_parser.add_argument("--ios-simulator-device", required=True)
     matrix_parser.add_argument("--android-emulator-device", required=True)
@@ -2594,45 +2758,6 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
-    nonprod_data_evidence_parser = subparsers.add_parser(
-        "nonprod-data-evidence",
-        help="从显式真实回执装配候选绑定的非生产数据门禁 evidence",
-    )
-    nonprod_data_evidence_parser.add_argument(
-        "--report-dir", default=argparse.SUPPRESS
-    )
-    nonprod_data_evidence_parser.add_argument(
-        "--target",
-        choices=tuple(NONPROD_TARGETS),
-        required=True,
-    )
-    nonprod_data_evidence_parser.add_argument(
-        "--share-receipt",
-        action="append",
-        required=True,
-        help="真实端侧分享 delivery CaseResult；必须显式传入三次",
-    )
-    nonprod_data_evidence_parser.add_argument(
-        "--provider-receipt",
-        action="append",
-        required=True,
-        metavar="ROLE=PATH",
-        help=(
-            "Provider Conformance user_acceptance receipt；ROLE 为 "
-            + "|".join(NONPROD_PROVIDER_CAPABILITIES)
-        ),
-    )
-    nonprod_data_evidence_parser.add_argument(
-        "--reliability-receipt",
-        action="append",
-        required=True,
-        metavar="CASE=PATH",
-        help=(
-            "候选绑定的可靠性 CaseResult；CASE 为 "
-            + "|".join(NONPROD_RELIABILITY_CASE_IDS)
-        ),
-    )
-
     up_parser = subparsers.add_parser("up")
     up_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     up_parser.add_argument("--target", choices=TARGETS, default="")
@@ -2673,11 +2798,17 @@ def build_parser() -> argparse.ArgumentParser:
             "release-readiness.json；也可由 DATA_RELEASE_READINESS_RECEIPT 提供"
         ),
     )
-    up_parser.add_argument("--rollout-mode", choices=["gray-initial", "carry-on", "full"], default="")
+    up_parser.add_argument("--rollout-mode", choices=["canary", "5", "20", "50", "100"], default="")
 
     dev_session_parser = subparsers.add_parser(
         "dev-session",
         help="实时编排可变非生产 handoff、健康诊断与可选 App 启动。",
+    )
+    dev_session_parser.add_argument(
+        "dev_session_action",
+        nargs="?",
+        choices=("start", "bind-content"),
+        default="start",
     )
     dev_session_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     dev_session_parser.add_argument(
@@ -2693,6 +2824,32 @@ def build_parser() -> argparse.ArgumentParser:
     dev_session_parser.add_argument("--all-nonprod", action="store_true")
     dev_session_parser.add_argument("--device-id", default="")
     dev_session_parser.add_argument("--launch-app", action="store_true")
+    dev_session_parser.add_argument("--startup-attempt-id", default="")
+    dev_session_parser.add_argument(
+        "--release-id",
+        default="",
+        help="显式绑定当前test-live target的canonical Data releaseId；禁止latest。",
+    )
+    dev_session_parser.add_argument(
+        "--verify-run-id",
+        default="",
+        help="显式绑定当前test-live target的Data verifyRunId；禁止latest。",
+    )
+    dev_session_parser.add_argument(
+        "--manifest-digest",
+        default="",
+        help="显式绑定Data immutable payload digest（sha256:...）。",
+    )
+    dev_session_parser.add_argument(
+        "--readiness-digest",
+        default="",
+        help="bind-content 必需的 exact release-readiness.json sha256。",
+    )
+    dev_session_parser.add_argument(
+        "--lifecycle-exit-ref",
+        default="",
+        help="commercial readiness必需；consumer readiness可省略。",
+    )
 
     log_sink_control_parser = subparsers.add_parser(
         "product-telemetry-log-sink",
@@ -2781,6 +2938,11 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser = subparsers.add_parser("status")
     status_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
     status_parser.add_argument("--target", choices=TARGETS, required=True)
+    status_parser.add_argument(
+        "--currentness",
+        action="store_true",
+        help="explicitly compare the active candidate with its declared source closure",
+    )
 
     health_parser = subparsers.add_parser("health")
     health_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
@@ -2852,6 +3014,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inspect_parser.add_argument("--distribution-root", default="")
     inspect_parser.add_argument("--verify-hosted", action="store_true")
+    inspect_parser.add_argument(
+        "--currentness",
+        action="store_true",
+        help="explicitly compare the active candidate with its declared source closure",
+    )
 
     doctor_parser = subparsers.add_parser("doctor")
     doctor_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
@@ -2946,9 +3113,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--report-dir", default=argparse.SUPPRESS
     )
     app_debug_preflight_parser.add_argument(
+        "--purpose",
+        choices=("runtime", "content_live"),
+        default="runtime",
+        help="runtime diagnostics or strict content-live readiness",
+    )
+    app_debug_preflight_parser.add_argument(
         "--target",
         choices=("alpha-local", "beta-local", "gamma-local"),
         required=True,
+    )
+    app_debug_preflight_parser.add_argument(
+        "--runtime-mode",
+        choices=("immutable_candidate", "test_live"),
+        required=True,
+        help=(
+            "显式选择 active immutable candidate 严格验证，或 non-promotable "
+            "test_live 启动诊断"
+        ),
     )
     app_domain_api_parser = subparsers.add_parser(
         "app-domain-api-integration",
@@ -3115,7 +3297,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     premium_pool_parser = subparsers.add_parser(
         "premium-pool",
-        help="以候选绑定 operator command/event 验证非生产精品池闭环",
+        help="以immutable candidate或exact test-live binding验证非生产精品池闭环",
     )
     premium_pool_parser.add_argument(
         "--target",
@@ -3126,6 +3308,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--action",
         choices=("upsert-and-verify", "verify-readback"),
         default="upsert-and-verify",
+    )
+    premium_pool_parser.add_argument(
+        "--launch-policy",
+        choices=("immutable-candidate", "test-live"),
+        default="immutable-candidate",
+        help=(
+            "默认保持immutable candidate语义；test-live只接受当前running attempt的"
+            "run-bound nonPromotable content binding"
+        ),
     )
     premium_pool_parser.add_argument("--readiness-receipt", required=True)
     premium_pool_parser.add_argument("--content-id", required=True)
@@ -3140,7 +3331,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     repair_parser = subparsers.add_parser("repair")
     repair_parser.add_argument("--report-dir", default=argparse.SUPPRESS)
-    repair_parser.add_argument("--target", choices=TARGETS, required=True)
+    repair_parser.add_argument("--target", choices=(*TARGETS, "repo"), required=True)
     repair_parser.add_argument(
         "--fix",
         choices=[
@@ -3150,9 +3341,56 @@ def build_parser() -> argparse.ArgumentParser:
             "reclaim-orphaned-compose",
             "restart-stack",
             "reclaim-ports",
-            "reconcile-nonprod-data",
+            "reconcile-output-layout",
+            "repair-active-content-release-outbox",
+            "repair-media-processing-dead-letter-indexes",
         ],
         required=True,
+    )
+    repair_parser.add_argument(
+        "--confirm-global-build-cache-reclaim",
+        action="store_true",
+        help=(
+            "Confirm daemon-global removal of all unused local Docker builder "
+            "cache while containers, images, volumes, and runtime data remain preserved."
+        ),
+    )
+    repair_parser.add_argument(
+        "--confirm-active-content-release-outbox-repair",
+        action="store_true",
+        help=(
+            "Confirm candidate-bound replay repair of the exact active Content "
+            "release while only Mongo and the packaged importer are running."
+        ),
+    )
+    repair_parser.add_argument(
+        "--confirm-media-processing-dead-letter-index-migration",
+        action="store_true",
+        help=(
+            "Confirm candidate-bound removal of the two retired MediaAsset "
+            "dead-letter indexes while only Mongo and the packaged migration "
+            "command are running."
+        ),
+    )
+    repair_parser.add_argument(
+        "--expected-retired-index-drop-count",
+        type=int,
+        default=-1,
+        help=(
+            "Exact retired MediaAsset index count expected to be removed: "
+            "2 for the first migration or 0 for authoritative replay."
+        ),
+    )
+    repair_parser.add_argument(
+        "--content-import-report",
+        default="",
+        help="Exact existing active Content import receipt used as repair identity.",
+    )
+    repair_parser.add_argument(
+        "--expected-outbox-repair-count",
+        type=int,
+        default=-1,
+        help="Exact legacy payload count expected in this replay transaction.",
     )
     repair_parser.add_argument(
         "--confirm-orphaned-process-reclaim",
@@ -3180,11 +3418,28 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     repair_parser.add_argument(
-        "--confirm-nonprod-data-reconcile",
+        "--output-layout-action",
+        choices=("plan", "apply"),
+        default="plan",
+        help=(
+            "Create an immutable output/root-layout reconciliation plan, or apply "
+            "one exact ready plan. This repair is available only with --target repo."
+        ),
+    )
+    repair_parser.add_argument(
+        "--output-layout-plan-ref",
+        default="",
+        help=(
+            "Exact immutable plan below the canonical repo runs root; required for "
+            "--output-layout-action apply."
+        ),
+    )
+    repair_parser.add_argument(
+        "--confirm-output-layout-reconciliation",
         action="store_true",
         help=(
-            "Confirm public-API cleanup of stale, expired, or incomplete "
-            "receipt-owned Alpha/Beta/Gamma acceptance datasets."
+            "Confirm reversible move-only application of one exact ready output "
+            "layout plan. Named volumes, environment runtime, Data, and source are excluded."
         ),
     )
 
@@ -3215,9 +3470,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     deploy_parser.add_argument(
         "--stage",
-        choices=("gray-initial", "carry-on", "full"),
+        choices=("canary", "5", "20", "50", "100"),
         default="",
-        help="显式 rollout stage；未指定时按 step 映射为 5=gray-initial、25/50=carry-on、100=full",
+        help="显式 rollout stage；仅允许 canary/5/20/50/100 固定事务",
     )
     deploy_parser.add_argument("--service", default="")
     deploy_parser.add_argument(
@@ -3272,6 +3527,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--prometheus-url",
         default="",
         help="生产 SLO readback 的 Prometheus base URL；非 dry-run 必须提供",
+    )
+    deploy_parser.add_argument(
+        "--promotion-evidence",
+        default="",
+        help=(
+            "受保护生产 runner 已物化的阶段观测 JSON；正式 Prod 晋级必须位于 "
+            "QWQ_PROD_ROLLOUT_EVIDENCE_ROOT 内"
+        ),
     )
     deploy_parser.add_argument(
         "--promotion-deadline-epoch",
@@ -4688,12 +4951,6 @@ def _selected_profile_commands(
             )
             if search_smoke_command is not None:
                 commands.append(search_smoke_command)
-        commands.append(
-            {
-                "name": "prod-rollout-stackctl-contract",
-                "argv": ["python3", "quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py"],
-            }
-        )
     return commands
 
 
@@ -4800,6 +5057,7 @@ def _onboarding_author_impact_gamma_api_integration_profile_command(
     report_path = evidence_root / "onboarding_author_impact_api_uat_report.json"
     return {
         "name": "gamma-local-onboarding-author-impact-api-integration",
+        "testDataActorCase": ProfileActorCaseId.GAMMA_ONBOARDING_AUTHOR_IMPACT,
         "argv": [
             "bash",
             "quwoquan_app/scripts/gamma/"
@@ -4842,6 +5100,7 @@ def _search_remote_api_integration_profile_command(
     report_path = evidence_root / "search_remote_api_uat_report.json"
     return {
         "name": "gamma-local-search-remote-api-integration",
+        "testDataActorCase": ProfileActorCaseId.GAMMA_SEARCH_REMOTE,
         "argv": [
             "bash",
             "quwoquan_app/scripts/gamma/run_local_gamma_search_api_uat.sh",
@@ -4886,6 +5145,7 @@ def _assistant_learning_gamma_api_integration_profile_command(
     report_path = evidence_root / "assistant_learning_remote_api_uat_report.json"
     return {
         "name": "gamma-local-assistant-learning-remote-api-integration",
+        "testDataActorCase": ProfileActorCaseId.GAMMA_ASSISTANT_LEARNING,
         "argv": [
             "bash",
             "quwoquan_app/scripts/gamma/"
@@ -4930,6 +5190,7 @@ def _profile_proposal_gamma_api_integration_profile_command(
     report_path = evidence_root / "profile_proposal_remote_api_uat_report.json"
     return {
         "name": "gamma-local-profile-proposal-remote-api-integration",
+        "testDataActorCase": ProfileActorCaseId.GAMMA_PROFILE_PROPOSAL,
         "argv": [
             "bash",
             "quwoquan_app/scripts/gamma/"
@@ -4994,13 +5255,24 @@ def _report_feedback_lifecycle_profile_command(
         "--report",
         str(probe_report),
     ]
-    return {
+    command: dict[str, Any] = {
         "name": f"{target_name}-report-feedback-lifecycle",
         "argv": argv,
         "cwd": ROOT,
         "stopOnFailure": True,
         "reportPath": relpath(probe_report),
     }
+    if target_name in {"beta-local", "gamma-local"}:
+        command["testDataActorCase"] = (
+            ProfileActorCaseId.BETA_REPORT_FEEDBACK
+            if target_name == "beta-local"
+            else ProfileActorCaseId.GAMMA_REPORT_FEEDBACK
+        )
+        command["testDataActorRoles"] = (
+            ActorRole.PRIMARY,
+            ActorRole.MEMBER,
+        )
+    return command
 
 
 def _media_publication_lifecycle_profile_command(
@@ -5066,13 +5338,24 @@ def _media_publication_lifecycle_profile_command(
     ]
     if moderation_base_url:
         argv.extend(["--moderation-base-url", moderation_base_url])
-    return {
+    command = {
         "name": f"{target_name}-media-publication-lifecycle",
         "argv": argv,
         "cwd": ROOT,
         "stopOnFailure": True,
         "reportPath": relpath(probe_report),
     }
+    if target_name in {"beta-local", "gamma-local"}:
+        command["testDataActorCase"] = (
+            ProfileActorCaseId.BETA_MEDIA_PUBLICATION
+            if target_name == "beta-local"
+            else ProfileActorCaseId.GAMMA_MEDIA_PUBLICATION
+        )
+        command["testDataActorRoles"] = (
+            ActorRole.PRIMARY,
+            ActorRole.MEMBER,
+        )
+    return command
 
 
 def _chat_group_lifecycle_profile_command(
@@ -5124,13 +5407,21 @@ def _chat_group_lifecycle_profile_command(
     ]
     if mutating:
         argv.append("--mutating")
-    return {
+    command = {
         "name": f"{target_name}-chat-group-lifecycle",
         "argv": argv,
         "cwd": ROOT,
         "stopOnFailure": True,
         "reportPath": relpath(probe_report),
     }
+    if target_name in {"beta-local", "gamma-local"}:
+        command["testDataActorCase"] = (
+            ProfileActorCaseId.BETA_CHAT_GROUP
+            if target_name == "beta-local"
+            else ProfileActorCaseId.GAMMA_CHAT_GROUP
+        )
+        command["testDataActorRoles"] = (ActorRole.PRIMARY,)
+    return command
 
 
 def _target_media_preflight_profile_command(
@@ -5529,6 +5820,7 @@ def _environment_page_smoke_profile_command(
     patrol_target: str = VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
     remote_api_evidence_report: Path | None = None,
     data_readiness_path: Path | None = None,
+    release_video_work_id: str | None = None,
     persisted_device_session: bool = False,
 ) -> dict[str, Any] | None:
     if target_name not in {"alpha-local", "beta-local", "gamma-local", "prod-sim", "prod-hosted"}:
@@ -5564,7 +5856,12 @@ def _environment_page_smoke_profile_command(
         configured_canary_work_id
         or os.environ.get(canary_work_id_env, "").strip()
     )
-    if data_readiness_path is not None:
+    if release_video_work_id is not None:
+        # app-content-uat already validated this identity against the exact
+        # Data appUatEnvelope. Preserve that single binding instead of
+        # reinterpreting the receipt through an older canary query shape.
+        video_playback_canary_work_id = str(release_video_work_id).strip()
+    elif data_readiness_path is not None:
         try:
             release_binding = load_release_video_binding(
                 data_readiness_path,
@@ -5620,10 +5917,11 @@ def _environment_page_smoke_profile_command(
                 str(remote_api_evidence_report),
             )
         )
-    if patrol_target.endswith(
-        "test/user_acceptance/journeys/home_video_playback/"
-        "video_playback_canary__user_acceptance_test.dart"
-    ):
+    if patrol_target in {
+        VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
+        HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
+        APP_CORE_READBACK_UAT_TEST_TARGET,
+    }:
         argv.extend(
             (
                 "--video-playback-canary-work-id",
@@ -5739,6 +6037,7 @@ def fetch_url(
     retry_sleep_seconds: float = 2.0,
     headers: dict[str, str] | None = None,
     ca_file: str = "",
+    body_limit: int = 500,
 ) -> tuple[bool, int | None, str, str]:
     retry_markers = (
         "timed out",
@@ -5759,6 +6058,7 @@ def fetch_url(
                     local_target,
                     timeout=timeout,
                     headers=headers,
+                    body_limit=body_limit,
                 )
             request = urllib.request.Request(url, headers=headers or {})
             context = (
@@ -5776,12 +6076,12 @@ def fetch_url(
                 return (
                     True,
                     int(response.status),
-                    body[:500],
+                    body[:body_limit],
                     str(response.headers.get("Content-Type") or ""),
                 )
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-            return False, int(exc.code), body[:500], str(exc.headers.get("Content-Type") or "")
+            return False, int(exc.code), body[:body_limit], str(exc.headers.get("Content-Type") or "")
         except Exception as exc:
             if attempt >= total_attempts or not _is_retryable_fetch_error(
                 exc, retry_markers
@@ -5815,6 +6115,7 @@ def _fetch_local_managed_url(
     *,
     timeout: float,
     headers: dict[str, str] | None,
+    body_limit: int,
 ) -> tuple[bool, int | None, str, str]:
     from quwoquan_ops.cli.lib.public_domain_tls import root_certificate_path
 
@@ -5835,7 +6136,7 @@ def _fetch_local_managed_url(
         body = response.read().decode("utf-8", errors="replace")
         content_type = str(response.headers.get("Content-Type") or "")
         status = int(response.status)
-        return status < 400, status, body[:500], content_type
+        return status < 400, status, body[:body_limit], content_type
     finally:
         connection.close()
 
@@ -5864,6 +6165,66 @@ def _is_retryable_fetch_error(exc: Exception, retry_markers: tuple[str, ...]) ->
         ):
             return True
     return any(marker in str(exc) for marker in retry_markers)
+
+
+def _health_body_evidence(body: str) -> dict[str, Any]:
+    encoded = body.encode("utf-8")
+    evidence: dict[str, Any] = {
+        "bodyPreview": body[:500],
+        "bodySha256": "sha256:" + hashlib.sha256(encoded).hexdigest(),
+        "failedChecks": [],
+        "failureDetails": {},
+    }
+    try:
+        document = json.loads(body)
+    except (json.JSONDecodeError, TypeError):
+        return evidence
+    if not isinstance(document, dict):
+        return evidence
+    failed = document.get("failedChecks")
+    checks = document.get("checks")
+    if not isinstance(failed, list) or not isinstance(checks, dict):
+        return evidence
+    failed_checks = sorted(
+        {
+            str(name).strip()
+            for name in failed
+            if isinstance(name, str) and str(name).strip()
+        }
+    )
+    failure_details: dict[str, str] = {}
+    for name in failed_checks:
+        detail = checks.get(name)
+        if not isinstance(detail, str) or not detail.strip():
+            continue
+        failure_details[name] = detail.strip()
+    evidence["failedChecks"] = failed_checks
+    evidence["failureDetails"] = failure_details
+    return evidence
+
+
+def _startup_health_failure_for_report(
+    report_dir: Path,
+    *,
+    target: str,
+    candidate_digest: str,
+    startup_exit_code: int,
+) -> tuple[dict[str, Any], str]:
+    if startup_exit_code == 0:
+        return {}, ""
+    path = report_dir / "startup-health-failure.json"
+    if not path.exists():
+        return {}, ""
+    try:
+        evidence = startup_health_failure_evidence.load(
+            path,
+            target=target,
+            candidate_digest=candidate_digest,
+            service="content-service",
+        )
+    except startup_health_failure_evidence.StartupHealthFailureEvidenceError as exc:
+        return {}, str(exc)
+    return evidence, ""
 
 
 def _content_release_public_ready_attempts(target: dict[str, Any]) -> int:
@@ -5956,7 +6317,10 @@ def _run_environment_integration_probe(
     *,
     require_non_empty_content_feed: bool = False,
     release_post_expectations: dict[str, set[str]] | None = None,
+    release_search_canaries: Sequence[Mapping[str, str]] = (),
+    release_samples: Sequence[Mapping[str, Any]] = (),
     release_readiness_path: Path | None = None,
+    video_page_size: int = 1,
     only_checks: tuple[str, ...] = (),
     probe_name: str = "integration-readonly",
     timeout_seconds: float | None = None,
@@ -5990,6 +6354,33 @@ def _run_environment_integration_probe(
             raise ValueError(f"unsupported release feed expectation: {check_name}")
         for post_id in sorted(post_ids):
             argv.extend([flag, post_id])
+    if release_search_canaries:
+        for canary in release_search_canaries:
+            argv.extend(
+                [
+                    "--release-search-canary",
+                    json.dumps(
+                        dict(canary),
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                ]
+            )
+    for sample in release_samples:
+        argv.extend(
+            [
+                "--release-sample",
+                json.dumps(
+                    dict(sample),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+            ]
+        )
+    if video_page_size != 1:
+        argv.extend(["--video-page-size", str(video_page_size)])
     if target_name == "prod-hosted":
         request_timeout = 20
         retry_attempts = 3
@@ -6014,16 +6405,18 @@ def _run_environment_integration_probe(
     if product_ops:
         argv.extend(["--product-ops-base-url", product_ops])
     media_image = str(public_bases.get("mediaImage") or "").strip()
+    if release_readiness_path is not None:
+        argv.extend(["--release-readiness", str(release_readiness_path)])
     if media_image and release_readiness_path is not None:
         argv.extend(
             [
                 "--media-image-base-url",
                 media_image,
-                "--release-readiness",
-                str(release_readiness_path),
             ]
         )
     token = _resolve_test_auth_token(env_name)
+    temporary_actor: Any | None = None
+    temporary_actor_instance_id = ""
     public_release_checks = {
         "content_feed",
         "video_book_feed",
@@ -6034,18 +6427,21 @@ def _run_environment_integration_probe(
         check_name not in public_release_checks for check_name in only_checks
     )
     if env_name in {"beta", "gamma"} and not token and requires_reference_identity:
-        # Self-signed local edge requires the managed CA before OTP/login;
-        # probe_env SSL_CERT_FILE only covers the child probe process.
-        # Use try/finally (not @contextmanager): LocalEnvironmentHTTPError is a
-        # frozen dataclass and contextlib.throw cannot attach __traceback__.
+        # Health/probe callers never reuse a retained mutable account. One
+        # isolated actor lives exactly for this script body and is then closed.
         previous_ssl_cert_file = os.environ.get("SSL_CERT_FILE")
         os.environ["SSL_CERT_FILE"] = str(root_certificate_path(target_name))
         try:
-            token = open_reference_acceptance_session(
+            temporary_actor_instance_id = "probe-" + uuid4().hex
+            temporary_actor = open_test_data_acceptance_session(
                 str(public_bases["api"]),
                 environment=env_name,
                 target_name=target_name,
-            ).access_token
+                test_data_instance_id=temporary_actor_instance_id,
+                actor_role="primary",
+                actor_index=0,
+            )
+            token = temporary_actor.session.access_token
         except (OSError, RuntimeError, ValueError) as exc:
             finding = f"{target_name} integration auth failed: {exc}"
             return (
@@ -6079,7 +6475,7 @@ def _run_environment_integration_probe(
             probe_env["BETA_TEST_AUTH_TOKEN"] = token
         elif env_name == "prod":
             probe_env["PROD_TEST_AUTH_TOKEN"] = token
-    return _run_script_probe(
+    probe_result = _run_script_probe(
         name=probe_name,
         scope="full",
         argv=argv,
@@ -6087,6 +6483,31 @@ def _run_environment_integration_probe(
         env=probe_env or None,
         timeout_seconds=timeout_seconds,
     )
+    if temporary_actor is not None:
+        try:
+            close_test_data_acceptance_actor(
+                str(public_bases["api"]),
+                actor=temporary_actor,
+                test_data_instance_id=temporary_actor_instance_id,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            finding = f"{target_name} integration actor cleanup failed: {exc}"
+            return (
+                {
+                    "name": probe_name,
+                    "scope": "full",
+                    "type": "script",
+                    "argv": argv,
+                    "ok": False,
+                    "statusCode": 2,
+                    "bodyPreview": finding,
+                    "skipped": False,
+                    "reportPath": relpath(report_file),
+                },
+                finding,
+                [finding],
+            )
+    return probe_result
 
 
 def _script_probe_plan_for_target(
@@ -6214,8 +6635,8 @@ def _validate_release_transition(
     stage: str,
 ) -> tuple[str, int]:
     if not state:
-        if stage != "gray-initial":
-            raise RuntimeError("release ledger must start at gray-initial")
+        if stage != "canary":
+            raise RuntimeError("release ledger must start at canary")
         return "advance", 0
 
     generation = int(state.get("generation") or 0)
@@ -6236,25 +6657,30 @@ def _validate_release_transition(
             )
         if state.get("decision", "continue") != "continue":
             raise RuntimeError("paused or failed release cannot advance to the next stage")
-        expected_next = {"gray-initial": "carry-on", "carry-on": "full"}.get(current_stage)
+        expected_next = {
+            "canary": "5",
+            "5": "20",
+            "20": "50",
+            "50": "100",
+        }.get(current_stage)
         if expected_next != stage:
             raise RuntimeError(
                 f"release ledger stage CAS conflict: {current_stage} cannot advance to {stage}"
             )
         return "advance", generation
 
-    if stage != "gray-initial":
-        raise RuntimeError("new release target must start at gray-initial")
+    if stage != "canary":
+        raise RuntimeError("new release target must start at canary")
     if state.get("to_candidate_digest") != from_candidate_digest:
         raise RuntimeError(
             "release ledger base CAS conflict: requested source candidate does not "
             "match the current stable candidate"
         )
-    if current_stage != "full" or state.get("decision", "continue") not in {
+    if current_stage != "100" or state.get("decision", "continue") not in {
         "continue",
         "rolled_back",
     }:
-        raise RuntimeError("previous release is not in a stable full state")
+        raise RuntimeError("previous release is not in a stable 100 state")
     return "advance", generation
 
 
@@ -6323,6 +6749,78 @@ def _local_stack_operation_lock(target_name: str) -> Any:
             handle.flush()
             os.fsync(handle.fileno())
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+LOCAL_BUILD_CACHE_TARGETS: tuple[str, ...] = (
+    "alpha-local",
+    "beta-local",
+    "gamma-local",
+)
+
+
+@contextlib.contextmanager
+def _global_local_operation_lock(
+    *,
+    scope: str,
+    affected_targets: Sequence[str],
+) -> Any:
+    """Reserve the one host-global boundary shared by runtime and repair work."""
+    lock_path = local_runtime_operation_lock_path()
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    owner = (
+        f"pid={os.getpid()} scope={scope} mode=exclusive "
+        f"startedAt={utc_now()}"
+    )
+    with lock_path.open("a+", encoding="utf-8") as handle:
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            handle.seek(0)
+            holder = handle.read().strip() or "unknown"
+            raise RuntimeError(
+                "local runtime operation is already running: " + holder
+            ) from error
+        handle.seek(0)
+        handle.truncate()
+        handle.write(owner + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+        try:
+            yield {
+                "path": relpath(lock_path),
+                "mode": "exclusive",
+                "scope": scope,
+                "owner": owner,
+                "affectedTargets": list(affected_targets),
+            }
+        finally:
+            handle.seek(0)
+            handle.truncate()
+            handle.flush()
+            os.fsync(handle.fileno())
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
+@contextlib.contextmanager
+def _global_local_build_cache_lock() -> Any:
+    """Exclusively reserve the daemon-global local BuildKit cache boundary."""
+
+    with _global_local_operation_lock(
+        scope="global-local-build-cache",
+        affected_targets=LOCAL_BUILD_CACHE_TARGETS,
+    ) as evidence:
+        yield evidence
+
+
+@contextlib.contextmanager
+def _global_output_layout_reconciliation_lock() -> Any:
+    """Block runtime/package work while layout identities are planned or moved."""
+
+    with _global_local_operation_lock(
+        scope="global-output-layout-reconciliation",
+        affected_targets=(*LOCAL_BUILD_CACHE_TARGETS, "repo"),
+    ) as evidence:
+        yield evidence
 
 
 @contextlib.contextmanager
@@ -6602,6 +7100,18 @@ def _validate_hosted_release_readback(
         or receipt.get("verifiedAt") != state.get("updated_at")
     ):
         raise RuntimeError("hosted release ledger receipt digest or state binding is invalid")
+    if service == PROD_RELEASE_UNIT and receipt.get("decision") == "continue":
+        try:
+            rollout_stage_promotion_evidence.validate_receipt_evidence(
+                (receipt.get("sloReadback") or {}).get("promotionEvidence"),
+                candidate_id=receipt.get("toCandidateDigest"),
+                artifact_digest=receipt.get("artifactDigest"),
+                stage=receipt.get("triggerStage"),
+            )
+        except (ValueError, RuntimeError) as error:
+            raise RuntimeError(
+                "hosted release receipt promotion evidence is invalid"
+            ) from error
     return payload
 
 
@@ -6674,6 +7184,18 @@ def _run_hosted_release_ledger(
             or receipt.get("service") != service
         ):
             raise RuntimeError("hosted release receipt digest is invalid")
+        if service == PROD_RELEASE_UNIT and receipt.get("decision") == "continue":
+            try:
+                rollout_stage_promotion_evidence.validate_receipt_evidence(
+                    (receipt.get("sloReadback") or {}).get("promotionEvidence"),
+                    candidate_id=receipt.get("toCandidateDigest"),
+                    artifact_digest=receipt.get("artifactDigest"),
+                    stage=receipt.get("triggerStage"),
+                )
+            except (ValueError, RuntimeError) as error:
+                raise RuntimeError(
+                    "hosted release receipt promotion evidence is invalid"
+                ) from error
         return payload
     return _validate_hosted_release_readback(payload, service=service)
 
@@ -6880,6 +7402,8 @@ def _legal_static_command(
     env_name: str,
     *,
     target: str = "",
+    source_root: Path = ROOT,
+    environment: Mapping[str, str] | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
     cmd = [
         "python3",
@@ -6890,7 +7414,14 @@ def _legal_static_command(
     ]
     if target:
         cmd.extend(["--target", target])
-    result = run(cmd, env={"QWQ_DEPLOY_TARGET": target} if target else None)
+    command_environment = dict(environment or {})
+    if target:
+        command_environment["QWQ_DEPLOY_TARGET"] = target
+    result = run(
+        cmd,
+        cwd=source_root,
+        env=command_environment or None,
+    )
     payload: dict[str, Any] = {}
     if result.stdout.strip():
         try:
@@ -7318,9 +7849,69 @@ def _command_package_release_manifest(args: argparse.Namespace) -> dict[str, Any
     }
 
 
+def _validate_runtime_package_identity_readback(
+    *,
+    report_path: Path,
+    fingerprint_path: Path,
+    manifest_path: Path,
+) -> dict[str, Any]:
+    """Read back one non-claiming package identity from all three artifacts."""
+
+    payloads: dict[str, dict[str, Any]] = {}
+    for label, path in (
+        ("package report", report_path),
+        ("package fingerprint", fingerprint_path),
+        ("candidate manifest", manifest_path),
+    ):
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"{label} is missing or unsafe")
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"{label} is unreadable: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"{label} must be a JSON object")
+        if "formalRelease" in payload:
+            raise ValueError(f"{label} must not claim formalRelease")
+        payloads[label] = payload
+
+    identities: dict[str, dict[str, Any]] = {}
+    for label, payload in payloads.items():
+        classification = payload.get("releaseInputClassification")
+        graph_digest = payload.get("contractGraphDigest")
+        if classification not in RELEASE_INPUT_CLASSIFICATIONS:
+            raise ValueError(f"{label} releaseInputClassification is invalid")
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", str(graph_digest or "")) is None:
+            raise ValueError(f"{label} contractGraphDigest is invalid")
+        identities[label] = {
+            "releaseInputClassification": str(classification),
+            "contractGraphDigest": str(graph_digest),
+            "graphqlReadRegistry": payload.get("graphqlReadRegistry"),
+        }
+        if not isinstance(identities[label]["graphqlReadRegistry"], dict):
+            raise ValueError(f"{label} graphqlReadRegistry is invalid")
+    expected = identities["candidate manifest"]
+    if any(identity != expected for identity in identities.values()):
+        raise ValueError("runtime package release/ContractGraph identity drifted")
+    return expected
+
+
+def _runtime_package_report_path(report_ref: str) -> Path:
+    """Resolve the package report file from the canonical report directory."""
+
+    normalized = str(report_ref or "").strip()
+    if not normalized:
+        raise ValueError("package report directory is required")
+    report_dir = Path(normalized)
+    if not report_dir.is_absolute():
+        report_dir = ROOT / report_dir
+    return report_dir / "report.json"
+
+
 def _run_runtime_compile_preflight(
     *,
     package_environment: dict[str, str],
+    source_root: Path = ROOT,
 ) -> tuple[list[dict[str, Any]], str]:
     """Compile every runtime entrypoint before any package/image materialization."""
 
@@ -7335,7 +7926,7 @@ def _run_runtime_compile_preflight(
                 "./services/.../cmd/...",
                 "./control-plane/.../cmd/...",
             ],
-            ROOT / "quwoquan_service",
+            source_root / "quwoquan_service",
         ),
         (
             "compile-entrypoints:recommendation-python",
@@ -7352,7 +7943,7 @@ def _run_runtime_compile_preflight(
                     "for path in files]"
                 ),
             ],
-            ROOT / "quwoquan_service",
+            source_root / "quwoquan_service",
         ),
     ]
     reports: list[dict[str, Any]] = []
@@ -7375,6 +7966,25 @@ def _run_runtime_compile_preflight(
                 or f"{name} failed",
             )
     return reports, ""
+
+
+def _resolve_graphql_read_signing_for_local_target(
+    environment: str,
+    target: str,
+):
+    try:
+        return resolve_graphql_read_signing_material(ROOT)
+    except ValueError:
+        explicit = (
+            GRAPHQL_READ_SIGNING_KEY_ID_ENV,
+            GRAPHQL_READ_SIGNING_PRIVATE_KEY_FILE_ENV,
+            GRAPHQL_READ_TRUSTED_PUBLIC_KEYS_FILE_ENV,
+        )
+        if any(str(os.environ.get(name) or "").strip() for name in explicit):
+            raise
+        return prepare_local_graphql_read_registry_signing(
+            ROOT, environment, target
+        )
 
 
 def command_package(args: argparse.Namespace) -> dict[str, Any]:
@@ -7427,19 +8037,64 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             "summary": f"stackctl runtime package inputs blocked for {env_name}",
             "details": [str(exc)],
         }
-    with _target_package_lock(target_name):
-        package_snapshot = (
-            workspace_snapshot()
-            if getattr(args, "kind", "runtime") == "runtime"
-            else None
+    try:
+        build_cache_use_lock = acquire_local_runtime_use_lock(
+            target=target_name,
+            purpose="runtime-package-build",
         )
+    except RuntimeError as exc:
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl runtime package blocked for {env_name}",
+            "details": [str(exc)],
+        }
+    with contextlib.closing(build_cache_use_lock), _target_package_lock(target_name):
+        package_input_roots = deployment_input_roots(
+            env_name,
+            target_name,
+            [args.service] if args.service else _all_services(),
+            release_attestation=str(getattr(args, "release_attestation", "") or ""),
+            rollback_release_attestation=str(
+                getattr(args, "rollback_release_attestation", "") or ""
+            ),
+        )
+        capsule_parent = deployment_candidate_dir(
+            target_name,
+            "sha256:" + "0" * 64,
+        ).parent
+        capsule_parent.mkdir(parents=True, exist_ok=True)
+        # Capture directly inside the future candidate staging tree.  The
+        # capsule seals its root read-only, and macOS correctly refuses moving
+        # that sealed directory on its own.  Moving the still-writable parent
+        # at final candidate CAS preserves the seal without a writable gap.
+        staging_dir = Path(
+            tempfile.mkdtemp(prefix=".package-staging-", dir=str(capsule_parent))
+        )
+        capsule_staging_root = staging_dir / PACKAGE_INPUT_CAPSULE_DIRECTORY
+        try:
+            package_snapshot = materialize_package_input_capsule(
+                package_input_roots,
+                capsule_root=capsule_staging_root,
+            )
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl package input capsule blocked for {env_name}",
+                "details": [str(exc)],
+            }
         if package_snapshot is None:
-            return _command_package_unlocked(args, package_snapshot=None)
+            return _command_package_unlocked(
+                args,
+                package_snapshot=None,
+                package_input_roots=package_input_roots,
+            )
 
         baseline_id = str(package_snapshot["baselineId"])
         candidate_dir = deployment_candidate_dir(target_name, baseline_id)
         previous_override = os.environ.get(PACKAGE_ROOT_OVERRIDE_ENV)
         if candidate_dir.exists():
+            shutil.rmtree(staging_dir, ignore_errors=True)
             os.environ[PACKAGE_ROOT_OVERRIDE_ENV] = str(candidate_dir / "packages")
             try:
                 reusable, detail = can_reuse_package(
@@ -7482,6 +8137,23 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             reused_fingerprint = json.loads(
                 reused_fingerprint_path.read_text(encoding="utf-8")
             )
+            report_ref = str(reused_fingerprint.get("reportRef") or "").strip()
+            reused_report_path = _runtime_package_report_path(report_ref)
+            try:
+                package_identity = _validate_runtime_package_identity_readback(
+                    report_path=reused_report_path,
+                    fingerprint_path=reused_fingerprint_path,
+                    manifest_path=candidate_dir / "manifest.json",
+                )
+            except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+                return {
+                    "exitCode": 2,
+                    "summary": (
+                        f"stackctl package reuse identity blocked for {target_name}"
+                    ),
+                    "details": [str(exc)],
+                    "baselineId": baseline_id,
+                }
             pointer = activate_deployment_candidate(target_name, baseline_id)
             return {
                 "exitCode": 0,
@@ -7492,6 +8164,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 "activeCandidateRef": str(pointer),
                 "reportDir": str(reused_fingerprint.get("reportRef") or ""),
                 "packageFingerprint": str(reused_fingerprint_path),
+                **package_identity,
                 "packageDigest": reused_manifest["packageDigest"],
                 "buildInputDigest": reused_manifest["buildInputDigest"],
                 "imageDigest": reused_manifest["imageDigest"],
@@ -7506,19 +8179,30 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 "providerRuntime": reused_manifest["providerRuntime"],
             }
 
-        candidate_parent = candidate_dir.parent
-        candidate_parent.mkdir(parents=True, exist_ok=True)
-        staging_dir = Path(
-            tempfile.mkdtemp(
-                prefix=f".{candidate_dir.name}.staging-",
-                dir=str(candidate_parent),
+        try:
+            args._graphql_read_signing_material = (
+                _resolve_graphql_read_signing_for_local_target(
+                    env_name, target_name
+                )
             )
-        )
+        except (OSError, ValueError) as exc:
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl package GraphQL signing inputs blocked for {env_name}",
+                "details": [str(exc)],
+                "baselineId": baseline_id,
+            }
+
+        capsule_root = capsule_staging_root
         os.environ[PACKAGE_ROOT_OVERRIDE_ENV] = str(staging_dir / "packages")
         try:
             payload = _command_package_unlocked(
                 args,
                 package_snapshot=package_snapshot,
+                package_input_roots=package_input_roots,
+                package_source_root=capsule_root / "repo",
+                package_capsule_root=capsule_root,
             )
         except Exception:
             shutil.rmtree(staging_dir, ignore_errors=True)
@@ -7572,6 +8256,9 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             require_full=True,
         )
         for field in (
+            "releaseInputClassification",
+            "contractGraphDigest",
+            "graphqlReadRegistry",
             "packageDigest",
             "buildInputDigest",
             "imageDigest",
@@ -7582,6 +8269,28 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             "providerRuntime",
         ):
             payload[field] = candidate_manifest[field]
+        fingerprint_path = (
+            candidate_dir / "packages" / "app" / "package-fingerprint.json"
+        )
+        report_ref = str(payload.get("reportDir") or "").strip()
+        report_path = _runtime_package_report_path(report_ref)
+        try:
+            package_identity = _validate_runtime_package_identity_readback(
+                report_path=report_path,
+                fingerprint_path=fingerprint_path,
+                manifest_path=candidate_dir / "manifest.json",
+            )
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+            return {
+                "exitCode": 2,
+                "summary": (
+                    f"stackctl package identity readback blocked for {target_name}"
+                ),
+                "details": [str(exc)],
+                "baselineId": baseline_id,
+                "candidateDir": str(candidate_dir),
+            }
+        payload.update(package_identity)
         # Activate only after report rewrite and full candidate validation so a
         # failed package command cannot leave the environment pointing at a new
         # candidate.
@@ -7594,6 +8303,9 @@ def _command_package_unlocked(
     args: argparse.Namespace,
     *,
     package_snapshot: dict[str, object] | None = None,
+    package_input_roots: Sequence[str] | None = None,
+    package_source_root: Path = ROOT,
+    package_capsule_root: Path | None = None,
 ) -> dict[str, Any]:
     if getattr(args, "kind", "runtime") == "release-manifest":
         return _command_package_release_manifest(args)
@@ -7656,6 +8368,21 @@ def _command_package_unlocked(
                 expected_signing_certificate_sha256=os.environ.get(
                     "QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256", ""
                 ),
+                minimum_supported_version=os.environ.get(
+                    "QWQ_ANDROID_MINIMUM_SUPPORTED_VERSION", ""
+                ),
+                minimum_supported_build=os.environ.get(
+                    "QWQ_ANDROID_MINIMUM_SUPPORTED_BUILD", ""
+                ),
+                minimum_supported_build_evidence_path=(
+                    Path(evidence_path)
+                    if (
+                        evidence_path := os.environ.get(
+                            "QWQ_ANDROID_MINIMUM_SUPPORTED_BUILD_EVIDENCE_PATH", ""
+                        ).strip()
+                    )
+                    else None
+                ),
                 verify_remote=bool(args.verify_remote_apk),
             )
         except AndroidOfficialReleaseError as error:
@@ -7677,6 +8404,18 @@ def _command_package_unlocked(
     topology = load_environment_topology()
     env_name = args.env
     target_name = args.target or DEFAULT_TARGET_BY_ENV[env_name]
+    if package_input_roots is None:
+        package_input_roots = deployment_input_roots(
+            env_name,
+            target_name,
+            [args.service] if args.service else _all_services(),
+            release_attestation=str(
+                getattr(args, "release_attestation", "") or ""
+            ),
+            rollback_release_attestation=str(
+                getattr(args, "rollback_release_attestation", "") or ""
+            ),
+        )
     report_dir = resolve_report_dir(args, env_name, target_name)
     started_monotonic, started_at = _start_timing()
     details: list[str] = []
@@ -7684,6 +8423,7 @@ def _command_package_unlocked(
     packaged_services: list[str] = []
     provider_runtime_package: dict[str, Any] | None = None
     observability_log_sink_package: dict[str, Any] | None = None
+    graphql_read_registry_package: dict[str, Any] | None = None
     package_cache = target_cache_dir(target_name) / "package"
     go_build_cache = package_cache / "go-build"
     go_tmp = package_cache / "go-tmp"
@@ -7691,11 +8431,22 @@ def _command_package_unlocked(
     go_tmp.mkdir(parents=True, exist_ok=True)
     package_environment = {
         "QWQ_DEPLOY_TARGET": target_name,
+        # Capsule-owned modules derive defaults from their own immutable
+        # location.  Runtime outputs and deploy payloads remain host-owned
+        # external state, so pass both roots explicitly into every producer.
+        "QWQ_OUTPUT_ROOT": str(output_root().expanduser().resolve()),
+        "QWQ_DEPLOY_WORK_ROOT": str(
+            deployment_work_root(target_name).parent.expanduser().resolve()
+        ),
+        "QWQ_PACKAGE_SOURCE_REVISION": str(
+            (package_snapshot or {}).get("sourceRevision") or ""
+        ),
         "GOCACHE": str(go_build_cache),
         "GOTMPDIR": str(go_tmp),
     }
     preflight_reports, preflight_error = _run_runtime_compile_preflight(
         package_environment=package_environment,
+        source_root=package_source_root,
     )
     reports.extend(preflight_reports)
     if preflight_error:
@@ -7735,6 +8486,8 @@ def _command_package_unlocked(
             "package",
             env_name,
             target=target_name,
+            source_root=package_source_root,
+            environment=package_environment,
         )
         reports.append(
             {
@@ -7769,7 +8522,7 @@ def _command_package_unlocked(
 
     if not args.service:
         app_cmd = ["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", env_name]
-        app_result = run(app_cmd, env=package_environment)
+        app_result = run(app_cmd, cwd=package_source_root, env=package_environment)
         reports.append(
             {
                 "name": "app-package",
@@ -7816,7 +8569,7 @@ def _command_package_unlocked(
                 "--env",
                 env_name,
             ]
-            svc_result = run(svc_cmd, env=package_environment)
+            svc_result = run(svc_cmd, cwd=package_source_root, env=package_environment)
             reports.append(
                 {
                     "name": f"service-package:{service}",
@@ -7895,10 +8648,53 @@ def _command_package_unlocked(
             )
 
     if not args.service:
+        if package_snapshot is None:
+            raise RuntimeError("runtime package requires an immutable input capsule")
+        try:
+            api_edge_package = service_deployment_package_dir(
+                env_name,
+                "api-edge",
+                target=target_name,
+            )
+            graphql_read_registry_package = (
+                materialize_graphql_read_registry_package(
+                    repo_root=package_source_root,
+                    candidate_root=api_edge_package.parents[2],
+                    environment=env_name,
+                    target=target_name,
+                    candidate_digest=str(package_snapshot["baselineId"]),
+                    scratch_root=package_cache / "graphql-read-registry",
+                    signing=getattr(
+                        args,
+                        "_graphql_read_signing_material",
+                        None,
+                    ),
+                )
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            timing = _finish_timing(started_monotonic, started_at)
+            return {
+                "exitCode": 2,
+                "summary": (
+                    "stackctl package signed GraphQL registry is GATE_BLOCK for "
+                    f"{env_name}"
+                ),
+                "details": [str(exc)],
+                "reportDir": relpath(report_dir),
+                "baselineId": package_snapshot["baselineId"],
+                **timing,
+            }
+        details.append(
+            "signed GraphQL registry ready: "
+            + str(graphql_read_registry_package["envelopeDigest"])
+        )
+
+    if not args.service:
         try:
             shared_package_dir = _build_runtime_shared_package(
                 env_name,
                 target=target_name,
+                source_root=package_source_root,
             )
         except (OSError, FileNotFoundError) as exc:
             timing = _finish_timing(started_monotonic, started_at)
@@ -7991,6 +8787,8 @@ def _command_package_unlocked(
                 provider_runtime=provider_runtime_package,
                 observability_log_sink=observability_log_sink_package,
                 candidate_root=shared_package_dir.parent.parent,
+                candidate_digest=str(package_snapshot["baselineId"]),
+                source_root=package_source_root,
             )
         except RuntimeError as exc:
             timing = _finish_timing(started_monotonic, started_at)
@@ -8022,50 +8820,48 @@ def _command_package_unlocked(
             ]
         )
 
-    ending_snapshot = workspace_snapshot()
-    if package_snapshot is None:
-        package_snapshot = ending_snapshot
-    if ending_snapshot != package_snapshot:
+    if package_snapshot is None or package_capsule_root is None:
+        raise RuntimeError("runtime package requires an immutable input capsule")
+    try:
+        verify_package_input_capsule(
+            package_capsule_root,
+            expected_snapshot=package_snapshot,
+        )
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
         timing = _finish_timing(started_monotonic, started_at)
-        details = workspace_drift_details(package_snapshot, ending_snapshot)
-        write_json(
-            report_dir / "report.json",
-            {
-                "status": "GATE_BLOCK",
-                "command": "package",
-                "env": env_name,
-                "target": target_name,
-                "details": details,
-                **timing,
-            },
-        )
-        _write_summary_bundle(
-            report_dir,
-            command="package",
-            target=target_name,
-            status="GATE_BLOCK",
-            summary=f"stackctl package blocked for {env_name}",
-            details=details,
-            extra={"env": env_name},
-            timing=timing,
-        )
         return {
             "exitCode": 2,
-            "summary": f"stackctl package blocked for {env_name}",
-            "details": details,
+            "summary": f"stackctl package capsule CAS blocked for {env_name}",
+            "details": [str(exc)],
             "reportDir": relpath(report_dir),
             **timing,
         }
 
     try:
+        release_bindings = validate_release_attestations(
+            str(getattr(args, "release_attestation", "") or ""),
+            str(getattr(args, "rollback_release_attestation", "") or ""),
+        )
+        release_classification = classify_release_inputs(release_bindings)
+        contract_graph_digest = canonical_contract_graph_digest()
         fingerprint = write_package_fingerprint(
             env_name,
             target_name,
             report_dir=relpath(report_dir),
             include_services=True,
             details=details,
+            release_input_classification=release_classification,
+            contract_graph_digest=contract_graph_digest,
+            graphql_read_registry=graphql_read_registry_package or {},
             service_packages=packaged_services,
+            release_attestation=str(
+                getattr(args, "release_attestation", "") or ""
+            ),
+            rollback_release_attestation=str(
+                getattr(args, "rollback_release_attestation", "") or ""
+            ),
             expected_snapshot=package_snapshot,
+            candidate_root=package_capsule_root.parent,
         )
         candidate_manifest = write_candidate_manifest(
             env_name,
@@ -8113,6 +8909,9 @@ def _command_package_unlocked(
         "baselineId": package_snapshot["baselineId"],
         "sourceRevision": package_snapshot["sourceRevision"],
         "workspaceStatusDigest": package_snapshot["workspaceStatusDigest"],
+        "releaseInputClassification": release_classification,
+        "contractGraphDigest": contract_graph_digest,
+        "graphqlReadRegistry": graphql_read_registry_package,
         "timestamp": utc_now(),
         "reportDir": relpath(report_dir),
         "steps": reports,
@@ -8122,6 +8921,21 @@ def _command_package_unlocked(
     if topology is not None:
         payload["topologyTarget"] = get_target(topology, target_name)
     write_json(report_dir / "report.json", payload)
+    try:
+        package_identity = _validate_runtime_package_identity_readback(
+            report_path=report_dir / "report.json",
+            fingerprint_path=fingerprint,
+            manifest_path=candidate_manifest,
+        )
+    except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+        return {
+            "exitCode": 2,
+            "summary": f"stackctl package identity readback blocked for {env_name}",
+            "details": [str(exc)],
+            "reportDir": relpath(report_dir),
+            "baselineId": package_snapshot["baselineId"],
+            **timing,
+        }
     _write_summary_bundle(
         report_dir,
         command="package",
@@ -8139,6 +8953,7 @@ def _command_package_unlocked(
         "reportDir": relpath(report_dir),
         "packageFingerprint": relpath(fingerprint),
         "baselineId": package_snapshot["baselineId"],
+        **package_identity,
         **timing,
     }
 
@@ -8221,7 +9036,7 @@ def _command_verify_legal_static(
         or (
             profile is VerificationProfile.INTEGRATION
             and args.kind == "all"
-            and target_name in NONPROD_TARGETS
+            and target_name in TEST_DATA_TARGETS
         )
     )
     payload = {
@@ -8625,31 +9440,38 @@ def _command_verify_distribution(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def _run_nonprod_business_data_profile(
+def _run_test_data_profile(
     args: argparse.Namespace,
     *,
+    profile: VerificationProfile,
     environment: str,
     target_name: str,
     report_dir: Path,
     prerequisites_passed: bool,
+    static_gate_ms: int = 0,
 ) -> dict[str, Any]:
-    result_dir = report_dir / "nonprod-business-data"
+    result_dir = report_dir / "test-data"
+    static_gate_started = time.monotonic()
     if not prerequisites_passed:
         result = {
             "schema": "qwq.case_result",
-            "caseId": "alpha-beta-gamma-nonprod-business-data",
+            "caseId": "alpha-beta-gamma-selected-test-data",
             "status": "GATE_BLOCK",
             "executed": 0,
             "skipped": 0,
             "target": target_name,
             "environment": environment,
+            "environmentStartMs": 0,
+            "environmentStartSource": "prestarted-environment",
+            "staticGateMs": max(0, int(static_gate_ms)),
+            "baselineEligible": False,
             "specRefs": [
                 "specs/feature-tree/spec.md#uat-009",
                 "specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-001",
                 "specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-003",
             ],
             "issues": [
-                "nonprod business data mutation was not started because prerequisite gates failed"
+                "test-data mutation was not started because prerequisite gates failed"
             ],
         }
         write_json(result_dir / "case-result.json", result)
@@ -8665,56 +9487,77 @@ def _run_nonprod_business_data_profile(
             active["baselineId"],
             require_full=True,
         )
-        readiness, _ = _load_data_release_readiness(
+        readiness, _ = _load_test_data_release_readiness(
             environment=environment,
             release_id=str(getattr(args, "data_release_id", "") or ""),
             verify_run_id=str(getattr(args, "data_verify_run_id", "") or ""),
             manifest_digest=str(
                 getattr(args, "data_manifest_digest", "") or ""
             ),
-            readiness_phase=ReadinessPhase.COMMERCIAL,
         )
-        raw_evidence_path = str(
-            getattr(args, "nonprod_data_evidence", "") or ""
-        ).strip()
-        if not raw_evidence_path:
-            raise ValueError("--nonprod-data-evidence is required")
-        evidence_path = Path(raw_evidence_path).expanduser()
-        if not evidence_path.is_absolute():
-            evidence_path = ROOT / evidence_path
-        evidence_path = evidence_path.resolve()
+        raw_request_path = str(getattr(args, "test_data_request", "") or "").strip()
+        if not raw_request_path:
+            raise ValueError("--test-data-request is required")
+        request_path = Path(raw_request_path).expanduser()
+        if not request_path.is_absolute():
+            request_path = ROOT / request_path
+        request_path = request_path.resolve()
+        request_document = json.loads(request_path.read_text(encoding="utf-8"))
+        _validate_test_data_request_for_profile(profile, request_document)
+        raw_evidence_path = str(getattr(args, "test_data_evidence", "") or "").strip()
+        evidence_path: Path | None = None
+        if raw_evidence_path:
+            evidence_path = Path(raw_evidence_path).expanduser()
+            if not evidence_path.is_absolute():
+                evidence_path = ROOT / evidence_path
+            evidence_path = evidence_path.resolve()
         evidence_root = output_root().expanduser().resolve()
-        try:
-            evidence_path.relative_to(evidence_root)
-        except ValueError as exc:
-            raise ValueError(
-                "nonprod data evidence must be below QWQ_OUTPUT_ROOT"
-            ) from exc
+        for label, path in (("request", request_path), ("evidence", evidence_path)):
+            if path is None:
+                continue
+            try:
+                path.relative_to(evidence_root)
+            except ValueError as exc:
+                raise ValueError(
+                    f"test-data {label} must be below QWQ_OUTPUT_ROOT"
+                ) from exc
         topology = load_environment_topology()
         target = get_target(topology, target_name)
         base_url = str((target.get("publicBases") or {}).get("api") or "").rstrip(
             "/"
         )
         if not base_url.startswith("https://"):
-            raise ValueError("nonprod business data requires canonical HTTPS API")
-        return run_nonprod_business_data_verification(
+            raise ValueError("test-data control plane requires canonical HTTPS API")
+        return run_test_data_verification(
             environment=environment,
             target=target_name,
             base_url=base_url,
             candidate_manifest=manifest,
             release_readiness=readiness,
+            request_path=request_path,
             evidence_path=evidence_path,
             report_dir=result_dir,
+            static_gate_ms=max(
+                max(0, int(static_gate_ms)),
+                round((time.monotonic() - static_gate_started) * 1000),
+            ),
         )
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
         result = {
             "schema": "qwq.case_result",
-            "caseId": "alpha-beta-gamma-nonprod-business-data",
+            "caseId": "alpha-beta-gamma-selected-test-data",
             "status": "GATE_BLOCK",
             "executed": 0,
             "skipped": 0,
             "target": target_name,
             "environment": environment,
+            "environmentStartMs": 0,
+            "environmentStartSource": "prestarted-environment",
+            "staticGateMs": max(
+                max(0, int(static_gate_ms)),
+                round((time.monotonic() - static_gate_started) * 1000),
+            ),
+            "baselineEligible": False,
             "specRefs": [
                 "specs/feature-tree/spec.md#uat-009",
                 "specs/feature-tree/runtime/runtime-data-engineering/spec.md#sit-001",
@@ -8726,6 +9569,381 @@ def _run_nonprod_business_data_profile(
         return result
 
 
+def _validate_test_data_request_for_profile(
+    profile: VerificationProfile,
+    document: Mapping[str, Any],
+) -> None:
+    """Release runs use the governed critical Journey set; integration selects freely."""
+
+    if profile is not VerificationProfile.RELEASE:
+        return
+    selected = load_case_requests(document)
+    selected_case_ids = tuple(case.case_id for case in selected)
+    canonical_case_ids = tuple(
+        case.case_id for case in canonical_acceptance_suite()
+    )
+    if selected_case_ids != canonical_case_ids:
+        raise ValueError(
+            "release profile requires the canonical seven-domain test-data request"
+        )
+
+
+def _command_verify_content_delivery(args: argparse.Namespace) -> dict[str, Any]:
+    """Verify only the immutable Research content delivery closure."""
+
+    environment = str(getattr(args, "env", "") or "").strip()
+    profile = str(getattr(args, "profile", "") or "").strip()
+    release_id = str(getattr(args, "data_release_id", "") or "").strip()
+    verify_run_id = str(
+        getattr(args, "data_verify_run_id", "") or ""
+    ).strip()
+    manifest_digest = str(
+        getattr(args, "data_manifest_digest", "") or ""
+    ).strip()
+    missing = [
+        label
+        for label, value in (
+            ("--env", environment),
+            ("--data-release-id", release_id),
+            ("--data-verify-run-id", verify_run_id),
+            ("--data-manifest-digest", manifest_digest),
+        )
+        if not value
+    ]
+    if profile != VerificationProfile.INTEGRATION.value:
+        return {
+            "exitCode": 2,
+            "summary": "content-delivery requires --profile integration",
+            "details": [
+                "Provider, device UAT and commercial rollout are outside this check"
+            ],
+        }
+    if environment not in {"alpha", "beta", "gamma"} or missing:
+        return {
+            "exitCode": 2,
+            "summary": "content-delivery arguments are incomplete",
+            "details": missing
+            or ["content-delivery supports alpha, beta or gamma"],
+        }
+    report_dir = resolve_report_dir(
+        args,
+        environment,
+        str(getattr(args, "target", "") or DEFAULT_TARGET_BY_ENV[environment]),
+    )
+    readiness_path = _data_release_readiness_path(
+        environment=environment,
+        release_id=release_id,
+        verify_run_id=verify_run_id,
+    )
+    report = verify_content_delivery(
+        output_root=output_root(),
+        readiness_path=readiness_path,
+        environment=environment,
+        release_id=release_id,
+        manifest_digest=manifest_digest,
+    )
+    write_json(report_dir / "report.json", report)
+    passed = report["result"] == "ready"
+    details = list(report.get("issues") or [])
+    if passed:
+        counts = report.get("counts") or {}
+        details = [
+            "delivery ready: "
+            f"posts={counts.get('manifestPosts', 0)} "
+            f"homepages={counts.get('homepages', 0)} "
+            f"personas={counts.get('personas', 0)}"
+        ]
+    return {
+        "exitCode": 0 if passed else 1,
+        "summary": (
+            "content delivery verification passed"
+            if passed
+            else "content delivery verification failed"
+        ),
+        "details": details,
+        "reportDir": relpath(report_dir),
+    }
+
+
+def _typed_profile_actor_context(
+    args: argparse.Namespace,
+    *,
+    environment: str,
+    target_name: str,
+    report_dir: Path,
+    runtime: TestDataRuntime,
+) -> TestDataContext:
+    """Build one candidate-bound context for profile-local Actor capabilities."""
+
+    active = active_deployment_candidate(target_name)
+    if not isinstance(active, Mapping):
+        raise RuntimeError("active immutable deployment candidate is required")
+    manifest = load_candidate_manifest(
+        environment,
+        target_name,
+        str(active.get("baselineId") or ""),
+        require_full=True,
+    )
+    readiness, _ = _load_test_data_release_readiness(
+        environment=environment,
+        release_id=str(getattr(args, "data_release_id", "") or ""),
+        verify_run_id=str(getattr(args, "data_verify_run_id", "") or ""),
+        manifest_digest=str(getattr(args, "data_manifest_digest", "") or ""),
+    )
+    candidate = build_candidate_binding(
+        environment=environment,
+        target=target_name,
+        manifest=manifest,
+        readiness=readiness,
+    )
+    raw_evidence_path = str(
+        getattr(args, "test_data_evidence", "") or ""
+    ).strip()
+    evidence_path: Path | None = None
+    if raw_evidence_path:
+        evidence_path = Path(raw_evidence_path).expanduser()
+        if not evidence_path.is_absolute():
+            evidence_path = ROOT / evidence_path
+        evidence_path = evidence_path.resolve()
+    provider_evidence = load_provider_evidence(evidence_path, candidate)
+    target = get_target(load_environment_topology(), target_name)
+    base_url = str((target.get("publicBases") or {}).get("api") or "").rstrip(
+        "/"
+    )
+    return TestDataContext(
+        candidate=candidate,
+        base_url=base_url,
+        output_root=report_dir / "profile-test-data",
+        provider_evidence=provider_evidence,
+        runtime=runtime,
+    )
+
+
+def _run_profile_command(
+    profile_command: Mapping[str, Any],
+    *,
+    target_name: str,
+    actor_context: TestDataContext | None,
+) -> subprocess.CompletedProcess[str]:
+    """Run one profile command inside its typed Actor scope when declared."""
+
+    case_id = profile_command.get("testDataActorCase")
+    command_environment = dict(profile_command.get("env") or {})
+    if case_id is None:
+        return run(
+            list(profile_command["argv"]),
+            cwd=profile_command.get("cwd"),
+            env=_verify_child_environment(target_name, command_environment),
+        )
+    if not isinstance(case_id, ProfileActorCaseId) or actor_context is None:
+        raise RuntimeError("typed profile Actor context is unavailable")
+    for legacy_key in (
+        "TEST_AUTH_TOKEN",
+        "TEST_REFRESH_TOKEN",
+        "APP_CURRENT_OWNER_ID",
+        "APP_CURRENT_PERSONA_ID",
+    ):
+        command_environment.pop(legacy_key, None)
+    runtime = actor_context.runtime
+    if not isinstance(runtime, TestDataRuntime):
+        raise TypeError("typed profile Actor runtime is unavailable")
+    raw_roles = profile_command.get("testDataActorRoles") or (
+        ActorRole.PRIMARY,
+    )
+    roles = tuple(raw_roles)
+    if not roles or any(not isinstance(role, ActorRole) for role in roles):
+        raise TypeError("typed profile Actor roles are invalid")
+    request = AUTHENTICATED_ACTORS.bind(
+        AuthenticatedActorsParams(roles=roles)
+    )
+    session = TestDataSession.for_case(case_id, context=actor_context)
+    with session.provision(request) as provisioned:
+        for role in roles:
+            actor_handle = provisioned.value.require(role)
+            actor = runtime.actor(actor_handle)
+            prefix = "QWQ_TEST_DATA_" + role.value.upper()
+            command_environment.update(
+                {
+                    prefix + "_ACCESS_TOKEN": actor.session.access_token,
+                    prefix + "_REFRESH_TOKEN": actor.session.refresh_token,
+                    prefix + "_OWNER_ID": actor.session.owner_id,
+                    prefix + "_PERSONA_ID": actor.session.persona_id,
+                }
+            )
+            if role is ActorRole.PRIMARY:
+                command_environment.update(
+                    {
+                        "QWQ_TEST_DATA_ACCESS_TOKEN": actor.session.access_token,
+                        "QWQ_TEST_DATA_REFRESH_TOKEN": actor.session.refresh_token,
+                        "QWQ_TEST_DATA_OWNER_ID": actor.session.owner_id,
+                        "QWQ_TEST_DATA_PERSONA_ID": actor.session.persona_id,
+                    }
+                )
+        return run(
+            list(profile_command["argv"]),
+            cwd=profile_command.get("cwd"),
+            env=_verify_child_environment(target_name, command_environment),
+        )
+
+
+def _run_static_verify_wave(
+    commands: Sequence[Sequence[str]],
+    *,
+    target_name: str,
+    readiness_call: Callable[[], dict[str, Any]] | None = None,
+    max_concurrency: int = 4,
+) -> tuple[
+    list[tuple[list[str], subprocess.CompletedProcess[str], int]],
+    dict[str, Any] | None,
+    int,
+]:
+    """Run independent read-only gates and candidate readiness in one wave."""
+
+    if not 1 <= max_concurrency <= 8:
+        raise ValueError("static verify concurrency must be within 1..8")
+    normalized = [list(command) for command in commands]
+    wave_started = time.monotonic()
+
+    def execute(command: list[str]) -> tuple[subprocess.CompletedProcess[str], int]:
+        started = time.monotonic()
+        result = run(
+            command,
+            env=_verify_child_environment(target_name),
+        )
+        return result, max(0, round((time.monotonic() - started) * 1000))
+
+    task_count = len(normalized) + (1 if readiness_call is not None else 0)
+    if task_count == 0:
+        return [], None, 0
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(max_concurrency, task_count),
+        thread_name_prefix="stackctl-static-verify",
+    ) as pool:
+        command_futures = [pool.submit(execute, command) for command in normalized]
+        readiness_future = (
+            pool.submit(readiness_call) if readiness_call is not None else None
+        )
+        # Preserve declared order in evidence while processes execute in
+        # parallel; stable reports must not depend on completion order.
+        command_results = [
+            (command, *future.result())
+            for command, future in zip(normalized, command_futures)
+        ]
+        readiness = readiness_future.result() if readiness_future is not None else None
+    return (
+        command_results,
+        readiness,
+        max(0, round((time.monotonic() - wave_started) * 1000)),
+    )
+
+
+def _is_patrol_profile_command(command: Mapping[str, Any]) -> bool:
+    argv = " ".join(str(item) for item in command.get("argv", ()))
+    return "run_environment_patrol_smoke.py" in argv or "patrol" in str(
+        command.get("name") or ""
+    ).lower()
+
+
+def _run_profile_commands_parallel(
+    commands: Sequence[Mapping[str, Any]],
+    *,
+    target_name: str,
+    actor_context: TestDataContext | None,
+    max_concurrency: int = 4,
+) -> list[tuple[Mapping[str, Any], subprocess.CompletedProcess[str], int, bool]]:
+    """Run profile gates by safe waves, keeping Flutter/Patrol work exclusive."""
+
+    if not 1 <= max_concurrency <= 8:
+        raise ValueError("profile verify concurrency must be within 1..8")
+    indexed = list(enumerate(commands))
+    health = [
+        item
+        for item in indexed
+        if "health" in str(item[1].get("name") or "").lower()
+    ]
+    patrol = [
+        item
+        for item in indexed
+        if item not in health and _is_patrol_profile_command(item[1])
+    ]
+    parallel = [item for item in indexed if item not in health and item not in patrol]
+    results: dict[
+        int,
+        tuple[Mapping[str, Any], subprocess.CompletedProcess[str], int, bool],
+    ] = {}
+
+    def execute(
+        command: Mapping[str, Any],
+    ) -> tuple[subprocess.CompletedProcess[str], int]:
+        started = time.monotonic()
+        try:
+            result = _run_profile_command(
+                command,
+                target_name=target_name,
+                actor_context=actor_context,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            result = subprocess.CompletedProcess(
+                args=list(command["argv"]),
+                returncode=2,
+                stdout="",
+                stderr=(
+                    "typed profile Actor provision/test/cleanup failed: "
+                    + str(exc)
+                ),
+            )
+        return result, max(0, round((time.monotonic() - started) * 1000))
+
+    health_blocked = False
+    for index, command in health:
+        result, duration_ms = execute(command)
+        results[index] = (command, result, duration_ms, False)
+        if result.returncode != 0 and bool(command.get("blocking", True)):
+            health_blocked = True
+
+    if health_blocked:
+        for index, command in (*parallel, *patrol):
+            skipped = subprocess.CompletedProcess(
+                args=list(command["argv"]),
+                returncode=2,
+                stdout="",
+                stderr="environment health prerequisite failed; profile node not started",
+            )
+            results[index] = (command, skipped, 0, True)
+        return [results[index] for index, _ in indexed]
+
+    if parallel:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(max_concurrency, len(parallel)),
+            thread_name_prefix="stackctl-profile-verify",
+        ) as pool:
+            futures = [pool.submit(execute, command) for _, command in parallel]
+            for (index, command), future in zip(parallel, futures):
+                result, duration_ms = future.result()
+                results[index] = (command, result, duration_ms, False)
+
+    prerequisite_blocked = any(
+        result.returncode != 0 and bool(command.get("blocking", True))
+        for command, result, _duration_ms, _skipped in results.values()
+    )
+    for index, command in patrol:
+        if prerequisite_blocked:
+            skipped = subprocess.CompletedProcess(
+                args=list(command["argv"]),
+                returncode=2,
+                stdout="",
+                stderr="blocking profile prerequisite failed; Patrol node not started",
+            )
+            results[index] = (command, skipped, 0, True)
+            continue
+        result, duration_ms = execute(command)
+        results[index] = (command, result, duration_ms, False)
+        if result.returncode != 0 and bool(command.get("blocking", True)):
+            prerequisite_blocked = True
+
+    return [results[index] for index, _ in indexed]
+
+
 def command_verify(args: argparse.Namespace) -> dict[str, Any]:
     service_name = str(getattr(args, "service", "") or "").strip()
     if service_name:
@@ -8734,6 +9952,8 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         return _command_verify_config_slo(args)
     if args.kind == "distribution":
         return _command_verify_distribution(args)
+    if args.kind == "content-delivery":
+        return _command_verify_content_delivery(args)
     profile = VerificationProfile(args.profile)
     if args.kind == "legal-static":
         if profile is VerificationProfile.BASELINE:
@@ -8775,6 +9995,74 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
     issues: list[str] = []
     provider_readiness: dict[str, Any] = {}
     force_deadline_rollback = False
+    test_data_request = str(
+        getattr(args, "test_data_request", "") or ""
+    ).strip()
+    if env_name == "prod" and test_data_request:
+        issue = (
+            "Prod rejects test-data mutation before Provider discovery, "
+            "ActorLease acquisition, or any business operation"
+        )
+        case_result = {
+            "schema": "qwq.case_result",
+            "caseId": "prod-test-data-mutation-boundary",
+            "status": "GATE_BLOCK",
+            "preparationStatus": "GATE_BLOCK",
+            "executed": 0,
+            "skipped": 0,
+            "target": target_name,
+            "environment": env_name,
+            "operationCount": 0,
+            "loadedProviders": [],
+            "requiredProviders": [],
+            "baselineEligible": False,
+            "issues": [issue],
+        }
+        write_json(report_dir / "test-data/case-result.json", case_result)
+        steps.append(
+            {
+                "kind": "test-data",
+                "profile": profile.value,
+                "exitCode": 2,
+                "reportPath": relpath(
+                    report_dir / "test-data/case-result.json"
+                ),
+                "details": [issue],
+                "caseResult": case_result,
+            }
+        )
+        timing = _finish_timing(started_monotonic, started_at)
+        payload = {
+            "status": ProbeOutcome.GATE_BLOCK.value,
+            "command": "verify",
+            "timestamp": utc_now(),
+            "kind": args.kind,
+            "profile": profile.value,
+            "environment": env_name,
+            "target": target_name,
+            "providerReadiness": {},
+            "steps": steps,
+            **timing,
+        }
+        write_json(report_dir / "report.json", payload)
+        write_json(report_dir / "findings.json", {"issues": [issue]})
+        _write_summary_bundle(
+            report_dir,
+            command="verify",
+            target=target_name,
+            status="blocked",
+            summary="stackctl verify rejected Prod test-data mutation",
+            details=[issue],
+            extra={"kind": args.kind, "profile": profile.value},
+            timing=timing,
+        )
+        return {
+            "exitCode": 2,
+            "summary": "stackctl verify rejected Prod test-data mutation",
+            "details": [issue],
+            "reportDir": relpath(report_dir),
+            **timing,
+        }
     if (
         profile is VerificationProfile.RELEASE
         and env_name in {"gamma", "prod"}
@@ -8796,38 +10084,42 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                 f"provider readiness: {detail}"
                 for detail in provider_preflight["details"]
             )
-            timing = _finish_timing(started_monotonic, started_at)
-            payload = {
-                "status": ProbeOutcome.GATE_BLOCK.value,
-                "command": "verify",
-                "timestamp": utc_now(),
-                "kind": args.kind,
-                "profile": profile.value,
-                "environment": env_name,
-                "target": target_name,
-                "providerReadiness": provider_readiness,
-                "steps": steps,
-                **timing,
-            }
-            write_json(report_dir / "report.json", payload)
-            write_json(report_dir / "findings.json", {"issues": issues})
-            _write_summary_bundle(
-                report_dir,
-                command="verify",
-                target=target_name,
-                status="blocked",
-                summary="stackctl verify is GATE_BLOCK by Provider readiness",
-                details=issues,
-                extra={"kind": args.kind, "profile": profile.value},
-                timing=timing,
-            )
-            return {
-                "exitCode": 2,
-                "summary": "stackctl verify is GATE_BLOCK by Provider readiness",
-                "details": issues,
-                "reportDir": relpath(report_dir),
-                **timing,
-            }
+            if not test_data_request:
+                timing = _finish_timing(started_monotonic, started_at)
+                payload = {
+                    "status": ProbeOutcome.GATE_BLOCK.value,
+                    "command": "verify",
+                    "timestamp": utc_now(),
+                    "kind": args.kind,
+                    "profile": profile.value,
+                    "environment": env_name,
+                    "target": target_name,
+                    "providerReadiness": provider_readiness,
+                    "steps": steps,
+                    **timing,
+                }
+                write_json(report_dir / "report.json", payload)
+                write_json(report_dir / "findings.json", {"issues": issues})
+                _write_summary_bundle(
+                    report_dir,
+                    command="verify",
+                    target=target_name,
+                    status="blocked",
+                    summary="stackctl verify is GATE_BLOCK by Provider readiness",
+                    details=issues,
+                    extra={"kind": args.kind, "profile": profile.value},
+                    timing=timing,
+                )
+                return {
+                    "exitCode": 2,
+                    "summary": "stackctl verify is GATE_BLOCK by Provider readiness",
+                    "details": issues,
+                    "reportDir": relpath(report_dir),
+                    **timing,
+                }
+            # The full release remains blocked, but the selected typed request
+            # owns an independently projected Provider evidence closure.  Keep
+            # collecting its provision/readback/CaseResult/cleanup evidence.
     if profile is VerificationProfile.RELEASE and target_name == "prod-hosted":
         receipt = str(
             getattr(args, "backup_recovery_receipt", "")
@@ -8894,6 +10186,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
             f"distribution: {issue}" for issue in distribution_issues
         )
     package_envs = [env_name] if env_name in ENVIRONMENTS and profile.requires_environment else []
+    test_data_package_ready = True
     for package_env in package_envs:
         package_target = args.target or DEFAULT_TARGET_BY_ENV[package_env]
         ok, package_detail = can_reuse_package(
@@ -8912,6 +10205,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
         if not ok:
+            test_data_package_ready = False
             issues.append(
                 f"fixed package is unavailable for {package_env}/{package_target}: "
                 f"{package_detail}; run stackctl package explicitly"
@@ -8923,27 +10217,11 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         target_name=target_name,
         profile=profile,
     )
-    for command in commands:
-        result = run(
-            command,
-            env=_verify_child_environment(target_name),
-        )
-        command_key = " ".join(command)
-        steps.append(
-            {
-                "kind": "verify",
-                "group": args.kind,
-                "argv": command,
-                "exitCode": result.returncode,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-            }
-        )
-        stdout_sections.append((command_key, "\n".join(filter(None, [result.stdout, result.stderr]))))
-        if result.returncode != 0:
-            issues.append(result.stderr.strip() or result.stdout.strip() or "unknown verify failure")
-    if (phase := profile.readiness_phase) is not None:
-        readiness_payload = command_content_readiness(
+    phase = profile.readiness_phase
+
+    def readiness_call() -> dict[str, Any]:
+        assert phase is not None
+        return command_content_readiness(
             argparse.Namespace(
                 command="content-readiness",
                 phase=phase.value,
@@ -8960,6 +10238,30 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                 report_dir=str(report_dir / "content-readiness"),
             )
         )
+
+    static_results, readiness_payload, static_gate_ms = _run_static_verify_wave(
+        commands,
+        target_name=target_name,
+        readiness_call=readiness_call if phase is not None else None,
+    )
+    for command, result, duration_ms in static_results:
+        command_key = " ".join(command)
+        steps.append(
+            {
+                "kind": "verify",
+                "group": args.kind,
+                "argv": command,
+                "exitCode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "durationMs": duration_ms,
+            }
+        )
+        stdout_sections.append((command_key, "\n".join(filter(None, [result.stdout, result.stderr]))))
+        if result.returncode != 0:
+            issues.append(result.stderr.strip() or result.stdout.strip() or "unknown verify failure")
+    test_data_content_readiness_ready = True
+    if phase is not None and readiness_payload is not None:
         steps.append(
             {
                 "kind": "readiness",
@@ -8970,11 +10272,22 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
             }
         )
         if readiness_payload["exitCode"] != 0:
+            test_data_content_readiness_ready = False
             issues.extend(
                 f"content readiness: {detail}"
                 for detail in readiness_payload.get("details", [])
             )
-    for profile_command in _selected_profile_commands(
+    # Only the active candidate/package and its content readiness gate the
+    # selected request graph. The graph's evidence document validates the
+    # exact Provider capability closure itself. Global Provider, distribution,
+    # backup and unrelated static/profile failures still block the full verify,
+    # but must not suppress independently safe data evidence.
+    test_data_prerequisites_passed = (
+        test_data_package_ready and test_data_content_readiness_ready
+    )
+    profile_actor_context: TestDataContext | None = None
+    profile_actor_runtime = TestDataRuntime()
+    profile_commands = _selected_profile_commands(
         env_name,
         target_name,
         profile,
@@ -8985,15 +10298,32 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
             environment=env_name,
             profile=profile,
         ),
-    ):
-        result = run(
-            profile_command["argv"],
-            cwd=profile_command.get("cwd"),
-            env=_verify_child_environment(
-                target_name,
-                profile_command.get("env"),
-            ),
-        )
+    )
+    if any(command.get("testDataActorCase") is not None for command in profile_commands):
+        try:
+            profile_actor_context = _typed_profile_actor_context(
+                args,
+                environment=env_name,
+                target_name=target_name,
+                report_dir=report_dir,
+                runtime=profile_actor_runtime,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError):
+            # Only Actor-bound nodes will fail closed in the scheduler; pure
+            # read-only and independently authenticated nodes still produce
+            # useful evidence.
+            profile_actor_context = None
+    profile_started = time.monotonic()
+    profile_results = _run_profile_commands_parallel(
+        profile_commands,
+        target_name=target_name,
+        actor_context=profile_actor_context,
+    )
+    profile_gate_ms = max(
+        0,
+        round((time.monotonic() - profile_started) * 1000),
+    )
+    for profile_command, result, duration_ms, skipped in profile_results:
         blocking = bool(profile_command.get("blocking", True))
         steps.append(
             {
@@ -9003,23 +10333,32 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                 "argv": profile_command["argv"],
                 "exitCode": result.returncode,
                 "blocking": blocking,
+                "skipped": skipped,
+                "durationMs": duration_ms,
                 "reportPath": profile_command.get("reportPath", ""),
                 "stdout": result.stdout,
                 "stderr": result.stderr,
             }
         )
-        stdout_sections.append((profile_command["name"], "\n".join(filter(None, [result.stdout, result.stderr]))))
+        stdout_sections.append(
+            (
+                profile_command["name"],
+                "\n".join(filter(None, [result.stdout, result.stderr])),
+            )
+        )
         if result.returncode != 0 and blocking:
             issues.append(
                 f"{profile_command['name']} failed: "
                 + (result.stderr.strip() or result.stdout.strip() or "unknown profile failure")
             )
-            if profile_command.get("stopOnFailure"):
-                break
     if (
-        profile is VerificationProfile.INTEGRATION
+        profile in {
+            VerificationProfile.INTEGRATION,
+            VerificationProfile.RELEASE,
+        }
         and args.kind == "all"
-        and target_name in NONPROD_TARGETS
+        and target_name in TEST_DATA_TARGETS
+        and bool(test_data_request)
     ):
         runtime_workload = _current_runtime_workload(target_name)
         if runtime_workload in {"content-release", "content-commercial"}:
@@ -9028,7 +10367,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
             # plane and must not block this workload.
             steps.append(
                 {
-                    "kind": "nonprod-business-data",
+                    "kind": "test-data",
                     "profile": profile.value,
                     "exitCode": 0,
                     "reportPath": "",
@@ -9038,7 +10377,7 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                     ],
                     "caseResult": {
                         "schema": "qwq.case_result",
-                        "caseId": "alpha-beta-gamma-nonprod-business-data",
+                        "caseId": "alpha-beta-gamma-selected-test-data",
                         "status": "skipped",
                         "executed": 0,
                         "skipped": 1,
@@ -9048,35 +10387,41 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
                     },
                 }
             )
+            if profile is VerificationProfile.RELEASE:
+                issues.append(
+                    "release test-data Journey requires the full runtime workload"
+                )
         else:
-            nonprod_data_result = _run_nonprod_business_data_profile(
+            test_data_result = _run_test_data_profile(
                 args,
+                profile=profile,
                 environment=env_name,
                 target_name=target_name,
                 report_dir=report_dir,
-                prerequisites_passed=not issues,
+                prerequisites_passed=test_data_prerequisites_passed,
+                static_gate_ms=static_gate_ms,
             )
-            nonprod_data_passed = (
-                nonprod_data_result.get("status") == "passed"
-                and int(nonprod_data_result.get("executed") or 0) > 0
-                and int(nonprod_data_result.get("skipped") or 0) == 0
+            test_data_passed = (
+                test_data_result.get("status") == "passed"
+                and int(test_data_result.get("executed") or 0) > 0
+                and int(test_data_result.get("skipped") or 0) == 0
             )
             steps.append(
                 {
-                    "kind": "nonprod-business-data",
+                    "kind": "test-data",
                     "profile": profile.value,
-                    "exitCode": 0 if nonprod_data_passed else 2,
+                    "exitCode": 0 if test_data_passed else 2,
                     "reportPath": relpath(
-                        report_dir / "nonprod-business-data/case-result.json"
+                        report_dir / "test-data/case-result.json"
                     ),
-                    "details": list(nonprod_data_result.get("issues") or []),
-                    "caseResult": nonprod_data_result,
+                    "details": list(test_data_result.get("issues") or []),
+                    "caseResult": test_data_result,
                 }
             )
-            if not nonprod_data_passed:
-                details = list(nonprod_data_result.get("issues") or [])
+            if not test_data_passed:
+                details = list(test_data_result.get("issues") or [])
                 issues.append(
-                    "nonprod business data verification failed: "
+                    "selected test-data verification failed: "
                     + ("; ".join(details) if details else "invalid CaseResult")
                 )
     timing = _finish_timing(started_monotonic, started_at)
@@ -9108,6 +10453,8 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         "kind": args.kind,
         "profile": profile.value,
         "providerReadiness": provider_readiness,
+        "staticGateMs": static_gate_ms,
+        "profileGateMs": profile_gate_ms,
         "steps": steps,
         "runtimeMediaPlaybackEvidencePath": playback_evidence_path,
         **timing,
@@ -9142,10 +10489,125 @@ def command_verify(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "details": issues or [f"ran {len(steps)} checks"],
         "reportDir": relpath(report_dir),
+        "staticGateMs": static_gate_ms,
+        "profileGateMs": profile_gate_ms,
         **timing,
     }
 
 
+def command_test_data_request(args: argparse.Namespace) -> dict[str, Any]:
+    """Materialize the one governed release Journey request composition."""
+
+    started_monotonic, started_at = _start_timing()
+    report_dir = resolve_report_dir(args, "repo", "repo")
+    document = case_request_document(canonical_acceptance_suite())
+    request_path = report_dir / "request.json"
+    write_json(request_path, document)
+    timing = _finish_timing(started_monotonic, started_at)
+    summary = {
+        "schema": "qwq.test_data_request_summary.v1",
+        "caseCount": len(document["cases"]),
+        "requestCount": len(document["requests"]),
+        "requestDigest": document["requestDigest"],
+        "requestPath": relpath(request_path),
+        **timing,
+    }
+    write_json(report_dir / "report.json", summary)
+    return {
+        "exitCode": 0,
+        "summary": "canonical typed test-data request generated",
+        "details": [
+            f"cases={summary['caseCount']}",
+            f"requests={summary['requestCount']}",
+            f"requestDigest={summary['requestDigest']}",
+        ],
+        "reportDir": relpath(report_dir),
+        "requestPath": relpath(request_path),
+        **timing,
+    }
+
+
+def command_test_data_evidence(args: argparse.Namespace) -> dict[str, Any]:
+    """Bind selected canonical Provider readiness to one candidate/request."""
+
+    started_monotonic, started_at = _start_timing()
+    environment = str(args.env)
+    target_name = str(args.target)
+    report_dir = resolve_report_dir(args, environment, target_name)
+    issues: list[str] = []
+    evidence_path = report_dir / "evidence.json"
+    try:
+        if TEST_DATA_TARGETS.get(target_name) != environment:
+            raise ValueError("test-data evidence target/environment mismatch")
+        active = active_deployment_candidate(target_name)
+        if not isinstance(active, Mapping):
+            raise ValueError("active immutable deployment candidate is required")
+        manifest = load_candidate_manifest(
+            environment,
+            target_name,
+            str(active.get("baselineId") or ""),
+            require_full=True,
+        )
+        readiness, _ = _load_test_data_release_readiness(
+            environment=environment,
+            release_id=str(args.data_release_id),
+            verify_run_id=str(args.data_verify_run_id),
+            manifest_digest=str(args.data_manifest_digest),
+        )
+        candidate = build_candidate_binding(
+            environment=environment,
+            target=target_name,
+            manifest=manifest,
+            readiness=readiness,
+        )
+        request_path = Path(str(args.test_data_request)).expanduser()
+        if not request_path.is_absolute():
+            request_path = ROOT / request_path
+        request_path = request_path.resolve()
+        request_path.relative_to(output_root().expanduser().resolve())
+        request_document = json.loads(request_path.read_text(encoding="utf-8"))
+        if not isinstance(request_document, Mapping):
+            raise TypeError("test-data request must be an object")
+        readiness_report, readiness_issues = (
+            _provider_conformance().load_validate_and_derive()
+        )
+        evidence = build_provider_evidence_document(
+            request_document=request_document,
+            candidate=candidate,
+            readiness_report=readiness_report,
+        )
+        report_dir.mkdir(parents=True, exist_ok=True)
+        write_json(evidence_path, evidence)
+        ignored_issue_count = len(readiness_issues)
+        status = "passed"
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        issues.append(str(exc))
+        ignored_issue_count = 0
+        status = ProbeOutcome.GATE_BLOCK.value
+    timing = _finish_timing(started_monotonic, started_at)
+    report = {
+        "schema": "qwq.test_data_evidence_summary.v1",
+        "status": status,
+        "environment": environment,
+        "target": target_name,
+        "evidencePath": relpath(evidence_path) if not issues else "",
+        "providerReadinessIssueCount": ignored_issue_count,
+        "issues": issues,
+        **timing,
+    }
+    write_json(report_dir / "report.json", report)
+    return {
+        "exitCode": 0 if not issues else 2,
+        "summary": (
+            "selected test-data Provider evidence generated"
+            if not issues
+            else "selected test-data Provider evidence is GATE_BLOCK"
+        ),
+        "details": issues or [f"evidence={relpath(evidence_path)}"],
+        "reportDir": relpath(report_dir),
+        "evidencePath": relpath(evidence_path) if not issues else "",
+        **timing,
+    }
 def _load_active_product_telemetry_log_sink(
     environment: str,
     target_name: str,
@@ -9209,11 +10671,14 @@ def _write_full_workload_log_sink_gate_block(
     report_dir: Path,
     report_target: str,
     resolved_target: str,
+    formal_release: bool,
+    release_input_classification: str,
+    contract_graph_digest: str,
     timing: dict[str, Any],
 ) -> dict[str, Any]:
     receipt = _log_sink_gate_block_receipt()
     details = [
-        "commercial full workload requires product telemetry log-sink binding",
+        "full workload requires product telemetry log-sink binding",
         "ensure the selected local topology exposes the declared log-sink endpoint",
         "use --workload content-release only for import/API/media validation",
     ]
@@ -9224,7 +10689,9 @@ def _write_full_workload_log_sink_gate_block(
             "target": report_target,
             "resolvedTarget": resolved_target,
             "workload": "full",
-            "commercialClaim": True,
+            "formalRelease": formal_release,
+            "releaseInputClassification": release_input_classification,
+            "contractGraphDigest": contract_graph_digest,
             "status": "gate_block",
             "logSink": receipt,
             "steps": [],
@@ -9241,7 +10708,9 @@ def _write_full_workload_log_sink_gate_block(
         details=details,
         extra={
             "workload": "full",
-            "commercialClaim": True,
+            "formalRelease": formal_release,
+            "releaseInputClassification": release_input_classification,
+            "contractGraphDigest": contract_graph_digest,
             "logSink": receipt,
         },
         timing=timing,
@@ -9253,7 +10722,9 @@ def _write_full_workload_log_sink_gate_block(
         "reportDir": relpath(report_dir),
         "status": "gate_block",
         "workload": "full",
-        "commercialClaim": True,
+        "formalRelease": formal_release,
+        "releaseInputClassification": release_input_classification,
+        "contractGraphDigest": contract_graph_digest,
         "logSink": receipt,
         **timing,
     }
@@ -9280,7 +10751,7 @@ def _write_product_telemetry_log_sink_control_report(
     details = (
         [
             failure_reason
-            or "commercial full workload requires product telemetry log-sink binding",
+            or "full workload requires product telemetry log-sink binding",
         ]
         if gate_blocked
         else [f"{item['action']}: {item['status']}" for item in action_statuses]
@@ -9289,7 +10760,6 @@ def _write_product_telemetry_log_sink_control_report(
         "command": "product-telemetry-log-sink",
         "target": target_name,
         "workload": "full",
-        "commercialClaim": True,
         "action": action,
         "status": status,
         "logSink": receipt,
@@ -9313,7 +10783,6 @@ def _write_product_telemetry_log_sink_control_report(
         details=details,
         extra={
             "workload": "full",
-            "commercialClaim": True,
             "logSink": receipt,
         },
         timing=timing,
@@ -9324,7 +10793,6 @@ def _write_product_telemetry_log_sink_control_report(
         "details": details,
         "reportDir": relpath(report_dir),
         "workload": "full",
-        "commercialClaim": True,
         "logSink": receipt,
         "actions": action_statuses,
         "executed": len(action_statuses),
@@ -9438,7 +10906,7 @@ def _run_product_telemetry_log_sink_control_action(
                     environment,
                     target_name,
                     include_services=True,
-                    require_workspace_match=False,
+                    purpose="self_verify",
                     candidate_root=Path(
                         str(candidate_snapshot["candidateDir"])
                     ),
@@ -9528,68 +10996,84 @@ def _run_product_telemetry_log_sink_control_action(
     product_ops_base = str(public_bases.get("productOps") or "").strip()
     if not api_base or not product_ops_base:
         raise RuntimeError("product-ops public base is unavailable")
-    session = open_reference_acceptance_session(
+    instance_id = "log-sink-" + uuid4().hex
+    actor = open_test_data_acceptance_session(
         api_base,
         environment=environment,
         target_name=target_name,
+        test_data_instance_id=instance_id,
+        actor_role="primary",
+        actor_index=0,
     )
-    if action == "permission-failure":
-        try:
-            request_local_environment_json(
-                product_ops_base,
-                path="/ops/events/summary",
-                session=session,
+    try:
+        session = actor.session
+        if action == "permission-failure":
+            try:
+                request_local_environment_json(
+                    product_ops_base,
+                    path="/ops/events/summary",
+                    session=session,
+                )
+            except LocalEnvironmentHTTPError as exc:
+                if exc.status == 403:
+                    return
+                raise RuntimeError(
+                    "permission probe returned unexpected status"
+                ) from exc
+            raise RuntimeError("permission probe unexpectedly succeeded")
+
+        if action != "send-query":
+            raise ValueError(
+                f"unsupported product telemetry log-sink action: {action}"
             )
-        except LocalEnvironmentHTTPError as exc:
-            if exc.status == 403:
-                return
-            raise RuntimeError("permission probe returned unexpected status") from exc
-        raise RuntimeError("permission probe unexpectedly succeeded")
 
-    if action != "send-query":
-        raise ValueError(f"unsupported product telemetry log-sink action: {action}")
-
-    probe_record = {
-        "logType": "event",
-        "eventType": "chat_interaction_outcome",
-        "sessionId": "s.c2xzX2NvbnRyb2w.1",
-        "pageName": "chat_detail",
-        "occurredAt": utc_now(),
-        "deviceManufacturer": "LogSinkControl",
-        "deviceModel": "LogSinkControl",
-        "appVersion": "0.0.0-log-sink-control",
-        "networkClass": "other",
-        "devicePlatform": "web",
-        "chatAction": "mention_send",
-        "chatOutcome": "succeeded",
-        "mentionScope": "member",
-    }
-    body = {"events": [probe_record]}
-    canonical_body = json.dumps(
-        body,
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    idempotency_key = hashlib.sha256(canonical_body).hexdigest()
-    request_local_environment_json(
-        product_ops_base,
-        path="/ops/events",
-        session=session,
-        method="POST",
-        body=body,
-        headers={"Idempotency-Key": idempotency_key},
-    )
-    query_session = _log_sink_control_query_session(
-        api_base=api_base,
-        environment=environment,
-        target_name=target_name,
-    )
-    request_local_environment_json(
-        product_ops_base,
-        path="/ops/events/summary",
-        session=query_session,
-    )
+        probe_record = {
+            "logType": "event",
+            "eventType": "chat_interaction_outcome",
+            "sessionId": "s.c2xzX2NvbnRyb2w.1",
+            "pageName": "chat_detail",
+            "occurredAt": utc_now(),
+            "deviceManufacturer": "LogSinkControl",
+            "deviceModel": "LogSinkControl",
+            "appVersion": "0.0.0-log-sink-control",
+            "networkClass": "other",
+            "devicePlatform": "web",
+            "chatAction": "mention_send",
+            "chatOutcome": "succeeded",
+            "mentionScope": "member",
+        }
+        body = {"events": [probe_record]}
+        canonical_body = json.dumps(
+            body,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        idempotency_key = hashlib.sha256(canonical_body).hexdigest()
+        request_local_environment_json(
+            product_ops_base,
+            path="/ops/events",
+            session=session,
+            method="POST",
+            body=body,
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        query_session = _log_sink_control_query_session(
+            api_base=api_base,
+            environment=environment,
+            target_name=target_name,
+        )
+        request_local_environment_json(
+            product_ops_base,
+            path="/ops/events/summary",
+            session=query_session,
+        )
+    finally:
+        close_test_data_acceptance_actor(
+            api_base,
+            actor=actor,
+            test_data_instance_id=instance_id,
+        )
 
 
 def command_product_telemetry_log_sink(args: argparse.Namespace) -> dict[str, Any]:
@@ -10022,7 +11506,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                     env_name,
                     requested_target,
                     include_services=True,
-                    require_workspace_match=False,
+                    purpose="self_verify",
                     candidate_root=Path(
                         str(fixed_candidate_snapshot["candidateDir"])
                     ),
@@ -10084,7 +11568,37 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
     # selection belongs to a separate App UAT command, never to server startup.
     if args.workload in {"content-release", "content-commercial"}:
         args.skip_app = True
-    commercial_claim = args.workload == "full"
+    release_input_classification = ""
+    contract_graph_digest = ""
+    if fixed_candidate_snapshot is not None:
+        candidate_manifest = fixed_candidate_snapshot.get("manifest")
+        if not isinstance(candidate_manifest, Mapping):
+            raise ValueError("fixed deployment candidate manifest is missing")
+        derived_classification = classify_release_inputs(
+            candidate_manifest.get("release")
+        )
+        release_input_classification = str(
+            candidate_manifest.get("releaseInputClassification") or ""
+        )
+        if release_input_classification != derived_classification:
+            raise ValueError(
+                "fixed deployment candidate release input classification drifted"
+            )
+        contract_graph_digest = str(
+            candidate_manifest.get("contractGraphDigest") or ""
+        )
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", contract_graph_digest) is None:
+            raise ValueError(
+                "fixed deployment candidate ContractGraph digest is invalid"
+            )
+    release_input_report = (
+        {
+            "releaseInputClassification": release_input_classification,
+            "contractGraphDigest": contract_graph_digest,
+        }
+        if release_input_classification
+        else {}
+    )
 
     def assert_fixed_candidate_selected() -> None:
         if requested_target not in {"alpha-local", "beta-local", "gamma-local"}:
@@ -10118,6 +11632,9 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                 report_dir=report_dir,
                 report_target=report_target,
                 resolved_target=requested_target,
+                formal_release=formal_release,
+                release_input_classification=release_input_classification,
+                contract_graph_digest=contract_graph_digest,
                 timing=timing,
             )
     steps: list[dict[str, Any]] = []
@@ -10400,6 +11917,8 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                 release_composition = _bind_gamma_release_image_refs(
                     Path(str(args.release_manifest)).expanduser().resolve(),
                     env,
+                    release_input_classification=release_input_classification,
+                    contract_graph_digest=contract_graph_digest,
                 )
             except (OSError, ValueError, json.JSONDecodeError) as exc:
                 result = subprocess.CompletedProcess(
@@ -10845,8 +12364,38 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
                 stderr=f"active candidate changed before completion: {exc}",
             )
 
+    startup_health_failure: dict[str, Any] = {}
+    if (
+        requested_target in {"alpha-local", "beta-local", "gamma-local"}
+        and fixed_candidate_snapshot is not None
+    ):
+        startup_health_failure, health_failure_issue = (
+            _startup_health_failure_for_report(
+                report_dir,
+                target=requested_target,
+                candidate_digest=str(
+                    fixed_candidate_snapshot.get("baselineId") or ""
+                ),
+                startup_exit_code=result.returncode,
+            )
+        )
+        if health_failure_issue:
+            steps.append(
+                {
+                    "name": "managed-startup-health-failure-evidence",
+                    "exitCode": 2,
+                    "stdout": "",
+                    "stderr": health_failure_issue,
+                }
+            )
+
     if log_sink_redaction_values:
         steps = _redact_controlled_payload(steps, log_sink_redaction_values)
+        if startup_health_failure:
+            startup_health_failure = _redact_controlled_payload(
+                [startup_health_failure],
+                log_sink_redaction_values,
+            )[0]
         result = subprocess.CompletedProcess(
             result.args,
             result.returncode,
@@ -10875,8 +12424,8 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             "target": report_target,
             "resolvedTarget": requested_target,
             "workload": args.workload,
-            "commercialClaim": commercial_claim,
             "formalRelease": formal_release,
+            **release_input_report,
             "releaseComposition": release_composition,
             "runtimeMode": "immutable-oci" if formal_release else "",
             "runtimeCandidateDigest": (
@@ -10888,6 +12437,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             "destructiveRepairPerformed": bool(destructive_actions),
             "destructiveActions": destructive_actions,
             "logSink": log_sink_receipt,
+            "startupHealthFailure": startup_health_failure,
             "steps": steps,
             **timing,
         },
@@ -10911,8 +12461,8 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
         details=_command_details(result),
         extra={
             "workload": args.workload,
-            "commercialClaim": commercial_claim,
             "formalRelease": formal_release,
+            **release_input_report,
             "releaseComposition": release_composition,
             "runtimeMode": "immutable-oci" if formal_release else "",
             "runtimeCandidateDigest": (
@@ -10924,6 +12474,7 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
             "destructiveRepairPerformed": bool(destructive_actions),
             "destructiveActions": destructive_actions,
             "logSink": log_sink_receipt,
+            "startupHealthFailure": startup_health_failure,
         },
         timing=timing,
     )
@@ -10932,8 +12483,9 @@ def _command_up_impl(args: argparse.Namespace) -> dict[str, Any]:
         "summary": terminal_summary,
         "details": _command_details(result),
         "reportDir": relpath(report_dir),
-        "commercialClaim": commercial_claim,
+        **release_input_report,
         "logSink": log_sink_receipt,
+        "startupHealthFailure": startup_health_failure,
         **timing,
     }
     return payload
@@ -11241,6 +12793,534 @@ def _bounded_workload_down_decision(
     }
 
 
+def _mutable_test_live_resource_names(
+    resource: str,
+    *,
+    compose_project: str,
+) -> list[str]:
+    result = run(
+        [
+            "docker",
+            resource,
+            "ls",
+            "--format",
+            "{{.Name}}",
+            "--filter",
+            f"label=com.docker.compose.project={compose_project}",
+        ],
+        timeout_seconds=30,
+    )
+    if result.returncode != 0:
+        raise ValueError(
+            f"mutable test-live {resource} inventory failed: "
+            + "; ".join(_command_details(result))
+        )
+    return sorted({line.strip() for line in result.stdout.splitlines() if line.strip()})
+
+
+def _mutable_test_live_container_ids(compose_project: str) -> list[str]:
+    lookup = run(
+        [
+            "docker",
+            "ps",
+            "-aq",
+            "--no-trunc",
+            "--filter",
+            f"label=com.docker.compose.project={compose_project}",
+        ],
+        timeout_seconds=30,
+    )
+    if lookup.returncode != 0:
+        raise ValueError(
+            "mutable test-live Compose container inventory failed: "
+            + "; ".join(_command_details(lookup))
+        )
+    return sorted({line.strip() for line in lookup.stdout.splitlines() if line.strip()})
+
+
+def _mutable_test_live_runtime_plan_from_receipt(
+    receipt: Mapping[str, Any],
+) -> tuple[dict[str, Any], Path]:
+    run_root = Path(str(receipt.get("runRoot") or ""))
+    try:
+        run_root_metadata = run_root.lstat()
+    except FileNotFoundError as exc:
+        raise ValueError("mutable test-live receipt runRoot is missing") from exc
+    if not stat.S_ISDIR(run_root_metadata.st_mode) or run_root.is_symlink():
+        raise ValueError("mutable test-live receipt runRoot must be a regular directory")
+    runtime_plan = _dev_session_regular_json(
+        run_root / "mutable-runtime-plan.json",
+        label="mutable test-live runtime plan",
+    )
+    if runtime_plan.get("schema") != "stackctl.mutable_test_live_runtime.v1":
+        raise ValueError("mutable test-live runtime plan schema mismatch")
+    for field in (
+        "environment",
+        "target",
+        "composeProject",
+        "composeDigest",
+        "configurationDigest",
+        "providerRuntimeDigest",
+        "portProfile",
+        "portBlock",
+        "publishedPorts",
+        "tlsProfile",
+        "resolverHandoffDigest",
+    ):
+        if runtime_plan.get(field) != receipt.get(field):
+            raise ValueError(f"mutable test-live receipt/plan drift: {field}")
+    workspace = runtime_plan.get("workspaceIdentity")
+    if not isinstance(workspace, Mapping):
+        raise ValueError("mutable test-live runtime plan workspace identity is missing")
+    for receipt_field, plan_field in (
+        ("sourceRevision", "sourceRevision"),
+        ("workspaceStatusDigest", "workspaceStatusDigest"),
+        ("mutableStateDigest", "mutableStateDigest"),
+    ):
+        if receipt.get(receipt_field) != workspace.get(plan_field):
+            raise ValueError(
+                f"mutable test-live receipt/plan drift: {receipt_field}"
+            )
+    return runtime_plan, run_root
+
+
+def _mutable_test_live_teardown_manifest(
+    *,
+    receipt: Mapping[str, Any],
+    runtime_plan: Mapping[str, Any],
+    run_root: Path,
+) -> tuple[dict[str, Any], list[str], list[str]]:
+    """Seal the exact running Compose identity into a teardown-only model."""
+
+    compose_project = str(receipt.get("composeProject") or "")
+    execution_refs = runtime_plan.get("executionComposeFiles")
+    if not isinstance(execution_refs, list) or not execution_refs:
+        raise ValueError("mutable test-live runtime plan has no execution Compose files")
+    declared_config_files: set[str] = set()
+    execution_payloads: dict[str, dict[str, Any]] = {}
+    expected_services: set[str] = set()
+    for index, raw_ref in enumerate(execution_refs):
+        ref = Path(str(raw_ref or ""))
+        path = ref if ref.is_absolute() else ROOT / ref
+        path = Path(os.path.abspath(path))
+        if not path.is_relative_to(run_root):
+            raise ValueError("mutable test-live execution Compose file escapes runRoot")
+        compose = _dev_session_regular_json(
+            path,
+            label=f"mutable test-live execution Compose file {index}",
+        )
+        services = compose.get("services")
+        if services is not None and not isinstance(services, dict):
+            raise ValueError("mutable test-live execution Compose services are invalid")
+        expected_services.update(str(service) for service in (services or {}))
+        declared_config_files.add(str(path))
+        if path.name in execution_payloads:
+            raise ValueError("mutable test-live execution Compose filename is duplicated")
+        execution_payloads[path.name] = compose
+    source_refs = runtime_plan.get("composeFiles")
+    if source_refs is not None and not isinstance(source_refs, list):
+        raise ValueError("mutable test-live source Compose file refs are invalid")
+    for raw_ref in source_refs or []:
+        ref = Path(str(raw_ref or ""))
+        path = ref if ref.is_absolute() else ROOT / ref
+        path = Path(os.path.abspath(path))
+        if not path.is_relative_to(ROOT):
+            raise ValueError("mutable test-live source Compose file escapes repository")
+        declared_config_files.add(str(path))
+    if not expected_services:
+        raise ValueError("mutable test-live execution Compose service roster is empty")
+
+    container_ids = _mutable_test_live_container_ids(compose_project)
+    if not container_ids:
+        raise ValueError("mutable test-live Compose project has no inspectable containers")
+    inspected = run(["docker", "inspect", *container_ids], timeout_seconds=30)
+    if inspected.returncode != 0:
+        raise ValueError("mutable test-live Compose project inspection failed")
+    try:
+        containers = json.loads(inspected.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError("mutable test-live Compose project inspection is not JSON") from exc
+    if not isinstance(containers, list):
+        raise ValueError("mutable test-live Compose project inspection is invalid")
+
+    network_names = _mutable_test_live_resource_names(
+        "network",
+        compose_project=compose_project,
+    )
+    network_keys: dict[str, str] = {}
+    if network_names:
+        network_result = run(
+            ["docker", "network", "inspect", *network_names],
+            timeout_seconds=30,
+        )
+        if network_result.returncode != 0:
+            raise ValueError("mutable test-live Compose network inspection failed")
+        try:
+            network_documents = json.loads(network_result.stdout)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                "mutable test-live Compose network inspection is not JSON"
+            ) from exc
+        if not isinstance(network_documents, list):
+            raise ValueError("mutable test-live Compose network inspection is invalid")
+        for network in network_documents:
+            try:
+                name = str(network["Name"])
+                labels = network["Labels"]
+                network_key = str(labels["com.docker.compose.network"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    "mutable test-live Compose network labels are invalid"
+                ) from exc
+            if (
+                labels.get("com.docker.compose.project") != compose_project
+                or not network_key
+                or name not in network_names
+                or name in network_keys
+            ):
+                raise ValueError("mutable test-live Compose network identity drifted")
+            network_keys[name] = network_key
+        if set(network_keys) != set(network_names):
+            raise ValueError("mutable test-live Compose network roster drifted")
+
+    services: dict[str, Any] = {}
+    actual_ids: set[str] = set()
+    for container in containers:
+        try:
+            container_id = str(container["Id"])
+            config = container["Config"]
+            labels = config["Labels"]
+            service = str(labels["com.docker.compose.service"])
+            image_ref = str(config["Image"])
+            attached_networks = set((container["NetworkSettings"]["Networks"] or {}))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("mutable test-live container inspection is invalid") from exc
+        config_files = {
+            str(Path(os.path.abspath(item.strip())))
+            for item in str(
+                labels.get("com.docker.compose.project.config_files") or ""
+            ).split(",")
+            if item.strip()
+        }
+        archived_config_files_match = False
+        if (
+            config_files
+            and len(config_files) == len(execution_payloads)
+            and not config_files.issubset(declared_config_files)
+        ):
+            archived_root = Path(os.path.abspath(env_runs_root(str(receipt["environment"]))))
+            archived_config_files_match = True
+            archived_services: set[str] = set()
+            for raw_path in config_files:
+                archived_path = Path(raw_path)
+                if (
+                    not archived_path.is_relative_to(archived_root)
+                    or archived_path.parent.name != "compose"
+                    or archived_path.parent.parent.name != "mutable-runtime"
+                    or archived_path.parent.parent.parent.name
+                    != str(receipt.get("target") or "")
+                    or archived_path.name not in execution_payloads
+                ):
+                    archived_config_files_match = False
+                    break
+                try:
+                    archived_payload = _dev_session_regular_json(
+                        archived_path,
+                        label="archived mutable test-live execution Compose file",
+                    )
+                except ValueError:
+                    archived_config_files_match = False
+                    break
+                archived_payload_services = archived_payload.get("services")
+                if (
+                    archived_payload_services is not None
+                    and not isinstance(archived_payload_services, dict)
+                ):
+                    archived_config_files_match = False
+                    break
+                archived_services.update(
+                    str(item) for item in (archived_payload_services or {})
+                )
+            if archived_services != expected_services:
+                archived_config_files_match = False
+        identity_issues: list[str] = []
+        if container_id not in container_ids:
+            identity_issues.append("container-id")
+        if labels.get("com.docker.compose.project") != compose_project:
+            identity_issues.append("project")
+        if labels.get("com.docker.compose.oneoff") == "True":
+            identity_issues.append("oneoff")
+        if not str(labels.get("com.docker.compose.config-hash") or ""):
+            identity_issues.append("config-hash")
+        if (
+            not config_files
+            or (
+                not config_files.issubset(declared_config_files)
+                and not archived_config_files_match
+            )
+        ):
+            unexpected_config_files = config_files - declared_config_files
+            outside_run_root = sum(
+                not Path(path).is_relative_to(run_root)
+                for path in unexpected_config_files
+            )
+            unexpected_refs = [
+                relpath(Path(path))
+                if Path(path).is_relative_to(ROOT)
+                else str(Path(path))
+                for path in sorted(unexpected_config_files)[:3]
+            ]
+            identity_issues.append(
+                "config-files"
+                f"[actual={len(config_files)},declared={len(declared_config_files)},"
+                f"unexpected={len(unexpected_config_files)},"
+                f"outsideRunRoot={outside_run_root},"
+                f"unexpectedRefs={unexpected_refs}]"
+            )
+        if service not in expected_services:
+            identity_issues.append("service-roster")
+        if service in services:
+            identity_issues.append("duplicate-service")
+        if not image_ref:
+            identity_issues.append("image")
+        if not attached_networks.issubset(network_keys):
+            identity_issues.append("network")
+        if identity_issues:
+            raise ValueError(
+                "mutable test-live container is not bound to this receipt: "
+                f"{service} ({','.join(identity_issues)})"
+            )
+        actual_ids.add(container_id)
+        service_payload: dict[str, Any] = {"image": image_ref}
+        if attached_networks:
+            service_payload["networks"] = sorted(
+                network_keys[name] for name in attached_networks
+            )
+        services[service] = service_payload
+    if actual_ids != set(container_ids) or set(services) != expected_services:
+        raise ValueError("mutable test-live Compose service roster drifted")
+
+    volumes = _mutable_test_live_resource_names(
+        "volume",
+        compose_project=compose_project,
+    )
+    manifest: dict[str, Any] = {"services": dict(sorted(services.items()))}
+    if network_keys:
+        manifest["networks"] = {
+            key: {"name": name}
+            for name, key in sorted(network_keys.items(), key=lambda item: item[1])
+        }
+    return manifest, container_ids, volumes
+
+
+def _command_mutable_test_live_down(
+    args: argparse.Namespace,
+    *,
+    env_name: str,
+    report_dir: Path,
+    receipt: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Stop one receipt-bound mutable runtime without deleting named volumes."""
+
+    compose_project = str(receipt.get("composeProject") or "")
+    attempt_id = str(receipt.get("attemptId") or "")
+    blocker_kind = ""
+    details: list[str] = []
+    command: list[str] = []
+    stopped_receipt: dict[str, Any] | None = None
+    preserved_volumes: list[str] = []
+    resource_release_issues: list[str] = []
+    try:
+        runtime_plan, run_root = _mutable_test_live_runtime_plan_from_receipt(receipt)
+        container_ids = _mutable_test_live_container_ids(compose_project)
+        if container_ids:
+            resumed, warnings = _dev_session_resume_running_mutable_runtime(
+                environment=env_name,
+                target=args.target,
+                workspace_snapshot={
+                    "mutableStateDigest": str(receipt.get("mutableStateDigest") or "")
+                },
+            )
+            if resumed is None or resumed.get("runtime") != runtime_plan:
+                raise ValueError(
+                    "mutable test-live running receipt could not be resumed exactly"
+                )
+            manifest, manifest_container_ids, preserved_volumes = (
+                _mutable_test_live_teardown_manifest(
+                    receipt=receipt,
+                    runtime_plan=runtime_plan,
+                    run_root=run_root,
+                )
+            )
+            if set(manifest_container_ids) != set(container_ids):
+                raise ValueError(
+                    "mutable test-live container inventory changed before teardown"
+                )
+            manifest_path = report_dir / "mutable-test-live-teardown-compose.json"
+            write_json(manifest_path, manifest)
+
+            app_command = [
+                "bash",
+                "quwoquan_app/scripts/device/run_stop_app_instance.sh",
+                "--env",
+                env_name,
+                "--quiet",
+            ]
+            app_result = run(app_command)
+            if app_result.returncode != 0:
+                blocker_kind = "mutable_test_live_app_stop_failed"
+                raise ValueError(
+                    "mutable test-live App stop failed: "
+                    + "; ".join(_command_details(app_result))
+                )
+
+            command = [
+                "docker",
+                "compose",
+                "-p",
+                compose_project,
+                "--project-directory",
+                str(run_root),
+                "-f",
+                str(manifest_path),
+                "down",
+                "--remove-orphans",
+                "--timeout",
+                "30",
+            ]
+            down_result = run(command, timeout_seconds=180)
+            details.extend(warnings)
+            details.extend(_command_details(down_result))
+            if down_result.returncode != 0:
+                blocker_kind = "mutable_test_live_compose_down_failed"
+                raise ValueError(
+                    "mutable test-live Compose down failed: "
+                    + "; ".join(_command_details(down_result))
+                )
+        else:
+            preserved_volumes = _mutable_test_live_resource_names(
+                "volume",
+                compose_project=compose_project,
+            )
+            details.append(
+                "mutable test-live teardown recovery observed no remaining project containers"
+            )
+
+        blocker_kind = "mutable_test_live_teardown_not_converged"
+        remaining_container_ids = _mutable_test_live_container_ids(compose_project)
+        if remaining_container_ids:
+            resource_release_issues.append(
+                "mutable test-live Compose containers remain after down"
+            )
+        remaining_networks = _mutable_test_live_resource_names(
+            "network",
+            compose_project=compose_project,
+        )
+        if remaining_networks:
+            resource_release_issues.append(
+                "mutable test-live Compose networks remain after down: "
+                + ",".join(remaining_networks)
+            )
+        remaining_volumes = _mutable_test_live_resource_names(
+            "volume",
+            compose_project=compose_project,
+        )
+        missing_volumes = sorted(set(preserved_volumes) - set(remaining_volumes))
+        if missing_volumes:
+            resource_release_issues.append(
+                "mutable test-live named volumes were removed: "
+                + ",".join(missing_volumes)
+            )
+        published_ports = receipt.get("publishedPorts")
+        if not isinstance(published_ports, Mapping) or not published_ports:
+            raise ValueError("mutable test-live receipt publishedPorts are invalid")
+        occupied_ports = _wait_for_exact_tcp_ports_released(
+            [int(port) for port in published_ports.values()]
+        )
+        for role, port in published_ports.items():
+            if int(port) in occupied_ports:
+                resource_release_issues.append(
+                    f"canonical port remains occupied after mutable down: {role}:{port}"
+                )
+        if resource_release_issues:
+            raise ValueError("; ".join(resource_release_issues))
+
+        stopped_receipt = transition_test_live_startup_attempt(
+            environment=env_name,
+            target=args.target,
+            attempt_id=attempt_id,
+            status="stopped",
+            runtime_plan=runtime_plan,
+            run_root=run_root,
+            failure="",
+        )
+        details.extend(
+            [
+                f"attemptId={attempt_id}",
+                f"composeProject={compose_project}",
+                f"containersReleased={len(container_ids)}",
+                f"namedVolumesPreserved={len(preserved_volumes)}",
+            ]
+        )
+        blocker_kind = ""
+        exit_code = 0
+        status = "ok"
+    except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        exit_code = 2
+        status = "gate_block"
+        if not blocker_kind:
+            blocker_kind = "mutable_test_live_teardown_identity_invalid"
+        details.append(str(exc))
+
+    report = {
+        "command": "down",
+        "target": args.target,
+        "workload": "full",
+        "status": status,
+        "exitCode": exit_code,
+        "blockerKind": blocker_kind,
+        "runtimeMode": "mutable-test-live",
+        "attemptId": attempt_id,
+        "composeProject": compose_project,
+        "runRoot": str(receipt.get("runRoot") or ""),
+        "argv": command,
+        "destructiveRepairPerformed": False,
+        "destructiveActions": [],
+        "namedVolumesPreserved": preserved_volumes,
+        "resourceReleaseIssues": resource_release_issues,
+        "startupAttempt": stopped_receipt or dict(receipt),
+        "details": details,
+    }
+    write_json(report_dir / "report.json", report)
+    summary = (
+        f"stackctl down completed for {args.target}"
+        if exit_code == 0
+        else f"stackctl down is GATE_BLOCK for {args.target}"
+    )
+    _write_summary_bundle(
+        report_dir,
+        command="down",
+        target=args.target,
+        status=status,
+        summary=summary,
+        details=details,
+        extra={
+            "runtimeMode": "mutable-test-live",
+            "attemptId": attempt_id,
+            "composeProject": compose_project,
+            "blockerKind": blocker_kind,
+        },
+    )
+    return {
+        "exitCode": exit_code,
+        "summary": summary,
+        "details": details,
+        "reportDir": relpath(report_dir),
+        "blockerKind": blocker_kind,
+        "runtimeMode": "mutable-test-live",
+    }
+
+
 def command_down(args: argparse.Namespace) -> dict[str, Any]:
     bounded_decision = _bounded_workload_down_decision(args)
     if bounded_decision is not None:
@@ -11324,10 +13404,23 @@ def _bind_local_teardown_runtime(
         return {}, "prepared-startup-receipt", "", True
 
     receipt_candidate = str(current_attempt.get("candidateDigest") or "").strip()
+    candidate_root = deployment_candidate_dir(
+        target_name,
+        receipt_candidate,
+    ).resolve()
+    candidate_manifest = load_candidate_manifest(
+        env_name,
+        target_name,
+        receipt_candidate,
+        require_full=True,
+        purpose="self_verify",
+    )
     provider_runtime_binding = _candidate_provider_runtime(
         env_name,
         target_name,
         receipt_candidate,
+        candidate_manifest=candidate_manifest,
+        candidate_root=candidate_root,
     )
     provider_runtime_environment = _provider_runtime_launch_environment(
         provider_runtime_binding["providerRuntime"],
@@ -11345,10 +13438,16 @@ def _bind_local_teardown_runtime(
             "runtime receipt Provider composition differs from active candidate"
         )
     environment.update(provider_runtime_environment)
+    environment[RUNTIME_CANDIDATE_ROOT_ENV] = str(
+        provider_runtime_binding["candidateRoot"]
+    )
+    environment["QWQ_RELEASE_CANDIDATE_DIGEST"] = receipt_candidate
     observability_runtime_binding = _candidate_observability_log_sink(
         env_name,
         target_name,
         receipt_candidate,
+        candidate_manifest=candidate_manifest,
+        candidate_root=candidate_root,
     )
     environment.update(
         _observability_log_sink_launch_environment(
@@ -11395,6 +13494,78 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     runtime_composition_source = ""
     runtime_compose_project = ""
     prepared_attempt_only = False
+
+    if (
+        not formal_release
+        and args.target in {"alpha-local", "beta-local", "gamma-local"}
+    ):
+        try:
+            mutable_attempt = load_test_live_startup_attempt(args.target)
+            immutable_attempt = load_startup_attempt(args.target)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            mutable_attempt = None
+            immutable_attempt = None
+            selection_issue = f"runtime receipt is unreadable: {exc}"
+        else:
+            selection_issue = ""
+        mutable_status = str((mutable_attempt or {}).get("status") or "")
+        immutable_status = str((immutable_attempt or {}).get("status") or "")
+        if mutable_attempt and mutable_status != "stopped":
+            if selection_issue:
+                pass
+            elif immutable_attempt and immutable_status != "stopped":
+                selection_issue = (
+                    "mutable and immutable runtime receipts are both active; "
+                    "teardown identity is ambiguous"
+                )
+            elif purge_rebuildable_state:
+                selection_issue = (
+                    "mutable test-live teardown never permits rebuildable-state purge"
+                )
+            elif mutable_status != "running":
+                selection_issue = (
+                    "mutable test-live teardown requires a canonical running receipt; "
+                    f"current status is {mutable_status or '<unknown>'}"
+                )
+            else:
+                return _command_mutable_test_live_down(
+                    args,
+                    env_name=env_name,
+                    report_dir=report_dir,
+                    receipt=mutable_attempt,
+                )
+        if selection_issue:
+            details = [selection_issue]
+            write_json(
+                report_dir / "report.json",
+                {
+                    "command": "down",
+                    "target": args.target,
+                    "workload": str(getattr(args, "workload", "") or "full"),
+                    "status": "gate_block",
+                    "exitCode": 2,
+                    "blockerKind": "runtime_teardown_identity_ambiguous",
+                    "mutableStartupAttempt": mutable_attempt,
+                    "immutableStartupAttempt": immutable_attempt,
+                    "details": details,
+                },
+            )
+            _write_summary_bundle(
+                report_dir,
+                command="down",
+                target=args.target,
+                status="gate_block",
+                summary=f"stackctl down is GATE_BLOCK for {args.target}",
+                details=details,
+                extra={"blockerKind": "runtime_teardown_identity_ambiguous"},
+            )
+            return {
+                "exitCode": 2,
+                "summary": f"stackctl down is GATE_BLOCK for {args.target}",
+                "details": details,
+                "reportDir": relpath(report_dir),
+                "blockerKind": "runtime_teardown_identity_ambiguous",
+            }
 
     if purge_rebuildable_state and (
         formal_release
@@ -11512,7 +13683,10 @@ def _command_down_unlocked(args: argparse.Namespace) -> dict[str, Any]:
     resource_release_issues: list[str] = []
     startup_receipt: dict[str, Any] | None = None
     if result.returncode == 0 and not prepared_attempt_only:
-        occupied = _wait_for_network_ports_released(args.target)
+        occupied = _wait_for_network_ports_released(
+            args.target,
+            port_reporter=_canonical_port_occupancy_report,
+        )
         resource_release_issues = [
             f"canonical port remains occupied after down: {item['name']}:{item['port']}"
             for item in occupied
@@ -11702,9 +13876,17 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         read_only=True,
         output_format=getattr(args, "output_format", "text"),
         report_dir=str(resolve_report_dir(args, str(get_target(load_environment_topology(), args.target)["env"]), args.target)),
+        request_timeout_seconds=1.0,
+        retry_attempts=1,
+        retry_sleep_seconds=0.0,
+        deadline_epoch=int(time.time()) + 8,
     )
     result = command_health(health_args)
-    candidate_workspace = _candidate_workspace_report(args.target)
+    candidate_workspace = (
+        _candidate_workspace_report(args.target, purpose="currentness")
+        if getattr(args, "currentness", False)
+        else _candidate_workspace_report(args.target)
+    )
     report_path = Path(health_args.report_dir) / "report.json"
     try:
         report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -11809,6 +13991,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
                 retry_sleep_seconds=retry_sleep_seconds,
                 headers=item.get("headers"),
                 ca_file=str(item.get("caFile") or ""),
+                body_limit=65_536,
             )
         expected_status = item.get("expectedStatus")
         if ok and expected_status is not None and status_code != int(expected_status):
@@ -11825,6 +14008,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
                 f"expected Content-Type {expected_content_type_prefix}*, "
                 f"got {content_type or '<empty>'}"
             )
+        body_evidence = _health_body_evidence(body)
         return {
             "name": item["name"],
             "scope": item["scope"],
@@ -11832,7 +14016,7 @@ def command_health(args: argparse.Namespace) -> dict[str, Any]:
             "ok": ok,
             "statusCode": status_code,
             "contentType": content_type,
-            "bodyPreview": body,
+            **body_evidence,
             "skipped": False,
         }
 
@@ -12026,7 +14210,11 @@ def command_inspect(args: argparse.Namespace) -> dict[str, Any]:
     inspection: dict[str, Any] = {}
     findings: list[str] = []
     candidate_workspace = (
-        _candidate_workspace_report(args.target)
+        (
+            _candidate_workspace_report(args.target, purpose="currentness")
+            if getattr(args, "currentness", False)
+            else _candidate_workspace_report(args.target)
+        )
         if "config" in scopes or "data" in scopes
         else None
     )
@@ -12484,12 +14672,27 @@ def command_premium_pool(args: argparse.Namespace) -> dict[str, Any]:
     try:
         if not api_base_url:
             raise PremiumPoolReleaseError("target topology lacks API public base")
-        binding = load_premium_pool_candidate_binding(
-            environment=environment,
-            target=args.target,
-            readiness_receipt=args.readiness_receipt,
-            content_id=args.content_id,
+        launch_policy = str(
+            getattr(args, "launch_policy", "immutable-candidate")
         )
+        if launch_policy == "immutable-candidate":
+            binding = load_premium_pool_candidate_binding(
+                environment=environment,
+                target=args.target,
+                readiness_receipt=args.readiness_receipt,
+                content_id=args.content_id,
+            )
+        elif launch_policy == "test-live":
+            binding = load_premium_pool_test_live_binding(
+                environment=environment,
+                target=args.target,
+                readiness_receipt=args.readiness_receipt,
+                content_id=args.content_id,
+            )
+        else:
+            raise PremiumPoolReleaseError(
+                "unsupported premium pool launch policy"
+            )
         from quwoquan_ops.cli.lib.public_domain_tls import root_certificate_path
 
         ssl_cafile = str(root_certificate_path(args.target))
@@ -12536,8 +14739,17 @@ def command_premium_pool(args: argparse.Namespace) -> dict[str, Any]:
             f"release={binding.release_id}",
             f"importRunId={binding.import_run_id}",
             f"contentId={binding.content_id}",
-            f"baselineId={binding.baseline_id}",
         ]
+        if launch_policy == "immutable-candidate":
+            details.append(f"baselineId={binding.baseline_id}")
+        else:
+            details.extend(
+                (
+                    "launchPolicy=test_live",
+                    f"startupAttemptId={binding.startup_attempt_id}",
+                    "nonPromotable=true",
+                )
+            )
     except (OSError, ValueError, PremiumPoolReleaseError) as exc:
         status = "gate_block"
         exit_code = 2
@@ -12649,6 +14861,7 @@ def _write_filter_catalog_command_report(
 
 
 _DATA_READINESS_SCHEMA = "quwoquan_data.environment_release_readiness"
+_DATA_ACTIVATION_SCHEMA = "quwoquan_data.environment_activation_envelope"
 _DATA_LIFECYCLE_EXIT_SCHEMA = "quwoquan_data.environment_release_lifecycle_exit"
 _DATA_READINESS_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _DATA_CONSUMER_READINESS_QUERY_NAMES = frozenset(
@@ -12729,6 +14942,97 @@ def _canonical_document_checksum(document: dict[str, Any]) -> str:
     return f"sha256:{hashlib.sha256(canonical).hexdigest()}"
 
 
+def _validate_data_activation_envelope(
+    receipt: dict[str, Any],
+    *,
+    evidence_root: Path,
+    issues: list[str],
+) -> None:
+    """Recompute the environment-specific activation/import/readback binding."""
+
+    app_uat = receipt.get("appUatEnvelope")
+    if not isinstance(app_uat, dict):
+        issues.append("Data readiness appUatEnvelope must be an object")
+        app_uat = {}
+    app_uat_digest = _canonical_document_checksum(app_uat)
+    if receipt.get("appUatEnvelopeDigest") != app_uat_digest:
+        issues.append("Data readiness appUatEnvelopeDigest drift")
+    for field in ("releaseId", "releaseClass", "productLifecycleState"):
+        if app_uat.get(field) != receipt.get(field):
+            issues.append(f"Data readiness appUatEnvelope {field} drift")
+
+    import_ref = str(receipt.get("contentImportReportRef") or "").strip()
+    import_path = (evidence_root / import_ref).resolve()
+    try:
+        import_path.relative_to(evidence_root)
+        import_digest = "sha256:" + hashlib.sha256(import_path.read_bytes()).hexdigest()
+    except (OSError, ValueError):
+        import_digest = ""
+        issues.append("Data activation import report is missing or unsafe")
+    expected: dict[str, Any] = {
+        "schema": _DATA_ACTIVATION_SCHEMA,
+        "environment": receipt.get("environment"),
+        "releaseId": receipt.get("releaseId"),
+        "manifestDigest": receipt.get("manifestDigest"),
+        "releaseClass": receipt.get("releaseClass"),
+        "productLifecycleState": receipt.get("productLifecycleState"),
+        "readinessPhase": receipt.get("readinessPhase"),
+        "importRunId": receipt.get("importRunId"),
+        "verifyRunId": receipt.get("verifyRunId"),
+        "importReportRef": import_ref,
+        "importReportDigest": import_digest,
+        "appUatEnvelopeDigest": app_uat_digest,
+    }
+    if "sourceIdentities" in receipt or "sourceIdentitySetDigest" in receipt:
+        expected["sourceIdentities"] = receipt.get("sourceIdentities")
+        expected["sourceIdentitySetDigest"] = receipt.get(
+            "sourceIdentitySetDigest"
+        )
+    else:
+        expected["sourceRevision"] = receipt.get("sourceRevision")
+        expected["sourceDigest"] = receipt.get("sourceDigest")
+        expected["entityCatalogDigest"] = receipt.get("entityCatalogDigest")
+    if receipt.get("readinessPhase") == ReadinessPhase.RESEARCH.value:
+        isolation_ref = str(
+            receipt.get("researchIsolationVerificationRef") or ""
+        ).strip()
+        isolation_digest = str(
+            receipt.get("researchIsolationVerificationDigest") or ""
+        ).strip()
+        isolation_path = (evidence_root / isolation_ref).resolve()
+        isolation: dict[str, Any] = {}
+        try:
+            isolation_path.relative_to(evidence_root)
+            isolation_bytes = isolation_path.read_bytes()
+            raw_isolation = json.loads(isolation_bytes)
+            if not isinstance(raw_isolation, dict):
+                raise ValueError("isolation receipt is not an object")
+            isolation = raw_isolation
+            if (
+                "sha256:" + hashlib.sha256(isolation_bytes).hexdigest()
+                != isolation_digest
+            ):
+                raise ValueError("isolation receipt digest drift")
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            issues.append(f"Data activation research isolation is invalid: {exc}")
+        expected["researchIsolationPolicy"] = {
+            "policyRef": isolation.get("policyRef"),
+            "policyDigest": isolation.get("policySha256"),
+            "verificationRef": isolation_ref,
+            "verificationDigest": isolation_digest,
+            "subjectHash": isolation.get("subjectHash"),
+        }
+    activation = receipt.get("activationEnvelope")
+    if activation != expected:
+        issues.append(
+            "Data readiness activationEnvelope drifts from release/import/readback"
+        )
+    if receipt.get("activationEnvelopeDigest") != _canonical_document_checksum(
+        expected
+    ):
+        issues.append("Data readiness activationEnvelopeDigest drift")
+
+
 def _validate_data_operation_evidence(
     value: object,
     *,
@@ -12795,6 +15099,49 @@ def _validated_string_set(
         )
         return set(items)
     return set(items)
+
+
+def _load_test_data_release_readiness(
+    *,
+    environment: str,
+    release_id: str,
+    verify_run_id: str,
+    manifest_digest: str,
+) -> tuple[dict[str, Any], Path]:
+    """Select the strict validator from the canonical receipt lifecycle."""
+
+    receipt_path = _data_release_readiness_path(
+        environment=environment,
+        release_id=release_id,
+        verify_run_id=verify_run_id,
+    )
+    try:
+        raw = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ValueError(
+            f"canonical Data readiness receipt is missing: {relpath(receipt_path)}"
+        ) from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(
+            f"canonical Data readiness receipt is unreadable: {relpath(receipt_path)}"
+        ) from exc
+    if not isinstance(raw, Mapping):
+        raise ValueError("canonical Data readiness receipt must be a JSON object")
+    phase_value = str(raw.get("readinessPhase") or "").strip()
+    if phase_value not in {
+        ReadinessPhase.RESEARCH.value,
+        ReadinessPhase.COMMERCIAL.value,
+    }:
+        raise ValueError(
+            "test-data readiness must be an immutable research or commercial release"
+        )
+    return _load_data_release_readiness(
+        environment=environment,
+        release_id=release_id,
+        verify_run_id=verify_run_id,
+        manifest_digest=manifest_digest,
+        readiness_phase=ReadinessPhase(phase_value),
+    )
 
 
 def _load_data_release_readiness(
@@ -12880,7 +15227,18 @@ def _load_data_release_readiness(
         contains_unverified is not False or authorization_required_ids != []
     ):
         issues.append("commercial readiness contains authorization-required assets")
-    for digest_key in ("manifestDigest", "mediaManifestDigest"):
+    identity_digest_keys = (
+        ("sourceIdentitySetDigest",)
+        if "sourceIdentities" in receipt or "sourceIdentitySetDigest" in receipt
+        else ("sourceRevision", "sourceDigest", "entityCatalogDigest")
+    )
+    for digest_key in (
+        "manifestDigest",
+        "mediaManifestDigest",
+        *identity_digest_keys,
+        "appUatEnvelopeDigest",
+        "activationEnvelopeDigest",
+    ):
         if _DATA_READINESS_DIGEST_RE.fullmatch(str(receipt.get(digest_key) or "")) is None:
             issues.append(f"Data readiness {digest_key} is not a canonical digest")
     if not str(receipt.get("importRunId") or "").strip():
@@ -12972,10 +15330,10 @@ def _load_data_release_readiness(
     if (
         not isinstance(avatar_count, int)
         or isinstance(avatar_count, bool)
-        or avatar_count != len(collections["creators"])
+        or not 1 <= avatar_count <= len(collections["creators"])
     ):
         issues.append(
-            "Data readiness counts.avatarAssets must equal release-bound creators"
+            "Data readiness counts.avatarAssets must be non-zero and release-bound"
         )
     image_count = counts.get("imageAssets")
     if (
@@ -13171,17 +15529,26 @@ def _load_data_release_readiness(
                     str(row.get("creatorRef") or "").strip()
                     for row in creator_evidence
                 }
+                ready_creator_evidence = [
+                    row
+                    for row in creator_evidence
+                    if row.get("avatarMediaReady") is True
+                ]
+                default_avatar_evidence = [
+                    row
+                    for row in creator_evidence
+                    if row.get("usesPlatformDefaultAvatar") is True
+                ]
                 avatar_asset_ids = {
                     str(row.get("avatarAssetId") or "").strip()
-                    for row in creator_evidence
+                    for row in ready_creator_evidence
                 }
                 if (
                     creator_refs != collections["creators"]
-                    or len(avatar_asset_ids) != len(collections["creators"])
+                    or len(avatar_asset_ids) != avatar_count
                     or "" in avatar_asset_ids
                     or any(
                         row.get("profileStatus") != 200
-                        or row.get("avatarMediaReady") is not True
                         or row.get("avatarProbeCount") != 1
                         or not isinstance(row.get("avatarProbe"), dict)
                         or row["avatarProbe"].get("publicUrl")
@@ -13197,8 +15564,20 @@ def _load_data_release_readiness(
                         )
                         is None
                         or row["avatarProbe"].get("hashVerified") is not True
-                        for row in creator_evidence
+                        for row in ready_creator_evidence
                     )
+                    or any(
+                        row.get("profileStatus") != 200
+                        or row.get("avatarAssetId") is not None
+                        or row.get("avatarUrl") != ""
+                        or row.get("avatarMediaReady") is not False
+                        or row.get("avatarProbeCount") != 0
+                        or row.get("avatarProbe") is not None
+                        for row in default_avatar_evidence
+                    )
+                    or len(ready_creator_evidence)
+                    + len(default_avatar_evidence)
+                    != len(creator_evidence)
                 ):
                     issues.append(
                         "Data readiness creator avatar evidence is not release-bound"
@@ -13234,6 +15613,12 @@ def _load_data_release_readiness(
                     issues.append(
                         "Data readiness mediaProbeCount drifts from typed probes"
                     )
+    _validate_data_activation_envelope(
+        receipt,
+        evidence_root=evidence_root,
+        issues=issues,
+    )
+
     attestation_path = (
         evidence_root / "data" / "releases" / release_id / "attestations" / "release.json"
     )
@@ -13244,12 +15629,31 @@ def _load_data_release_readiness(
             f"Data release attestation is missing or unreadable: {relpath(attestation_path)}"
         )
     else:
-        if not isinstance(attestation, dict) or any(
-            (
-                attestation.get("releaseId") != release_id,
-                attestation.get("sourceOwner") != "qwq_data",
-                attestation.get("payloadSha256") != manifest_digest,
+        expected_attestation = {
+            "releaseId": release_id,
+            "sourceOwner": "qwq_data",
+            "payloadSha256": manifest_digest,
+            "releaseClass": receipt.get("releaseClass"),
+            "productLifecycleState": receipt.get("productLifecycleState"),
+        }
+        if "sourceIdentities" in receipt or "sourceIdentitySetDigest" in receipt:
+            expected_attestation["sourceIdentities"] = receipt.get(
+                "sourceIdentities"
             )
+            expected_attestation["sourceIdentitySetDigest"] = receipt.get(
+                "sourceIdentitySetDigest"
+            )
+        else:
+            expected_attestation["sourceRevision"] = receipt.get(
+                "sourceRevision"
+            )
+            expected_attestation["sourceDigest"] = receipt.get("sourceDigest")
+            expected_attestation["entityCatalogDigest"] = receipt.get(
+                "entityCatalogDigest"
+            )
+        if not isinstance(attestation, dict) or any(
+            attestation.get(field) != expected
+            for field, expected in expected_attestation.items()
         ):
             issues.append("Data release attestation does not bind the expected payload digest")
 
@@ -13612,7 +16016,7 @@ def _run_release_feed_readback_probe(
 def _resolve_active_app_content_evidence(
     target: str,
 ) -> tuple[dict[str, Any], dict[str, Any], Path, str]:
-    """Resolve one active candidate to its newest fully valid commercial evidence."""
+    """Resolve an active candidate to exact Research or Commercial evidence."""
 
     topology = load_environment_topology()
     environment = str(get_target(topology, target)["env"])
@@ -13641,6 +16045,17 @@ def _resolve_active_app_content_evidence(
     ).hexdigest()
     if actual_attestation_digest != attestation_digest:
         raise ValueError("active candidate Data release attestation digest drifted")
+    attestation = _read_json_object(str(attestation_path))
+    release_class = str(attestation.get("releaseClass") or "").strip()
+    lifecycle_state = str(
+        attestation.get("productLifecycleState") or ""
+    ).strip()
+    if release_class != lifecycle_state or release_class not in {
+        ReadinessPhase.RESEARCH.value,
+        ReadinessPhase.COMMERCIAL.value,
+    }:
+        raise ValueError("active candidate Data release lifecycle is invalid")
+    readiness_phase = ReadinessPhase(release_class)
 
     readiness_root = env_runs_root(environment) / "data-release" / release_id
     lifecycle_root = (
@@ -13650,7 +16065,7 @@ def _resolve_active_app_content_evidence(
     )
     readiness_errors: list[str] = []
     lifecycle_errors: list[str] = []
-    commercial_receipts: list[tuple[dict[str, Any], Path]] = []
+    readiness_receipts: list[tuple[dict[str, Any], Path]] = []
     for readiness_path in sorted(
         readiness_root.glob("*/release-readiness.json"), reverse=True
     ):
@@ -13660,22 +16075,27 @@ def _resolve_active_app_content_evidence(
                 release_id=release_id,
                 verify_run_id=readiness_path.parent.name,
                 manifest_digest=manifest_digest,
-                readiness_phase=ReadinessPhase.COMMERCIAL,
+                readiness_phase=readiness_phase,
             )
         except ValueError as exc:
             readiness_errors.append(str(exc))
             continue
-        commercial_receipts.append((receipt, canonical_path))
-    if not commercial_receipts:
+        readiness_receipts.append((receipt, canonical_path))
+    if not readiness_receipts:
         detail = readiness_errors[0] if readiness_errors else "no receipt exists"
         raise ValueError(
-            "active release has no valid commercial readiness receipt: " + detail
+            f"active release has no valid {readiness_phase.value} readiness receipt: "
+            + detail
         )
+
+    if readiness_phase is ReadinessPhase.RESEARCH:
+        selected_readiness, selected_readiness_path = readiness_receipts[0]
+        return manifest, selected_readiness, selected_readiness_path, ""
 
     # Prefer any commercial readiness that binds a lifecycle Exit. Post-lifecycle
     # commercial verifies sit on the replay import; lexicographic "latest" alone
     # can otherwise pick a pre-lifecycle sibling commercial receipt first.
-    for selected_readiness, selected_readiness_path in commercial_receipts:
+    for selected_readiness, selected_readiness_path in readiness_receipts:
         for lifecycle_path in sorted(
             lifecycle_root.glob("*/lifecycle-exit.json"), reverse=True
         ):
@@ -13702,6 +16122,90 @@ def _resolve_active_app_content_evidence(
     detail = lifecycle_errors[0] if lifecycle_errors else "no receipt exists"
     raise ValueError(
         "active release has no valid rollback/replay lifecycle receipt: " + detail
+    )
+
+
+def _resolve_test_live_app_content_evidence(
+    target: str,
+    binding: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], Path, str]:
+    """Resolve one validated mutable binding without consulting active candidate state."""
+
+    topology = load_environment_topology()
+    environment = str(get_target(topology, target)["env"])
+    expected = {
+        "target": target,
+        "environment": environment,
+        "launchPolicy": "test_live",
+        "nonPromotable": True,
+        "contentBindingState": "bound",
+    }
+    if any(binding.get(field) != value for field, value in expected.items()):
+        raise ValueError("test_live content binding runtime identity mismatch")
+    release_id = str(binding.get("releaseId") or "").strip()
+    verify_run_id = str(binding.get("verifyRunId") or "").strip()
+    manifest_digest = str(binding.get("manifestDigest") or "").strip()
+    readiness_phase = str(binding.get("readinessPhase") or "").strip()
+    if readiness_phase not in {
+        ReadinessPhase.CONSUMER.value,
+        ReadinessPhase.RESEARCH.value,
+        ReadinessPhase.COMMERCIAL.value,
+    }:
+        raise ValueError("test_live content binding readinessPhase is invalid")
+    expected_ref = (
+        Path("env")
+        / environment
+        / "runs/data-release"
+        / release_id
+        / verify_run_id
+        / "release-readiness.json"
+    ).as_posix()
+    readiness_ref = str(binding.get("readinessReceiptRef") or "").strip()
+    if readiness_ref != expected_ref:
+        raise ValueError("test_live content binding readinessReceiptRef is not canonical")
+    evidence_root = output_root().expanduser().resolve()
+    readiness_path = (evidence_root / readiness_ref).resolve()
+    try:
+        readiness_path.relative_to(evidence_root)
+    except ValueError as exc:
+        raise ValueError("test_live content readiness escapes QWQ_OUTPUT_ROOT") from exc
+    if readiness_path.is_symlink() or not readiness_path.is_file():
+        raise ValueError("test_live content readiness receipt is missing")
+    receipt_digest = "sha256:" + hashlib.sha256(readiness_path.read_bytes()).hexdigest()
+    if receipt_digest != binding.get("readinessReceiptDigest"):
+        raise ValueError("test_live content readiness receipt digest drift")
+    readiness, canonical_path = _load_data_release_readiness(
+        environment=environment,
+        release_id=release_id,
+        verify_run_id=verify_run_id,
+        manifest_digest=manifest_digest,
+        readiness_phase=ReadinessPhase(readiness_phase),
+    )
+    if canonical_path.resolve() != readiness_path:
+        raise ValueError("test_live content readiness canonical path drift")
+    for field in (
+        "releaseId",
+        "verifyRunId",
+        "manifestDigest",
+        "readinessPhase",
+        "activationEnvelope",
+        "activationEnvelopeDigest",
+        "appUatEnvelope",
+        "appUatEnvelopeDigest",
+    ):
+        if binding.get(field) != readiness.get(field):
+            raise ValueError(f"test_live content binding {field} drift")
+    startup_identity = binding.get("startupIdentity")
+    source_revision = (
+        str(startup_identity.get("sourceRevision") or "")
+        if isinstance(startup_identity, Mapping)
+        else ""
+    )
+    return (
+        {"baselineId": "", "sourceRevision": source_revision},
+        readiness,
+        readiness_path,
+        str(binding.get("lifecycleExitRef") or "").strip(),
     )
 
 
@@ -13747,7 +16251,19 @@ def _app_content_uat_envelope(readiness: dict[str, Any]) -> dict[str, str]:
             )
     if not query_matches.get("homepage_recommend"):
         raise ValueError("release readiness homepage recommendation is empty")
-    if envelope["videoWorkId"] not in query_matches.get("premium_stream", set()):
+    readiness_phase = str(readiness.get("readinessPhase") or "").strip()
+    if readiness_phase not in {
+        ReadinessPhase.CONSUMER.value,
+        ReadinessPhase.RESEARCH.value,
+        ReadinessPhase.COMMERCIAL.value,
+    }:
+        raise ValueError("release readiness appUatEnvelope readinessPhase is invalid")
+    if (
+        readiness_phase
+        in {ReadinessPhase.RESEARCH.value, ReadinessPhase.COMMERCIAL.value}
+        and envelope["videoWorkId"]
+        not in query_matches.get("premium_stream", set())
+    ):
         raise ValueError(
             "release readiness appUatEnvelope video is not Premium-query bound"
         )
@@ -13792,17 +16308,33 @@ def _app_content_readback_summary(readiness: dict[str, Any]) -> dict[str, Any]:
 
 def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
     target = str(args.target)
+    purpose = str(getattr(args, "purpose", "readiness") or "readiness")
     environment = str(get_target(load_environment_topology(), target)["env"])
     report_dir = (
         Path(args.report_dir)
         if getattr(args, "report_dir", "")
         else repo_run_dir("app-content-preflight", target=target)
     )
+    runtime_mode = str(
+        getattr(args, "runtime_mode", "immutable_candidate")
+        or "immutable_candidate"
+    )
+    content_binding = getattr(args, "content_binding", None)
     try:
-        candidate, readiness, readiness_path, lifecycle_ref = (
-            _resolve_active_app_content_evidence(target)
-        )
+        if runtime_mode == "test_live":
+            if not isinstance(content_binding, Mapping):
+                raise ValueError("test_live content preflight requires a validated binding")
+            candidate, readiness, readiness_path, lifecycle_ref = (
+                _resolve_test_live_app_content_evidence(target, content_binding)
+            )
+        elif runtime_mode == "immutable_candidate":
+            candidate, readiness, readiness_path, lifecycle_ref = (
+                _resolve_active_app_content_evidence(target)
+            )
+        else:
+            raise ValueError("App content preflight runtime mode is invalid")
         app_uat_envelope = _app_content_uat_envelope(readiness)
+        app_uat_plan = build_app_content_uat_plan(readiness)
     except (OSError, ValueError) as exc:
         details = [str(exc)]
         payload = {
@@ -13821,10 +16353,11 @@ def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
             "reportDir": relpath(report_dir),
         }
 
+    readiness_phase = ReadinessPhase(str(readiness["readinessPhase"]))
     readiness_result = command_content_readiness(
         argparse.Namespace(
             command="content-readiness",
-            phase=ReadinessPhase.COMMERCIAL.value,
+            phase=readiness_phase.value,
             env=environment,
             release_id=str(readiness["releaseId"]),
             verify_run_id=str(readiness["verifyRunId"]),
@@ -13835,7 +16368,46 @@ def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
         )
     )
     passed = int(readiness_result.get("exitCode", 2)) == 0
-    receipt_digest = _canonical_document_checksum(readiness)
+    release_probe: dict[str, Any] = {}
+    details = list(readiness_result.get("details", []))
+    if passed and purpose == "content_live":
+        try:
+            release_probe = _run_app_content_release_probe(
+                target=target,
+                readiness_path=readiness_path,
+                app_uat_plan=app_uat_plan,
+                report_dir=report_dir / "release-probe",
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            passed = False
+            details.append(str(exc))
+    receipt_digest = (
+        str(content_binding.get("readinessReceiptDigest") or "")
+        if runtime_mode == "test_live" and isinstance(content_binding, Mapping)
+        else _canonical_document_checksum(readiness)
+    )
+    receipt_ref = (
+        str(content_binding.get("readinessReceiptRef") or "")
+        if runtime_mode == "test_live" and isinstance(content_binding, Mapping)
+        else relpath(readiness_path)
+    )
+    data_source_identity = (
+        {
+            "sourceIdentities": list(readiness.get("sourceIdentities") or []),
+            "sourceIdentitySetDigest": str(
+                readiness.get("sourceIdentitySetDigest") or ""
+            ),
+        }
+        if "sourceIdentities" in readiness or "sourceIdentitySetDigest" in readiness
+        else {
+            key: str(readiness.get(key) or "")
+            for key in (
+                "sourceRevision",
+                "sourceDigest",
+                "entityCatalogDigest",
+            )
+        }
+    )
     payload = {
         "schema": "quwoquan_ops.app_content_preflight",
         "target": target,
@@ -13845,15 +16417,26 @@ def command_app_content_preflight(args: argparse.Namespace) -> dict[str, Any]:
         "sourceRevision": candidate.get("sourceRevision", ""),
         "releaseId": readiness["releaseId"],
         "manifestDigest": readiness["manifestDigest"],
-        "readinessReceiptRef": relpath(readiness_path),
+        "readinessReceiptRef": receipt_ref,
         "readinessReceiptDigest": receipt_digest,
+        "dataSourceIdentity": data_source_identity,
+        "activationEnvelope": dict(readiness.get("activationEnvelope") or {}),
+        "activationEnvelopeDigest": str(
+            readiness.get("activationEnvelopeDigest") or ""
+        ),
         "lifecycleExitRef": lifecycle_ref,
         "appUatEnvelope": app_uat_envelope,
+        "appUatEnvelopeDigest": str(
+            readiness.get("appUatEnvelopeDigest") or ""
+        ),
+        "appUatPlan": app_uat_plan,
+        "appUatPlanDigest": _canonical_document_checksum(app_uat_plan),
         "contentReadback": _app_content_readback_summary(readiness),
         "contentReadinessReportRef": relpath(
             report_dir / "content-readiness" / "report.json"
         ),
-        "details": list(readiness_result.get("details", [])),
+        "releaseProbe": release_probe,
+        "details": details,
     }
     write_json(report_dir / "report.json", payload)
     write_json(
@@ -13919,13 +16502,258 @@ def _app_content_patrol_evidence(report_ref: str) -> dict[str, Any]:
     }
 
 
+def _run_app_content_release_probe(
+    *,
+    target: str,
+    readiness_path: Path,
+    app_uat_plan: Mapping[str, Any],
+    report_dir: Path,
+) -> dict[str, Any]:
+    """Verify Search, a 20-video page, and release media before device UAT."""
+
+    raw_search = app_uat_plan.get("searchCanaries")
+    raw_pagination = app_uat_plan.get("videoPagination")
+    raw_media = app_uat_plan.get("mediaChecks")
+    if (
+        not isinstance(raw_search, list)
+        or len(raw_search) != 3
+        or not all(isinstance(item, Mapping) for item in raw_search)
+        or not isinstance(raw_pagination, Mapping)
+        or raw_pagination.get("pageSize") != 20
+        or not isinstance(raw_pagination.get("expectedWorkIds"), list)
+        or not raw_pagination["expectedWorkIds"]
+        or not isinstance(raw_media, Mapping)
+        or raw_media.get("automatic") is not True
+    ):
+        raise ValueError("App content UAT plan is incomplete")
+    video_work_ids = {
+        str(item).strip()
+        for item in raw_pagination["expectedWorkIds"]
+        if str(item).strip()
+    }
+    if len(video_work_ids) != len(raw_pagination["expectedWorkIds"]):
+        raise ValueError("App content UAT video page identities are invalid")
+    sample_resolution: dict[str, Any] = {}
+    if isinstance(app_uat_plan.get("stratifiedSamples"), Mapping):
+        sample_resolution = resolve_release_sample_requests(
+            readiness_path=readiness_path,
+            app_uat_plan=app_uat_plan,
+            output_root=output_root(),
+        )
+    check, _output, findings = _run_environment_integration_probe(
+        load_environment_topology(),
+        target,
+        report_dir,
+        require_non_empty_content_feed=True,
+        release_post_expectations={"video_book_feed": video_work_ids},
+        release_search_canaries=[dict(item) for item in raw_search],
+        release_samples=list(sample_resolution.get("samples") or []),
+        release_readiness_path=readiness_path,
+        video_page_size=20,
+        only_checks=(
+            "video_book_feed",
+            "global_search",
+            "media_sample",
+            *(("release_sample",) if sample_resolution else ()),
+        ),
+        probe_name="app-content-release-bound-search-and-video-page",
+    )
+    if not bool(check.get("ok")) or findings:
+        raise ValueError(
+            "; ".join(str(item) for item in findings)
+            or "release-bound Search/video/media probe did not pass"
+        )
+    sample_execution: dict[str, Any] = {}
+    if sample_resolution:
+        readiness = _read_json_object(str(readiness_path))
+        sample_execution = validate_release_sample_probe(
+            report=_read_json_object(str(report_dir / "integration-probe.json")),
+            resolved=sample_resolution,
+            app_uat_plan_digest=_canonical_document_checksum(dict(app_uat_plan)),
+            readiness_receipt_digest=_canonical_document_checksum(readiness),
+        )
+    return {
+        "target": target,
+        "suite": "release-bound-search-and-video-page",
+        "exitCode": 0,
+        "reportRef": str(check.get("reportPath") or ""),
+        "searchCanaries": [dict(item) for item in raw_search],
+        "videoPagination": dict(raw_pagination),
+        "mediaChecks": dict(raw_media),
+        "sampleExecution": sample_execution,
+        "executedSampleCount": int(
+            sample_execution.get("executedSampleCount") or 0
+        ),
+        "sampleExecutionDigest": (
+            _canonical_document_checksum(sample_execution)
+            if sample_execution
+            else ""
+        ),
+    }
+
+
+def _execute_otp_login_journey(
+    *,
+    environment: str,
+    target_name: str,
+    runtime_mode: str,
+    startup: Mapping[str, Any],
+    provider_runtime: Mapping[str, Any],
+    api_base_url: str,
+    report_dir: Path,
+) -> dict[str, Any]:
+    """Execute one secret-free, runtime-bound SendOtp/Login/session readback."""
+
+    receipt_path = report_dir / "otp-login-journey.json"
+    if runtime_mode == "immutable_candidate":
+        result = run(
+            [
+                sys.executable,
+                str(
+                    ROOT
+                    / "quwoquan_ops/tests/acceptance/api_integration/service_ops/"
+                    "user-service/otp_local_capture_live_journey__api_integration_test.py"
+                ),
+            ],
+            cwd=ROOT,
+            env={
+                "QWQ_PROVIDER_CONFORMANCE_ENVIRONMENT": environment,
+                "APP_RUNTIME_ENV": environment,
+            },
+            timeout_seconds=120,
+        )
+        try:
+            journey = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(
+                "candidate-bound OTP login journey returned no machine receipt"
+            ) from exc
+        if not isinstance(journey, dict):
+            raise RuntimeError("candidate-bound OTP login journey receipt is invalid")
+        if result.returncode != 0 or journey.get("status") != "passed":
+            reason = str(journey.get("reason") or "live journey failed").strip()
+            raise RuntimeError(
+                "candidate-bound OTP login journey GATE_BLOCK: " + reason
+            )
+        baseline_id = str(provider_runtime.get("baselineId") or "")
+        manifest = load_candidate_manifest(
+            environment,
+            target_name,
+            baseline_id,
+            require_full=True,
+        )
+        expected = {
+            "schema": "otp-local-capture-live-journey",
+            "status": "passed",
+            "target": target_name,
+            "baselineId": baseline_id,
+            "sourceRevision": str(manifest.get("sourceRevision") or ""),
+            "runtimeConfigDigest": str(manifest.get("runtimeConfigDigest") or ""),
+            "configurationDigest": str(manifest.get("configurationDigest") or ""),
+            "providerRuntimeDigest": str(
+                provider_runtime.get("composition", {}).get(
+                    "runtimeCompositionDigest"
+                )
+                or ""
+            ),
+            "startupAttemptId": str(startup.get("attemptId") or ""),
+            "challengePresent": True,
+            "sessionPresent": True,
+            "nonPromotable": True,
+        }
+        if any(journey.get(field) != value for field, value in expected.items()):
+            raise RuntimeError(
+                "candidate-bound OTP login journey receipt identity mismatch"
+            )
+        receipt = dict(journey)
+        receipt["launchPolicy"] = "immutable_candidate"
+    else:
+        before_identity = {
+            field: str(startup.get(field) or "")
+            for field in (
+                "attemptId",
+                "sourceRevision",
+                "configurationDigest",
+                "providerRuntimeDigest",
+            )
+        }
+        if not api_base_url:
+            raise RuntimeError("test_live OTP login journey has no API base URL")
+        # The runtime attempt binds the journey to the selected deployment, but
+        # it is not the identity of an acceptance run.  Reusing only the
+        # attempt/configuration tuple makes a later app-debug-preflight replay
+        # the already-consumed SendOtp challenge while the protected capture is
+        # intentionally one-shot.  Bind the typed actor to this append-only
+        # preflight run as well, so a command retry gets a fresh Case actor and
+        # its own idempotency key without weakening SendOtp idempotency.
+        instance_id = "otp-" + hashlib.sha256(
+            (
+                target_name
+                + "\0"
+                + before_identity["attemptId"]
+                + "\0"
+                + before_identity["configurationDigest"]
+                + "\0"
+                + str(report_dir.expanduser().resolve())
+            ).encode("utf-8")
+        ).hexdigest()[:40]
+        actor = open_test_data_acceptance_session(
+            api_base_url,
+            environment=environment,
+            target_name=target_name,
+            test_data_instance_id=instance_id,
+            actor_role="primary",
+            actor_index=0,
+        )
+        try:
+            current = load_test_live_startup_attempt(target_name)
+            after_identity = {
+                field: str((current or {}).get(field) or "")
+                for field in before_identity
+            }
+            if before_identity != after_identity:
+                raise RuntimeError("test_live runtime changed during OTP login journey")
+            if not actor.challenge_id or not actor.session.owner_id:
+                raise RuntimeError("test_live OTP login journey receipt is incomplete")
+        finally:
+            close_test_data_acceptance_actor(
+                api_base_url,
+                actor=actor,
+                test_data_instance_id=instance_id,
+            )
+        receipt = {
+            "schema": "otp-local-capture-live-journey",
+            "status": "passed",
+            "target": target_name,
+            "launchPolicy": "test_live",
+            "baselineId": "",
+            "sourceRevision": before_identity["sourceRevision"],
+            "configurationDigest": before_identity["configurationDigest"],
+            "providerRuntimeDigest": before_identity["providerRuntimeDigest"],
+            "startupAttemptId": before_identity["attemptId"],
+            "challengePresent": True,
+            "sessionPresent": True,
+            "nonPromotable": True,
+        }
+
+    write_json(receipt_path, receipt)
+    receipt_digest = "sha256:" + hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+    return {
+        **receipt,
+        "receiptRef": relpath(receipt_path),
+        "receiptDigest": receipt_digest,
+    }
+
+
 def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
-    """Validate a mutable non-production launch without owning runtime health."""
+    """Validate runtime health plus a real SendOtp/Login/session journey."""
 
     target_name = str(args.target)
     topology = load_environment_topology()
     target = get_target(topology, target_name)
     environment = str(target["env"])
+    runtime_mode = str(getattr(args, "runtime_mode", "") or "")
+    purpose = str(getattr(args, "purpose", "runtime") or "runtime")
     report_dir = (
         Path(args.report_dir)
         if getattr(args, "report_dir", "")
@@ -13935,10 +16763,23 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
     warnings: list[str] = []
     mutable_workspace_warnings: list[str] = []
     startup: dict[str, Any] = {}
+    content_binding: dict[str, Any] = {}
+    content_preflight: dict[str, Any] = {}
     provider_runtime_binding: dict[str, Any] | None = None
+    login_journey: dict[str, Any] = {}
+
+    def record_readiness_finding(message: str) -> None:
+        if runtime_mode == "test_live" and purpose == "runtime":
+            warnings.append(message)
+        else:
+            details.append(message)
 
     if environment not in {"alpha", "beta", "gamma"}:
-        details.append("app-debug-preflight only supports non-production test_live")
+        details.append("app-debug-preflight only supports non-production targets")
+    if runtime_mode not in {"immutable_candidate", "test_live"}:
+        details.append("app-debug-preflight runtime mode is invalid")
+    if purpose not in {"runtime", "content_live"}:
+        details.append("app-debug-preflight purpose is invalid")
     public_bases = target.get("publicBases") or {}
     expected_host = f"{environment}.quwoquan.com"
     for role, raw_url in sorted(public_bases.items()):
@@ -13946,45 +16787,58 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
         hostname = str(parsed.hostname or "").lower()
         if hostname != expected_host and not hostname.endswith(f".{expected_host}"):
             details.append(
-                f"test_live {role} endpoint escapes the selected {environment} namespace"
+                f"{runtime_mode or 'unknown'} {role} endpoint escapes the selected "
+                f"{environment} namespace"
             )
 
     try:
-        current_composition = compile_provider_runtime_composition(
-            environment=environment,
-            target=target_name,
-        )
-        provider_runtime_binding = {"composition": current_composition}
+        if runtime_mode == "immutable_candidate":
+            provider_runtime_binding = _active_provider_runtime(
+                environment,
+                target_name,
+            )
+        else:
+            provider_runtime_binding = {
+                "baselineId": "",
+                "composition": compile_provider_runtime_composition(
+                    environment=environment,
+                    target=target_name,
+                ),
+            }
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
-        details.append(f"current Provider safety contract is invalid: {exc}")
+        record_readiness_finding(f"selected Provider runtime is invalid: {exc}")
     try:
-        _active_provider_runtime(environment, target_name)
-    except (OSError, RuntimeError, TypeError, ValueError) as exc:
-        warning = f"active candidate is absent or stale: {exc}"
-        warnings.append(warning)
-        mutable_workspace_warnings.append(warning)
-
-    try:
-        startup = load_startup_attempt(target_name) or {}
+        if runtime_mode == "immutable_candidate":
+            startup = load_startup_attempt(target_name) or {}
+        else:
+            startup = load_test_live_startup_attempt(target_name) or {}
     except (OSError, ValueError) as exc:
-        warnings.append(f"startup receipt unreadable: {exc}")
+        record_readiness_finding(f"selected startup receipt is unreadable: {exc}")
     if not startup:
-        warnings.append("target has no startup receipt")
+        record_readiness_finding("target has no selected runtime startup receipt")
     else:
         if startup.get("status") != "running":
-            warnings.append(
+            record_readiness_finding(
                 "target startup status is not running: "
                 + str(startup.get("status") or "missing")
             )
-        if startup.get("env") != environment or startup.get("target") != target_name:
-            warnings.append("startup receipt target/environment mismatch")
+        if (
+            startup.get(
+                "env" if runtime_mode == "immutable_candidate" else "environment"
+            )
+            != environment
+            or startup.get("target") != target_name
+        ):
+            record_readiness_finding("startup receipt target/environment mismatch")
         if startup.get("workload") != "full":
-            warnings.append("full runtime is not running")
+            record_readiness_finding("full runtime is not running")
         if re.fullmatch(
             r"sha256:[0-9a-f]{64}",
             str(startup.get("configurationDigest") or ""),
         ) is None:
-            warnings.append("startup receipt has no canonical configuration digest")
+            record_readiness_finding(
+                "startup receipt has no canonical configuration digest"
+            )
         expected_provider_digest = str(
             (provider_runtime_binding or {}).get("composition", {}).get(
                 "runtimeCompositionDigest"
@@ -13995,20 +16849,39 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             not expected_provider_digest
             or startup.get("providerRuntimeDigest") != expected_provider_digest
         ):
-            warning = (
-                "startup receipt Provider runtime differs from current test_live source"
+            record_readiness_finding(
+                "startup receipt Provider runtime differs from selected runtime"
             )
-            warnings.append(warning)
-            mutable_workspace_warnings.append(warning)
+        if runtime_mode == "immutable_candidate" and (
+            startup.get("candidateDigest")
+            != (provider_runtime_binding or {}).get("baselineId")
+        ):
+            details.append("startup receipt does not bind the active candidate")
 
     try:
         tls_evidence = verify_certificate(target_name)
-    except (OSError, PublicDomainTlsError, ValueError) as exc:
+    except (
+        OSError,
+        PublicDomainTlsError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ) as exc:
         tls_evidence = {"status": "gate_block"}
-        warnings.append(f"target TLS is not ready: {exc}")
+        record_readiness_finding(f"target TLS is not ready: {exc}")
 
     profile_name = str(target.get("portProfile") or "")
-    ports = profile_ports(load_port_manifest(), profile_name) if profile_name else {}
+    try:
+        ports = (
+            profile_ports(load_port_manifest(), profile_name)
+            if profile_name
+            else {}
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        ports = {}
+        record_readiness_finding(
+            f"target local port topology is unavailable: {exc}"
+        )
     public_bases = target.get("publicBases") or {}
     checks = [
         ("api-edge", f"{str(public_bases.get('api') or '').rstrip('/')}/healthz", ""),
@@ -14018,53 +16891,82 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
     provider_roles: list[str] = []
     sms_capture_roles: set[str] = set()
     if provider_runtime_binding is not None:
-        provider_roles = [
-            str(item["role"])
-            for item in provider_runtime_binding["composition"]["workloads"]
-        ]
-        sms_capture_roles = {
-            str(item["role"])
-            for item in provider_runtime_binding["composition"]["workloads"]
-            if "ext.sms.local_capture" in item["adapterIds"]
-        }
-        provider_ca_file = str(
-            root_certificate_path(target_name, require_ready=False)
-        )
-        checks.extend(
-            (
-                role,
-                f"https://127.0.0.1:{ports.get(role, 0)}/healthz",
-                provider_ca_file,
+        try:
+            composition = provider_runtime_binding.get("composition")
+            if not isinstance(composition, Mapping):
+                raise ValueError("Provider runtime composition is missing")
+            workloads = composition.get("workloads")
+            if not isinstance(workloads, list):
+                raise ValueError("Provider runtime workloads are missing")
+            provider_roles = [
+                str(item["role"])
+                for item in workloads
+                if isinstance(item, Mapping)
+            ]
+            sms_capture_roles = {
+                str(item["role"])
+                for item in workloads
+                if isinstance(item, Mapping)
+                and "ext.sms.local_capture" in item.get("adapterIds", [])
+            }
+            provider_ca_file = str(
+                root_certificate_path(target_name, require_ready=False)
             )
-            for role in provider_roles
-        )
+            checks.extend(
+                (
+                    role,
+                    f"https://127.0.0.1:{ports.get(role, 0)}/healthz",
+                    provider_ca_file,
+                )
+                for role in provider_roles
+            )
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            record_readiness_finding(
+                f"selected Provider runtime diagnostics are unavailable: {exc}"
+            )
     provider_readback: dict[str, Any] = {}
     check_receipts: list[dict[str, Any]] = []
     for name, url, ca_file in checks:
         if url.endswith(":0/healthz") or url == "/healthz":
-            warnings.append(f"{name} topology is incomplete")
+            check_receipts.append(
+                {"name": name, "ready": False, "statusCode": None}
+            )
+            record_readiness_finding(f"{name} topology is incomplete")
             continue
-        ok, status_code, body, _ = fetch_url(
-            url,
-            timeout=2.0,
-            retry_attempts=1,
-            retry_sleep_seconds=0,
-            ca_file=ca_file,
-        )
+        probe_failed = False
+        try:
+            ok, status_code, body, _ = fetch_url(
+                url,
+                timeout=2.0,
+                retry_attempts=3,
+                retry_sleep_seconds=0.5,
+                ca_file=ca_file,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            ok, status_code, body = False, None, ""
+            probe_failed = True
+            record_readiness_finding(
+                f"{name} readiness probe failed: {exc}"
+            )
         check_receipts.append(
             {"name": name, "ready": ok, "statusCode": status_code}
         )
+        if not ok and not probe_failed:
+            record_readiness_finding(
+                f"{name} is not ready: {status_code or 'network_error'}"
+            )
         if not ok:
-            warnings.append(f"{name} is not ready: {status_code or 'network_error'}")
             continue
         if name in sms_capture_roles:
             try:
                 decoded = json.loads(body)
             except json.JSONDecodeError:
-                warnings.append("SMS substitute health readback is not JSON")
+                record_readiness_finding(
+                    "SMS substitute health readback is not JSON"
+                )
                 continue
             if not isinstance(decoded, dict):
-                warnings.append("SMS substitute health readback is invalid")
+                record_readiness_finding("SMS substitute health readback is invalid")
                 continue
             provider_readback = {
                 "adapterId": str(decoded.get("adapterId") or ""),
@@ -14091,16 +16993,184 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 "failure",
                 "timeout",
             }:
-                warnings.append("SMS substitute adapter/environment/readiness mismatch")
+                record_readiness_finding(
+                    "SMS substitute adapter/environment/readiness mismatch"
+                )
 
-    content_result: dict[str, Any] = {}
+    if not details and not warnings and provider_runtime_binding is not None:
+        try:
+            login_journey = _execute_otp_login_journey(
+                environment=environment,
+                target_name=target_name,
+                runtime_mode=runtime_mode,
+                startup=startup,
+                provider_runtime=provider_runtime_binding,
+                api_base_url=str(public_bases.get("api") or "").rstrip("/"),
+                report_dir=report_dir,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            record_readiness_finding(str(exc))
+
+    runtime_ready = (
+        not details
+        and not warnings
+        and provider_runtime_binding is not None
+        and bool(startup)
+        and startup.get("status") == "running"
+        and str(tls_evidence.get("status") or "") == "ready"
+        and bool(check_receipts)
+        and all(item.get("ready") is True for item in check_receipts)
+        and login_journey.get("status") == "passed"
+    )
+    if runtime_mode == "test_live":
+        try:
+            content_binding = load_test_live_content_binding(target_name) or {}
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            content_binding = {}
+            record_readiness_finding(
+                f"test-live content binding is invalid and was ignored: {exc}"
+            )
+        if not content_binding:
+            record_readiness_finding(
+                "test_live content is unbound; no explicit release identity was selected"
+            )
+
+    content_live_components: dict[str, bool | None] = {
+        "runtime": None,
+        "binding": None,
+        "api": None,
+        "media": None,
+        "search": None,
+        "recommendation": None,
+        "readiness": None,
+    }
+    blocked_content_components: list[str] = []
+    if purpose == "content_live":
+        try:
+            content_preflight = command_app_content_preflight(
+                argparse.Namespace(
+                    target=target_name,
+                    purpose="content_live",
+                    runtime_mode=runtime_mode,
+                    content_binding=content_binding,
+                    report_dir=str(report_dir / "content-live"),
+                )
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            content_preflight = {
+                "exitCode": 2,
+                "status": "gate_block",
+                "details": [str(exc)],
+            }
+
+        readback = content_preflight.get("contentReadback")
+        readback = readback if isinstance(readback, Mapping) else {}
+        raw_queries = readback.get("feedQueries")
+        feed_queries = (
+            [item for item in raw_queries if isinstance(item, Mapping)]
+            if isinstance(raw_queries, list)
+            else []
+        )
+
+        def matched_query(name: str) -> bool:
+            return any(
+                item.get("name") == name and bool(item.get("matchedPostIds"))
+                for item in feed_queries
+            )
+
+        app_uat_plan = content_preflight.get("appUatPlan")
+        app_uat_plan = app_uat_plan if isinstance(app_uat_plan, Mapping) else {}
+        release_probe = content_preflight.get("releaseProbe")
+        release_probe = release_probe if isinstance(release_probe, Mapping) else {}
+        probed_media = release_probe.get("mediaChecks")
+        probed_media = probed_media if isinstance(probed_media, Mapping) else {}
+        probed_search = release_probe.get("searchCanaries")
+        binding_ready = (
+            (
+                bool(content_binding)
+                and all(
+                    str(content_preflight.get(field) or "")
+                    == str(content_binding.get(field) or "")
+                    for field in (
+                        "releaseId",
+                        "manifestDigest",
+                        "readinessReceiptRef",
+                        "readinessReceiptDigest",
+                    )
+                )
+            )
+            if runtime_mode == "test_live"
+            else (
+                bool((provider_runtime_binding or {}).get("baselineId"))
+                and content_preflight.get("packageBaseline")
+                == (provider_runtime_binding or {}).get("baselineId")
+            )
+        )
+        content_live_components = {
+            "runtime": runtime_ready,
+            "binding": binding_ready,
+            "api": bool(readback.get("postIds")) and bool(feed_queries),
+            "media": release_probe.get("exitCode") == 0
+            and probed_media.get("automatic") is True
+            and matched_query("typed_video"),
+            "search": release_probe.get("exitCode") == 0
+            and isinstance(probed_search, list)
+            and len(probed_search) == 3,
+            "recommendation": release_probe.get("exitCode") == 0
+            and matched_query("homepage_recommend"),
+            "readiness": int(content_preflight.get("exitCode", 2)) == 0
+            and content_preflight.get("status") == "passed"
+            and bool(content_preflight.get("readinessReceiptRef"))
+            and bool(content_preflight.get("readinessReceiptDigest")),
+        }
+        blocked_content_components = sorted(
+            name
+            for name, ready in content_live_components.items()
+            if ready is not True
+        )
+        if blocked_content_components:
+            details.append(
+                "content-live components are GATE_BLOCK: "
+                + ", ".join(blocked_content_components)
+            )
+    content_state = "bound" if content_binding else "unbound"
     status = "gate_block" if details else "warning" if warnings else "passed"
+    content_live_status = (
+        "gate_block"
+        if purpose == "content_live" and blocked_content_components
+        else "passed"
+        if purpose == "content_live"
+        else "not_requested"
+    )
+    first_blocker = (
+        "APP.CONTENT_LIVE."
+        + blocked_content_components[0].upper()
+        + "_BLOCKED"
+        if blocked_content_components
+        else ("APP.RUNTIME.PREFLIGHT_BLOCKED" if details else "")
+    )
+    recovery_command = (
+        "python3 quwoquan_ops/cli/stackctl.py --output-format json "
+        f"app-debug-preflight --purpose {purpose} --target {target_name} "
+        f"--runtime-mode {runtime_mode}"
+    )
     payload = {
         "schema": "quwoquan_ops.app_debug_preflight",
         "target": target_name,
         "environment": environment,
-        "launchPolicy": "test_live",
-        "contentBindingState": "unbound",
+        "purpose": purpose,
+        "launchPolicy": runtime_mode,
+        "nonPromotable": runtime_mode == "test_live",
+        "contentLive": content_live_status,
+        "contentLiveChecks": {
+            "status": content_live_status,
+            "nonPromotable": runtime_mode == "test_live",
+            "components": content_live_components,
+            "blockedComponents": blocked_content_components,
+        },
+        "firstBlocker": first_blocker,
+        "recoveryCommand": recovery_command,
+        "contentBindingState": content_state,
         "status": status,
         "configurationDigest": str(startup.get("configurationDigest") or ""),
         "providerRuntimeDigest": str(
@@ -14112,26 +17182,68 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             "status": str(tls_evidence.get("status") or ""),
         },
         "provider": provider_readback,
+        "loginJourney": login_journey,
+        "loginJourneyReceiptRef": login_journey.get("receiptRef", ""),
+        "loginJourneyReceiptDigest": login_journey.get("receiptDigest", ""),
         "details": details,
         "warnings": warnings,
         "mutableWorkspaceWarnings": mutable_workspace_warnings,
-        "contentAvailability": {
-            "state": "unbound",
-            "emptyReason": "no_active_release",
-        },
-        "packageBaseline": content_result.get("packageBaseline", ""),
-        "sourceRevision": content_result.get("sourceRevision", ""),
-        "releaseId": content_result.get("releaseId", ""),
-        "manifestDigest": content_result.get("manifestDigest", ""),
-        "readinessReceiptRef": content_result.get("readinessReceiptRef", ""),
-        "readinessReceiptDigest": content_result.get(
-            "readinessReceiptDigest", ""
+        "contentAvailability": (
+            {
+                "state": "bound",
+                "readinessPhase": content_binding.get("readinessPhase", ""),
+            }
+            if content_binding
+            else (
+                {"state": "unbound", "emptyReason": "no_active_release"}
+                if runtime_mode == "test_live"
+                else {
+                    "state": "not_evaluated",
+                    "packageBaseline": str(
+                        (provider_runtime_binding or {}).get("baselineId") or ""
+                    ),
+                }
+            )
         ),
-        "lifecycleExitRef": content_result.get("lifecycleExitRef", ""),
-        "appUatEnvelope": content_result.get("appUatEnvelope", {}),
-        "contentReadback": content_result.get("contentReadback", {}),
-        "contentReadinessReportRef": content_result.get(
-            "contentReadinessReportRef", ""
+        "contentBinding": content_binding,
+        "packageBaseline": (
+            str((provider_runtime_binding or {}).get("baselineId") or "")
+            if runtime_mode == "immutable_candidate"
+            else ""
+        ),
+        "sourceRevision": str(
+            login_journey.get("sourceRevision")
+            or (
+                (content_binding.get("startupIdentity") or {}).get("sourceRevision")
+                if isinstance(content_binding.get("startupIdentity"), Mapping)
+                else ""
+            )
+        ),
+        "releaseId": content_binding.get("releaseId", ""),
+        "manifestDigest": content_binding.get("manifestDigest", ""),
+        "readinessReceiptRef": content_binding.get("readinessReceiptRef", ""),
+        "readinessReceiptDigest": content_binding.get("readinessReceiptDigest", ""),
+        "lifecycleExitRef": content_binding.get("lifecycleExitRef", ""),
+        "appUatEnvelope": content_binding.get("appUatEnvelope", {}),
+        "appUatPlan": (
+            content_preflight.get("appUatPlan", {})
+            if purpose == "content_live"
+            else content_binding.get("appUatPlan", {})
+        ),
+        "appUatPlanDigest": (
+            content_preflight.get("appUatPlanDigest", "")
+            if purpose == "content_live"
+            else content_binding.get("appUatPlanDigest", "")
+        ),
+        "contentReadback": (
+            content_preflight.get("contentReadback", {})
+            if purpose == "content_live"
+            else {}
+        ),
+        "contentReadinessReportRef": (
+            content_preflight.get("contentReadinessReportRef", "")
+            if purpose == "content_live"
+            else ""
         ),
     }
     write_json(report_dir / "report.json", payload)
@@ -14367,6 +17479,269 @@ def _normalize_debug_phone(raw: str) -> str:
     return normalized
 
 
+_APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS = (
+    "sourceRevision",
+    "workspaceStatusDigest",
+    "mutableStateDigest",
+    "composeDigest",
+    "configurationDigest",
+    "providerRuntimeDigest",
+    "resolverHandoffDigest",
+)
+
+
+def _app_content_test_live_runtime_binding(
+    preflight: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Bind one UAT target to its exact running mutable runtime and Data run."""
+
+    target = str(preflight.get("target") or "").strip()
+    environment = str(preflight.get("environment") or "").strip()
+    if (
+        preflight.get("launchPolicy") != "test_live"
+        or target != f"{environment}-local"
+        or environment not in {"alpha", "beta", "gamma"}
+    ):
+        raise ValueError("App content UAT requires canonical non-production test_live")
+    if str(preflight.get("packageBaseline") or ""):
+        raise ValueError("test_live App content UAT must not consume a package baseline")
+
+    startup = load_test_live_startup_attempt(target)
+    if (
+        not isinstance(startup, dict)
+        or startup.get("status") != "running"
+        or startup.get("failure") not in {None, ""}
+    ):
+        raise ValueError("App content UAT requires the current running test_live receipt")
+    content = load_test_live_content_binding(target)
+    if not isinstance(content, dict):
+        raise ValueError("App content UAT requires a run-bound content binding")
+    if (
+        content.get("launchPolicy") != "test_live"
+        or content.get("nonPromotable") is not True
+        or content.get("retentionClass") != "run_bound"
+        or content.get("contentBindingState") != "bound"
+        or content.get("environment") != environment
+        or content.get("target") != target
+        or content.get("startupAttemptId") != startup.get("attemptId")
+    ):
+        raise ValueError("App content UAT test_live binding identity drifted")
+
+    startup_identity = content.get("startupIdentity")
+    if not isinstance(startup_identity, Mapping):
+        raise ValueError("App content UAT test_live startup identity is missing")
+    for field in _APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS:
+        if str(startup_identity.get(field) or "") != str(startup.get(field) or ""):
+            raise ValueError(f"App content UAT test_live startup identity drifted: {field}")
+
+    expected_preflight = {
+        "contentBindingState": "bound",
+        "configurationDigest": startup["configurationDigest"],
+        "providerRuntimeDigest": startup["providerRuntimeDigest"],
+        "sourceRevision": startup["sourceRevision"],
+        "releaseId": content["releaseId"],
+        "manifestDigest": content["manifestDigest"],
+        "readinessReceiptRef": content["readinessReceiptRef"],
+        "readinessReceiptDigest": content["readinessReceiptDigest"],
+        "lifecycleExitRef": content["lifecycleExitRef"],
+        "appUatEnvelope": content["appUatEnvelope"],
+        "appUatPlan": content["appUatPlan"],
+        "appUatPlanDigest": content["appUatPlanDigest"],
+    }
+    for field, expected in expected_preflight.items():
+        if preflight.get(field) != expected:
+            raise ValueError(f"App content UAT preflight/binding drifted: {field}")
+
+    return {
+        "launchPolicy": "test_live",
+        "nonPromotable": True,
+        "environment": environment,
+        "target": target,
+        "startupAttemptId": startup["attemptId"],
+        "composeProject": startup["composeProject"],
+        "runRoot": startup["runRoot"],
+        "startupIdentity": {
+            field: str(startup[field])
+            for field in _APP_CONTENT_TEST_LIVE_STARTUP_IDENTITY_FIELDS
+        },
+        "contentBindingState": "bound",
+        "retentionClass": "run_bound",
+        "releaseId": content["releaseId"],
+        "verifyRunId": content["verifyRunId"],
+        "manifestDigest": content["manifestDigest"],
+        "readinessPhase": content["readinessPhase"],
+        "readinessReceiptRef": content["readinessReceiptRef"],
+        "readinessReceiptDigest": content["readinessReceiptDigest"],
+        "lifecycleExitRef": content["lifecycleExitRef"],
+        "appUatPlan": content["appUatPlan"],
+        "appUatPlanDigest": content["appUatPlanDigest"],
+    }
+
+
+_ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
+    {
+        DISCOVERY_FEED_UAT_TEST_TARGET,
+        APP_CORE_READBACK_UAT_TEST_TARGET,
+        HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
+        VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
+        CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
+    }
+)
+_BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
+    {
+        APP_CORE_READBACK_UAT_TEST_TARGET,
+        HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
+    }
+)
+
+
+def _app_content_uat_requires_typed_actor(
+    environment: str,
+    patrol_target: str,
+) -> bool:
+    if environment == "alpha":
+        return patrol_target in _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS
+    if environment in {"beta", "gamma"}:
+        return patrol_target in _BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS
+    return False
+
+
+def _app_content_test_live_actor_context(
+    *,
+    preflight: Mapping[str, Any],
+    runtime_binding: Mapping[str, Any],
+    readiness_path: Path,
+    report_dir: Path,
+) -> TestDataContext:
+    """Bind one typed UAT Actor scope to the exact mutable runtime and release."""
+
+    target = str(runtime_binding.get("target") or "").strip()
+    environment = str(runtime_binding.get("environment") or "").strip()
+    startup = runtime_binding.get("startupIdentity")
+    if not isinstance(startup, Mapping):
+        raise ValueError("App content UAT typed Actor startup identity is missing")
+    readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
+    if not isinstance(readiness, Mapping):
+        raise ValueError("App content UAT typed Actor readiness is invalid")
+    expected_readiness = {
+        "passed": True,
+        "environment": environment,
+        "releaseId": runtime_binding.get("releaseId"),
+        "verifyRunId": runtime_binding.get("verifyRunId"),
+        "manifestDigest": runtime_binding.get("manifestDigest"),
+        "readinessPhase": runtime_binding.get("readinessPhase"),
+    }
+    if any(readiness.get(field) != value for field, value in expected_readiness.items()):
+        raise ValueError("App content UAT typed Actor readiness identity drifted")
+    candidate = CandidateBinding(
+        environment=environment,
+        target=target,
+        baseline_id=str(startup.get("mutableStateDigest") or ""),
+        package_digest=str(startup.get("composeDigest") or ""),
+        runtime_config_digest=str(startup.get("configurationDigest") or ""),
+        release_id=str(runtime_binding.get("releaseId") or ""),
+        release_digest=str(runtime_binding.get("manifestDigest") or ""),
+        import_run_id=str(readiness.get("importRunId") or ""),
+        release_post_ids=tuple(
+            str(item).strip()
+            for item in readiness.get("postIds") or []
+            if str(item).strip()
+        ),
+    )
+    provider = preflight.get("provider")
+    login = preflight.get("loginJourney")
+    if not isinstance(provider, Mapping) or not isinstance(login, Mapping):
+        raise ValueError("App content UAT typed Actor Provider evidence is missing")
+    provider_expected = {
+        "adapterId": "ext.sms.local_capture",
+        "environment": environment,
+        "configurationDigest": startup.get("configurationDigest"),
+        "nonPromotable": True,
+        "ready": True,
+    }
+    if any(provider.get(field) != value for field, value in provider_expected.items()):
+        raise ValueError("App content UAT typed Actor Provider identity drifted")
+    if (
+        login.get("status") != "passed"
+        or login.get("challengePresent") is not True
+        or login.get("sessionPresent") is not True
+        or login.get("startupAttemptId") != runtime_binding.get("startupAttemptId")
+        or login.get("nonPromotable") is not True
+        or not str(login.get("receiptRef") or "").strip()
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", str(login.get("receiptDigest") or ""))
+        is None
+    ):
+        raise ValueError("App content UAT typed Actor OTP evidence drifted")
+    identity_provider_capability = (
+        AUTHENTICATED_ACTORS.required_provider_capabilities[0].value
+    )
+    provider_evidence = {
+        identity_provider_capability: {
+            "status": "passed",
+            "candidateBindingDigest": candidate.digest,
+            "adapterId": provider["adapterId"],
+            "receiptRef": login["receiptRef"],
+            "receiptDigest": login["receiptDigest"],
+        }
+    }
+    topology_target = get_target(load_environment_topology(), target)
+    base_url = str(
+        ((topology_target.get("publicBases") or {}).get("api") or "")
+    ).rstrip("/")
+    return TestDataContext(
+        candidate=candidate,
+        base_url=base_url,
+        output_root=report_dir / target / "test-data",
+        provider_evidence=provider_evidence,
+        runtime=TestDataRuntime(),
+    )
+
+
+def _ios_direct_flutter_log_reader_retryable(
+    evidence: Mapping[str, Any],
+) -> bool:
+    """Return whether a fresh run is required after Flutter lost its log reader.
+
+    The prior run must still prove one healthy cold terminal.  This never turns
+    that failed report into evidence; it only permits one new, fully validated
+    direct run so the three required hot restarts can be observed.
+    """
+
+    if evidence.get("status") != "failed":
+        return False
+    issues = evidence.get("issues")
+    if issues != ["expected 3 hot-restart Dart startup attempts, got 0"]:
+        return False
+    attempts = evidence.get("attempts")
+    if not isinstance(attempts, list) or len(attempts) != 1:
+        return False
+    cold = attempts[0]
+    if (
+        not isinstance(cold, Mapping)
+        or cold.get("hotRestart") is not False
+        or cold.get("canonicalTerminal") != "routerShell"
+        or cold.get("configurationState") != "complete"
+        or cold.get("bootstrapFailure") is not False
+        or cold.get("terminalEventCount") != 1
+    ):
+        return False
+    for field in ("reportedSafeTerminalMs", "nativeReceivedSafeTerminalMs"):
+        value = cold.get(field)
+        if not isinstance(value, int) or value > 6000:
+            return False
+    log_ref = str(evidence.get("flutterRunLog") or "").strip()
+    if not log_ref:
+        return False
+    try:
+        log_text = Path(log_ref).read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return (
+        "Error waiting for a debug connection: "
+        "The log reader failed unexpectedly" in log_text
+    )
+
+
 def _command_app_content_uat(
     args: argparse.Namespace,
     *,
@@ -14394,12 +17769,14 @@ def _command_app_content_uat(
         issues.append("--device-id is required")
 
     preflights: list[dict[str, Any]] = []
+    runtime_bindings: list[dict[str, Any]] = []
     if not issues:
         for target in targets:
             result = command_app_debug_preflight(
                 argparse.Namespace(
                     target=target,
                     report_dir=str(report_dir / target / "preflight"),
+                    runtime_mode="test_live",
                 )
             )
             preflights.append(result)
@@ -14409,8 +17786,14 @@ def _command_app_content_uat(
                     + str((result.get("details") or [result.get("summary")])[0])
                 )
                 break
+            try:
+                runtime_bindings.append(
+                    _app_content_test_live_runtime_binding(result)
+                )
+            except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                issues.append(f"{target}: {exc}")
+                break
     if not issues and preflights:
-        baselines = {str(item.get("packageBaseline") or "") for item in preflights}
         releases = {str(item.get("releaseId") or "") for item in preflights}
         digests = {str(item.get("manifestDigest") or "") for item in preflights}
         app_uat_envelopes = {
@@ -14422,21 +17805,79 @@ def _command_app_content_uat(
             )
             for item in preflights
         }
-        if len(baselines) != 1 or "" in baselines:
-            issues.append("Alpha/Beta/Gamma package baseline is not identical")
-        elif len(releases) != 1 or "" in releases:
+        app_uat_plans = {
+            json.dumps(
+                item.get("appUatPlan") or {},
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            for item in preflights
+        }
+        if len(releases) != 1 or "" in releases:
             issues.append("Alpha/Beta/Gamma active releaseId is not identical")
         elif len(digests) != 1 or "" in digests:
             issues.append("Alpha/Beta/Gamma manifest digest is not identical")
         elif len(app_uat_envelopes) != 1 or "{}" in app_uat_envelopes:
             issues.append("Alpha/Beta/Gamma appUatEnvelope is not identical")
+        elif len(app_uat_plans) != 1 or "{}" in app_uat_plans:
+            issues.append("Alpha/Beta/Gamma appUatPlan is not identical")
 
     runs: list[dict[str, Any]] = []
     if not issues:
         for preflight in preflights:
             target = str(preflight["target"])
             environment = str(preflight["environment"])
-            readiness_path = ROOT / str(preflight["readinessReceiptRef"])
+            envelope = preflight.get("appUatEnvelope")
+            if not isinstance(envelope, dict):
+                issues.append(f"{target}: canonical App UAT envelope is missing")
+                break
+            app_uat_plan = preflight.get("appUatPlan")
+            if not isinstance(app_uat_plan, dict):
+                issues.append(f"{target}: canonical App UAT plan is missing")
+                break
+            release_video_work_id = str(envelope.get("videoWorkId") or "").strip()
+            if not release_video_work_id:
+                issues.append(f"{target}: canonical App UAT video workId is missing")
+                break
+            readiness_path = (
+                output_root().expanduser().resolve()
+                / str(preflight["readinessReceiptRef"])
+            )
+            if bool(getattr(args, "dry_run", False)):
+                runs.append(
+                    {
+                        "target": target,
+                        "suite": "release-bound-search-and-video-page",
+                        "exitCode": 0,
+                        "reportRef": "",
+                        "status": "planned",
+                        "searchCanaries": list(
+                            app_uat_plan.get("searchCanaries") or []
+                        ),
+                        "videoPagination": dict(
+                            app_uat_plan.get("videoPagination") or {}
+                        ),
+                        "mediaChecks": dict(
+                            app_uat_plan.get("mediaChecks") or {}
+                        ),
+                    }
+                )
+            else:
+                try:
+                    runs.append(
+                        _run_app_content_release_probe(
+                            target=target,
+                            readiness_path=readiness_path,
+                            app_uat_plan=app_uat_plan,
+                            report_dir=(
+                                report_dir / target / "release-bound-readback"
+                            ),
+                        )
+                    )
+                except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                    issues.append(f"{target}: {exc}")
+                    break
             if args.platform == "ios-simulator":
                 direct_command = [
                     sys.executable,
@@ -14452,11 +17893,46 @@ def _command_app_content_uat(
                 ]
                 if bool(getattr(args, "dry_run", False)):
                     direct_command.append("--preflight-only")
-                direct_result = run(direct_command, cwd=ROOT / "quwoquan_app")
+                direct_execution_lock = None
                 try:
-                    direct_evidence = json.loads(direct_result.stdout)
-                except json.JSONDecodeError:
-                    direct_evidence = {}
+                    if not bool(getattr(args, "dry_run", False)):
+                        direct_execution_lock = acquire_patrol_execution_lock(
+                            env_name=target,
+                            target=f"direct-flutter-run:{device_id}",
+                        )
+                    direct_result = run(
+                        direct_command,
+                        cwd=ROOT / "quwoquan_app",
+                    )
+                    try:
+                        direct_evidence = json.loads(direct_result.stdout)
+                    except json.JSONDecodeError:
+                        direct_evidence = {}
+                    direct_retry_reports: list[str] = []
+                    if (
+                        direct_result.returncode != 0
+                        and isinstance(direct_evidence, dict)
+                        and _ios_direct_flutter_log_reader_retryable(
+                            direct_evidence
+                        )
+                    ):
+                        direct_retry_reports.append(
+                            str(direct_evidence.get("reportPath") or "")
+                        )
+                        direct_result = run(
+                            direct_command,
+                            cwd=ROOT / "quwoquan_app",
+                        )
+                        try:
+                            direct_evidence = json.loads(direct_result.stdout)
+                        except json.JSONDecodeError:
+                            direct_evidence = {}
+                except RuntimeError as exc:
+                    issues.append(f"{target}: {exc}")
+                    break
+                finally:
+                    if direct_execution_lock is not None:
+                        direct_execution_lock.close()
                 direct_passed = (
                     direct_result.returncode == 0
                     and isinstance(direct_evidence, dict)
@@ -14476,6 +17952,8 @@ def _command_app_content_uat(
                         "launchMode": direct_evidence.get("launchMode"),
                         "consumerLeaseId": direct_evidence.get("consumerLeaseId"),
                         "attempts": direct_evidence.get("attempts", []),
+                        "retryCount": len(direct_retry_reports),
+                        "supersededFailedReportRefs": direct_retry_reports,
                     }
                 )
                 if not direct_passed:
@@ -14485,16 +17963,72 @@ def _command_app_content_uat(
                         + (detail[:800] if detail else "typed report is incomplete")
                     )
                     break
-            for suite_name, patrol_target, bind_release in (
-                ("homepage-feed", DISCOVERY_FEED_UAT_TEST_TARGET, False),
-                ("app-core-readback", APP_CORE_READBACK_UAT_TEST_TARGET, True),
-                ("video-playback", VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET, True),
+            raw_video_canaries = app_uat_plan.get("videoPlaybackCanaries")
+            if not isinstance(raw_video_canaries, list) or not raw_video_canaries:
+                issues.append(f"{target}: video playback canaries are missing")
+                break
+            suite_plan: list[tuple[str, str, bool, str]] = [
+                ("homepage-feed", DISCOVERY_FEED_UAT_TEST_TARGET, False, ""),
+                (
+                    "app-core-readback",
+                    APP_CORE_READBACK_UAT_TEST_TARGET,
+                    True,
+                    release_video_work_id,
+                ),
+                (
+                    "home-video-playback",
+                    HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
+                    True,
+                    release_video_work_id,
+                ),
+            ]
+            for raw_canary in raw_video_canaries:
+                if not isinstance(raw_canary, Mapping):
+                    issues.append(f"{target}: video playback canary is invalid")
+                    break
+                position = str(raw_canary.get("position") or "").strip()
+                work_id = str(raw_canary.get("workId") or "").strip()
+                if not position or not work_id:
+                    issues.append(f"{target}: video playback canary is incomplete")
+                    break
+                suite_plan.append(
+                    (
+                        f"video-playback-{position}",
+                        VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
+                        True,
+                        work_id,
+                    )
+                )
+            suite_plan.append(
                 (
                     "controlled-edge-recovery",
                     CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET,
                     False,
-                ),
+                    "",
+                )
+            )
+            if issues:
+                break
+            typed_actor_context: TestDataContext | None = None
+            if not bool(getattr(args, "dry_run", False)) and any(
+                _app_content_uat_requires_typed_actor(environment, patrol_target)
+                for _suite_name, patrol_target, _bind_release, _work_id in suite_plan
             ):
+                try:
+                    typed_actor_context = _app_content_test_live_actor_context(
+                        preflight=preflight,
+                        runtime_binding=next(
+                            item
+                            for item in runtime_bindings
+                            if item.get("target") == target
+                        ),
+                        readiness_path=readiness_path,
+                        report_dir=report_dir,
+                    )
+                except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                    issues.append(f"{target}: {exc}")
+                    break
+            for suite_name, patrol_target, bind_release, canary_work_id in suite_plan:
                 command = _environment_page_smoke_profile_command(
                     environment,
                     target,
@@ -14502,18 +18036,15 @@ def _command_app_content_uat(
                     suite_name=f"app-content-{suite_name}",
                     patrol_target=patrol_target,
                     data_readiness_path=(readiness_path if bind_release else None),
+                    release_video_work_id=(
+                        canary_work_id if bind_release else None
+                    ),
                 )
                 if command is None:
                     issues.append(f"{target}: {suite_name} topology is incomplete")
                     break
                 argv = list(command["argv"])
                 if patrol_target == APP_CORE_READBACK_UAT_TEST_TARGET:
-                    envelope = preflight.get("appUatEnvelope")
-                    if not isinstance(envelope, dict):
-                        issues.append(
-                            f"{target}: app-core-readback has no canonical App UAT envelope"
-                        )
-                        break
                     for field, flag in APP_CONTENT_UAT_ENVELOPE_ARGUMENTS:
                         argv.extend((flag, str(envelope.get(field) or "")))
                 if patrol_target == CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET:
@@ -14528,12 +18059,33 @@ def _command_app_content_uat(
                 )
                 if bool(getattr(args, "dry_run", False)):
                     argv.append("--dry-run")
-                result = run(argv, cwd=command["cwd"], env=command.get("env"))
+                typed_actor_required = _app_content_uat_requires_typed_actor(
+                    environment,
+                    patrol_target,
+                )
+                execution_command = {**command, "argv": argv}
+                if typed_actor_required:
+                    execution_command.update(
+                        {
+                            "testDataActorCase": ProfileActorCaseId.APP_CONTENT_UAT,
+                            "testDataActorRoles": (ActorRole.PRIMARY,),
+                        }
+                    )
+                result = (
+                    run(argv, cwd=command["cwd"], env=command.get("env"))
+                    if bool(getattr(args, "dry_run", False))
+                    else _run_profile_command(
+                        execution_command,
+                        target_name=target,
+                        actor_context=typed_actor_context,
+                    )
+                )
                 run_payload = {
                     "target": target,
                     "suite": suite_name,
                     "exitCode": result.returncode,
                     "reportRef": str(command["reportPath"]),
+                    "typedTestDataActor": typed_actor_required,
                     "evidence": _app_content_patrol_evidence(
                         str(command["reportPath"])
                     ),
@@ -14620,11 +18172,23 @@ def _command_app_content_uat(
         "targets": targets,
         "platform": str(args.platform),
         "deviceId": device_id,
-        "packageBaseline": (
-            str(preflights[0].get("packageBaseline") or "")
-            if preflights
-            else ""
-        ),
+        "launchPolicy": "test_live",
+        "packageBaseline": "",
+        "runtimeBindings": {
+            str(item["target"]): item for item in runtime_bindings
+        },
+        "runtimeBindingDigests": {
+            str(item["target"]): "sha256:"
+            + hashlib.sha256(
+                json.dumps(
+                    item,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+            for item in runtime_bindings
+        },
         "releaseId": (
             str(preflights[0].get("releaseId") or "") if preflights else ""
         ),
@@ -14645,6 +18209,16 @@ def _command_app_content_uat(
                 ).encode("utf-8")
             ).hexdigest()
             if preflights and preflights[0].get("appUatEnvelope")
+            else ""
+        ),
+        "appUatPlan": (
+            preflights[0].get("appUatPlan", {}) if preflights else {}
+        ),
+        "appUatPlanDigest": (
+            _canonical_document_checksum(
+                dict(preflights[0].get("appUatPlan") or {})
+            )
+            if preflights and preflights[0].get("appUatPlan")
             else ""
         ),
         "configurationDigests": sorted(
@@ -14697,6 +18271,18 @@ def _command_app_content_uat(
         "preflights": preflights,
         "runs": runs,
         "executed": 0 if dry_run else len(runs),
+        "executedSamples": (
+            0
+            if dry_run
+            else sum(int(item.get("executedSampleCount") or 0) for item in runs)
+        ),
+        "sampleExecutionDigests": sorted(
+            {
+                str(item.get("sampleExecutionDigest") or "")
+                for item in runs
+                if str(item.get("sampleExecutionDigest") or "")
+            }
+        ),
         "skipped": 0,
         "details": issues
         or [
@@ -15324,294 +18910,6 @@ def _run_data_acceptance_lease(
     return payload
 
 
-def _reconcile_nonprod_data(
-    args: argparse.Namespace,
-    *,
-    environment: str,
-    target_name: str,
-    report_dir: Path,
-) -> dict[str, Any]:
-    if environment not in {"alpha", "beta", "gamma"} or target_name not in NONPROD_TARGETS:
-        summary = "reconcile-nonprod-data is forbidden outside Alpha/Beta/Gamma"
-        return {
-            "exitCode": 2,
-            "summary": summary,
-            "details": [summary, "Prod REAL_DATA_ONLY is fail-closed"],
-            "reportDir": relpath(report_dir),
-        }
-    if not bool(getattr(args, "confirm_nonprod_data_reconcile", False)):
-        summary = f"stackctl repair nonprod data is GATE_BLOCK for {target_name}"
-        details = [
-            "--confirm-nonprod-data-reconcile is required",
-            "only stale, expired, failed, or incomplete receipt-owned datasets are eligible",
-        ]
-        write_json(
-            report_dir / "report.json",
-            {
-                "command": "repair",
-                "target": target_name,
-                "fix": "reconcile-nonprod-data",
-                "status": "GATE_BLOCK",
-                "destructiveRepairPerformed": False,
-                "details": details,
-            },
-        )
-        _write_summary_bundle(
-            report_dir,
-            command="repair",
-            target=target_name,
-            status="failed",
-            summary=summary,
-            details=details,
-        )
-        return {
-            "exitCode": 2,
-            "summary": summary,
-            "details": details,
-            "reportDir": relpath(report_dir),
-        }
-
-    active_binding: dict[str, Any] | None = None
-    active = active_deployment_candidate(target_name)
-    if isinstance(active, dict):
-        baseline_id = str(active.get("baselineId") or "").strip()
-        try:
-            manifest = load_candidate_manifest(
-                environment,
-                target_name,
-                baseline_id,
-                require_full=True,
-            )
-        except (OSError, ValueError, json.JSONDecodeError) as exc:
-            summary = f"stackctl repair nonprod data is GATE_BLOCK for {target_name}"
-            details = ["active candidate manifest is invalid: " + str(exc)]
-            _write_summary_bundle(
-                report_dir,
-                command="repair",
-                target=target_name,
-                status="failed",
-                summary=summary,
-                details=details,
-            )
-            return {
-                "exitCode": 2,
-                "summary": summary,
-                "details": details,
-                "reportDir": relpath(report_dir),
-            }
-        active_binding = {
-            "baselineId": manifest.get("baselineId"),
-            "packageDigest": manifest.get("packageDigest"),
-            "runtimeConfigDigest": manifest.get("runtimeConfigDigest"),
-            "releaseDigest": (
-                ((manifest.get("release") or {}).get("candidate") or {}).get(
-                    "releaseDigest"
-                )
-            ),
-        }
-
-    receipt_root = env_runs_root(environment) / "nonprod-data"
-    groups: dict[tuple[str, ...], dict[str, dict[str, Any]]] = {}
-    scan_issues: list[str] = []
-    if receipt_root.is_dir():
-        for epoch_dir in sorted(receipt_root.iterdir()):
-            if (
-                not epoch_dir.is_dir()
-                or epoch_dir.name.startswith("history")
-                or re.fullmatch(r"[0-9a-f]{64}", epoch_dir.name) is None
-            ):
-                continue
-            for path in sorted(epoch_dir.glob("*.json")):
-                try:
-                    receipt = json.loads(path.read_text(encoding="utf-8"))
-                except (OSError, json.JSONDecodeError) as exc:
-                    scan_issues.append(
-                        f"unreadable receipt {relpath(path)}: {type(exc).__name__}"
-                    )
-                    continue
-                if (
-                    not isinstance(receipt, dict)
-                    or receipt.get("schema")
-                    != "qwq.nonprod_acceptance_dataset_receipt"
-                    or receipt.get("target") != target_name
-                    or receipt.get("environment") != environment
-                    or receipt.get("retentionClass") != "candidate_bound"
-                ):
-                    scan_issues.append(
-                        f"ineligible receipt identity: {relpath(path)}"
-                    )
-                    continue
-                key = tuple(
-                    str(receipt.get(name) or "").strip()
-                    for name in (
-                        "baselineId",
-                        "sourceRevision",
-                        "packageDigest",
-                        "runtimeConfigDigest",
-                        "releaseId",
-                        "releaseDigest",
-                        "importRunId",
-                    )
-                )
-                if any(not value for value in key):
-                    scan_issues.append(
-                        f"receipt candidate binding is incomplete: {relpath(path)}"
-                    )
-                    continue
-                dataset_id = str(receipt.get("datasetId") or "").strip()
-                group = groups.setdefault(key, {})
-                if not dataset_id or dataset_id in group:
-                    scan_issues.append(
-                        f"duplicate or empty dataset identity: {relpath(path)}"
-                    )
-                    continue
-                group[dataset_id] = receipt
-
-    eligible: list[tuple[tuple[str, ...], dict[str, dict[str, Any]], list[str]]] = []
-    now = datetime.now(timezone.utc)
-    for key, group in groups.items():
-        reasons: list[str] = []
-        binding = {
-            "baselineId": key[0],
-            "packageDigest": key[2],
-            "runtimeConfigDigest": key[3],
-            "releaseDigest": key[5],
-        }
-        if active_binding is not None and binding != active_binding:
-            reasons.append("stale_candidate_binding")
-        for receipt in group.values():
-            if receipt.get("cleanupState") in {"pending", "failed"} or receipt.get(
-                "status"
-            ) != "passed":
-                reasons.append("incomplete_or_failed")
-            raw_expires_at = str(receipt.get("expiresAt") or "").strip()
-            try:
-                expires_at = datetime.fromisoformat(raw_expires_at.replace("Z", "+00:00"))
-            except ValueError:
-                reasons.append("invalid_expiry")
-            else:
-                if expires_at.tzinfo is None or expires_at <= now:
-                    reasons.append("expired")
-        if reasons:
-            eligible.append((key, group, sorted(set(reasons))))
-
-    results: list[dict[str, Any]] = []
-    failures = list(scan_issues)
-    topology = load_environment_topology()
-    target = get_target(topology, target_name)
-    base_url = str((target.get("publicBases") or {}).get("api") or "").rstrip("/")
-    if not base_url.startswith("https://"):
-        failures.append("canonical HTTPS API is required for reconciliation")
-    if not failures:
-        for key, group, reasons in eligible:
-            identity = group.get("nonprod_reference_identity")
-            if identity is None:
-                failures.append(
-                    f"candidate {key[0]} has no receipt-owned identity closure"
-                )
-                continue
-            post_ids = identity.get("releasePostIds")
-            if not isinstance(post_ids, list) or len(post_ids) != 3:
-                content = group.get("nonprod_reference_content_interaction") or {}
-                post_ids = (content.get("createdObjectIdsOrHashes") or {}).get(
-                    "releasePostIds"
-                )
-            if (
-                not isinstance(post_ids, list)
-                or len(post_ids) != 3
-                or len({str(value).strip() for value in post_ids}) != 3
-            ):
-                failures.append(
-                    f"candidate {key[0]} has no exact release post closure"
-                )
-                continue
-            try:
-                candidate = NonprodCandidateIdentity(
-                    environment=environment,
-                    target=target_name,
-                    baseline_id=key[0],
-                    source_revision=key[1],
-                    package_digest=key[2],
-                    runtime_config_digest=key[3],
-                    release_id=key[4],
-                    release_digest=key[5],
-                    import_run_id=key[6],
-                    release_post_ids=tuple(str(value).strip() for value in post_ids),
-                )
-                result = NonprodDataProvisioner(
-                    base_url=base_url,
-                    candidate=candidate,
-                ).cleanup_candidate_bound_data()
-            except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
-                failures.append(f"candidate {key[0]} cleanup failed: {exc}")
-                continue
-            results.append(
-                {
-                    "baselineId": result["baselineId"],
-                    "packageDigest": result["packageDigest"],
-                    "releaseDigest": result["releaseDigest"],
-                    "datasetIds": result["datasetIds"],
-                    "closedActorCount": len(result["closedActorRoles"]),
-                    "cleanupState": result["cleanupState"],
-                    "eligibilityReasons": reasons,
-                }
-            )
-
-    succeeded = not failures
-    summary = (
-        f"stackctl repair reconciled {len(results)} nonprod dataset candidate(s) for {target_name}"
-        if succeeded
-        else f"stackctl repair nonprod data is GATE_BLOCK for {target_name}"
-    )
-    details = failures or (
-        ["no stale, expired, failed, or incomplete dataset is eligible"]
-        if not results
-        else [
-            f"cleaned receipt-bound candidate {item['baselineId']}"
-            for item in results
-        ]
-    )
-    write_json(
-        report_dir / "report.json",
-        {
-            "command": "repair",
-            "target": target_name,
-            "fix": "reconcile-nonprod-data",
-            "status": "passed" if succeeded else "GATE_BLOCK",
-            "destructiveRepairPerformed": bool(results),
-            "results": results,
-            "issues": failures,
-        },
-    )
-    write_json(
-        report_dir / "repair_plan.json",
-        {
-            "target": target_name,
-            "fix": "reconcile-nonprod-data",
-            "actions": [
-                "use only receipt-owned identifiers and managed nonprod identities",
-                "reverse domain objects through ContractGraph public APIs",
-                "close acceptance accounts only after domain cleanup succeeds",
-                "never wipe a database or mutate Prod",
-            ],
-        },
-    )
-    _write_summary_bundle(
-        report_dir,
-        command="repair",
-        target=target_name,
-        status="ok" if succeeded else "failed",
-        summary=summary,
-        details=details,
-    )
-    return {
-        "exitCode": 0 if succeeded else 2,
-        "summary": summary,
-        "details": details,
-        "reportDir": relpath(report_dir),
-    }
-
-
 def _orphan_compose_runtime_gate(target_name: str) -> dict[str, Any] | None:
     """Return the stopped receipt when normal candidate-bound down cannot apply."""
 
@@ -16112,14 +19410,1629 @@ def _repair_orphaned_compose(
         }
 
 
+def _startup_receipt_cache_audit(
+    target_name: str,
+    *,
+    workload: str,
+) -> dict[str, Any]:
+    if workload == "aggregate":
+        path = startup_attempt_path(target_name)
+        payload = load_startup_attempt(target_name)
+    else:
+        path = startup_attempt_path_for_workload(target_name, workload)
+        payload = load_workload_startup_attempt(target_name, workload)
+    evidence: dict[str, Any] = {
+        "workload": workload,
+        "path": relpath(path),
+        "state": "missing" if payload is None else "present",
+        "sha256": _sha256_file(path) if payload is not None else "",
+        "status": "absent" if payload is None else str(payload.get("status") or ""),
+        "attemptId": "" if payload is None else str(payload.get("attemptId") or ""),
+        "candidateDigest": (
+            "" if payload is None else str(payload.get("candidateDigest") or "")
+        ),
+        "failure": None if payload is None else payload.get("failure"),
+        "cleanupFailure": None if payload is None else payload.get("cleanupFailure"),
+    }
+    return evidence
+
+
+def _consumer_lease_receipt_audit() -> list[dict[str, Any]]:
+    directory = consumer_lease_dir()
+    if not directory.exists():
+        return []
+    if not directory.is_dir() or directory.is_symlink():
+        raise ValueError(
+            f"consumer lease receipt root is unreadable: {directory}"
+        )
+    receipts: list[dict[str, Any]] = []
+    for path in sorted(directory.glob("*.json")):
+        if not path.is_file() or path.is_symlink():
+            raise ValueError(f"consumer lease receipt is unsafe: {path}")
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError(
+                f"consumer lease receipt is unreadable: {path}: {exc}"
+            ) from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"consumer lease receipt must be an object: {path}")
+        target_name = str(payload.get("target") or "").strip()
+        if target_name not in LOCAL_BUILD_CACHE_TARGETS:
+            continue
+        receipts.append(
+            {
+                "path": relpath(path),
+                "sha256": _sha256_file(path),
+                "target": target_name,
+                "leaseId": str(payload.get("leaseId") or ""),
+                "consumer": str(payload.get("consumer") or ""),
+                "device": str(payload.get("device") or ""),
+            }
+        )
+    return receipts
+
+
+def _local_build_cache_runtime_audit() -> dict[str, Any]:
+    """Snapshot runtime facts under the global exclusive cache lock.
+
+    Running attempts and ordinary App leases are deliberately report-only:
+    BuildKit unused-cache GC does not delete containers, images, volumes, or
+    runtime data. Unreadable canonical evidence still fails closed because the
+    repair report would otherwise assert a snapshot that it could not prove.
+    """
+
+    targets: list[dict[str, Any]] = []
+    evidence_issues: list[str] = []
+    runtime_anomalies: list[str] = []
+    lease_receipts = _consumer_lease_receipt_audit()
+    for target_name in LOCAL_BUILD_CACHE_TARGETS:
+        try:
+            receipts = [
+                _startup_receipt_cache_audit(
+                    target_name,
+                    workload=workload,
+                )
+                for workload in (
+                    "aggregate",
+                    "full",
+                    "content-release",
+                    "content-commercial",
+                )
+            ]
+            leases = active_consumer_leases(target_name)
+            # BuildKit GC only removes unused build cache. Its runtime audit
+            # must describe canonical port occupancy without requiring the
+            # currently active Provider composition to match the workspace.
+            # A stale candidate is precisely one reason a new package may be
+            # needed, so coupling cache recovery to that identity deadlocks
+            # package recovery after a no-space failure.
+            ports = _canonical_port_occupancy_report(target_name)
+        except (OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ValueError(
+                f"{target_name} runtime audit evidence is unreadable: {exc}"
+            ) from exc
+        for receipt in receipts:
+            cleanup_failure = str(receipt.get("cleanupFailure") or "").strip()
+            if cleanup_failure:
+                issue = (
+                    f"{target_name}/{receipt['workload']} "
+                    f"cleanupFailure={cleanup_failure}"
+                )
+                runtime_anomalies.append(issue)
+                evidence_issues.append(issue)
+        targets.append(
+            {
+                "target": target_name,
+                "startupReceipts": receipts,
+                "consumerLeaseReceipts": [
+                    item
+                    for item in lease_receipts
+                    if item["target"] == target_name
+                ],
+                "activeConsumerLeases": leases,
+                "ports": ports,
+            }
+        )
+    return {
+        "targets": targets,
+        "evidenceIssues": evidence_issues,
+        "runtimeAnomalies": runtime_anomalies,
+        "runningRuntimeBlocksCacheReclaim": False,
+        "activeConsumerLeaseBlocksCacheReclaim": False,
+    }
+
+
+def _command_result_evidence(
+    *,
+    name: str,
+    argv: list[str],
+    result: subprocess.CompletedProcess[str],
+) -> dict[str, Any]:
+    stdout = str(result.stdout or "")
+    stderr = str(result.stderr or "")
+    return {
+        "name": name,
+        "argv": argv,
+        "exitCode": int(result.returncode),
+        "stdout": stdout,
+        "stderr": stderr,
+        "stdoutSha256": "sha256:" + hashlib.sha256(stdout.encode("utf-8")).hexdigest(),
+        "stderrSha256": "sha256:" + hashlib.sha256(stderr.encode("utf-8")).hexdigest(),
+    }
+
+
+def _run_build_cache_command(argv: list[str]) -> subprocess.CompletedProcess[str]:
+    try:
+        return run(argv)
+    except OSError as exc:
+        return subprocess.CompletedProcess(
+            argv,
+            127,
+            stdout="",
+            stderr=f"Docker command could not start: {exc}",
+        )
+
+
+def _parse_docker_size_bytes(raw_value: str) -> int | None:
+    match = re.fullmatch(
+        r"\s*([0-9]+(?:\.[0-9]+)?)\s*(B|KB|MB|GB|TB)\s*",
+        raw_value,
+        re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    multiplier = {
+        "B": 1,
+        "KB": 1000,
+        "MB": 1000**2,
+        "GB": 1000**3,
+        "TB": 1000**4,
+    }[match.group(2).upper()]
+    return int(float(match.group(1)) * multiplier)
+
+
+def _builder_prune_reclaimed_evidence(stdout: str) -> dict[str, Any]:
+    deleted_cache_ids: list[str] = []
+    reclaimed_display = ""
+    for raw_line in str(stdout or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        total = re.match(r"^Total reclaimed space:\s*(.+)$", line, re.IGNORECASE)
+        if total:
+            reclaimed_display = total.group(1).strip()
+            continue
+        if line.lower().startswith(("cache id", "id ", "total")):
+            continue
+        candidate = line.split()[0]
+        if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{5,}", candidate):
+            deleted_cache_ids.append(candidate)
+    reclaimed_bytes = _parse_docker_size_bytes(reclaimed_display)
+    return {
+        "deletedCacheIds": sorted(set(deleted_cache_ids)),
+        "deletedCacheIdentityEnumerable": bool(deleted_cache_ids),
+        "reclaimedDisplay": reclaimed_display,
+        "reclaimedBytes": reclaimed_bytes,
+        "outcome": (
+            "noop"
+            if reclaimed_bytes == 0
+            else "reclaimed"
+            if reclaimed_display
+            else "aggregate-not-reported"
+        ),
+    }
+
+
+def _finish_build_cache_reclaim(
+    *,
+    report_dir: Path,
+    report: dict[str, Any],
+    status: str,
+    summary: str,
+    exit_code: int,
+) -> dict[str, Any]:
+    report["status"] = status
+    write_json(report_dir / "report.json", report)
+    write_json(
+        report_dir / "repair_plan.json",
+        {
+            "fix": "reclaim-build-cache",
+            "resourceScope": "docker_daemon_global",
+            "targetScoped": False,
+            "selection": "unused_build_cache_all",
+            "affectedTargets": list(LOCAL_BUILD_CACHE_TARGETS),
+            "actions": [
+                {
+                    "argv": ["docker", "builder", "prune", "--all", "--force"],
+                    "deletes": "unused Docker builder cache only",
+                    "preserves": ["containers", "images", "volumes", "runtime-data"],
+                }
+            ],
+        },
+    )
+    details = list(report.get("resourceReleaseIssues") or []) or [
+        "unused Docker builder cache is daemon-global; containers, images, "
+        "volumes, and runtime data are preserved"
+    ]
+    _write_summary_bundle(
+        report_dir,
+        command="repair",
+        target=str(report["requestedTarget"]),
+        status="ok" if exit_code == 0 else "failed",
+        summary=summary,
+        details=details,
+    )
+    return {
+        "exitCode": exit_code,
+        "summary": summary,
+        "details": details,
+        "reportDir": relpath(report_dir),
+    }
+
+
+def _repair_reclaim_build_cache(
+    args: argparse.Namespace,
+    *,
+    report_dir: Path,
+) -> dict[str, Any]:
+    report: dict[str, Any] = {
+        "schema": "stackctl-global-local-build-cache-reclaim",
+        "command": "repair",
+        "fix": "reclaim-build-cache",
+        "requestedTarget": str(args.target),
+        "affectedTargets": list(LOCAL_BUILD_CACHE_TARGETS),
+        "resourceScope": "docker_daemon_global",
+        "targetScoped": False,
+        "selection": "unused_build_cache_all",
+        "confirmation": bool(
+            getattr(args, "confirm_global_build_cache_reclaim", False)
+        ),
+        "globalLock": None,
+        "runtimeAudit": None,
+        "dockerIdentity": None,
+        "cacheInventory": {"before": None, "after": None},
+        "prune": {
+            "argv": ["docker", "builder", "prune", "--all", "--force"],
+            "status": "not-run",
+        },
+        "cacheReclaimed": {
+            "deletedCacheIds": [],
+            "deletedCacheIdentityEnumerable": False,
+            "reclaimedDisplay": "",
+            "reclaimedBytes": None,
+            "outcome": "not-run",
+        },
+        "preservedResourceClasses": [
+            "containers",
+            "images",
+            "volumes",
+            "runtime-data",
+        ],
+        "destructiveRepairPerformed": False,
+        "destructiveActions": [],
+        "resourceReleaseIssues": [],
+    }
+    if not report["confirmation"]:
+        report["resourceReleaseIssues"].append(
+            "--confirm-global-build-cache-reclaim is required before any Docker access"
+        )
+        return _finish_build_cache_reclaim(
+            report_dir=report_dir,
+            report=report,
+            status="gate_block",
+            summary="global local Docker build cache reclaim is GATE_BLOCK",
+            exit_code=2,
+        )
+    try:
+        with _global_local_build_cache_lock() as lock_evidence:
+            report["globalLock"] = lock_evidence
+            try:
+                report["runtimeAudit"] = _local_build_cache_runtime_audit()
+            except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                report["resourceReleaseIssues"].append(str(exc))
+                return _finish_build_cache_reclaim(
+                    report_dir=report_dir,
+                    report=report,
+                    status="gate_block",
+                    summary="global local Docker build cache audit is GATE_BLOCK",
+                    exit_code=2,
+                )
+
+            identity_specs = (
+                ("docker-context", ["docker", "context", "show"]),
+                ("docker-daemon", ["docker", "info", "--format", "{{json .}}"]),
+                ("docker-builders", ["docker", "builder", "ls", "--format", "json"]),
+            )
+            identity_steps: list[dict[str, Any]] = []
+            for name, argv in identity_specs:
+                result = _run_build_cache_command(argv)
+                evidence = _command_result_evidence(
+                    name=name,
+                    argv=argv,
+                    result=result,
+                )
+                identity_steps.append(evidence)
+                if result.returncode != 0:
+                    report["dockerIdentity"] = identity_steps
+                    report["resourceReleaseIssues"].append(
+                        result.stderr.strip()
+                        or result.stdout.strip()
+                        or f"{name} failed"
+                    )
+                    return _finish_build_cache_reclaim(
+                        report_dir=report_dir,
+                        report=report,
+                        status="gate_block",
+                        summary="global local Docker build cache identity is GATE_BLOCK",
+                        exit_code=2,
+                    )
+            report["dockerIdentity"] = identity_steps
+
+            inventory_argv = ["docker", "system", "df"]
+            before = _run_build_cache_command(inventory_argv)
+            report["cacheInventory"]["before"] = _command_result_evidence(
+                name="docker-build-cache-before",
+                argv=inventory_argv,
+                result=before,
+            )
+            before_detail = f"{before.stderr}\n{before.stdout}".lower()
+            preinventory_no_space = (
+                before.returncode != 0 and "no space left on device" in before_detail
+            )
+            report["cacheInventory"]["preInventoryNoSpaceRecovery"] = (
+                preinventory_no_space
+            )
+            if before.returncode != 0 and not preinventory_no_space:
+                report["resourceReleaseIssues"].append(
+                    before.stderr.strip()
+                    or before.stdout.strip()
+                    or "Docker build cache pre-inventory failed"
+                )
+                return _finish_build_cache_reclaim(
+                    report_dir=report_dir,
+                    report=report,
+                    status="gate_block",
+                    summary="global local Docker build cache inventory is GATE_BLOCK",
+                    exit_code=2,
+                )
+
+            prune_argv = ["docker", "builder", "prune", "--all", "--force"]
+            report["destructiveRepairPerformed"] = True
+            report["destructiveActions"] = [
+                {
+                    "argv": prune_argv,
+                    "selection": "unused_build_cache_all",
+                    "preservedResourceClasses": report["preservedResourceClasses"],
+                }
+            ]
+            reclaim = _run_build_cache_command(prune_argv)
+            report["prune"] = _command_result_evidence(
+                name="docker-unused-build-cache-prune",
+                argv=prune_argv,
+                result=reclaim,
+            )
+            report["prune"]["status"] = (
+                "passed" if reclaim.returncode == 0 else "failed"
+            )
+            report["cacheReclaimed"] = _builder_prune_reclaimed_evidence(
+                reclaim.stdout
+            )
+
+            after = _run_build_cache_command(inventory_argv)
+            report["cacheInventory"]["after"] = _command_result_evidence(
+                name="docker-build-cache-after",
+                argv=inventory_argv,
+                result=after,
+            )
+            if reclaim.returncode != 0:
+                report["resourceReleaseIssues"].append(
+                    reclaim.stderr.strip()
+                    or reclaim.stdout.strip()
+                    or "Docker builder prune failed"
+                )
+            if after.returncode != 0:
+                report["resourceReleaseIssues"].append(
+                    after.stderr.strip()
+                    or after.stdout.strip()
+                    or "Docker build cache post-inventory failed"
+                )
+            succeeded = reclaim.returncode == 0 and after.returncode == 0
+            return _finish_build_cache_reclaim(
+                report_dir=report_dir,
+                report=report,
+                status="ok" if succeeded else "failed",
+                summary=(
+                    "global unused Docker build cache reclaimed"
+                    if succeeded
+                    else "global Docker build cache reclaim failed"
+                ),
+                exit_code=0 if succeeded else 1,
+            )
+    except RuntimeError as exc:
+        report["resourceReleaseIssues"].append(str(exc))
+        return _finish_build_cache_reclaim(
+            report_dir=report_dir,
+            report=report,
+            status="gate_block",
+            summary="global local Docker build cache lock is GATE_BLOCK",
+            exit_code=2,
+        )
+
+
+def _output_layout_canonical_truth() -> dict[str, dict[str, str]]:
+    paths = {
+        "outputLayoutVerifier": ROOT / "quwoquan_ops/gate/verify_output_layout.py",
+        "rootLayoutVerifier": ROOT / "quwoquan_ops/gate/verify_root_layout.py",
+        "outputLayoutManifest": ROOT / "quwoquan_ops/environments/output_layout_manifest.yaml",
+        "reconciliationPlanSchema": (
+            ROOT
+            / "quwoquan_ops/environments/output_layout_reconciliation_plan.schema.json"
+        ),
+    }
+    return {
+        name: {"path": relpath(path), "sha256": _sha256_file(path)}
+        for name, path in paths.items()
+    }
+
+
+def _finish_output_layout_reconciliation(
+    *,
+    report_dir: Path,
+    status: str,
+    summary: str,
+    details: Sequence[str],
+    report: Mapping[str, Any],
+    exit_code: int,
+) -> dict[str, Any]:
+    write_json(report_dir / "report.json", dict(report))
+    _write_summary_bundle(
+        report_dir,
+        command="repair",
+        target="repo",
+        status="ok" if exit_code == 0 else "failed",
+        summary=summary,
+        details=list(details),
+    )
+    return {
+        "exitCode": exit_code,
+        "summary": summary,
+        "details": list(details),
+        "reportDir": relpath(report_dir),
+        "status": status,
+    }
+
+
+def _canonical_output_layout_plan_ref(value: str) -> Path:
+    requested = Path(value).expanduser()
+    if not requested.is_absolute():
+        requested = ROOT / requested
+    requested = requested.absolute()
+    try:
+        resolved = requested.resolve(strict=True)
+    except OSError as exc:
+        raise output_layout_reconciliation.OutputLayoutReconciliationError(
+            f"output reconciliation plan is unreadable: {exc}"
+        ) from exc
+    if requested != resolved:
+        raise output_layout_reconciliation.OutputLayoutReconciliationError(
+            "output reconciliation plan path must not contain symlinks or aliases"
+        )
+    allowed_root = repo_runs_root().resolve()
+    try:
+        resolved.relative_to(allowed_root)
+    except ValueError as exc:
+        raise output_layout_reconciliation.OutputLayoutReconciliationError(
+            "output reconciliation plan must remain below the canonical repo runs root"
+        ) from exc
+    return resolved
+
+
+def _repair_output_layout(
+    args: argparse.Namespace,
+    *,
+    report_dir: Path,
+) -> dict[str, Any]:
+    action = str(getattr(args, "output_layout_action", "plan") or "plan")
+    confirmation = bool(
+        getattr(args, "confirm_output_layout_reconciliation", False)
+    )
+    plan_ref = str(getattr(args, "output_layout_plan_ref", "") or "").strip()
+    base_report: dict[str, Any] = {
+        "schema": "stackctl-output-layout-reconciliation",
+        "command": "repair",
+        "target": "repo",
+        "fix": "reconcile-output-layout",
+        "action": action,
+        "status": "gate_block",
+        "confirmation": confirmation,
+        "globalLock": None,
+        "planRef": plan_ref,
+        "planDigest": "",
+        "destructiveRepairPerformed": False,
+        "destructiveActions": [],
+        "excludedResourceClasses": output_layout_reconciliation.EXCLUDED_RESOURCE_CLASSES,
+        "resourceReleaseIssues": [],
+    }
+    if action == "apply" and not confirmation:
+        details = [
+            "--confirm-output-layout-reconciliation is required before reading or applying a plan"
+        ]
+        base_report["resourceReleaseIssues"] = details
+        return _finish_output_layout_reconciliation(
+            report_dir=report_dir,
+            status="gate_block",
+            summary="output layout reconciliation apply is GATE_BLOCK",
+            details=details,
+            report=base_report,
+            exit_code=2,
+        )
+    if action == "apply" and not plan_ref:
+        details = [
+            "--output-layout-plan-ref is required for output layout apply"
+        ]
+        base_report["resourceReleaseIssues"] = details
+        return _finish_output_layout_reconciliation(
+            report_dir=report_dir,
+            status="gate_block",
+            summary="output layout reconciliation apply is GATE_BLOCK",
+            details=details,
+            report=base_report,
+            exit_code=2,
+        )
+    if action == "plan" and (plan_ref or confirmation):
+        details = [
+            "plan mode does not accept an existing plan ref or apply confirmation"
+        ]
+        base_report["resourceReleaseIssues"] = details
+        return _finish_output_layout_reconciliation(
+            report_dir=report_dir,
+            status="gate_block",
+            summary="output layout reconciliation plan is GATE_BLOCK",
+            details=details,
+            report=base_report,
+            exit_code=2,
+        )
+
+    try:
+        with _global_output_layout_reconciliation_lock() as lock_evidence:
+            base_report["globalLock"] = lock_evidence
+            truth = _output_layout_canonical_truth()
+            from quwoquan_ops.gate.verify_root_layout import root_layout_issues
+
+            issues = root_layout_issues(ROOT)
+            if action == "plan":
+                plan = output_layout_reconciliation.build_plan(
+                    repository_root=ROOT,
+                    output_root=output_root(),
+                    canonical_issues=issues,
+                    truth=truth,
+                )
+                plan_path = report_dir / output_layout_reconciliation.PLAN_FILENAME
+                output_layout_reconciliation.write_create_once(plan_path, plan)
+                blocked = plan["status"] != "ready"
+                details = [
+                    f"immutablePlan={relpath(plan_path)}",
+                    f"planDigest={plan['planDigest']}",
+                    f"canonicalIssues={plan['canonicalIssueCount']}",
+                    f"records={len(plan['records'])}",
+                    f"actions={plan['actionCount']}",
+                ]
+                if blocked:
+                    details.append(f"blockers={len(plan['blockers'])}")
+                base_report.update(
+                    {
+                        "status": "gate_block" if blocked else "passed",
+                        "planRef": relpath(plan_path),
+                        "planDigest": plan["planDigest"],
+                        "planStatus": plan["status"],
+                        "canonicalIssueCount": plan["canonicalIssueCount"],
+                        "recordCount": len(plan["records"]),
+                        "actionCount": plan["actionCount"],
+                        "resourceReleaseIssues": plan["blockers"],
+                    }
+                )
+                return _finish_output_layout_reconciliation(
+                    report_dir=report_dir,
+                    status=str(base_report["status"]),
+                    summary=(
+                        "output layout reconciliation plan is GATE_BLOCK"
+                        if blocked
+                        else "output layout reconciliation plan is ready"
+                    ),
+                    details=details,
+                    report=base_report,
+                    exit_code=2 if blocked else 0,
+                )
+
+            canonical_plan_path = _canonical_output_layout_plan_ref(plan_ref)
+            plan = output_layout_reconciliation.load_plan(canonical_plan_path)
+            current_issue_digest = output_layout_reconciliation.canonical_digest(
+                sorted(str(issue) for issue in issues)
+            )
+            same_findings = (
+                int(plan.get("canonicalIssueCount") or -1) == len(issues)
+                and plan.get("canonicalIssueDigest") == current_issue_digest
+            )
+            current_fingerprints = (
+                output_layout_reconciliation.canonical_issue_fingerprints(
+                    issues,
+                    repository_root=ROOT,
+                )
+            )
+            planned_fingerprints = (
+                output_layout_reconciliation.plan_issue_fingerprints(plan)
+            )
+            if not same_findings and not current_fingerprints.issubset(
+                planned_fingerprints
+            ):
+                raise output_layout_reconciliation.OutputLayoutReconciliationError(
+                    "canonical root/output findings added facts outside immutable plan"
+                )
+            journal = {
+                "schema": "stackctl-output-layout-reconciliation-journal",
+                "createdAt": utc_now(),
+                "status": "prepared",
+                "planRef": relpath(canonical_plan_path),
+                "planDigest": plan["planDigest"],
+                "actions": [
+                    {
+                        "from": record["path"],
+                        "to": record["canonicalDestination"],
+                    }
+                    for record in plan["records"]
+                    if record.get("action") is True
+                ],
+            }
+            output_layout_reconciliation.write_create_once(
+                report_dir / "output-layout-reconciliation-journal.json",
+                journal,
+            )
+            result = output_layout_reconciliation.apply_plan(
+                plan,
+                repository_root=ROOT,
+                output_root=output_root(),
+                truth=truth,
+            )
+            details = [
+                f"planDigest={plan['planDigest']}",
+                f"moved={len(result['moved'])}",
+                f"noOp={str(result['noOp']).lower()}",
+                "all moves passed source/destination readback; rollback remains path-exact",
+            ]
+            base_report.update(
+                {
+                    "status": "passed",
+                    "planRef": relpath(canonical_plan_path),
+                    "planDigest": plan["planDigest"],
+                "noOp": result["noOp"],
+                "replayed": result["replayed"],
+                "moved": result["moved"],
+                "readBack": result["readBack"],
+                    "rollbackAvailable": result["rollbackAvailable"],
+                    "destructiveRepairPerformed": bool(result["moved"]),
+                    "destructiveActions": result["moved"],
+                }
+            )
+            return _finish_output_layout_reconciliation(
+                report_dir=report_dir,
+                status="passed",
+                summary="output layout reconciliation apply passed",
+                details=details,
+                report=base_report,
+                exit_code=0,
+            )
+    except (
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
+        details = [str(exc)]
+        base_report["resourceReleaseIssues"] = details
+        return _finish_output_layout_reconciliation(
+            report_dir=report_dir,
+            status="gate_block",
+            summary=f"output layout reconciliation {action} is GATE_BLOCK",
+            details=details,
+            report=base_report,
+            exit_code=2,
+        )
+
+
+def _repair_active_content_release_outbox(
+    args: argparse.Namespace,
+    *,
+    environment: str,
+    target_name: str,
+    report_dir: Path,
+) -> dict[str, Any]:
+    report: dict[str, Any] = {
+        "schema": "stackctl-active-content-release-outbox-repair.v1",
+        "command": "repair",
+        "target": target_name,
+        "fix": "repair-active-content-release-outbox",
+        "status": "gate_block",
+        "confirmation": bool(
+            getattr(
+                args,
+                "confirm_active_content_release_outbox_repair",
+                False,
+            )
+        ),
+        "expectedOutboxRepairCount": int(
+            getattr(args, "expected_outbox_repair_count", -1)
+        ),
+        "runtimeServices": ["mongodb", "mongo-init", "content-service:run"],
+        "apiStarted": False,
+        "destructiveRepairAttempted": False,
+        "destructiveRepairOutcome": "not_started",
+        "destructiveRepairPerformed": False,
+        "destructiveActions": [],
+        "resourceReleaseIssues": [],
+        "steps": [],
+    }
+    details: list[str] = []
+    compose_prefix: list[str] = []
+    environment_values: dict[str, str] = {}
+    repair_succeeded = False
+
+    def finish(exit_code: int) -> dict[str, Any]:
+        status = "passed" if exit_code == 0 else "gate_block"
+        report["status"] = status
+        report["details"] = details
+        write_json(report_dir / "report.json", report)
+        summary = (
+            f"active Content release outbox repair passed for {target_name}"
+            if exit_code == 0
+            else f"active Content release outbox repair is GATE_BLOCK for {target_name}"
+        )
+        _write_summary_bundle(
+            report_dir,
+            command="repair",
+            target=target_name,
+            status="ok" if exit_code == 0 else "failed",
+            summary=summary,
+            details=details,
+            extra={
+                "fix": "repair-active-content-release-outbox",
+                "expectedOutboxRepairCount": report[
+                    "expectedOutboxRepairCount"
+                ],
+                "candidateDigest": str(report.get("candidateDigest") or ""),
+            },
+        )
+        return {
+            "exitCode": exit_code,
+            "summary": summary,
+            "details": details,
+            "reportDir": relpath(report_dir),
+        }
+
+    if target_name != "alpha-local":
+        details.append(
+            "repair-active-content-release-outbox is currently limited to alpha-local"
+        )
+        return finish(2)
+    if not report["confirmation"]:
+        details.append(
+            "--confirm-active-content-release-outbox-repair is required before runtime or Mongo access"
+        )
+        return finish(2)
+    expected_count = int(report["expectedOutboxRepairCount"])
+    if expected_count < 0:
+        details.append("--expected-outbox-repair-count must be non-negative")
+        return finish(2)
+    source_import_arg = str(
+        getattr(args, "content_import_report", "") or ""
+    ).strip()
+    if not source_import_arg:
+        details.append("--content-import-report is required")
+        return finish(2)
+
+    try:
+        with _local_stack_operation_lock(target_name):
+            active_leases = active_consumer_leases(target_name)
+            if active_leases:
+                raise ValueError(
+                    "active Content outbox repair requires zero consumer leases"
+                )
+            startup = load_startup_attempt(target_name)
+            if startup is not None and startup.get("status") != "stopped":
+                raise ValueError(
+                    "active Content outbox repair requires an absent or stopped runtime receipt"
+                )
+            candidate_snapshot = active_deployment_candidate_snapshot(target_name)
+            if candidate_snapshot is None:
+                raise ValueError("active immutable candidate is required")
+            baseline_id, candidate_root, candidate_manifest = _fixed_candidate_identity(
+                candidate_snapshot,
+                environment_name=environment,
+                target_name=target_name,
+            )
+            source_import_path = Path(source_import_arg).expanduser().resolve()
+            allowed_import_root = (
+                output_root()
+                / "env"
+                / environment
+                / "runs"
+                / "data-release"
+            ).resolve()
+            if not source_import_path.is_relative_to(allowed_import_root):
+                raise ValueError(
+                    "Content import report must belong to canonical environment data-release output"
+                )
+            source_import = (
+                active_content_release_outbox_repair.validate_source_import_report(
+                    source_import_path,
+                    environment=environment,
+                )
+            )
+            legacy_deletion_count = int(source_import["legacyDeletionCount"])
+            if expected_count not in {0, legacy_deletion_count}:
+                raise ValueError(
+                    "expected outbox repair count must be either zero or the "
+                    "source import legacy deletion count"
+                )
+            release_binding = (
+                active_content_release_outbox_repair.validate_candidate_release_binding(
+                    candidate_snapshot,
+                    source_import,
+                )
+            )
+            release_root = Path(str(release_binding["releaseRoot"])).resolve()
+            canonical_data_root = (output_root() / "data" / "releases").resolve()
+            if not release_root.is_relative_to(canonical_data_root):
+                raise ValueError(
+                    "candidate release root must belong to canonical Data release output"
+                )
+            creator_receipt = (
+                active_content_release_outbox_repair.validate_creator_receipt(
+                    source_import_path,
+                    environment=environment,
+                    release_id=str(release_binding["releaseId"]),
+                )
+            )
+            compose_files = (
+                active_content_release_outbox_repair.topology_compose_files(
+                    candidate_root,
+                    candidate_manifest,
+                )
+            )
+            runtime_inputs = active_content_release_outbox_repair.materialize_candidate_runtime_inputs(
+                candidate_root,
+                report_dir,
+                environment=environment,
+            )
+            tls_evidence = verify_certificate(target_name)
+            certificate = str(tls_evidence.get("certificate") or "").strip()
+            private_key = str(tls_evidence.get("privateKey") or "").strip()
+            if not certificate or not private_key:
+                raise ValueError(
+                    "active Content outbox repair requires verified local-managed TLS"
+                )
+            provider_binding, observability_binding = (
+                _candidate_bindings_from_snapshot(
+                    candidate_snapshot,
+                    environment_name=environment,
+                    target_name=target_name,
+                )
+            )
+            environment_values = _gamma_env_from_port_manifest(
+                load_environment_topology(),
+                target_name,
+            )
+            environment_values.update(runtime_inputs["environment"])
+            environment_values.update(
+                _provider_runtime_launch_environment(
+                    provider_binding["providerRuntime"],
+                    candidate_root=provider_binding["candidateRoot"],
+                    workload="content-release",
+                )
+            )
+            environment_values.update(
+                _observability_log_sink_launch_environment(
+                    observability_binding["composition"],
+                    environment_name=environment,
+                    target_name=target_name,
+                    candidate_root=observability_binding["candidateRoot"],
+                    workload="content-release",
+                )
+            )
+            environment_values.update(
+                {
+                    "QWQ_RUN_ROOT": str(report_dir.resolve()),
+                    "QWQ_OBSERVABILITY_RUN_ROOT": str(
+                        (report_dir / "observability").resolve()
+                    ),
+                    "QWQ_WORKLOAD": "content-release",
+                    "QWQ_PRODUCT_TELEMETRY_AVAILABLE": "0",
+                    "QWQ_RELEASE_CANDIDATE_DIGEST": baseline_id,
+                    RUNTIME_CANDIDATE_ROOT_ENV: str(candidate_root),
+                    "QWQ_PUBLIC_TLS_CERT_FILE": certificate,
+                    "QWQ_PUBLIC_TLS_KEY_FILE": private_key,
+                }
+            )
+            _bind_gamma_down_parse_environment(environment_values)
+            image_composition = _bind_gamma_packaged_service_image_refs(
+                environment,
+                environment_values,
+                candidate_snapshot=candidate_snapshot,
+            )
+            _bind_gamma_packaged_configuration_digest(
+                environment,
+                environment_values,
+                image_composition,
+            )
+            compose_project = _formal_release_compose_project_name(target_name)
+            environment_values["LOCAL_GAMMA_COMPOSE_PROJECT_NAME"] = compose_project
+            compose_prefix = [
+                "docker",
+                "compose",
+                "-p",
+                compose_project,
+                *compose_file_args(compose_files),
+            ]
+            report.update(
+                {
+                    "candidateDigest": baseline_id,
+                    "candidateRoot": str(candidate_root),
+                    "candidateManifestDigest": _sha256_file(
+                        candidate_root / "manifest.json"
+                    ),
+                    "releaseBinding": release_binding,
+                    "sourceImport": source_import,
+                    "creatorReceipt": creator_receipt,
+                    "startupReceipt": startup,
+                    "consumerLeases": [],
+                    "composeProject": compose_project,
+                    "composeFiles": [str(path) for path in compose_files],
+                    "runtimeInputs": runtime_inputs["evidence"],
+                    "candidateReleaseInputClassification": candidate_manifest.get(
+                        "releaseInputClassification"
+                    ),
+                }
+            )
+
+            def execute(name: str, argv: list[str]) -> None:
+                result = run(
+                    argv,
+                    env=environment_values,
+                    timeout_seconds=300,
+                )
+                step = {
+                    "name": name,
+                    "argv": argv,
+                    "exitCode": result.returncode,
+                    "stdoutSha256": "sha256:"
+                    + hashlib.sha256(result.stdout.encode()).hexdigest(),
+                    "stderrSha256": "sha256:"
+                    + hashlib.sha256(result.stderr.encode()).hexdigest(),
+                }
+                report["steps"].append(step)
+                if result.returncode != 0:
+                    raise RuntimeError(
+                        result.stderr.strip()
+                        or result.stdout.strip()
+                        or f"{name} exited with status {result.returncode}"
+                    )
+
+            execute("compose-config", [*compose_prefix, "config", "--services"])
+            execute(
+                "mongo-start",
+                [*compose_prefix, "up", "-d", "--wait", "mongodb"],
+            )
+            execute(
+                "mongo-init",
+                [*compose_prefix, "run", "--rm", "--no-deps", "mongo-init"],
+            )
+            repair_report_path = report_dir / "content-import-repair.json"
+            import_argv = [
+                *compose_prefix,
+                "run",
+                "--rm",
+                "--no-deps",
+                "-v",
+                f"{release_root}:/repair/release:ro",
+                "-v",
+                f"{creator_receipt['path']}:/repair/creator-import.json:ro",
+                "-v",
+                f"{source_import_path}:/repair/source-import.json:ro",
+                "-v",
+                f"{report_dir.resolve()}:/repair/report",
+                "content-service",
+                "/usr/local/bin/content-import",
+                "--release-root",
+                "/repair/release",
+                "--mongo-uri",
+                "mongodb://mongodb:27017",
+                "--env",
+                environment,
+                "--mode",
+                "sync",
+                "--delete-policy",
+                "tombstone",
+                "--source-owner",
+                "qwq_data",
+                "--creator-receipt",
+                "/repair/creator-import.json",
+                "--media-image-base-url",
+                environment_values["LOCAL_GAMMA_MEDIA_IMAGE_BASE_URL"],
+                "--media-video-base-url",
+                environment_values["LOCAL_GAMMA_MEDIA_VIDEO_BASE_URL"],
+                "--media-avatar-base-url",
+                environment_values["LOCAL_GAMMA_MEDIA_AVATAR_BASE_URL"],
+                "--require-replay",
+                "--replay-source-import-report",
+                "/repair/source-import.json",
+                "--expected-outbox-repair-count",
+                str(expected_count),
+                "--report",
+                "/repair/report/content-import-repair.json",
+            ]
+            report["destructiveRepairAttempted"] = True
+            report["destructiveRepairOutcome"] = "unknown"
+            report["destructiveRepairPerformed"] = None
+            execute("content-import-repair", import_argv)
+            repair_evidence = (
+                active_content_release_outbox_repair.validate_repair_report(
+                    repair_report_path,
+                    environment=environment,
+                    release_id=str(release_binding["releaseId"]),
+                    manifest_digest=str(release_binding["manifestDigest"]),
+                    expected_repair_count=expected_count,
+                    expected_post_binding_count=int(
+                        source_import["postBindingCount"]
+                    ),
+                    expected_post_bindings_digest=str(
+                        source_import["postBindingsDigest"]
+                    ),
+                )
+            )
+            report["repairEvidence"] = repair_evidence
+            report["destructiveRepairPerformed"] = expected_count > 0
+            report["destructiveRepairOutcome"] = "confirmed"
+            report["destructiveActions"] = (
+                repair_evidence["repairs"] if expected_count > 0 else []
+            )
+            source_import_after = (
+                active_content_release_outbox_repair.validate_source_import_report(
+                    source_import_path,
+                    environment=environment,
+                )
+            )
+            release_binding_after = (
+                active_content_release_outbox_repair.validate_candidate_release_binding(
+                    candidate_snapshot,
+                    source_import_after,
+                )
+            )
+            creator_receipt_after = (
+                active_content_release_outbox_repair.validate_creator_receipt(
+                    source_import_path,
+                    environment=environment,
+                    release_id=str(release_binding["releaseId"]),
+                )
+            )
+            compose_files_after = (
+                active_content_release_outbox_repair.topology_compose_files(
+                    candidate_root,
+                    candidate_manifest,
+                )
+            )
+            if (
+                source_import_after != source_import
+                or release_binding_after != release_binding
+                or creator_receipt_after != creator_receipt
+                or compose_files_after != compose_files
+                or _sha256_file(candidate_root / "manifest.json")
+                != report["candidateManifestDigest"]
+            ):
+                raise ValueError(
+                    "candidate/release/import identity changed during repair"
+                )
+            assert_active_deployment_candidate_snapshot(candidate_snapshot)
+            repair_succeeded = True
+            details.extend(
+                [
+                    f"candidate={baseline_id}",
+                    f"release={release_binding['releaseId']}",
+                    f"repaired={repair_evidence['repairCount']}",
+                    "Mongo-only repair completed; API/relay/consumer remained stopped",
+                ]
+            )
+    except (
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
+        details.append(str(exc))
+    finally:
+        if compose_prefix:
+            cleanup_argv = [*compose_prefix, "down", "--remove-orphans"]
+            try:
+                cleanup = run(
+                    cleanup_argv,
+                    env=environment_values,
+                    timeout_seconds=180,
+                )
+            except OSError as exc:
+                cleanup = subprocess.CompletedProcess(
+                    cleanup_argv,
+                    2,
+                    "",
+                    str(exc),
+                )
+            report["steps"].append(
+                {
+                    "name": "mongo-teardown",
+                    "argv": cleanup_argv,
+                    "exitCode": cleanup.returncode,
+                    "stdoutSha256": "sha256:"
+                    + hashlib.sha256(cleanup.stdout.encode()).hexdigest(),
+                    "stderrSha256": "sha256:"
+                    + hashlib.sha256(cleanup.stderr.encode()).hexdigest(),
+                    "volumesPurged": False,
+                }
+            )
+            if cleanup.returncode != 0:
+                issue = (
+                    cleanup.stderr.strip()
+                    or cleanup.stdout.strip()
+                    or "Mongo-only repair teardown failed"
+                )
+                report["resourceReleaseIssues"].append(issue)
+                details.append(issue)
+                repair_succeeded = False
+    return finish(0 if repair_succeeded else 2)
+
+
+def _repair_media_processing_dead_letter_indexes(
+    args: argparse.Namespace,
+    *,
+    environment: str,
+    target_name: str,
+    report_dir: Path,
+) -> dict[str, Any]:
+    expected_drop_count = int(
+        getattr(args, "expected_retired_index_drop_count", -1)
+    )
+    report: dict[str, Any] = {
+        "schema": "stackctl-media-processing-dead-letter-index-migration.v1",
+        "command": "repair",
+        "target": target_name,
+        "fix": "repair-media-processing-dead-letter-indexes",
+        "status": "gate_block",
+        "confirmation": bool(
+            getattr(
+                args,
+                "confirm_media_processing_dead_letter_index_migration",
+                False,
+            )
+        ),
+        "expectedRetiredIndexDropCount": expected_drop_count,
+        "runtimeServices": ["mongodb", "mongo-init", "content-service:run"],
+        "apiStarted": False,
+        "storageMigrationMode": "quiesced_atomic",
+        "destructiveRepairAttempted": False,
+        "destructiveRepairOutcome": "not_started",
+        "destructiveRepairPerformed": False,
+        "destructiveActions": [],
+        "resourceReleaseIssues": [],
+        "steps": [],
+    }
+    details: list[str] = []
+    compose_prefix: list[str] = []
+    environment_values: dict[str, str] = {}
+    migration_succeeded = False
+
+    def finish(exit_code: int) -> dict[str, Any]:
+        status = "passed" if exit_code == 0 else "gate_block"
+        report["status"] = status
+        report["details"] = details
+        write_json(report_dir / "report.json", report)
+        summary = (
+            "MediaAsset retired dead-letter index migration passed for "
+            f"{target_name}"
+            if exit_code == 0
+            else "MediaAsset retired dead-letter index migration is GATE_BLOCK "
+            f"for {target_name}"
+        )
+        _write_summary_bundle(
+            report_dir,
+            command="repair",
+            target=target_name,
+            status="ok" if exit_code == 0 else "failed",
+            summary=summary,
+            details=details,
+            extra={
+                "fix": "repair-media-processing-dead-letter-indexes",
+                "expectedRetiredIndexDropCount": expected_drop_count,
+                "candidateDigest": str(report.get("candidateDigest") or ""),
+            },
+        )
+        return {
+            "exitCode": exit_code,
+            "summary": summary,
+            "details": details,
+            "reportDir": relpath(report_dir),
+        }
+
+    if target_name != "alpha-local":
+        details.append(
+            "repair-media-processing-dead-letter-indexes is currently limited to alpha-local"
+        )
+        return finish(2)
+    if not report["confirmation"]:
+        details.append(
+            "--confirm-media-processing-dead-letter-index-migration is required "
+            "before runtime or Mongo access"
+        )
+        return finish(2)
+    if expected_drop_count not in {0, 2}:
+        details.append(
+            "--expected-retired-index-drop-count must be 0 for replay or 2 for "
+            "the first migration"
+        )
+        return finish(2)
+
+    try:
+        with _local_stack_operation_lock(target_name):
+            active_leases = active_consumer_leases(target_name)
+            if active_leases:
+                raise ValueError(
+                    "MediaAsset dead-letter index migration requires zero consumer leases"
+                )
+            startup = load_startup_attempt(target_name)
+            if startup is not None and startup.get("status") != "stopped":
+                raise ValueError(
+                    "MediaAsset dead-letter index migration requires an absent or "
+                    "stopped runtime receipt"
+                )
+            candidate_snapshot = active_deployment_candidate_snapshot(target_name)
+            if candidate_snapshot is None:
+                raise ValueError("active immutable candidate is required")
+            baseline_id, candidate_root, candidate_manifest = _fixed_candidate_identity(
+                candidate_snapshot,
+                environment_name=environment,
+                target_name=target_name,
+            )
+            compose_files = (
+                active_content_release_outbox_repair.topology_compose_files(
+                    candidate_root,
+                    candidate_manifest,
+                )
+            )
+            runtime_inputs = (
+                active_content_release_outbox_repair.materialize_candidate_runtime_inputs(
+                    candidate_root,
+                    report_dir,
+                    environment=environment,
+                )
+            )
+            tls_evidence = verify_certificate(target_name)
+            certificate = str(tls_evidence.get("certificate") or "").strip()
+            private_key = str(tls_evidence.get("privateKey") or "").strip()
+            if not certificate or not private_key:
+                raise ValueError(
+                    "MediaAsset dead-letter index migration requires verified local-managed TLS"
+                )
+            provider_binding, observability_binding = (
+                _candidate_bindings_from_snapshot(
+                    candidate_snapshot,
+                    environment_name=environment,
+                    target_name=target_name,
+                )
+            )
+            environment_values = _gamma_env_from_port_manifest(
+                load_environment_topology(),
+                target_name,
+            )
+            environment_values.update(runtime_inputs["environment"])
+            environment_values.update(
+                _provider_runtime_launch_environment(
+                    provider_binding["providerRuntime"],
+                    candidate_root=provider_binding["candidateRoot"],
+                    workload="content-release",
+                )
+            )
+            environment_values.update(
+                _observability_log_sink_launch_environment(
+                    observability_binding["composition"],
+                    environment_name=environment,
+                    target_name=target_name,
+                    candidate_root=observability_binding["candidateRoot"],
+                    workload="content-release",
+                )
+            )
+            environment_values.update(
+                {
+                    "QWQ_RUN_ROOT": str(report_dir.resolve()),
+                    "QWQ_OBSERVABILITY_RUN_ROOT": str(
+                        (report_dir / "observability").resolve()
+                    ),
+                    "QWQ_WORKLOAD": "content-release",
+                    "QWQ_PRODUCT_TELEMETRY_AVAILABLE": "0",
+                    "QWQ_RELEASE_CANDIDATE_DIGEST": baseline_id,
+                    RUNTIME_CANDIDATE_ROOT_ENV: str(candidate_root),
+                    "QWQ_PUBLIC_TLS_CERT_FILE": certificate,
+                    "QWQ_PUBLIC_TLS_KEY_FILE": private_key,
+                }
+            )
+            _bind_gamma_down_parse_environment(environment_values)
+            image_composition = _bind_gamma_packaged_service_image_refs(
+                environment,
+                environment_values,
+                candidate_snapshot=candidate_snapshot,
+            )
+            _bind_gamma_packaged_configuration_digest(
+                environment,
+                environment_values,
+                image_composition,
+            )
+            compose_project = _formal_release_compose_project_name(target_name)
+            environment_values["LOCAL_GAMMA_COMPOSE_PROJECT_NAME"] = compose_project
+            compose_prefix = [
+                "docker",
+                "compose",
+                "-p",
+                compose_project,
+                *compose_file_args(compose_files),
+            ]
+            candidate_manifest_digest = _sha256_file(
+                candidate_root / "manifest.json"
+            )
+            report.update(
+                {
+                    "candidateDigest": baseline_id,
+                    "candidateRoot": str(candidate_root),
+                    "candidateManifestDigest": candidate_manifest_digest,
+                    "startupReceipt": startup,
+                    "consumerLeases": [],
+                    "composeProject": compose_project,
+                    "composeFiles": [str(path) for path in compose_files],
+                    "runtimeInputs": runtime_inputs["evidence"],
+                    "candidateReleaseInputClassification": candidate_manifest.get(
+                        "releaseInputClassification"
+                    ),
+                }
+            )
+
+            def execute(name: str, argv: list[str]) -> None:
+                result = run(argv, env=environment_values, timeout_seconds=300)
+                step = {
+                    "name": name,
+                    "argv": argv,
+                    "exitCode": result.returncode,
+                    "stdoutSha256": "sha256:"
+                    + hashlib.sha256(result.stdout.encode()).hexdigest(),
+                    "stderrSha256": "sha256:"
+                    + hashlib.sha256(result.stderr.encode()).hexdigest(),
+                }
+                report["steps"].append(step)
+                if result.returncode != 0:
+                    raise RuntimeError(
+                        result.stderr.strip()
+                        or result.stdout.strip()
+                        or f"{name} exited with status {result.returncode}"
+                    )
+
+            execute("compose-config", [*compose_prefix, "config", "--services"])
+            execute(
+                "mongo-start",
+                [*compose_prefix, "up", "-d", "--wait", "mongodb"],
+            )
+            execute(
+                "mongo-init",
+                [*compose_prefix, "run", "--rm", "--no-deps", "mongo-init"],
+            )
+            migration_report_path = (
+                report_dir / "media-processing-dead-letter-index-migration.json"
+            )
+            migration_argv = [
+                *compose_prefix,
+                "run",
+                "--rm",
+                "--no-deps",
+                "-e",
+                "MONGO_URI=mongodb://mongodb:27017",
+                "-e",
+                "CONTENT_MONGO_DATABASE=quwoquan_content",
+                "-e",
+                "QWQ_STORAGE_MIGRATION_MODE=quiesced_atomic",
+                "-v",
+                f"{report_dir.resolve()}:/migration/report",
+                "content-service",
+                "/usr/local/bin/migrate-media-processing-dead-letter-indexes",
+                "--expected-drop-count",
+                str(expected_drop_count),
+                "--report",
+                "/migration/report/media-processing-dead-letter-index-migration.json",
+            ]
+            report["destructiveRepairAttempted"] = True
+            report["destructiveRepairOutcome"] = "unknown"
+            report["destructiveRepairPerformed"] = None
+            execute("media-processing-dead-letter-index-migration", migration_argv)
+            raw_migration_report = json.loads(
+                migration_report_path.read_text(encoding="utf-8")
+            )
+            required_report_fields = {
+                "schema",
+                "status",
+                "database",
+                "migrationMode",
+                "expectedDropCount",
+                "droppedIndexes",
+                "retiredIndexesAbsent",
+            }
+            if (
+                not isinstance(raw_migration_report, dict)
+                or set(raw_migration_report) != required_report_fields
+                or raw_migration_report.get("schema")
+                != "quwoquan.content.media_processing_dead_letter_index_migration.v1"
+                or raw_migration_report.get("status") != "passed"
+                or raw_migration_report.get("database") != "quwoquan_content"
+                or raw_migration_report.get("migrationMode") != "quiesced_atomic"
+                or raw_migration_report.get("expectedDropCount")
+                != expected_drop_count
+                or raw_migration_report.get("retiredIndexesAbsent") is not True
+            ):
+                raise ValueError(
+                    "MediaAsset dead-letter index migration report identity mismatch"
+                )
+            dropped_indexes = raw_migration_report.get("droppedIndexes")
+            if (
+                not isinstance(dropped_indexes, list)
+                or len(dropped_indexes) != expected_drop_count
+                or len(set(dropped_indexes)) != expected_drop_count
+                or any(
+                    not isinstance(name, str) or not name.strip()
+                    for name in dropped_indexes
+                )
+            ):
+                raise ValueError(
+                    "MediaAsset dead-letter index migration dropped index set mismatch"
+                )
+            report["migrationEvidence"] = {
+                "path": str(migration_report_path.resolve()),
+                "sha256": _sha256_file(migration_report_path),
+                **raw_migration_report,
+            }
+            report["destructiveRepairPerformed"] = expected_drop_count > 0
+            report["destructiveRepairOutcome"] = "confirmed"
+            report["destructiveActions"] = [
+                {"action": "drop_index", "index": name}
+                for name in dropped_indexes
+            ]
+            compose_files_after = (
+                active_content_release_outbox_repair.topology_compose_files(
+                    candidate_root,
+                    candidate_manifest,
+                )
+            )
+            if (
+                compose_files_after != compose_files
+                or _sha256_file(candidate_root / "manifest.json")
+                != candidate_manifest_digest
+            ):
+                raise ValueError(
+                    "candidate or runtime topology identity changed during migration"
+                )
+            assert_active_deployment_candidate_snapshot(candidate_snapshot)
+            migration_succeeded = True
+            details.extend(
+                [
+                    f"candidate={baseline_id}",
+                    f"dropped={expected_drop_count}",
+                    "Mongo-only migration completed; API/relay/consumer remained stopped",
+                ]
+            )
+    except (
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
+        details.append(str(exc))
+    finally:
+        if compose_prefix:
+            cleanup_argv = [*compose_prefix, "down", "--remove-orphans"]
+            try:
+                cleanup = run(
+                    cleanup_argv,
+                    env=environment_values,
+                    timeout_seconds=180,
+                )
+            except OSError as exc:
+                cleanup = subprocess.CompletedProcess(
+                    cleanup_argv,
+                    2,
+                    "",
+                    str(exc),
+                )
+            report["steps"].append(
+                {
+                    "name": "mongo-teardown",
+                    "argv": cleanup_argv,
+                    "exitCode": cleanup.returncode,
+                    "stdoutSha256": "sha256:"
+                    + hashlib.sha256(cleanup.stdout.encode()).hexdigest(),
+                    "stderrSha256": "sha256:"
+                    + hashlib.sha256(cleanup.stderr.encode()).hexdigest(),
+                    "volumesPurged": False,
+                }
+            )
+            if cleanup.returncode != 0:
+                issue = (
+                    cleanup.stderr.strip()
+                    or cleanup.stdout.strip()
+                    or "Mongo-only migration teardown failed"
+                )
+                report["resourceReleaseIssues"].append(issue)
+                details.append(issue)
+                migration_succeeded = False
+    return finish(0 if migration_succeeded else 2)
+
+
 def command_repair(args: argparse.Namespace) -> dict[str, Any]:
+    if args.fix == "reconcile-output-layout":
+        report_dir = resolve_report_dir(args, "repo", "repo")
+        if args.target != "repo":
+            details = [
+                "reconcile-output-layout is repository-scoped and requires --target repo"
+            ]
+            return _finish_output_layout_reconciliation(
+                report_dir=report_dir,
+                status="gate_block",
+                summary="output layout reconciliation is GATE_BLOCK",
+                details=details,
+                report={
+                    "command": "repair",
+                    "target": args.target,
+                    "fix": args.fix,
+                    "status": "gate_block",
+                    "destructiveRepairPerformed": False,
+                    "destructiveActions": [],
+                    "resourceReleaseIssues": details,
+                },
+                exit_code=2,
+            )
+        return _repair_output_layout(args, report_dir=report_dir)
+    if args.target == "repo":
+        report_dir = resolve_report_dir(args, "repo", "repo")
+        summary = f"{args.fix} is not available for repository target"
+        _write_summary_bundle(
+            report_dir,
+            command="repair",
+            target="repo",
+            status="failed",
+            summary=summary,
+            details=[summary],
+        )
+        return {
+            "exitCode": 2,
+            "summary": summary,
+            "details": [summary],
+            "reportDir": relpath(report_dir),
+        }
     topology = load_environment_topology()
     target = get_target(topology, args.target)
     env_name = str(target["env"])
     report_dir = resolve_report_dir(args, env_name, args.target)
     steps: list[dict[str, Any]] = []
-    if args.fix == "reconcile-nonprod-data":
-        return _reconcile_nonprod_data(
+    if args.fix == "repair-active-content-release-outbox":
+        return _repair_active_content_release_outbox(
+            args,
+            environment=env_name,
+            target_name=args.target,
+            report_dir=report_dir,
+        )
+    if args.fix == "repair-media-processing-dead-letter-indexes":
+        return _repair_media_processing_dead_letter_indexes(
             args,
             environment=env_name,
             target_name=args.target,
@@ -16262,8 +21175,7 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
             "reportDir": relpath(report_dir),
         }
     if args.fix == "reclaim-build-cache":
-        local_targets = {"alpha-local", "beta-local", "gamma-local"}
-        if args.target not in local_targets:
+        if args.target not in LOCAL_BUILD_CACHE_TARGETS:
             summary = (
                 "reclaim-build-cache is only available for "
                 "alpha-local, beta-local, or gamma-local"
@@ -16282,71 +21194,10 @@ def command_repair(args: argparse.Namespace) -> dict[str, Any]:
                 "details": [summary],
                 "reportDir": relpath(report_dir),
             }
-        before = run(["docker", "system", "df"])
-        reclaim = run(["docker", "builder", "prune", "--all", "--force"])
-        after = run(["docker", "system", "df"])
-        steps = [
-            {
-                "name": "docker-storage-before",
-                "exitCode": before.returncode,
-                "stdout": before.stdout,
-                "stderr": before.stderr,
-            },
-            {
-                "name": "docker-unused-build-cache-prune",
-                "exitCode": reclaim.returncode,
-                "stdout": reclaim.stdout,
-                "stderr": reclaim.stderr,
-            },
-            {
-                "name": "docker-storage-after",
-                "exitCode": after.returncode,
-                "stdout": after.stdout,
-                "stderr": after.stderr,
-            },
-        ]
-        # A completely full BuildKit store can make the read-only `system df`
-        # pre-snapshot fail because BuildKit cannot update snapshots.db.  The
-        # repair has still succeeded when the allow-listed cache prune and the
-        # post-repair inventory both succeed; keep the failed pre-snapshot in
-        # `steps` as diagnostic evidence instead of turning a recovered host
-        # into a false failure.
-        succeeded = reclaim.returncode == 0 and after.returncode == 0
-        summary = (
-            f"{args.target} unused Docker build cache reclaimed"
-            if succeeded
-            else f"{args.target} Docker build cache reclaim failed"
+        return _repair_reclaim_build_cache(
+            args,
+            report_dir=report_dir,
         )
-        write_json(
-            report_dir / "report.json",
-            {"command": "repair", "target": args.target, "fix": args.fix, "steps": steps},
-        )
-        write_json(
-            report_dir / "repair_plan.json",
-            {
-                "target": args.target,
-                "fix": args.fix,
-                "actions": ["remove unused Docker build cache only"],
-            },
-        )
-        _write_summary_bundle(
-            report_dir,
-            command="repair",
-            target=args.target,
-            status="ok" if succeeded else "failed",
-            summary=summary,
-            details=[
-                "only unused Docker builder cache is eligible; containers, images, volumes, and release data are preserved"
-            ],
-        )
-        return {
-            "exitCode": 0 if succeeded else 1,
-            "summary": summary,
-            "details": [
-                "only unused Docker builder cache is eligible; containers, images, volumes, and release data are preserved"
-            ],
-            "reportDir": relpath(report_dir),
-        }
     if args.fix == "rebuild-packages":
         package_args = argparse.Namespace(
             command="package",
@@ -16803,15 +21654,34 @@ def _verify_release_registry_attestations(
         raise RuntimeError("; ".join(sorted(failures)))
 
 
-def _prod_rollout_canary_contract(rollout_stage: str) -> dict[str, Any]:
+def _prod_rollout_contract(
+    rollout_stage: str,
+    *,
+    expected_candidate_digest: str = "",
+) -> dict[str, Any]:
     policy_path = ROOT / "quwoquan_ops" / "environments" / "prod" / "rollout" / "routing_policy.yaml"
+    try:
+        policy_bytes = policy_path.read_bytes()
+    except OSError as error:
+        raise RuntimeError("production rollout policy is unavailable") from error
     payload = load_json_yaml(policy_path)
     policy = payload.get("policy") if isinstance(payload, dict) else None
     if not isinstance(policy, dict) or not policy.get("enabled"):
-        raise RuntimeError("production gray routing policy must be enabled")
+        raise RuntimeError("production rollout policy must be enabled")
+    if rollout_stage not in {"canary", "5", "20", "50", "100"}:
+        raise RuntimeError(f"unsupported production rollout stage: {rollout_stage}")
+    if policy.get("subjectKind") != "device_actor":
+        raise RuntimeError("production rollout subjectKind must be device_actor")
+    for field in ("campaignId", "candidateDigest", "allocationKeyId"):
+        if not str(policy.get(field) or "").strip():
+            raise RuntimeError(f"production rollout policy requires {field}")
+    if expected_candidate_digest and policy["candidateDigest"] != expected_candidate_digest:
+        raise RuntimeError(
+            "production rollout candidateDigest does not match the deployment candidate"
+        )
     canary = policy.get("syntheticCanary")
     if not isinstance(canary, dict):
-        raise RuntimeError("production gray routing policy requires syntheticCanary")
+        raise RuntimeError("production rollout policy requires syntheticCanary")
     headers = canary.get("headers")
     requests = int(canary.get("requests") or 0)
     path = str(canary.get("path") or "").strip()
@@ -16820,46 +21690,37 @@ def _prod_rollout_canary_contract(rollout_stage: str) -> dict[str, Any]:
         or requests < 100
         or not path.startswith("/")
     ):
-        raise RuntimeError("production gray synthetic canary contract is incomplete")
-    stage_dimensions = policy.get("stageDimensions")
-    if not isinstance(stage_dimensions, dict):
-        raise RuntimeError("production gray routing stageDimensions are missing")
-    dimensions = stage_dimensions.get(rollout_stage)
-    if not isinstance(dimensions, dict):
+        raise RuntimeError("production rollout synthetic canary contract is incomplete")
+    stages = policy.get("stages")
+    stage_policy = stages.get(rollout_stage) if isinstance(stages, dict) else None
+    if not isinstance(stage_policy, dict):
         raise RuntimeError(
-            f"production gray routing dimensions are missing for stage {rollout_stage}"
+            f"production rollout policy is missing stage {rollout_stage}"
         )
-    header_dimensions = {
-        "X-Client-App-Version": "appVersions",
-        "X-Client-User-Id": "userIds",
-        "X-Client-Region-Code": "provinces",
-        "X-Client-Carrier": "carriers",
-    }
-    matching_headers = {
-        header: str(headers.get(header) or "")
-        for header, dimension in header_dimensions.items()
-        if str(headers.get(header) or "")
-        in {str(value) for value in dimensions.get(dimension) or []}
-    }
-    if rollout_stage == "full":
-        # full 阶段没有灰度路由维度；canary 只验证稳定面 healthz，不能把此前
-        # stage 的用户/地区 header 误报为仍在灰度。
-        return {
-            **canary,
-            "headers": {
-                key: value
-                for key, value in headers.items()
-                if key not in header_dimensions
-            },
-            "rolloutStage": rollout_stage,
-            "expectedRoute": "stable",
-        }
-    if not matching_headers:
-        raise RuntimeError("synthetic canary headers do not match any enabled gray dimension")
+    expected_basis_points = {
+        "canary": 0,
+        "5": 500,
+        "20": 2000,
+        "50": 5000,
+        "100": 10000,
+    }[rollout_stage]
+    if stage_policy.get("basisPoints") != expected_basis_points:
+        raise RuntimeError(
+            f"production rollout stage {rollout_stage} basisPoints is invalid"
+        )
     return {
         **canary,
         "rolloutStage": rollout_stage,
-        "expectedRoute": "gray",
+        "expectedRoute": "stable" if rollout_stage == "100" else "candidate",
+        "campaignId": policy["campaignId"],
+        "candidateDigest": policy["candidateDigest"],
+        "allocationKeyId": policy["allocationKeyId"],
+        "basisPoints": expected_basis_points,
+        "routingPolicyDigest": "sha256:" + hashlib.sha256(policy_bytes).hexdigest(),
+        "platforms": stage_policy.get("platforms"),
+        "appVersions": stage_policy.get("appVersions"),
+        "regions": stage_policy.get("regions"),
+        "carriers": stage_policy.get("carriers"),
     }
 
 
@@ -16945,14 +21806,18 @@ def _prometheus_query_value(
 
 
 def _read_prometheus_slo(
-    base_url: str, service: str, *, deadline_epoch: int
+    base_url: str,
+    service: str,
+    *,
+    deadline_epoch: int,
+    window_override: str = "",
 ) -> dict[str, Any]:
     policy_path = ROOT / "quwoquan_ops/policies/config-release/slo_thresholds.yaml"
     policy = load_json_yaml(policy_path)
     if not isinstance(policy, dict) or not isinstance(policy.get("readback"), dict):
         raise RuntimeError(f"invalid SLO readback policy: {policy_path}")
     readback_policy = policy["readback"]
-    window = str(readback_policy.get("window") or "").strip()
+    window = str(window_override or readback_policy.get("window") or "").strip()
     minimum_samples = int(readback_policy.get("minimum_samples") or 0)
     if not window or minimum_samples <= 0:
         raise RuntimeError(f"SLO readback policy requires window/minimum_samples: {policy_path}")
@@ -17101,8 +21966,8 @@ def _decision_from_slo_output(output: str, rollout_stage: str) -> tuple[str, str
     if "decision=pause reason=insufficient_samples" in output:
         return "pause", "SLO sample evidence is insufficient; promotion remains paused"
     if "decision=pause" in output:
-        if rollout_stage == "full":
-            return "rollback", "full rollout cannot remain paused on warning SLO"
+        if rollout_stage == "100":
+            return "rollback", "100 rollout cannot remain paused on warning SLO"
         return "pause", "slo gate decision=pause"
     if "decision=rollback" in output:
         return "rollback", "slo gate decision=rollback"
@@ -17144,6 +22009,8 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
     last_good_candidate_digest = ""
     rollout_canary_contract: dict[str, Any] | None = None
     rollout_canary_traffic: dict[str, Any] | None = None
+    promotion_observation: dict[str, Any] | None = None
+    promotion_evidence: dict[str, Any] | None = None
     provider_readiness: dict[str, Any] = {}
     promotion_deadline_epoch = int(
         getattr(args, "promotion_deadline_epoch", 0) or 0
@@ -17179,7 +22046,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 "details": [str(error)],
                 **timing,
             }
-        if rollout_stage == "gray-initial":
+        if rollout_stage == "canary":
             provider_preflight = _run_provider_readiness_preflight("prod", report_dir)
             provider_readiness = provider_preflight["report"]
             if provider_preflight["exitCode"] != 0:
@@ -17251,12 +22118,15 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             }
         if not dry_run_requested:
             try:
-                rollout_canary_contract = _prod_rollout_canary_contract(rollout_stage)
+                rollout_canary_contract = _prod_rollout_contract(
+                    rollout_stage,
+                    expected_candidate_digest=str(args.to_candidate_digest or "").strip(),
+                )
             except RuntimeError as error:
                 timing = _finish_timing(started_monotonic, started_at)
                 return {
                     "exitCode": 2,
-                    "summary": "stackctl deploy blocked: gray canary contract is invalid",
+                    "summary": "stackctl deploy blocked: rollout contract is invalid",
                     "details": [str(error)],
                     **timing,
                 }
@@ -17302,6 +22172,43 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
             ):
                 if re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
                     raise RuntimeError(f"{label} digest is invalid")
+            if not dry_run_requested:
+                evidence_path_value = str(
+                    getattr(args, "promotion_evidence", "") or ""
+                ).strip()
+                evidence_root_value = str(
+                    os.environ.get("QWQ_PROD_ROLLOUT_EVIDENCE_ROOT", "")
+                ).strip()
+                if not evidence_path_value or not evidence_root_value:
+                    raise RuntimeError(
+                        "protected rollout promotion evidence path/root is required"
+                    )
+                if rollout_canary_contract is None:
+                    raise RuntimeError("production rollout contract was not loaded")
+                promotion_observation = (
+                    rollout_stage_promotion_evidence.load_protected_observation(
+                        Path(evidence_path_value),
+                        trusted_root=Path(evidence_root_value),
+                    )
+                )
+                promotion_evidence = (
+                    rollout_stage_promotion_evidence.validate_observation(
+                        promotion_observation,
+                        candidate_id=str(
+                            release_manifest_payload.get("candidateId") or ""
+                        ),
+                        artifact_digest=release_artifact_digest,
+                        campaign_id=str(rollout_canary_contract["campaignId"]),
+                        routing_policy_digest=str(
+                            rollout_canary_contract["routingPolicyDigest"]
+                        ),
+                        stage=rollout_stage,
+                        stage_policy=rollout_canary_contract,
+                        actual_synthetic_requests=(
+                            None if rollout_stage == "canary" else 0
+                        ),
+                    )
+                )
             if not dry_run_requested:
                 release_candidate_digests = _required_release_candidate_digests(
                     args,
@@ -17481,7 +22388,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     and release_state_snapshot.get("last_good_candidate_digest")
                     == args.from_candidate_digest
                     and release_state_snapshot.get("stage")
-                    in {"gray-initial", "carry-on"}
+                    in {"canary", "5", "20", "50"}
                 )
                 if active_candidate:
                     force_deadline_rollback = True
@@ -17587,6 +22494,29 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     rollout_canary_contract,
                     deadline_epoch=promotion_deadline_epoch,
                 )
+                if rollout_stage == "canary":
+                    if promotion_observation is None:
+                        raise RuntimeError(
+                            "protected rollout promotion observation was not loaded"
+                        )
+                    promotion_evidence = (
+                        rollout_stage_promotion_evidence.validate_observation(
+                            promotion_observation,
+                            candidate_id=str(
+                                release_manifest_payload.get("candidateId") or ""
+                            ),
+                            artifact_digest=release_artifact_digest,
+                            campaign_id=str(rollout_canary_contract["campaignId"]),
+                            routing_policy_digest=str(
+                                rollout_canary_contract["routingPolicyDigest"]
+                            ),
+                            stage=rollout_stage,
+                            stage_policy=rollout_canary_contract,
+                            actual_synthetic_requests=int(
+                                rollout_canary_traffic.get("requests") or 0
+                            ),
+                        )
+                    )
                 settle_seconds = _slo_settle_seconds(rollout_stage)
                 if settle_seconds:
                     remaining = _remaining_deadline_seconds(
@@ -17672,6 +22602,8 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                             stderr=gate_result.stderr,
                         )
                     )
+            if slo_readback is not None and promotion_evidence is not None:
+                slo_readback["promotionEvidence"] = promotion_evidence
     run_post_deploy_checks = result.returncode == 0 and not (
         args.target == "prod-hosted" and dry_run_requested
     )
@@ -17705,7 +22637,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                     deadline_epoch=promotion_deadline_epoch,
                 )
                 post_deploy_checks.append(command_health(nested_args))
-        if args.target == "prod-hosted" and rollout_stage == "gray-initial":
+        if args.target == "prod-hosted" and rollout_stage == "canary":
             nested_dir = report_dir / "environment-page-smoke"
             verify_command = [
                 "python3",
@@ -17808,7 +22740,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                 "IMAGE_TRANSPORT_TAG": from_image_transport_tag,
                 "CANDIDATE_DIGEST": args.from_candidate_digest,
                 "PREVIOUS_IMAGE_TRANSPORT_TAG": to_image_transport_tag,
-                "ROLLOUT_STAGE": "full",
+                "ROLLOUT_STAGE": "100",
                 "DRY_RUN": "false",
                 "PROD_IMAGE_DELIVERY_MODE": "skip",
             }
@@ -17881,7 +22813,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
                         else args.to_candidate_digest
                     ),
                     step="100" if rollback_succeeded else args.step,
-                    stage="full" if rollback_succeeded else rollout_stage,
+                    stage="100" if rollback_succeeded else rollout_stage,
                     decision=rollback_decision,
                     artifact_digest=release_artifact_digest,
                     expected_generation=expected_generation,
@@ -17992,7 +22924,7 @@ def _command_deploy_with_lock(args: argparse.Namespace) -> dict[str, Any]:
         elif final_exit_code == 0 and not dry_run_requested:
             committed_last_good_candidate_digest = (
                 args.to_candidate_digest
-                if rollout_stage == "full"
+                if rollout_stage == "100"
                 else last_good_candidate_digest
             )
             committed_release_state, release_receipt_path = _commit_hosted_release_transition(
@@ -18788,13 +23720,13 @@ def command_hosted_release_receipt(args: argparse.Namespace) -> dict[str, Any]:
             raise RuntimeError("hosted receipt candidate binding does not match UAT")
         purpose = str(args.purpose)
         if purpose == "last-good" and not (
-            receipt.get("stage") == "full"
+            receipt.get("stage") == "100"
             and receipt.get("decision") == "continue"
             and receipt.get("rollbackOutcome") == "not_triggered"
             and receipt.get("lastGoodCandidateDigest")
             == receipt.get("toCandidateDigest")
         ):
-            raise RuntimeError("hosted receipt is not a stable full last-good release")
+            raise RuntimeError("hosted receipt is not a stable 100 last-good release")
         if purpose == "rollback" and not (
             receipt.get("decision") == "rolled_back"
             and receipt.get("rollbackOutcome") == "rolled_back"
@@ -18932,6 +23864,13 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
             f"GATE_BLOCK: shared local release runtime does not support {target_name}"
         )
     public_bases = target.get("publicBases") or {}
+    def public_host(name: str, *, schemes: set[str]) -> str:
+        parsed = urllib.parse.urlsplit(str(public_bases.get(name) or ""))
+        if parsed.scheme not in schemes or not parsed.hostname:
+            raise RuntimeError(
+                f"GATE_BLOCK: {target_name} publicBases.{name} has no canonical host"
+            )
+        return parsed.hostname
     startup = target.get("startup")
     if not isinstance(startup, dict):
         raise RuntimeError(
@@ -18960,6 +23899,16 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         return value.strip()
 
     environment = {
+        # Every first-party service builds from the same large Go module
+        # context.  Colima's SSHFS source session can lose a sibling file when
+        # Compose asks BuildKit to upload that context many times in parallel
+        # (observed as alternating go.mod/go.sum checksum misses).  Test-live
+        # favors a deterministic current-worktree build over parallelism.
+        "COMPOSE_PARALLEL_LIMIT": "1",
+        # Compose fragments may persist rebuildable runtime logs and reports,
+        # but mutable test-live must still bind them to the one canonical
+        # repository output tree instead of relying on the caller shell.
+        "QWQ_OUTPUT_ROOT": str(output_root().expanduser().resolve()),
         "LOCAL_GAMMA_HTTP_PORT": str(ports["api-edge"]),
         "LOCAL_GAMMA_PRODUCT_OPS_PORT": str(ports["product-ops-edge"]),
         "LOCAL_GAMMA_PLATFORM_OPS_PORT": str(ports["platform-ops-edge"]),
@@ -19025,6 +23974,15 @@ def _gamma_env_from_port_manifest(topology: dict[str, Any], target_name: str) ->
         "LOCAL_GAMMA_GO_BASE_IMAGE": required_build_image("goBaseImage"),
         "LOCAL_GAMMA_ALPINE_BASE_IMAGE": required_build_image("alpineBaseImage"),
         "QWQ_COMPOSE_PUBLIC_WEB_BASE_URL": str(public_bases["publicWeb"]),
+        "QWQ_PUBLIC_API_HOST": public_host("api", schemes={"https"}),
+        "QWQ_PUBLIC_WEB_HOST": public_host("publicWeb", schemes={"https"}),
+        "QWQ_PUBLIC_RTC_HOST": public_host("rtc", schemes={"wss"}),
+        "QWQ_PUBLIC_OPS_HOST": public_host("productOps", schemes={"https"}),
+        "QWQ_PUBLIC_CDN_HOST": public_host("mediaImage", schemes={"https"}),
+        "QWQ_PUBLIC_UPLOAD_HOST": public_host("mediaUpload", schemes={"https"}),
+        "QWQ_LOCAL_PUBLIC_UPLOAD_HOST": public_host(
+            "mediaUpload", schemes={"https"}
+        ),
         "QWQ_COMPOSE_MEDIA_AVATAR_BASE_URL": str(public_bases["mediaAvatar"]),
         "QWQ_LOCAL_RELEASE_ENV": environment_name,
         "QWQ_LOCAL_RELEASE_TARGET": target_name,
@@ -19184,9 +24142,12 @@ def _content_consumer_health_checks(
     api_base = str(public_bases.get("api") or "").rstrip("/")
     if not api_base:
         return []
-    # Ranked /channel recommend feeds require a session id; bare ?limit=1 is 400.
+    # Probe the exact default homepage channel route.  An identity=work query is
+    # a discovery-browser read, while a bare feed query leaves the App route
+    # ambiguous; neither proves that the visible Recommend tab can assemble a
+    # ranked page.
     feed_url = (
-        f"{api_base}/content/feed?limit=1"
+        f"{api_base}/content/feed?sort=recommend&channelId=recommend&limit=1"
         "&sessionId=stackctl-content-consumer-health"
     )
     return [
@@ -19537,21 +24498,17 @@ def _resolve_prod_rollout_stage(step: str, requested_stage: str = "") -> str:
         percentage = int(normalized_step)
     except ValueError as error:
         raise ValueError(f"step 必须是 1..100 的整数，实际 {step!r}") from error
-    if percentage < 1 or percentage > 100:
-        raise ValueError(f"step 必须在 1..100，实际 {percentage}")
-
+    step_to_stage = {0: "canary", 5: "5", 20: "20", 50: "50", 100: "100"}
+    if percentage not in step_to_stage:
+        raise ValueError("step 只允许 0/5/20/50/100")
     explicit_stage = str(requested_stage).strip()
     if explicit_stage:
-        if explicit_stage == "full" and percentage != 100:
-            raise ValueError("full 必须与 step=100 同时使用")
-        if explicit_stage != "full" and percentage == 100:
-            raise ValueError("step=100 只能使用 full")
+        if explicit_stage != step_to_stage[percentage]:
+            raise ValueError(
+                f"stage={explicit_stage} 与 step={percentage} 不匹配"
+            )
         return explicit_stage
-    if percentage == 100:
-        return "full"
-    if percentage <= 5:
-        return "gray-initial"
-    return "carry-on"
+    return step_to_stage[percentage]
 
 
 def _prod_rollout_workloads() -> list[dict[str, Any]]:
@@ -19648,22 +24605,29 @@ def _runtime_log_evidence_report(log_root: Path) -> dict[str, Any]:
     }
 
 
-def _candidate_workspace_report(target_name: str) -> dict[str, Any]:
-    """Compare the active immutable candidate with current managed inputs.
-
-    This is deliberately read-only.  It never packages, activates, repairs or
-    selects another candidate; status/inspect can therefore expose stale
-    evidence without changing the environment being observed.
-    """
+def _candidate_workspace_report(
+    target_name: str,
+    *,
+    purpose: str = "self_verify",
+) -> dict[str, Any]:
+    """Self-verify candidate bytes; current source comparison is explicit."""
 
     report: dict[str, Any] = {
         "status": "unavailable",
+        "purpose": purpose,
+        "selfVerified": False,
+        "currentSourceClaim": "not_evaluated",
+        "nonPromotable": None,
         "drifted": None,
         "candidate": None,
         "current": None,
         "mismatchedFields": [],
         "issues": [],
+        "warnings": [],
     }
+    if purpose not in {"self_verify", "currentness"}:
+        report["issues"] = ["candidate validation purpose is invalid"]
+        return report
     try:
         topology = load_environment_topology()
         environment = str(get_target(topology, target_name).get("env") or "")
@@ -19677,17 +24641,25 @@ def _candidate_workspace_report(target_name: str) -> dict[str, Any]:
                 }
             )
             return report
+        candidate_root = Path(str(active["candidateDir"]))
+        self_verified, self_verify_detail = can_reuse_package(
+            environment,
+            target_name,
+            include_services=True,
+            purpose="self_verify",
+            candidate_root=candidate_root,
+        )
+        if not self_verified:
+            raise ValueError(self_verify_detail)
         candidate = load_candidate_manifest(
             environment,
             target_name,
             str(active["baselineId"]),
             require_full=True,
+            purpose="self_verify",
         )
-        current = workspace_snapshot()
     except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
-        report["issues"] = [
-            "candidate/workspace identity is unavailable: " + str(exc)
-        ]
+        report["issues"] = ["candidate self-verify is unavailable: " + str(exc)]
         return report
 
     candidate_identity = {
@@ -19696,34 +24668,40 @@ def _candidate_workspace_report(target_name: str) -> dict[str, Any]:
         "workspaceStatusDigest": candidate.get("workspaceStatusDigest"),
         "deploymentInputDigest": candidate.get("workspaceDigest"),
     }
-    current_identity = {
-        "baselineId": current.get("baselineId"),
-        "sourceRevision": current.get("sourceRevision"),
-        "workspaceStatusDigest": current.get("workspaceStatusDigest"),
-        "deploymentInputDigest": current.get("deploymentInputDigest"),
-        "deploymentInputFileCount": current.get("deploymentInputFileCount"),
-    }
-    mismatched = [
-        field
-        for field, expected in candidate_identity.items()
-        if expected != current_identity.get(field)
-    ]
-    drifted = bool(mismatched)
+    status = "self_verified"
+    current_source_claim = "not_evaluated"
+    non_promotable: bool | None = None
+    drifted: bool | None = None
+    current_identity: dict[str, Any] | None = None
+    mismatched: list[str] = []
+    warnings: list[str] = []
+    if purpose == "currentness":
+        current, detail = can_reuse_package(
+            environment,
+            target_name,
+            include_services=True,
+            purpose="currentness",
+            candidate_root=candidate_root,
+        )
+        status = "current" if current else "drifted"
+        current_source_claim = status
+        non_promotable = not current
+        drifted = not current
+        current_identity = {"detail": detail}
+        if not current:
+            mismatched = ["deploymentInputClosure"]
+            warnings.append(detail)
     report.update(
         {
-            "status": "drifted" if drifted else "current",
+            "status": status,
+            "selfVerified": True,
+            "currentSourceClaim": current_source_claim,
+            "nonPromotable": non_promotable,
             "drifted": drifted,
             "candidate": candidate_identity,
             "current": current_identity,
             "mismatchedFields": mismatched,
-            "issues": (
-                [
-                    "active immutable candidate differs from current managed "
-                    "workspace fields: " + ",".join(mismatched)
-                ]
-                if drifted
-                else []
-            ),
+            "warnings": warnings,
         }
     )
     return report
@@ -19734,15 +24712,6 @@ def _data_report(
     *,
     candidate_workspace: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    def summarized_digest(value: dict[str, Any]) -> str:
-        encoded = json.dumps(
-            value,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-        return "sha256:" + hashlib.sha256(encoded).hexdigest()
-
     topology = load_environment_topology()
     target = get_target(topology, target_name)
     profile_name = target.get("portProfile")
@@ -19802,87 +24771,15 @@ def _data_report(
             "Prod run root contains forbidden nonprod acceptance dataset receipts"
         )
         return report
-    for path in sorted(receipt_root.glob("*/*.json")):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            report["issues"].append(
-                f"invalid nonprod dataset receipt {relpath(path)}: {type(exc).__name__}"
-            )
-            continue
-        if not isinstance(payload, dict) or payload.get("schema") != (
-            "qwq.nonprod_acceptance_dataset_receipt"
-        ):
-            report["issues"].append(
-                f"invalid nonprod dataset receipt schema: {relpath(path)}"
-            )
-            continue
-        receipt_issues: list[str] = []
-        if payload.get("target") != target_name or payload.get("environment") != environment:
-            receipt_issues.append("target/environment mismatch")
-        if str(payload.get("datasetEpoch") or "") != path.parent.name:
-            receipt_issues.append("datasetEpoch/path mismatch")
-        raw_expires_at = str(payload.get("expiresAt") or "").strip()
-        try:
-            expires_at = datetime.fromisoformat(raw_expires_at.replace("Z", "+00:00"))
-        except ValueError:
-            receipt_issues.append("expiresAt invalid")
-        else:
-            if expires_at.tzinfo is None:
-                receipt_issues.append("expiresAt timezone missing")
-            elif expires_at <= datetime.now(timezone.utc):
-                receipt_issues.append("receipt expired")
-        candidate_binding = "unbound"
-        if active_manifest is not None:
-            expected_release_digest = (
-                ((active_manifest.get("release") or {}).get("candidate") or {}).get(
-                    "releaseDigest"
-                )
-            )
-            binding_fields = {
-                "baselineId": active_manifest.get("baselineId"),
-                "packageDigest": active_manifest.get("packageDigest"),
-                "runtimeConfigDigest": active_manifest.get("runtimeConfigDigest"),
-                "releaseDigest": expected_release_digest,
-            }
-            drifted = [
-                name
-                for name, expected in binding_fields.items()
-                if payload.get(name) != expected
-            ]
-            candidate_binding = "stale" if drifted else "active"
-            if drifted:
-                receipt_issues.append(
-                    "candidate binding drift: " + ",".join(sorted(drifted))
-                )
-        if receipt_issues:
-            report["issues"].append(
-                f"nonprod dataset {payload.get('datasetId') or path.name}: "
-                + "; ".join(receipt_issues)
-            )
-        objects = payload.get("createdObjectIdsOrHashes")
-        projection = payload.get("projectionWatermarks")
+    legacy_receipts = sorted(receipt_root.glob("*/*.json"))
+    for path in legacy_receipts:
+        report["issues"].append(
+            "legacy nonprod-data receipt must be explicitly cleaned before "
+            f"typed test-data verification: {relpath(path)}"
+        )
         report["nonprodAcceptanceDatasets"].append(
             {
-                "datasetId": payload.get("datasetId"),
-                "datasetEpoch": payload.get("datasetEpoch"),
-                "baselineId": payload.get("baselineId"),
-                "packageDigest": payload.get("packageDigest"),
-                "releaseDigest": payload.get("releaseDigest"),
-                "retentionClass": payload.get("retentionClass"),
-                "status": payload.get("status"),
-                "cleanupState": payload.get("cleanupState"),
-                "expiresAt": payload.get("expiresAt"),
-                "candidateBinding": candidate_binding,
-                "driftIssues": receipt_issues,
-                "objectClosureHash": (
-                    summarized_digest(objects) if isinstance(objects, dict) else ""
-                ),
-                "projectionWatermarkHash": (
-                    summarized_digest(projection)
-                    if isinstance(projection, dict)
-                    else ""
-                ),
+                "status": "retired_schema",
                 "receiptRef": relpath(path),
             }
         )
@@ -19922,12 +24819,187 @@ def _command_details(result: Any) -> list[str]:
         return [f"exit={result.returncode}"]
     if len(details) <= COMMAND_SUMMARY_DETAIL_LIMIT:
         return details
-    retained = details[:COMMAND_SUMMARY_DETAIL_LIMIT]
-    retained.append("additional command output retained in report.json")
-    return retained
+    # Build tools normally print their actionable failure at the end of a
+    # long progress stream.  Keeping only the prefix hid that failure and made
+    # mutable test-live recovery loop on an untyped Compose error.  Preserve a
+    # bounded prefix and suffix so the report contains both build context and
+    # the first actionable terminal blocker.
+    head_count = COMMAND_SUMMARY_DETAIL_LIMIT // 2
+    tail_count = COMMAND_SUMMARY_DETAIL_LIMIT - head_count
+    omitted = len(details) - head_count - tail_count
+    return [
+        *details[:head_count],
+        f"... {omitted} command output line(s) omitted ...",
+        *details[-tail_count:],
+    ]
 
 
-def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
+@contextlib.contextmanager
+def _scoped_process_environment(values: Mapping[str, str]):
+    previous = {key: os.environ.get(key) for key in values}
+    os.environ.update({key: str(value) for key, value in values.items()})
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def _provider_conformance_runtime_environment(
+    environment: str,
+) -> dict[str, str]:
+    if environment not in {"alpha", "beta", "gamma"}:
+        return {}
+    target_name = f"{environment}-local"
+    auth = load_local_environment_auth(environment, target_name)
+    values = dict(os.environ)
+    values.update(auth.environment)
+    mutable_receipt = load_test_live_startup_attempt(target_name)
+    if (
+        isinstance(mutable_receipt, Mapping)
+        and mutable_receipt.get("status") == "running"
+    ):
+        if (
+            mutable_receipt.get("environment") != environment
+            or mutable_receipt.get("target") != target_name
+            or mutable_receipt.get("workload") != "full"
+            or not str(mutable_receipt.get("attemptId") or "").strip()
+            or mutable_receipt.get("failure") not in {None, ""}
+            or mutable_receipt.get("cleanupFailure") not in {None, ""}
+        ):
+            raise RuntimeError(
+                f"GATE_BLOCK: {target_name} test_live runtime identity drifted"
+            )
+        composition = compile_provider_runtime_composition(
+            environment=environment,
+            target=target_name,
+        )
+        if (
+            mutable_receipt.get("providerRuntimeDigest")
+            != composition.get("runtimeCompositionDigest")
+        ):
+            raise RuntimeError(
+                f"GATE_BLOCK: {target_name} test_live Provider runtime drifted"
+            )
+        runtime_identity: dict[str, Any] = {
+            "schema": "stackctl.provider_conformance_runtime_identity.v1",
+            "runtimeMode": "test_live",
+            "environment": environment,
+            "target": target_name,
+            "workload": "full",
+            "startupAttemptId": mutable_receipt["attemptId"],
+            "providerRuntimeDigest": mutable_receipt["providerRuntimeDigest"],
+            "failureFree": True,
+            "nonPromotable": True,
+            "mutableComposeDigest": mutable_receipt.get("composeDigest"),
+            "mutableConfigurationDigest": mutable_receipt.get(
+                "configurationDigest"
+            ),
+            "mutableStateDigest": mutable_receipt.get("mutableStateDigest"),
+            "mutableWorkspaceStatusDigest": mutable_receipt.get(
+                "workspaceStatusDigest"
+            ),
+            "mutableResolverHandoffDigest": mutable_receipt.get(
+                "resolverHandoffDigest"
+            ),
+            "mutableSourceRevision": mutable_receipt.get("sourceRevision"),
+        }
+    else:
+        immutable_runtime = _active_provider_runtime(
+            environment,
+            target_name,
+        )
+        composition = immutable_runtime["composition"]
+        immutable_receipt = load_startup_attempt(target_name)
+        if (
+            not isinstance(immutable_receipt, Mapping)
+            or immutable_receipt.get("status") != "running"
+            or immutable_receipt.get("env") != environment
+            or immutable_receipt.get("target") != target_name
+            or immutable_receipt.get("workload") != "full"
+            or not str(immutable_receipt.get("attemptId") or "").strip()
+            or immutable_receipt.get("candidateDigest")
+            != immutable_runtime.get("baselineId")
+            or immutable_receipt.get("providerRuntimeDigest")
+            != composition.get("runtimeCompositionDigest")
+            or immutable_receipt.get("failure") not in {None, ""}
+            or immutable_receipt.get("cleanupFailure") not in {None, ""}
+        ):
+            raise RuntimeError(
+                f"GATE_BLOCK: {target_name} immutable runtime does not match "
+                "the active candidate"
+            )
+        runtime_identity = {
+            "schema": "stackctl.provider_conformance_runtime_identity.v1",
+            "runtimeMode": "immutable_candidate",
+            "environment": environment,
+            "target": target_name,
+            "workload": "full",
+            "startupAttemptId": immutable_receipt["attemptId"],
+            "providerRuntimeDigest": immutable_receipt[
+                "providerRuntimeDigest"
+            ],
+            "failureFree": True,
+            "nonPromotable": False,
+            "candidateDigest": immutable_runtime["baselineId"],
+        }
+    digest_fields = [
+        value
+        for key, value in runtime_identity.items()
+        if key.endswith("Digest")
+    ]
+    if (
+        any(
+            re.fullmatch(r"sha256:[0-9a-f]{64}", str(value or "")) is None
+            for value in digest_fields
+        )
+        or runtime_identity["runtimeMode"] == "test_live"
+        and re.fullmatch(
+            r"[0-9a-f]{40}",
+            str(runtime_identity.get("mutableSourceRevision") or ""),
+        )
+        is None
+    ):
+        raise RuntimeError(
+            f"GATE_BLOCK: {target_name} Provider conformance runtime identity "
+            "is incomplete"
+        )
+    error = _bind_local_external_provider_environment(
+        values,
+        environment_name=environment,
+        target_name=target_name,
+        storage_prefix=environment.upper(),
+        runtime_composition=composition,
+    )
+    if error:
+        raise RuntimeError(error)
+    values[PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_ENV] = json.dumps(
+        runtime_identity,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    projected = {
+        key: value
+        for key, value in values.items()
+        if os.environ.get(key) != value
+    }
+    # This field is the mandatory stackctl -> runner contract, not an optional
+    # environment delta.  Preserve it even when a parent process happens to
+    # contain the same value so direct and matrix execution cannot lose the
+    # selected canonical runtime identity.
+    projected[PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_ENV] = values[
+        PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_ENV
+    ]
+    return projected
+
+
+def _command_provider_conformance_unlocked(
+    args: argparse.Namespace,
+) -> dict[str, Any]:
     environment_matrix = bool(getattr(args, "environment_matrix", False))
     if bool(args.matrix) and environment_matrix:
         return {
@@ -19986,12 +25058,16 @@ def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
             if source_issues:
                 raise ValueError("; ".join(source_issues))
             runner = _provider_conformance_runner()
+            runtime_environment = _provider_conformance_runtime_environment(
+                environment
+            )
             attempt_evidence_paths: list[Path] = []
             runner.preflight_environment_matrix(
                 environment=environment,
                 registry=governance.load_registry(),
                 compiled=compiled,
                 sources=sources,
+                runtime_environment=runtime_environment,
             )
             for capability_id in capability_ids:
                 binding = selected.get(capability_id)
@@ -20021,6 +25097,9 @@ def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
                     exit_code = runner.main(
                         runner_args,
                         evidence_paths_out=attempt_evidence_paths,
+                        runtime_environments={
+                            environment: runtime_environment,
+                        },
                     )
                     cells.append(
                         {
@@ -20117,7 +25196,30 @@ def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
     ):
         if value:
             runner_args.extend((option, value))
-    exit_code = _provider_conformance_runner().main(runner_args)
+    try:
+        runtime_environments: dict[str, dict[str, str]] = {}
+        if bool(args.execute):
+            requested_environments = (
+                tuple(_provider_conformance().ENVIRONMENTS)
+                if bool(args.matrix)
+                else (str(args.env or "").strip(),)
+            )
+            runtime_environments = {
+                cell_environment: _provider_conformance_runtime_environment(
+                    cell_environment
+                )
+                for cell_environment in requested_environments
+            }
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        return {
+            "exitCode": 2,
+            "summary": "stackctl provider-conformance is GATE_BLOCK",
+            "details": [str(exc)],
+        }
+    exit_code = _provider_conformance_runner().main(
+        runner_args,
+        runtime_environments=runtime_environments,
+    )
     return {
         "exitCode": exit_code,
         "summary": (
@@ -20136,29 +25238,31 @@ def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def _explicit_evidence_mappings(
-    values: list[str],
-    *,
-    allowed: set[str],
-    option: str,
-) -> dict[str, str]:
-    result: dict[str, str] = {}
-    for raw in values:
-        name, separator, path = str(raw).partition("=")
-        name = name.strip()
-        path = path.strip()
-        if not separator or name not in allowed or not path:
-            raise ValueError(
-                f"{option} must use one of {','.join(sorted(allowed))}=PATH"
-            )
-        if name in result:
-            raise ValueError(f"{option} duplicates role/case: {name}")
-        result[name] = path
-    if set(result) != allowed:
-        raise ValueError(
-            f"{option} must bind exactly {','.join(sorted(allowed))}"
+def command_provider_conformance(args: argparse.Namespace) -> dict[str, Any]:
+    """Run local Provider evidence while sharing the BuildKit/runtime lock."""
+
+    if not bool(getattr(args, "execute", False)):
+        return _command_provider_conformance_unlocked(args)
+    if bool(getattr(args, "matrix", False)):
+        target_name = ",".join(LOCAL_BUILD_CACHE_TARGETS)
+    else:
+        environment = str(getattr(args, "env", "") or "").strip()
+        target_name = DEFAULT_TARGET_BY_ENV.get(environment, "")
+    if target_name not in {*LOCAL_BUILD_CACHE_TARGETS, ",".join(LOCAL_BUILD_CACHE_TARGETS)}:
+        return _command_provider_conformance_unlocked(args)
+    try:
+        runtime_use_lock = acquire_local_runtime_use_lock(
+            target=target_name,
+            purpose="provider-conformance-uat",
         )
-    return result
+    except RuntimeError as exc:
+        return {
+            "exitCode": 2,
+            "summary": "stackctl provider-conformance is GATE_BLOCK",
+            "details": [str(exc)],
+        }
+    with contextlib.closing(runtime_use_lock):
+        return _command_provider_conformance_unlocked(args)
 
 
 def command_provider_config(args: argparse.Namespace) -> dict[str, Any]:
@@ -20178,71 +25282,6 @@ def command_provider_config(args: argparse.Namespace) -> dict[str, Any]:
             "summary": "stackctl provider-config is GATE_BLOCK",
             "details": [str(exc)],
         }
-
-
-def command_nonprod_data_evidence(args: argparse.Namespace) -> dict[str, Any]:
-    target_name = str(args.target)
-    environment = str(NONPROD_TARGETS[target_name])
-    report_dir = resolve_report_dir(args, environment, target_name)
-    started_monotonic, started_at = _start_timing()
-    issues: list[str] = []
-    output_path = report_dir / "gate-evidence.json"
-    try:
-        active = active_deployment_candidate(target_name)
-        if active is None:
-            raise ValueError("active immutable deployment candidate is required")
-        manifest = load_candidate_manifest(
-            environment,
-            target_name,
-            str(active["baselineId"]),
-            require_full=True,
-        )
-        provider_refs = _explicit_evidence_mappings(
-            list(args.provider_receipt),
-            allowed=set(NONPROD_PROVIDER_CAPABILITIES),
-            option="--provider-receipt",
-        )
-        reliability_refs = _explicit_evidence_mappings(
-            list(args.reliability_receipt),
-            allowed=set(NONPROD_RELIABILITY_CASE_IDS),
-            option="--reliability-receipt",
-        )
-        assemble_nonprod_gate_evidence(
-            target=target_name,
-            environment=environment,
-            candidate_manifest=manifest,
-            share_receipt_refs=list(args.share_receipt),
-            provider_receipt_refs=provider_refs,
-            reliability_receipt_refs=reliability_refs,
-            evidence_root=output_root(),
-            output_path=output_path,
-        )
-    except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as exc:
-        issues.append(str(exc))
-    timing = _finish_timing(started_monotonic, started_at)
-    status = "passed" if not issues else ProbeOutcome.GATE_BLOCK.value
-    report = {
-        "command": "nonprod-data-evidence",
-        "target": target_name,
-        "environment": environment,
-        "status": status,
-        "evidenceRef": relpath(output_path) if not issues else "",
-        "issues": issues,
-        **timing,
-    }
-    write_json(report_dir / "report.json", report)
-    write_json(report_dir / "findings.json", {"issues": issues})
-    return {
-        "exitCode": 0 if not issues else 2,
-        "summary": (
-            f"nonprod data evidence assembled for {target_name}"
-            if not issues
-            else f"nonprod data evidence is GATE_BLOCK for {target_name}"
-        ),
-        "details": issues or [f"evidence={relpath(output_path)}"],
-        "reportDir": relpath(report_dir),
-        **timing,
-    }
 
 
 def command_tls(args: argparse.Namespace) -> dict[str, Any]:
@@ -20653,6 +25692,1455 @@ def _mutable_workspace_snapshot() -> dict[str, Any]:
     }
 
 
+def _dev_session_compose_project(environment: str, target: str) -> str:
+    """Return the one mutable project identity owned by a nonprod target."""
+
+    if environment not in {"alpha", "beta", "gamma"}:
+        raise ValueError("mutable test_live only supports Alpha, Beta, and Gamma")
+    if target != f"{environment}-local":
+        raise ValueError("mutable test_live target does not belong to environment")
+    project = f"quwoquan_{environment}_test_live"
+    if re.fullmatch(r"quwoquan_(?:alpha|beta|gamma)_test_live", project) is None:
+        raise ValueError("mutable test_live Compose project is not canonical")
+    return project
+
+
+def _mutable_test_live_operation_identity_environment(
+    *,
+    environment: str,
+    target: str,
+    mutable_state_digest: str,
+    api_edge_config_version: str,
+) -> dict[str, str]:
+    """Materialize the target-bound non-promotable API operation identity."""
+
+    _dev_session_compose_project(environment, target)
+    for label, digest in (
+        ("mutable state", mutable_state_digest),
+        ("api-edge config", api_edge_config_version),
+    ):
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", str(digest or "")) is None:
+            raise ValueError(f"mutable test_live {label} digest is invalid")
+    return {
+        # Compose fragments that consume release-scoped caches still require a
+        # candidate identity.  test_live has no immutable release candidate,
+        # so bind those caches to the exact non-promotable mutable snapshot.
+        "QWQ_RELEASE_CANDIDATE_DIGEST": mutable_state_digest,
+        "QWQ_RUNTIME_IDENTITY_SCHEMA": "stackctl.mutable_test_live_runtime.v1",
+        "QWQ_RUNTIME_LAUNCH_POLICY": "test_live",
+        "QWQ_RUNTIME_NON_PROMOTABLE": "true",
+        "QWQ_RUNTIME_ENVIRONMENT": environment,
+        "QWQ_RUNTIME_TARGET": target,
+        "QWQ_RUNTIME_MUTABLE_STATE_DIGEST": mutable_state_digest,
+        "QWQ_RUNTIME_CONFIGURATION_DIGEST": api_edge_config_version,
+    }
+
+
+def _dev_session_source_compose_files(
+    *,
+    environment: str,
+    target: str,
+    provider_composition: Mapping[str, Any],
+) -> tuple[list[Path], list[str]]:
+    """Resolve the complete current-worktree Compose closure without packaging."""
+
+    _dev_session_compose_project(environment, target)
+    services_root = ROOT / "quwoquan_service" / "services"
+    active_services = set(first_party_service_names(ROOT))
+    files = [
+        ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+    ]
+    files.extend(
+        sorted(
+            path
+            for path in services_root.glob("*/deploy/compose.yaml")
+            if path.parents[1].name in active_services
+        )
+    )
+    files.extend(
+        sorted(
+            path
+            for path in services_root.glob(
+                f"*/environments/{environment}/deploy/compose.yaml"
+            )
+            if path.parents[3].name in active_services
+        )
+    )
+    files.extend(
+        (
+            ROOT
+            / "quwoquan_service/services/product-ops-service/deploy/local-elasticsearch.compose.yaml",
+            ROOT
+            / "quwoquan_service/control-plane/platform-ops/deploy/compose.yaml",
+        )
+    )
+    profiles = {"assistant-runtime", "commercial-observability", "edge-media"}
+    validated_provider = validate_provider_runtime_composition(
+        dict(provider_composition),
+        expected_environment=environment,
+        expected_target=target,
+    )
+    for workload in validated_provider["workloads"]:
+        compose_ref = Path(str(workload["composeRef"]))
+        if compose_ref.is_absolute() or ".." in compose_ref.parts:
+            raise ValueError("mutable Provider Compose reference is unsafe")
+        compose_path = (ROOT / compose_ref).resolve()
+        if (
+            not compose_path.is_relative_to(ROOT)
+            or not compose_path.is_file()
+            or compose_path.is_symlink()
+            or _sha256_file(compose_path) != str(workload["composeDigest"])
+        ):
+            raise ValueError(
+                f"mutable Provider Compose identity drifted: {workload['role']}"
+            )
+        files.append(compose_path)
+        profiles.update(str(item) for item in workload["composeProfiles"])
+
+    canonical_files: list[Path] = []
+    seen: set[Path] = set()
+    for raw_path in files:
+        path = raw_path.resolve()
+        if (
+            path in seen
+            or not path.is_relative_to(ROOT)
+            or not path.is_file()
+            or path.is_symlink()
+        ):
+            if path in seen:
+                continue
+            raise ValueError(f"mutable test_live Compose source is unsafe: {path}")
+        seen.add(path)
+        canonical_files.append(path)
+    if not canonical_files:
+        raise ValueError("mutable test_live Compose closure is empty")
+    return canonical_files, sorted(profiles)
+
+
+def _dev_session_materialize_compose_files(
+    source_files: Sequence[Path],
+    *,
+    destination_root: Path,
+) -> list[Path]:
+    """Create execution-only Compose copies with source-relative build contexts."""
+
+    def contains_symlink(path: Path) -> bool:
+        current = ROOT
+        for part in path.relative_to(ROOT).parts:
+            current /= part
+            if current.is_symlink():
+                return True
+        return False
+
+    destination_root.mkdir(parents=True, exist_ok=True)
+    execution_files: list[Path] = []
+    compose_base = (
+        Path(os.path.abspath(source_files[0].parent)) if source_files else ROOT
+    )
+    for index, source in enumerate(source_files):
+        payload = load_json_yaml(source)
+        services = payload.get("services")
+        if services is not None and not isinstance(services, dict):
+            raise ValueError(f"mutable Compose services must be an object: {source}")
+        try:
+            source_ref = source.relative_to(ROOT).as_posix()
+        except ValueError as exc:
+            raise ValueError(
+                f"mutable test_live Compose source escapes repository: {source}"
+            ) from exc
+        if source_ref == "quwoquan_service/services/content-service/deploy/compose.yaml":
+            content_service = (services or {}).get("content-service")
+            if not isinstance(content_service, dict):
+                raise ValueError(
+                    "mutable content-service Compose source has no service definition"
+                )
+            dependencies = content_service.get("depends_on")
+            if not isinstance(dependencies, dict):
+                raise ValueError(
+                    "mutable content-service Compose dependencies must be an object"
+                )
+            # Full test-live always enables the canonical Elasticsearch-backed
+            # feed/search projection.  Formal environment overlays retain their
+            # existing ownership; this execution-only copy closes the cold
+            # Alpha/Beta race without changing package/deploy semantics.
+            dependencies["elasticsearch"] = {"condition": "service_healthy"}
+            dependencies["postgres"] = {"condition": "service_healthy"}
+        if source_ref == "quwoquan_service/services/recommendation-service/deploy/compose.yaml":
+            recommendation_service = (services or {}).get("recommendation-service")
+            if not isinstance(recommendation_service, dict):
+                raise ValueError(
+                    "mutable recommendation-service Compose source has no service definition"
+                )
+            dependencies = recommendation_service.get("depends_on")
+            if dependencies is None:
+                dependencies = {}
+                recommendation_service["depends_on"] = dependencies
+            if not isinstance(dependencies, dict):
+                raise ValueError(
+                    "mutable recommendation-service Compose dependencies must be an object"
+                )
+            dependencies["redis"] = {"condition": "service_healthy"}
+        for service_name, service in (services or {}).items():
+            if not isinstance(service, dict):
+                raise ValueError(
+                    f"mutable Compose service must be an object: {source}:{service_name}"
+                )
+            build = service.get("build")
+            if isinstance(build, str):
+                build = {"context": build}
+                service["build"] = build
+            elif build is None:
+                continue
+            elif not isinstance(build, dict):
+                raise ValueError(
+                    f"mutable Compose build must be a string or object: "
+                    f"{source}:{service_name}"
+                )
+            context_value = str(build.get("context") or "").strip()
+            if not context_value:
+                raise ValueError(
+                    f"mutable Compose build context is empty: {source}:{service_name}"
+                )
+            context_path = Path(context_value)
+            dockerfile_value = str(build.get("dockerfile") or "Dockerfile").strip()
+            dockerfile_path = Path(dockerfile_value)
+            if not dockerfile_value or dockerfile_path.is_absolute():
+                raise ValueError(
+                    f"mutable Compose Dockerfile is unsafe: {source}:{service_name}"
+                )
+            raw_candidates = (
+                [Path(os.path.abspath(context_path))]
+                if context_path.is_absolute()
+                else [
+                    Path(os.path.abspath(source.parent / context_path)),
+                    Path(os.path.abspath(compose_base / context_path)),
+                ]
+            )
+            candidates: list[Path] = []
+            for candidate in raw_candidates:
+                if candidate in candidates:
+                    continue
+                dockerfile = Path(os.path.abspath(candidate / dockerfile_path))
+                if (
+                    candidate.is_relative_to(ROOT)
+                    and candidate.is_dir()
+                    and not contains_symlink(candidate)
+                    and dockerfile.is_relative_to(candidate)
+                    and dockerfile.is_file()
+                    and not contains_symlink(dockerfile)
+                ):
+                    candidates.append(candidate)
+            if len(candidates) != 1:
+                raise ValueError(
+                    f"mutable Compose build context must resolve exactly once: "
+                    f"{source}:{service_name}:{context_value}"
+                )
+            resolved_context = candidates[0]
+            build["context"] = str(resolved_context)
+        destination = destination_root / f"{index:02d}-{source.stem}.json"
+        write_json(destination, payload)
+        execution_files.append(destination)
+    return execution_files
+
+
+def _dev_session_target_media_root(
+    *,
+    target: str,
+    target_contract: Mapping[str, Any],
+) -> tuple[str, Path]:
+    data_release = target_contract.get("dataRelease")
+    if not isinstance(data_release, Mapping) or data_release.get("mode") != "local-import":
+        raise ValueError("mutable test_live target must declare local-import dataRelease")
+    media_local_ref = str(data_release.get("mediaLocalRef") or "").strip()
+    media_relative = Path(media_local_ref)
+    if (
+        not media_local_ref
+        or media_relative.is_absolute()
+        or media_relative == Path(".")
+        or any(part in {"", ".", ".."} for part in media_relative.parts)
+    ):
+        raise ValueError(
+            "mutable test_live dataRelease.mediaLocalRef must be a safe target-local path"
+        )
+    target_local_root = target_local_dir(target).expanduser()
+    target_local_root.mkdir(parents=True, exist_ok=True)
+    canonical_target_root = target_local_root.resolve()
+    candidate_media_root = target_local_root / media_relative
+    current_path = target_local_root
+    for part in media_relative.parts:
+        current_path /= part
+        if current_path.is_symlink():
+            raise ValueError(
+                "mutable test_live dataRelease.mediaLocalRef contains a symlink"
+            )
+    candidate_media_root.mkdir(parents=True, exist_ok=True)
+    media_root = candidate_media_root.resolve()
+    try:
+        media_root.relative_to(canonical_target_root)
+    except ValueError as exc:
+        raise ValueError(
+            "mutable test_live dataRelease.mediaLocalRef escapes target-local root"
+        ) from exc
+    return media_local_ref, media_root
+
+
+def _dev_session_render_runtime_inputs(
+    *,
+    environment: str,
+    target: str,
+    report_dir: Path,
+    workspace_snapshot: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Render current source/config and target-owned secret material for test_live."""
+
+    from quwoquan_ops.cli.render_runtime_config import render_workload
+
+    topology = load_environment_topology()
+    target_contract = get_target(topology, target)
+    if str(target_contract.get("env") or "") != environment:
+        raise ValueError("mutable test_live topology target/environment mismatch")
+    profile_name = str(target_contract.get("portProfile") or "")
+    if profile_name != target:
+        raise ValueError("mutable test_live target must own its canonical port profile")
+    manifest = load_port_manifest()
+    profile = manifest.get("profiles", {}).get(profile_name)
+    if not isinstance(profile, dict):
+        raise ValueError("mutable test_live canonical port block is missing")
+    block_start = int(profile.get("blockStart", -1))
+    block_end = int(profile.get("blockEnd", -1))
+    ports = profile_ports(manifest, profile_name)
+    if (
+        block_start < 1
+        or block_end <= block_start
+        or any(port < block_start or port > block_end for port in ports.values())
+    ):
+        raise ValueError("mutable test_live port projection escapes target block")
+
+    media_local_ref, media_root = _dev_session_target_media_root(
+        target=target,
+        target_contract=target_contract,
+    )
+
+    provider_composition = compile_provider_runtime_composition(
+        environment=environment,
+        target=target,
+    )
+    compose_files, compose_profiles = _dev_session_source_compose_files(
+        environment=environment,
+        target=target,
+        provider_composition=provider_composition,
+    )
+    compose_digest = "sha256:" + hashlib.sha256(
+        b"".join(
+            len(path.relative_to(ROOT).as_posix().encode("utf-8")).to_bytes(8, "big")
+            + path.relative_to(ROOT).as_posix().encode("utf-8")
+            + len(path.read_bytes()).to_bytes(8, "big")
+            + path.read_bytes()
+            for path in compose_files
+        )
+    ).hexdigest()
+
+    render_root = report_dir / "mutable-runtime"
+    execution_compose_root = render_root / "compose"
+    config_root = render_root / "config-root"
+    shared_root = render_root / "runtime-shared"
+    legal_root = render_root / "legal"
+    portal_root = render_root / "portal"
+    for directory in (
+        execution_compose_root,
+        config_root / "quwoquan_service/runtime/reliabletask/resources",
+        shared_root,
+        legal_root,
+        portal_root,
+    ):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    execution_compose_files = _dev_session_materialize_compose_files(
+        compose_files,
+        destination_root=execution_compose_root,
+    )
+
+    mutable_digest = str(workspace_snapshot.get("mutableStateDigest") or "")
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", mutable_digest) is None:
+        mutable_digest = compose_digest
+
+    config_versions: dict[str, str] = {}
+    for service in first_party_service_names(ROOT):
+        output = render_workload(
+            ROOT,
+            environment,
+            service,
+            config_root / f"{service}.yaml",
+        )
+        payload = load_json_yaml(output)
+        version = str((payload.get("config") or {}).get("version") or "")
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", version) is None:
+            raise ValueError(f"mutable rendered config has no digest: {service}")
+        config_versions[service] = version
+    graphql_read_registry = materialize_graphql_read_runtime_config(
+        repo_root=ROOT,
+        runtime_config_path=config_root / "api-edge.yaml",
+        environment=environment,
+        target=target,
+        candidate_digest=mutable_digest,
+        signing=_resolve_graphql_read_signing_for_local_target(
+            environment, target
+        ),
+    )
+    config_versions["api-edge"] = str(graphql_read_registry["configVersion"])
+
+    shared_sources = {
+        "module_catalog.yaml": ROOT
+        / "quwoquan_service/runtime/reliabletask/resources/module_catalog.yaml",
+        "retention_policy.yaml": ROOT
+        / "quwoquan_service/runtime/reliabletask/resources/retention_policy.yaml",
+        "object-storage-lifecycle.json": ROOT
+        / "quwoquan_ops/environments/compose/object-storage-lifecycle.json",
+        "livekit.yaml": ROOT / "quwoquan_ops/external/livekit/base/livekit.yaml",
+        "Caddyfile": ROOT
+        / "quwoquan_ops/environments/gamma/local/Caddyfile",
+    }
+    for name, source in shared_sources.items():
+        if not source.is_file() or source.is_symlink():
+            raise ValueError(f"mutable runtime shared source is unsafe: {source}")
+        shutil.copy2(source, shared_root / name)
+    for name in ("module_catalog.yaml", "retention_policy.yaml"):
+        shutil.copy2(
+            shared_root / name,
+            config_root
+            / "quwoquan_service/runtime/reliabletask/resources"
+            / name,
+        )
+
+    try:
+        tls_profile_name, profile_kind, _ = tls_profile(target)
+        if profile_kind != "local-managed":
+            raise PublicDomainTlsError(
+                f"GATE_BLOCK: {target} must use local-managed TLS"
+            )
+        try:
+            tls_evidence = verify_certificate(target)
+        except PublicDomainTlsError:
+            tls_evidence = issue_certificate(target)
+        resolver_handoff = materialize_handoff(target)
+    except (PublicDomainTlsError, LocalTargetHandoffError, OSError, ValueError) as exc:
+        raise ValueError(f"mutable test_live TLS/resolver materialization failed: {exc}") from exc
+
+    environment_values = _gamma_env_from_port_manifest(topology, target)
+    environment_values.update(
+        {
+            "LOCAL_GAMMA_COMPOSE_PROJECT_NAME": _dev_session_compose_project(
+                environment, target
+            ),
+            "LOCAL_GAMMA_ADMIN_PORT": str(block_end),
+            "LOCAL_GAMMA_CADDYFILE": str(shared_root / "Caddyfile"),
+            "LOCAL_GAMMA_LIVEKIT_CONFIG_FILE": str(shared_root / "livekit.yaml"),
+            "LOCAL_GAMMA_OBJECT_STORAGE_LIFECYCLE_FILE": str(
+                shared_root / "object-storage-lifecycle.json"
+            ),
+            "LOCAL_GAMMA_MEDIA_ROOT": str(media_root),
+            "LOCAL_GAMMA_LEGAL_STATIC_ROOT": str(legal_root),
+            "LOCAL_GAMMA_PORTAL_ROOT": str(portal_root),
+            "QWQ_COMPOSE_CONFIG_ROOT": str(config_root),
+            "QWQ_COMPOSE_ENV": environment,
+            "QWQ_WORKLOAD": "full",
+            "QWQ_PROVIDER_RUNTIME_DIGEST": str(
+                provider_composition["runtimeCompositionDigest"]
+            ),
+            "QWQ_PRODUCT_TELEMETRY_AVAILABLE": "1",
+            "PRODUCT_OPS_ELASTICSEARCH_ENDPOINT": "http://elasticsearch:9200",
+            "QWQ_COMPOSE_REC_POLICY_SOURCE": str(
+                ROOT
+                / "quwoquan_service/services/content-service/resources/policies/content/post/recommendation_policy.yaml"
+            ),
+            "QWQ_PUBLIC_TLS_CERT_FILE": str(tls_evidence["certificate"]),
+            "QWQ_PUBLIC_TLS_KEY_FILE": str(tls_evidence["privateKey"]),
+            "QWQ_LOCAL_MANAGED_CA_FILE": str(tls_evidence["rootCertificate"]),
+        }
+    )
+    configuration_digest = "sha256:" + hashlib.sha256(
+        json.dumps(
+            config_versions,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    environment_values["LOCAL_GAMMA_CONFIG_VERSION"] = configuration_digest
+    environment_values["QWQ_COMPOSE_CONFIG_VERSION"] = configuration_digest
+    environment_values["QWQ_COMPOSE_IMAGE_VERSION"] = mutable_digest
+    environment_values["QWQ_COMPOSE_IMAGE_TAG"] = (
+        f"{environment}-test-live-{mutable_digest.removeprefix('sha256:')[:16]}"
+    )
+    environment_values.update(
+        _mutable_test_live_operation_identity_environment(
+            environment=environment,
+            target=target,
+            mutable_state_digest=mutable_digest,
+            api_edge_config_version=config_versions["api-edge"],
+        )
+    )
+    for service, version in config_versions.items():
+        key = service.upper().replace("-", "_")
+        environment_values[f"QWQ_COMPOSE_{key}_CONFIG_VERSION"] = version
+        environment_values[compose_image_environment_key(service)] = (
+            f"quwoquan/test-live-{target}-{service}:"
+            f"{mutable_digest.removeprefix('sha256:')[:16]}"
+        )
+
+    elasticsearch = load_json_yaml(
+        ROOT
+        / "quwoquan_service/services/product-ops-service/deploy/local-elasticsearch.compose.yaml"
+    )
+    platforms = ((elasticsearch.get("x-qwq-package-elasticsearch") or {}).get("platforms") or {})
+    machine = os.uname().machine.lower()
+    selected_platform = "arm64" if machine in {"arm64", "aarch64"} else "amd64"
+    selection = platforms.get(selected_platform)
+    if not isinstance(selection, dict) or not str(selection.get("image") or ""):
+        raise ValueError("mutable Elasticsearch platform selection is invalid")
+    environment_values.update(
+        {
+            "QWQ_COMPOSE_ELASTICSEARCH_IMAGE": str(selection["image"]),
+            "QWQ_COMPOSE_ELASTICSEARCH_CLI_JAVA_OPTS": str(
+                selection.get("cliJavaOpts") or ""
+            ),
+            "QWQ_COMPOSE_ELASTICSEARCH_JAVA_OPTS": str(
+                selection.get("esJavaOpts") or ""
+            ),
+        }
+    )
+
+    provider_error = _bind_formal_local_release_provider_environment(
+        environment_values,
+        environment_name=environment,
+        target_name=target,
+        workload="full",
+        runtime_composition=provider_composition,
+    )
+    if provider_error is not None:
+        raise ValueError(provider_error)
+    # The base Compose still owns LOCAL_GAMMA_* interpolation names while
+    # service fragments consume QWQ_COMPOSE_* aliases. They must describe the
+    # same target and may never fall back to another environment's defaults.
+    for key, value in tuple(environment_values.items()):
+        if key.startswith("LOCAL_GAMMA_"):
+            environment_values[f"QWQ_COMPOSE_{key.removeprefix('LOCAL_GAMMA_')}"] = value
+
+    plan = {
+        "schema": "stackctl.mutable_test_live_runtime.v1",
+        "environment": environment,
+        "target": target,
+        "composeProject": environment_values["LOCAL_GAMMA_COMPOSE_PROJECT_NAME"],
+        "portProfile": profile_name,
+        "portBlock": {"start": block_start, "end": block_end},
+        "publishedPorts": dict(sorted(ports.items())),
+        "composeFiles": [relpath(path) for path in compose_files],
+        "executionComposeFiles": [relpath(path) for path in execution_compose_files],
+        "composeProfiles": compose_profiles,
+        "composeDigest": compose_digest,
+        "configurationDigest": configuration_digest,
+        "providerRuntimeDigest": provider_composition["runtimeCompositionDigest"],
+        "mediaLocalRef": media_local_ref,
+        "mediaRoot": relpath(media_root),
+        "tlsProfile": tls_profile_name,
+        "resolverHandoffDigest": resolver_handoff["handoffDigest"],
+        "workspaceIdentity": dict(workspace_snapshot),
+        "graphqlReadRegistry": dict(graphql_read_registry),
+    }
+    write_json(report_dir / "mutable-runtime-plan.json", plan)
+    return {
+        "plan": plan,
+        "environment": environment_values,
+        "composeFiles": execution_compose_files,
+        "composeProfiles": compose_profiles,
+    }
+
+
+def _start_mutable_test_live_runtime(
+    *,
+    environment: str,
+    target: str,
+    report_dir: Path,
+    workspace_snapshot: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Render and start one current-worktree runtime; health is evaluated later."""
+
+    phases: list[dict[str, Any]] = []
+    try:
+        rendered = _dev_session_render_runtime_inputs(
+            environment=environment,
+            target=target,
+            report_dir=report_dir,
+            workspace_snapshot=workspace_snapshot,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_runtime_materialization_failed",
+            "details": [str(exc)],
+            "phases": phases,
+        }
+    plan = rendered["plan"]
+    phases.append(
+        {
+            "name": "mutable-materialize",
+            "exitCode": 0,
+            "summary": "current workspace runtime inputs materialized",
+            "details": [
+                f"composeProject={plan['composeProject']}",
+                f"composeDigest={plan['composeDigest']}",
+            ],
+            "reportDir": relpath(report_dir),
+        }
+    )
+    base_command = [
+        "docker",
+        "compose",
+        "-p",
+        str(plan["composeProject"]),
+        *compose_file_args(list(rendered["composeFiles"])),
+    ]
+    for profile in rendered["composeProfiles"]:
+        base_command.extend(("--profile", str(profile)))
+    render_command = [*base_command, "config", "--quiet"]
+    render_result = run(
+        render_command,
+        env=dict(rendered["environment"]),
+        timeout_seconds=90,
+    )
+    phases.append(
+        {
+            "name": "compose-render",
+            "exitCode": render_result.returncode,
+            "summary": "mutable Compose render validated",
+            "details": _command_details(render_result),
+            "reportDir": relpath(report_dir),
+        }
+    )
+    if render_result.returncode != 0:
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_compose_render_failed",
+            "details": _command_details(render_result),
+            "phases": phases,
+        }
+    try:
+        previous_mutable_attempt = load_test_live_startup_attempt(target)
+        if previous_mutable_attempt is not None and previous_mutable_attempt.get(
+            "status"
+        ) in {"prepared", "partial", "running"}:
+            stopped = transition_test_live_startup_attempt(
+                environment=environment,
+                target=target,
+                attempt_id=str(previous_mutable_attempt["attemptId"]),
+                status="stopped",
+                failure=(
+                    str(previous_mutable_attempt.get("failure") or "").strip()
+                    or "superseded by an explicit mutable dev-session retry"
+                ),
+            )
+            phases.append(
+                {
+                    "name": "mutable-startup-retry",
+                    "exitCode": 0,
+                    "summary": "existing mutable startup attempt was superseded",
+                    "details": [f"attemptId={stopped['attemptId']}"],
+                    "reportDir": relpath(report_dir),
+                }
+            )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_startup_retry_failed",
+            "details": [f"interrupted mutable startup attempt is not retryable: {exc}"],
+            "phases": phases,
+        }
+    attempt_seed = hashlib.sha256(
+        (
+            f"{environment}\0{target}\0{report_dir}\0"
+            f"{time.time_ns()}\0{os.getpid()}"
+        ).encode("utf-8")
+    ).hexdigest()
+    attempt_id = f"{environment}-test-live-{attempt_seed[:32]}"
+    try:
+        prepared_receipt = transition_test_live_startup_attempt(
+            environment=environment,
+            target=target,
+            attempt_id=attempt_id,
+            status="prepared",
+            runtime_plan=plan,
+            run_root=report_dir,
+        )
+        partial_receipt = transition_test_live_startup_attempt(
+            environment=environment,
+            target=target,
+            attempt_id=attempt_id,
+            status="partial",
+            runtime_plan=plan,
+            run_root=report_dir,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_startup_receipt_failed",
+            "details": [f"mutable startup receipt could not enter partial: {exc}"],
+            "phases": phases,
+        }
+    phases.append(
+        {
+            "name": "mutable-startup-partial",
+            "exitCode": 0,
+            "summary": "target-scoped mutable startup receipt entered partial",
+            "details": [
+                f"attemptId={attempt_id}",
+                f"configurationDigest={prepared_receipt['configurationDigest']}",
+            ],
+            "reportDir": relpath(report_dir),
+        }
+    )
+    build_timeout = max(
+        float(
+            rendered["environment"].get(
+                "LOCAL_GAMMA_COMPOSE_BUILD_TIMEOUT_SECONDS", "3600"
+            )
+        ),
+        float(
+            rendered["environment"].get(
+                "LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS", "420"
+            )
+        ),
+    )
+    # A brand-new target has no Product Ops ExperimentPolicyActivated fact.
+    # Recommendation intentionally refuses a full runtime without that fact,
+    # so test_live first brings up only the canonical Product Ops public
+    # command owner (and its authored dependencies), activates the exact
+    # run-bound policies, then starts the complete stack.  This is not a DB
+    # seed or a private Recommendation fallback.
+    policy_owner_command = [
+        *base_command,
+        "up",
+        "--build",
+        "-d",
+        "product-ops-service",
+    ]
+    policy_owner_result = run(
+        policy_owner_command,
+        env=dict(rendered["environment"]),
+        timeout_seconds=build_timeout,
+    )
+    phases.append(
+        {
+            "name": "test-live-policy-owner-bootstrap",
+            "exitCode": policy_owner_result.returncode,
+            "summary": "Product Ops policy command owner bootstrap completed",
+            "details": _command_details(policy_owner_result),
+            "reportDir": relpath(report_dir),
+        }
+    )
+    if policy_owner_result.returncode != 0:
+        failure = (
+            f"Product Ops policy owner bootstrap exited "
+            f"{policy_owner_result.returncode}: "
+            + "; ".join(_command_details(policy_owner_result))
+        )
+        try:
+            partial_receipt = transition_test_live_startup_attempt(
+                environment=environment,
+                target=target,
+                attempt_id=attempt_id,
+                status="partial",
+                runtime_plan=plan,
+                run_root=report_dir,
+                failure=failure,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError):
+            pass
+        return {
+            "exitCode": 2,
+            "blockerKind": "test_live_policy_owner_bootstrap_failed",
+            "details": _command_details(policy_owner_result),
+            "phases": phases,
+            "startupAttempt": partial_receipt,
+        }
+    try:
+        product_ops_port = int(
+            (plan.get("publishedPorts") or {})["product-ops-service"]
+        )
+        policy_receipt = activate_test_live_experiment_policies(
+            environment=environment,
+            target=target,
+            product_ops_published_port=product_ops_port,
+            attempt_id=attempt_id,
+            configuration_digest=str(plan["configurationDigest"]),
+        )
+        policy_receipt_path = report_dir / "experiment-policy-activation.json"
+        write_json(policy_receipt_path, policy_receipt)
+    except (
+        ExperimentPolicyActivationError,
+        KeyError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        failure = f"test-live experiment policy activation failed: {exc}"
+        try:
+            partial_receipt = transition_test_live_startup_attempt(
+                environment=environment,
+                target=target,
+                attempt_id=attempt_id,
+                status="partial",
+                runtime_plan=plan,
+                run_root=report_dir,
+                failure=failure,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError):
+            pass
+        phases.append(
+            {
+                "name": "test-live-experiment-policy-activation",
+                "exitCode": 2,
+                "summary": "run-bound Product Ops policy activation failed",
+                "details": [failure],
+                "reportDir": relpath(report_dir),
+            }
+        )
+        return {
+            "exitCode": 2,
+            "blockerKind": "test_live_experiment_policy_activation_failed",
+            "details": [failure],
+            "phases": phases,
+            "startupAttempt": partial_receipt,
+        }
+    phases.append(
+        {
+            "name": "test-live-experiment-policy-activation",
+            "exitCode": 0,
+            "summary": "run-bound Product Ops policies activated",
+            "details": [
+                f"receipt={relpath(policy_receipt_path)}",
+                f"runtimeIdentityDigest={policy_receipt['runtimeIdentityDigest']}",
+            ],
+            "reportDir": relpath(report_dir),
+        }
+    )
+    # Build is deliberately independent of service-health dependencies.  The
+    # project-wide command only builds services that author a build stanza;
+    # registry-backed infrastructure images remain untouched.
+    build_command = [*base_command, "build"]
+    build_result = run(
+        build_command,
+        env=dict(rendered["environment"]),
+        timeout_seconds=build_timeout,
+    )
+    phases.append(
+        {
+            "name": "compose-build",
+            "exitCode": build_result.returncode,
+            "summary": "mutable current-worktree images built without health dependencies",
+            "details": _command_details(build_result),
+            "reportDir": relpath(report_dir),
+        }
+    )
+    if build_result.returncode != 0:
+        receipt_details: list[str] = []
+        try:
+            partial_receipt = transition_test_live_startup_attempt(
+                environment=environment,
+                target=target,
+                attempt_id=attempt_id,
+                status="partial",
+                runtime_plan=plan,
+                run_root=report_dir,
+                failure=(
+                    f"docker compose build exited {build_result.returncode}: "
+                    + "; ".join(_command_details(build_result))
+                ),
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            receipt_details.append(
+                f"mutable startup partial failure receipt could not be updated: {exc}"
+            )
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_compose_build_failed",
+            "details": [*_command_details(build_result), *receipt_details],
+            "phases": phases,
+            "startupAttempt": partial_receipt,
+        }
+
+    replace_command = [
+        *base_command,
+        "up",
+        "-d",
+        "--no-deps",
+    ]
+    replace_result = run(
+        replace_command,
+        env=dict(rendered["environment"]),
+        timeout_seconds=build_timeout,
+    )
+    phases.append(
+        {
+            "name": "compose-replace-buildable-services",
+            "exitCode": replace_result.returncode,
+            "summary": "mutable buildable services replaced without waiting on old health",
+            "details": _command_details(replace_result),
+            "reportDir": relpath(report_dir),
+        }
+    )
+    if replace_result.returncode != 0:
+        failure = (
+            f"docker compose no-deps replacement exited {replace_result.returncode}: "
+            + "; ".join(_command_details(replace_result))
+        )
+        try:
+            partial_receipt = transition_test_live_startup_attempt(
+                environment=environment,
+                target=target,
+                attempt_id=attempt_id,
+                status="partial",
+                runtime_plan=plan,
+                run_root=report_dir,
+                failure=failure,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError):
+            pass
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_compose_service_replacement_failed",
+            "details": _command_details(replace_result),
+            "phases": phases,
+            "startupAttempt": partial_receipt,
+        }
+
+    up_command = [*base_command, "up", "-d", "--remove-orphans"]
+    up_result = run(
+        up_command,
+        env=dict(rendered["environment"]),
+        timeout_seconds=build_timeout,
+    )
+    phases.append(
+        {
+            "name": "compose-up",
+            "exitCode": up_result.returncode,
+            "summary": "mutable current-worktree Compose dependencies restored",
+            "details": _command_details(up_result),
+            "reportDir": relpath(report_dir),
+        }
+    )
+    if up_result.returncode != 0:
+        failure = (
+            f"docker compose up exited {up_result.returncode}: "
+            + "; ".join(_command_details(up_result))
+        )
+        try:
+            partial_receipt = transition_test_live_startup_attempt(
+                environment=environment,
+                target=target,
+                attempt_id=attempt_id,
+                status="partial",
+                runtime_plan=plan,
+                run_root=report_dir,
+                failure=failure,
+            )
+        except (OSError, RuntimeError, TypeError, ValueError):
+            pass
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_compose_up_failed",
+            "details": _command_details(up_result),
+            "phases": phases,
+            "startupAttempt": partial_receipt,
+        }
+    try:
+        running_receipt = transition_test_live_startup_attempt(
+            environment=environment,
+            target=target,
+            attempt_id=attempt_id,
+            status="running",
+            runtime_plan=plan,
+            run_root=report_dir,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        return {
+            "exitCode": 2,
+            "blockerKind": "mutable_startup_receipt_commit_failed",
+            "details": [
+                "mutable Compose up completed but its running receipt could not be committed",
+                str(exc),
+            ],
+            "runtimeMayBeRunning": True,
+            "phases": phases,
+            "startupAttempt": partial_receipt,
+        }
+    phases.append(
+        {
+            "name": "mutable-startup-running",
+            "exitCode": 0,
+            "summary": "target-scoped mutable startup receipt entered running",
+            "details": [f"attemptId={attempt_id}"],
+            "reportDir": relpath(report_dir),
+        }
+    )
+    return {
+        "exitCode": 0,
+        "blockerKind": "",
+        "details": [],
+        "phases": phases,
+        "runtime": plan,
+        "startupAttempt": running_receipt,
+    }
+
+
+def _dev_session_regular_json(path: Path, *, label: str) -> dict[str, Any]:
+    """Read one execution artifact without following a replacement or symlink."""
+
+    try:
+        before = path.lstat()
+    except FileNotFoundError as exc:
+        raise ValueError(f"{label} is missing") from exc
+    if not stat.S_ISREG(before.st_mode) or path.is_symlink():
+        raise ValueError(f"{label} must be a regular non-symlink file")
+    try:
+        payload = json.loads(path.read_bytes())
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{label} is unreadable JSON") from exc
+    after = path.lstat()
+    if (
+        before.st_dev,
+        before.st_ino,
+        before.st_size,
+        before.st_mtime_ns,
+    ) != (
+        after.st_dev,
+        after.st_ino,
+        after.st_size,
+        after.st_mtime_ns,
+    ):
+        raise ValueError(f"{label} changed while it was read")
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be a JSON object")
+    return payload
+
+
+_TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES = frozenset(
+    {
+        "api-edge",
+        "content-service",
+        "recommendation-service",
+        # Mutable test-live exposes media through gamma-proxy and reads the
+        # release-bound bytes from object-storage.  Both physical services are
+        # required before binding Data consumer evidence to the App.
+        "gamma-proxy",
+        "object-storage",
+    }
+)
+
+
+def _dev_session_resume_running_mutable_runtime(
+    *,
+    environment: str,
+    target: str,
+    workspace_snapshot: Mapping[str, Any],
+    required_running_services: frozenset[str] = frozenset(),
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """Reuse one verified running test-live attempt for a run-bound operation.
+
+    Alpha/Beta/Gamma are mutable test environments: a current-worktree digest
+    change is reported as a warning while the receipt continues to identify the
+    exact already-deployed runtime.  Compose, configuration, image and container
+    identity are still verified below before the attempt can be reused for
+    business-data apply or explicit content binding.
+    """
+
+    receipt = load_test_live_startup_attempt(target)
+    if not isinstance(receipt, dict) or receipt.get("status") != "running":
+        return None, []
+    if (
+        receipt.get("launchPolicy") != "test_live"
+        or receipt.get("nonPromotable") is not True
+        or receipt.get("contentBindingState") != "unbound"
+        or receipt.get("environment") != environment
+        or receipt.get("target") != target
+        or receipt.get("workload") != "full"
+    ):
+        raise ValueError("running mutable receipt is outside the test-live resume boundary")
+
+    current_digest = str(workspace_snapshot.get("mutableStateDigest") or "")
+    resume_warnings: list[str] = []
+    if receipt.get("mutableStateDigest") != current_digest:
+        resume_warnings.append(
+            "running mutable workspace digest changed; reusing the exact "
+            "verified deployed runtime for the run-bound operation"
+        )
+
+    run_root = Path(str(receipt.get("runRoot") or ""))
+    try:
+        run_root_metadata = run_root.lstat()
+    except FileNotFoundError as exc:
+        raise ValueError("running mutable receipt runRoot is missing") from exc
+    if not stat.S_ISDIR(run_root_metadata.st_mode) or run_root.is_symlink():
+        raise ValueError("running mutable receipt runRoot must be a regular directory")
+    runtime_plan = _dev_session_regular_json(
+        run_root / "mutable-runtime-plan.json",
+        label="running mutable runtime plan",
+    )
+    if runtime_plan.get("schema") != "stackctl.mutable_test_live_runtime.v1":
+        raise ValueError("running mutable runtime plan schema mismatch")
+
+    for field in (
+        "environment",
+        "target",
+        "composeProject",
+        "composeDigest",
+        "configurationDigest",
+        "providerRuntimeDigest",
+        "portProfile",
+        "portBlock",
+        "publishedPorts",
+        "tlsProfile",
+        "resolverHandoffDigest",
+    ):
+        if runtime_plan.get(field) != receipt.get(field):
+            raise ValueError(f"running mutable receipt/plan drift: {field}")
+    plan_workspace = runtime_plan.get("workspaceIdentity")
+    if not isinstance(plan_workspace, Mapping):
+        raise ValueError("running mutable runtime plan has no workspace identity")
+    for receipt_field, plan_field in (
+        ("sourceRevision", "sourceRevision"),
+        ("workspaceStatusDigest", "workspaceStatusDigest"),
+        ("mutableStateDigest", "mutableStateDigest"),
+    ):
+        if receipt.get(receipt_field) != plan_workspace.get(plan_field):
+            raise ValueError(
+                f"running mutable receipt/plan drift: {receipt_field}"
+            )
+
+    execution_refs = runtime_plan.get("executionComposeFiles")
+    if not isinstance(execution_refs, list) or not execution_refs:
+        raise ValueError("running mutable runtime plan has no execution Compose files")
+    expected_services: set[str] = set()
+    environment_keys: dict[str, set[str]] = {}
+    completed_services: set[str] = set()
+    health_checked_services: set[str] = set()
+    for index, raw_ref in enumerate(execution_refs):
+        ref = Path(str(raw_ref or ""))
+        path = ref if ref.is_absolute() else ROOT / ref
+        path = Path(os.path.abspath(path))
+        if not path.is_relative_to(run_root):
+            raise ValueError("running mutable execution Compose file escapes runRoot")
+        compose = _dev_session_regular_json(
+            path,
+            label=f"running mutable execution Compose file {index}",
+        )
+        services = compose.get("services")
+        if services is not None and not isinstance(services, dict):
+            raise ValueError("running mutable execution Compose services are invalid")
+        for service, definition in (services or {}).items():
+            if not isinstance(service, str) or not service or not isinstance(definition, dict):
+                raise ValueError("running mutable execution Compose service is invalid")
+            expected_services.add(service)
+            if "healthcheck" in definition:
+                healthcheck = definition.get("healthcheck")
+                if (
+                    isinstance(healthcheck, Mapping)
+                    and healthcheck.get("disable") is not True
+                ):
+                    health_checked_services.add(service)
+                else:
+                    health_checked_services.discard(service)
+            depends_on = definition.get("depends_on")
+            if isinstance(depends_on, Mapping):
+                for dependency, dependency_rule in depends_on.items():
+                    if (
+                        isinstance(dependency, str)
+                        and isinstance(dependency_rule, Mapping)
+                        and dependency_rule.get("condition")
+                        == "service_completed_successfully"
+                    ):
+                        completed_services.add(dependency)
+            raw_environment = definition.get("environment")
+            if isinstance(raw_environment, dict):
+                environment_keys.setdefault(service, set()).update(
+                    str(key) for key in raw_environment
+                )
+    mandatory_services = {"api-edge", "integration-service", "sms-provider-substitute"}
+    if not mandatory_services.issubset(expected_services):
+        raise ValueError("running mutable full workload service roster is incomplete")
+    if not required_running_services.issubset(expected_services):
+        raise ValueError("running mutable required service roster is incomplete")
+
+    project = str(receipt["composeProject"])
+    lookup = run(
+        [
+            "docker",
+            "ps",
+            "-aq",
+            "--filter",
+            f"label=com.docker.compose.project={project}",
+        ],
+        timeout_seconds=30,
+    )
+    container_ids = [line.strip() for line in lookup.stdout.splitlines() if line.strip()]
+    if lookup.returncode != 0 or not container_ids:
+        raise ValueError("running mutable Compose project has no inspectable containers")
+    inspected = run(["docker", "inspect", *container_ids], timeout_seconds=30)
+    if inspected.returncode != 0:
+        raise ValueError("running mutable Compose project inspection failed")
+    try:
+        containers = json.loads(inspected.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError("running mutable Compose project inspection is not JSON") from exc
+    if not isinstance(containers, list):
+        raise ValueError("running mutable Compose project inspection is invalid")
+
+    actual_services: set[str] = set()
+    expected_image_suffix = str(receipt["mutableStateDigest"]).removeprefix(
+        "sha256:"
+    )[:16]
+    for container in containers:
+        try:
+            config = container["Config"]
+            labels = config["Labels"]
+            service = str(labels["com.docker.compose.service"])
+            state = container["State"]
+            image_ref = str(config["Image"])
+            env_rows = config.get("Env") or []
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("running mutable container inspection is invalid") from exc
+        if (
+            labels.get("com.docker.compose.project") != project
+            or labels.get("com.docker.compose.oneoff") == "True"
+            or not str(labels.get("com.docker.compose.config-hash") or "")
+            or service not in expected_services
+            or service in actual_services
+        ):
+            raise ValueError(
+                f"running mutable container is not bound to this attempt: {service}"
+            )
+        if service in completed_services:
+            if state.get("Status") != "exited" or state.get("ExitCode") != 0:
+                raise ValueError(
+                    "running mutable completed service did not exit successfully: "
+                    + service
+                )
+        else:
+            state_issue = ""
+            if state.get("Status") != "running" or state.get("Restarting") is True:
+                state_issue = "not running"
+            if service in health_checked_services:
+                health = state.get("Health")
+                if not isinstance(health, Mapping) or health.get("Status") != "healthy":
+                    state_issue = "not healthy"
+            if state_issue and service in required_running_services:
+                raise ValueError(
+                    f"running mutable required service is {state_issue}: {service}"
+                )
+            if state_issue:
+                resume_warnings.append(
+                    "running mutable non-critical service state warning: "
+                    f"{service} status={state.get('Status') or 'missing'} "
+                    f"exitCode={state.get('ExitCode', 'unknown')}"
+                )
+        actual_services.add(service)
+        environment_values = {
+            row.split("=", 1)[0]: row.split("=", 1)[1]
+            for row in env_rows
+            if isinstance(row, str) and "=" in row
+        }
+        required_keys = environment_keys.get(service, set())
+        if "IMAGE_VERSION" in required_keys and environment_values.get(
+            "IMAGE_VERSION"
+        ) != receipt.get("mutableStateDigest"):
+            raise ValueError(f"running mutable image identity drifted: {service}")
+        for digest_key in (
+            "PROVIDER_SUBSTITUTE_CONFIGURATION_DIGEST",
+            "SMS_SUBSTITUTE_CONFIGURATION_DIGEST",
+        ):
+            if digest_key in required_keys and environment_values.get(
+                digest_key
+            ) != receipt.get("configurationDigest"):
+                raise ValueError(
+                    f"running mutable configuration identity drifted: {service}"
+                )
+        if image_ref.startswith("quwoquan/") and not (
+            image_ref.endswith(":" + expected_image_suffix)
+            or image_ref.endswith(
+                f":{environment}-test-live-{expected_image_suffix}"
+            )
+        ):
+            raise ValueError(f"running mutable image ref drifted: {service}")
+    if actual_services != expected_services:
+        raise ValueError("running mutable Compose service roster drifted")
+
+    return (
+        {
+            "exitCode": 0,
+            "blockerKind": "",
+            "details": [],
+            "phases": [
+                {
+                    "name": "mutable-runtime-resume",
+                    "exitCode": 0,
+                    "summary": "unchanged running test-live runtime reused",
+                    "details": [f"attemptId={receipt['attemptId']}"],
+                    "reportDir": relpath(run_root),
+                }
+            ],
+            "runtime": runtime_plan,
+            "runtimeRunRoot": str(run_root),
+            "startupAttempt": receipt,
+        },
+        resume_warnings,
+    )
+
+
+def _dev_session_test_live_content_binding_readiness_issues(
+    *,
+    environment: str,
+    startup_receipt: Mapping[str, Any],
+    preflight: Mapping[str, Any],
+) -> list[str]:
+    """Require the live App/API/Provider edge before using a content binding."""
+
+    issues: list[str] = []
+    tls = preflight.get("tls")
+    if not isinstance(tls, Mapping) or (
+        tls.get("profile") != "local-managed" or tls.get("status") != "ready"
+    ):
+        issues.append("target local-managed TLS is not ready")
+    provider = preflight.get("provider")
+    expected_provider = {
+        "adapterId": "ext.sms.local_capture",
+        "environment": environment,
+        "configurationDigest": startup_receipt.get("configurationDigest"),
+        "nonPromotable": True,
+        "ready": True,
+    }
+    if not isinstance(provider, Mapping) or any(
+        provider.get(field) != value for field, value in expected_provider.items()
+    ):
+        issues.append("target SMS capture Provider is not ready or identity-bound")
+    checks = preflight.get("runtimeChecks")
+    observed = {
+        str(item.get("name") or ""): item.get("ready") is True
+        for item in checks
+        if isinstance(item, Mapping)
+    } if isinstance(checks, list) else {}
+    if observed.get("user-service") is not True:
+        issues.append("user-service is not ready")
+    for name, ready in observed.items():
+        if name and not ready:
+            issues.append(f"{name} is not ready")
+    return list(dict.fromkeys(issues))
+
+
+def _dev_session_content_binding_request(args: argparse.Namespace) -> dict[str, str]:
+    """Return one explicit test-live content identity or fail on partial input."""
+
+    values = {
+        "releaseId": str(getattr(args, "release_id", "") or "").strip(),
+        "verifyRunId": str(getattr(args, "verify_run_id", "") or "").strip(),
+        "manifestDigest": str(getattr(args, "manifest_digest", "") or "").strip(),
+        "lifecycleExitRef": str(
+            getattr(args, "lifecycle_exit_ref", "") or ""
+        ).strip(),
+    }
+    mandatory = ("releaseId", "verifyRunId", "manifestDigest")
+    populated = [field for field in mandatory if values[field]]
+    if not populated and not values["lifecycleExitRef"]:
+        return {}
+    if len(populated) != len(mandatory):
+        missing = sorted(field for field in mandatory if not values[field])
+        raise ValueError(
+            "test-live content identity is partial; missing " + ", ".join(missing)
+        )
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", values["manifestDigest"]) is None:
+        raise ValueError(
+            "test-live content manifestDigest must be sha256:<64 lowercase hex>"
+        )
+    return values
+
+
+def _dev_session_launcher_handoff(
+    *,
+    environment: str,
+    target: str,
+    content_binding: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Render the App handoff from the exact run-bound content selection."""
+
+    command = [
+        sys.executable,
+        str(ROOT / "quwoquan_app/scripts/device/build_launcher_handoff.py"),
+        "--env",
+        environment,
+        "--target",
+        target,
+        "--launch-mode",
+        "canonical_launcher",
+        "--launch-policy",
+        "test_live",
+        "--app-instance-namespace",
+        f"{environment}-test-live",
+    ]
+    if content_binding:
+        command.extend(
+            (
+                "--content-release-id",
+                str(content_binding.get("releaseId") or ""),
+                "--content-manifest-digest",
+                str(content_binding.get("manifestDigest") or ""),
+                "--content-readiness-receipt-digest",
+                str(content_binding.get("readinessReceiptDigest") or ""),
+            )
+        )
+    try:
+        result = subprocess.run(
+            command,
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ValueError(f"test_live launcher handoff failed: {exc}") from exc
+    if result.returncode != 0:
+        raise ValueError(
+            result.stderr.strip()
+            or result.stdout.strip()
+            or "test_live launcher handoff failed"
+        )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"test_live launcher handoff is not JSON: {exc}") from exc
+    expected_state = "bound" if content_binding else "unbound"
+    expected_content = {
+        "contentReleaseId": str(content_binding.get("releaseId") or ""),
+        "contentManifestDigest": str(content_binding.get("manifestDigest") or ""),
+        "contentReadinessReceiptDigest": str(
+            content_binding.get("readinessReceiptDigest") or ""
+        ),
+    }
+    if (
+        not isinstance(payload, dict)
+        or payload.get("launchPolicy") != "test_live"
+        or payload.get("contentBindingState") != expected_state
+        or (
+            bool(content_binding)
+            and any(
+                payload.get(field) != value
+                for field, value in expected_content.items()
+            )
+        )
+    ):
+        raise ValueError("test_live launcher handoff policy/content binding mismatch")
+    return dict(payload)
+
+
 def _run_dev_session_target(
     *,
     environment: str,
@@ -20660,6 +27148,7 @@ def _run_dev_session_target(
     device_id: str,
     launch_app_requested: bool,
     report_dir: Path,
+    content_binding_request: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Render one mutable non-production session without immutable packaging."""
 
@@ -20688,94 +27177,146 @@ def _run_dev_session_target(
         mutable_workspace_warnings.append(warning)
 
     report_dir.mkdir(parents=True, exist_ok=True)
-    handoff_command = [
-        sys.executable,
-        str(ROOT / "quwoquan_app/scripts/device/build_launcher_handoff.py"),
-        "--env",
-        environment,
-        "--target",
-        target,
-        "--launch-mode",
-        "canonical_launcher",
-        "--launch-policy",
-        "test_live",
-        "--app-instance-namespace",
-        f"{environment}-test-live",
-    ]
-    try:
-        handoff_result = subprocess.run(
-            handoff_command,
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=30,
+    runtime_payload: dict[str, Any] | None = None
+    preflight_payload: dict[str, Any] | None = None
+    runtime_was_started = False
+    resume_requested = not launch_app_requested and bool(content_binding_request)
+    if resume_requested:
+        try:
+            resume_candidate, resume_warnings = (
+                _dev_session_resume_running_mutable_runtime(
+                    environment=environment,
+                    target=target,
+                    workspace_snapshot=beginning_snapshot,
+                    required_running_services=(
+                        _TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
+                        if content_binding_request
+                        else frozenset()
+                    ),
+                )
+            )
+            warnings.extend(resume_warnings)
+            mutable_workspace_warnings.extend(resume_warnings)
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            resume_candidate = None
+            warnings.append(
+                "running mutable session cannot be reused; refreshing it: "
+                + str(exc)
+            )
+        if resume_candidate is not None:
+            runtime_payload = resume_candidate
+    if runtime_payload is None:
+        runtime_was_started = True
+        runtime_payload = _start_mutable_test_live_runtime(
+            environment=environment,
+            target=target,
+            report_dir=report_dir,
+            workspace_snapshot=beginning_snapshot,
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    phases.extend(list(runtime_payload.get("phases") or []))
+    if int(runtime_payload.get("exitCode", 2)) != 0:
         return {
-            "exitCode": 2,
+            "exitCode": int(runtime_payload.get("exitCode", 2)),
             "sessionKind": "mutable",
-            "blockerKind": "launcher_handoff_invalid",
-            "details": [f"test_live launcher handoff failed: {exc}"],
+            "blockerKind": str(
+                runtime_payload.get("blockerKind")
+                or "mutable_runtime_start_failed"
+            ),
+            "details": list(runtime_payload.get("details") or []),
             "fullRuntimeSelected": False,
+            "runtimeMayBeRunning": bool(
+                runtime_payload.get("runtimeMayBeRunning", False)
+            ),
+            "startupAttempt": dict(
+                runtime_payload.get("startupAttempt") or {}
+            ),
             "phases": phases,
         }
-    if handoff_result.returncode != 0:
-        return {
-            "exitCode": 2,
-            "sessionKind": "mutable",
-            "blockerKind": "launcher_handoff_invalid",
-            "details": [
-                handoff_result.stderr.strip()
-                or handoff_result.stdout.strip()
-                or "test_live launcher handoff failed"
-            ],
-            "fullRuntimeSelected": False,
-            "phases": phases,
-        }
-    try:
-        handoff_payload = json.loads(handoff_result.stdout)
-    except json.JSONDecodeError as exc:
-        return {
-            "exitCode": 2,
-            "sessionKind": "mutable",
-            "blockerKind": "launcher_handoff_invalid",
-            "details": [f"test_live launcher handoff is not JSON: {exc}"],
-            "fullRuntimeSelected": False,
-            "phases": phases,
-        }
-    if (
-        not isinstance(handoff_payload, dict)
-        or handoff_payload.get("launchPolicy") != "test_live"
-        or handoff_payload.get("contentBindingState") != "unbound"
-    ):
-        return {
-            "exitCode": 2,
-            "sessionKind": "mutable",
-            "blockerKind": "launcher_handoff_invalid",
-            "details": ["test_live launcher handoff policy/binding mismatch"],
-            "fullRuntimeSelected": False,
-            "phases": phases,
-        }
-    handoff_path = report_dir / "test-live-launcher-handoff.json"
-    write_json(handoff_path, handoff_payload)
-    phases.append(
-        {
-            "name": "mutable-render",
-            "exitCode": 0,
-            "summary": "current workspace test_live handoff rendered",
-            "details": [f"handoff={relpath(handoff_path)}"],
-            "reportDir": relpath(report_dir),
-        }
-    )
 
-    preflight_payload = command_app_debug_preflight(
-        _dev_session_child_args(
-            "app-debug-preflight",
-            report_dir=report_dir / "preflight",
-            argv=["--target", target],
+    content_binding: dict[str, Any] = {}
+    if content_binding_request:
+        startup_attempt = dict(runtime_payload.get("startupAttempt") or {})
+        if runtime_was_started:
+            try:
+                validated_runtime, validation_warnings = (
+                    _dev_session_resume_running_mutable_runtime(
+                        environment=environment,
+                        target=target,
+                        workspace_snapshot=beginning_snapshot,
+                        required_running_services=(
+                            _TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
+                        ),
+                    )
+                )
+                validated_attempt = dict(
+                    (validated_runtime or {}).get("startupAttempt") or {}
+                )
+                if (
+                    validated_runtime is None
+                    or validated_attempt.get("attemptId")
+                    != startup_attempt.get("attemptId")
+                ):
+                    raise ValueError(
+                        "new mutable runtime identity changed before content binding"
+                    )
+                warnings.extend(validation_warnings)
+                mutable_workspace_warnings.extend(validation_warnings)
+            except (OSError, RuntimeError, TypeError, ValueError) as exc:
+                return {
+                    "exitCode": 1,
+                    "sessionKind": "mutable",
+                    "blockerKind": "test_live_content_runtime_unready",
+                    "details": [str(exc)],
+                    "fullRuntimeSelected": True,
+                    "startupAttempt": startup_attempt,
+                    "phases": phases,
+                }
+        try:
+            content_binding = create_test_live_content_binding(
+                environment=environment,
+                target=target,
+                startup_attempt_id=str(startup_attempt.get("attemptId") or ""),
+                release_id=str(content_binding_request.get("releaseId") or ""),
+                verify_run_id=str(content_binding_request.get("verifyRunId") or ""),
+                manifest_digest=str(
+                    content_binding_request.get("manifestDigest") or ""
+                ),
+                lifecycle_exit_ref=str(
+                    content_binding_request.get("lifecycleExitRef") or ""
+                ),
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            return {
+                "exitCode": 2,
+                "sessionKind": "mutable",
+                "blockerKind": "test_live_content_binding_invalid",
+                "details": [str(exc)],
+                "fullRuntimeSelected": True,
+                "startupAttempt": startup_attempt,
+                "phases": phases,
+            }
+        phases.append(
+            {
+                "name": "test-live-content-binding",
+                "exitCode": 0,
+                "summary": "running mutable attempt bound to explicit Data evidence",
+                "details": [
+                    f"releaseId={content_binding['releaseId']}",
+                    f"verifyRunId={content_binding['verifyRunId']}",
+                    f"readinessPhase={content_binding['readinessPhase']}",
+                ],
+                "reportDir": relpath(report_dir),
+            }
         )
-    )
+
+    if preflight_payload is None:
+        preflight_payload = command_app_debug_preflight(
+            _dev_session_child_args(
+                "app-debug-preflight",
+                report_dir=report_dir / "preflight",
+                argv=["--target", target, "--runtime-mode", "test_live"],
+            )
+        )
     phases.append(_dev_session_phase("preflight", preflight_payload))
     if int(preflight_payload.get("exitCode", 1)) != 0:
         return {
@@ -20786,9 +27327,61 @@ def _run_dev_session_target(
             "fullRuntimeSelected": False,
             "phases": phases,
         }
+    if content_binding:
+        content_preflight_issues = (
+            _dev_session_test_live_content_binding_readiness_issues(
+                environment=environment,
+                startup_receipt=dict(
+                    runtime_payload.get("startupAttempt") or {}
+                ),
+                preflight=preflight_payload,
+            )
+        )
+        if content_preflight_issues:
+            return {
+                "exitCode": 1,
+                "sessionKind": "mutable",
+                "blockerKind": "test_live_content_runtime_unready",
+                "details": content_preflight_issues,
+                "fullRuntimeSelected": True,
+                "startupAttempt": dict(
+                    runtime_payload.get("startupAttempt") or {}
+                ),
+                "contentBinding": content_binding,
+                "phases": phases,
+            }
     warnings.extend(str(item) for item in preflight_payload.get("warnings") or [])
     mutable_workspace_warnings.extend(
         str(item) for item in preflight_payload.get("mutableWorkspaceWarnings") or []
+    )
+
+    try:
+        handoff_payload = _dev_session_launcher_handoff(
+            environment=environment,
+            target=target,
+            content_binding=content_binding,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        return {
+            "exitCode": 2,
+            "sessionKind": "mutable",
+            "blockerKind": "launcher_handoff_invalid",
+            "details": [str(exc)],
+            "fullRuntimeSelected": True,
+            "startupAttempt": dict(runtime_payload.get("startupAttempt") or {}),
+            "contentBinding": content_binding,
+            "phases": phases,
+        }
+    handoff_path = report_dir / "test-live-launcher-handoff.json"
+    write_json(handoff_path, handoff_payload)
+    phases.append(
+        {
+            "name": "launcher-handoff",
+            "exitCode": 0,
+            "summary": "current workspace test_live handoff rendered",
+            "details": [f"handoff={relpath(handoff_path)}"],
+            "reportDir": relpath(report_dir),
+        }
     )
 
     health_payload = command_health(
@@ -20875,7 +27468,7 @@ def _run_dev_session_target(
         "exitCode": 0,
         "status": "warning" if warnings else "passed",
         "launchPolicy": "test_live",
-        "contentBindingState": "unbound",
+        "contentBindingState": "bound" if content_binding else "unbound",
         "sessionKind": "mutable",
         "blockerKind": "",
         "details": [
@@ -20887,28 +27480,194 @@ def _run_dev_session_target(
         "workspaceStart": beginning_snapshot,
         "workspaceEnd": ending_snapshot,
         "fullRuntimeSelected": bool(
-            active_attempt
-            and active_attempt.get("status") == "running"
-            and active_attempt.get("workload") == "full"
+            runtime_payload.get("runtime")
         ),
+        "runtime": dict(runtime_payload.get("runtime") or {}),
+        "startupAttempt": dict(
+            runtime_payload.get("startupAttempt") or {}
+        ),
+        "contentBinding": content_binding,
+        "launcherHandoff": handoff_payload,
         "phases": phases,
     }
 
 
+def _command_dev_session_bind_content(args: argparse.Namespace) -> dict[str, Any]:
+    """Bind exact Data evidence to one running attempt without materialization."""
+
+    started_monotonic, started_at = _start_timing()
+    target = str(getattr(args, "target", "") or "").strip()
+    attempt_id = str(getattr(args, "startup_attempt_id", "") or "").strip()
+    release_id = str(getattr(args, "release_id", "") or "").strip()
+    verify_run_id = str(getattr(args, "verify_run_id", "") or "").strip()
+    manifest_digest = str(getattr(args, "manifest_digest", "") or "").strip()
+    readiness_digest = str(getattr(args, "readiness_digest", "") or "").strip()
+    lifecycle_exit_ref = str(
+        getattr(args, "lifecycle_exit_ref", "") or ""
+    ).strip()
+    invalid: list[str] = []
+    if target not in {"alpha-local", "beta-local", "gamma-local"}:
+        invalid.append("--target must select alpha-local, beta-local, or gamma-local")
+    for option, value in (
+        ("--startup-attempt-id", attempt_id),
+        ("--release-id", release_id),
+        ("--verify-run-id", verify_run_id),
+        ("--manifest-digest", manifest_digest),
+        ("--readiness-digest", readiness_digest),
+    ):
+        if not value:
+            invalid.append(f"{option} is required")
+    for option, value in (
+        ("--manifest-digest", manifest_digest),
+        ("--readiness-digest", readiness_digest),
+    ):
+        if value and re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
+            invalid.append(f"{option} must be sha256:<64 lowercase hex>")
+    environment = target.removesuffix("-local")
+    report_dir = resolve_report_dir(args, environment, target)
+    if invalid:
+        timing = _finish_timing(started_monotonic, started_at)
+        result = {
+            "exitCode": 2,
+            "summary": "stackctl dev-session bind-content is GATE_BLOCK",
+            "details": invalid,
+            "blockerKind": "invalid_content_binding_selection",
+            **timing,
+        }
+        report_dir.mkdir(parents=True, exist_ok=True)
+        write_json(report_dir / "report.json", result)
+        return {**result, "reportDir": relpath(report_dir)}
+
+    try:
+        with _local_stack_operation_lock(target):
+            workspace = _mutable_workspace_snapshot()
+            before_runtime, before_warnings = (
+                _dev_session_resume_running_mutable_runtime(
+                    environment=environment,
+                    target=target,
+                    workspace_snapshot=workspace,
+                    required_running_services=(
+                        _TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
+                    ),
+                )
+            )
+            before_attempt = dict(
+                (before_runtime or {}).get("startupAttempt") or {}
+            )
+            if before_runtime is None or before_attempt.get("attemptId") != attempt_id:
+                raise ValueError(
+                    "bind-content requires the exact current running startup attempt"
+                )
+            binding = create_test_live_content_binding(
+                environment=environment,
+                target=target,
+                startup_attempt_id=attempt_id,
+                release_id=release_id,
+                verify_run_id=verify_run_id,
+                manifest_digest=manifest_digest,
+                expected_readiness_receipt_digest=readiness_digest,
+                lifecycle_exit_ref=lifecycle_exit_ref,
+            )
+            after_runtime, after_warnings = (
+                _dev_session_resume_running_mutable_runtime(
+                    environment=environment,
+                    target=target,
+                    workspace_snapshot=workspace,
+                    required_running_services=(
+                        _TEST_LIVE_CONTENT_BINDING_REQUIRED_SERVICES
+                    ),
+                )
+            )
+            after_attempt = dict((after_runtime or {}).get("startupAttempt") or {})
+            if (
+                after_runtime is None
+                or after_attempt.get("attemptId") != attempt_id
+                or after_attempt != before_attempt
+            ):
+                raise ValueError(
+                    "running mutable runtime identity changed during content binding"
+                )
+            handoff = _dev_session_launcher_handoff(
+                environment=environment,
+                target=target,
+                content_binding=binding,
+            )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        timing = _finish_timing(started_monotonic, started_at)
+        result = {
+            "exitCode": 2,
+            "summary": "stackctl dev-session bind-content is GATE_BLOCK",
+            "details": [str(exc)],
+            "blockerKind": "test_live_content_binding_invalid",
+            **timing,
+        }
+        report_dir.mkdir(parents=True, exist_ok=True)
+        write_json(report_dir / "report.json", result)
+        return {**result, "reportDir": relpath(report_dir)}
+
+    report_dir.mkdir(parents=True, exist_ok=True)
+    write_json(report_dir / "test-live-launcher-handoff.json", handoff)
+    timing = _finish_timing(started_monotonic, started_at)
+    warnings = sorted(set([*before_warnings, *after_warnings]))
+    report = {
+        "command": "dev-session bind-content",
+        "target": target,
+        "status": "warning" if warnings else "passed",
+        "startupAttempt": after_attempt,
+        "contentBinding": binding,
+        "launcherHandoff": handoff,
+        "warnings": warnings,
+        "details": [
+            f"attemptId={attempt_id}",
+            f"releaseId={binding['releaseId']}",
+            f"verifyRunId={binding['verifyRunId']}",
+            f"readinessReceiptDigest={binding['readinessReceiptDigest']}",
+        ],
+        "blockerKind": "",
+        **timing,
+    }
+    write_json(report_dir / "report.json", report)
+    return {
+        "exitCode": 0,
+        "summary": f"stackctl dev-session bind-content completed for {target}",
+        "reportDir": relpath(report_dir),
+        **report,
+    }
+
+
 def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
+    if str(getattr(args, "dev_session_action", "start") or "start") == "bind-content":
+        return _command_dev_session_bind_content(args)
     started_monotonic, started_at = _start_timing()
     topology = load_environment_topology()
     all_nonprod = bool(getattr(args, "all_nonprod", False))
     requested_env = str(getattr(args, "env", "") or "").strip()
     requested_target = str(getattr(args, "target", "") or "").strip()
+    try:
+        content_binding_request = _dev_session_content_binding_request(args)
+    except ValueError as exc:
+        timing = _finish_timing(started_monotonic, started_at)
+        return {
+            "exitCode": 2,
+            "summary": "stackctl dev-session is GATE_BLOCK",
+            "details": [str(exc)],
+            "blockerKind": "invalid_content_binding_selection",
+            **timing,
+        }
     if all_nonprod:
-        if requested_env or requested_target or bool(getattr(args, "launch_app", False)):
+        if (
+            requested_env
+            or requested_target
+            or bool(getattr(args, "launch_app", False))
+            or content_binding_request
+        ):
             timing = _finish_timing(started_monotonic, started_at)
             return {
                 "exitCode": 2,
                 "summary": "stackctl dev-session is GATE_BLOCK",
                 "details": [
-                    "--all-nonprod cannot be combined with --env, --target or --launch-app"
+                    "--all-nonprod cannot be combined with --env, --target, "
+                    "--launch-app or content binding arguments"
                 ],
                 "blockerKind": "invalid_session_selection",
                 **timing,
@@ -20944,27 +27703,36 @@ def command_dev_session(args: argparse.Namespace) -> dict[str, Any]:
     details: list[str] = []
 
     if terminal_exit == 0:
-        for environment, target in selections:
-            session = _run_dev_session_target(
-                environment=environment,
-                target=target,
-                device_id=str(getattr(args, "device_id", "") or ""),
-                launch_app_requested=bool(getattr(args, "launch_app", False)),
-                report_dir=report_dir / target,
-            )
-            sessions.append(
-                {
-                    "environment": environment,
-                    "target": target,
-                    **session,
-                }
-            )
-            terminal_exit = int(session["exitCode"])
-            if terminal_exit != 0:
-                blocker_kind = str(session.get("blockerKind") or "session_failed")
-                details = list(session.get("details") or [])
-            if terminal_exit != 0:
-                break
+        try:
+            with _local_stack_operation_lock(selections[0][1]):
+                for environment, target in selections:
+                    session = _run_dev_session_target(
+                        environment=environment,
+                        target=target,
+                        device_id=str(getattr(args, "device_id", "") or ""),
+                        launch_app_requested=bool(getattr(args, "launch_app", False)),
+                        report_dir=report_dir / target,
+                        content_binding_request=content_binding_request,
+                    )
+                    sessions.append(
+                        {
+                            "environment": environment,
+                            "target": target,
+                            **session,
+                        }
+                    )
+                    terminal_exit = int(session["exitCode"])
+                    if terminal_exit != 0:
+                        blocker_kind = str(
+                            session.get("blockerKind") or "session_failed"
+                        )
+                        details = list(session.get("details") or [])
+                    if terminal_exit != 0:
+                        break
+        except (OSError, RuntimeError, ValueError) as exc:
+            terminal_exit = 2
+            blocker_kind = "runtime_operation_conflict"
+            details = [str(exc)]
 
     timing = _finish_timing(started_monotonic, started_at)
     has_warnings = any(session.get("warnings") for session in sessions)
@@ -21037,25 +27805,39 @@ def command_matrix(args: argparse.Namespace) -> dict[str, Any]:
         for item in str(getattr(args, "targets", "") or "").split(",")
         if item.strip()
     )
+    request_by_target: dict[str, str] = {}
     evidence_by_target: dict[str, str] = {}
     evidence_issues: list[str] = []
-    for raw in list(getattr(args, "nonprod_data_evidence", []) or []):
+    for raw in list(getattr(args, "test_data_request", []) or []):
         target, separator, path = str(raw).partition("=")
         target = target.strip()
         path = path.strip()
         if not separator or target not in CANONICAL_LOCAL_GATE_TARGETS or not path:
             evidence_issues.append(
-                "--nonprod-data-evidence must use alpha-local|beta-local|gamma-local=PATH"
+                "--test-data-request must use alpha-local|beta-local|gamma-local=PATH"
+            )
+            continue
+        if target in request_by_target:
+            evidence_issues.append(f"duplicate test-data request target: {target}")
+            continue
+        request_by_target[target] = path
+    for raw in list(getattr(args, "test_data_evidence", []) or []):
+        target, separator, path = str(raw).partition("=")
+        target = target.strip()
+        path = path.strip()
+        if not separator or target not in CANONICAL_LOCAL_GATE_TARGETS or not path:
+            evidence_issues.append(
+                "--test-data-evidence must use alpha-local|beta-local|gamma-local=PATH"
             )
             continue
         if target in evidence_by_target:
-            evidence_issues.append(f"duplicate nonprod data evidence target: {target}")
+            evidence_issues.append(f"duplicate test-data evidence target: {target}")
             continue
         evidence_by_target[target] = path
     if evidence_issues:
         return {
             "exitCode": 2,
-            "summary": "stackctl matrix nonprod data evidence is GATE_BLOCK",
+            "summary": "stackctl matrix test-data input is GATE_BLOCK",
             "details": evidence_issues,
         }
     return run_local_env_gate_matrix(
@@ -21076,7 +27858,8 @@ def command_matrix(args: argparse.Namespace) -> dict[str, Any]:
         rollback_release_attestation=str(
             getattr(args, "rollback_release_attestation", "") or ""
         ),
-        nonprod_data_evidence=evidence_by_target,
+        test_data_request=request_by_target,
+        test_data_evidence=evidence_by_target,
         ios_simulator_device=str(
             getattr(args, "ios_simulator_device", "") or ""
         ),
@@ -21099,12 +27882,13 @@ def main() -> int:
     dispatch = {
         "package": command_package,
         "verify": command_verify,
+        "test-data-request": command_test_data_request,
+        "test-data-evidence": command_test_data_evidence,
         "matrix": command_matrix,
         "tls": command_tls,
         "device-trust": command_device_trust,
         "provider-conformance": command_provider_conformance,
         "provider-config": command_provider_config,
-        "nonprod-data-evidence": command_nonprod_data_evidence,
         "dev-session": command_dev_session,
         "up": command_up,
         "product-telemetry-log-sink": command_product_telemetry_log_sink,

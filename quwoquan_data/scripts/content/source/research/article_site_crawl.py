@@ -34,8 +34,15 @@ from content.source.research.article_frontier_robots import (
     robots_for_url,
     shared_rate_limiter,
 )
+from content.source.research.article_mediawiki_content_links import (
+    ENTITY_SEEDED_METHOD,
+    ENTITY_SEEDED_PAGE_LINK_METHOD,
+    MEDIAWIKI_SEARCH_METHOD,
+    mediawiki_content_page_links,
+)
 from content.source.research.article_site_page import PageParser, sitemap_urls
 from content.source.research.text_match import (
+    _normalized_title,
     _text_mentions_entity,
     _title_matches_entity,
 )
@@ -103,6 +110,27 @@ def _has_structural_entity_anchor(
             ):
                 return True
     return False
+
+
+def _has_specific_body_entity_anchor(
+    text: str,
+    aliases: tuple[str, ...],
+) -> bool:
+    """Accept a full, high-specificity entity name in rendered body text.
+
+    MediaWiki search results sometimes lead to a broader subject page whose
+    rendered prose names the requested place without linking it.  That is
+    usable article evidence, but short aliases remain unsafe because they can
+    occur inside unrelated compounds.  Requiring at least six normalized
+    characters preserves the compound false-hit guard while admitting exact
+    long-form names such as a research-base official name.
+    """
+    normalized_text = _normalized_title(text)
+    return any(
+        len(normalized_alias) >= 6 and normalized_alias in normalized_text
+        for alias in aliases
+        if (normalized_alias := _normalized_title(alias))
+    )
 
 
 def _record(
@@ -433,9 +461,11 @@ def crawl_article_site(
         if (
             relevant
             and str(profile.get("fetchMode") or "") == "mediawiki_api"
-            and item.discovery_method == "mediawiki_api_search"
+            and item.discovery_method
+            in {MEDIAWIKI_SEARCH_METHOD, ENTITY_SEEDED_PAGE_LINK_METHOD}
             and not any(_title_matches_entity(title, alias) for alias in aliases)
             and not _has_structural_entity_anchor(parser.links, aliases)
+            and not _has_specific_body_entity_anchor(parser.text, aliases)
         ):
             relevant = False
             relevance_score = 0.0
@@ -467,6 +497,7 @@ def crawl_article_site(
                 discovery_method=item.discovery_method,
                 relevance_score=relevance_score,
                 profile_digest=profile_digest,
+                discovery_query=item.query,
             )
         )
         records.append(
@@ -480,16 +511,41 @@ def crawl_article_site(
             )
         )
         if item.depth < max_depth:
-            for link in parser.links[: max(16, requested_limit * 8)]:
-                queue.append(
-                    FrontierItem(
-                        link.url,
-                        link.title,
-                        final_url,
-                        item.depth + 1,
-                        "page_link",
-                    )
+            link_limit = max(16, requested_limit * 8)
+            entity_seeded_lineage = item.discovery_method in {
+                ENTITY_SEEDED_METHOD,
+                ENTITY_SEEDED_PAGE_LINK_METHOD,
+            }
+            page_links = (
+                mediawiki_content_page_links(
+                    parser,
+                    final_url=final_url,
+                    site=site,
+                    limit=link_limit,
                 )
+                if entity_seeded_lineage
+                and str(profile.get("fetchMode") or "") == "mediawiki_api"
+                else tuple(parser.links[:link_limit])
+            )
+            method = (
+                ENTITY_SEEDED_PAGE_LINK_METHOD
+                if entity_seeded_lineage
+                else "page_link"
+            )
+            pending = tuple(
+                FrontierItem(
+                    link.url,
+                    link.title,
+                    final_url,
+                    item.depth + 1,
+                    method,
+                )
+                for link in page_links
+            )
+            if entity_seeded_lineage:
+                queue.extendleft(reversed(pending))
+            else:
+                queue.extend(pending)
     if queue and pages_reserved >= run_page_limit:
         pending = queue[0]
         records.append(

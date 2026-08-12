@@ -21,7 +21,12 @@ from content.execution.queue.core import (
     _write_job,
 )
 from content.execution.queue.model import QueueJob, QueueLease
-from content.execution.queue.runtime import _apply_failure, _record_failure, _stored_envelope_ref
+from content.execution.queue.runtime import (
+    _apply_failure,
+    _record_failure,
+    _stored_envelope_ref,
+)
+
 
 def record_reliabletask_completion(
     execution_id: str,
@@ -80,7 +85,10 @@ def record_reliabletask_completion(
                 )
 
                 refresh_post_author_evidence_from_durable_meta(
-                    _execution_context(execution_id),
+                    _execution_context(
+                        execution_id,
+                        semantic_max_attempts=job.max_attempts,
+                    ),
                     ref=job.ref,
                 )
                 evidence = read_json(path)

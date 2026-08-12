@@ -15,6 +15,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	rterr "quwoquan_service/runtime/errors"
+	authchallengegenerated "quwoquan_service/services/user-service/generated/account/authentication_challenge"
+	useraccountgenerated "quwoquan_service/services/user-service/generated/account/user_account"
 )
 
 // localCaptureBridge mirrors the sms-provider-substitute capture/readback
@@ -89,7 +93,11 @@ func (bridge *localCaptureBridge) recipientDigest(recipient string) string {
 func (bridge *localCaptureBridge) handleProviderSend(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost ||
 		!bridge.authorized(request, bridge.providerToken) {
-		http.Error(writer, "unauthorized", http.StatusUnauthorized)
+		writeCaptureBridgeError(
+			writer,
+			request,
+			useraccountgenerated.AppErrorFromUnauthorized("capture bridge provider authorization rejected"),
+		)
 		return
 	}
 	var payload struct {
@@ -108,12 +116,20 @@ func (bridge *localCaptureBridge) handleProviderSend(writer http.ResponseWriter,
 		!bridgeRecipientPattern.MatchString(strings.TrimSpace(payload.Payload["recipient"])) ||
 		!bridgeCodePattern.MatchString(strings.TrimSpace(payload.Payload["code"])) ||
 		strings.TrimSpace(payload.Payload["templateId"]) == "" {
-		http.Error(writer, "invalid provider payload", http.StatusBadRequest)
+		writeCaptureBridgeError(
+			writer,
+			request,
+			useraccountgenerated.AppErrorFromInvalidArgument("capture bridge provider payload is invalid"),
+		)
 		return
 	}
 	expiresAt, err := time.Parse(time.RFC3339, payload.ExpiresAt)
 	if err != nil || !expiresAt.After(time.Now().UTC()) {
-		http.Error(writer, "expired challenge", http.StatusBadRequest)
+		writeCaptureBridgeError(
+			writer,
+			request,
+			authchallengegenerated.AppErrorFromOtpExpired("capture bridge challenge is expired"),
+		)
 		return
 	}
 	bridge.mu.Lock()
@@ -121,13 +137,21 @@ func (bridge *localCaptureBridge) handleProviderSend(writer http.ResponseWriter,
 	bridge.failNext = false
 	bridge.mu.Unlock()
 	if failNext {
-		http.Error(writer, "provider_failed", http.StatusBadGateway)
+		writeCaptureBridgeError(
+			writer,
+			request,
+			authchallengegenerated.AppErrorFromOtpProviderFailed("capture bridge provider failure was injected"),
+		)
 		return
 	}
 	digest := bridge.recipientDigest(payload.Payload["recipient"])
 	ciphertext, err := bridge.seal(payload.RequestID, digest, payload.Payload["code"])
 	if err != nil {
-		http.Error(writer, "capture_failed", http.StatusInternalServerError)
+		writeCaptureBridgeError(
+			writer,
+			request,
+			useraccountgenerated.AppErrorFromInternalError("capture bridge failed to seal otp"),
+		)
 		return
 	}
 	bridge.mu.Lock()
@@ -149,7 +173,11 @@ func (bridge *localCaptureBridge) handleProviderSend(writer http.ResponseWriter,
 func (bridge *localCaptureBridge) handleProtectedRead(writer http.ResponseWriter, request *http.Request) {
 	if request.Method != http.MethodPost ||
 		!bridge.authorized(request, bridge.operatorToken) {
-		http.Error(writer, "unauthorized", http.StatusUnauthorized)
+		writeCaptureBridgeError(
+			writer,
+			request,
+			useraccountgenerated.AppErrorFromUnauthorized("capture bridge operator authorization rejected"),
+		)
 		return
 	}
 	var payload struct {
@@ -159,7 +187,11 @@ func (bridge *localCaptureBridge) handleProtectedRead(writer http.ResponseWriter
 	if err := json.NewDecoder(request.Body).Decode(&payload); err != nil ||
 		payload.Environment != bridge.environment ||
 		!strings.HasPrefix(payload.RecipientDigest, "sha256:") {
-		http.Error(writer, "invalid_request", http.StatusBadRequest)
+		writeCaptureBridgeError(
+			writer,
+			request,
+			useraccountgenerated.AppErrorFromInvalidArgument("capture bridge read request is invalid"),
+		)
 		return
 	}
 	bridge.mu.Lock()
@@ -169,12 +201,20 @@ func (bridge *localCaptureBridge) handleProtectedRead(writer http.ResponseWriter
 	}
 	bridge.mu.Unlock()
 	if !ok || !captured.expiresAt.After(time.Now().UTC()) {
-		http.Error(writer, "otp_not_found", http.StatusNotFound)
+		writeCaptureBridgeError(
+			writer,
+			request,
+			useraccountgenerated.AppErrorFromUserNotFound("capture bridge otp was not found"),
+		)
 		return
 	}
 	code, err := bridge.open(captured.requestID, payload.RecipientDigest, captured.ciphertext)
 	if err != nil {
-		http.Error(writer, "otp_unavailable", http.StatusGone)
+		writeCaptureBridgeError(
+			writer,
+			request,
+			authchallengegenerated.AppErrorFromOtpExpired("capture bridge otp is unavailable"),
+		)
 		return
 	}
 	writer.Header().Set("Content-Type", "application/json")
@@ -183,6 +223,10 @@ func (bridge *localCaptureBridge) handleProtectedRead(writer http.ResponseWriter
 		"code":      code,
 		"expiresAt": captured.expiresAt.UTC().Format(time.RFC3339),
 	})
+}
+
+func writeCaptureBridgeError(writer http.ResponseWriter, request *http.Request, err error) {
+	rterr.WriteHTTPError(writer, err, rterr.HTTPWriteOptionsFromRequest(request))
 }
 
 func (bridge *localCaptureBridge) readOTP(recipient string) (string, error) {

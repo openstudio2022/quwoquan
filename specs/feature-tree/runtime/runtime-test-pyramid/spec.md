@@ -16,6 +16,7 @@
 - App、Service、Data、Ops 测试路径到 service/context/object owner 的反向关联
 - support 边界、真实依赖分层、对象级分支覆盖率和运行报告计算
 - 测试入口结构证据与 CaseResult、环境及用户验收结果证据的分离
+- StaticContractExample、GeneratedTestObject、API provider-state、immutable release、Acceptance Actor、case-run 交易与外部 sandbox 状态的分层边界
 
 ### Out of Scope
 
@@ -68,6 +69,21 @@
 - user_acceptance 必须使用 production Remote composition 验证 Journey、用户可见终态与恢复动作；文件存在、静态 path-UAT、动态 skip 或环境名不能充当执行结果。
 - 覆盖率只描述真实测试触达的生产代码，不能替代 api_integration、user_acceptance、Provider、四环境或设备 CaseResult。
 
+<a id="req-004"></a>
+### REQ-004 测试数据构造服从三层真实度
+
+- local_contract 使用对象级强类型 builder/generator、固定 seed/clock/ID 和最小 wire/golden，不进入环境测试数据控制面，不加载全应用场景 dump。
+- api_integration 通过真实进程的 application command 或 provider-state harness 构造最小前置状态；direct storage 只用于 persistence adapter、migration 或 corruption recovery 专项测试，不能生成环境或用户验收成功事实。
+- user_acceptance 使用 production Remote composition：内容、Creator、Entity 和发布 Media 只读引用当前 immutable release，可变事实由强类型 capability request 经公开 command/event 创建；每个 CaseResult 独立 Actor 与 mutable data，Prod 在 mutation 前拒绝。
+- 单个结构化 fixture 不超过 64 KiB、500 个 scalar leaf、单数组 100 项；同一对象 support 下总量不超过 256 KiB。超限数据改为 builder、固定 seed generator、immutable release 或独立 corpus。
+
+<a id="req-005"></a>
+### REQ-005 用例正文和性能不得被全域数据准备淹没
+
+- user_acceptance 测试正文保持“需求声明、行为执行、业务断言”，不出现 capability 字符串、裸字典参数、固定业务对象 ID、Provider 实现或 cleanup 细节。
+- 数据准备只覆盖选中用例的依赖闭包；单领域用例的无关 Provider 和 operation 为零。
+- 性能优化不得减少测试 case、业务断言、错误路径、真实 Provider、readback 或 cleanup；提前失败 run 不得成为完整执行基线。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`runtime`](../spec.md) 声明的领域入口。
@@ -88,6 +104,8 @@
 - THEN 测试入口结构证据与 runner CaseResult、环境和用户验收结果证据分字段表达，文件存在不会被解释为执行通过。
 - THEN golden fixture 使用固定、跨执行日期稳定的输入，不因相对时间阈值自动漂移。
 - THEN 动态报告能从当前代码与运行结果定位实际测试、环境和制品摘要，不读取 tracked inventory。
+- THEN 三层数据分别由最小 builder/provider-state/强类型环境 capability 构造，fixture 超限、环境 DB seed、Prod mutation 与跨 case 可变数据复用均被阻断。
+- THEN 单领域测试只加载依赖闭包，测试正文不暴露数据准备实现，性能报告将数据准备、测试执行和清理分段表达。
 
 ## 8. 开放事项
 

@@ -1,0 +1,8 @@
+{
+  "label": "城市",
+  "labelEn": "City",
+  "description": "城市级地点实体类型；具体城市实例在 entities/地点/城市/ 下建实体，通过 geoTagRef 关联行政区标签。城市属性（省会/旅游/历史等）通过 tagRefs 多标签描述",
+  "axisRole": "entityType",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

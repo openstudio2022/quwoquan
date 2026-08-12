@@ -52,7 +52,27 @@ def select_or_freeze_job_set_attempt(
                 raise TypeError("ReliableTask attempt task must be an object")
             key = str(raw.get("idempotencyKey") or "").strip()
             if key in known:
-                raise ValueError("ReliableTask attempts repeat an idempotencyKey")
+                previous_attempt, previous_task = known[key]
+                for field in (
+                    "entityRef", "carrier", "sourceRevision", "jobId",
+                    "executionId", "ref", "stage", "maxAttempts",
+                ):
+                    if str(raw.get(field) or "") != str(previous_task.get(field) or ""):
+                        raise ValueError(
+                            "ReliableTask repeated task drifted across host generations"
+                        )
+                previous_binding = previous_attempt.get("workerHostSetBinding")
+                current_binding = attempt.get("workerHostSetBinding")
+                if (
+                    not isinstance(previous_binding, Mapping)
+                    or not isinstance(current_binding, Mapping)
+                    or int(current_binding.get("generation") or 0)
+                    <= int(previous_binding.get("generation") or 0)
+                ):
+                    raise ValueError(
+                        "ReliableTask attempts repeat an idempotencyKey without "
+                        "a newer host generation"
+                    )
             known[key] = (attempt, raw)
     active_by_key = {
         str(row.get("idempotencyKey") or "").strip(): dict(row)
@@ -60,6 +80,41 @@ def select_or_freeze_job_set_attempt(
     }
     if "" in active_by_key or len(active_by_key) != len(active_tasks):
         raise ValueError("ReliableTask active task identities are invalid")
+    from content.execution.queue.reliabletask.job_set import _worker_host_binding
+
+    current_binding = _worker_host_binding(execution_id)
+    latest = max(
+        attempts,
+        key=lambda row: int(row["attemptOrdinal"]),
+        default=None,
+    )
+    latest_binding = latest.get("workerHostSetBinding") if latest else None
+    if latest is not None and current_binding != latest_binding:
+        if (
+            not isinstance(current_binding, Mapping)
+            or not isinstance(latest_binding, Mapping)
+            or int(current_binding.get("generation") or 0)
+            <= int(latest_binding.get("generation") or 0)
+        ):
+            raise ValueError("ReliableTask worker host-set generation cannot regress")
+        for key, current in active_by_key.items():
+            if key not in known:
+                continue
+            frozen = known[key][1]
+            for field in (
+                "entityRef", "carrier", "sourceRevision", "jobId",
+                "executionId", "ref", "stage", "maxAttempts",
+            ):
+                if str(current.get(field) or "") != str(frozen.get(field) or ""):
+                    raise ValueError(
+                        "ReliableTask active task drifted across host generations"
+                    )
+        return freeze_reliabletask_job_set(
+            execution_id,
+            stage,
+            expected_tasks=list(active_by_key.values()),
+            required_workers=required_workers,
+        )
     new_tasks = [row for key, row in active_by_key.items() if key not in known]
     if new_tasks:
         return freeze_reliabletask_job_set(
@@ -92,7 +147,7 @@ def select_or_freeze_job_set_attempt(
             frozen = expected_by_key[key]
             for field in (
                 "entityRef", "carrier", "sourceRevision", "jobId",
-                "executionId", "ref", "stage",
+                "executionId", "ref", "stage", "maxAttempts",
             ):
                 if str(current.get(field) or "") != str(frozen.get(field) or ""):
                     raise ValueError("ReliableTask active task drifted from its attempt")

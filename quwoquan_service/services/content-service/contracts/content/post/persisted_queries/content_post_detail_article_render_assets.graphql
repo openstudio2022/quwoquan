@@ -1,0 +1,45 @@
+query ContentPostDetailArticleRenderAssets($postId: ID!, $articleAssetFirst: Int! = 20) {
+  contentPostDetailArticleRenderAssets(postId: $postId) {
+    postId
+    contentType
+    articleMarkdown
+    markdownDialect
+    articleMarkdownDigest
+    articleAssetManifestSummary {
+      schema
+      markdownVersion
+      markdownDialect
+      articleMarkdownDigest
+      documentSha256
+      assetManifestSha256
+      documentVersionSha256
+    }
+    articleAssets(first: $articleAssetFirst) {
+      assetId
+      kind
+      publicSliceKey
+      sha256
+      mimeType
+      sourceOriginalSha256
+      caption
+      role
+      width
+      height
+      durationMs
+      thumbnailUrl
+      coverUrl
+      coverStrategy
+      coverFrameTimeMs
+      sourceCollectionId
+    }
+    articleRenderProfileSummary {
+      template
+      fontPreset
+      paperThemeMode
+      paperTexture
+    }
+    contentVertical
+    articleTemplate
+    articleFontPreset
+  }
+}

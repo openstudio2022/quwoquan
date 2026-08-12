@@ -1,49 +1,26 @@
 """Process and Git facts used by the task recipe facade."""
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
 
 
 def current_git_commit(repo_root: Path) -> str:
-    result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo_root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0 and result.stdout.strip():
-        return result.stdout.strip()
-    if str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip():
-        return str(os.environ.get("QWQ_FROZEN_MAIN_COMMIT") or "").strip()
-    raise subprocess.CalledProcessError(
-        result.returncode,
-        result.args,
-        output=result.stdout,
-        stderr=result.stderr,
-    )
+    from core.execution_branch import current_git_commit as captured_git_commit
+
+    commit = captured_git_commit(cwd=repo_root)
+    if commit:
+        return commit
+    raise subprocess.CalledProcessError(1, ["git", "rev-parse", "HEAD"])
 
 
 def current_git_branch(repo_root: Path) -> str:
-    result = subprocess.run(
-        ["git", "branch", "--show-current"],
-        cwd=repo_root,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0 and result.stdout.strip():
-        return result.stdout.strip()
-    if str(os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") or "").strip():
-        return str(os.environ.get("QWQ_FROZEN_MAIN_BRANCH") or "").strip()
-    raise subprocess.CalledProcessError(
-        result.returncode,
-        result.args,
-        output=result.stdout,
-        stderr=result.stderr,
-    )
+    from core.execution_branch import current_git_branch as captured_git_branch
+
+    branch = captured_git_branch(cwd=repo_root)
+    if branch:
+        return branch
+    raise subprocess.CalledProcessError(1, ["git", "branch", "--show-current"])
 
 
 def runtime_preflight_argv(

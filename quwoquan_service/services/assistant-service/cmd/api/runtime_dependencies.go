@@ -20,7 +20,6 @@ import (
 	publicwebpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/publicweb"
 	sessionports "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimewiring"
-	taskpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_task_view/infrastructure/persistence"
 	turnviewapplication "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/application"
 	turnviewpersistence "quwoquan_service/services/assistant-service/internal/assistant/assistant_turn_view/infrastructure/persistence"
 	activitypersistence "quwoquan_service/services/assistant-service/internal/assistant/skill_activity_view/infrastructure/persistence"
@@ -61,7 +60,6 @@ type persistentDependencies struct {
 	turnViewReader     turnviewapplication.Reader
 	turnViewProjector  *turnviewapplication.Projector
 	entryViewReader    *entrypersistence.MongoReader
-	taskViewReader     *taskpersistence.MongoReader
 	policyReleaseStore *policyreleasepersistence.MongoStore
 	policyRolloutStore *policyrolloutpersistence.MongoStore
 	learningFactStore  *learningpersistence.MongoStore
@@ -242,11 +240,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 		inner.Close(ctx)
 		return nil, dependencyError("mongodb.assistant_entry_view", "indexes", err)
 	}
-	taskViewReader := taskpersistence.NewMongoReader(database)
-	if err := taskViewReader.EnsureIndexes(ctx); err != nil {
-		inner.Close(ctx)
-		return nil, dependencyError("mongodb.assistant_task_view", "indexes", err)
-	}
 	return &persistentDependencies{
 		subscriptionStore:  inner.SubscriptionStore,
 		subscriptionReader: subscriptionReader,
@@ -260,7 +253,6 @@ func openPersistentDependencies(ctx context.Context, cfg config) (*persistentDep
 		turnViewReader:     turnViewStore,
 		turnViewProjector:  turnViewProjector,
 		entryViewReader:    entryViewReader,
-		taskViewReader:     taskViewReader,
 		policyReleaseStore: policyReleaseStore,
 		policyRolloutStore: policyRolloutStore,
 		learningFactStore:  learningFactStore,

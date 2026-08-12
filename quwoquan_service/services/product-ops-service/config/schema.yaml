@@ -7,13 +7,6 @@ configs:
   rollout: progressive
   sensitive: false
   default: ''
-- key: sys.product-ops-service.app_release.recovery_url
-  type: string
-  scope: workload
-  reload: restart
-  rollout: progressive
-  sensitive: false
-  default: ''
 - key: sys.product-ops-service.app_release.ios.latest_version
   type: string
   scope: workload
@@ -28,7 +21,28 @@ configs:
   rollout: progressive
   sensitive: false
   default: ''
-- key: sys.product-ops-service.app_release.ios.pwa_url
+- key: sys.product-ops-service.app_release.ios.minimum_supported_version
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.ios.minimum_supported_build
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.ios.update_url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.ios.recovery_url
   type: string
   scope: workload
   reload: restart
@@ -43,6 +57,34 @@ configs:
   sensitive: false
   default: ''
 - key: sys.product-ops-service.app_release.android.latest_build
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.android.minimum_supported_version
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.android.minimum_supported_build
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.android.update_url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.android.recovery_url
   type: string
   scope: workload
   reload: restart
@@ -92,6 +134,48 @@ configs:
   sensitive: false
   default: ''
 - key: sys.product-ops-service.app_release.android.min_android_version
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.web.latest_version
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.web.latest_build
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.web.minimum_supported_version
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.web.minimum_supported_build
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.web.update_url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ''
+- key: sys.product-ops-service.app_release.web.recovery_url
   type: string
   scope: workload
   reload: restart

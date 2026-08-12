@@ -223,6 +223,12 @@
           "type": "number",
           "minimum": 0,
           "maximum": 1
+        },
+        "title": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
         }
       }
     }

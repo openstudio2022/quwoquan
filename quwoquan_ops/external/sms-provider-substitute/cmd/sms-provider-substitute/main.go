@@ -13,6 +13,16 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+		if err := runTLSHealthcheck(
+			"https://127.0.0.1:9443/healthz",
+			"/run/secrets/sms-provider-substitute/ca.crt",
+		); err != nil {
+			log.Printf("SMS substitute healthcheck failed: %v", err)
+			os.Exit(1)
+		}
+		return
+	}
 	captureKey, err := base64.StdEncoding.DecodeString(required("SMS_SUBSTITUTE_CAPTURE_KEY_B64"))
 	if err != nil {
 		log.Fatal("SMS substitute capture key is invalid")

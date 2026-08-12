@@ -191,6 +191,105 @@ func TestManagedMigrationsAreIdempotent(t *testing.T) {
 	}
 }
 
+func TestProfileSearchPayloadMigrationPreservesPublishedHistoryAndRejectsPendingUnknownPayload(
+	t *testing.T,
+) {
+	ctx := context.Background()
+	migrationSQL := readUserAccountMigrationSQL(
+		t,
+		"039_user_profile_search_projection_payload.up.sql",
+	)
+
+	t.Run("published legacy history is retired without fabricating a snapshot", func(t *testing.T) {
+		tx, err := pgPool.Begin(ctx)
+		if err != nil {
+			t.Fatalf("begin published legacy migration fixture: %v", err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
+		if _, err := tx.Exec(ctx, `
+			SET LOCAL search_path TO pg_temp;
+			CREATE TEMP TABLE user_profile_search_outbox (
+				event_id TEXT PRIMARY KEY,
+				published_at TIMESTAMPTZ
+			) ON COMMIT DROP;
+			INSERT INTO user_profile_search_outbox (event_id, published_at)
+			VALUES ('published-legacy-profile-event', NOW());
+		`); err != nil {
+			t.Fatalf("seed published legacy profile event: %v", err)
+		}
+
+		if _, err := tx.Exec(ctx, migrationSQL); err != nil {
+			t.Fatalf("migrate published legacy profile event: %v", err)
+		}
+		if _, err := tx.Exec(ctx, migrationSQL); err != nil {
+			t.Fatalf("rerun profile payload migration: %v", err)
+		}
+
+		var (
+			isSQLNull   bool
+			payloadType string
+			isNotNull   bool
+		)
+		if err := tx.QueryRow(ctx, `
+			SELECT payload_json IS NULL, jsonb_typeof(payload_json)
+			FROM user_profile_search_outbox
+			WHERE event_id = 'published-legacy-profile-event'
+		`).Scan(&isSQLNull, &payloadType); err != nil {
+			t.Fatalf("read retired published profile event: %v", err)
+		}
+		if isSQLNull || payloadType != "null" {
+			t.Fatalf(
+				"published legacy event must be retained as explicit JSON null, sqlNull=%t type=%q",
+				isSQLNull,
+				payloadType,
+			)
+		}
+		if err := tx.QueryRow(ctx, `
+			SELECT attnotnull
+			FROM pg_attribute
+			WHERE attrelid = 'user_profile_search_outbox'::regclass
+			  AND attname = 'payload_json'
+		`).Scan(&isNotNull); err != nil {
+			t.Fatalf("read profile payload nullability: %v", err)
+		}
+		if !isNotNull {
+			t.Fatal("new profile search outbox rows must require payload_json")
+		}
+	})
+
+	t.Run("pending legacy event without snapshot remains a typed blocker", func(t *testing.T) {
+		tx, err := pgPool.Begin(ctx)
+		if err != nil {
+			t.Fatalf("begin pending legacy migration fixture: %v", err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
+		if _, err := tx.Exec(ctx, `
+			SET LOCAL search_path TO pg_temp;
+			CREATE TEMP TABLE user_profile_search_outbox (
+				event_id TEXT PRIMARY KEY,
+				published_at TIMESTAMPTZ
+			) ON COMMIT DROP;
+			INSERT INTO user_profile_search_outbox (event_id, published_at)
+			VALUES ('pending-legacy-profile-event', NULL);
+		`); err != nil {
+			t.Fatalf("seed pending legacy profile event: %v", err)
+		}
+
+		_, err = tx.Exec(ctx, migrationSQL)
+		if err == nil {
+			t.Fatal("pending legacy profile event without payload was accepted")
+		}
+		if !strings.Contains(
+			err.Error(),
+			"USER.PROFILE_SEARCH.LEGACY_PAYLOAD_MISSING",
+		) {
+			t.Fatalf("unexpected pending legacy migration failure: %v", err)
+		}
+	})
+}
+
 func TestPersonaActorSingleTrackMigrationPreservesGreetingJSONAndIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	tx, err := pgPool.Begin(ctx)

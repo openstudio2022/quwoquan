@@ -16,6 +16,7 @@ from content.execution.campaign import controller as campaign_controller
 from content.execution.campaign import distributed as campaign_distributed
 from content.execution.campaign import lane_execution as campaign_lane_execution
 from content.execution.campaign import orchestrator as campaign_orchestrator
+from content.execution.campaign import plan as campaign_plan
 from content.execution.campaign import submission as campaign_submission
 from content.execution.campaign.external_input_runtime import (
     execution_external_input_envelope_path,
@@ -36,21 +37,50 @@ from content.execution.campaign.runtime_process import (
     begin_stale_controller_termination,
 )
 from content.execution.campaign.workspace import CampaignRuntimePaths
-from content.execution.queue.reliabletask.transport import (
-    FrozenReliableTaskFleetBinding,
-    ReliableTaskFleetTransport,
-)
 from content.execution.request import RuntimeExecutionRequest
-from content.execution.runtime_evidence.reliabletask_process import (
-    ReliableTaskObserverBinaryBinding,
-)
 from core.control_types import TargetSelector
-from core.execution_branch import current_git_branch, stamp_execution_branch
+from core.execution_branch import (
+    current_git_branch,
+    execution_branch_issues,
+    stamp_execution_branch,
+)
 from core.io import read_json, write_json
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
 ROOT_ID = "20260728--travel-homepage-m1--china--scale-001"
 CARRIERS = ("homepage", "article", "image", "video")
+
+
+def test_semantic_campaign_does_not_bind_pool_delivery_observer() -> None:
+    assert not hasattr(campaign_orchestrator, "resolve_campaign_observer_binary")
+    assert not hasattr(campaign_distributed, "resolve_campaign_observer_binary")
+    assert not hasattr(campaign_orchestrator, "resolve_campaign_fleet_transport")
+    assert not hasattr(campaign_distributed, "resolve_campaign_fleet_transport")
+
+
+def test_four_reviewed_lanes_with_frozen_delivery_intents_close_partial() -> None:
+    lanes = {}
+    for carrier in CARRIERS:
+        lane = campaign_plan.empty_lane(f"execution-{carrier}")
+        lane.update(
+            {
+                "status": "delivery_pending",
+                "phase": "publish",
+                "approvedQuota": 1,
+                "qualifiedCount": 1,
+                "finalizedCount": 0,
+                "deliveryPendingCount": 1,
+                "deliveryIntentRefs": [f"intents/{carrier}.json"],
+                "publishReturnCode": 10,
+                "error": "DATA.POOL.DELIVERY_UNAVAILABLE",
+            }
+        )
+        lanes[carrier] = lane
+
+    assert campaign_plan.aggregate_status(lanes) == "succeeded_partial"
+    assert sum(lane["qualifiedCount"] for lane in lanes.values()) == 4
+    assert sum(lane["deliveryPendingCount"] for lane in lanes.values()) == 4
+    assert sum(lane["finalizedCount"] for lane in lanes.values()) == 0
 
 
 def test_only_typed_execution_checkpoints_are_resumable_lane_slices(
@@ -98,6 +128,37 @@ def test_only_typed_execution_checkpoints_are_resumable_lane_slices(
         },
     )
     assert campaign_lane_execution._execution_has_resumable_checkpoint(tmp_path) is True
+
+
+def test_campaign_lane_argv_binds_audited_stage_recovery() -> None:
+    submission = {
+        "executionId": "20260810--travel-homepage-m1--china--scale-005",
+        "rootExecutionId": "20260810--travel-homepage-m1--china--scale-005",
+        "familyRef": "travel-homepage-m1",
+        "regionRef": "china/四川省",
+        "selector": "named-targets",
+        "quota": 1,
+        "count": 1,
+        "requiredWorkers": 1,
+        "partitionCount": 16,
+        "capacityPlanDigest": "sha256:" + "1" * 64,
+        "semanticSelectionId": "cursor_auto",
+        "targetNames": ["都江堰"],
+    }
+
+    argv = campaign_lane_execution._lane_argv(
+        submission,
+        stage="review-only",
+        recover_stage="build_homepage",
+        recovery_reason="retry failed author against the frozen writing pack",
+    )
+
+    recover_index = argv.index("--recover-stage")
+    assert argv[recover_index + 1] == "build_homepage"
+    assert argv[recover_index + 2 :] == [
+        "--recovery-reason",
+        "retry failed author against the frozen writing pack",
+    ]
 
 
 def test_lane_runner_resumes_controller_yields_in_one_create_once_claim(
@@ -433,7 +494,7 @@ def test_failed_lane_prefers_typed_terminal_cause_over_truncated_log_tail(
         workspace,
         {
             "executionId": execution_id,
-            "gitBranch": "dev1.0",
+            "gitBranch": "main",
             "gitCommitSha": "a" * 40,
             "sourceDigest": {"digest": "sha256:" + ("3" * 64)},
             "sourceRevision": "sha256:" + ("4" * 64),
@@ -495,23 +556,24 @@ external_input_envelope = (
     / execution_id
     / "0.plan/campaign_external_input_envelope.json"
 )
+reliabletask_env_keys = (
+    "QWQ_RELIABLETASK_OBSERVER_BINARY_REF",
+    "QWQ_RELIABLETASK_OBSERVER_BINARY_SHA256",
+    "QWQ_RELIABLETASK_FLEET_TARGET",
+    "QWQ_RELIABLETASK_FLEET_MONGO_URI",
+    "QWQ_RELIABLETASK_FLEET_REDIS_ADDR",
+    "QWQ_RELIABLETASK_FLEET_PLAN_DIGEST",
+    "QWQ_RELIABLETASK_FLEET_BINDING_DIGEST",
+)
+# Campaign subprocesses stay transport-neutral in both stages.  The stage=run
+# handler validates its frozen pool-delivery preflight before transport or drain.
+reliabletask_binding_invalid = any(
+    os.environ.get(key) for key in reliabletask_env_keys
+)
 if (
     os.environ.get("QWQ_CAMPAIGN_ROOT_EXECUTION_ID") != root_id
     or not os.environ.get("QWQ_FROZEN_MAIN_BRANCH")
-    or os.environ.get("QWQ_RELIABLETASK_OBSERVER_BINARY_REF")
-    != "data/local/cache/reliabletask-observer-binaries/"
-    + "f" * 64
-    + "/data-content-worker"
-    or os.environ.get("QWQ_RELIABLETASK_OBSERVER_BINARY_SHA256")
-    != "sha256:" + "e" * 64
-    or os.environ.get("QWQ_RELIABLETASK_FLEET_TARGET")
-    != "test-data-execution-fleet"
-    or os.environ.get("QWQ_RELIABLETASK_FLEET_MONGO_URI")
-    != "mongodb://127.0.0.1:27117/quwoquan"
-    or os.environ.get("QWQ_RELIABLETASK_FLEET_REDIS_ADDR")
-    != "127.0.0.1:6389"
-    or not os.environ.get("QWQ_RELIABLETASK_FLEET_PLAN_DIGEST")
-    or not os.environ.get("QWQ_RELIABLETASK_FLEET_BINDING_DIGEST")
+    or reliabletask_binding_invalid
     or not external_input_envelope.is_file()
 ):
     raise SystemExit(32)
@@ -732,51 +794,6 @@ def _restore_capsule_permissions_for_pytest_cleanup(
     monkeypatch: pytest.MonkeyPatch,
 ):
     """Production capsules stay read-only; pytest still has to remove its tmp tree."""
-    binding = ReliableTaskObserverBinaryBinding(
-        ref=(
-            "data/local/cache/reliabletask-observer-binaries/"
-            + "f" * 64
-            + "/data-content-worker"
-        ),
-        sha256="sha256:" + "e" * 64,
-    )
-    monkeypatch.setattr(
-        campaign_orchestrator,
-        "resolve_campaign_observer_binary",
-        lambda runtime, root_execution_id, plan_digest: binding,
-    )
-    monkeypatch.setattr(
-        campaign_distributed,
-        "resolve_campaign_observer_binary",
-        lambda runtime, root_execution_id, plan_digest: binding,
-    )
-    fleet_transport = ReliableTaskFleetTransport(
-        target="test-data-execution-fleet",
-        mongo_uri="mongodb://127.0.0.1:27117/quwoquan",
-        redis_addr="127.0.0.1:6389",
-    )
-    monkeypatch.setattr(
-        campaign_orchestrator,
-        "resolve_campaign_fleet_transport",
-        lambda runtime, root_execution_id, plan_digest: (
-            FrozenReliableTaskFleetBinding.create(
-                root_execution_id=root_execution_id,
-                plan_digest=plan_digest,
-                transport=fleet_transport,
-            )
-        ),
-    )
-    monkeypatch.setattr(
-        campaign_distributed,
-        "resolve_campaign_fleet_transport",
-        lambda runtime, root_execution_id, plan_digest: (
-            FrozenReliableTaskFleetBinding.create(
-                root_execution_id=root_execution_id,
-                plan_digest=plan_digest,
-                transport=fleet_transport,
-            )
-        ),
-    )
     monkeypatch.setenv(
         "QWQ_RELIABLETASK_OBSERVER_BINARY_REF",
         "data/local/cache/reliabletask-observer-binaries/"
@@ -853,7 +870,7 @@ def _create_repo(tmp_path: Path) -> Path:
     branch_policy = repo / "quwoquan_ops/policies/branch_policy.yaml"
     branch_policy.parent.mkdir(parents=True)
     branch_policy.write_text(
-        "allowed_local_branches:\n  - dev1.0\n",
+        "allowed_local_branches:\n  - main\n",
         encoding="utf-8",
     )
     feature_root = (
@@ -992,6 +1009,7 @@ def _assert_capsule_reused_and_lane_roots_isolated(
     assert (feature_root / "spec.md").is_file()
     assert (feature_root / "design.md").is_file()
     capsule_manifest = read_json(capsule / ".qwq_campaign_capsule.json")
+    assert capsule_manifest["gitBranch"] == "main"
     assert capsule_manifest["sourceRevision"].startswith("sha256:")
     assert set(capsule_manifest["laneExternalInputs"]) == set(CARRIERS)
     assert capsule.stat().st_mode & 0o222 == 0
@@ -1045,13 +1063,50 @@ def test_detached_branch_fallback_requires_campaign_context(
     monkeypatch.setenv("QWQ_FROZEN_MAIN_BRANCH", branch)
     assert current_git_branch(cwd=repo) == ""
     monkeypatch.setenv("QWQ_CAMPAIGN_ROOT_EXECUTION_ID", ROOT_ID)
+    write_json(
+        repo / ".qwq_campaign_capsule.json",
+        {
+            "format": "source-capsule-v2",
+            "gitBranch": branch,
+            "gitCommitSha": _git(repo, "rev-parse", "HEAD"),
+        },
+    )
     assert current_git_branch(cwd=repo) == branch
+    monkeypatch.setenv("QWQ_FROZEN_MAIN_BRANCH", "dev1.0")
+    assert current_git_branch(cwd=repo) == ""
+    monkeypatch.setenv("QWQ_FROZEN_MAIN_BRANCH", branch)
     spec = {"executionPolicy": {}}
     stamp_execution_branch(spec, cwd=repo)
     assert spec["executionPolicy"] == {
         "executionBranch": branch,
         "gitCommitSha": _git(repo, "rev-parse", "HEAD"),
     }
+
+
+def test_capsule_captured_dev_branch_remains_a_typed_branch_blocker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capsule = tmp_path / "capsule"
+    policy = capsule / "quwoquan_ops/policies/branch_policy.yaml"
+    policy.parent.mkdir(parents=True)
+    policy.write_text("allowed_local_branches:\n  - main\n", encoding="utf-8")
+    write_json(
+        capsule / ".qwq_campaign_capsule.json",
+        {
+            "format": "source-capsule-v2",
+            "gitBranch": "dev1.0",
+            "gitCommitSha": "a" * 40,
+        },
+    )
+    monkeypatch.setenv("QWQ_CAMPAIGN_ROOT_EXECUTION_ID", ROOT_ID)
+    monkeypatch.setenv("QWQ_FROZEN_MAIN_BRANCH", "dev1.0")
+
+    assert current_git_branch(cwd=capsule) == "dev1.0"
+    assert execution_branch_issues(cwd=capsule) == [
+        "当前 git 分支 'dev1.0' 不在正式分支 allowlist ['main']；"
+        "商业执行只允许 mainline（临时 feature 分支绑定已废止）"
+    ]
 
 
 def test_real_subprocess_lanes_overlap_and_publish_only_after_own_review(
@@ -1266,6 +1321,26 @@ def test_four_copied_sessions_claim_independent_lanes_and_finalize(
     capsule_path = runtime.output_root / next(iter(capsule_refs))
     assert capsule_path.is_dir()
     assert not capsule_path.stat().st_mode & 0o222
+    runtime_snapshot = read_runtime_snapshot(runtime, ROOT_ID)
+    assert runtime_snapshot is not None
+    assert runtime_snapshot["status"] == "succeeded"
+    assert runtime_snapshot["phase"] == "completed"
+    assert runtime_snapshot["runId"] == plan["distributedRun"]["campaignRunId"]
+    assert set(runtime_snapshot["lanes"]) == set(CARRIERS)
+    for carrier in CARRIERS:
+        checkpoint = read_lane_checkpoint(runtime, ROOT_ID, carrier)
+        assert checkpoint is not None
+        assert checkpoint["runId"] == plan["distributedRun"]["campaignRunId"]
+        assert checkpoint["generation"] == plan["distributedRun"][
+            "campaignGeneration"
+        ]
+        assert checkpoint["fencingToken"] == plan["distributedRun"][
+            "campaignFencingToken"
+        ]
+        assert checkpoint["executionId"] == plan["executionIds"][carrier]
+        assert checkpoint["phase"] == "run"
+        assert checkpoint["status"] == "succeeded"
+        assert checkpoint["returnCode"] == 0
     assert (runtime.campaigns_root / ROOT_ID / "copy_ready_receipt.json").is_file()
 
 
@@ -1794,6 +1869,115 @@ def test_one_lane_review_failure_does_not_block_sibling_publish(
     _assert_capsule_reused_and_lane_roots_isolated(runtime, report)
 
 
+def test_finalize_uses_frozen_capsule_after_live_source_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _create_repo(tmp_path)
+    runtime = _runtime(tmp_path, repo)
+    _submit_all(repo, runtime, monkeypatch)
+    monkeypatch.setenv(
+        "CAMPAIGN_EVENT_LOG",
+        str(tmp_path / "finalize-after-source-drift.ndjson"),
+    )
+    frozen = read_json(
+        campaign_distributed.freeze_campaign(
+            ROOT_ID,
+            submission_timeout_seconds=2,
+            runtime_paths=runtime,
+        )
+    )
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [
+            pool.submit(
+                campaign_distributed.run_campaign_lane,
+                ROOT_ID,
+                carrier,
+                lane_timeout_seconds=5,
+                runtime_paths=runtime,
+            )
+            for carrier in CARRIERS
+        ]
+        for future in futures:
+            future.result()
+
+    (repo / "quwoquan_data/schema/source.txt").write_text(
+        "source changed after all lane claims settled",
+        encoding="utf-8",
+    )
+
+    report = read_json(
+        campaign_distributed.finalize_campaign(
+            ROOT_ID,
+            runtime_paths=runtime,
+        )
+    )
+    assert report["status"] == "succeeded"
+    assert report["phase"] == "completed"
+    assert {
+        lane["sourceCapsuleRef"] for lane in report["lanes"].values()
+    } == {
+        lane["sourceCapsuleRef"] for lane in frozen["lanes"].values()
+    }
+    assert {
+        lane["sourceCapsuleDigest"] for lane in report["lanes"].values()
+    } == {
+        lane["sourceCapsuleDigest"] for lane in frozen["lanes"].values()
+    }
+
+
+def test_finalize_terminally_blocks_without_consuming_corrupted_capsule(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _create_repo(tmp_path)
+    runtime = _runtime(tmp_path, repo)
+    _submit_all(repo, runtime, monkeypatch)
+    frozen = read_json(
+        campaign_distributed.freeze_campaign(
+            ROOT_ID,
+            submission_timeout_seconds=2,
+            runtime_paths=runtime,
+        )
+    )
+    capsule_ref = frozen["lanes"]["homepage"]["sourceCapsuleRef"]
+    capsule_root = runtime.output_root / capsule_ref
+    capsule_root.chmod(capsule_root.stat().st_mode | 0o200)
+    (capsule_root / "post-freeze-drift.txt").write_text(
+        "immutable capsule was modified",
+        encoding="utf-8",
+    )
+    capsule_root.chmod(capsule_root.stat().st_mode & ~0o222)
+    monkeypatch.setattr(
+        campaign_distributed,
+        "prepare_distributed_workspace",
+        lambda *_args, **_kwargs: pytest.fail("corrupted capsule was consumed"),
+    )
+
+    report = read_json(
+        campaign_distributed.finalize_campaign(
+            ROOT_ID,
+            runtime_paths=runtime,
+        )
+    )
+
+    assert report["status"] == "blocked"
+    assert report["phase"] == "completed"
+    assert report["failure"].startswith(
+        "DATA.CONTRACT.INVALID: campaign capsule integrity failure:"
+    )
+    assert "campaign capsule tree digest drift" in report["failure"]
+    for lane in report["lanes"].values():
+        assert lane["status"] == "blocked"
+        assert lane["phase"] == "capsule"
+        assert lane["sourceCapsuleReadOnly"] is False
+        assert lane["cleanupStatus"] == "failed"
+        assert lane["error"] == report["failure"]
+    assert not (
+        runtime.campaigns_root / ROOT_ID / "copy_ready_receipt.json"
+    ).exists()
+
+
 def test_quota_shortfall_publishes_partial_qualified_objects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -2085,3 +2269,70 @@ def test_timeout_and_publish_failure_are_lane_local(
     for carrier in ("homepage", "image", "video"):
         assert report["lanes"][carrier]["finalizedCount"] == 1
     _assert_capsule_reused_and_lane_roots_isolated(runtime, report)
+
+
+def test_terminal_failed_lane_claim_can_retry_same_frozen_execution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = _create_repo(tmp_path)
+    runtime = _runtime(tmp_path, repo)
+    _submit_all(repo, runtime, monkeypatch)
+    monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(tmp_path / "events.ndjson"))
+    monkeypatch.setenv("FAIL_PUBLISH_CARRIER", "article")
+
+    campaign_distributed.freeze_campaign(
+        ROOT_ID,
+        submission_timeout_seconds=2,
+        runtime_paths=runtime,
+    )
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {
+            carrier: pool.submit(
+                campaign_distributed.run_campaign_lane,
+                ROOT_ID,
+                carrier,
+                lane_timeout_seconds=5,
+                runtime_paths=runtime,
+            )
+            for carrier in CARRIERS
+        }
+        for carrier, future in futures.items():
+            if carrier == "article":
+                with pytest.raises(RuntimeError, match="run exited with code 17"):
+                    future.result()
+            else:
+                future.result()
+    first_report = read_json(
+        campaign_distributed.finalize_campaign(
+            ROOT_ID,
+            runtime_paths=runtime,
+        )
+    )
+    assert first_report["lanes"]["article"]["status"] == "blocked"
+    failed_claim = read_lane_claim(runtime, ROOT_ID, "article")
+    assert failed_claim is not None
+    assert failed_claim["status"] == "failed"
+    assert failed_claim["claimAttempt"] == 1
+
+    monkeypatch.delenv("FAIL_PUBLISH_CARRIER")
+    campaign_distributed.run_campaign_lane(
+        ROOT_ID,
+        "article",
+        lane_timeout_seconds=5,
+        runtime_paths=runtime,
+    )
+    recovered_claim = read_lane_claim(runtime, ROOT_ID, "article")
+    assert recovered_claim is not None
+    assert recovered_claim["status"] == "completed"
+    assert recovered_claim["claimAttempt"] == 2
+    assert recovered_claim["claimId"] != failed_claim["claimId"]
+
+    recovered_report = read_json(
+        campaign_distributed.finalize_campaign(
+            ROOT_ID,
+            runtime_paths=runtime,
+        )
+    )
+    assert recovered_report["status"] == "succeeded"
+    assert recovered_report["lanes"]["article"]["finalizedCount"] == 1

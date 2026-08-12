@@ -16,6 +16,8 @@ errors:
   emitted_by:
   - surface: http
     operations: [GetPost]
+  - surface: graphql
+    operations: [GetPostSemantic, GetPostMedia, GetPostArticleRenderAssets, GetPostArticleEntities]
   recovery_action: surface
   disruption_level: inlineCard
   dart_const: contentDeleted
@@ -29,6 +31,8 @@ errors:
   emitted_by:
   - surface: http
     operations: [GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetCounters, GetHelperRead, content.comment.CreateComment]
+  - surface: graphql
+    operations: [GetPostSemantic, GetPostMedia, GetPostArticleRenderAssets, GetPostArticleEntities]
   recovery_action: surface
   disruption_level: inlineCard
   dart_const: postNotFound
@@ -69,6 +73,7 @@ errors:
   - surface: http
     operations:
     - GetFeed
+    - GetResearchReleaseReadback
     - SubmitPostPublication
     - DeletePost
     - UpdatePostSettings
@@ -137,6 +142,19 @@ errors:
   user_message:
     zh: 请先登录
     en: Please sign in to continue
+- code: CONTENT.USER.research_identity_invalid
+  reason: forbidden
+  http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [GetResearchReleaseReadback]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: researchIdentityInvalid
+  go_const: ErrResearchIdentityInvalid
+  user_message:
+    zh: 当前研究态身份无效或已过期
+    en: The research identity is invalid or expired
 - code: CONTENT.USER.invalid_argument
   reason: invalid_argument
   http_status: 400
@@ -183,6 +201,8 @@ errors:
     - content.report.DismissReport
     - content.report.ListMyReports
     - content.report.ResolveReport
+  - surface: graphql
+    operations: [GetPostSemantic, GetPostMedia, GetPostArticleRenderAssets, GetPostArticleEntities]
   recovery_action: surface
   disruption_level: inlineCard
   dart_const: invalidArgument
@@ -426,6 +446,8 @@ errors:
     - content.report.GetReport
     - content.report.ListMyReports
     - content.report.ListReports
+  - surface: graphql
+    operations: [GetPostSemantic, GetPostMedia, GetPostArticleRenderAssets, GetPostArticleEntities]
   recovery_action: retry
   disruption_level: snackbar
   recovery_after_seconds: 5
@@ -439,7 +461,7 @@ errors:
   http_status: 503
   emitted_by:
   - surface: http
-    operations: [GetFeed, SubmitPostPublication, GetHelperRead, content.content_behavior_fact.ReportBehaviors]
+    operations: [GetFeed, GetResearchReleaseReadback, SubmitPostPublication, GetHelperRead, content.content_behavior_fact.ReportBehaviors]
   recovery_action: retry
   disruption_level: snackbar
   recovery_after_seconds: 5
@@ -453,7 +475,9 @@ errors:
   http_status: 500
   emitted_by:
   - surface: http
-    operations: [GetFeed, SubmitPostPublication, ListUserPosts, GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, content.intersection_visit_state.GetMyIntersectionSummary, content.intersection_visit_state.ListMyIntersections, content.intersection_visit_state.GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
+    operations: [GetFeed, GetResearchReleaseReadback, SubmitPostPublication, ListUserPosts, GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, content.intersection_visit_state.GetMyIntersectionSummary, content.intersection_visit_state.ListMyIntersections, content.intersection_visit_state.GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
+  - surface: graphql
+    operations: [GetPostSemantic, GetPostMedia, GetPostArticleRenderAssets, GetPostArticleEntities]
   recovery_action: surface
   disruption_level: inlineCard
   dart_const: internalError

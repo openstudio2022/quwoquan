@@ -71,10 +71,9 @@ type fakeProfileSearchProjectionPublisher struct {
 
 func (publisher *fakeProfileSearchProjectionPublisher) PublishUserProfileSearch(
 	_ context.Context,
-	eventType string,
-	userID string,
+	event userports.UserProfileSearchOutboxEvent,
 ) error {
-	publisher.projected = append(publisher.projected, eventType+":"+userID)
+	publisher.projected = append(publisher.projected, event.EventType+":"+event.UserID)
 	return publisher.err
 }
 
@@ -90,6 +89,7 @@ func TestUserProfileSearchOutboxRelayRetriesWithoutAdvancingCheckpoint(
 			ProfileVersion:  4,
 			EventType:       "UserAvatarUpdated",
 			OccurredAt:      time.Now().UTC(),
+			PayloadJSON:     []byte(`{"eventId":"profile-search-event-1"}`),
 			DeliveryAttempt: 1,
 		},
 	}
@@ -110,9 +110,9 @@ func TestUserProfileSearchOutboxRelayRetriesWithoutAdvancingCheckpoint(
 		t.Fatalf("expected visible retryable failure, didWork=%v err=%v", didWork, err)
 	}
 	if !store.failed || store.published || !store.nextAttempt.After(time.Now().Add(-time.Second)) {
-		t.Fatalf("failed ES projection must retain the checkpoint: %+v", store)
+		t.Fatalf("failed durable append must retain the checkpoint: %+v", store)
 	}
-	if store.failure.Code != userports.UserProfileSearchOutboxFailureProject ||
+	if store.failure.Code != userports.UserProfileSearchOutboxFailurePublish ||
 		len(store.failure.Digest) != 64 ||
 		strings.Contains(store.failure.Digest, "profile-owner-1") ||
 		strings.Contains(err.Error(), "profile-owner-1") {

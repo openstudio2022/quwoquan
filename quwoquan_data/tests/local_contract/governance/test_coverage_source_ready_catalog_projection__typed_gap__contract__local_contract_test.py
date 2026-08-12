@@ -19,12 +19,18 @@ def _write_json(path: Path, value: object) -> None:
     )
 
 
-def _row(*, name: str = "西湖", district: str = "西湖区") -> dict[str, object]:
+def _row(
+    *,
+    name: str = "西湖",
+    canonical_name: str | None = None,
+    district: str = "西湖区",
+) -> dict[str, object]:
     return {
         "schema": "quwoquan_data.source_ready_candidate",
         "identityKey": f"name_location:{name}|浙江省|杭州市|{district}",
         "candidate": {
             "name": name,
+            "canonicalName": canonical_name or name,
             "province": "浙江省",
             "city": "杭州市",
             "district": district,
@@ -73,12 +79,20 @@ def _run(tmp_path: Path, rows: list[dict[str, object]]) -> Path:
     ready = run_dir / "source_ready.ndjson"
     inconclusive = run_dir / "source_inconclusive.ndjson"
     frozen = run_dir / "frozen_targets.ndjson"
-    serialized = "".join(
+    frozen_serialized = "".join(
         json.dumps(row, ensure_ascii=False) + "\n" for row in rows
     )
-    ready.write_text(serialized, encoding="utf-8")
+    ready_serialized = "".join(
+        json.dumps(
+            {key: value for key, value in row.items() if key != "selection"},
+            ensure_ascii=False,
+        )
+        + "\n"
+        for row in rows
+    )
+    ready.write_text(ready_serialized, encoding="utf-8")
     inconclusive.write_text("", encoding="utf-8")
-    frozen.write_text(serialized, encoding="utf-8")
+    frozen.write_text(frozen_serialized, encoding="utf-8")
     report = {
         "schema": "quwoquan_data.source_readiness_report",
         "runId": "source-ready-zhejiang",
@@ -139,10 +153,12 @@ def test_projection_binds_physical_coverage_bytes_and_preserves_typed_gaps(
     assert first["articleCatalogBuilderInputs"] == []
     candidate = first["plannedCandidates"][0]
     assert candidate["coverageEntityIdentity"].startswith("name_location:西湖|")
+    assert candidate["canonicalEntityRef"] == "/entity/地点/景区/西湖"
     assert candidate["source"] == {
         "sourceKind": "wikipedia",
         "extractor": "wikipedia_api",
         "sourceUrl": "https://zh.wikipedia.org/wiki/西湖",
+        "resolvedTitle": "西湖",
         "observedAt": "2026-08-08T00:00:00Z",
     }
     assert "bodyContentDigest" in candidate["homepage"]["missingEvidence"]
@@ -152,6 +168,48 @@ def test_projection_binds_physical_coverage_bytes_and_preserves_typed_gaps(
     assert "contentDigest" not in candidate["source"]
     for binding in first["coverageBindings"].values():
         assert binding["fileSha256"].startswith("sha256:")
+
+
+def test_projection_uses_canonical_name_for_exact_entity_ref(tmp_path):
+    candidate = _project(
+        _run(
+            tmp_path,
+            [_row(name="黄龙", canonical_name="黄龙风景名胜区", district="松潘县")],
+        )
+    )["plannedCandidates"][0]
+
+    assert candidate["candidateName"] == "黄龙风景名胜区"
+    assert candidate["canonicalEntityRef"] == "/entity/地点/景区/黄龙风景名胜区"
+    assert candidate["source"]["resolvedTitle"] == "黄龙"
+
+
+def test_projection_preserves_and_verifies_exact_required_ref_order(tmp_path):
+    rows = [
+        _row(name="后项", district="后区"),
+        _row(name="前项", district="前区"),
+    ]
+    run_dir = _run(tmp_path, rows)
+    required = ["/entity/地点/景区/后项", "/entity/地点/景区/前项"]
+    manifest_path = run_dir / "manifest.json"
+    report_path = run_dir / "report.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    manifest["requiredEntityRefs"] = required
+    report.update(
+        {
+            "requiredEntityRefs": required,
+            "frozenEntityRefs": required,
+            "missingRequiredEntityRefs": [],
+        }
+    )
+    _write_json(manifest_path, manifest)
+    _write_json(report_path, report)
+
+    projection = _project(run_dir)
+
+    assert [
+        row["canonicalEntityRef"] for row in projection["plannedCandidates"]
+    ] == required
 
 
 def test_projection_rejects_duplicate_entity_identity(tmp_path):
@@ -203,4 +261,3 @@ def test_zhejiang_master_list_keeps_922_poi_leaves_distinct_from_admin_rows():
     )
     assert counts["master_list"] == 922
     assert counts["admin_region_catalog"] == 102
-

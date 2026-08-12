@@ -1,6 +1,8 @@
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-001
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md#gwt-002
 // readiness_case: list-homepage-claim-requests-local
 // readiness_case: create-homepage-claim-request-local
+// readiness_case: get-my-pending-homepage-claim-request-local
 // readiness_case: review-homepage-claim-request-local
 package local_contract
 
@@ -321,6 +323,24 @@ func TestClaimGovernanceQueueReturnsPendingReviewMaterial(t *testing.T) {
 		page.Items[0].BusinessLicenseURL == "" ||
 		page.Items[0].ContactPhone == "" {
 		t.Fatalf("governance queue must preserve review material: %+v", page)
+	}
+}
+
+func TestClaimRequesterReadsOnlyOwnPendingRequest(t *testing.T) {
+	facade, _ := newFacadeForTest(t)
+	created, err := facade.Create(commandContext("claim-mine-create"), validCreateCommand())
+	if err != nil {
+		t.Fatalf("create claim: %v", err)
+	}
+	mine, err := facade.GetMyPending(context.Background(), created.HomepageID, "persona-requester")
+	if err != nil || mine.ClaimRequestID != created.ClaimRequestID ||
+		mine.Status != claimmodel.StatusPendingReview {
+		t.Fatalf("get own pending claim: %+v err=%v", mine, err)
+	}
+	if _, err := facade.GetMyPending(
+		context.Background(), created.HomepageID, "persona-other",
+	); !hasCode(err, claimgenerated.ErrClaimNotFound) {
+		t.Fatalf("another persona must not read pending claim: %v", err)
 	}
 }
 

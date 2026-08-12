@@ -140,6 +140,8 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGetActiveFilterCatalog(w, r)
 	case "GetFeed":
 		h.handleGetFeed(w, r)
+	case "GetResearchReleaseReadback":
+		h.handleGetResearchReleaseReadback(w, r)
 	case "GetHelperRead":
 		h.handleGetHelperRead(w, r)
 	case "GetMediaAsset":

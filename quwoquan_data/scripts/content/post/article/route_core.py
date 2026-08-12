@@ -73,8 +73,12 @@ STANDALONE_TIPS_MARKERS = ("实用信息", "实用攻略信息", "来源平台",
 # 软门集合单一真相源 = quality_gates.SOFT_QUALITY_GATES（review 与 publish-face verify 共用，
 # 消除第二真相源）。新增/调整软门只改 quality_gates，禁止此处另起一套集合。
 from core.quality_gates import SOFT_QUALITY_GATES as _SOFT_QUALITY_GATES
+from core.quality_gates import (
+    AUTHORING_DIAGNOSTIC_GATES as _AUTHORING_DIAGNOSTIC_GATES,
+)
 
 SOFT_CHECKS: set[str] = set(_SOFT_QUALITY_GATES)
+AUTHORING_DIAGNOSTIC_CHECKS: set[str] = set(_AUTHORING_DIAGNOSTIC_GATES)
 IMAGE_EVIDENCE_GENERATOR = ContentGenerator.IMAGE_EVIDENCE_PACK.value
 
 
@@ -97,9 +101,10 @@ def aggregate_checks(
         if result.get("passed", True):
             continue
         issues = list(result.get("issues") or [])
-        if name in SOFT_CHECKS:
+        if name in SOFT_CHECKS or name in AUTHORING_DIAGNOSTIC_CHECKS:
             soft_failed += 1
-            suggestions.extend(f"[建议] {name}: {issue}" for issue in issues)
+            prefix = "诊断" if name in AUTHORING_DIAGNOSTIC_CHECKS else "建议"
+            suggestions.extend(f"[{prefix}] {name}: {issue}" for issue in issues)
         else:
             blocking.extend(f"{name}: {issue}" for issue in issues)
         suggestions.extend(result.get("suggestions") or [])
@@ -163,6 +168,8 @@ def _publish_angle(brief: Mapping[str, Any]) -> str:
         return "画报"
     if carrier == "video":
         return "体验"
+    if str(brief.get("articleCategory") or "").strip() == "photography":
+        return "摄影"
     intent = str(brief.get("writingIntent") or "").strip()
     return _ANGLE_BY_INTENT.get(intent, "攻略")
 

@@ -425,12 +425,16 @@ final class _ControllableGreetingRepository implements GreetingRepository {
   }
 
   @override
-  Future<GreetingRequestViewData> cancelGreeting(String requestId) =>
-      throw StateError('not used by chat home');
+  Future<GreetingRequestViewData> cancelGreeting(
+    String requestId, {
+    String? idempotencyKey,
+  }) => throw StateError('not used by chat home');
 
   @override
-  Future<GreetingRequestViewData> ignoreGreeting(String requestId) =>
-      throw StateError('not used by chat home');
+  Future<GreetingRequestViewData> ignoreGreeting(
+    String requestId, {
+    String? idempotencyKey,
+  }) => throw StateError('not used by chat home');
 
   @override
   Future<List<GreetingRequestViewData>> listOutbox({
@@ -440,8 +444,10 @@ final class _ControllableGreetingRepository implements GreetingRepository {
   }) => throw StateError('not used by chat home');
 
   @override
-  Future<GreetingReplyResultViewData> replyGreeting(String requestId) =>
-      throw StateError('not used by chat home');
+  Future<GreetingReplyResultViewData> replyGreeting(
+    String requestId, {
+    String? idempotencyKey,
+  }) => throw StateError('not used by chat home');
 
   @override
   Future<GreetingRequestViewData> sendGreeting({

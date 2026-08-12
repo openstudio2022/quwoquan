@@ -5,14 +5,14 @@
 #   - 远端就是与原 gamma 同台的 ECS（SSH + rootless podman compose），非独立 k8s；PROD_KUBECONFIG 已退役。
 #   - 按 edge/media/service/data 四平面隔离：每个读写平面用各自 Linux service 账号 prod-<plane>-svc 自登录，
 #     仅操作本平面 governedWorkloads；data 平面只读审计，不参与 deploy。
-#   - rollout stage：gray-initial（取同集群一个灰度实例验证，承接原远端 gamma 验证职责）-> carry-on -> full。
+#   - rollout stage：canary -> 5 -> 20 -> 50 -> 100；前四阶段更新 candidate，100 提升为 stable。
 #   - 凭据：每平面独立 SSH key 逻辑 id（PROD_<PLANE>_SSH_KEY）；实际私钥只允许来自本机 key 文件 /
 #     self-hosted runner 私有目录 / ssh-agent，禁止再把私钥正文注入 GitHub secrets。
 #
 # 用法（dry-run 预览，默认）：
-#   ROLLOUT_STAGE=gray-initial IMAGE_TRANSPORT_TAG=<tag> CANDIDATE_DIGEST=<sha256> quwoquan_ops/cli/prod/deploy_to_prod.sh
+#   ROLLOUT_STAGE=canary IMAGE_TRANSPORT_TAG=<tag> CANDIDATE_DIGEST=<sha256> quwoquan_ops/cli/prod/deploy_to_prod.sh
 # 用法（真实发布）：
-#   DRY_RUN=false ROLLOUT_STAGE=gray-initial IMAGE_TRANSPORT_TAG=<tag> CANDIDATE_DIGEST=<sha256> \
+#   DRY_RUN=false ROLLOUT_STAGE=canary IMAGE_TRANSPORT_TAG=<tag> CANDIDATE_DIGEST=<sha256> \
 #   PROD_SSH_KEY_DIR=~/.ssh/quwoquan-prod quwoquan_ops/cli/prod/deploy_to_prod.sh
 #   或显式指定：
 #   PROD_SERVICE_SSH_KEY_FILE=~/.ssh/quwoquan-prod/prod-service-svc quwoquan_ops/cli/prod/deploy_to_prod.sh
@@ -35,7 +35,7 @@ ACCESS_MANIFEST="quwoquan_ops/environments/prod/access-isolation.yaml"
 TOPOLOGY_MANIFEST="quwoquan_ops/environments/prod/runtime.yaml"
 
 DRY_RUN="${DRY_RUN:-true}"
-ROLLOUT_STAGE="${ROLLOUT_STAGE:-gray-initial}"
+ROLLOUT_STAGE="${ROLLOUT_STAGE:-canary}"
 IMAGE_TRANSPORT_TAG="${IMAGE_TRANSPORT_TAG:-}"
 CANDIDATE_DIGEST="${CANDIDATE_DIGEST:-}"
 PREVIOUS_IMAGE_TRANSPORT_TAG="${PREVIOUS_IMAGE_TRANSPORT_TAG:-}"
@@ -47,8 +47,8 @@ SERVICE_FILTER="${SERVICE:-}"
 PROD_IMAGE_DELIVERY_MODE="${PROD_IMAGE_DELIVERY_MODE:-prebuilt}"
 
 case "$ROLLOUT_STAGE" in
-  gray-initial|carry-on|full) ;;
-  *) echo "FAIL: ROLLOUT_STAGE 必须为 gray-initial|carry-on|full，实际 $ROLLOUT_STAGE" >&2; exit 2 ;;
+  canary|5|20|50|100) ;;
+  *) echo "FAIL: ROLLOUT_STAGE 必须为 canary|5|20|50|100，实际 $ROLLOUT_STAGE" >&2; exit 2 ;;
 esac
 
 if [[ ! -f "$ACCESS_MANIFEST" ]]; then
@@ -150,9 +150,11 @@ run_remote_bash() {
 plan_args=(
   python3 quwoquan_ops/cli/prod/prod_hosted_topology.py
   --stage "$ROLLOUT_STAGE"
-  --require-release-redundancy
   --format tsv
 )
+if [[ "$ROLLOUT_STAGE" != "canary" ]]; then
+  plan_args+=(--require-release-redundancy)
+fi
 if [[ -n "$SERVICE_FILTER" ]]; then
   plan_args+=(--service-filter "$SERVICE_FILTER")
 fi
@@ -166,8 +168,8 @@ if [[ -z "$PLANE_PLAN" ]]; then
   exit 2
 fi
 
-# 灰度阶段始终只更新独立 gray 项目；full 才替换正式项目。
-if [[ "$ROLLOUT_STAGE" == "gray-initial" || "$ROLLOUT_STAGE" == "carry-on" ]]; then
+# candidate 阶段始终只更新独立 gray 项目；100 才替换正式项目。
+if [[ "$ROLLOUT_STAGE" != "100" ]]; then
   INSTANCE_SUFFIX="gray"
 else
   INSTANCE_SUFFIX="prod"
@@ -316,7 +318,7 @@ done
 echo \"[plane service] integration push credentials preflight ok\""
   fi
   local image_retention=""
-  if [[ "$ROLLOUT_STAGE" == "full" ]]; then
+  if [[ "$ROLLOUT_STAGE" == "100" ]]; then
     image_retention="
 for service in ${governed_services}; do
   repository=\"localhost/quwoquan_service_\${service}\"
@@ -619,7 +621,7 @@ while IFS=$'\t' read -r plane account compose_root secret_name governed_csv supp
   deploy_plane "$plane" "$account" "$compose_root" "$secret_name" "$governed_csv" "$support_csv" "$credentials_root" "$host_id" "$ssh_host" "$replica_id" "$replica_count" "$remote_root" "$project" "$systemd_unit" "$render_name"
 done <<< "$PLANE_PLAN"
 
-if [[ "$ROLLOUT_STAGE" == "full" ]]; then
+if [[ "$ROLLOUT_STAGE" == "100" ]]; then
   while IFS=$'\t' read -r plane account _compose_root secret_name _governed _support credentials_root host_id ssh_host replica_id _replica_count remote_root _project _systemd_unit _render_name; do
     [[ "$plane" == "service" ]] || continue
     deploy_observability_replica "$account" "$remote_root" "$secret_name" "$credentials_root" "$ssh_host" "$host_id" "$replica_id"
@@ -628,13 +630,13 @@ else
   echo "[skip] observability remains bound to stable prod replicas during gray rollout"
 fi
 
-if [[ "$DRY_RUN" != "true" && "$ROLLOUT_STAGE" != "full" ]]; then
+if [[ "$DRY_RUN" != "true" && "$ROLLOUT_STAGE" != "100" ]]; then
   while IFS=$'\t' read -r plane account compose_root secret_name _governed _support _credentials host_id ssh_host replica_id _replica_count _remote_root _project _systemd_unit _render_name; do
     [[ "$plane" == "service" ]] || continue
     update_stable_gray_router_replica "$account" "$compose_root" "$secret_name" "$ssh_host" "$host_id" "$replica_id"
   done <<< "$PLANE_PLAN"
 fi
-if [[ "$DRY_RUN" != "true" && "$ROLLOUT_STAGE" == "full" ]]; then
+if [[ "$DRY_RUN" != "true" && "$ROLLOUT_STAGE" == "100" ]]; then
   cleanup_gray_stacks
 fi
 
@@ -645,4 +647,4 @@ echo "[deploy] placementCoverage hosts=${host_count} planeReplicas=${placement_c
 if [[ "$DRY_RUN" == "true" ]]; then
   echo "[deploy] dry_run — 已预览各平面 SSH 发布计划，未执行。设置 DRY_RUN=false 并提供各平面 SSH 凭据后真实发布。"
 fi
-echo "[deploy] prod-hosted stage=$ROLLOUT_STAGE 完成（按平面账号隔离、gray-initial 承接远端验证）。"
+echo "[deploy] prod-hosted stage=$ROLLOUT_STAGE 完成（按平面账号隔离、candidate/stable 分池）。"

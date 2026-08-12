@@ -175,6 +175,15 @@
 - 新增语义轴的叶子必须在提交时即声明 `collectionChannel` 与 `consumedBy`，且该通道已在 `PRODUCERS` 登记；
  「先建定义、后补通道」不成立，它正是当前 1732 个孤儿的成因。
 
+<a id="req-006"></a>
+### REQ-006 active release 的历史 PostDeleted 负载必须由 owning importer 原子收敛
+
+- replay repair 只允许作用于当前 active Content release，并要求既有 import identity 与请求的 `releaseId / manifestDigest` 精确一致；普通 import、非 active release 或未知 payload 必须 fail closed。
+- importer 必须在同一 Mongo 事务内精确校验期望修复数，只对已知 legacy `PostDeleted` payload，或精确绑定同一 envelope 且唯一漂移为 `deleted -> published` status-before-delete 的历史中间形态执行 CAS；禁止新增 outbox、修改 Post、推进 active release 或接受未知字段。
+- 新 release 接管既有 tombstone 时仍必须生成 canonical status-before-delete，保证首次写入与 active-release replay 字节一致，不得把 tombstone 当前状态误写为删除前状态。
+- 期望数量不一致、CAS 未命中或事务失败时不得留下部分修复；同一 release 首次精确修复后，以期望零重放必须零写且保持字节幂等。
+- outbox relay 在首次成功扫描前已经发生严格解码或发布失败时，readiness 必须优先返回最新具体失败，不得以“未完成扫描”覆盖可修复首因。
+
 ## 6. 领域验收
 
 <a id="dom-001"></a>
@@ -207,6 +216,14 @@
 - 可观察结果：无采集通道的标签数高于上限时报「新增了没有采集通道的标签定义」并非零退出；
  低于上限时报「请把 `ORPHAN_NO_CHANNEL_CEILING` 同步下调」并非零退出；等于上限时通过。
 - 禁止结果：不得因商用判定仍为 `BLOCK` 而放行孤儿增长；不得把上限调高来容纳新增定义。
+
+<a id="dom-005"></a>
+### DOM-005 active release PostDeleted 已知历史 payload 原子修复
+
+- 条件：既有 active release 的 outbox 中存在已知 legacy `PostDeleted` payload，或唯一漂移为历史 status-before-delete 的精确中间形态，且请求精确绑定同一 release/import identity 与期望修复数量。
+- 可观察结果：事务只修复精确数量的已知 payload；Post、active release 与 outbox 总数不变，修复后的 payload 可由 canonical consumer 严格解码。
+- 可观察结果：随后以相同 release 和期望零修复重放时零写且幂等。
+- 禁止结果：release identity、期望数量、payload 形态、CAS 或事务任一不一致时不得提交部分结果。
 
 ## 7. 工程归属
 

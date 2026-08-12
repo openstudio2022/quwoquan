@@ -5,6 +5,7 @@
 // spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-004
 // spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-008
 // spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-009
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-012
 // readiness_case: gathering_cancel_gathering_app_local
 // readiness_case: gathering_complete_gathering_app_local
 // readiness_case: gathering_create_gathering_draft_app_local
@@ -201,6 +202,54 @@ void main() {
             'expectedParticipationVersion': 2,
           },
         );
+      },
+    );
+
+    test(
+      'WatchGatheringAvailability keeps aggregate and watch versions distinct',
+      () async {
+        final captured = <http.Request>[];
+        var callCount = 0;
+        final remote = _remote(captured, (_) {
+          callCount += 1;
+          return _commandResponse(
+            version: 8,
+            lifecycle: 'published',
+            roomBinding: 'ready',
+            replayed: callCount > 1,
+          );
+        });
+        const input = GatheringAvailabilityWatchCommandInput(
+          idempotencyKey: 'gathering-watch-availability-intent',
+          gatheringId: 'gathering-1',
+          expectedGatheringVersion: 7,
+          expectedWatchVersion: 0,
+        );
+
+        final first = await remote.watchAvailability(input);
+        final replay = await remote.watchAvailability(input);
+
+        for (final request in captured) {
+          _expectCommandRequest(
+            request,
+            method: 'POST',
+            path: '/gatherings/gathering-1:watch-availability',
+            operationId: cloud
+                .AppCloudOperationIds
+                .circleGatheringWatchGatheringAvailability,
+            idempotencyKey: input.idempotencyKey,
+            body: const <String, Object?>{
+              'expectedGatheringVersion': 7,
+              'expectedWatchVersion': 0,
+            },
+          );
+        }
+        expect(first.aggregateVersion, 8);
+        expect(first.idempotentReplay, isFalse);
+        expect(first.participationState, isNull);
+        expect(first.participationVersion, isNull);
+        expect(replay.aggregateVersion, first.aggregateVersion);
+        expect(replay.idempotentReplay, isTrue);
       },
     );
 

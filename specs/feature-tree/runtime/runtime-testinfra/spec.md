@@ -6,7 +6,7 @@
 
 ## 1. 能力目标
 
-以物理目录扫描和运行报告提供三层测试证据，不维护路径登记或目录清单。
+以物理目录扫描发现三层测试，以强类型请求按需准备隔离数据，并从真实执行、回读与清理结果生成证据，不维护路径登记、测试清单或 capability registry。
 
 ## 2. 范围与非目标
 
@@ -15,6 +15,8 @@
 - App / Service / Data / Ops canonical 测试发现
 - case ID、测试入口、运行结果、环境和制品摘要闭环
 - directory-layout / no-fake / coverage-map 门禁
+- Alpha/Beta/Gamma 验收数据的强类型请求、按需 Provider、依赖图、Actor 租约、回读、清理与追加式回执
+- 测试数据准备关键路径、operation 数量与阶段耗时治理
 
 ### Out of Scope
 
@@ -23,17 +25,14 @@
 
 ## 3. Journey / Scenario 贡献
 
-- [`JNY-001 / SCN-004`](../../spec.md#scn-004)
-  - 本能力接收：该 Scenario 进入本能力边界的已授权主体与 canonical 输入。
-  - 本能力处理：以物理目录扫描和运行报告提供三层测试证据，不维护路径登记或目录清单。
-  - 本能力输出：直属 Story 组合产生的可观察结果与明确失败终态。
-  - 失败时终态：保留已确认事实，并返回可恢复的 canonical failure。
+- 横切工程能力：不直接拥有 AppRoot Scenario；业务领域继续拥有产品行为和断言，本能力只提供可审计的测试发现、隔离数据与执行证据。
 
 ## 4. Story
 
 
 
-- [`test-engine-and-fixture-framework`](./test-engine-and-fixture-framework/spec.md)：按 canonical 测试目录发现用例，隔离 fixture 与真实依赖，并从执行结果生成证据。
+- [`test-execution-and-evidence`](./test-execution-and-evidence/spec.md)：按 canonical 目录发现并执行用例，从真实结果生成结构与运行证据。
+- [`test-data-provisioning-and-isolation`](./test-data-provisioning-and-isolation/spec.md)：按选中用例的强类型请求图准备、回读和清理最小验收数据。
 
 ## 5. 能力要求
 
@@ -50,6 +49,22 @@
 
 - 测试文件必须物理位于 canonical 目录；禁止 bridge、历史豁免 allowlist 和手写绿色报告
 - `support/` 只保存 fixture、harness、builder，不得保存测试入口
+
+<a id="req-003"></a>
+### REQ-003 环境测试数据按强类型请求图最小准备
+
+- 测试代码只引用领域公开的强类型 capability、参数与结果，不书写 capability key、wire path、operation ID、裸字典参数或 Provider 实现。
+- Runner 只收集当前选中用例的根请求；控制面只加载其依赖闭包内 Provider，并按依赖图并行执行互不相关节点。
+- 内容、Creator、Entity 与已发布 Media 只读引用当前候选绑定的 immutable release；账号与交易事实只经各领域公开 command/event 创建。同源表示采用相同 publish、release、importer、契约和 readback，不表示复制 Prod 数据库。
+- 一个 CaseResult 的一次尝试拥有独立数据实例和 Actor 租约；可变业务事实不得跨 case 复用，清理不确定时必须隔离并阻断。
+- Prod 在首条测试数据 mutation 前拒绝，生产/App/Service 制品不得包含测试数据控制面、fixture、租约或回执。
+
+<a id="req-004"></a>
+### REQ-004 数据准备性能与证据可比较
+
+- 报告分别记录环境启动、静态门、请求收集、Provider 发现、规划、Actor 准备、每个 capability 的 provision/readback/cleanup、测试正文、回执写入、关键路径和总耗时，以及 operation 数量、加载 Provider、并发度、租约等待与缓存命中。
+- 前置失败或提前退出的 run 与完整绿色 run 分开表达，不得进入性能基线。
+- 无 mutation 的 smoke 不执行环境数据准备；单领域用例的额外 Provider 与无关 operation 必须为零。
 
 ## 6. 契约与依赖
 
@@ -68,3 +83,12 @@
 - THEN App、Service、Data、Ops 测试均能由 canonical 目录直接发现，且不存在 bridge、tracked inventory 或 coverage map。
 - THEN runner 报告能由 `spec_ref` 反向关联实际测试、结果、环境和制品摘要。
 - THEN directory-layout、no-fake 与动态追踪门禁能独立阻断漂移。
+
+<a id="sit-002"></a>
+### SIT-002 验收数据最小化、隔离与性能闭环
+
+- GIVEN Runner 已得到当前选择的真实测试及其强类型根请求，候选、环境和公开契约均有效。
+- WHEN 控制面准备、回读、执行并清理本次 CaseResult 所需数据。
+- THEN 只加载请求依赖闭包内 Provider，只调用所属领域公开 operation，互不依赖节点并行且结果与串行执行一致。
+- THEN immutable release 可只读复用，可变 Actor 与交易事实按 case 隔离；重试同一实例不重复创建，新尝试获得新实例，清理不确定进入隔离并阻断。
+- THEN 完整报告可区分环境、数据准备、测试正文与清理耗时，失败早退不污染绿色性能基线，Prod 在任何 mutation 前拒绝。

@@ -2,7 +2,8 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/application/
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart'
     as domain;
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart' as cloud;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    as cloud;
 
 domain.GatheringCommandResult gatheringCommandResultFromWire(
   cloud.GatheringCommandResult wire,
@@ -80,7 +81,9 @@ cloud.GatheringParticipationVersionCommand participationCommandToWire(
   );
 }
 
-cloud.ApplyToGatheringCommand applyCommandToWire(domain.GatheringApplyInput input) {
+cloud.ApplyToGatheringCommand applyCommandToWire(
+  domain.GatheringApplyInput input,
+) {
   return cloud.ApplyToGatheringCommand(
     gatheringId: input.gatheringId,
     expectedGatheringVersion: input.expectedGatheringVersion,
@@ -112,7 +115,9 @@ cloud.ReviewGatheringApplicationCommand reviewApplicationCommandToWire(
   );
 }
 
-cloud.InviteToGatheringCommand inviteCommandToWire(domain.GatheringInviteInput input) {
+cloud.InviteToGatheringCommand inviteCommandToWire(
+  domain.GatheringInviteInput input,
+) {
   return cloud.InviteToGatheringCommand(
     gatheringId: input.gatheringId,
     participantPersonaId: input.participantPersonaId,
@@ -175,12 +180,12 @@ cloud.GatheringReasonCommand reasonCommandToWire(
 }
 
 cloud.GatheringAvailabilityWatchCommand watchAvailabilityCommandToWire(
-  domain.GatheringVersionCommandInput input,
+  domain.GatheringAvailabilityWatchCommandInput input,
 ) {
   return cloud.GatheringAvailabilityWatchCommand(
     gatheringId: input.gatheringId,
     expectedGatheringVersion: input.expectedGatheringVersion,
-    expectedWatchVersion: input.expectedGatheringVersion,
+    expectedWatchVersion: input.expectedWatchVersion,
   );
 }
 
@@ -223,7 +228,9 @@ GatheringDetailPresentationSlice? presentationFromPublicWire(
       policy: GatheringPolicyPresentationSlice(
         audience: _audienceFromWire(wire.audiencePolicy),
         admission: _admissionPolicyFromWire(wire.admissionPolicy),
-        timeDisclosure: _timeDisclosureFromWire(wire.disclosurePolicy.timeDisclosure),
+        timeDisclosure: _timeDisclosureFromWire(
+          wire.disclosurePolicy.timeDisclosure,
+        ),
         placeDisclosure: _placeDisclosureFromWire(
           wire.disclosurePolicy.placeDisclosure,
         ),
@@ -259,7 +266,9 @@ GatheringDetailPresentationSlice? presentationFromPublicWire(
   );
 }
 
-cloud.GatheringPurpose _purposeDraftToWire(domain.GatheringPurposeDraft purpose) {
+cloud.GatheringPurpose _purposeDraftToWire(
+  domain.GatheringPurposeDraft purpose,
+) {
   return cloud.GatheringPurpose(
     title: purpose.title,
     summary: purpose.summary,
@@ -281,7 +290,9 @@ cloud.GatheringPurpose _purposeDraftToWire(domain.GatheringPurposeDraft purpose)
   );
 }
 
-cloud.GatheringSchedule _scheduleDraftToWire(domain.GatheringScheduleDraft schedule) {
+cloud.GatheringSchedule _scheduleDraftToWire(
+  domain.GatheringScheduleDraft schedule,
+) {
   return cloud.GatheringSchedule(
     timezone: schedule.timezone,
     startAt: schedule.startAt,
@@ -305,7 +316,9 @@ cloud.GatheringPlace _placeDraftToWire(domain.GatheringPlaceDraft place) {
   );
 }
 
-cloud.GatheringPolicySet _policyDraftToWire(domain.GatheringPolicyDraft policy) {
+cloud.GatheringPolicySet _policyDraftToWire(
+  domain.GatheringPolicyDraft policy,
+) {
   return cloud.GatheringPolicySet(
     audiencePolicy: _audienceToWire(policy.audience),
     admissionPolicy: _admissionPolicyToWire(policy.admission),
@@ -322,21 +335,29 @@ cloud.GatheringPolicySet _policyDraftToWire(domain.GatheringPolicyDraft policy) 
   );
 }
 
-cloud.GatheringHostSubjectKind _hostKindToWire(domain.GatheringHostSubjectKind value) {
+cloud.GatheringHostSubjectKind _hostKindToWire(
+  domain.GatheringHostSubjectKind value,
+) {
   return switch (value) {
-    domain.GatheringHostSubjectKind.persona => cloud.GatheringHostSubjectKind.persona,
+    domain.GatheringHostSubjectKind.persona =>
+      cloud.GatheringHostSubjectKind.persona,
     domain.GatheringHostSubjectKind.entityHomepage =>
       cloud.GatheringHostSubjectKind.entityHomepage,
-    domain.GatheringHostSubjectKind.circle => cloud.GatheringHostSubjectKind.circle,
+    domain.GatheringHostSubjectKind.circle =>
+      cloud.GatheringHostSubjectKind.circle,
   };
 }
 
-domain.GatheringHostSubjectKind _hostKindFromWire(cloud.GatheringHostSubjectKind value) {
+domain.GatheringHostSubjectKind _hostKindFromWire(
+  cloud.GatheringHostSubjectKind value,
+) {
   return switch (value) {
-    cloud.GatheringHostSubjectKind.persona => domain.GatheringHostSubjectKind.persona,
+    cloud.GatheringHostSubjectKind.persona =>
+      domain.GatheringHostSubjectKind.persona,
     cloud.GatheringHostSubjectKind.entityHomepage =>
       domain.GatheringHostSubjectKind.entityHomepage,
-    cloud.GatheringHostSubjectKind.circle => domain.GatheringHostSubjectKind.circle,
+    cloud.GatheringHostSubjectKind.circle =>
+      domain.GatheringHostSubjectKind.circle,
   };
 }
 
@@ -356,10 +377,14 @@ domain.GatheringPlaceMode _placeModeFromWire(cloud.GatheringPlaceMode value) {
   };
 }
 
-cloud.GatheringAudiencePolicy _audienceToWire(domain.GatheringAudiencePolicy value) {
+cloud.GatheringAudiencePolicy _audienceToWire(
+  domain.GatheringAudiencePolicy value,
+) {
   return switch (value) {
-    domain.GatheringAudiencePolicy.public => cloud.GatheringAudiencePolicy.public,
-    domain.GatheringAudiencePolicy.unlisted => cloud.GatheringAudiencePolicy.unlisted,
+    domain.GatheringAudiencePolicy.public =>
+      cloud.GatheringAudiencePolicy.public,
+    domain.GatheringAudiencePolicy.unlisted =>
+      cloud.GatheringAudiencePolicy.unlisted,
     domain.GatheringAudiencePolicy.communityMembers =>
       cloud.GatheringAudiencePolicy.communityMembers,
     domain.GatheringAudiencePolicy.inviteOnly =>
@@ -367,10 +392,14 @@ cloud.GatheringAudiencePolicy _audienceToWire(domain.GatheringAudiencePolicy val
   };
 }
 
-domain.GatheringAudiencePolicy _audienceFromWire(cloud.GatheringAudiencePolicy value) {
+domain.GatheringAudiencePolicy _audienceFromWire(
+  cloud.GatheringAudiencePolicy value,
+) {
   return switch (value) {
-    cloud.GatheringAudiencePolicy.public => domain.GatheringAudiencePolicy.public,
-    cloud.GatheringAudiencePolicy.unlisted => domain.GatheringAudiencePolicy.unlisted,
+    cloud.GatheringAudiencePolicy.public =>
+      domain.GatheringAudiencePolicy.public,
+    cloud.GatheringAudiencePolicy.unlisted =>
+      domain.GatheringAudiencePolicy.unlisted,
     cloud.GatheringAudiencePolicy.communityMembers =>
       domain.GatheringAudiencePolicy.communityMembers,
     cloud.GatheringAudiencePolicy.inviteOnly =>
@@ -402,20 +431,27 @@ domain.GatheringAdmissionPolicy _admissionPolicyFromWire(
   };
 }
 
-cloud.GatheringTimeDisclosure _timeDisclosureToWire(domain.GatheringTimeDisclosure value) {
+cloud.GatheringTimeDisclosure _timeDisclosureToWire(
+  domain.GatheringTimeDisclosure value,
+) {
   return switch (value) {
     domain.GatheringTimeDisclosure.exact => cloud.GatheringTimeDisclosure.exact,
-    domain.GatheringTimeDisclosure.dateOnly => cloud.GatheringTimeDisclosure.dateOnly,
+    domain.GatheringTimeDisclosure.dateOnly =>
+      cloud.GatheringTimeDisclosure.dateOnly,
     domain.GatheringTimeDisclosure.afterJoin =>
       cloud.GatheringTimeDisclosure.afterJoin,
   };
 }
 
-domain.GatheringTimeDisclosure _timeDisclosureFromWire(cloud.GatheringTimeDisclosure value) {
+domain.GatheringTimeDisclosure _timeDisclosureFromWire(
+  cloud.GatheringTimeDisclosure value,
+) {
   return switch (value) {
     cloud.GatheringTimeDisclosure.exact => domain.GatheringTimeDisclosure.exact,
-    cloud.GatheringTimeDisclosure.dateOnly => domain.GatheringTimeDisclosure.dateOnly,
-    cloud.GatheringTimeDisclosure.afterJoin => domain.GatheringTimeDisclosure.afterJoin,
+    cloud.GatheringTimeDisclosure.dateOnly =>
+      domain.GatheringTimeDisclosure.dateOnly,
+    cloud.GatheringTimeDisclosure.afterJoin =>
+      domain.GatheringTimeDisclosure.afterJoin,
   };
 }
 
@@ -423,8 +459,10 @@ cloud.GatheringPlaceDisclosure _placeDisclosureToWire(
   domain.GatheringPlaceDisclosure value,
 ) {
   return switch (value) {
-    domain.GatheringPlaceDisclosure.exact => cloud.GatheringPlaceDisclosure.exact,
-    domain.GatheringPlaceDisclosure.coarse => cloud.GatheringPlaceDisclosure.coarse,
+    domain.GatheringPlaceDisclosure.exact =>
+      cloud.GatheringPlaceDisclosure.exact,
+    domain.GatheringPlaceDisclosure.coarse =>
+      cloud.GatheringPlaceDisclosure.coarse,
     domain.GatheringPlaceDisclosure.afterJoin =>
       cloud.GatheringPlaceDisclosure.afterJoin,
   };
@@ -434,8 +472,10 @@ domain.GatheringPlaceDisclosure _placeDisclosureFromWire(
   cloud.GatheringPlaceDisclosure value,
 ) {
   return switch (value) {
-    cloud.GatheringPlaceDisclosure.exact => domain.GatheringPlaceDisclosure.exact,
-    cloud.GatheringPlaceDisclosure.coarse => domain.GatheringPlaceDisclosure.coarse,
+    cloud.GatheringPlaceDisclosure.exact =>
+      domain.GatheringPlaceDisclosure.exact,
+    cloud.GatheringPlaceDisclosure.coarse =>
+      domain.GatheringPlaceDisclosure.coarse,
     cloud.GatheringPlaceDisclosure.afterJoin =>
       domain.GatheringPlaceDisclosure.afterJoin,
   };
@@ -467,9 +507,12 @@ domain.GatheringRosterDisclosure _rosterDisclosureFromWire(
   };
 }
 
-domain.GatheringLifecycleStatus _lifecycleFromWire(cloud.GatheringLifecycleStatus value) {
+domain.GatheringLifecycleStatus _lifecycleFromWire(
+  cloud.GatheringLifecycleStatus value,
+) {
   return switch (value) {
-    cloud.GatheringLifecycleStatus.draft => domain.GatheringLifecycleStatus.draft,
+    cloud.GatheringLifecycleStatus.draft =>
+      domain.GatheringLifecycleStatus.draft,
     cloud.GatheringLifecycleStatus.published =>
       domain.GatheringLifecycleStatus.published,
     cloud.GatheringLifecycleStatus.cancelled =>
@@ -485,15 +528,21 @@ domain.GatheringRoomBindingStatus _roomBindingFromWire(
   return switch (value) {
     cloud.GatheringRoomBindingStatus.pending =>
       domain.GatheringRoomBindingStatus.pending,
-    cloud.GatheringRoomBindingStatus.ready => domain.GatheringRoomBindingStatus.ready,
-    cloud.GatheringRoomBindingStatus.failed => domain.GatheringRoomBindingStatus.failed,
+    cloud.GatheringRoomBindingStatus.ready =>
+      domain.GatheringRoomBindingStatus.ready,
+    cloud.GatheringRoomBindingStatus.failed =>
+      domain.GatheringRoomBindingStatus.failed,
   };
 }
 
-domain.GatheringTemporalPhase _temporalFromWire(cloud.GatheringTemporalPhase value) {
+domain.GatheringTemporalPhase _temporalFromWire(
+  cloud.GatheringTemporalPhase value,
+) {
   return switch (value) {
-    cloud.GatheringTemporalPhase.upcoming => domain.GatheringTemporalPhase.upcoming,
-    cloud.GatheringTemporalPhase.inProgress => domain.GatheringTemporalPhase.inProgress,
+    cloud.GatheringTemporalPhase.upcoming =>
+      domain.GatheringTemporalPhase.upcoming,
+    cloud.GatheringTemporalPhase.inProgress =>
+      domain.GatheringTemporalPhase.inProgress,
     cloud.GatheringTemporalPhase.ended => domain.GatheringTemporalPhase.ended,
   };
 }
@@ -502,10 +551,13 @@ domain.GatheringAdmissionState _admissionStateFromWire(
   cloud.GatheringAdmissionState value,
 ) {
   return switch (value) {
-    cloud.GatheringAdmissionState.accepting => domain.GatheringAdmissionState.accepting,
+    cloud.GatheringAdmissionState.accepting =>
+      domain.GatheringAdmissionState.accepting,
     cloud.GatheringAdmissionState.full => domain.GatheringAdmissionState.full,
-    cloud.GatheringAdmissionState.paused => domain.GatheringAdmissionState.paused,
-    cloud.GatheringAdmissionState.closed => domain.GatheringAdmissionState.closed,
+    cloud.GatheringAdmissionState.paused =>
+      domain.GatheringAdmissionState.paused,
+    cloud.GatheringAdmissionState.closed =>
+      domain.GatheringAdmissionState.closed,
   };
 }
 
@@ -517,22 +569,29 @@ domain.GatheringParticipationState _participationFromWire(
       domain.GatheringParticipationState.invitedPending,
     cloud.GatheringParticipationState.applicationPending =>
       domain.GatheringParticipationState.applicationPending,
-    cloud.GatheringParticipationState.active => domain.GatheringParticipationState.active,
+    cloud.GatheringParticipationState.active =>
+      domain.GatheringParticipationState.active,
     cloud.GatheringParticipationState.closed =>
       domain.GatheringParticipationState.closed,
   };
 }
 
-domain.GatheringOutcomeStatus _outcomeFromWire(cloud.GatheringOutcomeStatus value) {
+domain.GatheringOutcomeStatus _outcomeFromWire(
+  cloud.GatheringOutcomeStatus value,
+) {
   return switch (value) {
-    cloud.GatheringOutcomeStatus.occurred => domain.GatheringOutcomeStatus.occurred,
+    cloud.GatheringOutcomeStatus.occurred =>
+      domain.GatheringOutcomeStatus.occurred,
     cloud.GatheringOutcomeStatus.didNotHappen =>
       domain.GatheringOutcomeStatus.didNotHappen,
-    cloud.GatheringOutcomeStatus.endedEarly => domain.GatheringOutcomeStatus.endedEarly,
+    cloud.GatheringOutcomeStatus.endedEarly =>
+      domain.GatheringOutcomeStatus.endedEarly,
     cloud.GatheringOutcomeStatus.safetyTerminated =>
       domain.GatheringOutcomeStatus.safetyTerminated,
-    cloud.GatheringOutcomeStatus.disputed => domain.GatheringOutcomeStatus.disputed,
-    cloud.GatheringOutcomeStatus.unverified => domain.GatheringOutcomeStatus.unverified,
+    cloud.GatheringOutcomeStatus.disputed =>
+      domain.GatheringOutcomeStatus.disputed,
+    cloud.GatheringOutcomeStatus.unverified =>
+      domain.GatheringOutcomeStatus.unverified,
   };
 }
 
@@ -608,13 +667,15 @@ GatheringPrivateDetailSlice? privatePresentationFromWire(
     applications: const <GatheringApplicationInboxItemSlice>[],
     roster: const <GatheringRosterItemSlice>[],
     admissionPaused:
-        wire.admissionControl.status == cloud.GatheringAdmissionControlStatus.paused,
+        wire.admissionControl.status ==
+        cloud.GatheringAdmissionControlStatus.paused,
     admissionControlVersion: wire.admissionControl.version,
   );
 }
 
 String _scheduleLabel(cloud.GatheringSchedule schedule) {
-  final start = (schedule.startAt ?? DateTime.fromMillisecondsSinceEpoch(0)).toLocal();
+  final start = (schedule.startAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+      .toLocal();
   final end = (schedule.endAt ?? start).toLocal();
   return '${start.year}-${start.month.toString().padLeft(2, '0')}-'
       '${start.day.toString().padLeft(2, '0')} '
@@ -657,18 +718,21 @@ GatheringBoardCircleSlice gatheringBoardCircleFromPrivateWire(
       capability: GatheringBoardCapabilitySummary(
         state: GatheringBoardCapabilityState.unavailable,
         summaryLabel: 'plan',
-        unavailableReason: GatheringBoardCapabilityUnavailableReason.notConfigured,
+        unavailableReason:
+            GatheringBoardCapabilityUnavailableReason.notConfigured,
       ),
     ),
     mapCapability: const GatheringBoardCapabilitySummary(
       state: GatheringBoardCapabilityState.unavailable,
       summaryLabel: 'map',
-      unavailableReason: GatheringBoardCapabilityUnavailableReason.notConfigured,
+      unavailableReason:
+          GatheringBoardCapabilityUnavailableReason.notConfigured,
     ),
     calendarCapability: const GatheringBoardCapabilitySummary(
       state: GatheringBoardCapabilityState.unavailable,
       summaryLabel: 'calendar',
-      unavailableReason: GatheringBoardCapabilityUnavailableReason.notConfigured,
+      unavailableReason:
+          GatheringBoardCapabilityUnavailableReason.notConfigured,
     ),
   );
 }

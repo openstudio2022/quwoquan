@@ -140,6 +140,7 @@ def test_reliabletask_uses_governed_mongo_redis_reader_bound_to_frozen_jobs(
                 ),
                 "ref": f"ref-{carrier}",
                 "partitionKey": f"partition-{carrier}",
+                "maxAttempts": 3,
             }],
             "jobSetDigest": "sha256:" + "9" * 64,
             "envelopeDigest": "sha256:" + "8" * 64,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -282,6 +283,83 @@ func (s *MemoryStore) ClaimReadyTaskByID(ctx context.Context, taskID string, wor
 	task.UpdatedAt = now.UTC()
 	s.tasks[task.TaskID] = task
 	return &task, nil
+}
+
+func (s *MemoryStore) ClaimReadyTaskByIDWithFence(
+	ctx context.Context,
+	taskID string,
+	workerID string,
+	leaseTTL time.Duration,
+	now time.Time,
+	fence map[string]string,
+) (*ReliableAsyncTask, error) {
+	_ = ctx
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task, ok := s.tasks[strings.TrimSpace(taskID)]
+	if !ok {
+		return nil, nil
+	}
+	for key, expected := range fence {
+		if task.Payload[key] != expected {
+			return nil, nil
+		}
+	}
+	leaseExpired := !task.LeaseUntil.IsZero() && !task.LeaseUntil.After(now)
+	if !(task.Status == TaskStatusReady || task.Status == TaskStatusRetryWait || (task.Status == TaskStatusProcessing && leaseExpired)) || task.NextAttemptAt.After(now) {
+		return nil, nil
+	}
+	task.Status = TaskStatusProcessing
+	task.LeaseOwner = strings.TrimSpace(workerID)
+	task.LeaseToken = NewRecordID("lease")
+	task.LeaseUntil = now.Add(leaseTTL).UTC()
+	task.UpdatedAt = now.UTC()
+	s.tasks[task.TaskID] = task
+	return &task, nil
+}
+
+func (s *MemoryStore) AdvanceDataContentTaskFence(
+	ctx context.Context,
+	taskID string,
+	fence DataContentWorkerFence,
+	now time.Time,
+) (bool, error) {
+	_ = ctx
+	if err := fence.Validate(); err != nil {
+		return false, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	task, ok := s.tasks[strings.TrimSpace(taskID)]
+	if !ok {
+		return false, nil
+	}
+	current, _ := strconv.Atoi(task.Payload["workerHostGeneration"])
+	if current > fence.Generation {
+		return false, nil
+	}
+	if current == fence.Generation && current > 0 {
+		for key, value := range fence.payload() {
+			if task.Payload[key] != value {
+				return false, nil
+			}
+		}
+		return true, nil
+	}
+	if task.Status == TaskStatusSucceeded || task.Status == TaskStatusDead {
+		return false, nil
+	}
+	for key, value := range fence.payload() {
+		task.Payload[key] = value
+	}
+	task.Status = TaskStatusReady
+	task.LeaseOwner = ""
+	task.LeaseToken = ""
+	task.LeaseUntil = time.Time{}
+	task.NextAttemptAt = now.UTC()
+	task.UpdatedAt = now.UTC()
+	s.tasks[task.TaskID] = task
+	return true, nil
 }
 
 func (s *MemoryStore) ListReadyTasks(

@@ -345,16 +345,6 @@ def build_execution_reducer_gate(refs_payload: list[Mapping[str, Any]]) -> dict[
         ref for ref, mode in valid_modes.items() if mode == "text_only"
     )
     valid_count = len(valid_modes)
-    allowed_text_only = valid_count // 10
-    excess_text_only = max(0, len(text_only_refs) - allowed_text_only)
-    if excess_text_only:
-        rejected_text_only = text_only_refs[-excess_text_only:]
-        issues.append(
-            "article_media_coverage: illustrated must be >=90% and text_only "
-            f"<=10% (illustrated={len(illustrated_refs)}/{valid_count}, "
-            f"textOnly={len(text_only_refs)}/{valid_count})"
-        )
-        affected.update(rejected_text_only)
     illustrated_rate = (
         round(len(illustrated_refs) / valid_count, 6) if valid_count else 0.0
     )

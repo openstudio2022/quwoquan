@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/semantic_provider_preflight_receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schema",
+    "preflightProfile",
+    "receiptId",
+    "recordedAt",
+    "validUntil",
+    "semanticSelectionId",
+    "selectionDigest",
+    "provider",
+    "model",
+    "modelParameters",
+    "semanticRuntime",
+    "runtimeProfileId",
+    "runtimeProfileDigest",
+    "requiresNewRetryOf",
+    "fallbackPolicy",
+    "startupRequested",
+    "soakRequested",
+    "workspaceSmokeRequested",
+    "preflightReady",
+    "capacitySoakReady",
+    "workspaceSmokeReady",
+    "ready",
+    "semanticExecutionReady",
+    "evidenceDigest",
+    "evidence"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": { "const": "quwoquan_data.semantic_provider_preflight_receipt" },
+    "preflightProfile": { "const": "semantic" },
+    "receiptId": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "recordedAt": { "type": "string", "format": "date-time" },
+    "validUntil": { "type": "string", "format": "date-time" },
+    "semanticSelectionId": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "selectionDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "provider": { "enum": ["cursor_sdk", "codex_sdk"] },
+    "model": { "type": "string", "minLength": 1 },
+    "modelParameters": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["id", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "value": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "semanticRuntime": { "enum": ["local", "cloud"] },
+    "runtimeProfileId": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "runtimeProfileDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "requiresNewRetryOf": { "type": "boolean" },
+    "fallbackPolicy": { "const": "forbidden" },
+    "startupRequested": { "type": "boolean" },
+    "soakRequested": { "type": "boolean" },
+    "workspaceSmokeRequested": { "type": "boolean" },
+    "preflightReady": { "type": "boolean" },
+    "capacitySoakReady": { "type": "boolean" },
+    "workspaceSmokeReady": { "type": "boolean" },
+    "ready": { "type": "boolean" },
+    "semanticExecutionReady": { "type": "boolean" },
+    "evidenceDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ready",
+        "semanticSelectionId",
+        "selectionDigest",
+        "provider",
+        "model",
+        "modelParameters",
+        "semanticRuntime",
+        "runtimeProfileId",
+        "runtimeProfileDigest",
+        "requiresNewRetryOf",
+        "fallbackPolicy",
+        "runtime",
+        "credential",
+        "network",
+        "semanticAgentStartup",
+        "capacitySoak",
+        "workspaceSmoke",
+        "issues"
+      ],
+      "properties": {
+        "ready": { "type": "boolean" },
+        "semanticSelectionId": { "type": "string", "minLength": 1 },
+        "selectionDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "provider": { "enum": ["cursor_sdk", "codex_sdk"] },
+        "model": { "type": "string", "minLength": 1 },
+        "modelParameters": { "type": "array" },
+        "semanticRuntime": { "enum": ["local", "cloud"] },
+        "runtimeProfileId": { "type": "string", "minLength": 1 },
+        "runtimeProfileDigest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "requiresNewRetryOf": { "type": "boolean" },
+        "fallbackPolicy": { "const": "forbidden" },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ready", "python", "missing"],
+          "properties": {
+            "ready": { "type": "boolean" },
+            "python": { "type": ["string", "null"] },
+            "missing": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "credential": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "source", "present", "valid", "issues"],
+          "properties": {
+            "provider": { "type": ["string", "null"] },
+            "source": { "type": "string" },
+            "present": { "type": "boolean" },
+            "valid": { "type": "boolean" },
+            "issues": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["checked", "ready", "skipped", "issues"],
+          "properties": {
+            "checked": { "type": "boolean" },
+            "ready": { "type": "boolean" },
+            "skipped": { "type": "boolean" },
+            "issues": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "semanticAgentStartup": { "$ref": "#/$defs/startupEvidence" },
+        "capacitySoak": { "$ref": "#/$defs/capacityEvidence" },
+        "workspaceSmoke": { "$ref": "#/$defs/workspaceEvidence" },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "$defs": {
+    "startupEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "checked", "ready", "runtime", "model", "agentId", "runId", "sdkVersion", "issues"],
+      "properties": {
+        "provider": { "type": ["string", "null"] },
+        "checked": { "type": "boolean" },
+        "ready": { "type": "boolean" },
+        "runtime": { "type": ["string", "null"] },
+        "model": { "type": ["string", "null"] },
+        "agentId": { "type": ["string", "null"] },
+        "runId": { "type": ["string", "null"] },
+        "sdkVersion": { "type": ["string", "null"] },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "capacityEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semanticSelectionId", "selectionDigest", "provider", "model", "modelParameters", "runtimeProfileDigest", "ready", "attempts", "successCount", "effectiveConcurrency", "bridgeDisconnectCount", "probeJobsPerHour", "startupLatencyP95", "modelCatalog", "runs", "issues"],
+      "properties": {
+        "semanticSelectionId": { "type": ["string", "null"] },
+        "selectionDigest": { "type": ["string", "null"] },
+        "provider": { "type": ["string", "null"] },
+        "model": { "type": ["string", "null"] },
+        "modelParameters": { "type": "array" },
+        "runtimeProfileDigest": { "type": ["string", "null"] },
+        "ready": { "type": "boolean" },
+        "attempts": { "type": ["integer", "null"] },
+        "successCount": { "type": ["integer", "null"] },
+        "effectiveConcurrency": { "type": ["integer", "null"] },
+        "bridgeDisconnectCount": { "type": ["integer", "null"] },
+        "probeJobsPerHour": { "type": ["number", "null"] },
+        "startupLatencyP95": { "type": ["number", "null"] },
+        "modelCatalog": { "type": "object" },
+        "runs": { "type": "array" },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "workspaceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ready", "workspaceCount", "successCount", "configuredConcurrency", "effectiveConcurrency", "elapsedSeconds", "cleanupStatus", "runs", "issues"],
+      "properties": {
+        "ready": { "type": "boolean" },
+        "workspaceCount": { "type": ["integer", "null"] },
+        "successCount": { "type": ["integer", "null"] },
+        "configuredConcurrency": { "type": ["integer", "null"] },
+        "effectiveConcurrency": { "type": ["integer", "null"] },
+        "elapsedSeconds": { "type": ["number", "null"] },
+        "cleanupStatus": { "type": ["string", "null"] },
+        "runs": { "type": "array" },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

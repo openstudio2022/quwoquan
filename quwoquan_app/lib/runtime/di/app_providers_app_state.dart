@@ -62,6 +62,22 @@ final resolvedOwnerUserIdProvider = Provider<String>((ref) {
   return ref.watch(currentUserIdProvider).trim();
 });
 
+/// 当前命令 actor 的已认证 Persona ID。
+///
+/// Command header 必须能在 App 冷启动后的第一条用户意图中立即构造，不能等待
+/// 另一次 Persona projection query。认证 grant 中的 activePersonaId 是该时刻的
+/// canonical actor；环境编译值只保留给尚未建立认证会话的只读兼容路径。
+final resolvedActivePersonaIdProvider = Provider<String>((ref) {
+  final sessionPersonaId = ref
+      .watch(authSessionControllerProvider)
+      .activePersonaId
+      .trim();
+  if (sessionPersonaId.isNotEmpty) {
+    return sessionPersonaId;
+  }
+  return ref.watch(currentUserIdProvider).trim();
+});
+
 /// 响应式Provider
 final responsiveProvider =
     NotifierProvider<ResponsiveNotifier, ResponsiveState>(() {

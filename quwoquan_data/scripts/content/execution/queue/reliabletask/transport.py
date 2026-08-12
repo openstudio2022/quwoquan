@@ -248,14 +248,33 @@ def reliabletask_fleet_preflight() -> dict[str, object]:
     with _fleet_status_guard():
         if str(os.environ.get(CAMPAIGN_ROOT_ENV) or "").strip():
             binding = _campaign_fleet_binding_from_environment()
+            document = _stackctl_fleet_document("--action", "status")
+            actual = ReliableTaskFleetTransport.from_document(document.get("fleet"))
+            evidence = document.get("evidence")
+            if not isinstance(evidence, Mapping):
+                raise RuntimeError("ReliableTask fleet status omitted typed evidence")
+            mongo_ready = evidence.get("mongo") is True
+            redis_ready = evidence.get("redis") is True
+            owned = evidence.get("owned") is True
+            ready = bool(
+                actual == binding.transport
+                and evidence.get("ready") is True
+                and mongo_ready
+                and redis_ready
+                and owned
+            )
             return {
                 "checked": True,
-                "ready": True,
+                "ready": ready,
                 "target": binding.transport.target,
-                "mongo": True,
-                "redis": True,
-                "owned": True,
-                "issues": [],
+                "mongo": mongo_ready,
+                "redis": redis_ready,
+                "owned": owned,
+                "issues": (
+                    []
+                    if ready
+                    else ["dedicated ReliableTask fleet is not writable"]
+                ),
             }
         document = _stackctl_fleet_document("--action", "status")
         transport = ReliableTaskFleetTransport.from_document(document.get("fleet"))
@@ -274,6 +293,61 @@ def reliabletask_fleet_preflight() -> dict[str, object]:
             "redis": redis_ready,
             "owned": owned,
             "issues": issues,
+        }
+
+
+def require_pool_delivery_fleet_transport() -> ReliableTaskFleetTransport:
+    """Resolve the Data-owned fleet without trusting transient lane environment.
+
+    Pool delivery may be drained after the semantic campaign process exited, so
+    its topology proof must come from the Ops status document itself.  This is
+    deliberately read-only and never reconciles or starts the fleet.
+    """
+
+    document = _stackctl_fleet_document("--action", "status")
+    transport = ReliableTaskFleetTransport.from_document(document.get("fleet"))
+    evidence = document.get("evidence")
+    if not (
+        transport.target == "data-local"
+        and isinstance(evidence, Mapping)
+        and evidence.get("ready") is True
+        and evidence.get("mongo") is True
+        and evidence.get("redis") is True
+        and evidence.get("owned") is True
+    ):
+        raise RuntimeError("Data pool delivery fleet is not writable")
+    return transport
+
+
+def pool_delivery_fleet_preflight(
+    expected: ReliableTaskFleetTransport,
+) -> dict[str, object]:
+    """Read back the exact transport frozen for one pool-delivery epoch."""
+
+    with _fleet_status_guard():
+        document = _stackctl_fleet_document("--action", "status")
+        actual = ReliableTaskFleetTransport.from_document(document.get("fleet"))
+        evidence = document.get("evidence")
+        if not isinstance(evidence, Mapping):
+            raise RuntimeError("ReliableTask fleet status omitted typed evidence")
+        mongo_ready = evidence.get("mongo") is True
+        redis_ready = evidence.get("redis") is True
+        owned = evidence.get("owned") is True
+        ready = bool(
+            actual == expected
+            and expected.target == "data-local"
+            and evidence.get("ready") is True
+            and mongo_ready
+            and redis_ready
+            and owned
+        )
+        return {
+            "ready": ready,
+            "target": expected.target,
+            "mongo": mongo_ready,
+            "redis": redis_ready,
+            "owned": owned,
+            "issues": [] if ready else ["dedicated Data pool delivery fleet is not writable"],
         }
 
 

@@ -162,15 +162,45 @@ def test_discovery_strategy_is_content_first_not_author_first():
     assert pinterest_profile["attributionPublish"]["allowed"] is True
 
 
+def test_article_discovery_is_site_first_and_creator_expansion_revalidates_every_work():
+    sites = {
+        str(site.get("siteId")): site
+        for site in load_travel_source_registry().get("sites", [])
+        if isinstance(site, dict)
+    }
+    for site_id in ("wikipedia_zh", "wikivoyage_zh", "qunar_guide"):
+        strategy = sites[site_id]["siteCrawlProfile"]["discoveryStrategy"]
+        assert strategy["priority"] == "site_direct_first"
+    assert (
+        sites["ctrip_sight_guide"]["siteCrawlProfile"]["discoveryStrategy"][
+            "priority"
+        ]
+        == "search_supplement_after_site_direct_shortfall"
+    )
+    for site_id in (
+        "wikipedia_zh",
+        "wikivoyage_zh",
+        "ctrip_sight_guide",
+        "qunar_guide",
+    ):
+        expansion = sites[site_id]["siteCrawlProfile"]["creatorExpansion"]
+        assert expansion["stableCreatorIdRequired"] is True
+        assert expansion["perWorkEntityRevalidationRequired"] is True
+    qunar = sites["qunar_guide"]["siteCrawlProfile"]["creatorExpansion"]
+    assert qunar["policy"] == "reference_search_fallback"
+    assert qunar["catalogCompletenessClaim"] == "visible_public_results_at_observed_at"
+
+
 def test_article_commercial_onboarding_summary_is_explicit():
     summary = build_article_commercial_onboarding_summary()
     counts = summary["admissionCounts"]
-    assert summary["siteCount"] == 8, summary
-    assert counts["commercial_release"] == 3, summary
+    assert summary["siteCount"] == 9, summary
+    assert counts["commercial_release"] == 4, summary
     assert counts["controlled_trial"] == 2, summary
     assert counts["reference_only"] == 3, summary
     assert counts["blocked"] == 0, summary
     assert set(summary["sharedCommercialPoolSites"]) == {
+        "wikipedia_zh",
         "wikivoyage_zh",
         "qunar_guide",
         "ctrip_sight_guide",

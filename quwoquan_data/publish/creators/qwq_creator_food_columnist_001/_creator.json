@@ -1,0 +1,13 @@
+{
+  "schema": "quwoquan_data.creator_object",
+  "creatorId": "qwq_creator_food_columnist_001",
+  "profileRef": "profile.json",
+  "assetsRef": "assets.refs.json",
+  "worksRefsRef": "works.refs.ndjson",
+  "tagRefs": [
+    "Format/内容角度/科普/知识科普",
+    "Topic/美食餐饮/特色食材/应季食材",
+    "Topic/美食餐饮/菜系/中国菜系"
+  ],
+  "entityRefs": []
+}

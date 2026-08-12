@@ -1,5 +1,121 @@
 part of 'search_network_results_page.dart';
 
+class _SearchPageFlatCard extends StatelessWidget {
+  const _SearchPageFlatCard({
+    required this.item,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  final SearchPageResultItem item;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final surface = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.surfaceElevated,
+    );
+    final border = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.separatorSubtle,
+    );
+    final primary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final secondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final detail = item.subtitle?.trim().isNotEmpty == true
+        ? item.subtitle!.trim()
+        : item.snippet?.trim();
+    final thumbnail = item.thumbnailUrl?.trim() ?? '';
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(
+          AppSpacing.contentPreviewCornerRadius,
+        ),
+        border: Border.all(color: border),
+      ),
+      child: CupertinoButton(
+        key: ValueKey<String>('search_page_result_action_${item.objectRef}'),
+        padding: EdgeInsets.all(AppSpacing.containerSm),
+        minimumSize: const Size(
+          AppSpacing.minInteractiveSize,
+          AppSpacing.minInteractiveSize,
+        ),
+        onPressed: onTap,
+        child: Row(
+          children: <Widget>[
+            SizedBox.square(
+              dimension: AppSpacing.avatarUserLg,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppSpacing.containerXs),
+                child: thumbnail.isEmpty
+                    ? ColoredBox(
+                        color: AppColors.primaryColor.withValues(alpha: 0.08),
+                        child: Icon(
+                          CupertinoIcons.search,
+                          color: AppColors.primaryColor,
+                          size: AppSpacing.iconMedium,
+                        ),
+                      )
+                    : AppCachedNetworkImage(
+                        imageUrl: thumbnail,
+                        fit: BoxFit.cover,
+                        cdnPreset: CdnImagePreset.thumbnail,
+                        placeholder: const SizedBox.shrink(),
+                        errorWidget: const SizedBox.shrink(),
+                      ),
+              ),
+            ),
+            SizedBox(width: AppSpacing.containerSm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: primary,
+                      fontSize: AppTypography.iosBody,
+                      fontWeight: AppTypography.semiBold,
+                    ),
+                  ),
+                  if (detail != null && detail.isNotEmpty) ...<Widget>[
+                    SizedBox(height: AppSpacing.two),
+                    Text(
+                      detail,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: secondary,
+                        fontSize: AppTypography.iosCaption1,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(width: AppSpacing.intraGroupXs),
+            Icon(
+              CupertinoIcons.chevron_forward,
+              color: secondary,
+              size: AppSpacing.iconSmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _IntersectionCardPlaceholder extends StatelessWidget {
   const _IntersectionCardPlaceholder({required this.icon});
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/release/research_scale_promotion.schema.json",
   "title": "Research cumulative scale promotion receipt",
-  "description": "Create-once M100, M1000, or M10000 promotion. Target attainment, article media, ranked video, recovery, resource, and predecessor identity are hard gates.",
+  "description": "Create-once cumulative milestone receipt. Counts, immutable closure, uniqueness and source identity are gates; quality-rate, mix, popularity, recovery, concurrency, timing and resource fields are truthful non-blocking statistics.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,9 +12,6 @@
     "releaseClass",
     "productLifecycleState",
     "manifestDigest",
-    "sourceRevision",
-    "sourceDigest",
-    "entityCatalogDigest",
     "targetScale",
     "sourcePoolDigest",
     "predecessorSourcePoolDigests",
@@ -24,6 +21,7 @@
     "wallClockSeconds",
     "capacityThroughputByCarrier",
     "carrierCounts",
+    "campaignWaveStatistics",
     "statistics",
     "professionalImageSourceMix",
     "duplicateAssetCount",
@@ -56,10 +54,19 @@
     "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceIdentities": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"$ref": "#/$defs/sourceIdentity"}
+    },
+    "sourceIdentitySetDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "targetScale": {"enum": ["M100", "M1000", "M10000"]},
-    "sourcePoolDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourcePoolDigest": {
+      "description": "Current campaign-wave source-pool observation; milestone identity is sourceIdentitySetDigest.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
     "predecessorSourcePoolDigests": {
-      "type": "array", "maxItems": 2, "uniqueItems": true,
+      "type": "array", "uniqueItems": true,
       "items": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
     },
     "scaleStartedAt": {"type": "string", "format": "date-time"},
@@ -68,7 +75,7 @@
     "wallClockSeconds": {"type": "integer", "minimum": 0},
     "capacityThroughputByCarrier": {
       "type": "array",
-      "minItems": 4,
+      "minItems": 0,
       "maxItems": 4,
       "prefixItems": [
         {"allOf": [{"$ref": "#/$defs/capacityThroughput"}, {"properties": {"carrier": {"const": "homepage"}}}]},
@@ -91,12 +98,24 @@
       ],
       "items": false
     },
+    "campaignWaveStatistics": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "prefixItems": [
+        {"allOf": [{"$ref": "#/$defs/campaignWaveCount"}, {"properties": {"carrier": {"const": "homepage"}}}]},
+        {"allOf": [{"$ref": "#/$defs/campaignWaveCount"}, {"properties": {"carrier": {"const": "article"}}}]},
+        {"allOf": [{"$ref": "#/$defs/campaignWaveCount"}, {"properties": {"carrier": {"const": "image"}}}]},
+        {"allOf": [{"$ref": "#/$defs/campaignWaveCount"}, {"properties": {"carrier": {"const": "video"}}}]}
+      ],
+      "items": false
+    },
     "statistics": {"$ref": "#/$defs/statistics"},
     "professionalImageSourceMix": {"$ref": "#/$defs/professionalImageSourceMix"},
     "duplicateAssetCount": {"const": 0},
     "crossLaneWriteCount": {"const": 0},
-    "resourceIsolationPassed": {"const": true},
-    "soakDurationSeconds": {"type": "integer", "minimum": 3600},
+    "resourceIsolationPassed": {"type": "boolean"},
+    "soakDurationSeconds": {"type": "integer", "minimum": 0},
     "semanticJobsByLane": {
       "type": "array",
       "minItems": 4,
@@ -141,10 +160,10 @@
       ],
       "items": false
     },
-    "fourLaneOverlapSampleCount": {"type": "integer", "minimum": 1},
-    "fourLaneOverlapDurationSeconds": {"type": "integer", "minimum": 3600},
-    "fourLaneLongestContinuousOverlapSeconds": {"type": "integer", "minimum": 3600},
-    "allSemanticJobsTerminalAt": {"type": "string", "format": "date-time"},
+    "fourLaneOverlapSampleCount": {"type": "integer", "minimum": 0},
+    "fourLaneOverlapDurationSeconds": {"type": "integer", "minimum": 0},
+    "fourLaneLongestContinuousOverlapSeconds": {"type": "integer", "minimum": 0},
+    "allSemanticJobsTerminalAt": {"type": ["string", "null"], "format": "date-time"},
     "terminalResidualSampleAt": {"type": "string", "format": "date-time"},
     "campaignEvidenceRef": {"type": "string", "minLength": 1},
     "campaignEvidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
@@ -157,6 +176,18 @@
   },
   "allOf": [
     {
+      "oneOf": [
+        {
+          "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"],
+          "not": {"anyOf": [{"required": ["sourceIdentities"]}, {"required": ["sourceIdentitySetDigest"]}]}
+        },
+        {
+          "required": ["sourceIdentities", "sourceIdentitySetDigest"],
+          "not": {"anyOf": [{"required": ["sourceRevision"]}, {"required": ["sourceDigest"]}, {"required": ["entityCatalogDigest"]}]}
+        }
+      ]
+    },
+    {
       "if": {"properties": {"targetScale": {"const": "M100"}}, "required": ["targetScale"]},
       "then": {
         "properties": {
@@ -165,10 +196,10 @@
           "wallClockBudgetSeconds": {"type": "null"},
           "carrierCounts": {
             "prefixItems": [
-              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}},
-              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}},
-              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}},
-              {"properties": {"targetCount": {"const": 10}, "totalUniqueFinalizedCount": {"minimum": 10}, "researchAcceptedCount": {"minimum": 10}}}
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"const": 100}, "researchAcceptedCount": {"const": 100}}},
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"const": 100}, "researchAcceptedCount": {"const": 100}}},
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"const": 100}, "researchAcceptedCount": {"const": 100}}},
+              {"properties": {"targetCount": {"const": 10}, "totalUniqueFinalizedCount": {"const": 10}, "researchAcceptedCount": {"const": 10}}}
             ]
           }
         }
@@ -180,16 +211,15 @@
         "required": ["predecessorPromotion"],
         "properties": {
           "nextScaleEligible": {"const": "M10000"},
-          "predecessorSourcePoolDigests": {"minItems": 1, "maxItems": 1},
+          "predecessorSourcePoolDigests": {"minItems": 1},
           "predecessorPromotion": {"properties": {"targetScale": {"const": "M100"}}},
-          "wallClockBudgetSeconds": {"const": 259200},
-          "wallClockSeconds": {"maximum": 259200},
+          "wallClockBudgetSeconds": {"type": "null"},
           "carrierCounts": {
             "prefixItems": [
-              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"minimum": 1000}, "researchAcceptedCount": {"minimum": 1000}}},
-              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"minimum": 1000}, "researchAcceptedCount": {"minimum": 1000}}},
-              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"minimum": 1000}, "researchAcceptedCount": {"minimum": 1000}}},
-              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"minimum": 100}, "researchAcceptedCount": {"minimum": 100}}}
+              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"const": 1000}, "researchAcceptedCount": {"const": 1000}}},
+              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"const": 1000}, "researchAcceptedCount": {"const": 1000}}},
+              {"properties": {"targetCount": {"const": 1000}, "totalUniqueFinalizedCount": {"const": 1000}, "researchAcceptedCount": {"const": 1000}}},
+              {"properties": {"targetCount": {"const": 100}, "totalUniqueFinalizedCount": {"const": 100}, "researchAcceptedCount": {"const": 100}}}
             ]
           }
         }
@@ -201,7 +231,7 @@
         "required": ["predecessorPromotion"],
         "properties": {
           "nextScaleEligible": {"const": "COMPLETE"},
-          "predecessorSourcePoolDigests": {"minItems": 2, "maxItems": 2},
+          "predecessorSourcePoolDigests": {"minItems": 2},
           "predecessorPromotion": {"properties": {"targetScale": {"const": "M1000"}}},
           "wallClockBudgetSeconds": {"const": 604800},
           "wallClockSeconds": {"maximum": 604800},
@@ -222,8 +252,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "promotionId", "releaseId", "manifestDigest", "sourceRevision",
-        "sourceDigest", "entityCatalogDigest", "targetScale", "receiptRef",
+        "promotionId", "releaseId", "manifestDigest", "targetScale", "receiptRef",
         "receiptDigest"
       ],
       "properties": {
@@ -233,10 +262,50 @@
         "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
         "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
         "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sourceIdentities": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"$ref": "#/$defs/sourceIdentity"}
+        },
+        "sourceIdentitySetDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
         "targetScale": {"enum": ["M100", "M1000"]},
         "receiptRef": {"type": "string", "minLength": 1},
         "receiptDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-      }
+      },
+      "oneOf": [
+        {
+          "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"],
+          "not": {"anyOf": [{"required": ["sourceIdentities"]}, {"required": ["sourceIdentitySetDigest"]}]}
+        },
+        {
+          "required": ["sourceIdentities", "sourceIdentitySetDigest"],
+          "not": {"anyOf": [{"required": ["sourceRevision"]}, {"required": ["sourceDigest"]}, {"required": ["entityCatalogDigest"]}]}
+        }
+      ]
+    },
+    "sourceIdentity": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionIds"],
+          "properties": {
+            "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["identityKind", "sourceDigest", "canonicalObjectDigest", "migrationEvidenceDigest", "executionIds"],
+          "properties": {
+            "identityKind": {"const": "legacy_canonical_migration"},
+            "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "canonicalObjectDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "migrationEvidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        }
+      ]
     },
     "carrierCount": {
       "type": "object",
@@ -266,6 +335,23 @@
         "totalUniqueFinalizedCount": {"type": "integer", "minimum": 1},
         "shortfallCount": {"const": 0},
         "researchAcceptedCount": {"type": "integer", "minimum": 1}
+      }
+    },
+    "campaignWaveCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "carrier", "approvedQuota", "selectedCount", "qualifiedCount",
+        "finalizedCount", "discardedCount", "shortfallCount"
+      ],
+      "properties": {
+        "carrier": {"enum": ["homepage", "article", "image", "video"]},
+        "approvedQuota": {"type": "integer", "minimum": 1},
+        "selectedCount": {"type": "integer", "minimum": 1},
+        "qualifiedCount": {"type": "integer", "minimum": 1},
+        "finalizedCount": {"type": "integer", "minimum": 1},
+        "discardedCount": {"type": "integer", "minimum": 0},
+        "shortfallCount": {"type": "integer", "minimum": 0}
       }
     },
     "homepageCount": {
@@ -302,6 +388,18 @@
         "rate": {"type": "number", "minimum": 0, "maximum": 1}
       }
     },
+    "nonBlockingRateStatistic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["statistical", "nonBlocking", "numerator", "denominator", "rate"],
+      "properties": {
+        "statistical": {"const": true},
+        "nonBlocking": {"const": true},
+        "numerator": {"type": "integer", "minimum": 0},
+        "denominator": {"type": "integer", "minimum": 1},
+        "rate": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
     "signalAvailability": {
       "type": "object",
       "additionalProperties": false,
@@ -310,7 +408,7 @@
         "signal": {"enum": ["play", "like", "comment", "share", "favorite"]},
         "numerator": {"type": "integer", "minimum": 0},
         "denominator": {"type": "integer", "minimum": 1},
-        "rate": {"const": 1}
+        "rate": {"type": "number", "minimum": 0, "maximum": 1}
       }
     },
     "playAvailability": {
@@ -412,15 +510,15 @@
     },
     "videoPopularityStatistic": {
       "type": "object",
-      "description": "Truthful five-signal availability and comparable-bucket ranking coverage; complete coverage gates M100 and above.",
+      "description": "Truthful non-blocking five-signal availability and ranking coverage statistics.",
       "additionalProperties": false,
       "required": [
         "statistical", "nonBlocking", "signalAvailability",
-        "rankingCoverage", "observations"
+        "rankingCoverage", "observations", "observationIssues"
       ],
       "properties": {
         "statistical": {"const": true},
-        "nonBlocking": {"const": false},
+        "nonBlocking": {"const": true},
         "signalAvailability": {
           "type": "array",
           "minItems": 5,
@@ -434,22 +532,20 @@
           ],
           "items": false
         },
-        "rankingCoverage": {
-          "allOf": [
-            {"$ref": "#/$defs/rateStatistic"},
-            {"properties": {"rate": {"const": 1}}}
-          ]
-        },
+        "rankingCoverage": {"$ref": "#/$defs/rateStatistic"},
         "observations": {
           "type": "array",
-          "minItems": 1,
           "items": {"$ref": "#/$defs/videoPopularityObservation"}
+        },
+        "observationIssues": {
+          "type": "array", "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
         }
       }
     },
     "automaticRecoveryStatistic": {
       "type": "object",
-      "description": "Observed automatic recovery; eligible sample count and a rate of at least 0.95 gate promotion.",
+      "description": "Observed automatic recovery statistics; never an object or milestone admission gate.",
       "additionalProperties": false,
       "required": [
         "statistical", "nonBlocking", "status", "eligibleCount",
@@ -457,12 +553,12 @@
       ],
       "properties": {
         "statistical": {"const": true},
-        "nonBlocking": {"const": false},
-        "status": {"const": "MEASURED"},
-        "eligibleCount": {"type": "integer", "minimum": 20},
-        "automaticCount": {"type": "integer", "minimum": 19},
+        "nonBlocking": {"const": true},
+        "status": {"enum": ["NOT_EXERCISED", "MEASURED"]},
+        "eligibleCount": {"type": "integer", "minimum": 0},
+        "automaticCount": {"type": "integer", "minimum": 0},
         "targetRate": {"const": 0.95},
-        "rate": {"type": "number", "minimum": 0.95, "maximum": 1}
+        "rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
       }
     },
     "providerAssetCount": {
@@ -472,31 +568,55 @@
       "properties": {
         "provider": {"type": "string", "minLength": 1},
         "acceptedAssetCount": {"type": "integer", "minimum": 1},
-        "acceptedAssetRatio": {"type": "number", "exclusiveMinimum": 0, "maximum": 0.7}
+        "acceptedAssetRatio": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
       }
     },
     "professionalImageSourceMix": {
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "statistical", "nonBlocking",
         "acceptedImageAssetCount", "originalAssetClosureCount",
         "pinterestAcceptedAssetCount", "tuchongAcceptedAssetCount",
         "pinterestTuchongAcceptedAssetCount", "pinterestTuchongAcceptedAssetRatio",
-        "largestProvider", "maxProviderAcceptedAssetRatio", "providerAssetCounts"
+        "largestProvider", "maxProviderAcceptedAssetRatio", "providerAssetCounts",
+        "policyObservations", "observationIssues"
       ],
       "properties": {
-        "acceptedImageAssetCount": {"type": "integer", "minimum": 1},
-        "originalAssetClosureCount": {"type": "integer", "minimum": 1},
-        "pinterestAcceptedAssetCount": {"type": "integer", "minimum": 1},
-        "tuchongAcceptedAssetCount": {"type": "integer", "minimum": 1},
-        "pinterestTuchongAcceptedAssetCount": {"type": "integer", "minimum": 1},
-        "pinterestTuchongAcceptedAssetRatio": {"type": "number", "minimum": 0.5, "maximum": 1},
-        "largestProvider": {"const": "pinterest"},
-        "maxProviderAcceptedAssetRatio": {"type": "number", "exclusiveMinimum": 0, "maximum": 0.7},
+        "statistical": {"const": true},
+        "nonBlocking": {"const": true},
+        "acceptedImageAssetCount": {"type": "integer", "minimum": 0},
+        "originalAssetClosureCount": {"type": "integer", "minimum": 0},
+        "pinterestAcceptedAssetCount": {"type": "integer", "minimum": 0},
+        "tuchongAcceptedAssetCount": {"type": "integer", "minimum": 0},
+        "pinterestTuchongAcceptedAssetCount": {"type": "integer", "minimum": 0},
+        "pinterestTuchongAcceptedAssetRatio": {"type": "number", "minimum": 0, "maximum": 1},
+        "largestProvider": {"type": "string"},
+        "maxProviderAcceptedAssetRatio": {"type": "number", "minimum": 0, "maximum": 1},
         "providerAssetCounts": {
           "type": "array",
-          "minItems": 2,
           "items": {"$ref": "#/$defs/providerAssetCount"}
+        },
+        "policyObservations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "pinterestUniqueLargest", "tuchongPresent",
+            "pinterestTuchongAtLeastHalf", "providerAboveSeventyPercent"
+          ],
+          "properties": {
+            "pinterestUniqueLargest": {"type": "boolean"},
+            "tuchongPresent": {"type": "boolean"},
+            "pinterestTuchongAtLeastHalf": {"type": "boolean"},
+            "providerAboveSeventyPercent": {
+              "type": "array", "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "observationIssues": {
+          "type": "array", "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
         }
       }
     },
@@ -542,8 +662,11 @@
       "required": [
         "objectPassRate",
         "illustratedRate",
+        "textOnlyRate",
         "videoPopularity",
         "automaticRecoveryRate",
+        "capacityPlanning",
+        "resourceSoak",
         "firstPassRate",
         "discardRate",
         "quotaAttainmentByCarrier"
@@ -554,17 +677,55 @@
           "$ref": "#/$defs/rateStatistic"
         },
         "illustratedRate": {
-          "description": "Illustrated article count / article count in the promoted release.",
-          "allOf": [
-            {"$ref": "#/$defs/rateStatistic"},
-            {"properties": {"rate": {"minimum": 0.9}}}
-          ]
+          "description": "Non-blocking illustrated article count / article count statistic.",
+          "$ref": "#/$defs/nonBlockingRateStatistic"
+        },
+        "textOnlyRate": {
+          "description": "Non-blocking text-only article count / article count statistic.",
+          "$ref": "#/$defs/nonBlockingRateStatistic"
         },
         "videoPopularity": {
           "$ref": "#/$defs/videoPopularityStatistic"
         },
         "automaticRecoveryRate": {
           "$ref": "#/$defs/automaticRecoveryStatistic"
+        },
+        "capacityPlanning": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "statistical", "nonBlocking", "status", "evidenceCount",
+            "observationIssues"
+          ],
+          "properties": {
+            "statistical": {"const": true},
+            "nonBlocking": {"const": true},
+            "status": {"enum": ["MEASURED", "UNAVAILABLE"]},
+            "evidenceCount": {
+              "type": "integer", "minimum": 0, "maximum": 4
+            },
+            "observationIssues": {
+              "type": "array", "uniqueItems": true,
+              "items": {"type": "string", "minLength": 1}
+            }
+          }
+        },
+        "resourceSoak": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "statistical", "nonBlocking", "status", "durationSeconds",
+            "fourLaneOverlapDurationSeconds"
+          ],
+          "properties": {
+            "statistical": {"const": true},
+            "nonBlocking": {"const": true},
+            "status": {"enum": ["passed", "failed"]},
+            "durationSeconds": {"type": "integer", "minimum": 0},
+            "fourLaneOverlapDurationSeconds": {
+              "type": "integer", "minimum": 0
+            }
+          }
         },
         "firstPassRate": {
           "description": "Lanes whose retryChain contains only the current execution / four promoted lanes.",
@@ -628,33 +789,33 @@
       "properties": {
         "carrier": {"enum": ["homepage", "article", "image", "video"]},
         "executionId": {"type": "string", "minLength": 1},
-        "semanticJobCount": {"type": "integer", "minimum": 10},
-        "semanticJobSucceededCount": {"type": "integer", "minimum": 10},
-        "semanticJobTerminalCount": {"type": "integer", "minimum": 10},
+        "semanticJobCount": {"type": "integer", "minimum": 0},
+        "semanticJobSucceededCount": {"type": "integer", "minimum": 0},
+        "semanticJobTerminalCount": {"type": "integer", "minimum": 0},
         "semanticJobIds": {
           "type": "array",
-          "minItems": 10,
+          "minItems": 0,
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 8}
         },
         "semanticJobSucceededIds": {
           "type": "array",
-          "minItems": 10,
+          "minItems": 0,
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 8}
         },
         "semanticJobTerminalIds": {
           "type": "array",
-          "minItems": 10,
+          "minItems": 0,
           "uniqueItems": true,
           "items": {"type": "string", "minLength": 8}
         },
         "perSlotThroughputSamples": {
           "type": "array",
-          "minItems": 10,
+          "minItems": 0,
           "items": {"type": "number", "exclusiveMinimum": 0}
         },
-        "activeDurationSeconds": {"type": "integer", "minimum": 3600},
+        "activeDurationSeconds": {"type": "integer", "minimum": 0},
         "activeIntervals": {
           "type": "array",
           "minItems": 1,

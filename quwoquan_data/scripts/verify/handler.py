@@ -100,7 +100,10 @@ def handle_verify(args: argparse.Namespace) -> None:
     if cmd == "source-digest":
         from verify.verify_source_digest import main as source_digest_main
 
-        raise SystemExit(source_digest_main([]))
+        argv = []
+        if getattr(args, "source_execution_id", None):
+            argv.extend(["--execution-id", str(args.source_execution_id)])
+        raise SystemExit(source_digest_main(argv))
     if cmd == "execution-identity-purity":
         from verify.verify_execution_identity_purity import main as identity_purity_main
 
@@ -479,7 +482,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("script-architecture", help="校验脚本目录职责、模块尺寸与 core 依赖方向")
     sub.add_parser("python-symbols", help="校验 Data Python 运行时符号均有明确所有者")
     sub.add_parser("control-literals", help="校验双省链路控制字面量只有一个真相源")
-    sub.add_parser("source-digest", help="校验 execution/release 只记录仓内输入的不可变摘要")
+    source_digest = sub.add_parser(
+        "source-digest",
+        help="校验 candidate source-definition snapshot 与 execution bundle",
+    )
+    source_digest.add_argument("--execution-id", dest="source_execution_id")
     sub.add_parser("execution-identity-purity", help="校验 active code 已删除旧运行身份与旧路径")
     release_lifecycle = sub.add_parser("release-lifecycle", help="校验 immutable release 的闭环证据")
     release_lifecycle.add_argument("--release", dest="lifecycle_release", required=True)

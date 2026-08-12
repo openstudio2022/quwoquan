@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_network_admission.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "revision", "syntheticDnsCidrs", "allowedExactHosts",
+    "allowedHostSuffixes", "tls"
+  ],
+  "properties": {
+    "schema": {"const": "quwoquan_data.professional_image_network_admission"},
+    "revision": {"const": "professional-image-network-admission-v1"},
+    "syntheticDnsCidrs": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"const": "198.18.0.0/15"}
+    },
+    "allowedExactHosts": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9.-]+$"}
+    },
+    "allowedHostSuffixes": {
+      "type": "array", "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9.-]+$"}
+    },
+    "tls": {
+      "type": "object", "additionalProperties": false,
+      "required": ["minimumVersion", "systemTrustRequired", "hostnameVerificationRequired"],
+      "properties": {
+        "minimumVersion": {"const": "TLSv1.2"},
+        "systemTrustRequired": {"const": true},
+        "hostnameVerificationRequired": {"const": true}
+      }
+    }
+  }
+}

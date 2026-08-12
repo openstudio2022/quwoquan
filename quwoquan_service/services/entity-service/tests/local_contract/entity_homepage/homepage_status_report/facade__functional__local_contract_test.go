@@ -1,6 +1,8 @@
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
+// spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-002
 // readiness_case: list-homepage-status-reports-local
 // readiness_case: create-homepage-status-report-local
+// readiness_case: get-my-pending-homepage-status-report-local
 // readiness_case: review-homepage-status-report-local
 package local_contract
 
@@ -322,6 +324,40 @@ func TestStatusReportGovernanceQueueReturnsPendingEvidence(t *testing.T) {
 		len(page.Items[0].EvidenceURLs) != 1 ||
 		page.Items[0].Description == "" {
 		t.Fatalf("governance queue must preserve report evidence: %+v", page)
+	}
+}
+
+func TestStatusReporterReadsOnlyOwnPendingReason(t *testing.T) {
+	facade, _ := newFacadeForTest(t)
+	created, err := facade.Create(commandContext("report-mine-create"), validCreateCommand())
+	if err != nil {
+		t.Fatalf("create status report: %v", err)
+	}
+	mine, err := facade.GetMyPending(
+		context.Background(),
+		created.HomepageID,
+		"persona-reporter",
+		reportmodel.ReasonOffline,
+	)
+	if err != nil || mine.ReportID != created.ReportID ||
+		mine.Status != reportmodel.StatusPendingReview {
+		t.Fatalf("get own pending status report: %+v err=%v", mine, err)
+	}
+	if _, err := facade.GetMyPending(
+		context.Background(),
+		created.HomepageID,
+		"persona-other",
+		reportmodel.ReasonOffline,
+	); !hasCode(err, reportgenerated.ErrStatusReportNotFound) {
+		t.Fatalf("another persona must not read pending status report: %v", err)
+	}
+	if _, err := facade.GetMyPending(
+		context.Background(),
+		created.HomepageID,
+		"persona-reporter",
+		reportmodel.Reason("unknown"),
+	); !hasCode(err, generated.ErrInvalidArgument) {
+		t.Fatalf("invalid reason must fail closed: %v", err)
 	}
 }
 

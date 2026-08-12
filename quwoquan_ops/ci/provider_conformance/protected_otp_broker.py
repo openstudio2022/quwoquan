@@ -1,6 +1,7 @@
 """Ephemeral host/device bridge for one-time nonprod OTP Patrol input."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import json
@@ -11,7 +12,7 @@ import threading
 import time
 import urllib.error
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -31,6 +32,7 @@ class ProtectedOTPBrokerBinding:
     token: str
     ca_digest: str
     certificate_digest: str
+    ca_certificate_base64: str = field(repr=False, default="")
 
     def __repr__(self) -> str:
         return (
@@ -52,6 +54,7 @@ class ProtectedOTPBroker:
         recipient: str,
         reader: OTPReader,
         read_timeout_seconds: float = 30.0,
+        max_consumptions: int = 1,
     ) -> None:
         if environment not in {"alpha", "beta", "gamma"}:
             raise ValueError("protected OTP broker is limited to Alpha/Beta/Gamma")
@@ -61,16 +64,25 @@ class ProtectedOTPBroker:
             raise ValueError("protected OTP broker requires canonical E.164 recipient")
         if read_timeout_seconds <= 0:
             raise ValueError("protected OTP broker requires a positive timeout")
+        if (
+            isinstance(max_consumptions, bool)
+            or max_consumptions < 1
+            or max_consumptions > 2
+        ):
+            raise ValueError(
+                "protected OTP broker supports one or two device consumptions"
+            )
         self._environment = environment
         self._target_name = target_name
         self._recipient = recipient
         self._reader = reader
         self._read_timeout_seconds = read_timeout_seconds
+        self._max_consumptions = max_consumptions
         self._token = secrets.token_urlsafe(32)
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
-        self._consumed = False
+        self._consumptions = 0
 
     def start(self) -> ProtectedOTPBrokerBinding:
         if self._server is not None:
@@ -118,6 +130,9 @@ class ProtectedOTPBroker:
             token=self._token,
             ca_digest=ca_digest,
             certificate_digest=certificate_digest,
+            ca_certificate_base64=base64.b64encode(tls.ca_path.read_bytes()).decode(
+                "ascii"
+            ),
         )
 
     def close(self) -> None:
@@ -149,7 +164,7 @@ class ProtectedOTPBroker:
             )
             return
         with self._lock:
-            if self._consumed:
+            if self._consumptions >= self._max_consumptions:
                 self._write_json(
                     handler,
                     HTTPStatus.NOT_FOUND,
@@ -165,7 +180,7 @@ class ProtectedOTPBroker:
                     {"error": "otp_unavailable"},
                 )
                 return
-            self._consumed = True
+            self._consumptions += 1
         self._write_json(handler, HTTPStatus.OK, {"code": protected.code})
 
     def _read_captured_otp(self) -> ProtectedDebugOTP:

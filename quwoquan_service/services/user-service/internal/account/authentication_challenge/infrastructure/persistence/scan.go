@@ -19,6 +19,7 @@ func scanChallenge(
 	var (
 		state             challengemodel.State
 		status            string
+		deliveryStatus    string
 		completionReceipt string
 	)
 	err := row.Scan(
@@ -29,6 +30,10 @@ func scanChallenge(
 		&state.DestinationHash,
 		&state.SecretRef,
 		&state.BindingTicketRef,
+		&state.DeliveryRequestID,
+		&deliveryStatus,
+		&state.DeliveryUpdatedAt,
+		&state.LastDeliveryEventID,
 		&status,
 		&state.AttemptCount,
 		&state.ExpiresAt,
@@ -48,6 +53,7 @@ func scanChallenge(
 		)
 	}
 	state.Status = challengemodel.Status(status)
+	state.DeliveryStatus = challengemodel.DeliveryStatus(deliveryStatus)
 	state.CompletionFingerprint = completionReceipt
 	challenge, err := challengemodel.Restore(state)
 	if err != nil {
@@ -67,6 +73,10 @@ channel,
 COALESCE(phone_hash, ''),
 code_hash,
 COALESCE(binding_ticket_id, ''),
+COALESCE(request_id, ''),
+COALESCE(delivery_status, ''),
+delivery_updated_at,
+COALESCE(last_delivery_event_id, ''),
 status,
 failed_attempts,
 expires_at,

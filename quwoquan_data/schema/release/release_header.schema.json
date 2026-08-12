@@ -49,6 +49,15 @@
     "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "sourceIdentities": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/sourceIdentity"
+      }
+    },
+    "sourceIdentitySetDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "executionIds": {
       "type": "array",
       "uniqueItems": true,
@@ -72,22 +81,109 @@
         }
       }
     },
+    "targetEnvironment": {"enum": ["alpha", "beta", "gamma", "prod"]},
+    "milestone": {"enum": ["M100", "M1000", "M10000"]},
+    "milestoneTargets": {
+      "type": "object",
+      "required": ["homepage", "article", "image", "video"],
+      "additionalProperties": false,
+      "properties": {
+        "homepage": {"type": "integer", "minimum": 1},
+        "article": {"type": "integer", "minimum": 1},
+        "image": {"type": "integer", "minimum": 1},
+        "video": {"type": "integer", "minimum": 1}
+      }
+    },
+    "releaseMode": {"enum": ["research", "commercial"]},
+    "poolDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "counts": {
+      "type": "object",
+      "required": ["article", "image", "video", "total"],
+      "additionalProperties": false,
+      "properties": {
+        "article": {"type": "integer", "minimum": 0},
+        "image": {"type": "integer", "minimum": 0},
+        "video": {"type": "integer", "minimum": 0},
+        "total": {"type": "integer", "minimum": 0}
+      }
+    },
+    "contents": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": [
+          "contentId", "version", "postRef", "executionId", "sourceIdentityDigest"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "contentId": {"type": "string", "minLength": 1},
+          "version": {"type": "integer", "minimum": 1},
+          "postRef": {"type": "string", "minLength": 1},
+          "executionId": {"type": "string", "minLength": 1},
+          "sourceIdentityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "authors": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "required": ["authorId", "version", "creatorRef"],
+        "additionalProperties": false,
+        "properties": {
+          "authorId": {"type": "string", "minLength": 1},
+          "version": {"type": "integer", "minimum": 1},
+          "creatorRef": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "buildResult": {"const": "completed"},
     "reviewedClosureAdoption": {
       "$ref": "../execution/reviewed_closure_adoption_campaign_binding.schema.json"
     }
   },
+  "$defs": {
+    "sourceIdentity": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionIds"],
+          "additionalProperties": false,
+          "properties": {
+            "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["identityKind", "sourceDigest", "canonicalObjectDigest", "migrationEvidenceDigest", "executionIds"],
+          "additionalProperties": false,
+          "properties": {
+            "identityKind": {"const": "legacy_canonical_migration"},
+            "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "canonicalObjectDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "migrationEvidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+          }
+        }
+      ]
+    }
+  },
   "allOf": [
     {
-      "if": {"properties": {"releaseKind": {"const": "content"}}},
+      "if": {"properties": {"releaseKind": {"const": "empty_baseline"}}},
       "then": {
-        "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"]
-      },
-      "else": {
         "not": {
           "anyOf": [
             {"required": ["sourceRevision"]},
             {"required": ["sourceDigest"]},
-            {"required": ["entityCatalogDigest"]}
+            {"required": ["entityCatalogDigest"]},
+            {"required": ["sourceIdentities"]},
+            {"required": ["sourceIdentitySetDigest"]}
           ]
         }
       }
@@ -102,6 +198,149 @@
         }
       },
       "else": {"properties": {"productLifecycleState": {"const": "research"}}}
+    },
+    {
+      "if": {"required": ["targetEnvironment"]},
+      "then": {
+        "required": ["releaseMode", "poolDigest", "counts", "contents", "authors", "buildResult"],
+        "not": {"required": ["milestone"]}
+      }
+    },
+    {
+      "if": {"required": ["milestone"]},
+      "then": {
+        "required": [
+          "milestoneTargets", "releaseMode", "poolDigest", "counts",
+          "contents", "authors", "buildResult", "sourceIdentities",
+          "sourceIdentitySetDigest"
+        ],
+        "not": {
+          "anyOf": [
+            {"required": ["targetEnvironment"]},
+            {"required": ["sourceRevision"]},
+            {"required": ["sourceDigest"]},
+            {"required": ["entityCatalogDigest"]}
+          ]
+        },
+        "properties": {
+          "releaseClass": {"const": "research"},
+          "productLifecycleState": {"const": "research"},
+          "releaseMode": {"const": "research"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"releaseKind": {"const": "content"}}},
+      "then": {
+        "oneOf": [
+          {
+            "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest"],
+            "not": {
+              "anyOf": [
+                {"required": ["sourceIdentities"]},
+                {"required": ["sourceIdentitySetDigest"]}
+              ]
+            }
+          },
+          {
+            "required": ["sourceIdentities", "sourceIdentitySetDigest"],
+            "not": {
+              "anyOf": [
+                {"required": ["sourceRevision"]},
+                {"required": ["sourceDigest"]},
+                {"required": ["entityCatalogDigest"]}
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {"required": ["targetEnvironment", "sourceIdentities"]},
+      "then": {
+        "properties": {
+          "releaseClass": {"const": "research"},
+          "productLifecycleState": {"const": "research"},
+          "releaseMode": {"const": "research"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"milestone": {"const": "M100"}}, "required": ["milestone"]},
+      "then": {
+        "properties": {
+          "milestoneTargets": {
+            "properties": {
+              "homepage": {"const": 100}, "article": {"const": 100},
+              "image": {"const": 100}, "video": {"const": 10}
+            }
+          },
+          "counts": {
+            "properties": {
+              "article": {"const": 100}, "image": {"const": 100},
+              "video": {"const": 10}, "total": {"const": 210}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"milestone": {"const": "M1000"}}, "required": ["milestone"]},
+      "then": {
+        "properties": {
+          "milestoneTargets": {
+            "properties": {
+              "homepage": {"const": 1000}, "article": {"const": 1000},
+              "image": {"const": 1000}, "video": {"const": 100}
+            }
+          },
+          "counts": {
+            "properties": {
+              "article": {"const": 1000}, "image": {"const": 1000},
+              "video": {"const": 100}, "total": {"const": 2100}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"milestone": {"const": "M10000"}}, "required": ["milestone"]},
+      "then": {
+        "properties": {
+          "milestoneTargets": {
+            "properties": {
+              "homepage": {"const": 10000}, "article": {"const": 10000},
+              "image": {"const": 10000}, "video": {"const": 1000}
+            }
+          },
+          "counts": {
+            "properties": {
+              "article": {"const": 10000}, "image": {"const": 10000},
+              "video": {"const": 1000}, "total": {"const": 21000}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "not": {
+          "anyOf": [
+            {"required": ["targetEnvironment"]},
+            {"required": ["milestone"]}
+          ]
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {"required": ["releaseMode"]}, {"required": ["poolDigest"]},
+            {"required": ["counts"]}, {"required": ["contents"]},
+            {"required": ["authors"]}, {"required": ["buildResult"]},
+            {"required": ["milestoneTargets"]}
+          ]
+        }
+      }
     }
   ]
 }

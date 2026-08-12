@@ -7,7 +7,9 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
+import zipfile
 from pathlib import Path
 from urllib.parse import urlsplit
 from unittest import mock
@@ -28,6 +30,18 @@ from quwoquan_ops.cli.lib.provider_runtime_composition import (
 
 
 class EnvironmentPatrolSmokeTest(unittest.TestCase):
+    def test_rollout_stage_parser_accepts_fixed_production_stages(self) -> None:
+        for stage in ("canary", "5", "20", "50", "100"):
+            with (
+                self.subTest(stage=stage),
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    ["run_environment_patrol_smoke.py", "--rollout-stage", stage],
+                ),
+            ):
+                self.assertEqual(smoke.parse_args().rollout_stage, stage)
+
     def _args(self, **overrides: object) -> argparse.Namespace:
         values = {
             "env_name": "local-gamma",
@@ -82,6 +96,104 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 values[argument] = public_bases[role]
         return argparse.Namespace(**values)
 
+    def _test_live_receipt(
+        self,
+        *,
+        environment: str = "gamma",
+        status: str = "running",
+        failure: str | None = None,
+    ) -> dict[str, object]:
+        return {
+            "environment": environment,
+            "target": f"{environment}-local",
+            "sourceRevision": "a" * 40,
+            "workspaceStatusDigest": "sha256:" + "1" * 64,
+            "mutableStateDigest": "sha256:" + "2" * 64,
+            "configurationDigest": "sha256:" + "3" * 64,
+            "attemptId": f"{environment}-test-live-attempt",
+            "status": status,
+            "failure": failure,
+        }
+
+    def _launcher_handoff(
+        self,
+        args: argparse.Namespace,
+        *,
+        bound: bool = True,
+        android_transport: bool = True,
+    ) -> dict[str, object]:
+        environment = args.runtime_env
+        target = smoke._local_target_for_environment_alias(args.env_name)
+        public_bases = smoke.get_target(
+            smoke.load_environment_topology(),
+            target,
+        )["publicBases"]
+        content = {
+            "contentReleaseId": "release-current" if bound else "",
+            "contentManifestDigest": (
+                "sha256:" + "4" * 64 if bound else ""
+            ),
+            "contentReadinessReceiptDigest": (
+                "sha256:" + "5" * 64 if bound else ""
+            ),
+        }
+        defines = {
+            "APP_RUNTIME_ENV": environment,
+            "QWQ_APP_LAUNCH_MODE": "canonical_launcher",
+            "APP_LAUNCH_POLICY": "test_live",
+            "CONTENT_BINDING_STATE": "bound" if bound else "unbound",
+            "CLOUD_GATEWAY_BASE_URL": args.gateway_base_url,
+            "APP_LEGAL_BASE_URL": public_bases["legal"],
+            "PUBLIC_WEB_BASE_URL": public_bases["publicWeb"],
+            "APP_DOWNLOAD_BASE_URL": public_bases["appDownload"],
+            "MEDIA_AVATAR_CDN_BASE_URL": args.media_avatar_base_url,
+            "MEDIA_IMAGE_CDN_BASE_URL": args.media_image_base_url,
+            "MEDIA_VIDEO_CDN_BASE_URL": args.media_video_base_url,
+            "MEDIA_UPLOAD_BASE_URL": args.media_upload_base_url,
+            "RTC_MEDIA_CONNECTION_URL": args.rtc_media_connection_url,
+            "REALTIME_CONNECTION_URL": public_bases["realtime"],
+            "CURRENT_USER_ID": args.current_owner_id,
+        }
+        transport = {
+            "required": android_transport,
+            "reverseExpectedPorts": "19000,19010,19100,19130"
+            if android_transport
+            else "",
+            "reverseActualPorts": "19000,19010,19100,19130"
+            if android_transport
+            else "",
+            "reverseReceiptDigest": "sha256:" + "6" * 64
+            if android_transport
+            else "",
+            "consumerLeaseId": "sha256:" + "7" * 64
+            if android_transport
+            else "",
+        }
+        effective = {
+            "schema": "app-effective-launch-manifest",
+            "environment": environment,
+            "target": target,
+            "entrypoint": "lib/main_prod.dart",
+            "launchMode": "canonical_launcher",
+            "launchPolicy": "test_live",
+            "contentBindingState": "bound" if bound else "unbound",
+            "dartDefinesDigest": "sha256:" + "1" * 64,
+            "runtimeConfigDigest": "sha256:" + "1" * 64,
+            **content,
+            "recoveryBaseUrl": args.gateway_base_url,
+            "publicWebBaseUrl": public_bases["publicWeb"],
+            "appDownloadBaseUrl": public_bases["appDownload"],
+            "requiresLocalTransport": True,
+            "transport": transport,
+        }
+        return {
+            **effective,
+            "schema": "app-launcher-handoff",
+            "dartDefines": defines,
+            "effectiveLaunchManifest": effective,
+            "effectiveLaunchManifestDigest": "sha256:" + "2" * 64,
+        }
+
     def _expected_roles_from_current_provider_source(
         self,
         target_name: str,
@@ -134,13 +246,126 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                     )
             finally:
                 first.close()
-
             replacement = smoke._acquire_patrol_execution_lock(
                 env_name="local-gamma",
                 target=smoke.DEFAULT_TARGET,
                 lock_path=lock_path,
             )
             replacement.close()
+
+    def test_patrol_bundler_target_has_valid_wrapper_alias_shape(
+        self,
+    ) -> None:
+        wrapper_target = smoke._patrol_bundler_target(
+            smoke.BASIC_VIABILITY_TARGET
+        )
+        self.assertRegex(
+            wrapper_target,
+            r"^test/user_acceptance/patrol/"
+            r"qwq_environment_smoke_[0-9a-f]{16}_test\.dart$",
+        )
+        self.assertNotIn("..", wrapper_target)
+
+        args = self._args(target=smoke.BASIC_VIABILITY_TARGET)
+        command = smoke.patrol_command(
+            {
+                "id": "android-gamma",
+                "targetPlatform": "android-arm64",
+                "emulator": True,
+            },
+            args,
+            "patrol",
+            dart_define_file=Path("/protected/session.json"),
+        )
+
+        self.assertEqual(
+            command[command.index("-t") + 1],
+            wrapper_target,
+        )
+        self.assertNotIn(str(smoke.APP_DIR), command[command.index("-t") + 1])
+
+    def test_patrol_target_wrapper_forwards_main_and_is_removed_in_finally(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            app_dir = Path(temporary_dir) / "quwoquan_app"
+            wrapper_directory = app_dir / smoke.PATROL_TEST_DIRECTORY
+            target_path = app_dir / smoke.BASIC_VIABILITY_TARGET
+            wrapper_directory.mkdir(parents=True)
+            target_path.parent.mkdir(parents=True)
+            target_path.write_text("void main() {}\n", encoding="utf-8")
+            bundle_path = wrapper_directory / "test_bundle.dart"
+            bundle_preimage = b"// canonical tracked bundle\n"
+            bundle_path.write_bytes(bundle_preimage)
+
+            wrapper_path: Path | None = None
+            cleanup = None
+            with mock.patch.object(smoke, "APP_DIR", app_dir):
+                try:
+                    wrapper_path, wrapper_target, cleanup = (
+                        smoke._create_patrol_target_wrapper(
+                            smoke.BASIC_VIABILITY_TARGET
+                        )
+                    )
+                    self.assertTrue(wrapper_path.is_file())
+                    self.assertEqual(
+                        wrapper_target,
+                        wrapper_path.relative_to(app_dir).as_posix(),
+                    )
+                    self.assertRegex(
+                        wrapper_path.stem,
+                        r"^[A-Za-z_][A-Za-z0-9_]*$",
+                    )
+                    self.assertEqual(
+                        wrapper_path.stat().st_mode & 0o777,
+                        0o600,
+                    )
+                    self.assertEqual(
+                        wrapper_path.read_text(encoding="utf-8"),
+                        "// Ephemeral runner-owned Patrol wrapper; never commit this file.\n"
+                        "import '../journeys/app_startup/"
+                        "basic_viability__user_acceptance_test.dart' "
+                        "as canonical_target;\n\n"
+                        "void main() {\n"
+                        "  canonical_target.main();\n"
+                        "}\n",
+                    )
+                    bundle_path.write_bytes(b"// transient patrol bundle\n")
+                    command = smoke.patrol_command(
+                        {
+                            "id": "android-gamma",
+                            "targetPlatform": "android-arm64",
+                            "emulator": True,
+                        },
+                        self._args(target=smoke.BASIC_VIABILITY_TARGET),
+                        "patrol",
+                        dart_define_file=Path("/protected/session.json"),
+                        patrol_target=wrapper_target,
+                    )
+                    self.assertEqual(
+                        command[command.index("-t") + 1], wrapper_target
+                    )
+                finally:
+                    smoke._cleanup_patrol_target_wrapper(cleanup)
+
+            assert wrapper_path is not None
+            self.assertFalse(wrapper_path.exists())
+            self.assertEqual(bundle_path.read_bytes(), bundle_preimage)
+
+    def test_patrol_bundler_target_rejects_absolute_escape_or_noncanonical_test(
+        self,
+    ) -> None:
+        invalid_targets = (
+            str(smoke.APP_DIR / smoke.BASIC_VIABILITY_TARGET),
+            "test/user_acceptance/patrol/../../local_contract/example_test.dart",
+            "test/local_contract/example_test.dart",
+            "test/user_acceptance/patrol/patrol_test_main.dart",
+            "test/user_acceptance/journeys/missing_example_test.dart",
+        )
+
+        for target in invalid_targets:
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                smoke._patrol_bundler_target(target)
 
     def test_default_target_is_the_video_playback_canary(self) -> None:
         self.assertEqual(
@@ -216,6 +441,76 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 smoke._read_controlled_edge_fault_evidence(log_path),
                 {},
             )
+
+    def test_ios_device_evidence_command_is_exact_device_and_marker_scoped(
+        self,
+    ) -> None:
+        command = smoke._ios_device_evidence_command(
+            "SIMULATOR-EXACT-UDID",
+            xcrun_path="/usr/bin/xcrun",
+        )
+
+        self.assertEqual(
+            command[:5],
+            [
+                "/usr/bin/xcrun",
+                "simctl",
+                "spawn",
+                "SIMULATOR-EXACT-UDID",
+                "log",
+            ],
+        )
+        predicate = command[command.index("--predicate") + 1]
+        self.assertIn('process == "Runner"', predicate)
+        for token in smoke.IOS_DEVICE_EVIDENCE_TOKENS:
+            self.assertIn(f'eventMessage CONTAINS "{token}"', predicate)
+        self.assertNotIn("--last", command)
+        self.assertNotIn("log show", " ".join(command))
+
+    def test_ios_device_evidence_stream_keeps_only_current_whitelisted_markers(
+        self,
+    ) -> None:
+        observed: list[str] = []
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            log_path = Path(temporary_dir) / "device-evidence.log"
+            marker_line = smoke.FEED_CONTENT_EVIDENCE_PREFIX + json.dumps(
+                {
+                    "environment": "alpha",
+                    "visibleCardCount": 1,
+                    "visibleCardKeys": ["home-feed-card-0"],
+                },
+            )
+            stream = smoke._IosDeviceEvidenceStream(
+                device_id="SIMULATOR-EXACT-UDID",
+                log_path=log_path,
+                output_line_handler=observed.append,
+                command=[
+                    sys.executable,
+                    "-u",
+                    "-c",
+                    (
+                        "import time; "
+                        "print('historical or unrelated line', flush=True); "
+                        f"print({marker_line!r}, flush=True); time.sleep(5)"
+                    ),
+                ],
+            )
+
+            stream.start()
+            for _ in range(20):
+                if observed:
+                    break
+                time.sleep(0.05)
+            receipt = stream.stop(grace_seconds=0)
+            captured = log_path.read_text(encoding="utf-8")
+            evidence = smoke._read_feed_content_evidence(log_path)
+
+        self.assertEqual(receipt["status"], "captured")
+        self.assertEqual(receipt["deviceId"], "SIMULATOR-EXACT-UDID")
+        self.assertNotIn("historical or unrelated line", captured)
+        self.assertIn(smoke.FEED_CONTENT_EVIDENCE_PREFIX, captured)
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(evidence["visibleCardCount"], 1)
 
     def test_run_command_streams_restore_marker_before_process_exit(self) -> None:
         observed: list[str] = []
@@ -366,32 +661,12 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         )
 
     def test_remote_patrol_keeps_125s_video_contract_without_app_bundle(self) -> None:
-        scenarios = ROOT / (
-            "quwoquan_service/services/content-service/tests/support/"
-            "contract_fixtures/scenarios/content_scenarios.json"
-        )
-        payload = json.loads(scenarios.read_text(encoding="utf-8"))
-        posts = payload["seedSets"]["content_discovery_core"]["posts"]
-        canary_posts = [
-            item
-            for item in posts
-            if item.get("postId") == "video_tokyo_midnight"
-        ]
-        self.assertEqual(
-            len(canary_posts),
-            1,
-            "fixture video coverage requires the canonical Tokyo midnight video object",
-        )
-        canary = canary_posts[0]
-        self.assertEqual(canary.get("contentType"), "video")
-        self.assertEqual(canary.get("durationMs"), 125000)
-        self.assertEqual(canary.get("mediaAssetId"), "media-canary-seek-125s")
-        self.assertIn("media-canary-seek-125s", str(canary.get("videoUrl", "")))
-
         profile = ROOT / "quwoquan_data/reference/media_canary/video_playback.yaml"
         self.assertTrue(profile.is_file(), "mediaCanary.profileRef must resolve")
         profile_text = profile.read_text(encoding="utf-8")
         self.assertIn("media-canary-seek-125s", profile_text)
+        self.assertIn("durationMs: 125000", profile_text)
+        self.assertIn("publicSlicePrefix: media/video/s/media-canary-seek-125s/v1", profile_text)
         self.assertIn("media-canary-hour-boundary-3595s", profile_text)
 
         patrol_main = (
@@ -434,7 +709,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertEqual(actual["mediaVideoBaseUrl"], "https://cdn.gamma.quwoquan.com:19100/media/video")
         self.assertEqual(actual["mediaUploadBaseUrl"], "https://upload.gamma.quwoquan.com:19130")
 
-    def test_ios_build_restores_canonical_public_transport_authority(self) -> None:
+    def test_ios_build_uses_canonical_handoff_public_transport_authority(self) -> None:
         # Isolate deploy/output roots so a host active candidate with legacy
         # legal-static/current symlink cannot pollute this contract. Safety
         # validation stays fail-closed; this test must not read that candidate.
@@ -523,7 +798,9 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             )
             handoff = json.loads(handoff_result.stdout)
 
-            def resolved_gateway(supplied_gateway: str) -> str:
+            def prepare_defines(
+                supplied_gateway: str,
+            ) -> subprocess.CompletedProcess[str]:
                 entries = {
                     "APP_RUNTIME_ENV": "gamma",
                     "CLOUD_GATEWAY_BASE_URL": supplied_gateway,
@@ -537,6 +814,11 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 environment = {
                     **isolated_env,
                     "DART_DEFINES": encoded,
+                    "QWQ_LAUNCH_HANDOFF_JSON": json.dumps(
+                        handoff,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
                     "QWQ_APP_RUNTIME_ENV": "gamma",
                     "QWQ_APP_LAUNCH_MODE": "canonical_launcher",
                     "QWQ_LAUNCH_TARGET": "gamma-local",
@@ -572,29 +854,39 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                     capture_output=True,
                     check=False,
                 )
-                self.assertEqual(result.returncode, 0, result.stderr)
-                export = next(
-                    line
-                    for line in result.stdout.splitlines()
-                    if line.startswith("export DART_DEFINES=")
-                )
-                merged = {
-                    key: value
-                    for key, value in (
-                        base64.b64decode(item).decode("utf-8").split("=", 1)
-                        for item in export.split("=", 1)[1].split(",")
-                    )
-                }
-                return merged["CLOUD_GATEWAY_BASE_URL"]
+                return result
 
+            canonical_result = prepare_defines(
+                handoff["dartDefines"]["CLOUD_GATEWAY_BASE_URL"]
+            )
+            self.assertEqual(canonical_result.returncode, 0, canonical_result.stderr)
+            export = next(
+                line
+                for line in canonical_result.stdout.splitlines()
+                if line.startswith("export DART_DEFINES=")
+            )
+            merged = {
+                key: value
+                for key, value in (
+                    base64.b64decode(item).decode("utf-8").split("=", 1)
+                    for item in export.split("=", 1)[1].split(",")
+                )
+            }
             self.assertEqual(
-                resolved_gateway("https://legacy.invalid:19000"),
+                merged["CLOUD_GATEWAY_BASE_URL"],
                 "https://api.gamma.quwoquan.com:19000",
             )
-            self.assertEqual(
-                resolved_gateway("https://untrusted.localhost:19000"),
-                "https://api.gamma.quwoquan.com:19000",
-            )
+
+            for drifted_gateway in (
+                "https://legacy.invalid:19000",
+                "https://untrusted.localhost:19000",
+            ):
+                result = prepare_defines(drifted_gateway)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn(
+                    "DART_DEFINES conflict with canonical launcher handoff",
+                    result.stderr,
+                )
 
     def test_effective_base_urls_keep_public_for_hosted_target(self) -> None:
         args = self._args(
@@ -671,7 +963,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             media_avatar_base_url="https://cdn.beta.quwoquan.com:18100/media/avatar",
             media_image_base_url="https://cdn.beta.quwoquan.com:18100/media/image",
             media_video_base_url="https://cdn.beta.quwoquan.com:18100/media/video",
-            media_upload_base_url="https://upload.beta.quwoquan.com:18100",
+            media_upload_base_url="https://upload.beta.quwoquan.com:18130",
             test_auth_token="",
             test_refresh_token="",
             current_owner_id="",
@@ -769,8 +1061,8 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
     def test_patrol_command_forwards_disposable_account_install_id(self) -> None:
         args = self._args(
             target=(
-                "test/user_acceptance/journeys/account_closure/"
-                "account_closure_journey__user_acceptance_test.dart"
+                "test/user_acceptance/service/user_service/account/user_account/"
+                "account_closure_remote__user_acceptance_test.dart"
             ),
             patrol_install_id="account-closure-ci-run-1-{device}",
         )
@@ -1128,6 +1420,7 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertEqual(inventory, [{**device, "isSupported": True}])
         self.assertEqual(env[flutter_proxy.REAL_FLUTTER_ENV], "/sdk/flutter")
         self.assertEqual(env["QWQ_APP_RUNTIME_ENV"], "gamma")
+        self.assertEqual(env["QWQ_LAUNCH_TARGET"], "gamma-local")
         self.assertEqual(env["QWQ_RUN_DEVICE_ID"], "emulator-5554")
         self.assertEqual(env["ANDROID_SERIAL"], "emulator-5554")
         self.assertIn(
@@ -1362,6 +1655,24 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         )
         self.assertEqual(dry_run_result["exitCode"], 0)
 
+    def test_first_typed_patrol_blocker_is_structured_without_payload(self) -> None:
+        output = (
+            "\x1b[31mCloudException(type: CloudErrorType.invalidResponse, "
+            "message: private response detail, statusCode: null, code: "
+            "APP.CONTRACT.invalid_json, requestId: req-private, "
+            "traceId: trace-private, sourceOperationId: "
+            "chat.conversation.CreateConversation)\x1b[0m"
+        )
+
+        self.assertEqual(
+            smoke._first_typed_patrol_blocker(output),
+            {
+                "errorCode": "APP.CONTRACT.invalid_json",
+                "sourceOperationId": "chat.conversation.CreateConversation",
+                "httpStatus": None,
+            },
+        )
+
     def test_remote_api_evidence_requires_ids_and_effective_actions(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             path = Path(temporary_dir) / "search-report.json"
@@ -1535,6 +1846,313 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         finally:
             path.unlink(missing_ok=True)
 
+    def test_typed_core_uat_requires_control_plane_actor_and_forbids_anonymous(
+        self,
+    ) -> None:
+        args = self._args(
+            target=smoke.BASIC_VIABILITY_TARGET,
+            video_playback_canary_work_id="",
+            test_auth_token="",
+            test_refresh_token="",
+            current_owner_id="",
+            current_persona_id="",
+        )
+        with mock.patch.dict(
+            os.environ,
+            {
+                "QWQ_TEST_DATA_ACCESS_TOKEN": "typed-access",
+                "QWQ_TEST_DATA_REFRESH_TOKEN": "typed-refresh",
+                "QWQ_TEST_DATA_OWNER_ID": "typed-owner",
+                "QWQ_TEST_DATA_PERSONA_ID": "typed-persona",
+            },
+            clear=False,
+        ):
+            source = smoke._prepare_execution_session(args)
+
+        self.assertEqual(source, "test_data_protected_authenticated_session")
+        self.assertEqual(smoke._missing_required_args(args), [])
+        self.assertFalse(smoke._requires_video_playback_canary(args))
+        self.assertFalse(smoke._uses_runtime_anonymous_session(args))
+        command = smoke.patrol_command(
+            {
+                "id": "sim-1",
+                "targetPlatform": "ios",
+                "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+                "emulator": True,
+            },
+            args,
+            "patrol",
+            dart_define_file=None,
+            typed_test_data_session_handoff=True,
+        )
+        self.assertNotIn("--dart-define-from-file=", "\n".join(command))
+        self.assertNotIn("runtime_anonymous_session", "\n".join(command))
+
+    def test_alpha_app_content_targets_use_typed_session_handoff(self) -> None:
+        targets = (
+            *smoke.TYPED_AUTHENTICATED_SESSION_TARGETS,
+            *smoke.ALPHA_APP_CONTENT_TYPED_SESSION_TARGETS,
+        )
+        for target in targets:
+            with self.subTest(target=target):
+                args = self._args(
+                    env_name="alpha-local",
+                    runtime_env="alpha",
+                    api_contract_env="alpha",
+                    target=target,
+                    test_auth_token="",
+                    test_refresh_token="",
+                    current_owner_id="",
+                    current_persona_id="",
+                )
+                with mock.patch.dict(
+                    os.environ,
+                    {
+                        "QWQ_TEST_DATA_ACCESS_TOKEN": "typed-access",
+                        "QWQ_TEST_DATA_REFRESH_TOKEN": "typed-refresh",
+                        "QWQ_TEST_DATA_OWNER_ID": "typed-owner",
+                        "QWQ_TEST_DATA_PERSONA_ID": "typed-persona",
+                    },
+                    clear=False,
+                ):
+                    source = smoke._prepare_execution_session(args)
+
+                self.assertEqual(
+                    source,
+                    "test_data_protected_authenticated_session",
+                )
+                self.assertEqual(smoke._missing_required_args(args), [])
+                self.assertFalse(smoke._uses_runtime_anonymous_session(args))
+                self.assertFalse(
+                    smoke._uses_public_video_canary_anonymous_session(args)
+                )
+                if target == smoke.CORE_READBACK_TARGET:
+                    for destination, _ in smoke.RELEASE_APP_UAT_DEFINES:
+                        setattr(args, destination, "canonical-release-value")
+                command = smoke.patrol_command(
+                    {
+                        "id": "sim-1",
+                        "targetPlatform": "ios",
+                        "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+                        "emulator": True,
+                    },
+                    args,
+                    "patrol",
+                    dart_define_file=None,
+                    typed_test_data_session_handoff=True,
+                )
+                joined = "\n".join(command)
+                self.assertNotIn("--dart-define-from-file=", joined)
+                self.assertNotIn("runtime_anonymous_session", joined)
+
+    def test_beta_gamma_app_content_guest_targets_remain_anonymous(self) -> None:
+        guest_targets = (
+            (smoke.FEED_LOAD_TARGET, "runtime_anonymous_session"),
+            (smoke.DEFAULT_TARGET, "anonymous_public_video_session"),
+            (smoke.CONTROLLED_EDGE_FAULT_TARGET, "runtime_anonymous_session"),
+        )
+        for environment in ("beta", "gamma"):
+            for target, expected_source in guest_targets:
+                with self.subTest(environment=environment, target=target):
+                    args = self._args(
+                        env_name=f"{environment}-local",
+                        runtime_env=environment,
+                        api_contract_env=environment,
+                        target=target,
+                        test_auth_token="",
+                        test_refresh_token="",
+                        current_owner_id="",
+                        current_persona_id="",
+                    )
+                    with mock.patch.object(
+                        smoke,
+                        "load_test_live_startup_attempt",
+                    ) as load_receipt:
+                        source = smoke._prepare_execution_session(args)
+
+                    load_receipt.assert_not_called()
+                    self.assertEqual(source, expected_source)
+                    self.assertEqual(smoke._missing_required_args(args), [])
+
+    def test_beta_gamma_core_readback_remains_protected(self) -> None:
+        for environment in ("beta", "gamma"):
+            with self.subTest(environment=environment):
+                args = self._args(
+                    env_name=f"{environment}-local",
+                    runtime_env=environment,
+                    api_contract_env=environment,
+                    target=smoke.CORE_READBACK_TARGET,
+                    test_auth_token="",
+                    test_refresh_token="",
+                    current_owner_id="",
+                    current_persona_id="",
+                )
+                with mock.patch.dict(
+                    os.environ,
+                    {
+                        "QWQ_TEST_DATA_ACCESS_TOKEN": "typed-access",
+                        "QWQ_TEST_DATA_REFRESH_TOKEN": "typed-refresh",
+                        "QWQ_TEST_DATA_OWNER_ID": "typed-owner",
+                        "QWQ_TEST_DATA_PERSONA_ID": "typed-persona",
+                    },
+                    clear=False,
+                ):
+                    source = smoke._prepare_execution_session(args)
+
+                self.assertEqual(
+                    source,
+                    "test_data_protected_authenticated_session",
+                )
+                self.assertEqual(smoke._missing_required_args(args), [])
+
+    def test_typed_core_uat_rejects_missing_or_incomplete_actor_handoff(self) -> None:
+        def args() -> argparse.Namespace:
+            return self._args(
+                target=smoke.CORE_READBACK_TARGET,
+                test_auth_token="",
+                test_refresh_token="",
+                current_owner_id="",
+                current_persona_id="",
+            )
+
+        with mock.patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(
+            ValueError,
+            "TestDataSession actor handoff",
+        ):
+            smoke._prepare_execution_session(args())
+        with mock.patch.dict(
+            os.environ,
+            {"QWQ_TEST_DATA_ACCESS_TOKEN": "typed-access"},
+            clear=True,
+        ), self.assertRaisesRegex(ValueError, "actor handoff is incomplete"):
+            smoke._prepare_execution_session(args())
+
+    def test_typed_core_uat_rejects_caller_injected_credentials(self) -> None:
+        args = self._args(target=smoke.CORE_READBACK_TARGET)
+        with mock.patch.dict(
+            os.environ,
+            {
+                "QWQ_TEST_DATA_ACCESS_TOKEN": "typed-access",
+                "QWQ_TEST_DATA_REFRESH_TOKEN": "typed-refresh",
+                "QWQ_TEST_DATA_OWNER_ID": "typed-owner",
+                "QWQ_TEST_DATA_PERSONA_ID": "typed-persona",
+            },
+            clear=False,
+        ), self.assertRaisesRegex(ValueError, "forbids caller-injected"):
+            smoke._prepare_execution_session(args)
+
+    def test_typed_runtime_wrapper_keeps_actor_session_out_of_argv(
+        self,
+    ) -> None:
+        args = self._args(
+            target=smoke.BASIC_VIABILITY_TARGET,
+            test_auth_token="",
+            test_refresh_token="",
+            current_owner_id="",
+            current_persona_id="",
+        )
+        actor = smoke.TypedTestDataActor(
+            access_token="typed-access",
+            refresh_token="typed-refresh",
+            owner_id="typed-owner",
+            persona_id="typed-persona",
+        )
+
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            app_dir = Path(temporary_dir) / "quwoquan_app"
+            wrapper_directory = app_dir / smoke.PATROL_TEST_DIRECTORY
+            target_path = app_dir / smoke.BASIC_VIABILITY_TARGET
+            wrapper_directory.mkdir(parents=True)
+            target_path.parent.mkdir(parents=True)
+            target_path.write_text("void main() {}\n", encoding="utf-8")
+            (wrapper_directory / "test_bundle.dart").write_text(
+                "// canonical tracked bundle\n",
+                encoding="utf-8",
+            )
+            cleanup = None
+            with mock.patch.object(smoke, "APP_DIR", app_dir):
+                try:
+                    wrapper_path, wrapper_target, cleanup = (
+                        smoke._create_patrol_target_wrapper(
+                            smoke.BASIC_VIABILITY_TARGET,
+                            typed_actor=actor,
+                        )
+                    )
+                    source = wrapper_path.read_text(encoding="utf-8")
+                    command = smoke.patrol_command(
+                        {
+                            "id": "sim-1",
+                            "targetPlatform": "ios",
+                            "sdk": "com.apple.CoreSimulator.SimRuntime.iOS-17-2",
+                            "emulator": True,
+                        },
+                        args,
+                        "patrol",
+                        dart_define_file=None,
+                        patrol_target=wrapper_target,
+                        typed_test_data_session_handoff=True,
+                    )
+                    joined = "\n".join(command)
+                    for secret in (
+                        "typed-access",
+                        "typed-refresh",
+                        "typed-owner",
+                        "typed-persona",
+                    ):
+                        self.assertNotIn(secret, joined)
+                        self.assertNotIn(secret, source)
+                        self.assertNotIn(
+                            base64.b64encode(secret.encode("utf-8")).decode(
+                                "ascii"
+                            ),
+                            joined,
+                        )
+                    self.assertNotIn("--dart-define-from-file=", joined)
+                    self.assertIn(
+                        "installPatrolAcceptanceSessionForRunner",
+                        source,
+                    )
+                finally:
+                    smoke._cleanup_patrol_target_wrapper(cleanup)
+            self.assertFalse(wrapper_path.exists())
+
+    def test_typed_actor_generated_artifact_cleanup_is_exact_and_converges(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            app_dir = Path(temporary_dir) / "quwoquan_app"
+            build_dir = app_dir / "build"
+            dart_tool_dir = app_dir / ".dart_tool"
+            build_dir.mkdir(parents=True)
+            dart_tool_dir.mkdir(parents=True)
+            plain = build_dir / "kernel_blob.bin"
+            plain.write_bytes(b"prefix runtime-owner suffix")
+            archive = build_dir / "app-debug.apk"
+            with zipfile.ZipFile(archive, "w") as output:
+                output.writestr("assets/test.txt", "encoded-runtime-owner")
+            ignored_cache = (
+                build_dir
+                / "app/intermediates/incremental/packageDebugAndroidTest/tmp/zip-cache/androidResources"
+            )
+            ignored_cache.parent.mkdir(parents=True)
+            ignored_cache.write_bytes(b"not-a-zip runtime-owner")
+            unrelated = dart_tool_dir / "package_config.json"
+            unrelated.write_text("unrelated\n", encoding="utf-8")
+
+            removed = smoke._purge_typed_actor_credential_artifacts(
+                ("runtime-owner", "encoded-runtime-owner"),
+                app_dir=app_dir,
+            )
+
+            self.assertEqual(removed, 2)
+            self.assertFalse(plain.exists())
+            self.assertFalse(archive.exists())
+            self.assertTrue(ignored_cache.exists())
+            self.assertEqual(
+                unrelated.read_text(encoding="utf-8"),
+                "unrelated\n",
+            )
+
     def test_provider_uat_defines_are_explicit_private_inputs(self) -> None:
         args = self._args(
             env_name="gamma-local",
@@ -1563,7 +2181,15 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 payload["QWQ_PROVIDER_UAT_LOCATION_EXPECTED_TEXT"],
                 "天安门",
             )
-            self.assertEqual(provider_secrets, ("天安门", "天安门"))
+            self.assertEqual(
+                provider_secrets,
+                (
+                    "天安门",
+                    "QWQ_PROVIDER_UAT_LOCATION_QUERY=天安门",
+                    "天安门",
+                    "QWQ_PROVIDER_UAT_LOCATION_EXPECTED_TEXT=天安门",
+                ),
+            )
         finally:
             path.unlink(missing_ok=True)
 
@@ -1589,6 +2215,25 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             smoke._prepare_execution_session(args),
             "unauthenticated_auth_entry",
         )
+        self.assertFalse(smoke._uses_runtime_anonymous_session(args))
+        command = smoke.patrol_command(
+            {
+                "id": "android-alpha",
+                "targetPlatform": "android-arm64",
+                "emulator": True,
+            },
+            args,
+            "patrol",
+            dart_define_file=Path("/tmp/provider-uat-defines.json"),
+        )
+        self.assertIn(
+            "--dart-define=QWQ_PATROL_SESSION_MODE=unauthenticated_auth_entry",
+            command,
+        )
+        self.assertIn(
+            "--dart-define-from-file=/tmp/provider-uat-defines.json",
+            command,
+        )
         self.assertEqual(smoke._missing_required_args(args), [])
 
     def test_patrol_output_redacts_access_and_refresh_secrets(self) -> None:
@@ -1597,6 +2242,15 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertEqual(
             smoke._redact_text(output, ("access-secret", "refresh-secret")),
             "argv <redacted> <redacted>\nrequest failed",
+        )
+
+    def test_patrol_output_redacts_base64_encoded_provider_define(self) -> None:
+        define = "QWQ_PROVIDER_UAT_SMS_PHONE=19912345678"
+        encoded = base64.b64encode(define.encode("utf-8")).decode("ascii")
+
+        self.assertEqual(
+            smoke._redact_text(f"-Pdart-defines={encoded}", (define,)),
+            "-Pdart-defines=<redacted>",
         )
 
     def test_remote_session_missing_actor_is_gate_blocked(self) -> None:
@@ -1628,6 +2282,34 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "video_playback_canary_work_id",
             smoke._missing_required_args(args),
         )
+
+    def test_release_bound_core_readback_still_requires_video_canary(self) -> None:
+        args = self._args(
+            target=smoke.CORE_READBACK_TARGET,
+            video_playback_canary_work_id="",
+        )
+
+        self.assertTrue(smoke._requires_video_playback_canary(args))
+        self.assertIn(
+            "video_playback_canary_work_id",
+            smoke._missing_required_args(args),
+        )
+
+    def test_release_bound_home_video_still_requires_video_canary(self) -> None:
+        args = self._args(
+            env_name="alpha-local",
+            runtime_env="alpha",
+            api_contract_env="alpha",
+            target=smoke.HOME_VIDEO_PLAYBACK_TARGET,
+            video_playback_canary_work_id="",
+        )
+
+        self.assertTrue(smoke._requires_video_playback_canary(args))
+        self.assertIn(
+            "video_playback_canary_work_id",
+            smoke._missing_required_args(args),
+        )
+        self.assertTrue(smoke._requires_typed_authenticated_session(args))
 
     def test_release_bound_dry_run_does_not_touch_ios_device_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -1679,7 +2361,8 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             bridge.assert_not_called()
             screenshot.assert_not_called()
             report = json.loads((root / "report.json").read_text(encoding="utf-8"))
-            self.assertEqual(report["status"], "passed")
+            self.assertEqual(report["status"], "dry_run")
+            self.assertEqual(report["caseResults"][0]["status"], "not_executed")
             self.assertNotIn("currentOwnerId", report)
             self.assertNotIn("currentPersonaId", report)
             self.assertTrue(report["hasCurrentOwnerIdentity"])
@@ -1735,6 +2418,197 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         env = smoke._device_command_env(args, device)
 
         self.assertEqual(env["QWQ_IOS_SIMULATOR_UDID"], "selected-ios-simulator")
+        self.assertEqual(env["QWQ_LAUNCH_TARGET"], "gamma-local")
+
+    def test_device_command_env_uses_canonical_alias_target_not_external_or_test_path(
+        self,
+    ) -> None:
+        args = self._args(
+            env_name="local-alpha",
+            runtime_env="alpha",
+            target="test/user_acceptance/prod-hosted.dart",
+        )
+        device = {
+            "id": "selected-ios-simulator",
+            "targetPlatform": "ios",
+            "emulator": True,
+        }
+
+        with mock.patch.dict(
+            os.environ,
+            {"QWQ_LAUNCH_TARGET": "prod-hosted"},
+        ):
+            env = smoke._device_command_env(args, device)
+
+        self.assertEqual(env["QWQ_LAUNCH_TARGET"], "alpha-local")
+
+    def test_canonical_test_live_handoff_uses_current_binding_and_device_transport(
+        self,
+    ) -> None:
+        args = self._args()
+        device = {
+            "id": "emulator-5554",
+            "targetPlatform": "android-arm64",
+            "emulator": True,
+        }
+        command_env = {
+            "QWQ_ANDROID_REVERSE_EXPECTED_PORTS": "19000,19010,19100,19130",
+            "QWQ_ANDROID_REVERSE_ACTUAL_PORTS": "19000,19010,19100,19130",
+            "QWQ_ANDROID_REVERSE_RECEIPT_DIGEST": "sha256:" + "6" * 64,
+            "QWQ_CONSUMER_LEASE_ID": "sha256:" + "7" * 64,
+        }
+        handoff = self._launcher_handoff(args)
+        binding = {
+            "releaseId": handoff["contentReleaseId"],
+            "manifestDigest": handoff["contentManifestDigest"],
+            "readinessReceiptDigest": handoff[
+                "contentReadinessReceiptDigest"
+            ],
+        }
+        completed = subprocess.CompletedProcess(
+            args=[str(smoke.APP_LAUNCHER_HANDOFF_BUILDER)],
+            returncode=0,
+            stdout=json.dumps(handoff),
+            stderr="",
+        )
+
+        with (
+            mock.patch.object(
+                smoke,
+                "load_test_live_content_binding",
+                return_value=binding,
+            ),
+            mock.patch.object(smoke.subprocess, "run", return_value=completed) as run,
+        ):
+            actual = smoke._canonical_test_live_launcher_handoff(
+                args,
+                device,
+                command_env,
+            )
+
+        self.assertEqual(actual, handoff)
+        builder_command = run.call_args.args[0]
+        self.assertIn("--launch-policy", builder_command)
+        self.assertEqual(
+            builder_command[builder_command.index("--launch-policy") + 1],
+            "test_live",
+        )
+        for option, value in (
+            ("--content-release-id", binding["releaseId"]),
+            ("--content-manifest-digest", binding["manifestDigest"]),
+            (
+                "--content-readiness-receipt-digest",
+                binding["readinessReceiptDigest"],
+            ),
+            ("--reverse-expected-ports", "19000,19010,19100,19130"),
+            ("--reverse-actual-ports", "19000,19010,19100,19130"),
+            ("--reverse-receipt-digest", "sha256:" + "6" * 64),
+            ("--consumer-lease-id", "sha256:" + "7" * 64),
+        ):
+            self.assertEqual(
+                builder_command[builder_command.index(option) + 1],
+                value,
+            )
+
+    @mock.patch.object(smoke.shutil, "which", return_value="/sdk/flutter")
+    @mock.patch.object(
+        smoke,
+        "resolve_android_debug_bridge",
+        return_value="/sdk/platform-tools/adb",
+    )
+    def test_same_handoff_drives_patrol_defines_and_raw_gradle_environment(
+        self,
+        _resolve_adb: mock.Mock,
+        _which: mock.Mock,
+    ) -> None:
+        args = self._args()
+        device = {
+            "id": "emulator-5554",
+            "targetPlatform": "android-arm64",
+            "emulator": True,
+        }
+        handoff = self._launcher_handoff(args)
+        poisoned = {
+            "QWQ_DART_DEFINES_DIGEST": "sha256:" + "f" * 64,
+            "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": "sha256:" + "e" * 64,
+            "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": "sha256:" + "d" * 64,
+            "QWQ_APP_LAUNCH_POLICY": "prod_release",
+            "QWQ_CONTENT_RELEASE_ID": "stale-release",
+        }
+
+        with mock.patch.dict(os.environ, poisoned, clear=False):
+            environment = smoke._device_command_env(
+                args,
+                device,
+                launcher_handoff=handoff,
+            )
+            command = smoke.patrol_command(
+                device,
+                args,
+                "patrol",
+                dart_define_file=Path("/protected/session.json"),
+                launcher_handoff=handoff,
+            )
+
+        self.assertEqual(
+            environment["QWQ_DART_DEFINES_DIGEST"],
+            handoff["dartDefinesDigest"],
+        )
+        self.assertEqual(
+            environment["QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST"],
+            handoff["runtimeConfigDigest"],
+        )
+        self.assertEqual(
+            environment["QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST"],
+            handoff["effectiveLaunchManifestDigest"],
+        )
+        self.assertEqual(environment["QWQ_APP_BUILD_CONTEXT"], "runtime")
+        self.assertEqual(environment["QWQ_APP_LAUNCH_POLICY"], "test_live")
+        self.assertEqual(
+            environment["QWQ_CONTENT_RELEASE_ID"],
+            handoff["contentReleaseId"],
+        )
+        command_defines: dict[str, list[str]] = {}
+        for argument in command:
+            if not argument.startswith("--dart-define="):
+                continue
+            key, value = argument.removeprefix("--dart-define=").split("=", 1)
+            command_defines.setdefault(key, []).append(value)
+        for key, value in handoff["dartDefines"].items():
+            self.assertEqual(command_defines[key], [value])
+
+    def test_canonical_handoff_rejects_missing_define_or_nested_digest_drift(
+        self,
+    ) -> None:
+        args = self._args()
+        missing_define = self._launcher_handoff(args)
+        del missing_define["dartDefines"]["CONTENT_BINDING_STATE"]
+        with self.assertRaisesRegex(ValueError, "Dart defines are incomplete"):
+            smoke._canonical_handoff_projection(missing_define)
+
+        digest_drift = self._launcher_handoff(args)
+        digest_drift["effectiveLaunchManifest"]["dartDefinesDigest"] = (
+            "sha256:" + "9" * 64
+        )
+        with self.assertRaisesRegex(ValueError, "effective manifest mismatch"):
+            smoke._canonical_handoff_projection(digest_drift)
+
+    def test_device_command_env_rejects_target_path_as_environment_alias(self) -> None:
+        args = self._args()
+        args.env_name = "test/user_acceptance/gamma-local.dart"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "does not resolve to a canonical launch target",
+        ):
+            smoke._device_command_env(
+                args,
+                {
+                    "id": "selected-ios-simulator",
+                    "targetPlatform": "ios",
+                    "emulator": True,
+                },
+            )
 
     def test_device_command_env_blocks_local_ios_simulator_without_id(self) -> None:
         args = self._args()
@@ -1784,6 +2658,34 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             self.assertEqual(result["status"], "captured")
             self.assertEqual(screenshot.read_bytes(), b"png")
             self.assertEqual(result["command"][0], "/sdk/platform-tools/adb")
+
+    def test_screenshot_timeout_is_evidence_failure_not_an_uncaught_error(self) -> None:
+        cases = (
+            ({"id": "emulator-5554", "targetPlatform": "android-arm64"}, "Android"),
+            ({"id": "ios-simulator", "targetPlatform": "ios", "emulator": True}, "iOS"),
+        )
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            for device, platform in cases:
+                with (
+                    self.subTest(platform=platform),
+                    mock.patch.object(
+                        device_evidence,
+                        "resolve_android_debug_bridge",
+                        return_value="/sdk/platform-tools/adb",
+                    ),
+                    mock.patch.object(
+                        device_evidence.subprocess,
+                        "run",
+                        side_effect=subprocess.TimeoutExpired("screenshot", 30),
+                    ),
+                ):
+                    result = device_evidence.capture_device_screenshot(
+                        device,
+                        Path(temporary_dir) / f"{platform}.png",
+                    )
+
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(result["failureKind"], "screenshot_timeout")
 
     def test_android_local_target_reverses_all_injected_authority_ports(self) -> None:
         args = self._args()
@@ -2023,19 +2925,9 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
         self.assertIn("@homepage_release path /homepages /homepages/*", beta_manual)
         self.assertIn("@creator_profile_release path /auth /auth/* /user /user/* /users /users/*", beta_manual)
 
-    def test_search_dependency_is_owned_by_gamma_overlay_not_content_base(self) -> None:
+    def test_search_dependency_is_owned_by_each_environment_overlay_not_content_base(self) -> None:
         content_compose = (
             ROOT / "quwoquan_service/services/content-service/deploy/compose.yaml"
-        ).read_text(encoding="utf-8")
-        gamma_content_overlay = (
-            ROOT
-            / "quwoquan_service"
-            / "services"
-            / "content-service"
-            / "environments"
-            / "gamma"
-            / "deploy"
-            / "compose.yaml"
         ).read_text(encoding="utf-8")
         content_dependencies = content_compose.split("    depends_on:\n", 1)[1].split(
             "    ports:\n", 1
@@ -2050,7 +2942,22 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
                 "package-bound Product Ops Elasticsearch Compose"
             ),
         )
-        self.assertIn("elasticsearch:\n        condition: service_healthy", gamma_content_overlay)
+        for environment in ("alpha", "beta", "gamma"):
+            with self.subTest(environment=environment):
+                environment_overlay = (
+                    ROOT
+                    / "quwoquan_service"
+                    / "services"
+                    / "content-service"
+                    / "environments"
+                    / environment
+                    / "deploy"
+                    / "compose.yaml"
+                ).read_text(encoding="utf-8")
+                self.assertIn(
+                    "elasticsearch:\n        condition: service_healthy",
+                    environment_overlay,
+                )
 
     def test_prod_sim_tls_uses_canonical_hosts_and_public_certificate(self) -> None:
         prod_sim = (
@@ -2090,9 +2997,17 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "tls {$QWQ_PUBLIC_TLS_CERT_FILE} {$QWQ_PUBLIC_TLS_KEY_FILE}",
         ):
             self.assertIn(token, caddyfile)
-        self.assertNotIn("LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT", caddyfile)
-        # object-storage-edge 由带 TLS 的 MinIO workload 独占；Caddy 不能再次
-        # 绑定同一宿主端口，否则 gamma-proxy 永远无法启动。
+        self.assertIn(
+            "reverse_proxy @object_store_public_slice "
+            "https://object-storage:{$LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT}",
+            caddyfile,
+        )
+        self.assertIn(
+            "tls_trust_pool file /etc/caddy/tls/object-storage-ca.pem",
+            caddyfile,
+        )
+        # object-storage-edge 由带 TLS 的 MinIO workload 独占宿主端口；
+        # Caddy 只通过 Compose 内网把缺失的 public slice 转发给该 workload。
         self.assertIn(
             '"${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:?LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT is required}:${LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT:?LOCAL_GAMMA_OBJECT_STORAGE_EDGE_PORT is required}"',
             infrastructure_compose,
@@ -2537,6 +3452,115 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "test/user_acceptance/journeys/home_video_playback/video_playback_canary__user_acceptance_test.dart",
         )
         self.assertNotIn("env", command)
+
+    def test_stackctl_home_video_smoke_injects_the_release_video_work_id(self) -> None:
+        target = {
+            "env": "alpha",
+            "publicBases": {
+                "api": "https://api.alpha.quwoquan.com:17000",
+                "productOps": "https://ops.alpha.quwoquan.com:17010",
+                "rtc": "wss://rtc.alpha.quwoquan.com:17000",
+                "mediaAvatar": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaImage": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaVideo": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaUpload": "https://upload.alpha.quwoquan.com:17130",
+            },
+            "playbackCanary": {"workId": "release-video-001"},
+        }
+        with (
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch.object(stackctl, "get_target", return_value=target),
+            mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
+        ):
+            command = stackctl._environment_page_smoke_profile_command(
+                "alpha",
+                "alpha-local",
+                Path("/tmp/alpha-home-video-report"),
+                patrol_target=stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
+            )
+
+        self.assertIsNotNone(command)
+        argv = command["argv"]
+        self.assertEqual(
+            argv[argv.index("--target") + 1],
+            stackctl.HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
+        )
+        self.assertEqual(
+            argv[argv.index("--video-playback-canary-work-id") + 1],
+            "release-video-001",
+        )
+
+    def test_stackctl_core_readback_injects_the_release_video_work_id(self) -> None:
+        target = {
+            "env": "alpha",
+            "publicBases": {
+                "api": "https://api.alpha.quwoquan.com:17000",
+                "productOps": "https://ops.alpha.quwoquan.com:17010",
+                "rtc": "wss://rtc.alpha.quwoquan.com:17000",
+                "mediaAvatar": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaImage": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaVideo": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaUpload": "https://upload.alpha.quwoquan.com:17130",
+            },
+            "playbackCanary": {"workId": "release-video-001"},
+        }
+        with (
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch.object(stackctl, "get_target", return_value=target),
+            mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
+        ):
+            command = stackctl._environment_page_smoke_profile_command(
+                "alpha",
+                "alpha-local",
+                Path("/tmp/alpha-core-readback-report"),
+                patrol_target=stackctl.APP_CORE_READBACK_UAT_TEST_TARGET,
+            )
+
+        self.assertIsNotNone(command)
+        argv = command["argv"]
+        self.assertEqual(
+            argv[argv.index("--video-playback-canary-work-id") + 1],
+            "release-video-001",
+        )
+
+    def test_stackctl_core_readback_uses_the_validated_app_uat_video_binding(
+        self,
+    ) -> None:
+        target = {
+            "env": "alpha",
+            "publicBases": {
+                "api": "https://api.alpha.quwoquan.com:17000",
+                "productOps": "https://ops.alpha.quwoquan.com:17010",
+                "rtc": "wss://rtc.alpha.quwoquan.com:17000",
+                "mediaAvatar": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaImage": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaVideo": "https://cdn.alpha.quwoquan.com:17100",
+                "mediaUpload": "https://upload.alpha.quwoquan.com:17130",
+            },
+            "playbackCanary": {"workId": "stale-environment-video"},
+        }
+        with (
+            mock.patch.object(stackctl, "load_environment_topology", return_value={}),
+            mock.patch.object(stackctl, "get_target", return_value=target),
+            mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
+            mock.patch.object(stackctl, "load_release_video_binding") as load_binding,
+        ):
+            command = stackctl._environment_page_smoke_profile_command(
+                "alpha",
+                "alpha-local",
+                Path("/tmp/alpha-core-readback-report"),
+                patrol_target=stackctl.APP_CORE_READBACK_UAT_TEST_TARGET,
+                data_readiness_path=Path("/tmp/release-readiness.json"),
+                release_video_work_id="release-video-from-app-uat-envelope",
+            )
+
+        self.assertIsNotNone(command)
+        argv = command["argv"]
+        self.assertEqual(
+            argv[argv.index("--video-playback-canary-work-id") + 1],
+            "release-video-from-app-uat-envelope",
+        )
+        load_binding.assert_not_called()
 
     def test_stackctl_runtime_recovery_uses_persisted_device_session_only(self) -> None:
         target = {

@@ -14,9 +14,8 @@ final class RecoveryRuntimeBinding {
     final normalizedEnvironment = environment.trim();
     final cloudEnvironment = CloudEnvironment.values.firstWhere(
       (candidate) => candidate.name == normalizedEnvironment,
-      orElse: () => throw const FormatException(
-        'invalid recovery runtime environment',
-      ),
+      orElse: () =>
+          throw const FormatException('invalid recovery runtime environment'),
     );
     final recoveryOrigin = Uri.tryParse(recoveryBaseUrl.trim());
     if (recoveryOrigin == null ||

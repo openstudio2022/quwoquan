@@ -39,7 +39,16 @@ func TestAppReleaseVersionResponseContainsOnlyRecoveryContractFields(t *testing.
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode version response: %v", err)
 	}
-	wantKeys := []string{"latestBuild", "latestVersion", "recoveryUrl", "updateUrl"}
+	wantKeys := []string{
+		"latestBuild",
+		"latestVersion",
+		"minimumSupportedBuild",
+		"minimumSupportedVersion",
+		"platform",
+		"recoveryUrl",
+		"updateState",
+		"updateUrl",
+	}
 	gotKeys := make([]string, 0, len(payload))
 	for key := range payload {
 		gotKeys = append(gotKeys, key)
@@ -50,6 +59,46 @@ func TestAppReleaseVersionResponseContainsOnlyRecoveryContractFields(t *testing.
 	}
 	if payload["updateUrl"] != "https://download.quwoquan.example/download/android" {
 		t.Fatalf("android update url=%v", payload["updateUrl"])
+	}
+	if payload["platform"] != "android" || payload["minimumSupportedBuild"] != "18000" || payload["updateState"] != "available" {
+		t.Fatalf("android version policy=%v", payload)
+	}
+}
+
+func TestAppReleaseDerivesUpdateStateFromBuildOnly(t *testing.T) {
+	service := newAppReleaseService(t)
+	for _, test := range []struct {
+		build string
+		want  string
+	}{
+		{build: "17999", want: apprelease.UpdateStateRequired},
+		{build: "18000", want: apprelease.UpdateStateAvailable},
+		{build: "18201", want: apprelease.UpdateStateNone},
+		{build: "19000", want: apprelease.UpdateStateNone},
+	} {
+		result, err := service.Version(apprelease.VersionQuery{
+			Platform: "android", AppVersion: "ignored-for-state", BuildNumber: test.build,
+		})
+		if err != nil {
+			t.Fatalf("version build=%s: %v", test.build, err)
+		}
+		if result.UpdateState != test.want {
+			t.Fatalf("build=%s state=%s want=%s", test.build, result.UpdateState, test.want)
+		}
+	}
+}
+
+func TestAppReleaseSupportsWebAsAnIndependentPlatform(t *testing.T) {
+	service := newAppReleaseService(t)
+	result, err := service.Version(apprelease.VersionQuery{
+		Platform: "web", AppVersion: "1.8.0", BuildNumber: "18000",
+	})
+	if err != nil {
+		t.Fatalf("web version: %v", err)
+	}
+	if result.Platform != "web" || result.UpdateState != apprelease.UpdateStateAvailable ||
+		result.UpdateURL != "https://download.quwoquan.example/" {
+		t.Fatalf("web version=%+v", result)
 	}
 }
 
@@ -106,6 +155,18 @@ func TestAndroidExplicitDownloadAndLatestManifestUseVerifiedRelease(t *testing.T
 	if got := download.Header().Get("Location"); got != "https://cdn.quwoquan.example/releases/quwoquan-18201.apk" {
 		t.Fatalf("android location=%q", got)
 	}
+	if got := download.Header().Get("X-App-Package-SHA256"); got != testSHA256 {
+		t.Fatalf("android package digest header=%q", got)
+	}
+	if got := download.Header().Get("X-App-Build-Number"); got != "18201" {
+		t.Fatalf("android build header=%q", got)
+	}
+	if got := download.Header().Get("X-Quwoquan-APK-SHA256"); got != "" {
+		t.Fatalf("legacy branded package header must be absent, got=%q", got)
+	}
+	if got := download.Header().Get("X-Quwoquan-APK-Build"); got != "" {
+		t.Fatalf("legacy branded build header must be absent, got=%q", got)
+	}
 
 	manifest := httptest.NewRecorder()
 	mux.ServeHTTP(manifest, httptest.NewRequest(http.MethodGet, "/download/android/latest.json", nil))
@@ -141,6 +202,18 @@ func TestAppReleaseRejectsUntrustedAndroidAPKAndIncompleteProof(t *testing.T) {
 	catalog.IOS.RecoveryURL = "https://attacker.example/recovery"
 	if _, err := apprelease.NewService(catalog); err == nil {
 		t.Fatal("recovery url outside the official web host must be rejected")
+	}
+
+	catalog = appReleaseCatalog()
+	catalog.IOS.UpdateURL = "https://attacker.example/app"
+	if _, err := apprelease.NewService(catalog); err == nil {
+		t.Fatal("ios update url outside the app store must be rejected")
+	}
+
+	catalog = appReleaseCatalog()
+	catalog.Web.MinimumSupportedBuild = "19000"
+	if _, err := apprelease.NewService(catalog); err == nil {
+		t.Fatal("minimum supported build above latest must be rejected")
 	}
 }
 
@@ -188,14 +261,18 @@ func appReleaseCatalog() apprelease.Catalog {
 	return apprelease.Catalog{
 		PublicOrigin: "https://download.quwoquan.example",
 		IOS: apprelease.Release{
-			LatestVersion: "1.8.2",
-			LatestBuild:   "18201",
-			UpdateURL:     "",
-			RecoveryURL:   "https://download.quwoquan.example/download/ios",
+			LatestVersion:           "1.8.2",
+			LatestBuild:             "18201",
+			MinimumSupportedVersion: "1.8.0",
+			MinimumSupportedBuild:   "18000",
+			UpdateURL:               "https://apps.apple.com/app/id1234567890",
+			RecoveryURL:             "https://download.quwoquan.example/download/ios",
 		},
 		Android: apprelease.Release{
 			LatestVersion:               "1.8.2",
 			LatestBuild:                 "18201",
+			MinimumSupportedVersion:     "1.8.0",
+			MinimumSupportedBuild:       "18000",
 			UpdateURL:                   "https://download.quwoquan.example/download/android",
 			RecoveryURL:                 "https://download.quwoquan.example/download",
 			APKURL:                      "https://cdn.quwoquan.example/releases/quwoquan-18201.apk",
@@ -205,6 +282,14 @@ func appReleaseCatalog() apprelease.Catalog {
 			APKSizeBytes:                42,
 			APKSigningCertificateSHA256: testCertificate,
 			MinAndroidVersion:           "26",
+		},
+		Web: apprelease.Release{
+			LatestVersion:           "1.8.2",
+			LatestBuild:             "18201",
+			MinimumSupportedVersion: "1.8.0",
+			MinimumSupportedBuild:   "18000",
+			UpdateURL:               "https://download.quwoquan.example/",
+			RecoveryURL:             "https://download.quwoquan.example/download",
 		},
 	}
 }

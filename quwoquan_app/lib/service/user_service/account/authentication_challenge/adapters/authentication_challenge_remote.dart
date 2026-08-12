@@ -3,7 +3,10 @@ import 'package:quwoquan_app/service/user_service/account/authentication_challen
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 typedef AuthenticationChallengeInvocationContextFactory =
-    CloudOperationInvocationContext Function(String clientPageId);
+    CloudOperationInvocationContext Function(
+      String clientPageId, {
+      String? idempotencyKey,
+    });
 
 /// AuthenticationChallenge 的 production generated-client adapter。
 final class RemoteAuthenticationChallengeCommandWriter
@@ -17,11 +20,33 @@ final class RemoteAuthenticationChallengeCommandWriter
   final AuthenticationChallengeInvocationContextFactory invocationContext;
 
   @override
-  Future<OtpChallengeIssueResult> sendOtp(SendOtpCommand command) =>
-      client.userAuthenticationChallengeSendOtp(
-        command,
-        context: invocationContext(UserRequestPageIds.sendOtp),
-      );
+  Future<OtpDeliveryReadinessSnapshot> getOtpDeliveryReadiness() async {
+    final result = await client
+        .userAuthenticationChallengeGetOtpDeliveryReadiness(
+          const OtpDeliveryReadinessQuery(),
+          context: invocationContext(
+            UserRequestPageIds.getOtpDeliveryReadiness,
+          ),
+        );
+    return OtpDeliveryReadinessSnapshot(
+      availability: result.availability == OtpDeliveryAvailability.ready
+          ? OtpDeliveryReadinessAvailability.ready
+          : OtpDeliveryReadinessAvailability.temporarilyUnavailable,
+      retryAfterSeconds: result.retryAfterSeconds,
+    );
+  }
+
+  @override
+  Future<OtpChallengeIssueResult> sendOtp(
+    SendOtpCommand command, {
+    required String idempotencyKey,
+  }) => client.userAuthenticationChallengeSendOtp(
+    command,
+    context: invocationContext(
+      UserRequestPageIds.sendOtp,
+      idempotencyKey: idempotencyKey,
+    ),
+  );
 
   @override
   Future<AlipayAuthorizationGrant> createAlipayAuthorizationRequest(

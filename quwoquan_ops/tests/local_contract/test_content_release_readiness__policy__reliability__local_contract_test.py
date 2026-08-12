@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from quwoquan_ops.cli import stackctl
 from quwoquan_ops.cli.lib.content_release_readiness import (
@@ -222,7 +223,7 @@ def test_content_release_import_plane_excludes_tag_and_search__local_contract(
     assert "search-service" in full_plane
 
 
-def test_content_consumer_feed_health_includes_session_id__local_contract() -> None:
+def test_content_consumer_feed_health_uses_canonical_homepage_route__local_contract() -> None:
     topology = stackctl.load_environment_topology()
     checks = stackctl._health_checks_for_target(
         topology,
@@ -231,10 +232,14 @@ def test_content_consumer_feed_health_includes_session_id__local_contract() -> N
         workload="content-release",
     )
     feed = next(item for item in checks if item["name"] == "content-feed")
-    assert "sessionId=" in str(feed["url"])
-    assert str(feed["url"]).endswith("sessionId=stackctl-content-consumer-health") or (
-        "sessionId=stackctl-content-consumer-health" in str(feed["url"])
-    )
+    parsed = urlparse(str(feed["url"]))
+    assert parsed.path == "/content/feed"
+    assert parse_qs(parsed.query) == {
+        "sort": ["recommend"],
+        "channelId": ["recommend"],
+        "limit": ["1"],
+        "sessionId": ["stackctl-content-consumer-health"],
+    }
 
 
 def test_content_commercial_health_adds_product_ops_without_full_plane__local_contract() -> (
@@ -672,6 +677,9 @@ def _write_data_readiness_fixture(
     media_path.parent.mkdir(parents=True)
     media_path.write_text('{"assets":[{"assetId":"video-asset"}]}\n', encoding="utf-8")
     manifest_digest = "sha256:" + "2" * 64
+    source_revision = "sha256:" + "a" * 64
+    source_digest = "sha256:" + "b" * 64
+    entity_catalog_digest = "sha256:" + "c" * 64
     attestation_path = release_root / "attestations" / "release.json"
     attestation_path.parent.mkdir(parents=True)
     attestation_path.write_text(
@@ -680,6 +688,11 @@ def _write_data_readiness_fixture(
                 "releaseId": release_id,
                 "sourceOwner": "qwq_data",
                 "payloadSha256": manifest_digest,
+                "releaseClass": "commercial",
+                "productLifecycleState": "commercial",
+                "sourceRevision": source_revision,
+                "sourceDigest": source_digest,
+                "entityCatalogDigest": entity_catalog_digest,
             }
         ),
         encoding="utf-8",
@@ -750,6 +763,25 @@ def _write_data_readiness_fixture(
         for name, query, post_ids in feed_queries
     ]
     guest_actor_hash = "sha256:" + "3" * 64
+    app_uat_envelope = {
+        "releaseId": release_id,
+        "releaseClass": "commercial",
+        "productLifecycleState": "commercial",
+        "homepageId": "homepage-west-lake",
+        "homepageTitle": "西湖",
+        "articleWorkId": "post-article",
+        "articleTitle": "西湖文章",
+        "imageWorkId": "post-image",
+        "imageTitle": "西湖图片",
+        "videoWorkId": "post-video",
+        "videoTitle": "西湖视频",
+        "creatorName": "西湖创作者",
+        "creatorUserHandle": "west_lake_creator",
+        "creatorPersonaId": "persona-west-lake",
+        "creatorAvatarAssetId": "creator-avatar-1",
+        "tagLabel": "西湖",
+        "videoAttribution": "测试来源",
+    }
     post_verification_path = output_root / refs["postApiVerificationRef"]
     post_verification_path.write_text(
         json.dumps(
@@ -826,6 +858,9 @@ def _write_data_readiness_fixture(
         "authorizationRequiredAssetIds": [],
         "researchAcceptedCount": 3,
         "commercialAcceptedCount": 3,
+        "sourceRevision": source_revision,
+        "sourceDigest": source_digest,
+        "entityCatalogDigest": entity_catalog_digest,
         "readinessPhase": "commercial",
         "manifestDigest": manifest_digest,
         "mediaManifestDigest": "sha256:"
@@ -853,9 +888,35 @@ def _write_data_readiness_fixture(
         "feedQueries": feed_query_evidence,
         **refs,
         "mediaManifestRef": media_path.relative_to(output_root).as_posix(),
+        "appUatEnvelope": app_uat_envelope,
+        "appUatEnvelopeDigest": stackctl._canonical_document_checksum(
+            app_uat_envelope
+        ),
         "verifiedAt": "2026-07-28T00:00:00Z",
         "passed": True,
     }
+    import_ref = refs["contentImportReportRef"]
+    receipt["activationEnvelope"] = {
+        "schema": "quwoquan_data.environment_activation_envelope",
+        "environment": environment,
+        "releaseId": release_id,
+        "manifestDigest": manifest_digest,
+        "sourceRevision": source_revision,
+        "sourceDigest": source_digest,
+        "entityCatalogDigest": entity_catalog_digest,
+        "releaseClass": "commercial",
+        "productLifecycleState": "commercial",
+        "readinessPhase": "commercial",
+        "importRunId": "import-001",
+        "verifyRunId": verify_run_id,
+        "importReportRef": import_ref,
+        "importReportDigest": "sha256:"
+        + hashlib.sha256((output_root / import_ref).read_bytes()).hexdigest(),
+        "appUatEnvelopeDigest": receipt["appUatEnvelopeDigest"],
+    }
+    receipt["activationEnvelopeDigest"] = (
+        stackctl._canonical_document_checksum(receipt["activationEnvelope"])
+    )
     receipt["verificationChecksum"] = stackctl._canonical_document_checksum(receipt)
     receipt_path = evidence_root / "release-readiness.json"
     receipt_path.write_text(
@@ -863,6 +924,89 @@ def _write_data_readiness_fixture(
         encoding="utf-8",
     )
     return receipt_path, manifest_digest
+
+
+def _convert_data_readiness_fixture_to_research(
+    *,
+    output_root: Path,
+    receipt_path: Path,
+) -> None:
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["releaseClass"] = "research"
+    receipt["productLifecycleState"] = "research"
+    receipt["readinessPhase"] = "research"
+    receipt["internalSubjectHash"] = "sha256:" + "7" * 64
+    receipt.pop("guestActorHash", None)
+    receipt.pop("guestLogin", None)
+    app_uat = receipt["appUatEnvelope"]
+    app_uat["releaseClass"] = "research"
+    app_uat["productLifecycleState"] = "research"
+    receipt["appUatEnvelopeDigest"] = stackctl._canonical_document_checksum(
+        app_uat
+    )
+    attestation_path = (
+        output_root
+        / "data/releases"
+        / receipt["releaseId"]
+        / "attestations/release.json"
+    )
+    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+    attestation["releaseClass"] = "research"
+    attestation["productLifecycleState"] = "research"
+    attestation_path.write_text(json.dumps(attestation), encoding="utf-8")
+    post_path = output_root / receipt["postApiVerificationRef"]
+    post = json.loads(post_path.read_text(encoding="utf-8"))
+    post["internalSubjectHash"] = receipt["internalSubjectHash"]
+    post.pop("guestActorHash", None)
+    post.pop("guestLogin", None)
+    post_path.write_text(json.dumps(post), encoding="utf-8")
+    isolation_ref = (
+        Path("env")
+        / receipt["environment"]
+        / "runs/data-release"
+        / receipt["releaseId"]
+        / receipt["verifyRunId"]
+        / "research-isolation-verification.json"
+    ).as_posix()
+    isolation_path = output_root / isolation_ref
+    isolation = {
+        "policyRef": (
+            f"quwoquan_ops/environments/{receipt['environment']}/runtime.yaml"
+        ),
+        "policySha256": "sha256:" + "8" * 64,
+        "subjectHash": receipt["internalSubjectHash"],
+    }
+    isolation_path.write_text(json.dumps(isolation), encoding="utf-8")
+    isolation_digest = "sha256:" + hashlib.sha256(
+        isolation_path.read_bytes()
+    ).hexdigest()
+    receipt["researchIsolationVerificationRef"] = isolation_ref
+    receipt["researchIsolationVerificationDigest"] = isolation_digest
+    activation = receipt["activationEnvelope"]
+    activation.update(
+        {
+            "releaseClass": "research",
+            "productLifecycleState": "research",
+            "readinessPhase": "research",
+            "appUatEnvelopeDigest": receipt["appUatEnvelopeDigest"],
+            "researchIsolationPolicy": {
+                "policyRef": isolation["policyRef"],
+                "policyDigest": isolation["policySha256"],
+                "verificationRef": isolation_ref,
+                "verificationDigest": isolation_digest,
+                "subjectHash": receipt["internalSubjectHash"],
+            },
+        }
+    )
+    receipt["activationEnvelopeDigest"] = stackctl._canonical_document_checksum(
+        activation
+    )
+    unsigned = dict(receipt)
+    unsigned.pop("verificationChecksum")
+    receipt["verificationChecksum"] = stackctl._canonical_document_checksum(
+        unsigned
+    )
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
 
 
 def test_data_release_readiness__binds_digest_exact_queries_and_evidence__local_contract(
@@ -883,6 +1027,133 @@ def test_data_release_readiness__binds_digest_exact_queries_and_evidence__local_
     assert loaded_path == receipt_path
     assert receipt["counts"]["premiumPlayableVideos"] == 1
     assert receipt["sourceOwner"] == "qwq_data"
+
+
+def test_data_release_readiness__accepts_typed_source_identity_set__local_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    receipt_path, manifest_digest = _write_data_readiness_fixture(
+        output_root=tmp_path
+    )
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    identities = [
+        {
+            "identityKind": "legacy_canonical_migration",
+            "sourceDigest": "sha256:" + "6" * 64,
+            "canonicalObjectDigest": "sha256:" + "7" * 64,
+            "migrationEvidenceDigest": "sha256:" + "8" * 64,
+            "executionIds": ["execution-001"],
+        }
+    ]
+    identity_set_digest = "sha256:" + "9" * 64
+    for key in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
+        receipt.pop(key)
+        receipt["activationEnvelope"].pop(key)
+    receipt["sourceIdentities"] = identities
+    receipt["sourceIdentitySetDigest"] = identity_set_digest
+    receipt["activationEnvelope"]["sourceIdentities"] = identities
+    receipt["activationEnvelope"]["sourceIdentitySetDigest"] = identity_set_digest
+    receipt["activationEnvelopeDigest"] = stackctl._canonical_document_checksum(
+        receipt["activationEnvelope"]
+    )
+    attestation_path = (
+        tmp_path
+        / "data/releases/pilot-002/attestations/release.json"
+    )
+    attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+    for key in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
+        attestation.pop(key)
+    attestation["sourceIdentities"] = identities
+    attestation["sourceIdentitySetDigest"] = identity_set_digest
+    attestation_path.write_text(json.dumps(attestation), encoding="utf-8")
+    unsigned = dict(receipt)
+    unsigned.pop("verificationChecksum")
+    receipt["verificationChecksum"] = stackctl._canonical_document_checksum(
+        unsigned
+    )
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    loaded, _ = stackctl._load_data_release_readiness(
+        environment="gamma",
+        release_id="pilot-002",
+        verify_run_id="verify-001",
+        manifest_digest=manifest_digest,
+        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+    )
+
+    assert loaded["sourceIdentities"] == identities
+    assert loaded["sourceIdentitySetDigest"] == identity_set_digest
+
+
+def test_data_release_readiness__accepts_explicit_platform_default_avatar__local_contract(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    receipt_path, manifest_digest = _write_data_readiness_fixture(
+        output_root=tmp_path
+    )
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    post_path = tmp_path / receipt["postApiVerificationRef"]
+    post = json.loads(post_path.read_text(encoding="utf-8"))
+    post["creators"][-1].update(
+        {
+            "avatarAssetId": None,
+            "avatarUrl": "",
+            "avatarMediaReady": False,
+            "avatarProbeCount": 0,
+            "avatarProbe": None,
+            "usesPlatformDefaultAvatar": True,
+        }
+    )
+    post_path.write_text(json.dumps(post), encoding="utf-8")
+    receipt["counts"]["avatarAssets"] = 3
+    unsigned = dict(receipt)
+    unsigned.pop("verificationChecksum")
+    receipt["verificationChecksum"] = stackctl._canonical_document_checksum(
+        unsigned
+    )
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    loaded, _ = stackctl._load_data_release_readiness(
+        environment="gamma",
+        release_id="pilot-002",
+        verify_run_id="verify-001",
+        manifest_digest=manifest_digest,
+        readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+    )
+
+    assert loaded["counts"]["avatarAssets"] == 3
+
+
+def test_data_release_readiness__research_binds_activation_isolation_policy(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    receipt_path, manifest_digest = _write_data_readiness_fixture(
+        output_root=tmp_path
+    )
+    _convert_data_readiness_fixture_to_research(
+        output_root=tmp_path,
+        receipt_path=receipt_path,
+    )
+
+    receipt, _ = stackctl._load_data_release_readiness(
+        environment="gamma",
+        release_id="pilot-002",
+        verify_run_id="verify-001",
+        manifest_digest=manifest_digest,
+        readiness_phase=stackctl.ReadinessPhase.RESEARCH,
+    )
+
+    isolation = receipt["activationEnvelope"]["researchIsolationPolicy"]
+    assert isolation["policyRef"] == "quwoquan_ops/environments/gamma/runtime.yaml"
+    assert isolation["verificationRef"] == receipt[
+        "researchIsolationVerificationRef"
+    ]
 
 
 def test_data_release_readiness__rejects_tampered_receipt__local_contract(
@@ -908,6 +1179,40 @@ def test_data_release_readiness__rejects_tampered_receipt__local_contract(
         assert "playable video" in str(exc)
     else:
         raise AssertionError("tampered readiness receipt must be rejected")
+
+
+def test_data_release_readiness__rejects_resigned_activation_identity_drift(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(tmp_path))
+    receipt_path, manifest_digest = _write_data_readiness_fixture(
+        output_root=tmp_path
+    )
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["activationEnvelope"]["sourceDigest"] = "sha256:" + "9" * 64
+    receipt["activationEnvelopeDigest"] = stackctl._canonical_document_checksum(
+        receipt["activationEnvelope"]
+    )
+    unsigned = dict(receipt)
+    unsigned.pop("verificationChecksum")
+    receipt["verificationChecksum"] = stackctl._canonical_document_checksum(
+        unsigned
+    )
+    receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+    try:
+        stackctl._load_data_release_readiness(
+            environment="gamma",
+            release_id="pilot-002",
+            verify_run_id="verify-001",
+            manifest_digest=manifest_digest,
+            readiness_phase=stackctl.ReadinessPhase.COMMERCIAL,
+        )
+    except ValueError as exc:
+        assert "activationEnvelope drifts" in str(exc)
+    else:
+        raise AssertionError("resigned activation identity drift must be rejected")
 
 
 def test_data_release_readiness__projects_live_exact_query_expectations__local_contract(
@@ -950,6 +1255,10 @@ def test_data_release_readiness__consumer_does_not_require_premium_supply(
         if row["name"] != "premium_stream"
     ]
     receipt["counts"]["premiumPlayableVideos"] = 0
+    receipt["activationEnvelope"]["readinessPhase"] = "consumer"
+    receipt["activationEnvelopeDigest"] = stackctl._canonical_document_checksum(
+        receipt["activationEnvelope"]
+    )
     post_path = tmp_path / receipt["postApiVerificationRef"]
     post = json.loads(post_path.read_text(encoding="utf-8"))
     post["feedQueries"] = list(receipt["feedQueries"])

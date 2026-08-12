@@ -21,6 +21,7 @@ task:
     - creative_brief_block
     - persona_block
     - writing_intent_line
+    - article_category_line
     - narrative_block
     - base_source_line
     - banned_terms_line

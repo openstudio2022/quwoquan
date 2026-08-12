@@ -217,7 +217,7 @@ types:
       api_exposure: drop
       ops_exposure: read
   UpdateExperimentRolloutRequest:
-    description: 更新 Experiment 状态和 draft 期变体权重的唯一强类型请求实体；experimentId 只从 path 绑定，expectedVersion 只从 If-Match 绑定
+    description: 更新 Experiment 状态和当前 revision 变体权重的唯一强类型请求实体；运行中 rollout 允许原子重分配非负权重但总和必须精确为 10000 且至少一个变体为正；experimentId 只从 path 绑定，expectedVersion 只从 If-Match 绑定
     fields:
     - name: experimentId
       type: string

@@ -8,6 +8,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from quwoquan_ops.ci import render_release_lifecycle_receipts as lifecycle
+from quwoquan_ops.tests.local_contract.rollout_stage_promotion_evidence_test_support import (
+    promotion_evidence,
+)
 
 
 def digest(character: str) -> str:
@@ -39,7 +42,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
     def _hosted_receipt(
         self,
         *,
-        stage: str = "full",
+        stage: str = "100",
         decision: str = "continue",
         rollback_outcome: str = "not_triggered",
         from_candidate: str | None = None,
@@ -56,7 +59,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             "service": self.service,
             "fromCandidateDigest": from_value,
             "toCandidateDigest": to_value,
-            "step": {"gray-initial": "5", "carry-on": "25", "full": "100"}[
+            "step": {"canary": "0", "5": "5", "20": "20", "50": "50", "100": "100"}[
                 stage
             ],
             "stage": stage,
@@ -99,7 +102,20 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             "adapterDigest": digest("4"),
             "expectedGeneration": generation - 1,
             "committedGeneration": generation,
-            "sloReadback": {"sampleCount": 100},
+            "sloReadback": {
+                "sampleCount": 100,
+                **(
+                    {
+                        "promotionEvidence": promotion_evidence(
+                            candidate_id=to_value,
+                            artifact_digest=self.artifact,
+                            stage=trigger_stage or stage,
+                        )
+                    }
+                    if decision == "continue"
+                    else {}
+                ),
+            },
             "postChecks": [
                 {
                     "name": "health",
@@ -143,9 +159,11 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             "contract_graph_digest": receipt["contractGraphDigest"],
             "adapter_digest": receipt["adapterDigest"],
             "last_good_candidate_digest": receipt["lastGoodCandidateDigest"],
-            "gray_initial_receipt_id": "",
-            "carry_on_receipt_id": "",
-            "full_receipt_id": "",
+            "canary_receipt_id": "",
+            "percent_5_receipt_id": "",
+            "percent_20_receipt_id": "",
+            "percent_50_receipt_id": "",
+            "percent_100_receipt_id": "",
             "generation": str(receipt["committedGeneration"]),
             "receipt_id": receipt["receiptId"],
             "updated_at": receipt["verifiedAt"],
@@ -265,7 +283,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
     ) -> tuple[tuple[Path, dict], tuple[Path, dict]]:
         if rollback_outcome == "rolled_back":
             receipt = self._hosted_receipt(
-                stage="full",
+                stage="100",
                 trigger_stage=stage,
                 decision="rolled_back",
                 rollback_outcome="rolled_back",
@@ -282,7 +300,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                 to_candidate=self.candidate,
                 last_good=(
                     self.candidate
-                    if stage == "full" and rollback_outcome == "not_triggered"
+                    if stage == "100" and rollback_outcome == "not_triggered"
                     else self.from_candidate
                 ),
             )
@@ -346,11 +364,13 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             root = Path(temporary)
             reports = {}
             readbacks = {}
-            reports["gray-initial"], readbacks["gray-initial"] = self._stage_pair(
-                root, stage="gray-initial"
+            reports["canary"], readbacks["canary"] = self._stage_pair(
+                root, stage="canary"
             )
-            reports["carry-on"], readbacks["carry-on"] = self._stage_pair(
-                root, stage="carry-on", rollback_outcome="rolled_back"
+            reports["5"], readbacks["5"] = self._stage_pair(root, stage="5")
+            reports["20"], readbacks["20"] = self._stage_pair(root, stage="20")
+            reports["50"], readbacks["50"] = self._stage_pair(
+                root, stage="50", rollback_outcome="rolled_back"
             )
             with patch.object(lifecycle, "validate_manifest"):
                 result = lifecycle.render_prod_outcome(
@@ -376,7 +396,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             root = Path(temporary)
             report, readback = self._stage_pair(
                 root,
-                stage="gray-initial",
+                stage="canary",
                 decision="rollback_failed",
                 rollback_outcome="rollback_failed",
             )
@@ -385,8 +405,8 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                     manifest=self._manifest("deployable"),
                     service=self.service,
                     from_candidate_digest=self.from_candidate,
-                    reports={"gray-initial": report},
-                    readbacks={"gray-initial": readback},
+                    reports={"canary": report},
+                    readbacks={"canary": readback},
                     archive_prefix="evidence/raw/prod/outcome",
                     hard_deadline_epoch=int(
                         lifecycle.dt.datetime(
@@ -404,7 +424,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
             root = Path(temporary)
             report, readback = self._stage_pair(
                 root,
-                stage="gray-initial",
+                stage="canary",
                 rollback_outcome="rolled_back",
             )
             report_path, report_payload = report
@@ -417,8 +437,8 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                     manifest=self._manifest("deployable"),
                     service=self.service,
                     from_candidate_digest=self.from_candidate,
-                    reports={"gray-initial": (report_path, report_payload)},
-                    readbacks={"gray-initial": readback},
+                    reports={"canary": (report_path, report_payload)},
+                    readbacks={"canary": readback},
                     archive_prefix="evidence/raw/prod/outcome",
                     hard_deadline_epoch=int(
                         lifecycle.dt.datetime(
@@ -431,7 +451,7 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
     def test_missing_full_stage_cannot_be_reported_as_released(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            report, readback = self._stage_pair(root, stage="gray-initial")
+            report, readback = self._stage_pair(root, stage="canary")
             with patch.object(lifecycle, "validate_manifest"), self.assertRaisesRegex(
                 ValueError, "full rollout evidence is incomplete"
             ):
@@ -439,8 +459,8 @@ class ReleaseLifecycleReceiptsTest(unittest.TestCase):
                     manifest=self._manifest("deployable"),
                     service=self.service,
                     from_candidate_digest=self.from_candidate,
-                    reports={"gray-initial": report},
-                    readbacks={"gray-initial": readback},
+                    reports={"canary": report},
+                    readbacks={"canary": readback},
                     archive_prefix="evidence/raw/prod/outcome",
                     hard_deadline_epoch=int(
                         lifecycle.dt.datetime(

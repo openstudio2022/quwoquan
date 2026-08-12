@@ -33,12 +33,12 @@ REPORT_SCHEMA = "assistant-runtime-smoke-report"
 SCENARIO_FIXTURE = (
     REPO_ROOT
     / "quwoquan_service"
-    / "contracts"
-    / "metadata"
-    / "assistant"
-    / "test_fixtures"
-    / "scenarios"
-    / "assistant_scenarios.json"
+    / "services"
+    / "assistant-service"
+    / "tests"
+    / "support"
+    / "eval_corpora"
+    / "assistant_runtime_smoke_scenarios.json"
 )
 BAD_ANSWER_TOKENS = (
     "ASSISTANT.MIDDLEWARE",

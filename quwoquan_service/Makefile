@@ -1,11 +1,14 @@
 .PHONY: gate build test test-all-services test-unit test-contract test-contract-local test-integration test-runtime-api-integration test-chat-ready-index-alpha-beta lint service-contract-view verify-metadata verify-actor-persona-vocabulary verify-openapi verify-contract-graph verify-contract-graph-commercial verify-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors verify-assistant-runtime-enums verify-shared-contract-enums verify-storage-keyset-single-track verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission verify-content-architecture verify-redis-routes codegen-redis-routes codegen codegen-openapi codegen-contract-graph codegen-observability-catalog codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop verify-operation-privacy-redaction codegen-operation-privacy
 .PHONY: verify-assistant-citation-destinations codegen-assistant-citation-destinations
 .PHONY: verify-storage-index-governance
+.PHONY: verify-graphql-read-rest-command-single-track verify-graphql-read-rest-command-zero
+.PHONY: verify-graphql-read-registry codegen-graphql-read-registry verify-graphql-app-client codegen-graphql-app-client
 .PHONY: verify-link-templates-go codegen-link-templates-go
 .PHONY: verify-api-edge-errors codegen-api-edge-errors
 .PHONY: verify-assistant-tool-catalog codegen-assistant-tool-catalog
 .PHONY: codegen-event-constants
 .PHONY: verify-app-shell-navigation codegen-app-shell-navigation
+.PHONY: verify-domain-model-compatibility
 
 SCENARIO ?= content_feed
 DB ?= quwoquan_content
@@ -21,6 +24,13 @@ ML_DRIFT_BASELINE_DATE ?=
 ML_DRIFT_OUT ?=
 FLYWHEEL_REQUIRE_CLOSED ?= false
 FLYWHEEL_OUT ?=
+GRAPHQL_READ_REGISTRY_EXAMPLE_CANDIDATE_DIGEST ?= sha256:1111111111111111111111111111111111111111111111111111111111111111
+DOMAIN_MODEL_BASELINE_RECEIPT ?=
+DOMAIN_MODEL_BASELINE_GRAPH ?=
+DOMAIN_MODEL_CURRENT_GRAPH ?= generated/contract_graph.json
+DOMAIN_MODEL_COMPATIBILITY_WINDOW ?=
+DOMAIN_MODEL_STORAGE_MIGRATION_PLAN ?=
+DOMAIN_MODEL_COMPATIBILITY_REPORT ?= $(QWQ_OUTPUT_ROOT)/env/repo/runs/domain-model-compatibility/report.json
 REPO_ROOT ?= $(abspath ..)
 QWQ_OUTPUT_ROOT := $(REPO_ROOT)/.qwq_output
 # 每个 Make 进程独占可删除编译视图，避免并发 codegen 在 ContractGraph 编译和对象
@@ -105,7 +115,7 @@ verify-ddd-cqrs-baseline:
 	go test ./internal/metadata/load ./internal/metadata/graph ./internal/metadata/validate
 	go test ./services/content-service/internal/trust_safety/report/domain/... ./services/content-service/internal/trust_safety/report/application
 
-verify-metadata: service-contract-view verify-actor-persona-vocabulary verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-api-edge-errors verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-tool-catalog verify-assistant-citation-destinations verify-link-templates-go verify-shared-contract-enums verify-storage-keyset-single-track verify-storage-index-governance verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance
+verify-metadata: service-contract-view verify-actor-persona-vocabulary verify-codegen-contract-graph-source verify-contract-graph-single-track verify-observability-catalog verify-api-edge-errors verify-assistant-service-errors verify-assistant-runtime-enums verify-assistant-tool-catalog verify-assistant-citation-destinations verify-link-templates-go verify-shared-contract-enums verify-storage-keyset-single-track verify-storage-index-governance verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-graphql-read-registry
 	@$(MAKE) verify-contract-graph-commercial
 	go run ./tools/verify_metadata/ "$(CONTRACT_VIEW)"
 
@@ -134,7 +144,7 @@ verify-assistant-runtime-enums: service-contract-view
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --assistant-runtime-enums-go-output services/assistant-service/generated/assistant/assistant_session/assistant_runtime_enums.g.go --check-assistant-runtime-enums-go
 
 verify-assistant-tool-catalog: service-contract-view
-	go run ./tools/codegen_assistant_tool_catalog --metadata-dir "$(CONTRACT_VIEW)" --output services/assistant-service/generated/assistant/assistant_session/assistant_tool_catalog.g.go --check
+	go run ./tools/codegen_assistant_tool_catalog --metadata-dir "$(CONTRACT_VIEW)" --output services/assistant-service/generated/assistant/assistant_session/assistant_tool_catalog.g.go --search-access-output services/assistant-service/generated/assistant/assistant_session/assistant_search_access.g.go --check
 
 verify-assistant-citation-destinations: service-contract-view
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --citation-destinations-go-output services/assistant-service/generated/assistant/assistant_session/citation_destinations.g.go --check-citation-destinations-go
@@ -175,15 +185,63 @@ verify-external-provider-governance:
 verify-openapi: service-contract-view
 	go run ./tools/qwq_contract check-openapi --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
 
+verify-graphql-read-rest-command-single-track:
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/structure/verify_graphql_read_rest_command_single_track.py --service-root "$(CURDIR)"
+
+verify-graphql-read-rest-command-zero:
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/structure/verify_graphql_read_rest_command_single_track.py --service-root "$(CURDIR)" --require-zero
+
+verify-graphql-read-registry: service-contract-view
+	go run ./tools/codegen_graphql_read_registry \
+		-schema services/api-edge/resources/policies/graphql_read/schema.graphqls \
+		-metadata services/api-edge/resources/policies/graphql_read/query_metadata.json \
+		-metadata-dir "$(CONTRACT_VIEW)" \
+		-candidate-digest "$(GRAPHQL_READ_REGISTRY_EXAMPLE_CANDIDATE_DIGEST)" \
+		-output services/api-edge/resources/policies/graphql_read/persisted_query_registry.example.json \
+		-check
+
+verify-graphql-app-client: service-contract-view
+	go run ./tools/codegen_graphql_app_client \
+		-metadata-dir "$(CONTRACT_VIEW)" \
+		-target content-post-detail \
+		-check
+	go run ./tools/codegen_graphql_app_client \
+		-metadata-dir "$(CONTRACT_VIEW)" \
+		-target search-page \
+		-check
+
+codegen-graphql-app-client: service-contract-view
+	go run ./tools/codegen_graphql_app_client \
+		-metadata-dir "$(CONTRACT_VIEW)" \
+		-target content-post-detail
+	go run ./tools/codegen_graphql_app_client \
+		-metadata-dir "$(CONTRACT_VIEW)" \
+		-target search-page
+
 verify-contract-graph: verify-openapi
 	go run ./tools/qwq_contract validate --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile baseline
 	go run ./tools/qwq_contract check --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile baseline --input generated/contract_graph.json
 	go run ./tools/qwq_contract coverage --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
 
-verify-contract-graph-commercial: verify-openapi
+verify-contract-graph-commercial: verify-openapi verify-graphql-read-rest-command-zero
 	go run ./tools/qwq_contract validate --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile commercial
 	go run ./tools/qwq_contract check --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile commercial --input generated/contract_graph.json
 	go run ./tools/qwq_contract coverage --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
+
+# Release-only gate: the caller must first read back the last successful hosted
+# Prod full/100 receipt and its exact ContractGraph bytes.  This target is not
+# part of the source-only `gate`, because a local checkout cannot fabricate the
+# hosted baseline, minimum-build usage window, or storage migration evidence.
+verify-domain-model-compatibility:
+	@test -n "$(DOMAIN_MODEL_BASELINE_RECEIPT)" || { echo "DOMAIN_MODEL_BASELINE_RECEIPT is required" >&2; exit 2; }
+	@test -n "$(DOMAIN_MODEL_BASELINE_GRAPH)" || { echo "DOMAIN_MODEL_BASELINE_GRAPH is required" >&2; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 python3 scripts/verify/contract_graph/verify_domain_model_compatibility.py \
+		--baseline-receipt "$(DOMAIN_MODEL_BASELINE_RECEIPT)" \
+		--baseline-graph "$(DOMAIN_MODEL_BASELINE_GRAPH)" \
+		--current-graph "$(DOMAIN_MODEL_CURRENT_GRAPH)" \
+		$(if $(strip $(DOMAIN_MODEL_COMPATIBILITY_WINDOW)),--compatibility-window "$(DOMAIN_MODEL_COMPATIBILITY_WINDOW)",) \
+		$(if $(strip $(DOMAIN_MODEL_STORAGE_MIGRATION_PLAN)),--storage-migration-plan "$(DOMAIN_MODEL_STORAGE_MIGRATION_PLAN)",) \
+		--report "$(DOMAIN_MODEL_COMPATIBILITY_REPORT)"
 
 verify-contract-graph-single-track: service-contract-view
 	python3 scripts/verify/contract_graph/verify_contract_graph_single_track.py --metadata-dir "$(CONTRACT_VIEW)"
@@ -225,8 +283,16 @@ codegen-openapi: service-contract-view
 	go run ./tools/qwq_contract generate-openapi --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
 	PYTHONDONTWRITEBYTECODE=1 python3 scripts/contracts/sync_service_openapi.py --contract-view "$(CONTRACT_VIEW)"
 
-codegen-contract-graph: codegen-openapi
+codegen-contract-graph: codegen-graphql-read-registry codegen-openapi
 	go run ./tools/qwq_contract generate --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)" --profile $(CONTRACT_GRAPH_PROFILE) --output generated/contract_graph.json --go-security-output generated/operationsecurity/descriptors.g.go
+
+codegen-graphql-read-registry: service-contract-view
+	go run ./tools/codegen_graphql_read_registry \
+		-schema services/api-edge/resources/policies/graphql_read/schema.graphqls \
+		-metadata services/api-edge/resources/policies/graphql_read/query_metadata.json \
+		-metadata-dir "$(CONTRACT_VIEW)" \
+		-candidate-digest "$(GRAPHQL_READ_REGISTRY_EXAMPLE_CANDIDATE_DIGEST)" \
+		-output services/api-edge/resources/policies/graphql_read/persisted_query_registry.example.json
 
 codegen-observability-catalog codegen-rec-intersection codegen-impact \
 codegen-ops-portal codegen-control-plane-runtime \
@@ -274,7 +340,7 @@ codegen-assistant-runtime-enums:
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --assistant-runtime-enums-go-output services/assistant-service/generated/assistant/assistant_session/assistant_runtime_enums.g.go
 
 codegen-assistant-tool-catalog:
-	go run ./tools/codegen_assistant_tool_catalog --metadata-dir "$(CONTRACT_VIEW)" --output services/assistant-service/generated/assistant/assistant_session/assistant_tool_catalog.g.go
+	go run ./tools/codegen_assistant_tool_catalog --metadata-dir "$(CONTRACT_VIEW)" --output services/assistant-service/generated/assistant/assistant_session/assistant_tool_catalog.g.go --search-access-output services/assistant-service/generated/assistant/assistant_session/assistant_search_access.g.go
 
 codegen-assistant-citation-destinations:
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --citation-destinations-go-output services/assistant-service/generated/assistant/assistant_session/citation_destinations.g.go

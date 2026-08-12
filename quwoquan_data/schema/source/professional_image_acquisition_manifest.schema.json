@@ -13,6 +13,12 @@
     "sourceRevision": {"type": "string", "minLength": 1},
     "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "executionBundle": {"$ref": "#/$defs/digestDocument"},
+    "frozenPhysicalInput": {"$ref": "#/$defs/frozenPhysicalInput"},
+    "reviewExecutionBindings": {
+      "type": "array", "minItems": 1,
+      "items": {"$ref": "#/$defs/reviewExecutionBinding"}
+    },
     "discoveryPlanRef": {"type": "string", "minLength": 1},
     "discoveryPlanDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "items": {
@@ -26,7 +32,8 @@
           "sourceUrl", "assetUrl", "manualFile", "apiEvidence", "accessEvidence", "creator",
           "capturedAt", "rightsStatus", "license", "licenseSnapshot",
           "usageScope", "modelReleaseStatus", "termsUrl",
-          "authorizationProof", "rightsIssues", "caption", "relevance", "safetyReview"
+          "authorizationProof", "rightsIssues", "caption", "relevance", "safetyReview",
+          "sourceAttribution"
         ],
         "additionalProperties": false,
         "properties": {
@@ -59,12 +66,48 @@
           "rightsIssues": {"type": "array", "items": {"type": "string", "minLength": 1}},
           "caption": {"type": "string", "minLength": 1},
           "relevance": {"type": "string", "minLength": 1},
-          "safetyReview": {"$ref": "#/$defs/safetyReview"}
+          "safetyReview": {"$ref": "#/$defs/safetyReview"},
+          "sourceAttribution": {
+            "anyOf": [
+              {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"},
+              {"type": "null"}
+            ]
+          }
         }
       }
     }
   },
   "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "digestDocument": {
+      "type": "object", "additionalProperties": false,
+      "required": ["algorithm", "digest", "inputs"],
+      "properties": {
+        "algorithm": {"const": "sha256"}, "digest": {"$ref": "#/$defs/sha256"},
+        "inputs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "frozenPhysicalInput": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "metadataCatalogDigest", "externalInputsDigest"],
+      "properties": {
+        "sourceRevision": {"$ref": "#/$defs/sha256"},
+        "sourceDigest": {"$ref": "#/$defs/sha256"},
+        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "metadataCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "externalInputsDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "reviewExecutionBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["executionId", "executionBundle", "executionManifestRef", "executionManifestSha256"],
+      "properties": {
+        "executionId": {"type": "string", "minLength": 1},
+        "executionBundle": {"$ref": "#/$defs/digestDocument"},
+        "executionManifestRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "executionManifestSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
     "accessEvidence": {
       "type": "object",
       "required": [
@@ -86,7 +129,7 @@
       "required": [
         "status", "entityMatch", "privacyRisk", "minorRisk",
         "maliciousMediaRisk", "watermarkStatus", "reviewedAt",
-        "reviewer", "evidenceRef"
+        "reviewer", "evidenceRef", "safetyEvidenceFileSha256"
       ],
       "additionalProperties": false,
       "properties": {
@@ -98,7 +141,11 @@
         "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
         "reviewedAt": {"type": "string", "minLength": 1},
         "reviewer": {"type": "string", "minLength": 1},
-        "evidenceRef": {"type": "string", "minLength": 1}
+        "evidenceRef": {"type": "string", "minLength": 1},
+        "safetyEvidenceFileSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
       }
     }
   }

@@ -1,0 +1,86 @@
+{
+  "label": "四川省南充市",
+  "domain": "地点",
+  "type": "城市",
+  "executionId": "20260812--travel-homepage-m100--china--scale-008",
+  "entityRef": "/entity/地点/城市/四川省南充市",
+  "summary": "市域面积约一万二千五百平方公里，市政府驻顺庆区。",
+  "sourceRefs": [
+    "sources/homepage-source-74c1d29256fc4d0c3435/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E5%8D%97%E5%85%85%E5%B8%82"
+  ],
+  "primarySource": {
+    "entityName": "四川省南充市",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E5%8D%97%E5%85%85%E5%B8%82",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E5%8D%97%E5%85%85%E5%B8%82",
+    "title": "维基百科",
+    "fetchedAt": "2026-08-12T05:21:35Z",
+    "snapshotHash": "sha256:0f85f5069cb4d3fdc9f0ff8b38982fa1f38322010011ee6a008725b3d140753f",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only"
+  },
+  "sourceAttribution": {
+    "attributionText": "正文事实来源：维基百科（维基百科贡献者）",
+    "audioRightsStatus": "no_audio",
+    "authorizationProofUrl": "https://zh.wikipedia.org/wiki/%E5%8D%97%E5%85%85%E5%B8%82",
+    "collectedAt": "2026-08-12T05:21:35Z",
+    "commercialAuthorizationStatus": "verified",
+    "isOriginal": false,
+    "modelReleaseStatus": "not_required",
+    "originalAssetUrl": "https://zh.wikipedia.org/wiki/%E5%8D%97%E5%85%85%E5%B8%82",
+    "originalCreatorId": null,
+    "originalCreatorName": "维基百科贡献者",
+    "originalCreatorProfileUrl": null,
+    "platform": "维基百科",
+    "propertyReleaseStatus": "not_required",
+    "publicationAdmission": "research_release",
+    "rightsBasis": "CC BY-SA 4.0",
+    "riskAcceptanceId": null,
+    "sourcePostUrl": "https://zh.wikipedia.org/wiki/%E5%8D%97%E5%85%85%E5%B8%82",
+    "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+    "termsUrl": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+    "watermarkStatus": "absent"
+  },
+  "textSourceRefs": [
+    "sources/homepage-source-74c1d29256fc4d0c3435/source.md"
+  ],
+  "imageSourceRefs": [
+    "sources/homepage-source-74c1d29256fc4d0c3435/source.md"
+  ],
+  "heroAssetId": "四川省南充市_cover_南充市区夜景_269_b44b2457",
+  "mediaAssetIds": [
+    "四川省南充市_cover_南充市区夜景_269_b44b2457"
+  ],
+  "tagRefs": [
+    "Entity/地点/城市",
+    "Topic/地理/行政区/中国/四川省/南充市",
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "geoTagRef": "Topic/地理/行政区/中国/四川省/南充市",
+  "geoTagRefs": [
+    "Topic/地理/行政区/中国/四川省/南充市"
+  ],
+  "aliases": [
+    "南充市"
+  ],
+  "authorId": "builtin_travel_geo_editor",
+  "creatorProfileId": "qwq_creator_geo_editor_001",
+  "creatorArchetype": "geo_editor",
+  "creatorProfileDigest": "sha256:1ae1b5e97d6aca2bea11652dfb07fcf4746ce904ec07b25dd022631eda751e75",
+  "creatorDisclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "experienceClaimMode": "editorial_synthesis",
+  "authorQualitySignals": {
+    "qualityScore": 0.9,
+    "fatigueScore": 0.2,
+    "riskTier": "low"
+  }
+}

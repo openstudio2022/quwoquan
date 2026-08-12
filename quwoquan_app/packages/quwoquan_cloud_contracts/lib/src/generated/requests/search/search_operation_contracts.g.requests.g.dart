@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4
+// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
 
 part of '../../../search/search_operation_contracts.g.dart';
 
@@ -62,12 +62,14 @@ final class CanonicalSearchQuery {
     Iterable<String> objectTypes = const <String>[],
     Iterable<String> ids = const <String>[],
     int limit = 20,
+    String? cursor,
   }) : sessionId = _normalizeGeneratedOptionalText(sessionId),
        query = query.trim(),
        mode = mode,
        objectTypes = _normalizeGeneratedTextList(objectTypes, deduplicate: false),
        ids = _normalizeGeneratedTextList(ids, deduplicate: false),
-       limit = limit {
+       limit = limit,
+       cursor = cursor {
     if (this.query.isEmpty) {
       throw ArgumentError.value(this.query, "query", 'must not be blank');
     }
@@ -79,9 +81,10 @@ final class CanonicalSearchQuery {
   final List<String> objectTypes;
   final List<String> ids;
   final int limit;
+  final String? cursor;
 
   factory CanonicalSearchQuery.fromWire(Map<String, Object?> map, [String path = "CanonicalSearchQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"sessionId", "query", "mode", "objectTypes", "ids", "limit"}, path);
+    _generatedRequestRejectUnknownFields(map, const <String>{"sessionId", "query", "mode", "objectTypes", "ids", "limit", "cursor"}, path);
     return CanonicalSearchQuery(
       sessionId: map["sessionId"] == null ? null : _generatedRequestString(map["sessionId"], '$path.sessionId'),
       query: _generatedRequestString(map["query"], '$path.query'),
@@ -89,6 +92,7 @@ final class CanonicalSearchQuery {
       objectTypes: map.containsKey("objectTypes") ? List<String>.unmodifiable(_generatedRequestList(map["objectTypes"], '$path.objectTypes').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.objectTypes' + '[${entry.key}]'))) : const <String>[],
       ids: map.containsKey("ids") ? List<String>.unmodifiable(_generatedRequestList(map["ids"], '$path.ids').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.ids' + '[${entry.key}]'))) : const <String>[],
       limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
     );
   }
 
@@ -99,6 +103,7 @@ final class CanonicalSearchQuery {
     "objectTypes": this.objectTypes.map((value) => value).toList(growable: false),
     if (this.ids.isNotEmpty) "ids": this.ids.map((value) => value).toList(growable: false),
     "limit": this.limit,
+    if (this.cursor != null) "cursor": this.cursor!,
   };
 }
 
@@ -357,6 +362,7 @@ CloudOperationRequestPayload encodeSearchSearchIndexViewSearchGeneratedRequest(C
       "objectTypes": request.objectTypes.map((value) => value).toList(growable: false),
       if (request.ids.isNotEmpty) "ids": request.ids.map((value) => value).toList(growable: false),
       "limit": request.limit,
+      if (request.cursor != null) "cursor": request.cursor!,
     },
   );
 }

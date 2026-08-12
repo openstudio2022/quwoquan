@@ -390,7 +390,7 @@ def _managed_checkpoint_ref(
     from governance.coverage.entity_extract import require_domain_etype
 
     domain, entity_type = require_domain_etype(target.entity_type, context=entity)
-    return f"entities/{domain}/{entity_type}/{entity}"
+    return f"/entity/{domain}/{entity_type}/{entity}"
 
 
 def _managed_checkpoint_worker_count(ctx: ExecutionContext, prompt_count: int) -> int:

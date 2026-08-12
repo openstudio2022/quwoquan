@@ -133,15 +133,6 @@ def diagnose_gamma_failure() -> None:
         )
 
 
-def parse_gateway_port(raw_url: str) -> int:
-    parsed = urllib.parse.urlparse(raw_url)
-    if parsed.port is not None:
-        return int(parsed.port)
-    if parsed.scheme == "https":
-        return 443
-    return 80
-
-
 def canonical_gateway_base_url(env_name: str) -> str:
     target_name = ENVIRONMENT_CANONICAL_TARGET[env_name]
     return str(
@@ -219,12 +210,8 @@ def main() -> int:
             gateway_base_url,
             "--gateway-health-url",
             gateway_base_url,
-            "--gateway-port",
-            str(parse_gateway_port(gateway_base_url)),
         ]
     )
-    if env_name == "beta":
-        command.append("--skip-beta-services")
 
     # iOS 26+ 等新模拟器在全场景 smoke 下容易超过默认 420s（见 beta-ios 矩阵报告：
     # iPhone 17 Pro 上多次 SIGTERM/timeout），为 beta/gamma 的 iOS 矩阵单独放宽。

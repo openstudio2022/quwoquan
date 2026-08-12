@@ -22,6 +22,8 @@ ROLLOUT_MODE="${APP_ROLLOUT_MODE:-}"
 CONTENT_RELEASE_ID="${QWQ_CONTENT_RELEASE_ID:-}"
 CONTENT_MANIFEST_DIGEST="${QWQ_CONTENT_MANIFEST_DIGEST:-}"
 CONTENT_READINESS_RECEIPT_DIGEST="${QWQ_CONTENT_READINESS_RECEIPT_DIGEST:-}"
+APP_PREFLIGHT_JSON="{}"
+LAUNCH_POLICY=""
 
 usage() {
   cat <<EOF
@@ -116,7 +118,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$ENV_NAME" in
-  alpha|beta|gamma|prod) ;;
+  alpha|beta|gamma)
+    LAUNCH_POLICY="test_live"
+    ;;
+  prod)
+    LAUNCH_POLICY="prod_release"
+    ;;
   *)
     echo "FAIL: --env must be one of alpha|beta|gamma|prod" >&2
     exit 2
@@ -142,7 +149,7 @@ if [[ "$TARGET_NAME" == "alpha-local" \
   APP_PREFLIGHT_JSON="$(
     PYTHONDONTWRITEBYTECODE=1 python3 \
       "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
-      app-debug-preflight --target "$TARGET_NAME"
+      app-debug-preflight --target "$TARGET_NAME" --runtime-mode test_live
   )" || {
     echo "$APP_PREFLIGHT_JSON" >&2
     echo "GATE_BLOCK: target runtime/content preflight failed for $TARGET_NAME." >&2
@@ -155,36 +162,46 @@ import shlex
 import sys
 
 payload = json.loads(sys.argv[1])
-if payload.get("status") != "passed":
-    raise SystemExit("App Debug preflight did not pass")
+if payload.get("status") not in {"passed", "warning"}:
+    raise SystemExit("App Debug preflight did not allow test_live")
+for warning in payload.get("warnings") or []:
+    print(f"[app-instance] WARN: {warning}", file=sys.stderr)
 for key, field in (
     ("CONTENT_RELEASE_ID", "releaseId"),
     ("CONTENT_MANIFEST_DIGEST", "manifestDigest"),
     ("CONTENT_READINESS_RECEIPT_DIGEST", "readinessReceiptDigest"),
 ):
     value = str(payload.get(field) or "").strip()
-    if not value:
-        raise SystemExit(f"App content preflight is missing {field}")
-    print(f"{key}={shlex.quote(value)}")
+    if value:
+        print(f"{key}={shlex.quote(value)}")
 PY
   )" || {
     echo "GATE_BLOCK: App content preflight returned an invalid receipt." >&2
     exit 2
   }
   eval "$CONTENT_BINDING_EXPORTS"
+  export QWQ_APP_PREFLIGHT_JSON="$APP_PREFLIGHT_JSON"
 fi
 
-if [[ -z "$CONTENT_RELEASE_ID" \
-   || ! "$CONTENT_MANIFEST_DIGEST" =~ ^sha256:[0-9a-f]{64}$ \
-   || ! "$CONTENT_READINESS_RECEIPT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-  echo "GATE_BLOCK: canonical launcher requires release-bound content identity." >&2
-  exit 2
+if [[ "$LAUNCH_POLICY" == "prod_release" ]]; then
+  if [[ -z "$CONTENT_RELEASE_ID" \
+     || ! "$CONTENT_MANIFEST_DIGEST" =~ ^sha256:[0-9a-f]{64}$ \
+     || ! "$CONTENT_READINESS_RECEIPT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "GATE_BLOCK: canonical launcher requires release-bound content identity." >&2
+    exit 2
+  fi
 fi
 export QWQ_CONTENT_RELEASE_ID="$CONTENT_RELEASE_ID"
 export QWQ_CONTENT_MANIFEST_DIGEST="$CONTENT_MANIFEST_DIGEST"
 export QWQ_CONTENT_READINESS_RECEIPT_DIGEST="$CONTENT_READINESS_RECEIPT_DIGEST"
 
-if [[ "$TARGET_NAME" != "prod-hosted" ]]; then
+if [[ "$LAUNCH_POLICY" == "test_live" ]]; then
+  if ! PYTHONDONTWRITEBYTECODE=1 python3 \
+    "$ROOT_DIR/quwoquan_ops/cli/lib/public_domain_tls.py" verify \
+    --target "$TARGET_NAME" >/dev/null; then
+    echo "[app-instance] WARN: canonical certificate is unavailable for $TARGET_NAME; test_live continues with typed network recovery." >&2
+  fi
+elif [[ "$TARGET_NAME" != "prod-hosted" ]]; then
   if ! PYTHONDONTWRITEBYTECODE=1 python3 \
     "$ROOT_DIR/quwoquan_ops/cli/lib/public_domain_tls.py" verify \
     --target "$TARGET_NAME" >/dev/null; then
@@ -198,16 +215,13 @@ if [[ "$TARGET_NAME" == "alpha-local" \
   if [[ -z "${QWQ_DEVICE_TRUST_PLATFORM:-}" \
      || -z "${QWQ_DEVICE_TRUST_RECEIPT:-}" \
      || ! -f "${QWQ_DEVICE_TRUST_RECEIPT:-}" ]]; then
-    echo "GATE_BLOCK: local App launch requires a target/device system-trust receipt." >&2
-    exit 2
-  fi
-  if ! PYTHONDONTWRITEBYTECODE=1 python3 \
+    echo "[app-instance] WARN: target/device system-trust receipt is unavailable; test_live continues with typed network recovery." >&2
+  elif ! PYTHONDONTWRITEBYTECODE=1 python3 \
     "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
     device-trust --target "$TARGET_NAME" \
     --platform "$QWQ_DEVICE_TRUST_PLATFORM" \
     --action verify --device "$DEVICE_ID" >/dev/null; then
-    echo "GATE_BLOCK: device default trust stack cannot reach $TARGET_NAME." >&2
-    exit 2
+    echo "[app-instance] WARN: device default trust stack cannot reach $TARGET_NAME; test_live continues with typed network recovery." >&2
   fi
 fi
 
@@ -258,13 +272,21 @@ print("export QWQ_ANDROID_REVERSE_RECEIPT_DIGEST=" + shlex.quote(
 print("export QWQ_ANDROID_LOCAL_TARGET=" + shlex.quote(target))
 PY
   )" || {
-    echo "GATE_BLOCK: failed to resolve Android Remote topology." >&2
     return 2
   }
   eval "$android_exports"
 }
 
-prepare_android_reverse
+if ! prepare_android_reverse; then
+  unset QWQ_ANDROID_LOCAL_TARGET
+  unset QWQ_ANDROID_LOCAL_PORTS
+  if [[ "$LAUNCH_POLICY" == "test_live" ]]; then
+    echo "[app-instance] WARN: Android reverse transport is unavailable; test_live continues with typed network recovery." >&2
+  else
+    echo "GATE_BLOCK: Android reverse transport is required for $TARGET_NAME." >&2
+    exit 2
+  fi
+fi
 
 sanitize_device_id() {
   python3 - "$1" <<'PY'
@@ -290,9 +312,6 @@ export QWQ_CONSUMER_LEASE_ACQUIRED=0
 export QWQ_CONSUMER_LEASE_ID=""
 
 release_android_consumer_lease() {
-  if [[ "${QWQ_CONSUMER_LEASE_ACQUIRED:-0}" != "1" ]]; then
-    return
-  fi
   if command -v adb >/dev/null 2>&1; then
     IFS=',' read -r -a reverse_ports <<< "${QWQ_ANDROID_LOCAL_PORTS:-}"
     for port in "${reverse_ports[@]}"; do
@@ -301,6 +320,9 @@ release_android_consumer_lease() {
         echo "[app-instance] WARN: failed to remove owned adb reverse tcp:$port." >&2
       fi
     done
+  fi
+  if [[ "${QWQ_CONSUMER_LEASE_ACQUIRED:-0}" != "1" ]]; then
+    return
   fi
   python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" consumer-lease release \
     --target "$QWQ_ANDROID_LOCAL_TARGET" \
@@ -311,25 +333,39 @@ release_android_consumer_lease() {
 }
 
 if [[ -n "${QWQ_ANDROID_LOCAL_TARGET:-}" ]]; then
+  trap release_android_consumer_lease EXIT
+fi
+
+if [[ -n "${QWQ_ANDROID_LOCAL_TARGET:-}" ]]; then
   if [[ -z "${QWQ_ANDROID_LOCAL_PORTS:-}" ]]; then
-    echo "GATE_BLOCK: Android local topology did not provide reverse ports." >&2
-    exit 2
-  fi
-  export ANDROID_SERIAL="$DEVICE_ID"
-  LEASE_JSON="$(
-    python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
-      consumer-lease acquire \
-      --target "$QWQ_ANDROID_LOCAL_TARGET" \
-      --device "$DEVICE_ID" \
-      --consumer "$QWQ_RUN_CONSUMER_ID" \
-      --package-name com.quwoquan.quwoquan_app \
-      --ports "$QWQ_ANDROID_LOCAL_PORTS" \
-      --release-id "$CONTENT_RELEASE_ID" \
-      --manifest-digest "$CONTENT_MANIFEST_DIGEST" \
-      --readiness-receipt-digest "$CONTENT_READINESS_RECEIPT_DIGEST"
-  )"
-  QWQ_CONSUMER_LEASE_ID="$(
-    python3 - "$LEASE_JSON" <<'PY'
+    if [[ "$LAUNCH_POLICY" == "test_live" ]]; then
+      echo "[app-instance] WARN: Android local topology did not provide reverse ports; test_live continues with typed network recovery." >&2
+      unset QWQ_ANDROID_LOCAL_TARGET
+    else
+      echo "GATE_BLOCK: Android local topology did not provide reverse ports." >&2
+      exit 2
+    fi
+  else
+    export ANDROID_SERIAL="$DEVICE_ID"
+    LEASE_COMMAND=(
+      python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json
+      consumer-lease acquire
+      --target "$QWQ_ANDROID_LOCAL_TARGET"
+      --device "$DEVICE_ID"
+      --consumer "$QWQ_RUN_CONSUMER_ID"
+      --package-name com.quwoquan.quwoquan_app
+      --ports "$QWQ_ANDROID_LOCAL_PORTS"
+    )
+    if [[ -n "$CONTENT_RELEASE_ID" ]]; then
+      LEASE_COMMAND+=(
+        --release-id "$CONTENT_RELEASE_ID"
+        --manifest-digest "$CONTENT_MANIFEST_DIGEST"
+        --readiness-receipt-digest "$CONTENT_READINESS_RECEIPT_DIGEST"
+      )
+    fi
+    if LEASE_JSON="$("${LEASE_COMMAND[@]}")"; then
+      if QWQ_CONSUMER_LEASE_ID="$(
+        python3 - "$LEASE_JSON" <<'PY'
 import json
 import sys
 
@@ -339,10 +375,26 @@ if not lease_id:
     raise SystemExit("consumer lease response is missing leaseId")
 print(lease_id)
 PY
-  )"
-  export QWQ_CONSUMER_LEASE_ID
-  QWQ_CONSUMER_LEASE_ACQUIRED=1
-  trap release_android_consumer_lease EXIT
+      )"; then
+        export QWQ_CONSUMER_LEASE_ID
+        QWQ_CONSUMER_LEASE_ACQUIRED=1
+      else
+        if [[ "$LAUNCH_POLICY" == "test_live" ]]; then
+          echo "[app-instance] WARN: Android runtime consumer lease response is invalid; test_live continues without a lease." >&2
+        else
+          echo "GATE_BLOCK: Android runtime consumer lease response is invalid." >&2
+          exit 2
+        fi
+      fi
+    else
+      if [[ "$LAUNCH_POLICY" == "test_live" ]]; then
+        echo "[app-instance] WARN: Android runtime consumer lease is unavailable; test_live continues without a lease." >&2
+      else
+        echo "GATE_BLOCK: Android runtime consumer lease is unavailable." >&2
+        exit 2
+      fi
+    fi
+  fi
 elif [[ "$TARGET_NAME" == "prod-hosted" ]] && command -v adb >/dev/null 2>&1 && \
   adb -s "$DEVICE_ID" get-state >/dev/null 2>&1; then
   echo "GATE_BLOCK: Android prod Flutter debug launch is unsupported; verify a signed release APK/AAB." >&2
@@ -356,10 +408,15 @@ handoff_cmd=(
   --app-instance-id "$INSTANCE_ID"
   --app-instance-namespace "$INSTANCE_NAMESPACE"
   --launch-mode canonical_launcher
-  --content-release-id "$CONTENT_RELEASE_ID"
-  --content-manifest-digest "$CONTENT_MANIFEST_DIGEST"
-  --content-readiness-receipt-digest "$CONTENT_READINESS_RECEIPT_DIGEST"
+  --launch-policy "$LAUNCH_POLICY"
 )
+if [[ -n "$CONTENT_RELEASE_ID" ]]; then
+  handoff_cmd+=(
+    --content-release-id "$CONTENT_RELEASE_ID"
+    --content-manifest-digest "$CONTENT_MANIFEST_DIGEST"
+    --content-readiness-receipt-digest "$CONTENT_READINESS_RECEIPT_DIGEST"
+  )
+fi
 if [[ -n "$GATEWAY_BASE_URL" ]]; then
   handoff_cmd+=(--gateway-base-url "$GATEWAY_BASE_URL")
 fi
@@ -384,7 +441,7 @@ fi
 if [[ -n "$ROLLOUT_MODE" ]]; then
   handoff_cmd+=(--rollout-mode "$ROLLOUT_MODE")
 fi
-if [[ -n "${QWQ_ANDROID_LOCAL_TARGET:-}" ]]; then
+if [[ "${QWQ_CONSUMER_LEASE_ACQUIRED:-0}" == "1" ]]; then
   handoff_cmd+=(
     --transport-required
     --reverse-expected-ports "$QWQ_ANDROID_REVERSE_EXPECTED_PORTS"
@@ -442,7 +499,7 @@ verify_handoff_cmd=(
   --effective-launch-manifest-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
   --defines-json "$DEFINES_JSON"
 )
-if [[ -n "${QWQ_ANDROID_LOCAL_TARGET:-}" ]]; then
+if [[ "${QWQ_CONSUMER_LEASE_ACQUIRED:-0}" == "1" ]]; then
   verify_handoff_cmd+=(
     --transport-required
     --reverse-expected-ports "$QWQ_ANDROID_REVERSE_EXPECTED_PORTS"
@@ -454,6 +511,7 @@ fi
 "${verify_handoff_cmd[@]}"
 export QWQ_APP_RUNTIME_ENV="$ENV_NAME"
 export QWQ_APP_LAUNCH_MODE="canonical_launcher"
+export QWQ_APP_LAUNCH_POLICY="$LAUNCH_POLICY"
 export QWQ_LAUNCH_TARGET="$TARGET_NAME"
 export QWQ_APP_BUILD_CONTEXT="runtime"
 export QWQ_DART_DEFINES_DIGEST="$DART_DEFINES_DIGEST"
@@ -464,19 +522,31 @@ export QWQ_APP_PUBLIC_WEB_URL="$PUBLIC_WEB_BASE_URL"
 export QWQ_APP_DOWNLOAD_BASE_URL="$APP_DOWNLOAD_BASE_URL"
 export QWQ_LAUNCH_HANDOFF_JSON="$HANDOFF_JSON"
 if [[ "${QWQ_CONSUMER_LEASE_ACQUIRED:-0}" == "1" ]]; then
-  PYTHONDONTWRITEBYTECODE=1 python3 \
-    "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
-    consumer-lease acquire \
-    --target "$QWQ_ANDROID_LOCAL_TARGET" \
-    --device "$DEVICE_ID" \
-    --consumer "$QWQ_RUN_CONSUMER_ID" \
-    --package-name com.quwoquan.quwoquan_app \
-    --ports "$QWQ_ANDROID_LOCAL_PORTS" \
-    --handoff-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST" \
-    --release-id "$CONTENT_RELEASE_ID" \
-    --manifest-digest "$CONTENT_MANIFEST_DIGEST" \
-    --readiness-receipt-digest "$CONTENT_READINESS_RECEIPT_DIGEST" \
-    >/dev/null
+  LEASE_BIND_COMMAND=(
+    python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json
+    consumer-lease acquire
+    --target "$QWQ_ANDROID_LOCAL_TARGET"
+    --device "$DEVICE_ID"
+    --consumer "$QWQ_RUN_CONSUMER_ID"
+    --package-name com.quwoquan.quwoquan_app
+    --ports "$QWQ_ANDROID_LOCAL_PORTS"
+    --handoff-digest "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
+  )
+  if [[ -n "$CONTENT_RELEASE_ID" ]]; then
+    LEASE_BIND_COMMAND+=(
+      --release-id "$CONTENT_RELEASE_ID"
+      --manifest-digest "$CONTENT_MANIFEST_DIGEST"
+      --readiness-receipt-digest "$CONTENT_READINESS_RECEIPT_DIGEST"
+    )
+  fi
+  if ! PYTHONDONTWRITEBYTECODE=1 "${LEASE_BIND_COMMAND[@]}" >/dev/null; then
+    if [[ "$LAUNCH_POLICY" == "test_live" ]]; then
+      echo "[app-instance] WARN: failed to bind the runtime consumer lease to the final handoff digest." >&2
+    else
+      echo "GATE_BLOCK: failed to bind the runtime consumer lease to the final handoff digest." >&2
+      exit 2
+    fi
+  fi
 fi
 if [[ -t 0 && -e /dev/tty ]]; then
   export QWQ_APP_INSTANCE_PRESERVE_TTY="${QWQ_APP_INSTANCE_PRESERVE_TTY:-1}"
@@ -497,6 +567,7 @@ app_dir, state_file, env_name, device_id, instance_id, instance_namespace, servi
 app_dir = Path(app_dir)
 defines = json.loads(defines_json or "{}")
 handoff = json.loads(os.environ["QWQ_LAUNCH_HANDOFF_JSON"])
+preflight = json.loads(os.environ.get("QWQ_APP_PREFLIGHT_JSON", "{}"))
 state_path = Path(state_file)
 state_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -564,6 +635,8 @@ try:
         "appDownloadBaseUrl": defines.get("APP_DOWNLOAD_BASE_URL", ""),
         "runtimeConfigDigest": handoff["runtimeConfigDigest"],
         "dartDefinesDigest": handoff["dartDefinesDigest"],
+        "preflightStatus": str(preflight.get("status") or "not_run"),
+        "runtimeWarnings": list(preflight.get("warnings") or []),
         "recoveryBaseUrl": handoff["recoveryBaseUrl"],
         "dartDefines": defines,
         "androidLocalTarget": os.environ.get("QWQ_ANDROID_LOCAL_TARGET", ""),

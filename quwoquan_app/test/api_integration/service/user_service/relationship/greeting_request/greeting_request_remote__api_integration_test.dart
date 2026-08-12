@@ -1,4 +1,10 @@
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+// readiness_case: greeting_request_send_greeting_request_app_api
+// readiness_case: greeting_request_list_greeting_inbox_app_api
+// readiness_case: greeting_request_list_greeting_outbox_app_api
+// readiness_case: greeting_request_reply_greeting_request_app_api
+// readiness_case: greeting_request_ignore_greeting_request_app_api
+// readiness_case: greeting_request_cancel_greeting_request_app_api
 
 /// GreetingRequest production Remote API source contract.
 ///
@@ -134,6 +140,98 @@ void main() {
         replied.promotedConversationId,
       );
 
+      final ignoreCommand = SendGreetingCommand(
+        targetPersonaId: targetPersonaId,
+        requestMessage: 'API contract ignore $suffix',
+        source: 'profile',
+      );
+      final ignoreSeed = await harness.withSession(
+        session: requester,
+        action: () => harness.withIdempotencyKey(
+          idempotencyKey: 'greeting-ignore-seed-$suffix',
+          action: () => harness.greetingRequests.sendGreeting(ignoreCommand),
+        ),
+      );
+      final ignored = await harness.withSession(
+        session: target,
+        action: () => harness.withIdempotencyKey(
+          idempotencyKey: 'greeting-ignore-$suffix',
+          action: () => harness.greetingRequests.ignoreGreeting(
+            IgnoreGreetingCommand(requestId: ignoreSeed.id),
+          ),
+        ),
+      );
+      final ignoreReplay = await harness.withSession(
+        session: target,
+        action: () => harness.withIdempotencyKey(
+          idempotencyKey: 'greeting-ignore-$suffix',
+          action: () => harness.greetingRequests.ignoreGreeting(
+            IgnoreGreetingCommand(requestId: ignoreSeed.id),
+          ),
+        ),
+      );
+      expect(ignored.status, GreetingRequestStatus.ignored);
+      expect(ignored.promotedConversationId, isNull);
+      expect(ignoreReplay.id, ignored.id);
+      expect(ignoreReplay.status, ignored.status);
+      final ignoredReadback = await harness.withSession(
+        session: target,
+        action: () => _pollGreetingRequest(
+          () => harness.greetingRequests.listGreetingInbox(
+            const ListGreetingRequestsQuery(limit: 100),
+          ),
+          requestId: ignored.id,
+          status: GreetingRequestStatus.ignored,
+        ),
+      );
+      expect(ignoredReadback.promotedConversationId, isNull);
+
+      final cancelCommand = SendGreetingCommand(
+        targetPersonaId: targetPersonaId,
+        requestMessage: 'API contract cancel $suffix',
+        source: 'profile',
+      );
+      final cancelSeed = await harness.withSession(
+        session: requester,
+        action: () => harness.withIdempotencyKey(
+          idempotencyKey: 'greeting-cancel-seed-$suffix',
+          action: () => harness.greetingRequests.sendGreeting(cancelCommand),
+        ),
+      );
+      final cancelled = await harness.withSession(
+        session: requester,
+        action: () => harness.withIdempotencyKey(
+          idempotencyKey: 'greeting-cancel-$suffix',
+          action: () => harness.greetingRequests.cancelGreeting(
+            CancelGreetingCommand(requestId: cancelSeed.id),
+          ),
+        ),
+      );
+      final cancelReplay = await harness.withSession(
+        session: requester,
+        action: () => harness.withIdempotencyKey(
+          idempotencyKey: 'greeting-cancel-$suffix',
+          action: () => harness.greetingRequests.cancelGreeting(
+            CancelGreetingCommand(requestId: cancelSeed.id),
+          ),
+        ),
+      );
+      expect(cancelled.status, GreetingRequestStatus.cancelled);
+      expect(cancelled.promotedConversationId, isNull);
+      expect(cancelReplay.id, cancelled.id);
+      expect(cancelReplay.status, cancelled.status);
+      final cancelledReadback = await harness.withSession(
+        session: requester,
+        action: () => _pollGreetingRequest(
+          () => harness.greetingRequests.listGreetingOutbox(
+            const ListGreetingRequestsQuery(limit: 100),
+          ),
+          requestId: cancelled.id,
+          status: GreetingRequestStatus.cancelled,
+        ),
+      );
+      expect(cancelledReadback.promotedConversationId, isNull);
+
       final relationshipAfter = await harness.withSession(
         session: requester,
         action: () => harness.personaRelationships.getRelationshipCapability(
@@ -179,4 +277,27 @@ void main() {
       requesterClosed = true;
     },
   );
+}
+
+Future<GreetingRequestRecord> _pollGreetingRequest(
+  Future<GreetingRequestSlice> Function() read, {
+  required String requestId,
+  required GreetingRequestStatus status,
+}) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 15));
+  while (true) {
+    final page = await read();
+    for (final request in page.items) {
+      if (request.id == requestId && request.status == status) {
+        return request;
+      }
+    }
+    if (DateTime.now().isAfter(deadline)) {
+      throw StateError(
+        'Timed out waiting for GreetingRequest $requestId to become '
+        '${status.wireName}',
+      );
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+  }
 }

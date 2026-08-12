@@ -8,6 +8,7 @@ from pathlib import Path
 from content.source.professional_image_acquisition import (
     ACQUISITION_ROOT,
     acquire_professional_images,
+    rebind_professional_image_acquisition_manifest,
 )
 
 
@@ -47,5 +48,32 @@ def register_acquire_images_parser(sub: argparse._SubParsersAction) -> None:
     parser.add_argument("--output-root")
     parser.set_defaults(handler=handle_acquire_images)
 
+    rebind = sub.add_parser(
+        "rebind-image-acquisition-manifest",
+        help="将已验证frozen physical image closure绑定到fresh handoff identity",
+    )
+    rebind.add_argument("--source-manifest", required=True)
+    rebind.add_argument("--handoff-ref", required=True)
+    rebind.add_argument("--destination", required=True)
+    rebind.set_defaults(handler=handle_rebind_image_acquisition_manifest)
 
-__all__ = ["handle_acquire_images", "register_acquire_images_parser"]
+
+def handle_rebind_image_acquisition_manifest(args: argparse.Namespace) -> None:
+    try:
+        manifest, path = rebind_professional_image_acquisition_manifest(
+            Path(args.source_manifest).expanduser().resolve(),
+            handoff_ref=Path(args.handoff_ref).expanduser().resolve(),
+            destination=Path(args.destination).expanduser().resolve(),
+        )
+    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
+        raise SystemExit(f"[task rebind-image-acquisition-manifest] GATE_BLOCK {exc}") from exc
+    print(json.dumps({
+        "manifestId": manifest["manifestId"], "sourceRevision": manifest["sourceRevision"],
+        "sourceDigest": manifest["sourceDigest"], "manifestPath": path.as_posix(),
+    }, ensure_ascii=False, indent=2))
+
+
+__all__ = [
+    "handle_acquire_images", "handle_rebind_image_acquisition_manifest",
+    "register_acquire_images_parser",
+]

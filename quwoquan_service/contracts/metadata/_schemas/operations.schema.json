@@ -13,6 +13,15 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
+        "allOf": [
+          {
+            "if": { "required": ["request_entity"] },
+            "then": {
+              "required": ["request_body_kind"],
+              "properties": { "request_body_kind": { "const": "object" } }
+            }
+          }
+        ],
         "required": ["capability", "port", "operations"],
         "properties": {
           "role": {
@@ -179,6 +188,145 @@
       "type": "string",
       "minLength": 1
     },
+    "graphql_queries": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operation",
+          "operation_type",
+          "application",
+          "authorization",
+          "commercial",
+          "reliability",
+          "error_codes",
+          "privacy",
+          "telemetry",
+          "slo",
+          "response_entity"
+        ],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]+$"
+          },
+          "operation_type": {
+            "const": "query"
+          },
+          "request_entity": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+          "request_body_kind": { "enum": ["object", "none"] },
+          "application": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "facet", "method", "reader", "slice"],
+            "properties": {
+              "kind": { "const": "query" },
+              "facet": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+              "method": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$" },
+              "reader": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*Reader$" },
+              "slice": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" }
+            }
+          },
+          "authorization": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["principal", "ownership_policy"],
+            "properties": {
+              "principal": {
+                "enum": ["public", "account", "persona", "device", "service", "admin", "operator"]
+              },
+              "scopes": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "permissions": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "ownership_policy": { "type": "string", "minLength": 1 }
+            }
+          },
+          "commercial": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status"],
+            "properties": {
+              "status": { "enum": ["ready", "blocked"] },
+              "block_reason": { "type": "string", "minLength": 1 },
+              "gap_id": { "type": "string", "minLength": 1 },
+              "target_story": { "type": "string", "minLength": 1 }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": { "status": { "const": "blocked" } },
+                  "required": ["status"]
+                },
+                "then": { "required": ["block_reason", "gap_id", "target_story"] }
+              }
+            ]
+          },
+          "reliability": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["timeout_ms", "cancellation", "retry_mode", "max_attempts", "idempotency"],
+            "properties": {
+              "timeout_ms": { "type": "integer", "minimum": 1 },
+              "cancellation": { "type": "string", "minLength": 1 },
+              "retry_mode": { "type": "string", "minLength": 1 },
+              "max_attempts": { "type": "integer", "minimum": 1 },
+              "idempotency": { "type": "string", "minLength": 1 }
+            }
+          },
+          "error_codes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*\\.[A-Z][A-Z0-9_]*\\.[a-z][a-z0-9_]*$" }
+          },
+          "privacy": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["request_classification", "response_classification", "log_policy"],
+            "properties": {
+              "request_classification": { "type": "string", "minLength": 1 },
+              "response_classification": { "type": "string", "minLength": 1 },
+              "log_policy": { "type": "string", "minLength": 1 }
+            }
+          },
+          "telemetry": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["metric", "trace", "attributes"],
+            "properties": {
+              "metric": { "type": "string", "minLength": 1 },
+              "trace": { "const": true },
+              "attributes": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "slo": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["latency_p95_ms", "availability_percent"],
+            "properties": {
+              "latency_p95_ms": { "type": "integer", "minimum": 1 },
+              "availability_percent": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 }
+            }
+          },
+          "response_entity": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+          "response_body_kind": { "enum": ["object", "page"] }
+        }
+      }
+    },
     "api_routes": {
       "type": "array",
       "items": {
@@ -218,6 +366,66 @@
                       "minItems": 1
                     }
                   }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": ["application", "authorization"],
+              "properties": {
+                "application": {
+                  "required": ["kind"],
+                  "properties": {"kind": {"const": "query"}}
+                },
+                "authorization": {
+                  "required": ["principal"],
+                  "properties": {"principal": {"const": "service"}}
+                }
+              }
+            },
+            "then": {
+              "required": ["security"],
+              "properties": {
+                "authorization": {
+                  "required": ["scopes"],
+                  "properties": {"scopes": {"minItems": 1}}
+                },
+                "security": {
+                  "required": ["auth_mode", "principal", "visibility"],
+                  "properties": {
+                    "auth_mode": {"const": "required"},
+                    "principal": {"const": "service"},
+                    "visibility": {"const": "internal"}
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "required": ["application", "authorization"],
+              "properties": {
+                "application": {
+                  "required": ["kind"],
+                  "properties": {"kind": {"const": "query"}}
+                },
+                "authorization": {
+                  "required": ["principal"],
+                  "properties": {"principal": {"enum": ["admin", "operator"]}}
+                }
+              }
+            },
+            "then": {
+              "required": ["security"],
+              "properties": {
+                "authorization": {
+                  "required": ["scopes"],
+                  "properties": {"scopes": {"minItems": 1}}
+                },
+                "security": {
+                  "required": ["auth_mode"],
+                  "properties": {"auth_mode": {"const": "required"}}
                 }
               }
             }
@@ -285,6 +493,25 @@
           },
           "transport": {
             "enum": ["json", "sse"]
+          },
+          "transport_role": {
+            "enum": [
+              "binary_download",
+              "binary_upload",
+              "cdn",
+              "health",
+              "liveness",
+              "metrics",
+              "minimum_build",
+              "oauth_callback",
+              "provider_callback",
+              "readiness",
+              "recovery",
+              "sse",
+              "static_resource",
+              "upgrade",
+              "websocket"
+            ]
           },
           "streaming": {
             "type": "object",

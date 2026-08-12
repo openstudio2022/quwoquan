@@ -101,6 +101,27 @@ def classify_provider_failure(
             retry_after,
         )
 
+    if normalized_code in {
+        "model_not_found",
+        "model_unavailable",
+        "unsupported_model",
+        "unknown_model",
+    } or any(
+        marker in lowered
+        for marker in (
+            "model is not available",
+            "model unavailable",
+            "model not found",
+            "unknown model",
+            "unsupported model",
+        )
+    ):
+        return ProviderFailure(
+            AgentFailureKind.PROVIDER_REJECTED,
+            "semantic_provider_model_unavailable",
+            False,
+        )
+
     if normalized_code in {"capacity", "overloaded", "provider_busy"} or any(
         marker in lowered
         for marker in (

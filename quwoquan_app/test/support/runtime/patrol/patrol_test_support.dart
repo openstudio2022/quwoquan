@@ -48,6 +48,7 @@ const String _patrolRuntimeInstallId = String.fromEnvironment(
 const int _patrolAnonymousLoginSetupAttempts = 3;
 
 Future<void>? _patrolAppLaunch;
+AuthSessionState? _runnerInstalledAcceptanceSession;
 Completer<void>? _runtimeAnonymousSessionReady;
 String _runtimeAnonymousSessionFailure = '';
 Future<void>? _runtimeAnonymousSessionLogin;
@@ -58,8 +59,45 @@ bool get _usesRuntimeAnonymousSession =>
 bool get _usesAnonymousPublicVideoSession =>
     _patrolSessionMode == 'anonymous_public_video_session';
 
+bool get _usesUnauthenticatedAuthEntry =>
+    _patrolSessionMode == 'unauthenticated_auth_entry';
+
 Completer<void> _runtimeAnonymousSessionGate() =>
     _runtimeAnonymousSessionReady ??= Completer<void>();
+
+/// Installs the protected actor opened by the host-side test-live runner.
+///
+/// This handoff is called only from the runner-owned ephemeral Patrol wrapper,
+/// before the production App is mounted. It keeps bearer credentials out of
+/// Flutter/Gradle command arguments and out of UAT reports.
+AuthSessionState installPatrolAcceptanceSessionForRunner({
+  required String accessToken,
+  required String refreshToken,
+  required String ownerId,
+  required String personaId,
+}) {
+  if (_patrolAppLaunch != null) {
+    throw StateError(
+      'Patrol acceptance session must be installed before App launch',
+    );
+  }
+  final session = buildPatrolAcceptanceSession(
+    accessToken: accessToken,
+    refreshToken: refreshToken,
+    ownerId: ownerId,
+    personaId: personaId,
+  );
+  _runnerInstalledAcceptanceSession = session;
+  return session;
+}
+
+/// Clears the runtime handoff between local-contract cases.
+void resetPatrolAcceptanceSessionForTest() {
+  if (_patrolAppLaunch != null) {
+    throw StateError('Patrol App has already launched');
+  }
+  _runnerInstalledAcceptanceSession = null;
+}
 
 /// Starts the real App exactly once from the generated Patrol target.
 ///
@@ -305,6 +343,15 @@ AuthSessionState buildPatrolAcceptanceSession({
 AuthSessionState buildPatrolAnonymousPublicVideoSession() =>
     const AuthSessionState(status: AuthSessionStatus.guest);
 
+AuthSessionState buildPatrolUnauthenticatedAuthEntrySession() =>
+    AuthSessionState(
+      status: AuthSessionStatus.guest,
+      // 此模式只去掉登录凭证，不能去掉安装身份。新鲜 iOS
+      // Keychain 没有可回退的 persisted installId；空 deviceId 会让
+      // OTP 验证成功后的 AccountSession Issue 在服务端 fail-closed。
+      installId: _patrolRuntimeInstallId,
+    );
+
 final class _PatrolAuthSessionController extends AuthSessionController {
   @override
   AuthSessionState build() {
@@ -313,6 +360,13 @@ final class _PatrolAuthSessionController extends AuthSessionController {
     }
     if (_usesAnonymousPublicVideoSession) {
       return buildPatrolAnonymousPublicVideoSession();
+    }
+    if (_usesUnauthenticatedAuthEntry) {
+      return buildPatrolUnauthenticatedAuthEntrySession();
+    }
+    final runnerSession = _runnerInstalledAcceptanceSession;
+    if (runnerSession != null) {
+      return runnerSession;
     }
     return buildPatrolAcceptanceSession(
       accessToken: _patrolAcceptanceAuthToken,

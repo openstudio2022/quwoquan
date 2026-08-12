@@ -424,7 +424,13 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
     if coordinates is not None:
         geo_fields["coordinates"] = coordinates
     try:
-        primary_source, source_urls, primary_evidence_ref, source_catalog_sha = (
+        (
+            primary_source,
+            source_urls,
+            primary_evidence_ref,
+            source_catalog_sha,
+            source_attribution,
+        ) = (
             _materialize_homepage_source_catalog(
                 execution_id,
                 obj,
@@ -445,6 +451,7 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
         "sourceRefs": source_refs,
         "sourceUrls": source_urls,
         "primarySource": primary_source,
+        "sourceAttribution": source_attribution,
         "textSourceRefs": text_source_refs,
         "imageSourceRefs": image_source_refs,
         "heroAssetId": hero_asset_id,
@@ -465,6 +472,7 @@ def materialize_entity_page(execution_id: str, domain: str, etype: str, name: st
             "vertical": parse_execution_id(execution_id).vertical,
             "sourceCatalogRef": "evidence/source_catalog.json",
             "sourceCatalogSha256": source_catalog_sha,
+            "sourceAttribution": source_attribution,
             "primaryEvidenceRef": primary_evidence_ref,
             "sourceRefs": source_refs,
             "textSourceRefs": text_source_refs,

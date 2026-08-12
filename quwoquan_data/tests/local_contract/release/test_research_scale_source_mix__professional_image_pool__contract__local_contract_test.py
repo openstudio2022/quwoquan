@@ -4,7 +4,6 @@ from __future__ import annotations
 import pytest
 
 from content.release.canonical.research_scale_source_mix import (
-    SOURCE_POOL_SHORTFALL,
     ResearchScaleSourceMixError,
     validate_research_scale_source_mix,
 )
@@ -60,6 +59,12 @@ def test_professional_image_mix_projects_normalized_provider_counts() -> None:
     assert projection["pinterestTuchongAcceptedAssetRatio"] == 0.6
     assert projection["largestProvider"] == "pinterest"
     assert projection["maxProviderAcceptedAssetRatio"] == 0.4
+    assert projection["policyObservations"] == {
+        "pinterestUniqueLargest": True,
+        "tuchongPresent": True,
+        "pinterestTuchongAtLeastHalf": True,
+        "providerAboveSeventyPercent": [],
+    }
     counts = {
         row["provider"]: row["acceptedAssetCount"]
         for row in projection["providerAssetCounts"]
@@ -69,29 +74,37 @@ def test_professional_image_mix_projects_normalized_provider_counts() -> None:
 
 
 @pytest.mark.parametrize(
-    ("platforms", "message"),
+    ("platforms", "observation"),
     [
         (
             ["Pinterest"] * 3 + ["图虫"] * 2 + ["Wikimedia"] * 3 + ["Pexels"] * 2,
-            "unique largest",
+            "pinterestUniqueLargest",
         ),
-        (["Pinterest"] * 5 + ["Wikimedia"] * 3 + ["Pexels"] * 2, "Tuchong"),
+        (
+            ["Pinterest"] * 5 + ["Wikimedia"] * 3 + ["Pexels"] * 2,
+            "tuchongPresent",
+        ),
         (
             ["Pinterest"] * 4 + ["图虫"] + ["Wikimedia"] * 3 + ["Pexels"] * 3,
-            "below 50%",
+            "pinterestTuchongAtLeastHalf",
         ),
-        (["Pinterest"] * 8 + ["图虫"] + ["Pexels"], "exceeds 70%"),
+        (
+            ["Pinterest"] * 8 + ["图虫"] + ["Pexels"],
+            "providerAboveSeventyPercent",
+        ),
     ],
 )
-def test_professional_image_mix_rejects_milestone_shortfall(
+def test_professional_image_mix_reports_nonblocking_policy_observation(
     platforms: list[str],
-    message: str,
+    observation: str,
 ) -> None:
-    with pytest.raises(ResearchScaleSourceMixError, match=message) as captured:
-        validate_research_scale_source_mix(_admission(platforms))
+    projection = validate_research_scale_source_mix(_admission(platforms))
+    policy = projection["policyObservations"]
 
-    assert captured.value.code == SOURCE_POOL_SHORTFALL
-    assert str(captured.value).startswith("DATA.SOURCE.POOL_SHORTFALL:")
+    if observation == "providerAboveSeventyPercent":
+        assert policy[observation] == ["pinterest"]
+    else:
+        assert policy[observation] is False
 
 
 def test_professional_image_mix_rejects_provider_platform_identity_drift() -> None:

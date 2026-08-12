@@ -44,6 +44,20 @@ final class RuntimeRecoveryCoordinator {
     _host?.enter(error: error, stack: stack, source: source);
   }
 
+  void enterClientUpgradeRequired({
+    required Object error,
+    required StackTrace stack,
+    required String source,
+    required String failureCode,
+  }) {
+    _host?.enterClientUpgradeRequired(
+      error: error,
+      stack: stack,
+      source: source,
+      failureCode: failureCode,
+    );
+  }
+
   void markSafeShellReady() => _host?.markSafeShellReady();
 }
 
@@ -54,10 +68,12 @@ class RuntimeRecoveryHost extends StatefulWidget {
     super.key,
     required this.childBuilder,
     this.reentryDeadline = const Duration(seconds: 8),
+    this.clientUpgradeControllerFactory,
   });
 
   final Widget Function(Key generationKey, bool isRuntimeReentry) childBuilder;
   final Duration reentryDeadline;
+  final StartupRecoveryController Function()? clientUpgradeControllerFactory;
 
   @override
   State<RuntimeRecoveryHost> createState() => _RuntimeRecoveryHostState();
@@ -68,6 +84,8 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
   int _generation = 0;
   bool _childMounted = true;
   bool _runtimeReentryConsumed = false;
+  String _failureCode = '';
+  String _failureSource = 'runtime_boundary';
   Timer? _reentryTimer;
   late Widget _generationChild;
 
@@ -113,6 +131,8 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
     }
     setState(() {
       _childMounted = false;
+      _failureCode = '';
+      _failureSource = source;
       _controller = StartupRecoveryController(
         initialSnapshot: RecoverySnapshot(
           phase: _runtimeReentryConsumed
@@ -122,6 +142,31 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
         onRuntimeReenter: _beginRuntimeReentry,
       );
     });
+  }
+
+  void enterClientUpgradeRequired({
+    required Object error,
+    required StackTrace stack,
+    required String source,
+    required String failureCode,
+  }) {
+    if (!mounted || _controller?.requiredUpdateOnly == true) return;
+    final previous = _controller;
+    final next =
+        widget.clientUpgradeControllerFactory?.call() ??
+        StartupRecoveryController(
+          initialSnapshot: const RecoverySnapshot(
+            phase: RecoveryPhase.runtimeVersionChecking,
+          ),
+          requiredUpdateOnly: true,
+        );
+    setState(() {
+      _childMounted = false;
+      _failureCode = failureCode;
+      _failureSource = source;
+      _controller = next;
+    });
+    previous?.dispose();
   }
 
   Future<void> _beginRuntimeReentry() async {
@@ -178,7 +223,8 @@ class _RuntimeRecoveryHostState extends State<RuntimeRecoveryHost> {
               home: StartupRecoveryPage(
                 mount: ops_contracts.StartupRecoveryMount.runtimeBoundary,
                 controller: controller,
-                failureSource: 'runtime_boundary',
+                failureCode: _failureCode,
+                failureSource: _failureSource,
               ),
             ),
           ),

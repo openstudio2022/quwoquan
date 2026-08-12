@@ -31,7 +31,6 @@ sys.path.insert(0, str(REPO_ROOT))
 from quwoquan_ops.cli.lib.local_environment_auth import (  # noqa: E402
     LocalAcceptanceSession,
     LocalEnvironmentHTTPError,
-    open_reference_acceptance_session,
     request_local_environment_json,
 )
 
@@ -89,10 +88,26 @@ class ProbeClient:
         self.session: LocalAcceptanceSession | None = None
         self.token = ""
         if args.env in LOCAL_TARGETS:
-            self.session = open_reference_acceptance_session(
-                args.base_url,
-                environment=args.env,
-                target_name=LOCAL_TARGETS[args.env],
+            values = {
+                "owner_id": os.environ.get("QWQ_TEST_DATA_OWNER_ID", "").strip(),
+                "persona_id": os.environ.get("QWQ_TEST_DATA_PERSONA_ID", "").strip(),
+                "access_token": os.environ.get(
+                    "QWQ_TEST_DATA_ACCESS_TOKEN", ""
+                ).strip(),
+                "refresh_token": os.environ.get(
+                    "QWQ_TEST_DATA_REFRESH_TOKEN", ""
+                ).strip(),
+            }
+            if any(not value for value in values.values()):
+                raise ProbeFailure(
+                    "auth_missing",
+                    "local probe requires an isolated typed test-data actor",
+                )
+            self.session = LocalAcceptanceSession(
+                owner_id=values["owner_id"],
+                persona_id=values["persona_id"],
+                access_token=values["access_token"],
+                refresh_token=values["refresh_token"],
             )
         else:
             self.token = os.environ.get(args.auth_token_env, "").strip()

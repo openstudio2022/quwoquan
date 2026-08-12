@@ -44,9 +44,34 @@ type FleetRequest struct {
 	RequireCommercial       bool                                     `json:"requireCommercial"`
 	RecoverDeadTasks        *bool                                    `json:"recoverDeadTasks"`
 	ObjectTimeoutMS         int                                      `json:"objectTimeoutMilliseconds"`
+	GlobalRequiredQuota     int                                      `json:"globalRequiredQuota"`
 	RequiredQuota           int                                      `json:"requiredQuota"`
 	CampaignBinding         *reliabletask.DataContentCampaignBinding `json:"campaignBinding,omitempty"`
+	WorkerHostBinding       *WorkerHostBinding                       `json:"workerHostBinding,omitempty"`
 	Jobs                    []reliabletask.DataContentJob            `json:"jobs"`
+}
+
+type WorkerHostTransportBinding struct {
+	MongoTransportDigest string `json:"mongoTransportDigest"`
+	RedisTransportDigest string `json:"redisTransportDigest"`
+}
+
+// WorkerHostBinding is the exact host/generation/partition slice admitted by Data.
+type WorkerHostBinding struct {
+	HostSetID                string                     `json:"hostSetId"`
+	Generation               int                        `json:"generation"`
+	FencingToken             string                     `json:"fencingToken"`
+	HostSetDigest            string                     `json:"hostSetDigest"`
+	Transport                WorkerHostTransportBinding `json:"transportBinding"`
+	HostScopeID              string                     `json:"hostScopeId"`
+	WorkerCount              int                        `json:"workerCount"`
+	PartitionKeys            []string                   `json:"partitionKeys"`
+	RuntimeProfileDigest     string                     `json:"runtimeProfileDigest"`
+	ExecutorBundleRef        string                     `json:"executorBundleRef"`
+	ExecutorBundleDigest     string                     `json:"executorBundleDigest"`
+	ExecutorBundleFileSHA256 string                     `json:"executorBundleFileSha256"`
+	SourceCapsuleID          string                     `json:"sourceCapsuleId"`
+	SourceCapsuleDigest      string                     `json:"sourceCapsuleDigest"`
 }
 
 // DataContentCheckpointPolicy freezes partition-local restart semantics.
@@ -122,7 +147,6 @@ type FleetConfig struct {
 	BatchTimeout    time.Duration
 	LeaseTTL        time.Duration
 	PendingMinIdle  time.Duration
-	MaxAttempts     int
 }
 
 // FleetStoreConfig is the minimum composition contract for an explicit
@@ -193,22 +217,52 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 	if err := request.CheckpointPolicy.validate(); err != nil {
 		return FleetRequest{}, err
 	}
-	if (request.ScaleClass == "M100_PLUS" || request.ScaleClass == "M10000_PLUS") &&
-		request.CampaignBinding == nil {
-		return FleetRequest{}, errors.New(
-			request.ScaleClass + " fleet request requires campaign binding",
-		)
-	}
-	if request.RequiredQuota < 1 || request.RequiredQuota > len(request.Jobs) {
+	if request.GlobalRequiredQuota < 1 ||
+		request.RequiredQuota < 1 ||
+		request.RequiredQuota > len(request.Jobs) ||
+		request.RequiredQuota > request.GlobalRequiredQuota {
 		return FleetRequest{}, fmt.Errorf(
-			"fleet request requiredQuota=%d must be between 1 and the %d frozen jobs",
+			"fleet request requiredQuota=%d globalRequiredQuota=%d must fit the %d frozen jobs",
 			request.RequiredQuota,
+			request.GlobalRequiredQuota,
 			len(request.Jobs),
 		)
 	}
 	if request.CampaignBinding != nil {
 		if err := request.CampaignBinding.Validate(); err != nil {
 			return FleetRequest{}, err
+		}
+	}
+	assignedPartitions := map[string]struct{}(nil)
+	if request.WorkerHostBinding != nil {
+		binding := request.WorkerHostBinding
+		if strings.TrimSpace(binding.HostSetID) == "" ||
+			binding.Generation < 1 ||
+			strings.TrimSpace(binding.HostScopeID) == "" ||
+			binding.WorkerCount != request.RequiredWorkers ||
+			!reliabletask.ValidSHA256Digest(binding.FencingToken) ||
+			!reliabletask.ValidSHA256Digest(binding.HostSetDigest) ||
+			!reliabletask.ValidSHA256Digest(binding.Transport.MongoTransportDigest) ||
+			!reliabletask.ValidSHA256Digest(binding.Transport.RedisTransportDigest) ||
+			!reliabletask.ValidSHA256Digest(binding.RuntimeProfileDigest) ||
+			strings.TrimSpace(binding.ExecutorBundleRef) == "" ||
+			!reliabletask.ValidSHA256Digest(binding.ExecutorBundleDigest) ||
+			!reliabletask.ValidSHA256Digest(binding.ExecutorBundleFileSHA256) ||
+			strings.TrimSpace(binding.SourceCapsuleID) == "" ||
+			!reliabletask.ValidSHA256Digest(binding.SourceCapsuleDigest) ||
+			len(binding.PartitionKeys) == 0 {
+			return FleetRequest{}, errors.New("fleet request workerHostBinding is invalid")
+		}
+		assignedPartitions = make(map[string]struct{}, len(binding.PartitionKeys))
+		for _, partition := range binding.PartitionKeys {
+			value, err := strconv.Atoi(strings.TrimSpace(partition))
+			if err != nil || value < 0 || value >= request.PartitionCount {
+				return FleetRequest{}, errors.New("fleet request assigned partition is invalid")
+			}
+			if _, exists := assignedPartitions[strconv.Itoa(value)]; exists {
+				return FleetRequest{}, errors.New("fleet request assigned partitions are duplicated")
+			}
+			assignedPartitions[strconv.Itoa(value)] = struct{}{}
 		}
 	}
 	jobIDs := make(map[string]struct{}, len(request.Jobs))
@@ -238,6 +292,14 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 		job.JobSetEnvelopeDigest = request.JobSetEnvelopeDigest
 		job.JobSetDigest = request.JobSetDigest
 		job.ActualTaskDigest = request.ActualTaskDigest
+		if request.WorkerHostBinding != nil {
+			job.WorkerFence = &reliabletask.DataContentWorkerFence{
+				HostSetDigest: request.WorkerHostBinding.HostSetDigest,
+				Generation:    request.WorkerHostBinding.Generation,
+				FencingToken:  request.WorkerHostBinding.FencingToken,
+				HostScopeID:   request.WorkerHostBinding.HostScopeID,
+			}
+		}
 		if request.CampaignBinding != nil {
 			job.Campaign = *request.CampaignBinding
 		}
@@ -257,6 +319,15 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 				"fleet job %q partitionKey does not match carrier+objectRef partition",
 				job.JobID,
 			)
+		}
+		if assignedPartitions != nil {
+			if _, assigned := assignedPartitions[strings.TrimSpace(job.PartitionKey)]; !assigned {
+				return FleetRequest{}, fmt.Errorf(
+					"fleet job %q partition is not assigned to hostScopeId=%q",
+					job.JobID,
+					request.WorkerHostBinding.HostScopeID,
+				)
+			}
 		}
 		if job.Stage != "author" && job.Stage != "publish" {
 			return FleetRequest{}, fmt.Errorf(
@@ -283,10 +354,9 @@ func ReadFleetRequest(path string) (FleetRequest, error) {
 	if err != nil {
 		return FleetRequest{}, err
 	}
-	if actualTaskDigest != request.ActualTaskDigest ||
-		request.ActualTaskDigest != request.JobSetDigest {
+	if actualTaskDigest != request.ActualTaskDigest {
 		return FleetRequest{}, errors.New(
-			"fleet request actualTaskDigest does not match its exact job set",
+			"fleet request actualTaskDigest does not match its exact host task set",
 		)
 	}
 	return request, nil
@@ -390,7 +460,6 @@ func LoadFleetConfig(
 		Workers:         1,
 		LeaseTTL:        30 * time.Minute,
 		PendingMinIdle:  time.Second,
-		MaxAttempts:     3,
 	}
 	if value, ok := provider.GetString("QWQ_DATA_FLEET_MONGO_DATABASE"); ok {
 		cfg.MongoDatabase = value
@@ -416,17 +485,9 @@ func LoadFleetConfig(
 	); ok {
 		cfg.PendingMinIdle = value
 	}
-	if value, ok := provider.GetInt("QWQ_DATA_FLEET_MAX_ATTEMPTS"); ok {
-		cfg.MaxAttempts = value
-	}
 	if cfg.Workers < 1 || cfg.Workers > 4096 {
 		return FleetConfig{}, errors.New(
 			"QWQ_DATA_FLEET_WORKERS must be between 1 and 4096",
-		)
-	}
-	if cfg.MaxAttempts < 1 {
-		return FleetConfig{}, errors.New(
-			"QWQ_DATA_FLEET_MAX_ATTEMPTS must be positive",
 		)
 	}
 	return cfg, nil
@@ -552,6 +613,37 @@ func SelectExecutionTasks(
 				"data content request job %q remote identity does not match the frozen request",
 				jobID,
 			)
+		}
+		selected = append(selected, task)
+	}
+	return selected, nil
+}
+
+// SelectFenceTargets resolves stable logical jobs before a newer generation
+// atomically replaces only their mutable worker-fence payload fields.
+func SelectFenceTargets(
+	executionTasks []reliabletask.ReliableAsyncTask,
+	request FleetRequest,
+) ([]reliabletask.ReliableAsyncTask, error) {
+	wanted := make(map[string]reliabletask.DataContentJob, len(request.Jobs))
+	for _, job := range request.Jobs {
+		key, err := job.ValidateIdentity()
+		if err != nil {
+			return nil, err
+		}
+		wanted[key] = job
+	}
+	selected := make([]reliabletask.ReliableAsyncTask, 0, len(wanted))
+	for _, task := range executionTasks {
+		job, ok := wanted[strings.TrimSpace(task.IdempotencyKey)]
+		if !ok {
+			continue
+		}
+		if task.DedupeKey != task.IdempotencyKey ||
+			task.Payload["executionId"] != request.ExecutionID ||
+			task.Payload["jobId"] != job.JobID ||
+			task.PartitionKey != job.PartitionKey {
+			return nil, fmt.Errorf("data content fence target %q stable identity drift", job.JobID)
 		}
 		selected = append(selected, task)
 	}

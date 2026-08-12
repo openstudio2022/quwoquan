@@ -1,5 +1,31 @@
 description: 该自治边界的运行配置定义与默认值；环境只维护差异和引用。
 configs:
+- key: sys.user-service.research_identity.attestation_key_base64
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
+- key: sys.user-service.research_identity.enabled
+  type: bool
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: false
+- key: sys.user-service.research_identity.account_id_allowlist_json
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: true
+- key: sys.user-service.research_identity.ttl_seconds
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 300
 - key: sys.user-service.es.embeddingDims
   type: int
   scope: workload

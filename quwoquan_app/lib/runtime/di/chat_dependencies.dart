@@ -218,10 +218,8 @@ final class ChatProductionComposition {
   }) {
     return RemoteGatheringBoardChatReader(
       client: client,
-      invocationContext: (clientPageId) => invocationContext(
-        AppUiSurfaces.gatheringBoard,
-        clientPageId,
-      ),
+      invocationContext: (clientPageId) =>
+          invocationContext(AppUiSurfaces.gatheringBoard, clientPageId),
     );
   }
 }

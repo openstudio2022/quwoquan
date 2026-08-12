@@ -61,6 +61,7 @@
 - 领域边界、上下游依赖、工程映射和服务治理清晰；search-service（domain=search，18095）为云侧 canonical 入口。
 - `content.post`、`entity.homepage`、`circle.circle`、`circle.group`、`user.profile` 与第一方 `location.place` 必须投影到统一索引 `quwoquan_objects`。
 - App 的 `RemoteSearchRepository` 必须通过 `CloudHttpClient` 与生成的 path 调用 `/search`，并透传 canonical 商用字段。
+- `/search` 的 suggest/result 对已登录 App、guest 与无 bearer 的 public principal 保持同一公开读取语义；assistant retrieval 与 API Edge owner projection 的 service scope 只在 owner application port 校验，不得写进公开 operation 的 generated edge scope 并误拒绝 App principal。
 - `location.place` 的直达路由、冷启动与进程恢复必须经 canonical `/search` 的受控 `ids` 精确匹配重新读取；App 只消费 `SearchLocationPlaceHitView`，不得用 route extra 或裸 Map 伪造详情。
 - 精确读取返回 `entity.homepage` 时，地点落地页必须跳转该主页；无命中时显示结构化不可用恢复态并回到搜索，不得保留泛化标题或过期地址。
 - 搜索反馈、热力与排序信号必须回流推荐 Feed，结果排序必须能解释 `termHeat` 的贡献。

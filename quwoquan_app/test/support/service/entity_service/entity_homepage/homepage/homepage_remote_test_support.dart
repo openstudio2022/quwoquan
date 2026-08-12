@@ -79,6 +79,30 @@ HomepageFacetProjectionAdapter buildRemoteHomepageRepositoryForTest({
             personaId: 'test-persona',
           ),
         ),
+    claimRequestInvocationContext:
+        (clientPageId, surface, {String? idempotencyKey}) =>
+            CloudOperationInvocationContext(
+              surfaceId: surface.id,
+              routeId: surface.routeId,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey ?? 'test-idempotency-key',
+              actor: const CloudOperationActorContext(
+                accountId: 'test-account',
+                personaId: 'test-persona',
+              ),
+            ),
+    statusReportInvocationContext:
+        (clientPageId, surface, {String? idempotencyKey}) =>
+            CloudOperationInvocationContext(
+              surfaceId: surface.id,
+              routeId: surface.routeId,
+              clientPageId: clientPageId,
+              idempotencyKey: idempotencyKey ?? 'test-idempotency-key',
+              actor: const CloudOperationActorContext(
+                accountId: 'test-account',
+                personaId: 'test-persona',
+              ),
+            ),
   );
   return HomepageFacetProjectionAdapter(
     query: queryFacets.query,

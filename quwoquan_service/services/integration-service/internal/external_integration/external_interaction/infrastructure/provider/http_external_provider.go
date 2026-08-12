@@ -372,7 +372,14 @@ func providerPayload(operation string, source map[string]string) map[string]stri
 	var allowlist []string
 	switch operation {
 	case reliabletask.ExternalInteractionOperationSmsOTP:
-		allowlist = []string{"challengeId", "phoneHash", "maskedRecipient", "templateId"}
+		allowlist = []string{
+			"challengeId",
+			"phoneHash",
+			"maskedRecipient",
+			"templateId",
+			"platform",
+			"requestRef",
+		}
 	default:
 		return map[string]string{}
 	}
@@ -408,18 +415,34 @@ func (p *HTTPExternalProvider) providerPayload(
 	if err != nil {
 		return nil, err
 	}
+	platform := strings.ToLower(strings.TrimSpace(request.Payload["platform"]))
+	requestRef := strings.TrimSpace(request.Payload["requestRef"])
+	if !validOTPClientPlatform(platform) || requestRef == "" || requestRef != request.RequestID {
+		return nil, errors.New("sms otp platform or request reference is invalid")
+	}
 	return map[string]string{
 		"recipient":  secret.Phone,
 		"code":       secret.Code,
 		"templateId": strings.TrimSpace(request.Payload["templateId"]),
+		"platform":   platform,
+		"requestRef": requestRef,
 	}, nil
+}
+
+func validOTPClientPlatform(platform string) bool {
+	switch platform {
+	case "ios", "android", "web", "acceptance":
+		return true
+	default:
+		return false
+	}
 }
 
 func validateProviderPayload(operation string, payload map[string]string) error {
 	var required []string
 	switch operation {
 	case reliabletask.ExternalInteractionOperationSmsOTP:
-		required = []string{"recipient", "code", "templateId"}
+		required = []string{"recipient", "code", "templateId", "platform", "requestRef"}
 	default:
 		return fmt.Errorf("provider payload operation %q is not supported", operation)
 	}

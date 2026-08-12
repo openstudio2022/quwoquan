@@ -56,9 +56,7 @@ String resolvePersistedAssistantDisplayMarkdown(Map<String, dynamic> message) {
   return internal.resolvePersistedAssistantDisplayMarkdown(message);
 }
 
-String resolvePersistedAssistantDisplayPlainText(
-  Map<String, dynamic> message,
-) {
+String resolvePersistedAssistantDisplayPlainText(Map<String, dynamic> message) {
   return internal.resolvePersistedAssistantDisplayPlainText(message);
 }
 

@@ -52,6 +52,31 @@
     },
     "minimumPerProvince": { "type": "integer", "minimum": 1 },
     "exhaustInput": { "type": "boolean" },
+    "requiredEntityRefs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^/entity/[^/\\s]+/[^/\\s]+/\\S(?:[^/]*\\S)?$"
+      }
+    },
+    "frozenEntityRefs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^/entity/[^/\\s]+/[^/\\s]+/\\S(?:[^/]*\\S)?$"
+      }
+    },
+    "missingRequiredEntityRefs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^/entity/[^/\\s]+/[^/\\s]+/\\S(?:[^/]*\\S)?$"
+      }
+    },
     "inputExhausted": { "type": "boolean" },
     "inputUniqueByProvince": {
       "type": "object",

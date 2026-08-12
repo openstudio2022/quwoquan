@@ -40,14 +40,31 @@ func (b *executionUsageBudget) consume(response ModelResponse) error {
 	return b.state.consumeModel(b.policy, tokens, costUnits)
 }
 
-func (b *executionUsageBudget) reserveToolCall() (
+func (b *executionUsageBudget) reserveToolCalls(count int) (
 	*executionToolCallReservation,
 	error,
 ) {
 	if b == nil || !b.enabled {
-		return &executionToolCallReservation{}, nil
+		return &executionToolCallReservation{count: int64(count)}, nil
 	}
-	return b.state.reserveToolCall(b.policy)
+	return b.state.reserveToolCalls(b.policy, count)
+}
+
+func (b *executionUsageBudget) remainingToolCalls(fallback int) int {
+	if b == nil || !b.enabled || b.state == nil {
+		if fallback < 0 {
+			return 0
+		}
+		return fallback
+	}
+	b.state.mu.Lock()
+	defer b.state.mu.Unlock()
+	remaining := int64(b.policy.MaxToolCalls) -
+		b.state.consumption.ToolCalls - b.state.pendingToolCalls
+	if remaining <= 0 {
+		return 0
+	}
+	return int(remaining)
 }
 
 func consumeExecutionModelResponse(

@@ -1,12 +1,16 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentFeedEmptyReason;
 
 class WorksViewerFeedSnapshot {
   const WorksViewerFeedSnapshot({
     required this.items,
     required this.hasMore,
     required this.isLoading,
+    this.blockingError,
+    this.emptyReason,
     this.appendError,
     this.feedRequestId,
     this.policyDigest,
@@ -15,6 +19,8 @@ class WorksViewerFeedSnapshot {
   final List<ContentPostViewData> items;
   final bool hasMore;
   final bool isLoading;
+  final Object? blockingError;
+  final ContentFeedEmptyReason? emptyReason;
   final Object? appendError;
   final String? feedRequestId;
   final String? policyDigest;
@@ -32,6 +38,8 @@ final worksViewerFeedProvider =
               items: state.items,
               hasMore: state.hasMore,
               isLoading: state.isLoading,
+              blockingError: state.blockingError,
+              emptyReason: state.emptyReason,
               appendError: state.appendError,
               feedRequestId: state.feedRequestId,
               policyDigest: state.policyDigest,
@@ -48,8 +56,10 @@ class WorksViewerFeedCommands {
     return ref.read(discoveryFeedMapProvider).containsKey(channelId);
   }
 
-  void load(String channelId) {
-    ref.read(discoveryFeedMapProvider.notifier).load(channelId);
+  Future<DiscoveryFeedLoadResult> load(String channelId, {bool force = false}) {
+    return ref
+        .read(discoveryFeedMapProvider.notifier)
+        .load(channelId, force: force);
   }
 
   Future<void> appendNextPage(String channelId) {

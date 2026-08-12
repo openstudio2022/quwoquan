@@ -7,14 +7,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
-func dataContentTaskIdentity(job DataContentJob) (map[string]string, error) {
+func dataContentTaskIdentity(job DataContentJob) (map[string]any, error) {
 	if _, err := job.ValidateIdentity(); err != nil {
 		return nil, err
 	}
-	return map[string]string{
+	return map[string]any{
 		"entityRef":      strings.TrimSpace(job.EntityRef),
 		"carrier":        strings.TrimSpace(job.Carrier),
 		"sourceRevision": strings.TrimSpace(job.SourceRevision),
@@ -24,12 +25,13 @@ func dataContentTaskIdentity(job DataContentJob) (map[string]string, error) {
 		"ref":            strings.TrimSpace(job.Ref),
 		"stage":          strings.TrimSpace(job.Stage),
 		"partitionKey":   strings.TrimSpace(job.PartitionKey),
+		"maxAttempts":    job.MaxAttempts,
 	}, nil
 }
 
 // DataContentTaskDigest is byte-compatible with Data canonical JSON hashing.
 func DataContentTaskDigest(jobs []DataContentJob) (string, error) {
-	rows := make([]map[string]string, 0, len(jobs))
+	rows := make([]map[string]any, 0, len(jobs))
 	for _, job := range jobs {
 		row, err := dataContentTaskIdentity(job)
 		if err != nil {
@@ -41,7 +43,7 @@ func DataContentTaskDigest(jobs []DataContentJob) (string, error) {
 		return "", fmt.Errorf("data content task digest requires jobs")
 	}
 	sort.Slice(rows, func(i, j int) bool {
-		return rows[i]["jobId"] < rows[j]["jobId"]
+		return rows[i]["jobId"].(string) < rows[j]["jobId"].(string)
 	})
 	var buffer bytes.Buffer
 	encoder := json.NewEncoder(&buffer)
@@ -57,12 +59,20 @@ func DataContentTaskDigest(jobs []DataContentJob) (string, error) {
 func DataContentAsyncTaskDigest(tasks []ReliableAsyncTask) (string, error) {
 	jobs := make([]DataContentJob, 0, len(tasks))
 	for _, task := range tasks {
+		maxAttempts, err := strconv.Atoi(strings.TrimSpace(task.Payload["maxAttempts"]))
+		if err != nil || maxAttempts < 1 {
+			return "", fmt.Errorf(
+				"data content task %s maxAttempts is invalid",
+				task.TaskID,
+			)
+		}
 		jobs = append(jobs, DataContentJob{
 			EntityRef: task.Payload["entityRef"], Carrier: task.Payload["carrier"],
 			SourceRevision: task.Payload["sourceRevision"], JobID: task.Payload["jobId"],
 			ExecutionID: task.Payload["executionId"], Ref: task.Payload["ref"],
 			Stage: task.Payload["stage"], PartitionKey: task.Payload["partitionKey"],
 			IdempotencyKey:       task.Payload["idempotencyKey"],
+			MaxAttempts:          maxAttempts,
 			JobSetEnvelopeDigest: task.Payload["jobSetEnvelopeDigest"],
 			JobSetDigest:         task.Payload["jobSetDigest"],
 			ActualTaskDigest:     task.Payload["actualTaskDigest"],

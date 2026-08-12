@@ -38,13 +38,13 @@
 .PHONY: verify-app-ui-map-literal-budget
 .PHONY: verify-app-assistant-search-weak-typing-ratchet
 .PHONY: verify-app-assistant-old-stack-retired
-.PHONY: probe-avatar-user-pool-gateway
 .PHONY: verify-assistant-agent-replay-evaluation
 .PHONY: verify-retired-terms-zero
 .PHONY: verify-app-production-data-source-single-path
 .PHONY: verify-production-wiring-purity
 .PHONY: verify-provider-substitute-prod-purity
-.PHONY: verify-nonprod-business-data-provisioning
+.PHONY: verify-test-data-architecture
+.PHONY: verify-test-data-performance
 .PHONY: fetch-app-bundled-fonts
 .PHONY: verify-app-bundled-fonts
 .PHONY: check-app-bundled-fonts-updates
@@ -108,6 +108,7 @@
 .PHONY: verify-app-contract-handoff
 .PHONY: verify-app-contract-handoff-inputs
 .PHONY: verify-app-generated-manifest
+.PHONY: verify-graphql-app-client
 .PHONY: verify-app-enum-typed-binding
 .PHONY: verify-app-cohesion-ratchet
 .PHONY: verify-app-shell-navigation
@@ -313,8 +314,11 @@ verify-production-wiring-purity: verify-app-mock-isolation verify-app-lib-test-o
 verify-provider-substitute-prod-purity:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_provider_substitute_prod_purity.py
 
-verify-nonprod-business-data-provisioning:
-	@python3 quwoquan_ops/gate/verify_nonprod_business_data_provisioning.py
+verify-test-data-architecture:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_test_data_architecture.py
+
+verify-test-data-performance:
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_test_data_performance.py $(TEST_DATA_PERFORMANCE_ARGS)
 
 fetch-app-bundled-fonts:
 	@python3 quwoquan_app/scripts/cli.py fonts fetch
@@ -330,10 +334,6 @@ verify-app-web-offline-resources:
 
 verify-app-assistant-old-stack-retired:
 	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_old_stack_retired.py
-
-# 共享头像素材池经 beta gateway 的媒体派生探针（自带本地 media server + gateway，无需起环境）。
-probe-avatar-user-pool-gateway:
-	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/probe_avatar_user_pool_gateway.py
 
 verify-quwoquan-data:
 	@python3 quwoquan_data/scripts/cli.py verify all
@@ -804,6 +804,10 @@ verify-app-contract-handoff-inputs:
 
 verify-app-generated-manifest:
 	@python3 quwoquan_app/scripts/runtime/codegen/verify_app_generated_manifest.py
+	@$(MAKE) verify-graphql-app-client
+
+verify-graphql-app-client:
+	@$(MAKE) -C quwoquan_service verify-graphql-app-client
 
 verify-app-shell-navigation:
 	@$(MAKE) -C quwoquan_service verify-app-shell-navigation
@@ -846,10 +850,6 @@ gate:
 	@$(MAKE) verify-test-nonfunctional-coverage
 	# local_contract 只在 gate_repo scope 内跑一次，禁止与 test-local-contract 双跑。
 	@$(MAKE) verify-reliable-task-topology
-	# 原 verify-avatar-user-pool 依赖 app_*_seed_manifest.json / source_catalog.json，
-	# 随 seed manifest 退役一并删除；其治理职责由 gate_repo.sh 的
-	# verify_nonprod_business_data_provisioning.py 承接。
-	@$(MAKE) probe-avatar-user-pool-gateway
 	@$(MAKE) verify-markdown-article-no-article-document
 	@$(MAKE) verify-article-contract-purity
 	@python3 quwoquan_ops/cli/stackctl.py verify --kind all --profile baseline
@@ -871,7 +871,7 @@ gate-local-gamma:
 		export LOCAL_GAMMA_USER_PORT="$$LG_USER_PORT"; \
 		if [ "$${LOCAL_GAMMA_SKIP_GATE:-1}" != "1" ]; then $(MAKE) gate; fi; \
 		$(MAKE) verify-app-env-package; \
-		$(MAKE) verify-nonprod-business-data-provisioning; \
+		$(MAKE) verify-test-data-architecture; \
 		python3 quwoquan_ops/cli/stackctl.py up --env gamma --skip-app --workload full; \
 		python3 quwoquan_app/scripts/gamma/run_local_gamma_release_consumer_api.py; \
 		bash quwoquan_app/scripts/gamma/run_local_gamma_device_uat.sh; \
@@ -948,6 +948,7 @@ verify-runtime-log-governance:
 codegen-app:
 	@$(MAKE) verify-app-contract-handoff
 	@$(MAKE) -C quwoquan_service codegen-app
+	@$(MAKE) -C quwoquan_service codegen-graphql-app-client
 	@$(MAKE) codegen-app-shell-navigation
 	@$(MAKE) verify-app-generated-manifest
 
@@ -1042,7 +1043,7 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/test_git_branch_policy__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_homepage_type_contract__shared_enum_parity__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_local_dependency_purity__local_contract_test.py \
-		quwoquan_ops/tests/local_contract/test_nonprod_business_data_provisioning__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/test_test_data_architecture_gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_object_idempotency_dedup__declared_required_without_dedup__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_object_relation_edge_type_contract__shared_enum_parity__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_readiness_result_bundle_collector__gate__local_contract_test.py \

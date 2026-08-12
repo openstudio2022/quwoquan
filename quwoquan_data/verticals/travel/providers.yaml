@@ -27,6 +27,14 @@ articleCommercialAdmissions:
   - controlled_trial
   - reference_only
   - blocked
+creatorExpansionPolicies:
+  # Creator expansion is always derived from one entity-relevant accepted work;
+  # it is never an author-first source axis and never confers relevance or rights
+  # on the remaining catalog entries.
+  - unavailable
+  - stable_id_public_pagination
+  - stable_id_official_api
+  - reference_search_fallback
 sites:
   - siteId: wikipedia_zh
     platform: 维基百科
@@ -38,6 +46,40 @@ sites:
     extractor: wikipedia_api
     licensePolicy: factual_citation_only
     qualityTier: A
+    siteCrawlProfile:
+      crawlAllowed: true
+      contentLanes: [article]
+      articleCommercialAdmission: commercial_release
+      allowedPaths:
+        - https://zh.wikipedia.org/wiki/*
+      fetchMode: mediawiki_api
+      extractor: wikipedia_api
+      rightsPolicy: factual_citation_only
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use
+      rateLimit:
+        mode: conservative
+        maxRequestsPerSecond: 0.5
+        backoffOnStatus: [403, 429]
+      discoveryStrategy:
+        mode: entity_seeded_scan
+        priority: site_direct_first
+        seedAxes: [entity, topic, time_window]
+        queryTemplates:
+          - "{entity} site:zh.wikipedia.org/wiki"
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor]
+        notes: 以实体精确词条与公开 MediaWiki 搜索发现图文并茂的当前身份文章底稿。
+      creatorExpansion:
+        policy: unavailable
+        stableCreatorIdRequired: true
+        perWorkEntityRevalidationRequired: true
+        notes: 协作型百科编辑者不是旅游文章作者，禁止扩展编辑者贡献。
+      maxDepth: 1
+      maxPagesPerDay: 5000
+      timeWindowDays: 730
+      notes: 仅经 article 正文、同源媒体、Creator、rights 与语义门后可进入作者链。
     notes: 中文百科正文真相源，允许抽取 facts/sections，不得整段搬运。
   - siteId: wikivoyage_zh
     platform: 维基导游
@@ -68,11 +110,17 @@ sites:
         backoffOnStatus: [403, 429]
       discoveryStrategy:
         mode: entity_seeded_scan
+        priority: site_direct_first
         seedAxes: [entity, topic, time_window]
         queryTemplates:
           - "{entity} site:zh.wikivoyage.org/wiki"
         precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor]
         notes: 以目的地/主题/时间片检索可读指南页；不按作者维度扩展。
+      creatorExpansion:
+        policy: unavailable
+        stableCreatorIdRequired: true
+        perWorkEntityRevalidationRequired: true
+        notes: 协作型导游站编辑者不等于独立旅行博主，禁止作者扩展。
       maxDepth: 2
       maxPagesPerDay: 5000
       timeWindowDays: 730
@@ -311,12 +359,18 @@ sites:
         backoffOnStatus: [403, 429]
       discoveryStrategy:
         mode: content_search
+        priority: search_supplement_after_site_direct_shortfall
         searchProvider: brave_public
         seedAxes: [entity]
         queryTemplates:
           - "{entity} site:you.ctrip.com/sight"
         precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor]
         notes: 按实体名发现公开景点详情页；标题与抓取正文必须同时通过实体锚点门。
+      creatorExpansion:
+        policy: unavailable
+        stableCreatorIdRequired: true
+        perWorkEntityRevalidationRequired: true
+        notes: 景点指南页没有可治理的稳定作者作品分页接口。
       maxDepth: 1
       maxPagesPerDay: 5000
       notes: 只抓公开实体景点详情正文，作为原创文章的事实参考；不复制点评，不发布站内图片。
@@ -538,6 +592,7 @@ sites:
         notes: research 仅消费公开直链、平台支持接口或人工文件；逐图保留作者、作品页、原图、无水印扫描与 rights gap，commercial 仍须作者或图虫创意授权。
       discoveryStrategy:
         mode: site_listing_scan
+        priority: site_direct_first
         seedAxes: [topic, time_window, site_listing, collection]
         precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor, rights_gate]
         notes: 摄影社区按作品页/专题页/集合页形成 research 候选，不以摄影师主页为主轴；未验证权利可进入受隔离 research，但必须逐图记录授权缺口，commercial 不得放行。
@@ -621,6 +676,7 @@ sites:
         backoffOnStatus: [403, 429]
       discoveryStrategy:
         mode: site_listing_scan
+        priority: site_direct_first
         searchProvider: brave_public
         seedAxes: [topic, time_window, site_listing]
         queryTemplates:
@@ -628,6 +684,12 @@ sites:
           - "{entity} site:touch.travel.qunar.com"
         precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor]
         notes: 去哪儿等旅行类站点按公开攻略/景点/游记页轻量巡检候选内容，再进入 source quality 与实体锚点门；不按作者扩源。
+      creatorExpansion:
+        policy: reference_search_fallback
+        stableCreatorIdRequired: true
+        perWorkEntityRevalidationRequired: true
+        catalogCompletenessClaim: visible_public_results_at_observed_at
+        notes: 仅从已通过实体相关性门的作品反向取得作者；作者页无受治理完整分页时只冻结可见结果，并可用搜索补缺。每篇仍独立过实体、质量、去重与来源门。
       maxDepth: 3
       maxPagesPerDay: 5000
       timeWindowDays: 730

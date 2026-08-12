@@ -1,0 +1,75 @@
+{
+  "label": "南浔镇",
+  "domain": "地点",
+  "type": "景区",
+  "executionId": "20260808--travel-homepage-m1--china-nanxun-town-bootstrap-not-m100--scale-003",
+  "entityRef": "/entity/地点/景区/南浔镇",
+  "summary": "-汉语拼音：NánxúnZhèn-其他语言：吳語-其他语言名称：NeZinTzen-地名出处：取“南林”、“浔溪”两名之首字-毗邻：織里镇雙林镇練市镇七都镇（江蘇）震澤镇（江蘇）-总面积：141.3平方公里-总人口：11.93万人-总人口年。",
+  "sourceRefs": [
+    "sources/南浔镇__wikipedia__64ea0aad/source.md"
+  ],
+  "sourceUrls": [
+    "https://zh.wikipedia.org/wiki/%E5%8D%97%E6%B5%94%E9%95%87"
+  ],
+  "primarySource": {
+    "entityName": "南浔镇",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E5%8D%97%E6%B5%94%E9%95%87",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E5%8D%97%E6%B5%94%E9%95%87",
+    "title": "南浔镇",
+    "fetchedAt": "2026-08-09T00:12:59Z",
+    "snapshotHash": "sha256:59e88475109a0aca5021700663ff7c9cdf19e55efde51af60cd56471d998d582",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "licensed_adaptation"
+  },
+  "textSourceRefs": [
+    "sources/南浔镇__wikipedia__64ea0aad/source.md"
+  ],
+  "imageSourceRefs": [
+    "sources/南浔镇__wikipedia__64ea0aad/source.md"
+  ],
+  "heroAssetId": "南浔镇_cover_湖州南浔_182_e6274acc",
+  "mediaAssetIds": [
+    "南浔镇_cover_湖州南浔_182_e6274acc",
+    "南浔镇_detail_小莲莊_182_0bb55a5e",
+    "南浔镇_detail_張石銘舊居的精美木雕和法国玻璃窗_182_7925dffd",
+    "南浔镇_detail_南潯張靜江故居正廳_182_399f24d3",
+    "南浔镇_detail_5_312_182_ce305c11",
+    "南浔镇_detail_5_488_182_11099fed",
+    "南浔镇_detail_6_810_7_1973_182_18ce5d28",
+    "南浔镇_detail_7_1727_182_baa0896e",
+    "南浔镇_detail_7_112_182_9039a204",
+    "南浔镇_detail_7_238_182_870ae7b8",
+    "南浔镇_detail_3_13_182_8fdfe0a5",
+    "南浔镇_detail_3_15_182_35ae890f",
+    "南浔镇_detail_5_7_182_f3759571",
+    "南浔镇_detail_5_8_182_2079b3cf",
+    "南浔镇_detail_6_32_182_bc683378",
+    "南浔镇_detail_7_20_182_ae178d6a",
+    "南浔镇_detail_7_40_182_a3434597",
+    "南浔镇_detail_9_5_182_feffd3b8"
+  ],
+  "tagRefs": [
+    "Entity/地点/景区",
+    "Topic/地理/行政区/中国/浙江省/湖州市/南浔区",
+    "Topic/旅行/玩法/观光游览",
+    "Format/内容角度/攻略"
+  ],
+  "geoTagRef": "Topic/地理/行政区/中国/浙江省/湖州市/南浔区",
+  "authorId": "builtin_travel_geo_editor",
+  "creatorProfileId": "qwq_creator_geo_editor_001",
+  "creatorArchetype": "geo_editor",
+  "creatorProfileDigest": "sha256:6a4ab98ba999350059967e23751c544af0dd81b143d042eb38a8187e6d38c043",
+  "creatorDisclosure": {
+    "type": "platform_virtual_creator",
+    "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
+    "visible": true
+  },
+  "experienceClaimMode": "editorial_synthesis",
+  "authorQualitySignals": {
+    "qualityScore": 0.9,
+    "fatigueScore": 0.2,
+    "riskTier": "low"
+  }
+}

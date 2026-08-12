@@ -46,6 +46,7 @@ import 'package:quwoquan_app/runtime/di/video_preview_track_dependencies.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
@@ -59,6 +60,7 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/video_player_widget.dart';
@@ -69,6 +71,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_paged_canvas.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
+import 'package:quwoquan_app/runtime/di/works_viewer_feed_bridge.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/works_immersive_viewer.dart';
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
@@ -1039,8 +1042,9 @@ Widget _wrap(
 /// 内层传输故意直接抛错，把「意外发起真实下载」变成显式测试失败。
 CloudHttpClient _unreachableDataPlaneClient() => CloudHttpClient(
   client: MockClient(
-    (request) async =>
-        throw StateError('MediaDownloadCache double must not perform network IO'),
+    (request) async => throw StateError(
+      'MediaDownloadCache double must not perform network IO',
+    ),
   ),
 );
 
@@ -1297,6 +1301,85 @@ class _DeferredPostWorksViewerState extends State<_DeferredPostWorksViewer> {
       onAssistantTap: () {},
     );
   }
+}
+
+WorksViewerFeedSnapshot _worksFeedSnapshot({
+  List<ContentPostViewData> items = const <ContentPostViewData>[],
+  bool isLoading = false,
+  Object? blockingError,
+  ContentFeedEmptyReason? emptyReason,
+}) {
+  return WorksViewerFeedSnapshot(
+    items: items,
+    hasMore: false,
+    isLoading: isLoading,
+    blockingError: blockingError,
+    emptyReason: emptyReason,
+  );
+}
+
+final class _RecordingWorksViewerFeedCommands extends WorksViewerFeedCommands {
+  _RecordingWorksViewerFeedCommands(
+    super.ref,
+    this.loadedChannels,
+    this.loadTerminals,
+    this.loadGate,
+  );
+
+  final List<String> loadedChannels;
+  final Map<String, DiscoveryFeedLoadTerminal> loadTerminals;
+  final Future<void>? loadGate;
+  int _generation = 0;
+
+  @override
+  bool contains(String channelId) => false;
+
+  @override
+  Future<DiscoveryFeedLoadResult> load(
+    String channelId, {
+    bool force = false,
+  }) async {
+    loadedChannels.add(channelId);
+    await loadGate;
+    return DiscoveryFeedLoadResult(
+      terminal:
+          loadTerminals[channelId] ?? DiscoveryFeedLoadTerminal.canonicalEmpty,
+      generation: ++_generation,
+    );
+  }
+}
+
+List<Override> _worksInternalFeedOverrides({
+  required AsyncValue<WorksViewerFeedSnapshot> photo,
+  required AsyncValue<WorksViewerFeedSnapshot> video,
+  required AsyncValue<WorksViewerFeedSnapshot> article,
+  List<String>? loadedChannels,
+  Map<String, DiscoveryFeedLoadTerminal> loadTerminals = const {},
+  Future<void>? loadGate,
+}) {
+  return <Override>[
+    worksViewerFeedProvider('photo').overrideWithValue(photo),
+    worksViewerFeedProvider('video').overrideWithValue(video),
+    worksViewerFeedProvider('article').overrideWithValue(article),
+    worksViewerFeedCommandsProvider.overrideWith(
+      (ref) => _RecordingWorksViewerFeedCommands(
+        ref,
+        loadedChannels ?? <String>[],
+        loadTerminals,
+        loadGate,
+      ),
+    ),
+  ];
+}
+
+Widget _internalWorksViewer() {
+  return WorksImmersiveViewer(
+    showWorksToolbar: true,
+    showTopNavigation: false,
+    source: 'browse',
+    onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+    onAssistantTap: () {},
+  );
 }
 
 void main() {
@@ -3904,6 +3987,215 @@ void main() {
     expect(container.read(authContinuationProvider), isNull);
   });
 
+  test('internal feed bridge 保留 blockingError 与 canonical emptyReason', () {
+    final blockingError = StateError('service unavailable');
+    final container = ProviderContainer(
+      overrides: <Override>[
+        discoveryFeedProvider('photo').overrideWithValue(
+          const AsyncData<DiscoveryFeedState>(
+            DiscoveryFeedState(
+              emptyReason: ContentFeedEmptyReason.noActiveRelease,
+            ),
+          ),
+        ),
+        discoveryFeedProvider('video').overrideWithValue(
+          AsyncData<DiscoveryFeedState>(
+            DiscoveryFeedState(blockingError: blockingError),
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect(
+      container.read(worksViewerFeedProvider('photo')).value?.emptyReason,
+      ContentFeedEmptyReason.noActiveRelease,
+    );
+    expect(
+      container.read(worksViewerFeedProvider('video')).value?.blockingError,
+      same(blockingError),
+    );
+  });
+
+  testWidgets('internal feed 加载态明确呈现且不退化为空黑页', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        _internalWorksViewer(),
+        overrides: _worksInternalFeedOverrides(
+          photo: const AsyncLoading<WorksViewerFeedSnapshot>(),
+          video: const AsyncLoading<WorksViewerFeedSnapshot>(),
+          article: const AsyncLoading<WorksViewerFeedSnapshot>(),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('works-internal-feed-loading')),
+      findsOneWidget,
+    );
+    expect(find.byType(AppRequestFeedback), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('works-internal-feed-error')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('internal feed 无 active release 呈现 canonical empty 且不显示 Retry', (
+    tester,
+  ) async {
+    final canonicalEmpty = AsyncData<WorksViewerFeedSnapshot>(
+      _worksFeedSnapshot(emptyReason: ContentFeedEmptyReason.noActiveRelease),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        _internalWorksViewer(),
+        overrides: _worksInternalFeedOverrides(
+          photo: canonicalEmpty,
+          video: canonicalEmpty,
+          article: canonicalEmpty,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(
+        const ValueKey<String>('works-internal-feed-empty-no_active_release'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text(DiscoveryText.webPcFeedEmpty), findsOneWidget);
+    expect(find.byType(AppRequestFeedback), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('works-internal-feed-empty-retry')),
+      findsNothing,
+    );
+    expect(find.text(ContentText.tryAgain), findsNothing);
+  });
+
+  testWidgets('internal feed 服务离线呈现 blocking error 且重试三路', (tester) async {
+    final loadedChannels = <String>[];
+    final offline = StateError('offline transport detail must stay hidden');
+    final canonicalEmpty = AsyncData<WorksViewerFeedSnapshot>(
+      _worksFeedSnapshot(emptyReason: ContentFeedEmptyReason.noEligibleContent),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        _internalWorksViewer(),
+        overrides: _worksInternalFeedOverrides(
+          photo: AsyncError<WorksViewerFeedSnapshot>(
+            offline,
+            StackTrace.current,
+          ),
+          video: canonicalEmpty,
+          article: canonicalEmpty,
+          loadedChannels: loadedChannels,
+          loadTerminals: const <String, DiscoveryFeedLoadTerminal>{
+            'photo': DiscoveryFeedLoadTerminal.stillBlocked,
+            'video': DiscoveryFeedLoadTerminal.stillBlocked,
+            'article': DiscoveryFeedLoadTerminal.stillBlocked,
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final errorFinder = find.byKey(
+      const ValueKey<String>('works-internal-feed-error'),
+    );
+    expect(errorFinder, findsOneWidget);
+    expect(find.textContaining('offline transport detail'), findsNothing);
+    expect(find.byType(AppRequestFeedback), findsNothing);
+
+    final errorState = tester.widget<AppPageErrorState>(errorFinder);
+    expect(
+      errorState.semantic.primaryAction?.type,
+      anyOf(UiErrorActionType.retry, UiErrorActionType.resubmit),
+    );
+    final loadCountBeforeRetry = loadedChannels.length;
+    final recoveryOutcome = await errorState.onRecovery!(
+      errorState.semantic.primaryAction!,
+    );
+    expect(recoveryOutcome, UiRecoveryOutcome.stillBlocked);
+    expect(loadedChannels.length, loadCountBeforeRetry + 3);
+  });
+
+  testWidgets('internal feed 重叠 Retry 只让最新 recovery generation 收口', (
+    tester,
+  ) async {
+    final loadGate = Completer<void>();
+    final offline = StateError('offline transport detail must stay hidden');
+    final canonicalEmpty = AsyncData<WorksViewerFeedSnapshot>(
+      _worksFeedSnapshot(emptyReason: ContentFeedEmptyReason.noEligibleContent),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        _internalWorksViewer(),
+        overrides: _worksInternalFeedOverrides(
+          photo: AsyncError<WorksViewerFeedSnapshot>(
+            offline,
+            StackTrace.current,
+          ),
+          video: canonicalEmpty,
+          article: canonicalEmpty,
+          loadTerminals: const <String, DiscoveryFeedLoadTerminal>{
+            'photo': DiscoveryFeedLoadTerminal.stillBlocked,
+            'video': DiscoveryFeedLoadTerminal.stillBlocked,
+            'article': DiscoveryFeedLoadTerminal.stillBlocked,
+          },
+          loadGate: loadGate.future,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final errorState = tester.widget<AppPageErrorState>(
+      find.byKey(const ValueKey<String>('works-internal-feed-error')),
+    );
+    final action = errorState.semantic.primaryAction!;
+    final firstRecovery = errorState.onRecovery!(action);
+    final latestRecovery = errorState.onRecovery!(action);
+    loadGate.complete();
+    await tester.pump();
+
+    expect(await firstRecovery, UiRecoveryOutcome.superseded);
+    expect(await latestRecovery, UiRecoveryOutcome.stillBlocked);
+  });
+
+  testWidgets('internal feed partial channel 有内容时优先进入可用终态', (tester) async {
+    final post = _photoPost();
+    await tester.pumpWidget(
+      _wrap(
+        _internalWorksViewer(),
+        overrides: _worksInternalFeedOverrides(
+          photo: AsyncData<WorksViewerFeedSnapshot>(
+            _worksFeedSnapshot(items: <ContentPostViewData>[post]),
+          ),
+          video: AsyncError<WorksViewerFeedSnapshot>(
+            StateError('video channel unavailable'),
+            StackTrace.current,
+          ),
+          article: const AsyncLoading<WorksViewerFeedSnapshot>(),
+        ),
+      ),
+    );
+    await _pumpImmersiveViewerFirstFrames(tester);
+
+    expect(
+      find.byKey(ValueKey<String>('works-status-content-canvas-${post.id}')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('works-internal-feed-loading')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('works-internal-feed-error')),
+      findsNothing,
+    );
+  });
+
   testWidgets('external 空内容六秒后提供可退出状态而非永久 spinner', (tester) async {
     var dismissed = false;
     await tester.pumpWidget(
@@ -6010,7 +6302,9 @@ void main() {
     );
   });
 
-  testWidgets('文章详情水合失败后进入显式错误态且不在当前会话内重复拉取', (tester) async {
+  testWidgets('文章详情水合 404 遵循 canonical contentUnavailable dismiss 终态', (
+    tester,
+  ) async {
     final post = _articlePost();
     final analytics = _FakeAnalyticsService();
     final repo = _ConfigurableContentRepository();
@@ -6061,6 +6355,25 @@ void main() {
       (event) => event.eventName == 'article_reader_hydration_ms',
     );
     expect(hydrationEvent.properties['result'], equals('error'));
+
+    final errorState = tester.widget<AppPageErrorState>(
+      find.byKey(ValueKey<String>('article-hydration-error-${post.id}')),
+    );
+    expect(
+      errorState.semantic.userRecoveryGroup,
+      AppUserRecoveryGroup.contentUnavailable,
+    );
+    expect(errorState.semantic.primaryAction?.type, UiErrorActionType.dismiss);
+    final recoveryOutcome = await errorState.onRecovery!(
+      errorState.semantic.primaryAction!,
+    );
+
+    expect(recoveryOutcome, UiRecoveryOutcome.cancelled);
+    expect(repo.getPostCallCount, equals(1));
+    expect(
+      find.byKey(ValueKey<String>('article-hydration-error-${post.id}')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('沉浸式阅读器中的文章回翻保持统一 book deck 宿主', (tester) async {

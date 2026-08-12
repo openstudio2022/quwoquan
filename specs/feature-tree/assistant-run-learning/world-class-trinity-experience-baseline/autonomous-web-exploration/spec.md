@@ -48,6 +48,12 @@
 - 所有研究 Tool 的输出 schema 必须强制包含封闭且完整的 `evidenceAssessment`，至少表达充分性、是否重规划、原因及 target/document/artifact/source 引用集合；不得把缺失评估当作成功。
 - 需要把检索中浮现的兴趣反馈给用户体验或推荐系统的 Tool，必须在自身封闭输出 schema 中声明并返回标准 `emergedTagRefs`；Tool adapter 负责从所属领域的 canonical payload 生成路径制 tagRef，AgentLoop 只合并标准字段，不猜测 `results`、`payload` 或垂类字段。
 
+### REQ-005 站内检索与公开网检索共享研究语义但保持独立 Provider
+
+- `app_search` 与 `web_search` 必须共享 `query`、分维度 `searchQueries`、证据评估和是否重规划语义；站内检索始终调用 canonical `SearchIndexView.Search`，公开网检索始终调用公开网 Provider。
+- 任一 Tool 失败时不得自动切换另一 Tool，也不得以另一来源的结果冒充本次检索成功；下一步 Tool 只能由模型基于冻结 metadata、证据缺口和剩余预算显式选择。
+- AgentLoop 不得按 Tool 名称、Skill、Provider 或自然语言关键词实现搜索业务分支。
+
 ## 4. 契约引用
 
 - object / projection：`AssistantWebTarget`、`AssistantWebDocument`、`AssistantSourceLedgerEntry`
@@ -90,6 +96,13 @@
 - THEN `web_search` 始终只调用 public search；两个垂类 Tool 只调用各自 typed Provider，不跨能力降级或回退。
 - AND 新 Skill 采用这些能力只修改 Skill package profile，不增加 Go 中的 Skill 分支。
 - AND 任意新垂类 Tool 可用 metadata 绑定自己的 canonical Provider failure error，Coordinator 无需认识其 capability 名称。
+
+<a id="gwt-005"></a>
+### GWT-005 站内与公开网检索不自动互相降级
+
+- GIVEN 同一研究问题可使用站内 canonical Search 或公开网搜索且其中一个 Tool 失败或证据不足
+- WHEN 编排评估该 Tool 的 `evidenceAssessment`
+- THEN 运行时不自动调用另一搜索 Tool，只有新的冻结检索计划和显式 Tool 选择才能继续检索
 
 ## 6. 依赖
 

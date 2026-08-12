@@ -26,14 +26,20 @@ type otpRateLimitProbe struct {
 func (probe *otpRateLimitProbe) AllowSend(
 	_ context.Context,
 	phone string,
-) (bool, int, error) {
+	_ string,
+	_ string,
+) (accountorchestration.OtpSendAdmission, error) {
 	probe.phones = append(probe.phones, phone)
-	return probe.err == nil, 0, probe.err
+	return accountorchestration.OtpSendAdmission{
+		Allowed:           probe.err == nil,
+		RetryAfterSeconds: 60,
+	}, probe.err
 }
 
 type authenticationChallengeProbe struct {
 	creates []challengeapp.CreateChallengeCommand
 	cancels []challengeapp.CancelChallengeCommand
+	reports []challengeapp.ReportDeliveryResultCommand
 }
 
 func (probe *authenticationChallengeProbe) CreateChallenge(
@@ -43,10 +49,20 @@ func (probe *authenticationChallengeProbe) CreateChallenge(
 	probe.creates = append(probe.creates, command)
 	return challengeapp.ChallengeCommandResult{
 		Challenge: challengemodel.Snapshot{
-			ID:        command.ID,
-			ExpiresAt: command.ExpiresAt,
+			ID:                command.ID,
+			ExpiresAt:         command.ExpiresAt,
+			DeliveryRequestID: command.DeliveryRequestID,
+			DeliveryStatus:    command.DeliveryStatus,
 		},
 	}, nil
+}
+
+func (probe *authenticationChallengeProbe) ReportDeliveryResult(
+	_ context.Context,
+	command challengeapp.ReportDeliveryResultCommand,
+) (challengeapp.ChallengeCommandResult, error) {
+	probe.reports = append(probe.reports, command)
+	return challengeapp.ChallengeCommandResult{}, nil
 }
 
 func (probe *authenticationChallengeProbe) VerifyChallenge(
@@ -129,6 +145,7 @@ func TestOTPDeliveryPersistsOnlyIrreversibleReferenceAndSealedTransport(t *testi
 		"1.0.0",
 		"phone_login",
 		"",
+		"otp-delivery-security-key-000001",
 	)
 	if err != nil {
 		t.Fatalf("send OTP: %v", err)
@@ -193,6 +210,7 @@ func TestOTPDeliveryRejectsNonE164BeforeStateOrProviderCalls(t *testing.T) {
 			"1.0.0",
 			"phone_login",
 			"",
+			"otp-invalid-phone-key-00000001",
 		); err == nil {
 			t.Fatalf("non-E.164 phone %q was accepted", phone)
 		}
@@ -208,7 +226,7 @@ func TestOTPDeliveryRejectsNonE164BeforeStateOrProviderCalls(t *testing.T) {
 	}
 }
 
-func TestOTPProviderFailuresAreRedactedAndCancelChallenge(t *testing.T) {
+func TestOTPProviderFailuresAreRedactedAndKeepChallengeRecoverable(t *testing.T) {
 	const providerSecret = "provider body phone=+8613800000000 otp=482731 token=secret"
 	for _, providerFailure := range []error{
 		errors.New(providerSecret),
@@ -239,6 +257,7 @@ func TestOTPProviderFailuresAreRedactedAndCancelChallenge(t *testing.T) {
 			"1.0.0",
 			"phone_login",
 			"",
+			"otp-provider-failure-key-000001",
 		)
 		if err == nil {
 			t.Fatalf("provider failure %v was accepted", providerFailure)
@@ -253,10 +272,48 @@ func TestOTPProviderFailuresAreRedactedAndCancelChallenge(t *testing.T) {
 			strings.Contains(err.Error(), "+8613800000000") {
 			t.Fatalf("provider failure leaked sensitive context: %v", err)
 		}
-		if len(challenges.cancels) != 1 ||
-			challenges.cancels[0].ChallengeID == "" {
-			t.Fatalf("failed delivery did not cancel challenge: %#v", challenges.cancels)
+		if len(challenges.cancels) != 0 {
+			t.Fatalf("uncertain submit must not cancel challenge: %#v", challenges.cancels)
 		}
+	}
+}
+
+func TestOTPExplicitLocalDeliveryFailureReturnsRecoverableFailedState(t *testing.T) {
+	challenges := &authenticationChallengeProbe{}
+	service := accountorchestration.NewAuthService(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		accountorchestration.WithOtpCodeStore(&otpRateLimitProbe{}),
+		accountorchestration.WithAuthenticationChallenges(challenges),
+		accountorchestration.WithOTPCodeGenerator(func() (string, error) {
+			return "482731", nil
+		}),
+		accountorchestration.WithOTPCodeSealer(&otpSealerProbe{}),
+	)
+
+	result, err := service.SendOtp(
+		context.Background(),
+		"+8613800000000",
+		"device-1",
+		"ios",
+		"1.0.0",
+		"phone_login",
+		"",
+		"otp-explicit-failure-key-000001",
+	)
+	if err != nil {
+		t.Fatalf("explicit failure should be a typed delivery state: %v", err)
+	}
+	if result.DeliveryStatus != string(challengemodel.DeliveryStatusFailed) ||
+		result.RetryAfterSeconds != 60 {
+		t.Fatalf("unexpected explicit failure result: %+v", result)
+	}
+	if len(challenges.reports) != 1 ||
+		challenges.reports[0].Status != challengemodel.DeliveryStatusFailed {
+		t.Fatalf("failed challenge was not projected: %#v", challenges.reports)
 	}
 }
 
@@ -285,6 +342,7 @@ func TestDefaultOTPGeneratorProducesSixDigitNonConstantCodes(t *testing.T) {
 			"1.0.0",
 			"phone_login",
 			"",
+			fmt.Sprintf("otp-random-code-key-%08d", index),
 		); err != nil {
 			t.Fatalf("send random OTP %d: %v", index, err)
 		}

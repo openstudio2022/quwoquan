@@ -1,4 +1,4 @@
-"""Video-source commercial admission matrix backed by the unified registry."""
+"""Separate video acquisition, research use and commercial admission policy."""
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -35,6 +35,12 @@ REQUIRED_EVIDENCE = {
     "model_release",
     "property_release",
     "notice_and_takedown",
+}
+VIDEO_ACQUISITION_PATHS_BY_FETCH_MODE = {
+    "api": {"public_direct", "supported_api", "manual_file"},
+    "attribution_manifest": {"public_direct", "manual_file"},
+    "licensed_api": {"supported_api", "manual_file"},
+    "platform_reference": {"manual_file"},
 }
 REFERENCE_ONLY_GATE_BLOCK = "GATE_BLOCK DATA.CONTRACT.INVALID"
 
@@ -99,25 +105,67 @@ def video_commercial_admission(
     )
 
 
-def assert_video_source_admitted(
+def _video_source_and_admission(
+    registry: Mapping[str, Any],
+    *,
+    source_id: str,
+    source_kind: str,
+) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    source = _video_sources(registry).get(source_id)
+    if source is None:
+        raise ValueError(f"video source is not registered: {source_id}")
+    row = video_commercial_admission(registry, source_id=source_id)
+    if str(row.get("sourceKind") or "") != source_kind:
+        raise ValueError(
+            f"video sourceKind mismatch for {source_id}: {source_kind}"
+        )
+    return source, row
+
+
+def assert_video_acquisition_path_allowed(
+    registry: Mapping[str, Any],
+    *,
+    source_id: str,
+    source_kind: str,
+    acquisition_path: str,
+) -> None:
+    """Validate only how bytes were acquired, never their release status."""
+    source, _row = _video_source_and_admission(
+        registry,
+        source_id=source_id,
+        source_kind=source_kind,
+    )
+    paths = {
+        str(value)
+        for value in source.get("researchAcquisitionPaths") or []
+    }
+    if acquisition_path not in paths:
+        raise ValueError(
+            f"video acquisition path {acquisition_path} is not allowed "
+            f"for source {source_id}"
+        )
+
+
+def assert_video_distribution_use_allowed(
     registry: Mapping[str, Any],
     *,
     source_id: str,
     source_kind: str,
     publication_admission: str,
 ) -> None:
-    source = _video_sources(registry).get(source_id) or {}
-    if _is_reference_only_provider(source):
-        raise ValueError(
-            f"{REFERENCE_ONLY_GATE_BLOCK}: video source {source_id} is "
-            "reference_only/platform_reference and is not allowed to be "
-            "acquired or admitted to a release"
-        )
-    row = video_commercial_admission(registry, source_id=source_id)
-    if str(row.get("sourceKind") or "") != source_kind:
-        raise ValueError(
-            f"video sourceKind mismatch for {source_id}: {source_kind}"
-        )
+    """Validate distribution without treating rights facts as acquisition facts.
+
+    A protected research release is admitted from per-asset rights and safety
+    evidence.  Source-level publication defaults remain authoritative for
+    commercial and explicitly risk-accepted publication only.
+    """
+    _source, row = _video_source_and_admission(
+        registry,
+        source_id=source_id,
+        source_kind=source_kind,
+    )
+    if publication_admission == "research_release":
+        return
     admissions = {
         str(value)
         for value in row.get("publicationAdmissions") or []
@@ -202,13 +250,15 @@ def verify_video_commercial_admission(
             str(value)
             for value in source.get("researchAcquisitionPaths") or []
         }
+        expected_acquisition_paths = VIDEO_ACQUISITION_PATHS_BY_FETCH_MODE.get(
+            str(source.get("fetchMode") or "")
+        )
+        if acquisition_paths != expected_acquisition_paths:
+            issues.append(
+                f"video source {source_id}: research acquisition paths must "
+                f"equal {sorted(expected_acquisition_paths or set())}"
+            )
         if reference_only:
-            if acquisition_paths:
-                issues.append(
-                    f"{REFERENCE_ONLY_GATE_BLOCK}: video source {source_id} is "
-                    "reference_only/platform_reference but declares research "
-                    "acquisition paths"
-                )
             if admissions:
                 issues.append(
                     f"{REFERENCE_ONLY_GATE_BLOCK}: video matrix {source_id} is "
@@ -252,8 +302,10 @@ def verify_video_commercial_admission(
 
 
 __all__ = [
+    "VIDEO_ACQUISITION_PATHS_BY_FETCH_MODE",
     "VIDEO_SOURCE_KINDS",
-    "assert_video_source_admitted",
+    "assert_video_acquisition_path_allowed",
+    "assert_video_distribution_use_allowed",
     "verify_video_commercial_admission",
     "video_commercial_admission",
 ]

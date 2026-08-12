@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -12,9 +13,29 @@ from content.source.professional_image_discovery_governed import (
 )
 
 PLAN_DIGEST = "sha256:" + "d" * 64
+_MANUAL_BYTES: dict[str, bytes] = {}
+
+
+def _digest(value: object) -> str:
+    body = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(body).hexdigest()
 
 
 def _write(root: Path, ref: str, payload: dict) -> None:
+    manual_ref = str(payload.get("manualFile") or "")
+    if manual_ref:
+        manual_path = root / manual_ref
+        manual_path.parent.mkdir(parents=True, exist_ok=True)
+        manual_path.write_bytes(_MANUAL_BYTES[manual_ref])
+    attribution_ref = str(payload.get("sourceAttributionFile") or "")
+    if attribution_ref:
+        attribution_path = root / attribution_ref
+        attribution_path.parent.mkdir(parents=True, exist_ok=True)
+        attribution_path.write_bytes(
+            json.dumps(payload["sourceAttribution"], ensure_ascii=False).encode("utf-8")
+        )
     path = root / ref
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -42,7 +63,15 @@ def _evidence(
         "wikimedia_commons": "https://commons.wikimedia.org/w/api.php",
         "openverse": "https://api.openverse.org/v1/images",
     }
-    return {
+    creator = f"Creator {ordinal}"
+    observed_at = "2026-08-08T00:00:00Z"
+    manual_ref = f"manual/{provider}-image-{ordinal}.jpg" if is_manual else ""
+    seed = content or f"{provider}:{ordinal}"
+    manual_body = (seed.encode("utf-8") * 4096)[:4096]
+    content_sha = "sha256:" + hashlib.sha256(manual_body).hexdigest()
+    if is_manual:
+        _MANUAL_BYTES[manual_ref] = manual_body
+    evidence = {
         "schema": (
             "quwoquan_data.professional_image_manual_file_evidence"
             if is_manual
@@ -53,15 +82,78 @@ def _evidence(
         "discoveryCandidateId": f"{provider}:{ordinal:016x}",
         "sourcePageUrl": source_url,
         "assetUrl": "" if is_manual else asset_url,
-        "manualFile": f"manual/image-{ordinal}.jpg" if is_manual else "",
+        "manualFile": manual_ref,
         "apiEvidence": "" if is_manual else api_hosts[provider],
-        "creator": f"Creator {ordinal}",
+        "creator": creator,
         "title": f"Original {ordinal}",
-        "observedAt": "2026-08-08T00:00:00Z",
-        "contentSha256": content or "sha256:" + f"{ordinal:x}" * 64,
+        "observedAt": observed_at,
+        "contentSha256": content_sha,
         "originalAssetCandidate": True,
         "generated": False,
     }
+    if not is_manual:
+        return evidence
+    platform = {
+        "pinterest": "Pinterest",
+        "tuchong": "图虫",
+        "wikimedia_commons": "Wikimedia Commons",
+        "openverse": "Openverse",
+    }[provider]
+    attribution = {
+        "isOriginal": False,
+        "originalCreatorId": None,
+        "originalCreatorName": creator,
+        "originalCreatorProfileUrl": None,
+        "platform": platform,
+        "sourcePostUrl": source_url,
+        "originalAssetUrl": source_url,
+        "attributionText": f"{creator} / {platform}",
+        "rightsBasis": "CC BY-SA 4.0",
+        "commercialAuthorizationStatus": "verified",
+        "publicationAdmission": "commercial_release",
+        "authorizationProofUrl": source_url,
+        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "riskAcceptanceId": None,
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": observed_at,
+        "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+    }
+    stable = {
+        **evidence,
+        "evidenceId": f"professional-image-manual-{ordinal:016x}",
+        "sourceRevision": "sha256:" + "1" * 64,
+        "sourceDigest": "sha256:" + "2" * 64,
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "3" * 64,
+            "inputs": ["test-input"],
+        },
+        "entityCatalogDigest": "sha256:" + "4" * 64,
+        "handoffId": "test-handoff",
+        "handoffRevision": 1,
+        "handoffDigest": "sha256:" + "5" * 64,
+        "assetBytes": len(manual_body),
+        "dimensions": {"width": 64, "height": 64},
+        "rightsStatus": "verified",
+        "license": "CC BY-SA 4.0",
+        "licenseSnapshot": "Creative Commons Attribution-ShareAlike 4.0",
+        "usageScope": "app_publish",
+        "modelReleaseStatus": "not_required",
+        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "authorizationProof": source_url,
+        "rightsIssues": [],
+        "sourceAttributionFile": f"manual/{provider}-attribution-{ordinal}.json",
+        "sourceAttributionFileSha256": "",
+        "sourceAttribution": attribution,
+    }
+    attribution_body = json.dumps(attribution, ensure_ascii=False).encode("utf-8")
+    stable["sourceAttributionFileSha256"] = (
+        "sha256:" + hashlib.sha256(attribution_body).hexdigest()
+    )
+    return {**stable, "evidenceDigest": _digest(stable)}
 
 
 def _build(root: Path, refs: list[str]) -> dict:
@@ -143,6 +235,9 @@ def test_governed_catalog_rejects_public_direct_thumbnail_generated_and_duplicat
 
     generated = _evidence(provider="tuchong", path="manual_file", ordinal=3)
     generated["generated"] = True
+    generated["evidenceDigest"] = _digest(
+        {key: value for key, value in generated.items() if key != "evidenceDigest"}
+    )
     _write(tmp_path, "evidence/generated.json", generated)
     with pytest.raises(ProfessionalImageGovernedDiscoveryError, match="generated"):
         _build(tmp_path, ["evidence/generated.json"])

@@ -1,0 +1,23 @@
+{
+  "schema": "quwoquan_data.author_admission_evidence",
+  "authorIds": [
+    "builtin_campus_blogger",
+    "builtin_career_mentor",
+    "builtin_student_mentor",
+    "builtin_travel_food_columnist",
+    "builtin_travel_geo_editor",
+    "builtin_highland_travel_blogger",
+    "builtin_travel_landscape_photographer",
+    "builtin_travel_pro_guide",
+    "builtin_travel_self_drive_guide",
+    "builtin_travel_blogger"
+  ],
+  "processResult": "completed",
+  "qualityResult": "passed",
+  "checks": {
+    "profile": "passed",
+    "disclosure": "passed",
+    "avatarQuality": "passed"
+  },
+  "recordedAt": "2026-08-10T00:00:00Z"
+}

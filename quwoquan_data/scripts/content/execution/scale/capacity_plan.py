@@ -6,20 +6,20 @@ import json
 import math
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
-from decimal import Decimal, ROUND_CEILING
+from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
-from content.execution.preflight.receipt import (
-    validate_semantic_preflight_receipt,
-)
-from content.execution.queue.partition import partition_count
 from core.schema import assert_valid
 
+from content.execution.queue.partition import partition_count
 
 CARRIERS = ("homepage", "article", "image", "video")
 CAPACITY_SHORTFALL = "DATA.AGENT.CAPACITY_SHORTFALL"
 CAPACITY_PLAN_INVALID = "DATA.SCALE.CAPACITY_PLAN_INVALID"
 PREDECESSOR_IDENTITY_DRIFT = "DATA.SCALE.PREDECESSOR_IDENTITY_DRIFT"
+REMOTE_HOST_EXECUTOR_UNAVAILABLE = (
+    "DATA.SCALE.REMOTE_HOST_EXECUTOR_UNAVAILABLE"
+)
 
 _TARGET_POLICY = {
     "M1000": {"predecessor": "M100", "budgetSeconds": 259_200},
@@ -165,46 +165,107 @@ def _validate_deltas(carrier_deltas: Mapping[str, int]) -> dict[str, int]:
     return result
 
 
-def _validate_preflight(
-    receipt: Mapping[str, Any], *, now: datetime | None
-) -> tuple[int, Mapping[str, Any]]:
-    observed_now = now or datetime.now(timezone.utc)
+def _validate_host_set(
+    host_set: Mapping[str, Any],
+    *,
+    identity: Mapping[str, str],
+    now: datetime | None,
+) -> tuple[list[dict[str, Any]], int]:
     try:
-        validate_semantic_preflight_receipt(
-            receipt,
-            require_execution_admission=True,
-            now=observed_now,
+        assert_valid(
+            dict(host_set),
+            "execution",
+            "governed_worker_host_set",
+            label="governed worker host set",
         )
     except (KeyError, TypeError, ValueError) as exc:
-        raise _invalid(f"fresh semantic preflight receipt is invalid: {exc}") from exc
-    evidence = receipt.get("evidence")
-    capacity = (
-        evidence.get("capacitySoak")
-        if isinstance(evidence, Mapping)
-        and isinstance(evidence.get("capacitySoak"), Mapping)
-        else None
-    )
-    if capacity is None:
-        raise _invalid("preflight capacitySoak evidence is missing")
-    effective = capacity.get("effectiveConcurrency")
-    success_count = capacity.get("successCount")
-    attempts = capacity.get("attempts")
-    disconnects = capacity.get("bridgeDisconnectCount")
-    if isinstance(effective, bool) or not isinstance(effective, int) or effective <= 0:
-        raise _invalid("preflight effectiveConcurrency must be a positive integer")
-    if (
-        isinstance(success_count, bool)
-        or not isinstance(success_count, int)
-        or success_count < effective
-        or isinstance(attempts, bool)
-        or not isinstance(attempts, int)
-        or attempts < success_count
-        or isinstance(disconnects, bool)
-        or not isinstance(disconnects, int)
-        or disconnects != 0
-    ):
-        raise _invalid("preflight capacity evidence is incomplete or unhealthy")
-    return effective, capacity
+        raise _invalid(f"governed worker host set is invalid: {exc}") from exc
+    stable = {key: value for key, value in host_set.items() if key != "hostSetDigest"}
+    if host_set.get("hostSetDigest") != _canonical_digest(stable):
+        raise _invalid("governed worker hostSetDigest drift")
+    for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
+        if host_set.get(field) != identity[field]:
+            raise _identity_drift(f"governed worker host set {field} drift")
+    raw_hosts = host_set.get("hosts")
+    if not isinstance(raw_hosts, list) or not raw_hosts:
+        raise _invalid("governed worker host set has no hosts")
+    hosts = [dict(row) for row in raw_hosts if isinstance(row, Mapping)]
+    if len(hosts) != len(raw_hosts):
+        raise _invalid("governed worker host rows must be objects")
+    host_ids = [str(row.get("hostScopeId") or "") for row in hosts]
+    if host_ids != sorted(host_ids) or len(set(host_ids)) != len(host_ids):
+        raise _invalid("governed worker hosts must be distinct and sorted")
+    if len(host_ids) < 2:
+        raise GovernedCapacityPlanError(
+            REMOTE_HOST_EXECUTOR_UNAVAILABLE,
+            "M1000/M10000 governed capacity requires at least two distinct hosts",
+        )
+    observed_now = now or datetime.now(timezone.utc)
+    available = 0
+    for host in hosts:
+        preflight = host.get("preflight")
+        if not isinstance(preflight, Mapping):
+            raise _invalid(f"{host['hostScopeId']} preflight binding is missing")
+        try:
+            valid_until = datetime.fromisoformat(
+                str(preflight.get("validUntil") or "").replace("Z", "+00:00")
+            )
+        except ValueError as exc:
+            raise _invalid(f"{host['hostScopeId']} validUntil is invalid") from exc
+        if observed_now > valid_until:
+            raise _invalid(f"{host['hostScopeId']} preflight is expired")
+        effective = preflight.get("effectiveConcurrency")
+        if isinstance(effective, bool) or not isinstance(effective, int) or effective < 1:
+            raise _invalid(f"{host['hostScopeId']} effectiveConcurrency is invalid")
+        available += effective
+    if host_set.get("availableSlots") != available:
+        raise _invalid("governed worker host set availableSlots drift")
+    return hosts, available
+
+
+def _assign_carrier_hosts(
+    carrier_plans: list[dict[str, Any]], hosts: list[dict[str, Any]]
+) -> None:
+    remaining = {
+        str(host["hostScopeId"]): int(host["preflight"]["effectiveConcurrency"])
+        for host in hosts
+    }
+    host_ids = sorted(remaining)
+    cursor = 0
+    for plan in carrier_plans:
+        worker_owners: list[str] = []
+        for _ in range(int(plan["requiredWorkers"])):
+            for offset in range(len(host_ids)):
+                candidate_index = (cursor + offset) % len(host_ids)
+                candidate = host_ids[candidate_index]
+                if remaining[candidate] > 0:
+                    worker_owners.append(candidate)
+                    remaining[candidate] -= 1
+                    cursor = (candidate_index + 1) % len(host_ids)
+                    break
+            else:
+                raise GovernedCapacityPlanError(
+                    CAPACITY_SHORTFALL,
+                    "distinct governed hosts cannot satisfy required worker slots",
+                )
+        assignments: list[dict[str, Any]] = []
+        for host_id in host_ids:
+            worker_count = worker_owners.count(host_id)
+            if worker_count == 0:
+                continue
+            partitions = [
+                str(partition)
+                for partition in range(int(plan["partitionCount"]))
+                if worker_owners[partition % len(worker_owners)] == host_id
+            ]
+            assignments.append(
+                {
+                    "hostScopeId": host_id,
+                    "workerCount": worker_count,
+                    "partitionKeys": partitions,
+                }
+            )
+        plan["hostAssignments"] = assignments
 
 
 def _nearest_rank_p10(samples: Sequence[Decimal]) -> Decimal:
@@ -298,7 +359,7 @@ def build_governed_capacity_plan(
     predecessor_promotion: Mapping[str, Any],
     target_scale: str,
     carrier_deltas: Mapping[str, int],
-    preflight_receipt: Mapping[str, Any],
+    worker_host_set: Mapping[str, Any],
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Build a deterministic M1000/M10000 plan or raise a typed blocker."""
@@ -309,8 +370,10 @@ def build_governed_capacity_plan(
         predecessor_promotion, target_scale=target_scale
     )
     deltas = _validate_deltas(carrier_deltas)
-    effective_concurrency, _capacity = _validate_preflight(
-        preflight_receipt, now=now
+    hosts, effective_concurrency = _validate_host_set(
+        worker_host_set,
+        identity=identity,
+        now=now,
     )
     budget_seconds = int(_TARGET_POLICY[target_scale]["budgetSeconds"])
     carrier_plans = _carrier_rows(
@@ -325,6 +388,7 @@ def build_governed_capacity_plan(
             CAPACITY_SHORTFALL,
             f"requiredSlots={required_slots} exceeds effectiveConcurrency={effective_concurrency}",
         )
+    _assign_carrier_hosts(carrier_plans, hosts)
     stable: dict[str, Any] = {
         "schema": "quwoquan_data.governed_capacity_plan",
         "targetScale": target_scale,
@@ -335,15 +399,7 @@ def build_governed_capacity_plan(
         "entityCatalogDigest": identity["entityCatalogDigest"],
         "budgetSeconds": budget_seconds,
         "capacityUtilizationFactor": float(_UTILIZATION_FACTOR),
-        "preflight": {
-            "receiptId": preflight_receipt["receiptId"],
-            "selectionDigest": preflight_receipt["selectionDigest"],
-            "provider": preflight_receipt["provider"],
-            "model": preflight_receipt["model"],
-            "runtimeProfileDigest": preflight_receipt["runtimeProfileDigest"],
-            "validUntil": preflight_receipt["validUntil"],
-            "effectiveConcurrency": effective_concurrency,
-        },
+        "workerHostSet": dict(worker_host_set),
         "carrierPlans": carrier_plans,
         "requiredSlots": required_slots,
         "availableSlots": effective_concurrency,
@@ -363,6 +419,7 @@ __all__ = [
     "CAPACITY_PLAN_INVALID",
     "CAPACITY_SHORTFALL",
     "PREDECESSOR_IDENTITY_DRIFT",
+    "REMOTE_HOST_EXECUTOR_UNAVAILABLE",
     "GovernedCapacityPlanError",
     "build_governed_capacity_plan",
     "throughput_basis_digest",

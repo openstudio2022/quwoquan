@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
@@ -56,8 +57,8 @@ import (
 	mediaassetpersistence "quwoquan_service/services/content-service/internal/media/media_asset/infrastructure/persistence"
 	mediareprocesspersistence "quwoquan_service/services/content-service/internal/media/media_image_reprocess_run/infrastructure/persistence"
 	originalaccesspersistence "quwoquan_service/services/content-service/internal/media/media_original_access_fact/infrastructure/persistence"
-	originalaccessquotapersistence "quwoquan_service/services/content-service/internal/media/original_access_quota/infrastructure/persistence"
 	uploadsessionpersistence "quwoquan_service/services/content-service/internal/media/media_upload_session/infrastructure/persistence"
+	originalaccessquotapersistence "quwoquan_service/services/content-service/internal/media/original_access_quota/infrastructure/persistence"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
 	moderationmessaging "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/infrastructure/messaging"
 	moderationpersistence "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/infrastructure/persistence"
@@ -164,6 +165,7 @@ func main() {
 	var store *persistence.MongoPostStore
 	var postQueryReader *persistence.MongoPostQueryReader
 	var activeSupplyReader feedapp.ActiveSupplyReader
+	var researchReleaseReadback *postapp.ResearchReleaseReadbackQueryFacet
 	var reactionStore *reactionpersistence.MongoContentReactionStore
 	var reactionServiceCore *reactionapp.Service
 	var commentDataAdapter *commentpersistence.MongoCommentDataAdapter
@@ -266,7 +268,7 @@ func main() {
 		}
 		store = mongoStore
 		postQueryReader = persistence.NewMongoPostQueryReader(db.Collection(collName))
-		activeSupplyReader = persistence.NewMongoActiveSupplyReader(
+		mongoActiveSupplyReader := persistence.NewMongoActiveSupplyReader(
 			db,
 			appEnv,
 			persistence.WithActiveSupplyCachePolicy(
@@ -274,6 +276,14 @@ func main() {
 				time.Duration(cfg.Feed.ActiveSupplyCacheJitterMS)*time.Millisecond,
 			),
 		)
+		activeSupplyReader = mongoActiveSupplyReader
+		researchReleaseReadback, err = buildResearchReleaseReadback(
+			appEnv,
+			persistence.NewMongoResearchReleaseBindingReader(mongoActiveSupplyReader),
+		)
+		if err != nil {
+			log.Fatalf("content-service research release readback composition failed: %v", err)
+		}
 		outboundShareSink := outboundshareinfra.NewMongoAppendSink(db)
 		if err := outboundShareSink.EnsureIndexes(ctx); err != nil {
 			log.Fatalf("content-service OutboundShareFact indexes init failed: %v", err)
@@ -821,7 +831,7 @@ func main() {
 	// 推荐策略 Store 的具体实现仍在 composition root 显式选择。
 	policyStore := rtrecpolicy.NewStoreFromBaseline()
 	startRecommendationPolicyHotReload(ctx, policyStore, logger)
-	handler := buildContentHTTPHandler(contentHTTPHandlerInput{
+	handlers := buildContentHTTPHandler(contentHTTPHandlerInput{
 		ctx:                          ctx,
 		logger:                       logger,
 		healthChecker:                healthChecker,
@@ -832,6 +842,7 @@ func main() {
 		postStore:                    store,
 		postQueryReader:              postQueryReader,
 		activeSupplyReader:           activeSupplyReader,
+		researchReleaseReadback:      researchReleaseReadback,
 		feedCursorCodec:              feedCursorCodec,
 		feedRuntimeConfig:            cfg.Feed,
 		rankedRecommendation:         rankedRecommendation,
@@ -856,7 +867,9 @@ func main() {
 		outboundShareFacades:         outboundShareFacades,
 		profileInteractionFacades:    profileInteractionFacades,
 		filterCatalogFacades:         filterCatalogFacades,
+		contractGraphSHA256:          operationsecurity.ContractGraphSHA256,
 	})
+	handler := handlers.business
 	accountClosureRecoveryCommands, err := closureapp.NewContentAccountClosureRecoveryCommandFacet(
 		accountClosureConsumer,
 	)
@@ -875,6 +888,7 @@ func main() {
 		addr,
 		instanceID,
 		handler,
+		handlers.internalGraphQL,
 		cfg.Feed,
 		healthChecker,
 		accessTokenConfig,

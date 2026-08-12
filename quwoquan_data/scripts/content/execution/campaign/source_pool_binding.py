@@ -11,18 +11,20 @@ from typing import Any
 
 from core.io import read_json
 from core.schema import assert_valid
+
+from content.source.research.homepage_article_source_ready_batch import (
+    CAPSULE_SCHEMA as SOURCE_READY_CAPSULE_SCHEMA,
+)
+from content.source.research.homepage_article_source_ready_batch import (
+    HomepageArticleSourceReadyBatchError,
+    validate_source_ready_candidate_capsule,
+)
 from content.source.research.scale_source_pool import (
     SOURCE_POOL_SHORTFALL,
     ScaleSourcePoolError,
     validate_scale_source_pool,
     validate_scale_source_pool_evidence,
 )
-from content.source.research.homepage_article_source_ready_batch import (
-    CAPSULE_SCHEMA as SOURCE_READY_CAPSULE_SCHEMA,
-    HomepageArticleSourceReadyBatchError,
-    validate_source_ready_candidate_capsule,
-)
-
 
 _CARRIERS = ("homepage", "article", "image", "video")
 
@@ -75,6 +77,45 @@ def _safe_evidence_file(root: Path, ref: str) -> Path:
         ):
             raise ValueError(f"source-pool evidence ref is not a file: {ref}")
     return current
+
+
+def _safe_evidence_directory(root: Path, ref: str) -> Path:
+    relative = Path(ref)
+    if not ref or relative.is_absolute() or (ref != "." and ".." in relative.parts):
+        raise ValueError(f"unsafe source-ready evidence root ref: {ref!r}")
+    current = root
+    if ref == ".":
+        return current
+    for part in relative.parts:
+        current = current / part
+        mode = current.lstat().st_mode
+        if stat.S_ISLNK(mode) or not stat.S_ISDIR(mode):
+            raise ValueError(
+                f"source-ready evidence root traverses symlink or non-directory: {ref}"
+            )
+    return current
+
+
+def _member_root_ref(candidate: Mapping[str, Any]) -> str:
+    raw = candidate.get("sourceReadyEvidenceRootRef")
+    if raw is None:
+        return "."
+    ref = str(raw).strip()
+    relative = Path(ref)
+    if not ref or relative.is_absolute() or (ref != "." and ".." in relative.parts):
+        raise ValueError(f"unsafe source-ready evidence root ref: {ref!r}")
+    return ref
+
+
+def _member_file_ref(candidate: Mapping[str, Any], ref: object) -> str:
+    raw = str(ref or "").strip()
+    relative = Path(raw)
+    if not raw or relative.is_absolute() or ".." in relative.parts:
+        raise ValueError(f"unsafe source-ready member evidence ref: {raw!r}")
+    root_ref = _member_root_ref(candidate)
+    if root_ref == ".":
+        return relative.as_posix()
+    return (Path(root_ref) / relative).as_posix()
 
 
 def _selected_candidates(
@@ -134,13 +175,26 @@ def _add_ref(refs: dict[str, str], ref: object, sha: object) -> None:
         raise ValueError(f"source-pool evidence digest collision: {relative}")
 
 
+def _add_member_ref(
+    refs: dict[str, str],
+    candidate: Mapping[str, Any],
+    ref: object,
+    sha: object,
+) -> None:
+    _add_ref(refs, _member_file_ref(candidate, ref), sha)
+
+
 def _nested_source_ready_refs(
     candidate: Mapping[str, Any], *, evidence_root: Path, refs: dict[str, str]
 ) -> None:
     if candidate.get("carrier") not in {"homepage", "article"}:
         return
+    candidate_root = _safe_evidence_directory(
+        evidence_root,
+        _member_root_ref(candidate),
+    )
     capsule_path = _safe_evidence_file(
-        evidence_root, str(candidate.get("sourceUnitRef") or "")
+        candidate_root, str(candidate.get("sourceUnitRef") or "")
     )
     try:
         capsule = read_json(capsule_path)
@@ -148,23 +202,32 @@ def _nested_source_ready_refs(
         return
     if not isinstance(capsule, Mapping) or capsule.get("schema") != SOURCE_READY_CAPSULE_SCHEMA:
         return
-    validate_source_ready_candidate_capsule(capsule, evidence_root=evidence_root)
+    validate_source_ready_candidate_capsule(capsule, evidence_root=candidate_root)
     materialization = capsule["materialization"]
-    _add_ref(
+    _add_member_ref(
         refs,
+        candidate,
         materialization["body"]["ref"],
         materialization["body"]["fileSha256"],
     )
     for row in materialization["media"]:
-        _add_ref(refs, row["ref"], row["fileSha256"])
+        _add_member_ref(refs, candidate, row["ref"], row["fileSha256"])
     provenance = capsule["provenance"]
-    _add_ref(
+    _add_member_ref(
         refs,
+        candidate,
         provenance["coverageProjectionRef"],
         provenance["coverageProjectionFileSha256"],
     )
-    _add_ref(
+    _add_member_ref(
         refs,
+        candidate,
+        provenance["seedSelectionRef"],
+        provenance["seedSelectionFileSha256"],
+    )
+    _add_member_ref(
+        refs,
+        candidate,
         provenance["discoveryEvidenceRef"],
         provenance["discoveryEvidenceFileSha256"],
     )
@@ -172,7 +235,7 @@ def _nested_source_ready_refs(
         "acquisitionEvidenceRefs", "rightsEvidenceRefs", "qualityEvidenceRefs"
     ):
         for row in provenance[field]:
-            _add_ref(refs, row["ref"], row["fileSha256"])
+            _add_member_ref(refs, candidate, row["ref"], row["fileSha256"])
 
 
 def _selected_evidence_refs(
@@ -184,8 +247,9 @@ def _selected_evidence_refs(
         if candidate["carrier"] == "video":
             prefixes.append("playability")
         for prefix in prefixes:
-            _add_ref(
+            _add_member_ref(
                 refs,
+                candidate,
                 candidate[f"{prefix}Ref"],
                 candidate[f"{prefix}FileSha256"],
             )
@@ -524,11 +588,11 @@ def validate_lane_source_pool_selection(
 __all__ = [
     "bind_scale_source_pool",
     "bound_scale_source_pool_snapshot_digest",
-    "materialize_bound_scale_source_pool",
-    "resolve_capsule_scale_source_pool_identity",
     "capsule_source_pool_fields",
     "load_capsule_source_pool",
-    "validate_capsule_scale_source_pool",
+    "materialize_bound_scale_source_pool",
+    "resolve_capsule_scale_source_pool_identity",
     "validate_bound_scale_source_pool",
+    "validate_capsule_scale_source_pool",
     "validate_lane_source_pool_selection",
 ]

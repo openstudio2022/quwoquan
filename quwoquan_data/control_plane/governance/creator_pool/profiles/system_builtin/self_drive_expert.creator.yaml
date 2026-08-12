@@ -1,6 +1,12 @@
 creatorProfileId: qwq_creator_self_drive_guide_001
 personaId: builtin_travel_self_drive_guide
 authorId: builtin_travel_self_drive_guide
+version: 1
+admission:
+  processResult: completed
+  qualityResult: passed
+  evidenceRef: evidence/system_builtin_author_admission.json
+  evidenceDigest: sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e
 isSystemBuiltin: true
 displayName: 路书阿泽
 userHandle: roadbook_aze
@@ -56,4 +62,4 @@ avatarAsset:
   objectKey: media/objects/sha256/39/ee/39ee12d63d3640eb8b1f3d7a3552f909d2e9db4d2cb52d9c60145d339130f3d6.webp
   bytes: 238874
   mimeType: image/webp
-  rightsSnapshotRef: evidence/avatar_rights/qwq_creator_self_drive_guide_001/39ee12d63d3640eb8b1f3d7a3552f909d2e9db4d2cb52d9c60145d339130f3d6.json
+  evidenceRef: evidence/avatar_rights/qwq_creator_self_drive_guide_001/39ee12d63d3640eb8b1f3d7a3552f909d2e9db4d2cb52d9c60145d339130f3d6.json

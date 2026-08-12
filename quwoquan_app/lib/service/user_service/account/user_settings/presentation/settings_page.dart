@@ -464,17 +464,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     } catch (error, stackTrace) {
       // mutation 保留在本地，下一次登录后继续提交；本次本地退出不能被远端故障卡死。
       unawaited(
-        ref.read(exceptionTelemetryPortProvider).recordHandledException(
-          source: 'settings.logout.remove_push_endpoint',
-          error: error,
-          stackTrace: stackTrace,
-          pageId: 'settings',
-          pageName: 'settings',
-          surfaceId: surface.id,
-          routeId: surface.routeId,
-          operationId: AppCloudOperationIds
-              .userDeviceRegistrationRemoveDevicePushEndpoint,
-        ),
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'settings.logout.remove_push_endpoint',
+              error: error,
+              stackTrace: stackTrace,
+              pageId: 'settings',
+              pageName: 'settings',
+              surfaceId: surface.id,
+              routeId: surface.routeId,
+              operationId: AppCloudOperationIds
+                  .userDeviceRegistrationRemoveDevicePushEndpoint,
+            ),
       );
     }
     if (clearLocalCredential) {
@@ -491,16 +493,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       } catch (error, stackTrace) {
         // 本地退出优先，远端吊销失败由下次 refresh 兜底；失败必须可观测。
         unawaited(
-          ref.read(exceptionTelemetryPortProvider).recordHandledException(
-            source: 'settings.logout.remote_revoke',
-            error: error,
-            stackTrace: stackTrace,
-            pageId: 'settings',
-            pageName: 'settings',
-            surfaceId: surface.id,
-            routeId: surface.routeId,
-            operationId: AppCloudOperationIds.userAccountSessionLogout,
-          ),
+          ref
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'settings.logout.remote_revoke',
+                error: error,
+                stackTrace: stackTrace,
+                pageId: 'settings',
+                pageName: 'settings',
+                surfaceId: surface.id,
+                routeId: surface.routeId,
+                operationId: AppCloudOperationIds.userAccountSessionLogout,
+              ),
         );
       }
       await controller.hardLogout();

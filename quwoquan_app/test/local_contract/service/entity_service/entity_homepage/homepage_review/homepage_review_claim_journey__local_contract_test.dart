@@ -22,6 +22,7 @@ import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
     show
         homepageClaimRequestCommandWriterProvider,
+        homepageClaimRequestQueryReaderProvider,
         homepageFacetSetProvider,
         homepageWriteTargetReaderProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
@@ -136,6 +137,7 @@ void main() {
           homepageFacetSetProvider.overrideWithValue(homepage),
           homepageWriteTargetReaderProvider.overrideWithValue(homepage),
           homepageClaimRequestCommandWriterProvider.overrideWithValue(homepage),
+          homepageClaimRequestQueryReaderProvider.overrideWithValue(homepage),
           homepageIntroductionRepositoryProvider.overrideWithValue(
             const _EmptyIntroductionRepository(),
           ),
@@ -233,10 +235,15 @@ final class _JourneyHomepageRepository extends MockHomepageRepository {
   Future<HomepageClaimRequestView> createClaimRequest({
     required String homepageId,
     required HomepageClaimRequestDraft draft,
+    String? clientRequestId,
   }) async {
     claimCreateCalls += 1;
     lastClaimDraft = draft;
-    return super.createClaimRequest(homepageId: homepageId, draft: draft);
+    return super.createClaimRequest(
+      homepageId: homepageId,
+      draft: draft,
+      clientRequestId: clientRequestId,
+    );
   }
 }
 

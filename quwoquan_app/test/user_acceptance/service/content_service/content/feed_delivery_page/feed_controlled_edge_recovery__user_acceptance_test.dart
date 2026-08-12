@@ -125,7 +125,8 @@ void main() {
               'Retry ${retry + 1} while the service is stopped must keep the typed blocking terminal.',
         );
       }
-      debugPrint(
+      // ignore: avoid_print
+      print(
         'QWQ_APP_CONTENT_EDGE_RESTORE_REQUEST '
         '${jsonEncode(<String, Object>{'environment': _runtimeEnv, 'observed': true, 'copyKey': copy.copyKey, 'blockedRetryCount': 5})}',
       );
@@ -147,7 +148,8 @@ void main() {
       );
       final recoveredCount = _visibleFeedCardKeys().length;
       expect(recoveredCount, greaterThan(0));
-      debugPrint(
+      // ignore: avoid_print
+      print(
         'QWQ_APP_CONTENT_FAULT_EVIDENCE '
         '${jsonEncode(<String, Object>{'environment': _runtimeEnv, 'copyKey': copy.copyKey, 'singlePrimaryAction': true, 'forbiddenBrandAbsent': true, 'technicalDetailsAbsent': true, 'blockedRetryCount': 5, 'blockingErrorRetained': true, 'sameInstallRecovery': true, 'recoveredVisibleCardCount': recoveredCount})}',
       );

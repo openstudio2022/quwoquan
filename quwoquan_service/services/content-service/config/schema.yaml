@@ -1,5 +1,11 @@
 description: 该自治边界的运行配置定义与默认值；环境只维护差异和引用。
 configs:
+- key: sys.content-service.research_identity.attestation_key_base64
+  type: string
+  scope: workload
+  reload: restart
+  rollout: replace
+  sensitive: true
 - key: sys.content-service.accountSecurityAuthority.baseUrl
   type: string
   scope: workload
@@ -128,6 +134,27 @@ configs:
   rollout: progressive
   sensitive: false
   default: 1
+- key: sys.content-service.es.startupInitialBackoffMs
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 100
+- key: sys.content-service.es.startupMaxBackoffMs
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 2000
+- key: sys.content-service.es.startupTimeoutMs
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 60000
 - key: sys.content-service.es.synonyms
   type: list
   scope: workload

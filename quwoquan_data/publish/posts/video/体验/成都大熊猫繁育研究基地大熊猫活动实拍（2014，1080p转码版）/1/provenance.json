@@ -1,0 +1,42 @@
+{
+  "executionId": "20260809--travel-video-m1--china-panda-base-research-92eed002-epoch5-not-m100--scale-002",
+  "agentRunId": "run-ac77c1a1-0cf8-4561-ab31-0e534fe8e1c7",
+  "agentModel": "auto",
+  "renderStrategy": "sourced_video_transcode",
+  "outputAudioStatus": "preserved_authorized",
+  "sources": [
+    {
+      "assetRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__f44d87bf/assets/source.mp4",
+      "sourceRef": "https://commons.wikimedia.org/wiki/File:Pandejo_en_%C4%88engduo_(2014)_11.webm",
+      "rightsRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__f44d87bf/rights/permission_evidence.json",
+      "mediaProbeRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__f44d87bf/media/probe.json",
+      "watermarkEvidenceRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__f44d87bf/media/watermark_evidence.json",
+      "audioRightsEvidenceRef": "sources/成都大熊猫繁育研究基地__tourism_video_site__f44d87bf/rights/audio_rights_evidence.json",
+      "sha256": "sha256:48e28092f94f84f6909087dace63ef8220e1d0fd9e893cb3ff0aaac6980d9fd3",
+      "isOriginal": false,
+      "originalCreatorId": null,
+      "originalCreatorName": "RG72",
+      "originalCreatorProfileUrl": null,
+      "platform": "Wikimedia Commons",
+      "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:Pandejo_en_%C4%88engduo_(2014)_11.webm",
+      "originalAssetUrl": "https://commons.wikimedia.org/wiki/File:Pandejo_en_%C4%88engduo_(2014)_11.webm",
+      "attributionText": "成都大熊猫繁育研究基地大熊猫活动实拍（2014，1080p转码版） — RG72 — CC BY-SA 4.0 — https://commons.wikimedia.org/wiki/File:Pandejo_en_%C4%88engduo_(2014)_11.webm",
+      "rightsBasis": "CC BY-SA 4.0",
+      "commercialAuthorizationStatus": "verified",
+      "publicationAdmission": "research_release",
+      "authorizationProofUrl": "https://commons.wikimedia.org/wiki/File:Pandejo_en_%C4%88engduo_(2014)_11.webm",
+      "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+      "riskAcceptanceId": null,
+      "watermarkStatus": "absent",
+      "audioRightsStatus": "unverified",
+      "modelReleaseStatus": "not_required",
+      "propertyReleaseStatus": "not_required",
+      "collectedAt": "2026-08-09T07:20:27.568271+00:00",
+      "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+      "directDownload": true,
+      "accessControlBypassed": false,
+      "drmDetected": false,
+      "basis": "CC BY-SA 4.0"
+    }
+  ]
+}

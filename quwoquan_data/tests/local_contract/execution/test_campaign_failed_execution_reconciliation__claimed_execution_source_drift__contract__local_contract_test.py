@@ -8,6 +8,9 @@ from content.execution.campaign import failed_execution_reconciliation as reconc
 from content.execution.campaign import (
     failed_execution_reconciliation_claimed as claimed_contract,
 )
+from content.execution.campaign import (
+    failed_execution_reconciliation_post_publish as post_publish_contract,
+)
 from content.execution.campaign import request_envelope_writer
 from content.execution.campaign.external_inputs import payload_digest
 from content.execution.campaign.submission_reconciliation_contract import (
@@ -193,6 +196,7 @@ def _write_boundary(
         write_json(
             campaign / "claims" / f"{carrier}.json",
             {
+                "schema": "quwoquan_data.content_campaign_lane_claim",
                 "rootExecutionId": ROOT_ID,
                 "planDigest": plan["planDigest"],
                 "campaignRunId": RUN_ID,
@@ -200,6 +204,8 @@ def _write_boundary(
                 "campaignFencingToken": FENCING_TOKEN,
                 "carrier": carrier,
                 "executionId": execution_ids[carrier],
+                "claimId": "sha256:" + str(CARRIERS.index(carrier) + 1) * 64,
+                "claimAttempt": 1,
                 "status": "failed",
                 "phase": "completed",
                 "capsuleRef": "data/local/cache/capsules/shared",
@@ -208,6 +214,9 @@ def _write_boundary(
                 "pgid": 999_992,
                 "returnCode": 1,
                 "error": "DATA.CONTRACT.INVALID",
+                "acquiredAt": "2026-08-08T10:05:00Z",
+                "heartbeatAt": "2026-08-08T10:19:31Z",
+                "updatedAt": "2026-08-08T10:19:32Z",
                 "finishedAt": "2026-08-08T10:19:32Z",
             },
         )
@@ -246,6 +255,156 @@ def _write_boundary(
         reconciliation, "entity_catalog_digest", lambda _ref: CATALOG_DIGEST
     )
     return output_root, campaign, execution_ids
+
+
+def _write_post_publish_boundary(
+    tmp_path: Path,
+    output_root: Path,
+    campaign: Path,
+    execution_ids: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> Path:
+    report_path = campaign / "campaign_report.json"
+    report = read_json(report_path)
+    assert isinstance(report, dict)
+    report.update({"status": "blocked", "phase": "completed"})
+    for carrier in CARRIERS:
+        lane = report["lanes"][carrier]
+        lane.update(
+            {
+                "status": "blocked",
+                "phase": "review" if carrier in {"homepage", "article"} else "submission",
+                "reviewReturnCode": 0 if carrier in {"homepage", "article"} else None,
+                "publishReturnCode": 1,
+                "executionRootRef": f"data/tasks/{execution_ids[carrier]}",
+                "cleanupStatus": "cleaned",
+                "approvedQuota": 1 if carrier in {"homepage", "article"} else None,
+                "qualifiedCount": 1 if carrier in {"homepage", "article"} else None,
+                "finalizedCount": 0 if carrier in {"homepage", "article"} else None,
+                "selectedCount": 1 if carrier in {"homepage", "article"} else None,
+                "discardedCount": 0 if carrier in {"homepage", "article"} else None,
+                "shortfallCount": 0 if carrier in {"homepage", "article"} else None,
+                "error": "RuntimeError: terminal lane failed",
+            }
+        )
+    write_json(report_path, report)
+
+    article_id = execution_ids["article"]
+    article_root = output_root / "data/tasks" / article_id
+    transaction_id = f"{article_id}--post-test"
+    object_ref = "article/攻略/都江堰市/1"
+    merkle = "sha256:" + "9" * 64
+    fence = "sha256:" + "8" * 64
+    closure = "sha256:" + "7" * 64
+    package_path = (
+        article_root
+        / "evidence/object-transactions"
+        / transaction_id
+        / "object_transaction_package.json"
+    )
+    write_json(
+        package_path,
+        {
+            "schema": "quwoquan_data.object_transaction_package",
+            "executionId": article_id,
+            "transactionId": transaction_id,
+            "objectClosureDigest": closure,
+            "target": {"objectKind": "posts", "objectRef": object_ref},
+        },
+    )
+    transaction_root = (
+        output_root / "data/local/workspace/object-transactions" / transaction_id
+    )
+    write_json(
+        transaction_root / "audit_report.json",
+        {
+            "schema": "quwoquan_data.object_transaction_dry_run",
+            "executionId": article_id,
+            "transactionId": transaction_id,
+            "objectRef": object_ref,
+            "objectClosureDigest": closure,
+            "packageSha256": reconciliation.file_digest(package_path),
+            "afterCanonical": {"merkleRoot": merkle},
+        },
+    )
+    write_json(
+        transaction_root / "apply_report.json",
+        {
+            "schema": "quwoquan_data.object_transaction_apply",
+            "status": "applied",
+            "executionId": article_id,
+            "transactionId": transaction_id,
+            "objectRef": object_ref,
+            "objectClosureDigest": closure,
+            "afterMerkle": merkle,
+            "fenceToken": fence,
+        },
+    )
+    write_json(
+        transaction_root / "apply_completion.json",
+        {
+            "transactionId": transaction_id,
+            "afterMerkle": merkle,
+            "fenceToken": fence,
+        },
+    )
+    write_json(
+        transaction_root / "pointer.json",
+        {
+            "transactionId": transaction_id,
+            "executionId": article_id,
+            "state": "applied",
+            "afterMerkle": merkle,
+            "activeMerkle": merkle,
+            "fenceToken": fence,
+        },
+    )
+    write_json(
+        article_root / "evidence/reliabletask/publish/job-set/report.json",
+        {
+            "executionId": article_id,
+            "stage": "publish",
+            "passed": True,
+            "objectTransactionResultCount": 1,
+            "researchAcceptedCount": 1,
+            "finalizedObjectCount": 0,
+            "duplicatePublishCount": 0,
+            "missingObjectCount": 0,
+        },
+    )
+    write_json(
+        article_root / "publish_ref.json",
+        {
+            "executionId": article_id,
+            "publishedRefs": {"entities": [], "posts": [object_ref]},
+        },
+    )
+    state_path = article_root / "_shared/execution_state.json"
+    write_json(
+        state_path,
+        {
+            "executionId": article_id,
+            "status": "manual_required",
+            "completed": ["publish"],
+            "completionGateIssues": ["frozen capsule completion import failed"],
+            "throughput": {
+                "objectTransactionResultCount": 1,
+                "researchAcceptedCount": 1,
+                "finalizedObjectCount": 0,
+            },
+        },
+    )
+    publish_root = tmp_path / "publish"
+    write_json(
+        publish_root / "posts" / object_ref / "manifest.json",
+        {
+            "schema": "quwoquan_data.post_object",
+            "executionId": article_id,
+            "carrier": "article",
+        },
+    )
+    monkeypatch.setattr(post_publish_contract.paths, "PUBLISH_ROOT", publish_root)
+    return state_path
 
 
 def test_claimed_execution_source_drift_writes_create_once_lineage_receipt(
@@ -309,6 +468,43 @@ def test_claimed_execution_source_drift_requires_four_supersession_receipts(
         )
 
 
+def test_claimed_execution_source_drift_terminalizes_all_dead_stale_claims(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root, campaign, _execution_ids = _write_boundary(tmp_path, monkeypatch)
+    for carrier in CARRIERS:
+        path = campaign / "claims" / f"{carrier}.json"
+        claim = read_json(path)
+        claim.update(
+            {
+                "status": "running",
+                "phase": "review-only",
+                "returnCode": None,
+                "error": None,
+                "finishedAt": None,
+            }
+        )
+        write_json(path, claim)
+
+    receipt, _path = reconciliation.reconcile_failed_campaign(
+        ROOT_ID,
+        reason="claimed_execution_source_drift",
+        blocker_evidence=campaign / "claims/homepage.json",
+        repo_root=tmp_path,
+        output_root=output_root,
+    )
+
+    assert receipt["decision"] == "superseded"
+    for carrier in CARRIERS:
+        claim = read_json(campaign / "claims" / f"{carrier}.json")
+        assert claim["status"] == "failed"
+        assert claim["phase"] == "completed"
+        assert claim["returnCode"] == 130
+        assert claim["terminationOwner"] == "external_or_kernel"
+        assert claim["finishedAt"]
+
+
 def test_claimed_execution_source_drift_refuses_live_claim_process(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -324,6 +520,84 @@ def test_claimed_execution_source_drift_refuses_live_claim_process(
             ROOT_ID,
             reason="claimed_execution_source_drift",
             blocker_evidence=campaign / "claims/homepage.json",
+            repo_root=tmp_path,
+            output_root=output_root,
+        )
+
+
+def test_post_publish_partial_terminal_preserves_applied_article_without_finalizing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root, campaign, execution_ids = _write_boundary(tmp_path, monkeypatch)
+    blocker = _write_post_publish_boundary(
+        tmp_path, output_root, campaign, execution_ids, monkeypatch
+    )
+
+    first, path = reconciliation.reconcile_failed_campaign(
+        ROOT_ID,
+        reason="post_publish_partial_terminal",
+        blocker_evidence=blocker,
+        repo_root=tmp_path,
+        output_root=output_root,
+    )
+    repeated, repeated_path = reconciliation.reconcile_failed_campaign(
+        ROOT_ID,
+        reason="post_publish_partial_terminal",
+        blocker_evidence=blocker,
+        repo_root=tmp_path,
+        output_root=output_root,
+    )
+
+    assert repeated_path == path
+    assert repeated == first
+    assert first["errorCode"] == "DATA.CAMPAIGN.POST_PUBLISH_PARTIAL_TERMINAL"
+    evidence = first["executionEvidence"]
+    assert evidence["evidenceDisposition"] == "preserved_unadopted"
+    assert evidence["excludedFromFinalized"] is True
+    assert evidence["eligibleForRelease"] is False
+    assert evidence["partialPublish"]["objectRef"] == "article/攻略/都江堰市/1"
+    assert evidence["partialPublish"]["researchAcceptedCount"] == 1
+    assert evidence["partialPublish"]["finalizedObjectCount"] == 0
+    assert not (campaign / "release_selections").exists()
+
+
+def test_post_publish_partial_terminal_rejects_finalized_or_release_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root, campaign, execution_ids = _write_boundary(tmp_path, monkeypatch)
+    blocker = _write_post_publish_boundary(
+        tmp_path, output_root, campaign, execution_ids, monkeypatch
+    )
+    report_path = campaign / "campaign_report.json"
+    report = read_json(report_path)
+    report["lanes"]["article"]["finalizedCount"] = 1
+    write_json(report_path, report)
+
+    with pytest.raises(
+        CampaignSubmissionReconciliationError,
+        match="article is not one terminal non-finalized lane",
+    ):
+        reconciliation.reconcile_failed_campaign(
+            ROOT_ID,
+            reason="post_publish_partial_terminal",
+            blocker_evidence=blocker,
+            repo_root=tmp_path,
+            output_root=output_root,
+        )
+
+    report["lanes"]["article"]["finalizedCount"] = 0
+    write_json(report_path, report)
+    write_json(campaign / "release_selections/release.json", {"releaseId": "forged"})
+    with pytest.raises(
+        CampaignSubmissionReconciliationError,
+        match="already has release selection evidence",
+    ):
+        reconciliation.reconcile_failed_campaign(
+            ROOT_ID,
+            reason="post_publish_partial_terminal",
+            blocker_evidence=blocker,
             repo_root=tmp_path,
             output_root=output_root,
         )

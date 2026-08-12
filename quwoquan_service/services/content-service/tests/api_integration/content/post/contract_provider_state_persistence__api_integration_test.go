@@ -1,0 +1,245 @@
+package api_integration
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	feedapp "quwoquan_service/services/content-service/internal/content/post/application/feed"
+	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
+	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+)
+
+func TestPersistenceProviderState_ContentReadsViaHandler(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	evidence := provisionContentPersistenceProviderState(t, "content_discovery_core", "comment_thread_core")
+	if evidence.InsertedCount < 4 {
+		t.Fatalf("expected at least 4 seeded content records, got %d", evidence.InsertedCount)
+	}
+	reader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
+	if _, err := reader.ListPublishedFeedPosts(
+		context.Background(),
+		postports.NewPostFeedReadRequest("", "", "", 100),
+	); err != nil {
+		t.Fatalf("typed feed reader must decode canonical contract fixtures: %v", err)
+	}
+	if _, err := testFeedService.ListFeed(
+		context.Background(),
+		feedapp.ListFeedRequest{
+			UserID:    "fixture_contract_reader",
+			SessionID: "fixture_contract_reader_session",
+			Type:      "image",
+			Limit:     20,
+		},
+	); err != nil {
+		t.Fatalf("feed application must consume canonical contract fixtures: %v", err)
+	}
+
+	feedReq := httptest.NewRequest(http.MethodGet, "/content/feed?type=image&limit=20", nil)
+	feedReq.Header.Set("X-Client-Session-Id", "fixture_contract_reader_session")
+	feedRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(feedRec, feedReq)
+	if feedRec.Code != http.StatusOK {
+		t.Fatalf("feed expected 200, got %d: %s", feedRec.Code, feedRec.Body.String())
+	}
+	var feed map[string]any
+	if err := json.Unmarshal(feedRec.Body.Bytes(), &feed); err != nil {
+		t.Fatalf("decode feed: %v", err)
+	}
+	assertItemsNotEmpty(t, feed["items"])
+
+	getReq := httptest.NewRequest(http.MethodGet, "/content/posts/fixture_photo_001", nil)
+	getRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("get post expected 200, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+	var detail map[string]any
+	if err := json.Unmarshal(getRec.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode detail: %v", err)
+	}
+	if detail["postId"] != "fixture_photo_001" {
+		t.Fatalf("detail did not return fixture photo: %+v", detail)
+	}
+	if _, privateStorageID := detail["_id"]; privateStorageID {
+		t.Fatalf("detail must not expose storage _id: %+v", detail)
+	}
+
+	commentsReq := httptest.NewRequest(http.MethodGet, "/content/posts/fixture_photo_001/comments?limit=10", nil)
+	commentsRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(commentsRec, commentsReq)
+	if commentsRec.Code != http.StatusOK {
+		t.Fatalf("comments expected 200, got %d: %s", commentsRec.Code, commentsRec.Body.String())
+	}
+	var comments map[string]any
+	if err := json.Unmarshal(commentsRec.Body.Bytes(), &comments); err != nil {
+		t.Fatalf("decode comments: %v", err)
+	}
+	assertItemsNotEmpty(t, comments["items"])
+
+	reactionReq := httptest.NewRequest(http.MethodGet, "/content/posts/fixture_photo_001/reactions", nil)
+	reactionReq.Header.Set("X-Client-User-Id", "fixture_user_current")
+	reactionRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(reactionRec, reactionReq)
+	if reactionRec.Code != http.StatusOK {
+		t.Fatalf("reaction expected 200, got %d: %s", reactionRec.Code, reactionRec.Body.String())
+	}
+	var reaction map[string]any
+	if err := json.Unmarshal(reactionRec.Body.Bytes(), &reaction); err != nil {
+		t.Fatalf("decode reaction: %v", err)
+	}
+	if reaction["liked"] != true {
+		t.Fatalf("expected seeded reaction state, got %+v", reaction)
+	}
+	if _, exists := reaction["favorited"]; exists {
+		t.Fatalf("favorited 字段已随收藏概念退场，不应再出现在 reaction state: %+v", reaction)
+	}
+}
+
+func TestPersistenceProviderState_GetPostUsesGeneratedProjectionWire(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	provisionContentPersistenceProviderState(t, "content_discovery_core")
+	expected := contentFixturePostByID(
+		t,
+		"content_discovery_core",
+		"fixture_video_001",
+	)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/content/posts/fixture_video_001",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get video post expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var detail map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode video post detail: %v", err)
+	}
+	if detail["postId"] != "fixture_video_001" {
+		t.Fatalf("generated client requires postId: %+v", detail)
+	}
+	if _, exists := detail["_id"]; exists {
+		t.Fatalf("client projection must not expose storage _id: %+v", detail)
+	}
+	if detail["contentType"] != expected.ContentType ||
+		detail["videoUrl"] != expected.VideoURL {
+		t.Fatalf("unexpected video projection: %+v", detail)
+	}
+	if detail["authorDisplayName"] == "" || detail["authorAvatarUrl"] == "" {
+		t.Fatalf("client projection must expose author display fields: %+v", detail)
+	}
+	if detail["thumbnailUrl"] != expected.ThumbnailURL ||
+		detail["durationMs"] != float64(expected.DurationMS) ||
+		detail["width"] != float64(expected.Width) ||
+		detail["height"] != float64(expected.Height) {
+		t.Fatalf("client projection must preserve video playback fields: %+v", detail)
+	}
+	mediaItems, ok := detail["mediaItems"].([]any)
+	if !ok || len(mediaItems) != 1 {
+		t.Fatalf("client projection must expose one video media item: %+v", detail)
+	}
+	mediaItem, ok := mediaItems[0].(map[string]any)
+	if !ok ||
+		mediaItem["url"] != detail["videoUrl"] ||
+		mediaItem["coverUrl"] != detail["thumbnailUrl"] ||
+		mediaItem["durationMs"] != detail["durationMs"] {
+		t.Fatalf("client projection media item must match video playback fields: %+v", detail)
+	}
+}
+
+func TestContentFixturePostFromFixture_UsesExplicitUpdatedAndPublishedAt(t *testing.T) {
+	post := contentPostFromFixture(contentFixturePost{
+		PostID:      "fixture_time_semantics_001",
+		ContentType: "article",
+		Identity:    "work",
+		AuthorID:    "fixture_user_current",
+		DisplayName: "新同学_260622_6698692",
+		AvatarURL:   "media/avatar/example.png",
+		Title:       "时间语义",
+		Body:        "正文",
+		CreatedAt:   "2026-05-01T00:00:00Z",
+		UpdatedAt:   "2026-05-03T00:00:00Z",
+		PublishedAt: "2026-05-04T00:00:00Z",
+	})
+
+	if got, want := post.CreatedAt, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
+		t.Fatalf("createdAt mismatch: got %s want %s", got, want)
+	}
+	if got, want := post.UpdatedAt, time.Date(2026, 5, 3, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
+		t.Fatalf("updatedAt mismatch: got %s want %s", got, want)
+	}
+	if got, want := post.PublishedAt, time.Date(2026, 5, 4, 0, 0, 0, 0, time.UTC); !got.Equal(want) {
+		t.Fatalf("publishedAt mismatch: got %s want %s", got, want)
+	}
+	if !post.LastActiveAt.Equal(post.UpdatedAt) {
+		t.Fatalf("lastActiveAt should track updatedAt: got %s want %s", post.LastActiveAt, post.UpdatedAt)
+	}
+}
+
+func assertItemsContainID(t *testing.T, raw any, id string) {
+	t.Helper()
+	items, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("items is not list: %#v", raw)
+	}
+	for _, item := range items {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if obj["postId"] == id {
+			return
+		}
+	}
+	t.Fatalf("items did not contain id %s: %+v", id, items)
+}
+
+func assertItemsNotEmpty(t *testing.T, raw any) {
+	t.Helper()
+	items, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("items is not list: %#v", raw)
+	}
+	if len(items) == 0 {
+		t.Fatalf("items is empty")
+	}
+}
+
+func assertItemsContainText(t *testing.T, raw any, fragment string) {
+	t.Helper()
+	items, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("items is not list: %#v", raw)
+	}
+	for _, item := range items {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if value, ok := obj["content"].(string); ok && contains(value, fragment) {
+			return
+		}
+	}
+	t.Fatalf("items did not contain text %q: %+v", fragment, items)
+}
+
+func contains(value, fragment string) bool {
+	return len(fragment) == 0 || (len(value) >= len(fragment) && value[:len(fragment)] == fragment) || jsonContains(value, fragment)
+}
+
+func jsonContains(value, fragment string) bool {
+	for i := 0; i+len(fragment) <= len(value); i++ {
+		if value[i:i+len(fragment)] == fragment {
+			return true
+		}
+	}
+	return false
+}

@@ -17,6 +17,8 @@
 - 单一 search(request) contract，suggest/result 仅以 mode 区分。
 - 商用 response 字段 requestId/experimentBucket/relatedTerms/rankReasons/rankPosition/coverWidth/coverHeight/connectionState/intersectionReason。
 - 搜索实验 assignment unit 只使用可信登录主体或匿名稳定 `X-Session-Id`；禁止空主体默认为 control，也禁止用逐请求 requestId 重分桶。
+- 未投影或未激活实验策略时，搜索可按显式 control 语义降级；该 control 语义必须拥有稳定策略摘要并与候选、查询、筛选和主体共同绑定分页 cursor，不得因命中超过首屏而退化为 `SEARCH.USER.invalid_argument`。
+- Search runtime 必须从受管部署入口接收当前 immutable candidate digest；不得以空候选身份签发分页 cursor，也不得仅在单页查询中形成假绿。
 - App RemoteSearchRepository + RetrieveRequest 映射；assistant search tool 桥接 canonical。
 - 错误响应经 CloudException/runtimeFailure 结构化。
 
@@ -46,6 +48,9 @@
 - AI 模型可生成 typed 查询条件，但必须落在 schema 允许范围内。
 - contract 必须保持 web-search-like 的 query-first 结构，支持 `web.document` 与趣我圈对象统一召回。
 - 商用字段（`rankReasons / rankPosition / relatedTerms` 等）只在服务端产出，端侧只读消费，不得客户端合成形成第二真相源。
+- Data Post 只能由 Content durable outbox 的 canonical Post lifecycle 进入搜索文档，并且必须匹配当前 active Data release；公开 UGC 经同一 lifecycle 进入，更新后重建文档、删除后移除。禁止 Data 或环境部署直接 seed 搜索索引。
+- release verify 必须经 canonical `POST /search` 精确证明 Manifest 中每个 Data Post 和平台虚拟 Persona 可查询；仅证明 importer 成功不能作为 Search 就绪证据。
+- User/Persona 公共资料只通过 `UserProfileSearchProjectionRequested` durable event 进入 Search；事件必须自包含公开快照，SearchIndexView 以 eventId inbox 与 profileVersion watermark 幂等消费、独占 Provider upsert/delete，失败不得前移 checkpoint，禁止 User 直写搜索 Provider 或 Search 回读 User 数据库。
 
 ## 4. 契约引用
 
@@ -62,7 +67,9 @@
 - WHEN 调用 search(request) 以 mode=suggest|result 区分，返回统一 envelope。
 - THEN response 含 requestId/experimentBucket/relatedTerms；hit 含 rankReasons/rankPosition/coverWidth/coverHeight/connectionState/intersectionReason。
 - THEN 登录态从可信 principal 派生 experiment subject；匿名态必须按 SearchRequestFact contract 携带稳定 `X-Session-Id`，缺失时返回 `SEARCH.USER.invalid_argument`。
+  实验策略缺失或未激活时返回 `experimentBucket=control`，多页中文查询仍生成绑定 canonical control 摘要的 opaque cursor；策略身份变化后旧 cursor 必须 fail-closed。
 - THEN suggest 与 result 共用同一接口，无第二套建议专用接口。
+- AND UserProfile/Persona 更新与删除由同一 Search-owned durable consumer 投影；相同 eventId 重放幂等，旧版本不覆盖新版本，Provider 失败保留 pending stream checkpoint。
 
 <a id="gwt-002"></a>
 ### GWT-002 App result 只消费 canonical 响应（RemoteSearchRepository + RetrieveRequest 映射 + 错误响应）

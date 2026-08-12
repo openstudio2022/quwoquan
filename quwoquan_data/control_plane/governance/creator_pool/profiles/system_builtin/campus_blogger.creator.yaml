@@ -1,6 +1,12 @@
 creatorProfileId: qwq_creator_campus_blogger_001
 personaId: builtin_campus_blogger
 authorId: builtin_campus_blogger
+version: 1
+admission:
+  processResult: completed
+  qualityResult: passed
+  evidenceRef: evidence/system_builtin_author_admission.json
+  evidenceDigest: sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e
 isSystemBuiltin: true
 displayName: 校园观察员阿澈
 userHandle: campus_che

@@ -58,6 +58,7 @@ func DefaultCORSOptions() CORSOptions {
 			"X-Model-Id",
 			"X-Referral-Source",
 			"X-Request-Id",
+			"X-Research-Identity-Attestation",
 			"X-Share-Id",
 			"X-Qwq-Startup-Proof",
 			"X-Trace-Id",

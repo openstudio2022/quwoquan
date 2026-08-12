@@ -53,6 +53,9 @@ void main() {
             return <String, Object?>{
               'latestVersion': '1.8.2',
               'latestBuild': versionCalls == 1 ? '18201' : '18100',
+              'minimumSupportedVersion': '1.8.0',
+              'minimumSupportedBuild': '18000',
+              'updateState': versionCalls == 1 ? 'available' : 'none',
               'updateUrl':
                   'https://cdn.quwoquan.com/download/android/latest.json',
               'recoveryUrl': 'https://quwoquan.com/',
@@ -73,7 +76,8 @@ void main() {
 
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 120));
-    expect(find.text('当前版本需要更新'), findsOneWidget);
+    expect(find.text('发现新版本'), findsOneWidget);
+    expect(find.text('可前往官方渠道更新，或继续使用当前版本'), findsOneWidget);
     expect(find.text('前往更新'), findsOneWidget);
     expect(find.textContaining('诊断'), findsNothing);
     expect(find.textContaining('重试'), findsNothing);
@@ -186,6 +190,16 @@ final class _VersionExecutor implements RecoveryRuntimeOperations {
     return RecoveryVersionResponse(
       latestVersion: payload['latestVersion']! as String,
       latestBuild: int.parse(payload['latestBuild']! as String),
+      minimumSupportedVersion: payload['minimumSupportedVersion']! as String,
+      minimumSupportedBuild: int.parse(
+        payload['minimumSupportedBuild']! as String,
+      ),
+      updateState: switch (payload['updateState']) {
+        'none' => RecoveryUpdateState.none,
+        'available' => RecoveryUpdateState.available,
+        'required' => RecoveryUpdateState.required,
+        _ => throw const FormatException('invalid update state'),
+      },
       updateUrl: payload['updateUrl']! as String,
       recoveryUrl: payload['recoveryUrl']! as String,
     );

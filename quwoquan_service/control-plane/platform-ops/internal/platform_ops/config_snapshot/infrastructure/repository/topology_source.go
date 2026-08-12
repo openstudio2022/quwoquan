@@ -128,10 +128,18 @@ func (source *TopologySource) ReadGrayRoutingPolicy(
 		if err := yaml.Unmarshal(raw, &document); err != nil {
 			return configapp.GrayRoutingPolicySnapshot{}, err
 		}
-		for _, stage := range []string{"gray-initial", "carry-on", "full"} {
-			if _, found := document.Policy.StageDimensions[stage]; !found {
-				return configapp.GrayRoutingPolicySnapshot{}, errors.New("gray routing policy missing canonical rollout stage")
+		expectedBasisPoints := map[string]int{
+			"canary": 0, "5": 500, "20": 2000, "50": 5000, "100": 10000,
+		}
+		for _, stage := range []string{"canary", "5", "20", "50", "100"} {
+			value, found := document.Policy.Stages[stage]
+			if !found || value.BasisPoints != expectedBasisPoints[stage] {
+				return configapp.GrayRoutingPolicySnapshot{}, errors.New("rollout policy missing canonical stage or basis points")
 			}
+		}
+		if document.Policy.SubjectKind != "device_actor" ||
+			document.Policy.AssignmentTTLDaysAfterCampaign != 30 {
+			return configapp.GrayRoutingPolicySnapshot{}, errors.New("rollout policy subject or assignment retention is invalid")
 		}
 		return configapp.GrayRoutingPolicySnapshot{
 			Policy: document.Policy,

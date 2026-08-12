@@ -165,6 +165,22 @@ func TestBuildNoNearOmitsGeoDistance(t *testing.T) {
 	}
 }
 
+func TestBuildUsesStablePrefixInsteadOfExternalOffsetOrSearchAfter(t *testing.T) {
+	b := NewQueryBuilder()
+	plan, _ := rtsearch.PlanRequest(rtsearch.RetrieveRequest{
+		Targets: []rtsearch.Target{rtsearch.TargetArticle},
+		Terms:   []string{"西湖"},
+		Page:    rtsearch.PageRequest{Limit: 11, Offset: 20},
+	}, rtsearch.Viewer{})
+	body := b.Build(plan)
+	if body["from"] != 0 || body["size"] != 31 {
+		t.Fatalf("ES recall must use prefix size=offset+limit from=0: %#v", body)
+	}
+	if _, exists := body["search_after"]; exists {
+		t.Fatalf("ES search_after must not escape the Search owner cursor: %#v", body)
+	}
+}
+
 func TestBuildHybridAddsKnnAndRRF(t *testing.T) {
 	b := NewQueryBuilder()
 	plan, _ := rtsearch.PlanRequest(rtsearch.RetrieveRequest{

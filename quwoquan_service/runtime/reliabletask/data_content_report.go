@@ -186,11 +186,8 @@ func BuildDataContentFleetReport(
 		recoveryRate = float64(automaticRecovered) / float64(recoveryEligible)
 		recoveryStatus = "MEASURED"
 	}
-	// Idempotent resume may leave jobs non-succeeded while canonical objects
-	// are already finalized on disk; count those toward the canonical quota.
 	canonicalAccepted := researchAccepted + commercialAccepted
-	quotaMet := canonicalAccepted >= requiredQuota ||
-		finalizedObjectCount >= requiredQuota
+	quotaMet := canonicalAccepted >= requiredQuota
 	acceptedStatus := "GATE_BLOCK_NO_COMMERCIAL_BATCH"
 	if publishTasks > 0 && quotaMet {
 		acceptedStatus = "MEASURED"

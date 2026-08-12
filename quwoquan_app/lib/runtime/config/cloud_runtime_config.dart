@@ -374,8 +374,26 @@ class CloudRuntimeConfig {
         digestPattern.hasMatch(contentReadinessReceiptDigest);
   }
 
+  static bool get _hasAnyContentBinding =>
+      contentReleaseId.isNotEmpty ||
+      contentManifestDigest.isNotEmpty ||
+      contentReadinessReceiptDigest.isNotEmpty;
+
   static bool get requiresReleaseBoundContent =>
-      _enforceNativeLaunchBinding && launchPolicy == prodReleaseLaunchPolicy;
+      declaredContentBindingState == 'bound' ||
+      (_enforceNativeLaunchBinding && launchPolicy == prodReleaseLaunchPolicy);
+
+  /// 裸 `flutter run` 没有显式内容绑定时不能静默请求 Remote。
+  ///
+  /// canonical launcher 的 `ui-only` 仍可进入安全 Shell，并由服务端
+  /// `no_active_release` 表达无内容；direct Debug 则先进入 metadata 驱动的
+  /// 开发配置恢复，避免把启动方式错误伪装成普通服务不可用。
+  static bool get blocksRemoteForDirectUnboundLaunch =>
+      _enforceNativeLaunchBinding &&
+      launchMode == 'direct_flutter_run' &&
+      launchPolicy == testLiveLaunchPolicy &&
+      declaredContentBindingState == 'unbound' &&
+      !_hasAnyContentBinding;
 
   /// 返回有效 runtime package 中缺失或非法的键，不包含任何 endpoint 值。
   static List<String> get missingRequiredDefineKeys {
@@ -404,11 +422,15 @@ class CloudRuntimeConfig {
       if (launchPolicy == prodReleaseLaunchPolicy && appRuntimeEnv != 'prod')
         'APP_LAUNCH_POLICY',
       if (launchPolicy == testLiveLaunchPolicy &&
-          declaredContentBindingState != 'unbound')
+          declaredContentBindingState != 'unbound' &&
+          declaredContentBindingState != 'bound')
         'CONTENT_BINDING_STATE',
       if (launchPolicy == prodReleaseLaunchPolicy &&
           declaredContentBindingState != 'bound')
         'CONTENT_BINDING_STATE',
+      if (declaredContentBindingState == 'unbound' && _hasAnyContentBinding)
+        'CONTENT_BINDING_STATE',
+      if (blocksRemoteForDirectUnboundLaunch) 'CONTENT_BINDING_STATE',
       if (requiresReleaseBoundContent && contentReleaseId.isEmpty)
         'contentReleaseId',
       if (requiresReleaseBoundContent && launchTarget != '$appRuntimeEnv-local')
@@ -448,9 +470,10 @@ class CloudRuntimeConfig {
       'configurationState': missingRequiredDefineKeys.isEmpty
           ? 'complete'
           : 'invalid',
-      'contentBindingState': launchPolicy == 'test_live'
+      'contentBindingState':
+          declaredContentBindingState == 'unbound' && !_hasAnyContentBinding
           ? 'unbound'
-          : hasCompleteContentBinding
+          : declaredContentBindingState == 'bound' && hasCompleteContentBinding
           ? 'bound'
           : 'invalid',
       if (contentReleaseId.isNotEmpty) 'contentReleaseId': contentReleaseId,

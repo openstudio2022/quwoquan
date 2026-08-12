@@ -38,4 +38,11 @@ func (h *Handler) CancelChallenge(
 	return h.facet.CancelChallenge(ctx, command)
 }
 
+func (h *Handler) ReportDeliveryResult(
+	ctx context.Context,
+	command challengeapp.ReportDeliveryResultCommand,
+) (challengeapp.ChallengeCommandResult, error) {
+	return h.facet.ReportDeliveryResult(ctx, command)
+}
+
 var _ challengeapp.CommandFacet = (*Handler)(nil)

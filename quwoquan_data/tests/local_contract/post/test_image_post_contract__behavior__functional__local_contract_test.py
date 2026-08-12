@@ -1,7 +1,6 @@
 """Structured image-work contract tests for materialize and content.release.canonical."""
 from __future__ import annotations
 
-import os
 import sys
 import tempfile
 from pathlib import Path
@@ -14,23 +13,48 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 
-from content.post.object_index import register_content_object  # noqa: E402
-from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
-from core.io import read_json, write_json  # noqa: E402
-from core.paths import execution_root, ensure_execution_command_layout, ensure_execution_layout  # noqa: E402
-from core.provenance import provenance_issues  # noqa: E402
-from content.source.source_assets import object_image_candidates  # noqa: E402
-from content.source.source_unit import write_source_unit  # noqa: E402
 from content.execution.stage_reports import write_stage_result  # noqa: E402
 from content.post.materialize_apply import materialize_posts  # noqa: E402
 from content.post.materialize_contract import _image_source_contract  # noqa: E402
+from content.post.object_index import register_content_object  # noqa: E402
 from content.release.canonical import assemble as publish_assemble  # noqa: E402
 from content.release.canonical import gate as publish_gate  # noqa: E402
+from content.source.source_assets import object_image_candidates  # noqa: E402
+from content.source.source_unit import write_source_unit  # noqa: E402
+from core.io import read_json, write_json  # noqa: E402
+from core.paths import (  # noqa: E402
+    ensure_execution_command_layout,
+    ensure_execution_layout,
+    execution_root,
+)
+from core.provenance import provenance_issues  # noqa: E402
+from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
 from support.image_fixture import jpeg_bytes  # noqa: E402
-
 
 EXECUTION_ID = "20260711--travel-image-post-contract--test-region-a--pilot-001"
 REF = "空标题图片作品"
+SOURCE_ATTRIBUTION = {
+    "isOriginal": False,
+    "originalCreatorId": None,
+    "originalCreatorName": "摄影师甲",
+    "originalCreatorProfileUrl": "https://example.com/creator/a",
+    "platform": "fixture",
+    "sourcePostUrl": "https://example.com/collections/alpine",
+    "originalAssetUrl": "https://example.com/collections/alpine/original.jpg",
+    "attributionText": "摄影师甲 / CC-BY-4.0",
+    "rightsBasis": "CC-BY-4.0",
+    "commercialAuthorizationStatus": "verified",
+    "publicationAdmission": "commercial_release",
+    "authorizationProofUrl": "https://example.com/licenses/alpine",
+    "termsUrl": "https://example.com/licenses/alpine",
+    "riskAcceptanceId": None,
+    "watermarkStatus": "absent",
+    "audioRightsStatus": "no_audio",
+    "modelReleaseStatus": "not_required",
+    "propertyReleaseStatus": "not_required",
+    "collectedAt": "2026-06-13T00:00:00Z",
+    "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+}
 
 
 def _seed_source_collection() -> list[dict]:
@@ -77,6 +101,7 @@ def _seed_source_collection() -> list[dict]:
             },
         ],
         execution_id=EXECUTION_ID,
+        source={"sourceAttribution": SOURCE_ATTRIBUTION},
     )
     return object_image_candidates(object_dir, EXECUTION_ID)
 
@@ -200,6 +225,7 @@ def test_image_materialize_is_structured_only():
     assert manifest["license"] == "CC-BY-4.0"
     assert manifest["termsUrl"] == "https://example.com/licenses/alpine"
     assert manifest["authorizationProof"] == "https://example.com/licenses/alpine"
+    assert manifest["sourceAttribution"] == SOURCE_ATTRIBUTION
     assert "licenseProof" not in manifest
     assert provenance_issues(post_dir, manifest) == []
 

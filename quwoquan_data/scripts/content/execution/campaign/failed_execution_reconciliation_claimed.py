@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from core.io import read_json
+from core.io import read_json, write_json
 from core.schema import assert_valid
 
 from content.execution.campaign.lane import CAMPAIGN_CARRIERS
@@ -58,6 +59,136 @@ def _process_group_alive(value: object) -> bool:
     return True
 
 
+def _terminalize_superseded_dead_claims(
+    campaign: Path,
+    *,
+    root_execution_id: str,
+    expected_ids: Mapping[str, str],
+    plan: Mapping[str, Any],
+    distributed: Mapping[str, Any],
+    original_digest: object,
+    output_root: Path,
+) -> None:
+    """Close stale active claims only after all four executions are superseded.
+
+    A lane wrapper can disappear before its context-manager writes the terminal
+    claim. Reconciliation may close that bookkeeping gap, but only after every
+    process is dead and every execution has a current-code source-drift
+    supersession receipt. Validation is completed for all lanes before the
+    first claim byte is changed.
+    """
+
+    pending: list[tuple[Path, dict[str, Any]]] = []
+    for carrier in CAMPAIGN_CARRIERS:
+        execution_id = expected_ids[carrier]
+        path = campaign / "claims" / f"{carrier}.json"
+        claim = read_json(path)
+        if not isinstance(claim, dict):
+            raise typed(
+                "CAMPAIGN_EVIDENCE_INVALID",
+                f"{carrier} claimed execution has no claim object",
+            )
+        terminal = claim.get("status") == "failed" and claim.get("phase") == "completed"
+        stale = (
+            claim.get("status") in {"active", "starting", "running"}
+            and claim.get("phase") in {"claim", "review-only", "run"}
+        )
+        execution_root = output_root / "data/tasks" / execution_id
+        if (
+            claim.get("rootExecutionId") != root_execution_id
+            or claim.get("carrier") != carrier
+            or claim.get("executionId") != execution_id
+            or claim.get("planDigest") != plan.get("planDigest")
+            or claim.get("campaignRunId") != distributed.get("campaignRunId")
+            or claim.get("campaignGeneration")
+            != distributed.get("campaignGeneration")
+            or claim.get("campaignFencingToken")
+            != distributed.get("campaignFencingToken")
+            or not (terminal or stale)
+        ):
+            raise typed(
+                "CAMPAIGN_NOT_TERMINAL_FAILED",
+                f"{carrier} is not a superseded stale claim",
+            )
+        _dead_process(claim.get("pid"), carrier=carrier, label="pid")
+        pgid = claim.get("pgid")
+        if (
+            isinstance(pgid, bool)
+            or not isinstance(pgid, int)
+            or pgid < 2
+            or _process_group_alive(pgid)
+        ):
+            raise typed(
+                "CAMPAIGN_NOT_TERMINAL_FAILED",
+                f"{carrier} claim pgid is invalid or still live",
+            )
+        try:
+            observed_root = Path(str(claim.get("executionRoot") or "")).resolve()
+            root_matches = observed_root == execution_root.resolve()
+        except (OSError, RuntimeError):
+            root_matches = False
+        loaded = None
+        if (
+            root_matches
+            and execution_root.is_dir()
+            and not execution_root.is_symlink()
+        ):
+            loaded = load_execution_supersession_receipt(execution_root)
+        if loaded is None:
+            raise typed(
+                "EXECUTION_EVIDENCE_INVALID",
+                f"{carrier} execution lacks a supersession receipt",
+            )
+        supersession, _supersession_path = loaded
+        if (
+            supersession.get("executionId") != execution_id
+            or supersession.get("reason") != "source_drift"
+            or supersession.get("decision") != "superseded"
+            or (supersession.get("manifestSourceDigest") or {}).get("digest")
+            != original_digest
+        ):
+            raise typed(
+                "EXECUTION_EVIDENCE_INVALID",
+                f"{carrier} stale claim supersession identity drifted",
+            )
+        assert_valid(
+            claim,
+            "execution",
+            "content_campaign_lane_claim",
+            label=f"claimed source-drift claim:{carrier}",
+        )
+        if stale:
+            pending.append((path, claim))
+
+    now = datetime.now(timezone.utc).isoformat()
+    for path, claim in pending:
+        claim.update(
+            {
+                "status": "failed",
+                "phase": "completed",
+                "returnCode": (
+                    claim["returnCode"]
+                    if isinstance(claim.get("returnCode"), int)
+                    and int(claim["returnCode"]) != 0
+                    else 130
+                ),
+                "error": str(claim.get("error") or "").strip()
+                or "DATA.CAMPAIGN.LANE_PROCESS_GONE_AFTER_CLAIMED_SOURCE_DRIFT",
+                "terminationOwner": claim.get("terminationOwner")
+                or "external_or_kernel",
+                "updatedAt": now,
+                "finishedAt": now,
+            }
+        )
+        assert_valid(
+            claim,
+            "execution",
+            "content_campaign_lane_claim",
+            label=f"claimed source-drift terminal claim:{claim['carrier']}",
+        )
+        write_json(path, claim)
+
+
 def claimed_execution_source_drift_evidence(
     root_execution_id: str,
     submissions: Mapping[str, Mapping[str, Any]],
@@ -67,8 +198,9 @@ def claimed_execution_source_drift_evidence(
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Bind four failed claims to four current-code supersession receipts.
 
-    This path is intentionally read-only.  It never repairs a campaign report,
-    rewrites a claim, or removes an execution root.
+    The only permitted mutation is an atomic-after-validation terminal update
+    for stale claims whose processes are dead and whose executions are already
+    superseded. Campaign reports and execution roots remain immutable.
     """
 
     campaign = campaigns_root(output_root) / root_execution_id
@@ -128,6 +260,15 @@ def claimed_execution_source_drift_evidence(
             "IDENTITY_DRIFT",
             "claimed campaign plan is not bound to the four submissions",
         )
+    _terminalize_superseded_dead_claims(
+        campaign,
+        root_execution_id=root_execution_id,
+        expected_ids=expected_ids,
+        plan=plan,
+        distributed=distributed,
+        original_digest=original_digest,
+        output_root=output_root,
+    )
     if (
         report.get("rootExecutionId") != root_execution_id
         or report.get("status") != "running"

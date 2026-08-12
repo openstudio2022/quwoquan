@@ -1,4 +1,6 @@
-// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-002
+// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-002.t1
+// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-002.t2
 // readiness_case: assistant_task_view_list_assistant_tasks_app_local
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/transport/generated/assistant/assistant_request_page_ids.g.dart';
@@ -34,7 +36,7 @@ void main() {
 
       final tasks = await remote.listAssistantTasks(
         limit: 20,
-        status: '  active  ',
+        status: '  in_progress  ',
       );
 
       expect(
@@ -50,13 +52,13 @@ void main() {
       expect(executor.payload?.pathParameters, isEmpty);
       expect(executor.payload?.queryParameters, <String, String>{
         'limit': '20',
-        'status': 'active',
+        'status': 'in_progress',
       });
       expect(executor.payload?.body, isNull);
       expect(observedNetworkSurface, isFalse);
       expect(tasks, hasLength(1));
       expect(tasks.single.taskId, 'task-1');
-      expect(tasks.single.status, 'active');
+      expect(tasks.single.status, 'in_progress');
       expect(tasks.single.sourceSkillId, 'travel_companion');
     },
   );
@@ -83,7 +85,7 @@ final class _AssistantTaskExecutor implements CloudOperationExecutor {
           'taskId': 'task-1',
           'title': '整理行程',
           'description': '核对明日交通',
-          'status': 'active',
+          'status': 'in_progress',
           'dueAt': '2026-08-09T08:00:00Z',
           'priority': 'high',
           'sourceSkillId': 'travel_companion',
@@ -92,7 +94,7 @@ final class _AssistantTaskExecutor implements CloudOperationExecutor {
         <String, Object?>{
           'taskId': '',
           'title': '无效任务',
-          'status': 'active',
+          'status': 'in_progress',
           'updatedAt': '2026-08-08T10:00:00Z',
         },
       ],

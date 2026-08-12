@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -75,5 +76,48 @@ func TestImportLoadedCountsAlwaysIncludesZeroEntities(t *testing.T) {
 	}
 	if _, ok := decoded["entitiesLoaded"]; !ok {
 		t.Fatal("json omitted entitiesLoaded=0")
+	}
+}
+
+func TestImportAuditEventsRecordPreviousActiveRelease(t *testing.T) {
+	repairs := []releaseimport.ImportedPostOutboxRepairAudit{
+		{
+			EventID: "event-b", BeforeSHA256: "sha256:" + strings.Repeat("b", 64),
+			AfterSHA256: "sha256:" + strings.Repeat("c", 64),
+		},
+		{
+			EventID: "event-a", BeforeSHA256: "sha256:" + strings.Repeat("d", 64),
+			AfterSHA256: "sha256:" + strings.Repeat("e", 64),
+		},
+	}
+	events := releaseimport.ImportAuditEvents(
+		"release-previous",
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		repairs...,
+	)
+	if len(events) != 6 ||
+		events[2] != "PreviousDataRelease|release-previous|sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" ||
+		events[3] != "DataReleaseOutboxRepair|count=2" ||
+		events[4] != "DataReleaseOutboxEventRepair|eventId=event-a|beforeSha256=sha256:"+strings.Repeat("d", 64)+"|afterSha256=sha256:"+strings.Repeat("e", 64) ||
+		events[5] != "DataReleaseOutboxEventRepair|eventId=event-b|beforeSha256=sha256:"+strings.Repeat("b", 64)+"|afterSha256=sha256:"+strings.Repeat("c", 64) {
+		t.Fatalf("previous active release audit event mismatch: %#v", events)
+	}
+	serialized, err := json.Marshal(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(serialized), "releaseDigest") ||
+		strings.Contains(string(serialized), "sourceOwner") ||
+		strings.Contains(string(serialized), "deletedAt") {
+		t.Fatalf("repair audit leaked raw payload: %s", serialized)
+	}
+	if withoutPrevious := releaseimport.ImportAuditEvents("", ""); len(withoutPrevious) != 3 || withoutPrevious[2] != "DataReleaseOutboxRepair|count=0" {
+		t.Fatalf("unexpected empty previous audit event: %#v", withoutPrevious)
+	}
+	replayEvents := releaseimport.ImportReplayRepairAuditEvents(repairs...)
+	if len(replayEvents) != 5 || replayEvents[0] != "DataReleasePrepared" ||
+		replayEvents[1] != "DataReleaseReplayValidated" ||
+		replayEvents[2] != "DataReleaseOutboxRepair|count=2" {
+		t.Fatalf("repair replay claimed activation: %#v", replayEvents)
 	}
 }

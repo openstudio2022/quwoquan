@@ -32,21 +32,34 @@ type assistantRunErrorDocument struct {
 func main() {
 	var metadataDir string
 	var output string
+	var searchAccessOutput string
 	var check bool
 	flag.StringVar(&metadataDir, "metadata-dir", "", "compiled service contract view")
 	flag.StringVar(&output, "output", "", "generated Go catalog output")
+	flag.StringVar(&searchAccessOutput, "search-access-output", "", "generated assistant search access output")
 	flag.BoolVar(&check, "check", false, "fail when generated output is stale")
 	flag.Parse()
-	if strings.TrimSpace(metadataDir) == "" || strings.TrimSpace(output) == "" {
-		fail("--metadata-dir and --output are required")
+	if strings.TrimSpace(metadataDir) == "" || strings.TrimSpace(output) == "" ||
+		strings.TrimSpace(searchAccessOutput) == "" {
+		fail("--metadata-dir, --output and --search-access-output are required")
 	}
-	content, err := generate(metadataDir)
+	source, err := contractcodegen.NewSource(metadataDir, contractvalidate.ProfileBaseline)
+	if err != nil {
+		fail("compile ContractGraph: " + err.Error())
+	}
+	content, err := generateFromSource(source)
+	if err != nil {
+		fail(err.Error())
+	}
+	searchAccess, err := generateAssistantSearchAccess(source)
 	if err != nil {
 		fail(err.Error())
 	}
 	if check {
-		existing, err := os.ReadFile(output)
-		if err != nil || !bytes.Equal(existing, content) {
+		existing, readErr := os.ReadFile(output)
+		searchExisting, searchReadErr := os.ReadFile(searchAccessOutput)
+		if readErr != nil || !bytes.Equal(existing, content) ||
+			searchReadErr != nil || !bytes.Equal(searchExisting, searchAccess) {
 			fail("generated assistant tool catalog is stale; run make codegen-assistant-tool-catalog")
 		}
 		return
@@ -57,6 +70,12 @@ func main() {
 	if err := os.WriteFile(output, content, 0o644); err != nil {
 		fail(err.Error())
 	}
+	if err := os.MkdirAll(filepath.Dir(searchAccessOutput), 0o755); err != nil {
+		fail(err.Error())
+	}
+	if err := os.WriteFile(searchAccessOutput, searchAccess, 0o644); err != nil {
+		fail(err.Error())
+	}
 }
 
 func generate(metadataDir string) ([]byte, error) {
@@ -64,6 +83,10 @@ func generate(metadataDir string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("compile ContractGraph: %w", err)
 	}
+	return generateFromSource(source)
+}
+
+func generateFromSource(source *contractcodegen.Source) ([]byte, error) {
 	var document catalogDocument
 	const sourcePath = "assistant/assistant_tool_metadata/catalog.yaml"
 	if err := source.Decode(sourcePath, &document); err != nil {

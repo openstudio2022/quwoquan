@@ -345,7 +345,7 @@ class _HomeArticlePostCard extends StatelessWidget {
 
   Widget _buildSideImageLayout(BuildContext context, String coverUrl) {
     final title = item.normalizedTitle;
-    final body = item.normalizedBody;
+    final body = item.articlePreviewText;
     final contextObjectName = title.isNotEmpty ? title : body;
     final contextObjectTarget = IntersectionTarget(
       objectType: 'post',
@@ -419,7 +419,7 @@ class _HomeArticlePostCard extends StatelessWidget {
   }
 
   bool _articlePrefersTopImage(ContentPostViewData item) {
-    return item.normalizedBody.length >=
+    return item.articlePreviewText.length >=
         DiscoveryFeedSpacing.homeFeedArticleTopImageTextLength;
   }
 }
@@ -440,7 +440,7 @@ class _ArticleTextBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = item.normalizedTitle;
-    final body = item.normalizedBody;
+    final body = item.articlePreviewText;
     final contextObjectName = title.isNotEmpty ? title : body;
     final contextObjectTarget = IntersectionTarget(
       objectType: 'post',

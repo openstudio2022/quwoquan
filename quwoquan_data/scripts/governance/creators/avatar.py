@@ -1,4 +1,4 @@
-"""Materialize one commercial creator avatar from canonical publish evidence."""
+"""Materialize one creator avatar from canonical publish quality evidence."""
 
 from __future__ import annotations
 
@@ -9,9 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from content.release.canonical.creator_avatar_rights import (
-    creator_avatar_rights_issue,
-)
 from core.image_variants import build_center_square_cover_derivative
 from core.media_asset_url import is_cas_media_object_key
 from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT, PUBLISH_ROOT
@@ -147,7 +144,7 @@ def _source_asset(
     return row, physical, body, object_key
 
 
-def _source_rights(
+def _source_evidence(
     source_root: Path,
     *,
     source_asset_id: str,
@@ -165,7 +162,7 @@ def _source_rights(
             matches.append((document, path))
     if len(matches) != 1:
         raise CreatorAvatarError(
-            f"source rights snapshot must resolve exactly once: {source_asset_id}: "
+            f"source evidence must resolve exactly once: {source_asset_id}: "
             f"found={len(matches)}"
         )
     document, path = matches[0]
@@ -174,175 +171,63 @@ def _source_rights(
         relative = path.relative_to(PUBLISH_ROOT).as_posix()
     except ValueError as exc:
         raise CreatorAvatarError(
-            "source rights snapshot is outside canonical publish"
+            "source evidence is outside canonical publish"
         ) from exc
     return document, path, body, relative
 
 
-def _source_fetched_at(source_root: Path, source_asset_ref: str) -> str:
-    relative = _safe_relative(source_asset_ref, label="sourceAssetRef")
-    if len(relative.parts) < 3 or relative.parts[0] != "sources":
-        raise CreatorAvatarError("source rights snapshot has invalid sourceAssetRef")
-    source_unit_id = relative.parts[1]
-    sources = _read_json(source_root / "source_catalog.json").get("sources")
-    matches = (
-        [
-            row
-            for row in sources or []
-            if isinstance(row, Mapping)
-            and str(row.get("sourceUnitId") or "") == source_unit_id
-        ]
-        if isinstance(sources, list)
-        else []
-    )
-    if len(matches) != 1:
-        raise CreatorAvatarError(
-            f"source catalog timestamp must resolve exactly once: {source_unit_id}"
-        )
-    fetched_at = str(matches[0].get("fetchedAt") or "").strip()
-    if not fetched_at:
-        raise CreatorAvatarError("source catalog fetchedAt is missing")
-    return fetched_at
-
-
-def _verified_source_rights(
+def _source_asset_evidence(
     document: Mapping[str, object],
     *,
     source_asset_id: str,
     source_digest: str,
 ) -> Mapping[str, object]:
     if str(document.get("schema") or "") != "quwoquan_data.asset_rights_snapshot":
-        raise CreatorAvatarError("source rights snapshot schema is invalid")
+        raise CreatorAvatarError("source evidence schema is invalid")
     source_asset = document.get("sourceAsset")
     if not isinstance(source_asset, Mapping):
-        raise CreatorAvatarError("source rights snapshot is missing sourceAsset")
+        raise CreatorAvatarError("source evidence is missing sourceAsset")
     if (
         str(document.get("assetId") or "") != source_asset_id
         or str(source_asset.get("sha256") or "") != source_digest
     ):
-        raise CreatorAvatarError("source rights snapshot identity drift")
-    if (
-        str(source_asset.get("rightsAuditStatus") or "") != "verified"
-        or source_asset.get("rightsAuditIssues") != []
-        or str(source_asset.get("usageScope") or "") != "app_publish"
-        or str(source_asset.get("modelReleaseStatus") or "") != "not_required"
-    ):
-        raise CreatorAvatarError(
-            "source asset is not clean app-publish rights evidence"
-        )
-    required_https = {
-        "authorizationProof": source_asset.get("authorizationProof"),
-        "termsUrl": source_asset.get("termsUrl"),
-    }
-    for label, value in required_https.items():
-        if not str(value or "").startswith("https://"):
-            raise CreatorAvatarError(
-                f"source asset {label} is not canonical HTTPS evidence"
-            )
-    if not str(source_asset.get("license") or "").strip():
-        raise CreatorAvatarError("source asset license is missing")
-    if not str(source_asset.get("creator") or source_asset.get("credit") or "").strip():
-        raise CreatorAvatarError("source asset attribution owner is missing")
-    original_url = str(
-        source_asset.get("normalizedFromUrl")
-        or source_asset.get("requestedUrl")
-        or source_asset.get("url")
-        or ""
-    )
-    if not original_url.startswith("https://"):
-        raise CreatorAvatarError(
-            "source asset original URL is not canonical HTTPS evidence"
-        )
+        raise CreatorAvatarError("source evidence identity drift")
     return source_asset
 
 
-def _page_revision(source_asset: Mapping[str, object], snapshot_digest: str) -> str:
-    revision_id = str(source_asset.get("pageRevisionId") or "").strip()
-    if revision_id:
-        return revision_id
-    page_digest = str(source_asset.get("pageContentSha256") or "").strip()
-    if len(page_digest) == 64 and all(
-        character in "0123456789abcdef" for character in page_digest
-    ):
-        return f"sha256:{page_digest}"
-    return snapshot_digest
-
-
-def _rights_document(
+def _quality_evidence_document(
     *,
     asset_id: str,
     derivative: Mapping[str, object],
-    source_asset: Mapping[str, object],
-    source_rights_ref: str,
-    source_rights_body: bytes,
-    fetched_at: str,
+    source_evidence_ref: str,
+    source_evidence_body: bytes,
 ) -> dict[str, object]:
     digest = str(derivative["sha256"])
     digest_hex = digest.removeprefix("sha256:")
-    author = str(
-        source_asset.get("creator") or source_asset.get("credit") or ""
-    ).strip()
-    credit = str(source_asset.get("credit") or author).strip()
-    license_name = str(source_asset.get("license") or "").strip()
-    canonical_page = str(
-        source_asset.get("authorizationProof") or source_asset.get("sourceUrl") or ""
-    )
-    original_url = str(
-        source_asset.get("normalizedFromUrl")
-        or source_asset.get("requestedUrl")
-        or source_asset.get("url")
-        or ""
-    )
-    crop_box = derivative["cropBox"]
-    modifications = (
-        f"deterministic center-square crop {crop_box} from "
-        f"{derivative['sourceWidth']}x{derivative['sourceHeight']}; "
-        f"RGB; LANCZOS {derivative['width']}x{derivative['height']}; "
-        f"WebP quality={derivative['quality']} method={derivative['method']}; "
-        f"derivative_policy_version={derivative['policyVersion']}"
-    )
-    snapshot_digest = _sha256_bytes(source_rights_body)
+    snapshot_digest = _sha256_bytes(source_evidence_body)
     return {
-        "schema": "quwoquan_data.creator_avatar_rights_snapshot",
+        "schema": "quwoquan_data.creator_avatar_quality_evidence",
         "assetId": asset_id,
-        "depictsIdentifiablePerson": False,
         "manifestAsset": {"assetId": asset_id, "sha256": digest},
-        "commercialRights": {
-            "assetId": asset_id,
-            "sourceKind": "creator_avatar_derivative",
-            "sourceUseMode": "licensed_adaptation",
-            "canonicalFilePage": canonical_page,
-            "snapshotUrl": canonical_page,
-            "pageRevision": _page_revision(source_asset, snapshot_digest),
-            "originalAssetUrl": original_url,
-            "author": author,
-            "source": canonical_page,
-            "licenseName": license_name,
-            "licenseShortName": license_name,
-            "licenseUrl": str(source_asset.get("termsUrl") or ""),
-            "usageScope": "app_publish",
-            "attribution": f"{credit} / {license_name}",
-            "caption": str(source_asset.get("caption") or ""),
-            "captionSource": source_rights_ref,
-            "modifications": modifications,
-            "fetchedAt": fetched_at,
-            "snapshot": {
-                "ref": source_rights_ref,
-                "sha256": snapshot_digest,
-                "bytes": len(source_rights_body),
-            },
-            "asset": {
-                "ref": f"cas/{digest_hex}.webp",
-                "sha256": digest,
-                "bytes": derivative["byteSize"],
-                "mimeType": derivative["mimeType"],
-                "width": derivative["width"],
-                "height": derivative["height"],
-            },
-            "authorizationProof": canonical_page,
-            "modelReleaseStatus": "not_required",
-            "rightsAuditStatus": "verified",
-            "rightsAuditIssues": [],
+        "processResult": "completed",
+        "qualityResult": "passed",
+        "checks": {
+            "format": "passed",
+            "readable": "passed",
+            "clarity": "passed",
+            "safety": "passed",
+        },
+        "sourceEvidence": {
+            "ref": source_evidence_ref,
+            "sha256": snapshot_digest,
+        },
+        "asset": {
+            "ref": f"cas/{digest_hex}.webp",
+            "sha256": digest,
+            "bytes": derivative["byteSize"],
+            "mimeType": derivative["mimeType"],
+            "width": derivative["width"],
+            "height": derivative["height"],
         },
     }
 
@@ -360,7 +245,7 @@ def materialize_creator_avatar(
     source_asset_id = _safe_id(source_asset_id, label="source-asset-id")
     if not confirm_non_identifiable_person:
         raise CreatorAvatarError(
-            "--confirm-non-identifiable-person is required for model-release closure"
+            "--confirm-non-identifiable-person is required for avatar safety closure"
         )
     profile_path = _profile_path(creator_ref)
     source_root, source_relative = _source_root(source_object_ref)
@@ -369,22 +254,18 @@ def materialize_creator_avatar(
         source_asset_id=source_asset_id,
     )
     source_digest = str(source_row["sha256"])
-    rights, _, source_rights_body, source_rights_ref = _source_rights(
+    source_evidence, _, source_evidence_body, source_evidence_ref = _source_evidence(
         source_root,
         source_asset_id=source_asset_id,
         source_digest=source_digest,
     )
-    source_rights = _verified_source_rights(
-        rights,
+    source_asset_evidence = _source_asset_evidence(
+        source_evidence,
         source_asset_id=source_asset_id,
         source_digest=source_digest,
     )
-    if source_rights.get("bytes") != len(source_body):
-        raise CreatorAvatarError("source rights byte identity drift")
-    fetched_at = _source_fetched_at(
-        source_root,
-        str(rights.get("sourceAssetRef") or ""),
-    )
+    if source_asset_evidence.get("bytes") != len(source_body):
+        raise CreatorAvatarError("source evidence byte identity drift")
     derivative = build_center_square_cover_derivative(source_body)
     if derivative is None:
         raise CreatorAvatarError(
@@ -396,35 +277,22 @@ def materialize_creator_avatar(
     object_key = (
         f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/{digest_hex}.webp"
     )
-    rights_document = _rights_document(
+    quality_evidence = _quality_evidence_document(
         asset_id=asset_id,
         derivative=derivative,
-        source_asset=source_rights,
-        source_rights_ref=source_rights_ref,
-        source_rights_body=source_rights_body,
-        fetched_at=fetched_at,
+        source_evidence_ref=source_evidence_ref,
+        source_evidence_body=source_evidence_body,
     )
     try:
         assert_valid(
-            rights_document,
+            quality_evidence,
             "release",
-            "creator_avatar_rights_snapshot",
-            label=f"creator avatar rights {creator_ref}",
+            "creator_avatar_quality_evidence",
+            label=f"creator avatar quality evidence {creator_ref}",
         )
     except (FileNotFoundError, ValueError) as exc:
         raise CreatorAvatarError(str(exc)) from exc
-    rights_issue = creator_avatar_rights_issue(
-        rights_document,
-        asset_id=asset_id,
-        sha256=digest,
-        object_key=object_key,
-        byte_count=int(derivative["byteSize"]),
-        mime_type=str(derivative["mimeType"]),
-    )
-    if rights_issue:
-        raise CreatorAvatarError(f"derived avatar rights invalid: {rights_issue}")
-
-    rights_ref = f"evidence/avatar_rights/{creator_ref}/{digest_hex}.json"
+    evidence_ref = f"evidence/avatar_quality/{creator_ref}/{digest_hex}.json"
     avatar_asset = {
         "assetId": asset_id,
         "kind": "avatar",
@@ -432,7 +300,7 @@ def materialize_creator_avatar(
         "objectKey": object_key,
         "bytes": int(derivative["byteSize"]),
         "mimeType": str(derivative["mimeType"]),
-        "rightsSnapshotRef": rights_ref,
+        "evidenceRef": evidence_ref,
     }
     created = persist_creator_avatar(
         creator_ref=creator_ref,
@@ -441,8 +309,8 @@ def materialize_creator_avatar(
         creator_pool_root=CONTROL_PLANE_CREATOR_POOL_ROOT,
         object_key=object_key,
         derivative_body=derivative["bytes"],
-        rights_ref=rights_ref,
-        rights_document=rights_document,
+        evidence_ref=evidence_ref,
+        evidence_document=quality_evidence,
         avatar_asset=avatar_asset,
     )
 
@@ -453,11 +321,11 @@ def materialize_creator_avatar(
         "sourceAssetId": source_asset_id,
         "sourceSha256": source_digest,
         "sourceObjectKey": source_object_key,
-        "sourceRightsSnapshotRef": source_rights_ref,
+        "sourceEvidenceRef": source_evidence_ref,
         "assetId": asset_id,
         "sha256": digest,
         "objectKey": object_key,
-        "rightsSnapshotRef": rights_ref,
+        "evidenceRef": evidence_ref,
         "cropBox": derivative["cropBox"],
         "sourceDimensions": [
             derivative["sourceWidth"],

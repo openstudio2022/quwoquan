@@ -1,0 +1,37 @@
+description: >-
+  RolloutAssignment 只在验签身份、最小 Build、operation/query 授权和共享
+  admission 之后、owner proxy 之前执行，不公开第二条 HTTP API。
+api_routes: []
+runtime_entrypoints:
+- name: ProductionRolloutDecision
+  kind: middleware
+  phase: post_authorization_pre_owner_proxy
+  application:
+    kind: session
+    facet: RolloutAssignmentFacade
+    method: decide
+    object_owner: RolloutAssignment
+  telemetry:
+    metric: gateway_rollout_decision_total
+    trace: true
+    attributes: [stage, target, platform, appVersion, appBuild, region, carrier, operation, outcome]
+  slo:
+    latency_p95_ms: 20
+    failure_ratio_percent: 0.1
+readiness_cases:
+- case_id: production-rollout-decision-local
+  spec_ref: specs/feature-tree/platform-ops-governance/config-and-reliability-governance/reliability-policy-control/spec.md#gwt-003
+  producer: service
+  layer: local_contract
+  target: {kind: operation, id: ProductionRolloutDecision}
+  runner_source_path: quwoquan_service/services/api-edge/tests/local_contract/edge_security/rollout_assignment/rollout_assignment__local_contract_test.go
+  executions:
+  - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+- case_id: production-rollout-assignment-api
+  spec_ref: specs/feature-tree/platform-ops-governance/config-and-reliability-governance/reliability-policy-control/spec.md#gwt-003
+  producer: service
+  layer: api_integration
+  target: {kind: operation, id: ProductionRolloutDecision}
+  runner_source_path: quwoquan_service/services/api-edge/tests/api_integration/edge_security/rollout_assignment/rollout_assignment_redis__api_integration_test.go
+  executions:
+  - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}

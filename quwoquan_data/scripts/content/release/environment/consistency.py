@@ -249,6 +249,23 @@ def scan_release_contract(
         header_path = objects / "creators" / ref / "_creator.json"
         if header_path.is_file():
             required_tags.update(str(item) for item in read_json(header_path).get("tagRefs") or [] if str(item).strip())
+    if release_root is not None:
+        release_header_path = payload_file(release_root, "release.json")
+        if release_header_path.is_file():
+            release_header = read_json(release_header_path)
+            pool_authors = release_header.get("authors")
+            pool_creator_refs = sorted(
+                str(item.get("creatorRef") or "")
+                for item in pool_authors or []
+                if isinstance(item, Mapping)
+                and str(item.get("creatorRef") or "").strip()
+            )
+            if (
+                release_header.get("poolDigest")
+                and release_header.get("targetEnvironment")
+                and pool_creator_refs == creators
+            ):
+                required_creators.update(creators)
     if creators != sorted(required_creators):
         issues.append(
             _issue(

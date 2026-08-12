@@ -13,7 +13,13 @@ from typing import Any, Iterable, Mapping
 from core import paths as core_paths
 from core.paths import WORKSPACE_ROOT_BY_COMMAND, normalize_execution_workspace_command
 from core.io import read_json, write_json
-from core.source_digest import SourceDigest, SourceDigestError, current_source_digest
+from core.source_digest import (
+    ExecutionBundleIdentity,
+    SourceDefinitionSnapshot,
+    SourceDigestError,
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
+)
 from content.source.contracts import QualifiedHomepageSource
 
 from .identity import SelectionPolicy, parse_execution_id, validate_execution_id
@@ -407,8 +413,6 @@ def create_execution_manifest(
     root = execution_root(identity.execution_id)
     manifest_path = root / MANIFEST_FILENAME
     recipe_file = core_paths.recipe_path(recipe_ref)
-    if not recipe_file.is_file():
-        raise FileNotFoundError(f"recipeRef does not exist: {recipe_ref}")
     if not isinstance(selection_policy, SelectionPolicy):
         raise TypeError("selection_policy must be SelectionPolicy")
     if target_set_ref != TARGET_SET_REF:
@@ -433,16 +437,6 @@ def create_execution_manifest(
         if retry_identity.sequence >= identity.sequence:
             raise ValueError("retryOf sequence must be lower than the new execution sequence")
 
-    recipe_payload = yaml.safe_load(recipe_file.read_text(encoding="utf-8"))
-    if not isinstance(recipe_payload, dict):
-        raise ValueError(f"recipe must be an object: {recipe_file}")
-    from content.execution.planning.semantic_selection import semantic_manifest_identity
-
-    semantic_identity = semantic_manifest_identity(
-        recipe_payload,
-        semantic_selection_id=semantic_selection_id,
-        retry_of=normalized_retry_of,
-    )
     existing_manifest = (
         load_execution_manifest(identity.execution_id)
         if manifest_path.is_file()
@@ -461,10 +455,49 @@ def create_execution_manifest(
             semantic_preflight_require_fresh and existing_manifest is None
         ),
     )
+    if existing_manifest is not None:
+        # A v2 work package is its own immutable execution authority.  Resume
+        # must not rebuild either identity from the changing checkout: source
+        # definitions and the executor bundle were frozen at first creation.
+        # The exact request/target/preflight/family lineage is still checked
+        # below, so this does not turn resume into a compatibility path.
+        family_ref = existing_manifest.get("familyRef")
+        if not isinstance(family_ref, Mapping) or family_ref.get("ref") != recipe_ref:
+            raise ValueError("execution manifest familyRef drift")
+        if existing_manifest.get("semanticSelectionId") != semantic_selection_id:
+            raise ValueError("execution manifest semanticSelectionId drift")
+        if existing_manifest.get("retryOf") != normalized_retry_of:
+            raise ValueError("execution manifest retryOf drift")
+        if existing_manifest.get("targetSetRef") != target_set_ref:
+            raise ValueError("execution manifest targetSetRef drift")
+        if existing_manifest.get("targetSetDigest") != target_set_digest:
+            raise ValueError("execution manifest targetSetDigest drift")
+        if existing_manifest.get("semanticPreflightReceipt") != normalized_preflight_binding:
+            raise ValueError("execution manifest semantic preflight binding drift")
+        request_path = execution_request_path(identity.execution_id)
+        if not request_path.is_file() or read_json(request_path) != request:
+            raise ValueError("execution request is immutable; create a new sequence")
+        return existing_manifest
+
+    if not recipe_file.is_file():
+        raise FileNotFoundError(f"recipeRef does not exist: {recipe_ref}")
+    recipe_payload = yaml.safe_load(recipe_file.read_text(encoding="utf-8"))
+    if not isinstance(recipe_payload, dict):
+        raise ValueError(f"recipe must be an object: {recipe_file}")
+    from content.execution.planning.semantic_selection import semantic_manifest_identity
+
+    semantic_identity = semantic_manifest_identity(
+        recipe_payload,
+        semantic_selection_id=semantic_selection_id,
+        retry_of=normalized_retry_of,
+    )
+    source_identity = current_source_definition_snapshot().to_document()
+    execution_bundle_identity = current_execution_bundle_identity().to_document()
     candidate = {
         "executionId": identity.execution_id,
         "familyRef": {"ref": recipe_ref, "sha256": _file_sha256(recipe_file)},
-        "sourceDigest": current_source_digest().to_document(),
+        "sourceDigest": source_identity,
+        "executionBundle": execution_bundle_identity,
         **semantic_identity,
         "requestRef": REQUEST_REF,
         "targetSetRef": target_set_ref,
@@ -473,31 +506,6 @@ def create_execution_manifest(
     }
     if normalized_preflight_binding is not None:
         candidate["semanticPreflightReceipt"] = normalized_preflight_binding
-    if existing_manifest is not None:
-        existing = existing_manifest
-        immutable_keys = (
-            "executionId",
-            "familyRef",
-            "sourceDigest",
-            "modelBinding",
-            "runtimeProfileId",
-            "runtimeProfileDigest",
-            "semanticSelectionId",
-            "semanticRuntime",
-            "semanticPreflightReceipt",
-            "requestRef",
-            "targetSetRef",
-            "targetSetDigest",
-            "retryOf",
-        )
-        drift = [key for key in immutable_keys if existing.get(key) != candidate.get(key)]
-        if drift:
-            raise ValueError(
-                f"executionId {identity.execution_id} already exists with different "
-                f"immutable fields: {', '.join(drift)}; create a new sequence and retryOf"
-            )
-        return existing
-
     ensure_execution_work_package_layout(identity.execution_id)
     request_path = execution_request_path(identity.execution_id)
     if request_path.is_file():
@@ -523,11 +531,24 @@ def load_frozen_execution_manifest(execution_id: str) -> dict[str, Any]:
         raise ValueError(f"execution manifest is not an object: {manifest_path}")
     if manifest.get("executionId") != validate_execution_id(execution_id):
         raise ValueError(f"execution manifest identity mismatch: {manifest_path}")
+    from content.execution.execution_terminal import load_terminal_execution_evidence
     from core.schema import assert_valid
 
+    legacy = "executionBundle" not in manifest
+    if legacy:
+        terminal = load_terminal_execution_evidence(manifest_path.parent)
+        if terminal is None:
+            raise ExecutionSourceDigestDriftError(
+                "GATE_BLOCK DATA.EXECUTION.SOURCE_IDENTITY_MIGRATION_REQUIRED: "
+                "legacy nonterminal execution cannot resume"
+            )
+        if manifest.get("executionId") != validate_execution_id(execution_id):
+            raise ValueError(f"execution manifest identity mismatch: {manifest_path}")
+        return manifest
     assert_valid(manifest, "execution", "content_execution_manifest", label=f"execution_manifest:{execution_id}")
     try:
-        SourceDigest.from_document(manifest.get("sourceDigest"))
+        SourceDefinitionSnapshot.from_document(manifest.get("sourceDigest"))
+        ExecutionBundleIdentity.from_document(manifest.get("executionBundle"))
     except SourceDigestError as exc:
         raise ValueError(f"execution manifest sourceDigest invalid: {exc}") from exc
     if manifest.get("targetSetDigest") != frozen_target_set_digest(execution_id):
@@ -538,11 +559,13 @@ def load_frozen_execution_manifest(execution_id: str) -> dict[str, Any]:
 def load_execution_manifest(execution_id: str) -> dict[str, Any]:
     """Load a resumable execution and require its repository inputs to be unchanged."""
     manifest = load_frozen_execution_manifest(execution_id)
-    source_digest = SourceDigest.from_document(manifest.get("sourceDigest"))
-    if source_digest != current_source_digest():
+    if "executionBundle" not in manifest:
         raise ExecutionSourceDigestDriftError(
-            "execution manifest sourceDigest drift; create a new sequence with retryOf"
+            "GATE_BLOCK DATA.EXECUTION.SOURCE_IDENTITY_MIGRATION_REQUIRED: "
+            "legacy terminal execution is read-only"
         )
+    SourceDefinitionSnapshot.from_document(manifest.get("sourceDigest"))
+    ExecutionBundleIdentity.from_document(manifest.get("executionBundle"))
     return manifest
 
 

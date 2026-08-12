@@ -42,7 +42,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
     ) -> tuple[dict[str, str], dict[str, object]]:
         resolved_last_good = last_good or (
             to_candidate
-            if stage == "full" and decision in {"continue", "rolled_back"}
+            if stage == "100" and decision in {"continue", "rolled_back"}
             else from_candidate
         )
         result = hosted_release_ledger.commit(
@@ -52,7 +52,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 "service": self._SERVICE,
                 "fromCandidateDigest": from_candidate,
                 "toCandidateDigest": to_candidate,
-                "step": {"gray-initial": "5", "carry-on": "25", "full": "100"}[stage],
+                "step": {"canary": "0", "50": "50", "100": "100"}[stage],
                 "stage": stage,
                 "triggerStage": trigger_stage or stage,
                 "fromReleaseEvidenceRef": (
@@ -112,19 +112,19 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             state_dir = Path(temporary)
             first, gray_receipt = self._commit(
                 state_dir=state_dir,
-                stage="gray-initial",
+                stage="canary",
                 decision="continue",
                 generation=0,
             )
             second, carry_receipt = self._commit(
                 state_dir=state_dir,
-                stage="carry-on",
+                stage="50",
                 decision="continue",
                 generation=1,
             )
             third, full_receipt = self._commit(
                 state_dir=state_dir,
-                stage="full",
+                stage="100",
                 decision="continue",
                 generation=2,
             )
@@ -132,7 +132,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
 
         self.assertEqual(
             [first["stage"], second["stage"], third["stage"]],
-            ["gray-initial", "carry-on", "full"],
+            ["canary", "50", "100"],
         )
         for receipt, expected_generation, expected_last_good in (
             (gray_receipt, 1, self._FROM_CANDIDATE),
@@ -171,22 +171,22 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             readback["receiptRef"],
             f"receipt:hosted:{full_receipt['receiptId']}",
         )
-        self.assertEqual(first["gray_initial_receipt_id"], gray_receipt["receiptId"])
-        self.assertEqual(first["carry_on_receipt_id"], "")
-        self.assertEqual(first["full_receipt_id"], "")
-        self.assertEqual(second["gray_initial_receipt_id"], gray_receipt["receiptId"])
-        self.assertEqual(second["carry_on_receipt_id"], carry_receipt["receiptId"])
-        self.assertEqual(second["full_receipt_id"], "")
-        self.assertEqual(third["gray_initial_receipt_id"], gray_receipt["receiptId"])
-        self.assertEqual(third["carry_on_receipt_id"], carry_receipt["receiptId"])
-        self.assertEqual(third["full_receipt_id"], full_receipt["receiptId"])
+        self.assertEqual(first["canary_receipt_id"], gray_receipt["receiptId"])
+        self.assertEqual(first["percent_50_receipt_id"], "")
+        self.assertEqual(first["percent_100_receipt_id"], "")
+        self.assertEqual(second["canary_receipt_id"], gray_receipt["receiptId"])
+        self.assertEqual(second["percent_50_receipt_id"], carry_receipt["receiptId"])
+        self.assertEqual(second["percent_100_receipt_id"], "")
+        self.assertEqual(third["canary_receipt_id"], gray_receipt["receiptId"])
+        self.assertEqual(third["percent_50_receipt_id"], carry_receipt["receiptId"])
+        self.assertEqual(third["percent_100_receipt_id"], full_receipt["receiptId"])
 
     def test_successful_and_failed_rollback_are_distinct_receipt_facts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             state_dir = Path(temporary)
             _, success = self._commit(
                 state_dir=state_dir,
-                stage="full",
+                stage="100",
                 decision="rolled_back",
                 generation=0,
                 from_candidate=self._TO_CANDIDATE,
@@ -194,7 +194,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             )
             _, failure = self._commit(
                 state_dir=state_dir,
-                stage="full",
+                stage="100",
                 decision="rollback_failed",
                 generation=1,
             )
@@ -258,25 +258,25 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             state_dir = Path(temporary)
             self._commit(
                 state_dir=state_dir,
-                stage="gray-initial",
+                stage="canary",
                 decision="continue",
                 generation=0,
             )
             self._commit(
                 state_dir=state_dir,
-                stage="carry-on",
+                stage="50",
                 decision="continue",
                 generation=1,
             )
             _, old_full = self._commit(
                 state_dir=state_dir,
-                stage="full",
+                stage="100",
                 decision="continue",
                 generation=2,
             )
             new_state, new_gray = self._commit(
                 state_dir=state_dir,
-                stage="gray-initial",
+                stage="canary",
                 decision="continue",
                 generation=3,
                 from_candidate=self._TO_CANDIDATE,
@@ -290,9 +290,11 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 for field in hosted_release_ledger.STAGE_RECEIPT_ID_FIELDS.values()
             },
             {
-                "gray_initial_receipt_id": new_gray["receiptId"],
-                "carry_on_receipt_id": "",
-                "full_receipt_id": "",
+                "canary_receipt_id": new_gray["receiptId"],
+                "percent_5_receipt_id": "",
+                "percent_20_receipt_id": "",
+                "percent_50_receipt_id": "",
+                "percent_100_receipt_id": "",
             },
         )
 
@@ -301,14 +303,14 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             state_dir = Path(temporary)
             first_state, _ = self._commit(
                 state_dir=state_dir,
-                stage="gray-initial",
+                stage="canary",
                 decision="continue",
                 generation=0,
             )
             with self.assertRaisesRegex(RuntimeError, "evidence drifted"):
                 self._commit(
                     state_dir=state_dir,
-                    stage="carry-on",
+                    stage="50",
                     decision="continue",
                     generation=1,
                     artifact_digest=self._NEXT_CANDIDATE,
@@ -322,20 +324,20 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             state_dir = Path(temporary)
             _, gray = self._commit(
                 state_dir=state_dir,
-                stage="gray-initial",
+                stage="canary",
                 decision="continue",
                 generation=0,
             )
             _, carry = self._commit(
                 state_dir=state_dir,
-                stage="carry-on",
+                stage="50",
                 decision="continue",
                 generation=1,
             )
             rollback_state, rollback = self._commit(
                 state_dir=state_dir,
-                stage="full",
-                trigger_stage="carry-on",
+                stage="100",
+                trigger_stage="50",
                 decision="rolled_back",
                 generation=2,
                 from_candidate=self._TO_CANDIDATE,
@@ -346,14 +348,14 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
 
         self.assertNotEqual(carry["receiptId"], rollback["receiptId"])
         self.assertEqual(
-            rollback_state["gray_initial_receipt_id"],
+            rollback_state["canary_receipt_id"],
             gray["receiptId"],
         )
         self.assertEqual(
-            rollback_state["carry_on_receipt_id"],
+            rollback_state["percent_50_receipt_id"],
             rollback["receiptId"],
         )
-        self.assertEqual(rollback_state["full_receipt_id"], "")
+        self.assertEqual(rollback_state["percent_100_receipt_id"], "")
         self.assertEqual(readback["state"], rollback_state)
 
     @staticmethod
@@ -368,18 +370,18 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             state_dir = Path(temporary)
             state, _ = self._commit(
                 state_dir=state_dir,
-                stage="gray-initial",
+                stage="canary",
                 decision="continue",
                 generation=0,
             )
-            state.pop("full_receipt_id")
+            state.pop("percent_100_receipt_id")
             self._write_state(state_dir / f"{self._SERVICE}.state", state)
             with self.assertRaisesRegex(RuntimeError, "shape is not canonical"):
                 hosted_release_ledger.fetch(state_dir, self._SERVICE)
             with self.assertRaisesRegex(RuntimeError, "shape is not canonical"):
                 self._commit(
                     state_dir=state_dir,
-                    stage="carry-on",
+                    stage="50",
                     decision="continue",
                     generation=1,
                 )
@@ -389,11 +391,11 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             state_dir = Path(temporary)
             state, _ = self._commit(
                 state_dir=state_dir,
-                stage="gray-initial",
+                stage="canary",
                 decision="continue",
                 generation=0,
             )
-            state["carry_on_receipt_id"] = "f" * 64
+            state["percent_50_receipt_id"] = "f" * 64
             self._write_state(state_dir / f"{self._SERVICE}.state", state)
             with self.assertRaisesRegex(RuntimeError, "receipt is missing"):
                 hosted_release_ledger.fetch(state_dir, self._SERVICE)
@@ -402,7 +404,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             state_dir = Path(temporary)
             state, current = self._commit(
                 state_dir=state_dir,
-                stage="gray-initial",
+                stage="canary",
                 decision="continue",
                 generation=0,
             )
@@ -411,7 +413,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 {
                     "fromCandidateDigest": self._NEXT_CANDIDATE,
                     "toCandidateDigest": self._DIGEST,
-                    "triggerStage": "carry-on",
+                    "triggerStage": "50",
                     "fromReleaseEvidenceRef": (
                         "ghcr.io/owner/repo/release-artifact@"
                         + self._NEXT_CANDIDATE
@@ -429,7 +431,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 json.dumps(unrelated, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
-            state["carry_on_receipt_id"] = unrelated_id
+            state["percent_50_receipt_id"] = unrelated_id
             self._write_state(state_dir / f"{self._SERVICE}.state", state)
             with self.assertRaisesRegex(RuntimeError, "candidate-transaction bound"):
                 hosted_release_ledger.fetch(state_dir, self._SERVICE)
@@ -440,12 +442,12 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 state_dir = Path(temporary)
                 state, current = self._commit(
                     state_dir=state_dir,
-                    stage="gray-initial",
+                    stage="canary",
                     decision="continue",
                     generation=0,
                 )
                 history = dict(current)
-                history["triggerStage"] = "carry-on"
+                history["triggerStage"] = "50"
                 history.pop("receiptId")
                 if mutation == "authority":
                     history["authority"] = "untrusted-plane"
@@ -460,7 +462,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                     json.dumps(history, sort_keys=True) + "\n",
                     encoding="utf-8",
                 )
-                state["carry_on_receipt_id"] = history_id
+                state["percent_50_receipt_id"] = history_id
                 self._write_state(state_dir / f"{self._SERVICE}.state", state)
                 with self.assertRaisesRegex(
                     RuntimeError,
@@ -477,9 +479,9 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                     "service": self._SERVICE,
                     "fromCandidateDigest": self._FROM_CANDIDATE,
                     "toCandidateDigest": self._TO_CANDIDATE,
-                    "step": "5",
-                    "stage": "gray-initial",
-                    "triggerStage": "gray-initial",
+                    "step": "0",
+                    "stage": "canary",
+                    "triggerStage": "canary",
                     "fromReleaseEvidenceRef": (
                         "ghcr.io/owner/repo/release-artifact@"
                         + self._FROM_CANDIDATE
@@ -523,7 +525,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 )
 
         malformed = copy.deepcopy(readback)
-        malformed["state"]["carry_on_receipt_id"] = "not-a-receipt"
+        malformed["state"]["percent_50_receipt_id"] = "not-a-receipt"
         with self.assertRaisesRegex(RuntimeError, "history is invalid"):
             stackctl._validate_hosted_release_readback(
                 malformed,
@@ -531,8 +533,8 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
             )
 
         wrong_slot = copy.deepcopy(readback)
-        wrong_slot["state"]["gray_initial_receipt_id"] = ""
-        wrong_slot["state"]["carry_on_receipt_id"] = wrong_slot["state"][
+        wrong_slot["state"]["canary_receipt_id"] = ""
+        wrong_slot["state"]["percent_50_receipt_id"] = wrong_slot["state"][
             "receipt_id"
         ]
         with self.assertRaisesRegex(RuntimeError, "not trigger-stage bound"):
@@ -550,9 +552,9 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                     "service": self._SERVICE,
                     "fromCandidateDigest": self._FROM_CANDIDATE,
                     "toCandidateDigest": self._TO_CANDIDATE,
-                    "step": "5",
-                    "stage": "gray-initial",
-                    "triggerStage": "gray-initial",
+                    "step": "0",
+                    "stage": "canary",
+                    "triggerStage": "canary",
                     "fromReleaseEvidenceRef": (
                         "ghcr.io/owner/repo/release-artifact@"
                         + self._FROM_CANDIDATE
@@ -576,7 +578,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 },
             )
         invalid_state = dict(readback["state"])
-        invalid_state.pop("full_receipt_id")
+        invalid_state.pop("percent_100_receipt_id")
         with tempfile.TemporaryDirectory() as cache_temporary:
             cache_dir = Path(cache_temporary)
             with (
@@ -623,7 +625,7 @@ class HostedReleaseReceiptContractTest(unittest.TestCase):
                 from_candidate_digest=self._FROM_CANDIDATE,
                 to_candidate_digest=self._TO_CANDIDATE,
                 step="5",
-                stage="gray-initial",
+                stage="canary",
                 decision="continue",
                 artifact_digest=self._DIGEST,
                 expected_generation=0,

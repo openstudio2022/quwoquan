@@ -33,6 +33,7 @@ extension _SearchNetworkResultsPageStateLoading
         _locationResults = const <SearchHit>[];
         _userResults = const <SearchHit>[];
         _contentResults = const <PostSearchItemView>[];
+        _pageItems = const <SearchPageResultItem>[];
         _contentCloudMetaById = const <String, _ContentCloudMeta>{};
         _relatedTerms = const <String>[];
       }
@@ -180,6 +181,7 @@ extension _SearchNetworkResultsPageStateLoading
         _locationResults = _locationHitsFromResponse(response);
         _userResults = _userHitsFromResponse(response);
         _contentResults = _contentItemsFromResponse(response);
+        _pageItems = response.pageItems;
         _relatedTerms = response.relatedTerms;
         _degradeSignals = response.degradeSignals;
         _searchRequestId = response.searchRequestId;
@@ -198,11 +200,12 @@ extension _SearchNetworkResultsPageStateLoading
         action: activeTabId,
       );
       _waitController.complete(generation);
-      final itemCount =
-          _contentResults.length +
-          _locationResults.length +
-          _groupResults.length +
-          _userResults.length;
+      final itemCount = _pageItems.isNotEmpty
+          ? _pageItems.length
+          : _contentResults.length +
+                _locationResults.length +
+                _groupResults.length +
+                _userResults.length;
       ref
           .read(pageLifecycleObservabilityProvider)
           .recordPageState(

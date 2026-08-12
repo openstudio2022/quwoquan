@@ -30,11 +30,12 @@ type MongoActiveSupplyReader struct {
 type MongoActiveSupplyReaderOption func(*MongoActiveSupplyReader)
 
 type activeSupplyReleaseState struct {
-	Environment     string `bson:"environment"`
-	SourceOwner     string `bson:"sourceOwner"`
-	Status          string `bson:"status"`
-	ActiveReleaseID string `bson:"activeReleaseId"`
-	ManifestDigest  string `bson:"manifestDigest"`
+	Environment     string    `bson:"environment"`
+	SourceOwner     string    `bson:"sourceOwner"`
+	Status          string    `bson:"status"`
+	ActiveReleaseID string    `bson:"activeReleaseId"`
+	ManifestDigest  string    `bson:"manifestDigest"`
+	ActivatedAt     time.Time `bson:"activatedAt"`
 }
 
 func WithPlayableVideoSupplyReader(
@@ -152,8 +153,8 @@ func (r *MongoActiveSupplyReader) readActiveSupplyReleaseState(
 		},
 		options.FindOne().SetProjection(bson.M{
 			"environment": 1, "sourceOwner": 1, "status": 1,
-			"activeReleaseId": 1, "manifestDigest": 1,
-		}),
+			"activeReleaseId": 1, "manifestDigest": 1, "activatedAt": 1,
+		}).SetSort(bson.D{{Key: "activatedAt", Value: -1}}),
 	).Decode(&state)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {

@@ -2,7 +2,7 @@ package runtimeobservability
 
 import "testing"
 
-// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#open-011
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
 func TestCatalogFieldPrivacyRedactorEnforcesEveryAuthoredAction(t *testing.T) {
 	previous := CatalogFieldPrivacyPolicies()
 	t.Cleanup(func() { registerCatalogFieldPrivacyPolicies(previous) })
@@ -55,7 +55,7 @@ func TestCatalogFieldPrivacyRedactorEnforcesEveryAuthoredAction(t *testing.T) {
 	}
 }
 
-// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#open-011
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-001
 func TestCatalogFieldPrivacyRedactorUsesObjectPolicyAndFailsClosedForUnknownAction(t *testing.T) {
 	previous := CatalogFieldPrivacyPolicies()
 	t.Cleanup(func() { registerCatalogFieldPrivacyPolicies(previous) })

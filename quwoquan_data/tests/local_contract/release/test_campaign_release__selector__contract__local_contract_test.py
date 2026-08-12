@@ -8,8 +8,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from content.execution.campaign import submission_reconciliation as campaign_submission_reconciliation
-from content.release.canonical import campaign_release
+from content.execution.campaign import (
+    submission_reconciliation as campaign_submission_reconciliation,
+)
+from content.release.canonical import campaign_release, campaign_release_selection
 from content.release.canonical.campaign_release import (
     CampaignReleaseError,
     CampaignReleaseRoots,
@@ -114,7 +116,9 @@ def _scale_source_pool(
     *,
     source_revision: str,
 ) -> tuple[dict[str, object], str, dict[str, dict[str, object]]]:
-    evidence_root = output_root / "data/local/workspace/scale-source-pools/m100/evidence"
+    evidence_root = (
+        output_root / "data/local/workspace/scale-source-pools/m100/evidence"
+    )
     candidates: list[dict[str, object]] = []
     object_refs = {
         "homepage": "entities/地点/景区/测试实体",
@@ -140,66 +144,68 @@ def _scale_source_pool(
         rights = evidence(carrier, "rights")
         quality = evidence(carrier, "quality")
         playability = evidence(carrier, "playability") if carrier == "video" else None
-        candidates.append(
-            {
-                "candidateId": f"{carrier}-candidate-001",
-                "carrier": carrier,
-                "objectRef": object_refs[carrier],
-                "entityRef": "地点/景区/测试实体",
-                "observedEntityRef": "地点/景区/测试实体",
-                "sourceRevision": source_revision,
-                "sourceDigest": SOURCE_DIGEST,
-                "entityCatalogDigest": CATALOG_DIGEST,
-                "sourceUnitRef": source_unit[0],
-                "sourceUnitDigest": source_unit[1],
-                "sourceUnitFileSha256": source_unit[2],
-                "provider": "fixture_provider",
-                "contentSha256": "sha256:" + {
-                    "homepage": "1",
-                    "article": "2",
-                    "image": "3",
-                    "video": "4",
-                }[carrier]
-                * 64,
-                "acquisitionStatus": "acquired",
-                "acquisitionRef": acquisition[0],
-                "acquisitionDigest": acquisition[1],
-                "acquisitionFileSha256": acquisition[2],
-                "rightsStatus": "verified",
-                "distributionDecision": "commercial_allowed",
-                "rightsRef": rights[0],
-                "rightsDigest": rights[1],
-                "rightsFileSha256": rights[2],
-                "qualityStatus": "passed",
-                "qualityRef": quality[0],
-                "qualityDigest": quality[1],
-                "qualityFileSha256": quality[2],
-                "generated": False,
-                "playabilityRef": None if playability is None else playability[0],
-                "playabilityDigest": None if playability is None else playability[1],
-                "playabilityFileSha256": None if playability is None else playability[2],
-                "videoReadiness": None
-                if carrier != "video"
-                else {
-                    "playable": True,
-                    "motion": True,
-                    "premiumEligible": True,
-                    "playCount": 100,
-                    "likeCount": 20,
-                    "commentCount": 5,
-                    "shareCount": 3,
-                    "favoriteCount": 7,
-                    "observedAt": "2026-08-05T00:00:00+00:00",
-                    "popularityPercentile": 0.9,
-                    "comparisonBucket": {
-                        "provider": "fixture_provider",
-                        "topic": "fixture-topic",
-                        "timeBucket": "2026-08-05",
-                        "candidateCount": 2,
-                    },
+        candidate = {
+            "candidateId": f"{carrier}-candidate-001",
+            "carrier": carrier,
+            "objectRef": object_refs[carrier],
+            "entityRef": "地点/景区/测试实体",
+            "observedEntityRef": "地点/景区/测试实体",
+            "sourceRevision": source_revision,
+            "sourceDigest": SOURCE_DIGEST,
+            "entityCatalogDigest": CATALOG_DIGEST,
+            "sourceUnitRef": source_unit[0],
+            "sourceUnitDigest": source_unit[1],
+            "sourceUnitFileSha256": source_unit[2],
+            "provider": "fixture_provider",
+            "contentSha256": "sha256:"
+            + {
+                "homepage": "1",
+                "article": "2",
+                "image": "3",
+                "video": "4",
+            }[carrier]
+            * 64,
+            "acquisitionStatus": "acquired",
+            "acquisitionRef": acquisition[0],
+            "acquisitionDigest": acquisition[1],
+            "acquisitionFileSha256": acquisition[2],
+            "rightsStatus": "verified",
+            "distributionDecision": "commercial_allowed",
+            "rightsRef": rights[0],
+            "rightsDigest": rights[1],
+            "rightsFileSha256": rights[2],
+            "qualityStatus": "passed",
+            "qualityRef": quality[0],
+            "qualityDigest": quality[1],
+            "qualityFileSha256": quality[2],
+            "generated": False,
+            "playabilityRef": None if playability is None else playability[0],
+            "playabilityDigest": None if playability is None else playability[1],
+            "playabilityFileSha256": None if playability is None else playability[2],
+            "videoReadiness": None
+            if carrier != "video"
+            else {
+                "playable": True,
+                "motion": True,
+                "premiumEligible": True,
+                "playCount": 100,
+                "likeCount": 20,
+                "commentCount": 5,
+                "shareCount": 3,
+                "favoriteCount": 7,
+                "observedAt": "2026-08-05T00:00:00+00:00",
+                "popularityPercentile": 0.9,
+                "comparisonBucket": {
+                    "provider": "fixture_provider",
+                    "topic": "fixture-topic",
+                    "timeBucket": "2026-08-05",
+                    "candidateCount": 2,
                 },
-            }
-        )
+            },
+        }
+        if carrier in {"homepage", "article"}:
+            candidate["sourceReadyEvidenceRootRef"] = "."
+        candidates.append(candidate)
     pool_stable: dict[str, object] = {
         "schema": "quwoquan_data.scale_source_pool",
         "poolId": "campaign-release-selector-m100-pool",
@@ -208,9 +214,8 @@ def _scale_source_pool(
         "sourceDigest": SOURCE_DIGEST,
         "entityCatalogDigest": CATALOG_DIGEST,
         "createdAt": "2026-08-05T00:00:00+00:00",
-        "requiredNewCandidateCounts": [
-            {"carrier": carrier, "minimumCandidateCount": 1}
-            for carrier in CARRIERS
+        "waveCandidateCounts": [
+            {"carrier": carrier, "minimumCandidateCount": 1} for carrier in CARRIERS
         ],
         "candidates": candidates,
     }
@@ -304,6 +309,7 @@ def _fixture(tmp_path: Path) -> dict[str, object]:
             "requiredWorkers": 1,
             "partitionCount": 16,
             "capacityPlanDigest": "sha256:" + "6" * 64,
+            "workerHostSetBinding": None,
             "topic": None,
             "targetNames": ["测试实体"],
             "sourceProviders": [],
@@ -629,6 +635,194 @@ def test_campaign_release__derives_four_lanes_and_retry_lineage__local_contract(
     assert attestation_path.read_bytes() == first_bytes
 
 
+def test_retry_lineage_consumes_preserved_unadopted_post_publish_boundary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = _fixture(tmp_path)
+    roots = fixture["roots"]
+    campaign_root = fixture["campaignRoot"]
+    execution_ids = fixture["executionIds"]
+    assert isinstance(roots, CampaignReleaseRoots)
+    assert isinstance(campaign_root, Path)
+    assert isinstance(execution_ids, dict)
+    carrier = "article"
+    current_id = execution_ids[carrier]
+    predecessor_ids = {
+        lane: _execution_id(lane, 200) for lane in CARRIERS
+    }
+    submission = json.loads(
+        (campaign_root / "submissions" / f"{current_id}.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    submission["retryOf"] = predecessor_ids[carrier]
+    submission["predecessorReconciliation"] = {
+        "receiptRef": "data/local/reconciliation/post-publish.json",
+        "receiptDigest": "sha256:" + "3" * 64,
+    }
+    manifest_path = roots.tasks_root / current_id / "execution_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["retryOf"] = predecessor_ids[carrier]
+    _write(manifest_path, manifest)
+    plan = json.loads(
+        (campaign_root / "campaign_plan.json").read_text(encoding="utf-8")
+    )
+    predecessor_rows: dict[str, dict[str, object]] = {}
+    for lane in CARRIERS:
+        current = json.loads(
+            (
+                campaign_root
+                / "submissions"
+                / f"{execution_ids[lane]}.json"
+            ).read_text(encoding="utf-8")
+        )
+        predecessor_rows[lane] = {
+            **current,
+            "rootExecutionId": predecessor_ids["homepage"],
+            "executionId": predecessor_ids[lane],
+            "retryOf": _execution_id(lane, 199),
+        }
+    receipt = {
+        "reason": "post_publish_partial_terminal",
+        "rootExecutionId": predecessor_ids["homepage"],
+        "observedSourceIdentity": {
+            "sourceRevision": plan["sourceRevision"],
+            "sourceDigest": submission["sourceDigest"],
+            "entityCatalogDigest": plan["entityCatalogDigest"],
+        },
+        "submissions": predecessor_rows,
+        "executionEvidence": {
+            "lanes": [],
+            "partialPublish": {
+                "carrier": "article",
+                "executionId": predecessor_ids["article"],
+                "objectRef": "article/攻略/都江堰市/1",
+                "researchAcceptedCount": 1,
+                "finalizedObjectCount": 0,
+            },
+            "allLanesFinalizedCount": 0,
+            "immutableReleaseEvidencePresent": False,
+            "reviewedClosureAdoptionPresent": False,
+            "evidenceDisposition": "preserved_unadopted",
+            "excludedFromFinalized": True,
+            "eligibleForRelease": False,
+        },
+    }
+    receipt_path = roots.output_root / "data/local/reconciliation/post-publish.json"
+    monkeypatch.setattr(
+        campaign_release_selection,
+        "load_reconciliation_reference",
+        lambda *_args, **_kwargs: (receipt, receipt_path),
+    )
+
+    lineage = campaign_release_selection.retry_lineage(
+        carrier,
+        current_id,
+        submission,
+        plan,
+        roots=roots,
+    )
+
+    assert lineage == [current_id, predecessor_ids[carrier]]
+    receipt["executionEvidence"]["eligibleForRelease"] = True
+    with pytest.raises(CampaignReleaseError) as caught:
+        campaign_release_selection.retry_lineage(
+            carrier,
+            current_id,
+            submission,
+            plan,
+            roots=roots,
+        )
+    assert caught.value.code == "DATA.CAMPAIGN.RELEASE_RETRY_IDENTITY_DRIFT"
+
+
+def test_campaign_release__keeps_prior_source_epoch_as_retry_provenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = _fixture(tmp_path)
+    roots = fixture["roots"]
+    assert isinstance(roots, CampaignReleaseRoots)
+    predecessor_id = fixture["olderImageId"]
+    predecessor_root = roots.tasks_root / predecessor_id
+    target_path = predecessor_root / "0.plan/target_set.json"
+    manifest_path = predecessor_root / "execution_manifest.json"
+    target = json.loads(target_path.read_text(encoding="utf-8"))
+    target["entityCatalogDigest"] = "sha256:" + "8" * 64
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["sourceDigest"] = {
+        "algorithm": "sha256",
+        "digest": "sha256:" + "9" * 64,
+        "inputs": ["quwoquan_data/reference/travel"],
+    }
+    manifest["targetSetDigest"] = _digest(target, prefix=False)
+    _write(target_path, target)
+    _write(manifest_path, manifest)
+
+    def aggregate(**kwargs: object) -> dict[str, object]:
+        release = Path(kwargs["release_root"]) / str(kwargs["release_id"])
+        _write(release / "payload/release.json", {"releaseId": RELEASE_ID})
+        return {
+            "schema": "quwoquan_data.aggregate_release_result",
+            "releaseId": RELEASE_ID,
+            "releaseRoot": str(release),
+            "executionIds": list(kwargs["execution_ids"]),
+            "canonicalMerkle": "sha256:" + "e" * 64,
+            "idempotent": False,
+        }
+
+    monkeypatch.setattr(campaign_release, "build_aggregate_release", aggregate)
+    result = build_campaign_release(
+        root_execution_id=str(fixture["rootId"]),
+        release_id=RELEASE_ID,
+        roots=roots,
+    )
+    attestation = json.loads(
+        Path(result["campaignSelectionAttestation"]).read_text(encoding="utf-8")
+    )
+
+    assert attestation["sourceDigest"] == SOURCE_DIGEST
+    assert attestation["entityCatalogDigest"] == CATALOG_DIGEST
+    assert attestation["retryLineage"]["image"] == [
+        fixture["executionIds"]["image"],
+        predecessor_id,
+    ]
+
+
+def test_campaign_release__rejects_retry_target_scope_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fixture = _fixture(tmp_path)
+    roots = fixture["roots"]
+    assert isinstance(roots, CampaignReleaseRoots)
+    predecessor_root = roots.tasks_root / fixture["olderImageId"]
+    target_path = predecessor_root / "0.plan/target_set.json"
+    manifest_path = predecessor_root / "execution_manifest.json"
+    target = json.loads(target_path.read_text(encoding="utf-8"))
+    target["targets"][0]["name"] = "另一个实体"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["targetSetDigest"] = _digest(target, prefix=False)
+    _write(target_path, target)
+    _write(manifest_path, manifest)
+
+    monkeypatch.setattr(
+        campaign_release,
+        "build_aggregate_release",
+        lambda **_kwargs: pytest.fail("aggregate must not run"),
+    )
+    with pytest.raises(CampaignReleaseError) as caught:
+        build_campaign_release(
+            root_execution_id=str(fixture["rootId"]),
+            release_id=RELEASE_ID,
+            roots=roots,
+        )
+
+    assert caught.value.code == "DATA.CAMPAIGN.RELEASE_RETRY_IDENTITY_DRIFT"
+    assert "retry target scope drift" in str(caught.value)
+
+
 def test_campaign_release__conflicting_self_consistent_selection_blocks_before_aggregate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -763,7 +957,9 @@ def test_campaign_release__existing_release_without_selection_backfills_attestat
     def idempotent_aggregate(**kwargs: object) -> dict[str, object]:
         nonlocal aggregate_calls
         aggregate_calls += 1
-        assert Path(kwargs["release_root"]) / str(kwargs["release_id"]) == target_release
+        assert (
+            Path(kwargs["release_root"]) / str(kwargs["release_id"]) == target_release
+        )
         return {
             "schema": "quwoquan_data.aggregate_release_result",
             "releaseId": RELEASE_ID,
@@ -856,9 +1052,7 @@ def test_campaign_release_accepts_audited_submission_only_predecessor_for_lineag
     monkeypatch.setattr(
         campaign_submission_reconciliation,
         "current_source_digest",
-        lambda **_kwargs: SimpleNamespace(
-            to_document=lambda: dict(source_document)
-        ),
+        lambda **_kwargs: SimpleNamespace(to_document=lambda: dict(source_document)),
     )
     monkeypatch.setattr(
         campaign_submission_reconciliation,
@@ -879,13 +1073,13 @@ def test_campaign_release_accepts_audited_submission_only_predecessor_for_lineag
         output_root=roots.output_root,
     )
     image_path = (
-        current_campaign
-        / "submissions"
-        / f"{fixture['executionIds']['image']}.json"
+        current_campaign / "submissions" / f"{fixture['executionIds']['image']}.json"
     )
     image = json.loads(image_path.read_text(encoding="utf-8"))
     image_stable = {
-        key: value for key, value in image.items() if key not in {"requestDigest", "submittedAt"}
+        key: value
+        for key, value in image.items()
+        if key not in {"requestDigest", "submittedAt"}
     }
     image_stable["predecessorReconciliation"] = reference
     image = {

@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import pytest
-
 from content.execution.preflight.receipt import build_semantic_preflight_receipt
 from content.execution.preflight.selection import (
     bind_semantic_preflight_selection,
@@ -13,12 +12,21 @@ from content.execution.scale.capacity_plan import (
     CAPACITY_PLAN_INVALID,
     CAPACITY_SHORTFALL,
     PREDECESSOR_IDENTITY_DRIFT,
+    REMOTE_HOST_EXECUTOR_UNAVAILABLE,
     GovernedCapacityPlanError,
     build_governed_capacity_plan,
     throughput_basis_digest,
 )
+from content.execution.scale.host_set import (
+    GovernedHostSetError,
+    build_governed_host_set,
+    write_governed_host_set_create_once,
+)
+from content.execution.scale.source_capsule import (
+    build_governed_host_source_capsule,
+    write_governed_host_source_capsule_create_once,
+)
 from core.schema import assert_valid
-
 
 CARRIERS = ("homepage", "article", "image", "video")
 
@@ -33,15 +41,6 @@ def _preflight(*, effective_concurrency: int = 8) -> dict[str, object]:
             "provider": "cursor_sdk",
             "model": "auto",
             "runtime": "local",
-        },
-        "reliableTaskFleet": {
-            "checked": True,
-            "ready": True,
-            "target": "local-contract",
-            "mongo": True,
-            "redis": True,
-            "owned": True,
-            "issues": [],
         },
         "ready": True,
         "issues": [],
@@ -65,7 +64,16 @@ def _preflight(*, effective_concurrency: int = 8) -> dict[str, object]:
         },
         "startupRequested": True,
         "soakRequested": True,
-        "workspaceSmokeRequested": False,
+        "workspaceSmokeRequested": True,
+        "workspaceSmoke": {
+            "ready": True,
+            "workspaceCount": 4,
+            "successCount": 4,
+            "configuredConcurrency": 4,
+            "effectiveConcurrency": 4,
+            "cleanupStatus": "cleaned",
+            "issues": [],
+        },
         "ready": True,
     }
     return build_semantic_preflight_receipt(selection=selection, report=report)
@@ -108,9 +116,62 @@ def _promotion(*, target_scale: str = "M100") -> dict[str, object]:
     }
 
 
+def _host_set(
+    *,
+    effective_concurrency: int = 8,
+    host_count: int = 2,
+) -> dict[str, object]:
+    first = max(1, effective_concurrency // 2 - 1)
+    second = effective_concurrency - first
+    capsule = build_governed_host_source_capsule(
+        capsule_id="source-snapshot-m1000",
+        source_revision="sha256:" + "1" * 64,
+        source_digest={
+            "algorithm": "sha256",
+            "digest": "sha256:" + "2" * 64,
+            "inputs": ["quwoquan_data/reference"],
+        },
+        entity_catalog_digest="sha256:" + "3" * 64,
+        executor_bundle_ref="data/executor-bundles/content-worker",
+        executor_bundle_digest="sha256:" + "6" * 64,
+        executor_bundle_file_sha256="sha256:" + "a" * 64,
+    )
+    common = {
+        "sourceCapsule": capsule,
+        "mongoTransportDigest": "sha256:" + "8" * 64,
+        "redisTransportDigest": "sha256:" + "9" * 64,
+    }
+    hosts = [
+        {
+            "hostScopeId": "worker-alpha",
+            "preflightReceipt": _preflight(
+                effective_concurrency=(
+                    effective_concurrency if host_count == 1 else first
+                )
+            ),
+            **common,
+        }
+    ]
+    if host_count == 2:
+        hosts.append(
+            {
+                "hostScopeId": "worker-beta",
+                "preflightReceipt": _preflight(effective_concurrency=second),
+                **common,
+            }
+        )
+    return build_governed_host_set(
+        host_set_id="m1000-workers",
+        source_revision="sha256:" + "1" * 64,
+        source_digest="sha256:" + "2" * 64,
+        entity_catalog_digest="sha256:" + "3" * 64,
+        hosts=hosts,
+    )
+
+
 def test_m1000_plan_uses_nearest_rank_p10_and_deterministic_partitions() -> None:
-    receipt = _preflight(effective_concurrency=8)
     now = datetime.now(timezone.utc)
+    host_set = _host_set(effective_concurrency=8)
     plan = build_governed_capacity_plan(
         predecessor_promotion=_promotion(),
         target_scale="M1000",
@@ -120,7 +181,7 @@ def test_m1000_plan_uses_nearest_rank_p10_and_deterministic_partitions() -> None
             "image": 900,
             "video": 900,
         },
-        preflight_receipt=receipt,
+        worker_host_set=host_set,
         now=now,
     )
 
@@ -133,6 +194,18 @@ def test_m1000_plan_uses_nearest_rank_p10_and_deterministic_partitions() -> None
     assert [row["partitionCount"] for row in plan["carrierPlans"]] == [16] * 4
     assert plan["carrierPlans"][0]["p10PerSlotThroughput"] == 0.005
     assert plan["carrierPlans"][0]["requiredWorkers"] == 2
+    assert plan["workerHostSet"]["hostSetId"] == "m1000-workers"
+    assert {
+        assignment["hostScopeId"]
+        for row in plan["carrierPlans"]
+        for assignment in row["hostAssignments"]
+    } == {"worker-alpha", "worker-beta"}
+    for row in plan["carrierPlans"]:
+        assert sorted(
+            int(partition)
+            for assignment in row["hostAssignments"]
+            for partition in assignment["partitionKeys"]
+        ) == list(range(row["partitionCount"]))
     assert plan["carrierPlans"][0]["throughputSampleCount"] == 3
     assert_valid(plan, "execution", "governed_capacity_plan")
 
@@ -145,7 +218,7 @@ def test_m1000_plan_uses_nearest_rank_p10_and_deterministic_partitions() -> None
             "image": 900,
             "video": 900,
         },
-        preflight_receipt=receipt,
+        worker_host_set=host_set,
         now=now,
     )
     assert repeated == plan
@@ -155,8 +228,13 @@ def test_m10000_uses_seven_day_budget_and_m1000_predecessor() -> None:
     plan = build_governed_capacity_plan(
         predecessor_promotion=_promotion(target_scale="M1000"),
         target_scale="M10000",
-        carrier_deltas={carrier: 9_000 for carrier in CARRIERS},
-        preflight_receipt=_preflight(effective_concurrency=16),
+        carrier_deltas={
+            "homepage": 9_000,
+            "article": 9_000,
+            "image": 9_000,
+            "video": 900,
+        },
+        worker_host_set=_host_set(effective_concurrency=16),
     )
 
     assert plan["budgetSeconds"] == 604_800
@@ -175,11 +253,23 @@ def test_capacity_shortfall_is_typed_and_does_not_emit_a_plan() -> None:
             predecessor_promotion=promotion,
             target_scale="M1000",
             carrier_deltas={carrier: 1_000 for carrier in CARRIERS},
-            preflight_receipt=_preflight(effective_concurrency=8),
+            worker_host_set=_host_set(effective_concurrency=8),
         )
 
     assert captured.value.code == CAPACITY_SHORTFALL
     assert "requiredSlots=" in str(captured.value)
+
+
+def test_m1000_rejects_single_host_capacity() -> None:
+    with pytest.raises(GovernedCapacityPlanError) as captured:
+        build_governed_capacity_plan(
+            predecessor_promotion=_promotion(),
+            target_scale="M1000",
+            carrier_deltas={carrier: 900 for carrier in CARRIERS},
+            worker_host_set=_host_set(effective_concurrency=8, host_count=1),
+        )
+
+    assert captured.value.code == REMOTE_HOST_EXECUTOR_UNAVAILABLE
 
 
 @pytest.mark.parametrize(
@@ -198,7 +288,6 @@ def test_missing_zero_and_drift_inputs_fail_closed(
     mutation: str, expected_code: str
 ) -> None:
     promotion = _promotion()
-    receipt = _preflight()
     now = datetime.now(timezone.utc)
     if mutation == "missing_samples":
         promotion["capacityThroughputByCarrier"][0]["perSlotThroughputSamples"] = []
@@ -222,7 +311,7 @@ def test_missing_zero_and_drift_inputs_fail_closed(
             predecessor_promotion=promotion,
             target_scale="M1000",
             carrier_deltas={carrier: 900 for carrier in CARRIERS},
-            preflight_receipt=receipt,
+            worker_host_set=_host_set(effective_concurrency=8),
             now=now,
         )
 
@@ -239,9 +328,52 @@ def test_partition_count_is_power_of_two_and_capped_at_256() -> None:
         predecessor_promotion=promotion,
         target_scale="M1000",
         carrier_deltas={"homepage": 1_000, "article": 1, "image": 1, "video": 1},
-        preflight_receipt=_preflight(effective_concurrency=500),
+        worker_host_set=_host_set(effective_concurrency=500),
     )
 
     homepage = plan["carrierPlans"][0]
     assert homepage["requiredWorkers"] == 483
     assert homepage["partitionCount"] == 256
+
+
+def test_host_set_is_create_once_and_rejects_shared_receipt(tmp_path) -> None:
+    host_set = _host_set(effective_concurrency=8)
+    path = tmp_path / "host-set.json"
+    assert write_governed_host_set_create_once(path, host_set) == host_set
+    assert write_governed_host_set_create_once(path, host_set) == host_set
+
+    capsule_path = tmp_path / "source-capsule.json"
+    capsule = _host_set()["hosts"][0]
+    source_capsule = build_governed_host_source_capsule(
+        capsule_id=str(capsule["sourceCapsuleId"]),
+        source_revision="sha256:" + "1" * 64,
+        source_digest={
+            "algorithm": "sha256",
+            "digest": "sha256:" + "2" * 64,
+            "inputs": ["quwoquan_data/reference"],
+        },
+        entity_catalog_digest="sha256:" + "3" * 64,
+        executor_bundle_ref=str(capsule["executorBundleRef"]),
+        executor_bundle_digest=str(capsule["executorBundleDigest"]),
+        executor_bundle_file_sha256=str(capsule["executorBundleFileSha256"]),
+    )
+    assert write_governed_host_source_capsule_create_once(
+        capsule_path, source_capsule
+    ) == source_capsule
+    common = {
+        "sourceCapsule": source_capsule,
+        "mongoTransportDigest": "sha256:" + "8" * 64,
+        "redisTransportDigest": "sha256:" + "9" * 64,
+    }
+    receipt = _preflight(effective_concurrency=4)
+    with pytest.raises(GovernedHostSetError):
+        build_governed_host_set(
+            host_set_id="invalid-workers",
+            source_revision="sha256:" + "1" * 64,
+            source_digest="sha256:" + "2" * 64,
+            entity_catalog_digest="sha256:" + "3" * 64,
+            hosts=[
+                {"hostScopeId": "worker-alpha", "preflightReceipt": receipt, **common},
+                {"hostScopeId": "worker-beta", "preflightReceipt": receipt, **common},
+            ],
+        )

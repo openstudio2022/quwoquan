@@ -131,6 +131,7 @@
       "additionalProperties": false,
       "required": [
         "coverageEntityIdentity",
+        "canonicalEntityRef",
         "candidateName",
         "province",
         "city",
@@ -143,6 +144,7 @@
       ],
       "properties": {
         "coverageEntityIdentity": { "type": "string", "minLength": 1 },
+        "canonicalEntityRef": { "type": "string", "pattern": "^/entity/[^/]+/[^/]+/[^/]+$" },
         "candidateName": { "type": "string", "minLength": 1 },
         "province": { "type": "string", "minLength": 1 },
         "city": { "type": "string", "minLength": 1 },
@@ -151,11 +153,12 @@
         "source": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["sourceKind", "extractor", "sourceUrl", "observedAt"],
+          "required": ["sourceKind", "extractor", "sourceUrl", "resolvedTitle", "observedAt"],
           "properties": {
             "sourceKind": { "enum": ["wikipedia", "baidu_baike", "toutiao_baike"] },
             "extractor": { "enum": ["wikipedia_api", "baidu_baike_html", "toutiao_baike_html"] },
             "sourceUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+            "resolvedTitle": { "type": "string", "minLength": 1 },
             "observedAt": { "type": "string", "format": "date-time" }
           }
         },

@@ -118,8 +118,29 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                 candidate_dir / "packages/app/package-fingerprint.json"
             )
             fingerprint_path.parent.mkdir(parents=True)
+            report_dir = root / "package-report"
+            report_dir.mkdir()
+            report_path = report_dir / "report.json"
+            identity = {
+                "releaseInputClassification": "commercial_inputs",
+                "contractGraphDigest": f"sha256:{'f' * 64}",
+                "graphqlReadRegistry": {
+                    "schema": "stackctl-graphql-read-registry-package",
+                    "candidateDigest": baseline_id,
+                },
+            }
+            report_path.write_text(json.dumps(identity) + "\n", encoding="utf-8")
+            (candidate_dir / "manifest.json").write_text(
+                json.dumps(identity) + "\n",
+                encoding="utf-8",
+            )
             fingerprint_path.write_text(
-                json.dumps({"reportRef": "env/alpha/runs/original-package"})
+                json.dumps(
+                    {
+                        "reportRef": str(report_dir),
+                        **identity,
+                    }
+                )
                 + "\n",
                 encoding="utf-8",
             )
@@ -132,7 +153,12 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
             with (
                 mock.patch.object(
                     stackctl,
-                    "workspace_snapshot",
+                    "deployment_input_roots",
+                    return_value=[],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "materialize_package_input_capsule",
                     return_value=snapshot,
                 ),
                 mock.patch.object(
@@ -155,6 +181,8 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                     "load_candidate_manifest",
                     return_value={
                         "release": release_bindings,
+                        "releaseInputClassification": "commercial_inputs",
+                        "contractGraphDigest": f"sha256:{'f' * 64}",
                         "packageDigest": f"sha256:{'1' * 64}",
                         "buildInputDigest": f"sha256:{'2' * 64}",
                         "imageDigest": f"sha256:{'3' * 64}",
@@ -210,10 +238,133 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
             self.assertEqual(result["exitCode"], 0)
             self.assertEqual(
                 result["reportDir"],
-                "env/alpha/runs/original-package",
+                str(report_dir),
             )
             self.assertEqual(result["baselineId"], baseline_id)
+            self.assertEqual(
+                result["releaseInputClassification"],
+                "commercial_inputs",
+            )
+            self.assertEqual(
+                result["contractGraphDigest"],
+                f"sha256:{'f' * 64}",
+            )
             self.assertTrue(reuse_package.call_args.kwargs["include_services"])
+
+    def test_new_candidate_readback_failure_blocks_activation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate_dir = root / "candidate"
+            report_dir = root / "report"
+            baseline_id = f"sha256:{'a' * 64}"
+            release_bindings = {
+                "candidate": {"releaseId": "candidate"},
+                "rollback": {"releaseId": "rollback"},
+            }
+            manifest = {
+                "release": release_bindings,
+                "releaseInputClassification": "commercial_inputs",
+                "contractGraphDigest": f"sha256:{'f' * 64}",
+                "graphqlReadRegistry": {
+                    "schema": "stackctl-graphql-read-registry-package",
+                    "candidateDigest": baseline_id,
+                },
+                "packageDigest": f"sha256:{'1' * 64}",
+                "buildInputDigest": f"sha256:{'2' * 64}",
+                "imageDigest": f"sha256:{'3' * 64}",
+                "runtimeConfigDigest": f"sha256:{'4' * 64}",
+                "environmentRuntimeDigest": f"sha256:{'5' * 64}",
+                "runtimeSchemaVersion": "environment-runtime-package",
+                "observabilityLogSink": {},
+                "providerRuntime": {},
+            }
+
+            def materialize(
+                _args: argparse.Namespace,
+                *,
+                package_snapshot: dict[str, object] | None,
+                **_kwargs: object,
+            ) -> dict[str, object]:
+                self.assertIsNotNone(package_snapshot)
+                return {
+                    "exitCode": 0,
+                    "reportDir": str(report_dir),
+                }
+
+            use_lock = mock.Mock()
+            use_lock.close = mock.Mock()
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "deployment_input_roots",
+                    return_value=[],
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "materialize_package_input_capsule",
+                    return_value={"baselineId": baseline_id},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "deployment_candidate_dir",
+                    return_value=candidate_dir,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "validate_release_attestations",
+                    return_value=release_bindings,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "acquire_local_runtime_use_lock",
+                    return_value=use_lock,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_target_package_lock",
+                    side_effect=lambda _target: contextlib.nullcontext(),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_command_package_unlocked",
+                    side_effect=materialize,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "resolve_graphql_read_signing_material",
+                    return_value=object(),
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "load_candidate_manifest",
+                    return_value=manifest,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_validate_runtime_package_identity_readback",
+                    side_effect=ValueError("runtime package ContractGraph drifted"),
+                    create=True,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "activate_deployment_candidate",
+                ) as activate,
+            ):
+                result = stackctl.command_package(
+                    argparse.Namespace(
+                        env="alpha",
+                        target="alpha-local",
+                        kind="runtime",
+                        include_services=False,
+                        service="",
+                        release_attestation="candidate.json",
+                        rollback_release_attestation="rollback.json",
+                    )
+                )
+
+            self.assertEqual(result["exitCode"], 2, result)
+            self.assertIn("ContractGraph drifted", "\n".join(result["details"]))
+            activate.assert_not_called()
 
     def test_verify_children_override_inherited_cross_environment_target(self) -> None:
         invocations: list[tuple[list[str], dict[str, str]]] = []

@@ -60,11 +60,3 @@ func writeError(
 		rterr.HTTPWriteOptionsFromRequest(request),
 	)
 }
-
-func respondCommand(writer stdhttp.ResponseWriter, result any, err error) {
-	if err != nil {
-		rterr.WriteHTTPError(writer, err, rterr.HTTPWriteOptions{})
-		return
-	}
-	writeJSON(writer, stdhttp.StatusOK, result)
-}

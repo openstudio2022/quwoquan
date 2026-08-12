@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260809--travel-image-m1--china-panda-base-research-fefb5847-not-m100--scale-001",
+  "executionBinding": "frozen",
+  "objectRef": "成都大熊猫繁育研究基地_image",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "auto",
+    "modelFamily": "auto",
+    "runId": "run-4c7d5aee-409b-45f4-9a1d-06cb8903464d",
+    "resultHash": "sha256:440dd9c56331d1f1f3b7869b22db75f1c32b32aeea8d93b2a7ad41f38d360178"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

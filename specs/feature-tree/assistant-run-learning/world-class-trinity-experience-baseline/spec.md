@@ -94,5 +94,5 @@
   - 缺真实 Mongo/Redis Assistant API integration 全包执行收据；包可编译以及 `AssistantRun`、TaskGraph、Checkpoint、Presentation、主动 Trigger、公开网、原生工具调用和恢复状态机的 direct local contract 不能替代该收据。
   - 缺绑定最终冻结 snapshot 的唯一 immutable candidate，以及 Alpha/Beta/Gamma 对同一 active Skill package digest 的 activation、Provider、Run/Tool/Presentation 与 rollback readback。
   - 缺公开 URL、主动 Skill、Adaptive Presentation 和后台恢复的 Android/iPhone 物理真机 Remote UAT。
-  - 缺 Prod 法务真值、受保护审批、5%→25%→100% rollout 与 ≤300 秒 rollback readback；模拟器、本地测试、未绑定最终 snapshot 的 package 或未执行的 Patrol 均不能替代。
-- 完成判定：冻结 current source 后重新通过 ContractGraph、Assistant local contract、真实 Mongo/Redis API integration 与 service architecture；生成唯一 immutable candidate，并在 Alpha/Beta/Gamma 取得同 digest 的 package activation、Provider、Run/Tool/Presentation 与 rollback receipts。随后在 Android/iPhone 物理真机执行 Remote UAT，补齐 Prod 法务真值并完成受保护的 5%→25%→100% rollout 与 ≤300 秒 rollback readback。全部直属 Story 的阻断 OPEN 满足各自完成判定后方可删除本 OPEN。
+  - 缺 Prod 法务真值、受保护审批、`canary→5→20→50→100` rollout 与 ≤300 秒 rollback readback；模拟器、本地测试、未绑定最终 snapshot 的 package 或未执行的 Patrol 均不能替代。
+- 完成判定：`SIT-001` 对应行为满足，冻结 current source 后重新通过 ContractGraph、Assistant local contract、真实 Mongo/Redis API integration 与 service architecture。生成唯一 immutable candidate，并在 Alpha/Beta/Gamma 取得同 digest 的 package activation、Provider、Run/Tool/Presentation 与 rollback receipts。随后在 Android/iPhone 物理真机执行 Remote UAT，补齐 Prod 法务真值并完成受保护的 `canary→5→20→50→100` rollout 与 ≤300 秒 rollback readback。全部直属 Story 的阻断 OPEN 满足各自完成判定后方可删除本 OPEN。

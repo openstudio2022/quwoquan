@@ -137,12 +137,17 @@ class LoginActionButton extends StatelessWidget {
             color: background,
             disabledColor: background,
             onPressed: canPress ? onPressed : null,
-            child: Stack(
-              alignment: Alignment.center,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                AnimatedOpacity(
-                  opacity: busy ? 0 : 1,
-                  duration: const Duration(milliseconds: 120),
+                if (busy) ...<Widget>[
+                  CupertinoActivityIndicator(
+                    color: outlined ? accent : AppColors.white,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                ],
+                Flexible(
                   child: Text(
                     label,
                     maxLines: 1,
@@ -156,10 +161,6 @@ class LoginActionButton extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (busy)
-                  AppRequestFeedback.inline(
-                    indicatorColor: outlined ? accent : AppColors.white,
-                  ),
               ],
             ),
           ),

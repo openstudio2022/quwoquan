@@ -63,7 +63,7 @@ func TestMediaProcessingWorkerConsumesDurableVideoCreatedFact(t *testing.T) {
 		mediaapp.BindDataPorts(store),
 		newAPIIntegrationMediaObjectGateway(),
 	)
-	worker := mediaprocessing.NewWorker(
+	handler := mediaprocessing.NewMediaProcessingHandler(
 		store,
 		store,
 		store,
@@ -73,7 +73,7 @@ func TestMediaProcessingWorkerConsumesDurableVideoCreatedFact(t *testing.T) {
 		mediaprocessing.WithConsumer(consumer),
 	)
 
-	processed, err := worker.Drain(context.Background(), 100)
+	processed, err := handler.Process(context.Background(), 100)
 	if err != nil {
 		t.Fatalf("drain durable media outbox: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestMediaProcessingWorkerConsumesDurableVideoCreatedFact(t *testing.T) {
 
 	// 处理结果命令会发出 MediaAssetProcessingUpdated；它不是触发事实，后续扫描
 	// 只确认 checkpoint，不应再次调用 FFmpeg。
-	if _, err := worker.Drain(context.Background(), 100); err != nil {
+	if _, err := handler.Process(context.Background(), 100); err != nil {
 		t.Fatalf("drain processing-updated fact: %v", err)
 	}
 	if processor.calls != 1 {

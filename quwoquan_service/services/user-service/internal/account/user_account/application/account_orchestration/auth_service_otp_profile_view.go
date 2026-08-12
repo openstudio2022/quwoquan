@@ -5,9 +5,14 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"go.opentelemetry.io/otel/attribute"
 	"math/big"
+	"strings"
+	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/runtime/otpseal"
 	sessiongenerated "quwoquan_service/services/user-service/generated/account/account_session"
@@ -15,11 +20,41 @@ import (
 	"quwoquan_service/services/user-service/generated/account/user_account"
 	sessionapp "quwoquan_service/services/user-service/internal/account/account_session/application"
 	challengeapp "quwoquan_service/services/user-service/internal/account/authentication_challenge/application"
+	challengemodel "quwoquan_service/services/user-service/internal/account/authentication_challenge/domain/model"
 	"quwoquan_service/services/user-service/internal/account/user_account/domain/user/model"
 	userrepo "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
-	"strings"
-	"time"
 )
+
+const otpReadinessRetryAfterSeconds = 5
+
+var otpClientPlatforms = map[string]struct{}{
+	"ios":        {},
+	"android":    {},
+	"web":        {},
+	"acceptance": {},
+}
+
+// GetOtpDeliveryReadiness exposes only the business-safe availability enum.
+// Provider names, dependency checks, response bodies and transport errors stay
+// inside the service boundary.
+func (s *AuthService) GetOtpDeliveryReadiness(ctx context.Context) OtpDeliveryReadiness {
+	checker, ok := s.externalClient.(SMSOTPReadinessChecker)
+	if !ok || checker == nil {
+		return OtpDeliveryReadiness{
+			Availability:      "temporarily_unavailable",
+			RetryAfterSeconds: otpReadinessRetryAfterSeconds,
+		}
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 1200*time.Millisecond)
+	defer cancel()
+	if err := checker.CheckSMSOTPReadiness(probeCtx); err != nil {
+		return OtpDeliveryReadiness{
+			Availability:      "temporarily_unavailable",
+			RetryAfterSeconds: otpReadinessRetryAfterSeconds,
+		}
+	}
+	return OtpDeliveryReadiness{Availability: "ready", RetryAfterSeconds: 0}
+}
 
 // SendOtp 校验号码、限频后创建 OTP challenge，并通过 integration-service 提交短信发送。
 func (s *AuthService) SendOtp(
@@ -30,6 +65,7 @@ func (s *AuthService) SendOtp(
 	appVersion string,
 	sourceOperation string,
 	bindingTicket string,
+	idempotencyKey string,
 ) (_ *OtpSendResult, err error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "user.SendOtp",
 		attribute.String("platform", strings.TrimSpace(platform)),
@@ -40,6 +76,18 @@ func (s *AuthService) SendOtp(
 	if !validPhone {
 		return nil, generated.AppErrorFromInvalidArgument(
 			"phone must use canonical E.164 format",
+		)
+	}
+	platform = strings.ToLower(strings.TrimSpace(platform))
+	if _, ok := otpClientPlatforms[platform]; !ok {
+		return nil, generated.AppErrorFromInvalidArgument(
+			"platform must be one of ios, android, web, acceptance",
+		)
+	}
+	idempotencyKey = strings.TrimSpace(idempotencyKey)
+	if len(idempotencyKey) < 16 || len(idempotencyKey) > 128 {
+		return nil, generated.AppErrorFromInvalidArgument(
+			"Idempotency-Key must be a 128-bit opaque identifier",
 		)
 	}
 	if s.otp == nil {
@@ -77,13 +125,34 @@ func (s *AuthService) SendOtp(
 		}
 		bindingTicketRef = ticket.ID
 	}
-	allowed, retryAfter, err := s.otp.AllowSend(ctx, normalized)
+	commandFingerprint := otpSendCommandFingerprint(
+		normalized,
+		purpose,
+		bindingTicketRef,
+	)
+	admission, err := s.otp.AllowSend(
+		ctx,
+		normalized,
+		idempotencyKey,
+		commandFingerprint,
+	)
 	if err != nil {
+		if errors.Is(err, ErrOtpIdempotencyConflict) {
+			span.SetAttributes(attribute.String("outcome", "idempotency_conflict"))
+			return nil, challengegenerated.AppErrorFromOtpIdempotencyConflict(
+				"otp idempotency key was reused for another target",
+			)
+		}
+		span.SetAttributes(attribute.String("outcome", "rate_limit_store_failed"))
 		return nil, generated.AppErrorFromInternalError("otp rate-limit store failed")
 	}
-	if !allowed {
+	if !admission.Allowed {
+		span.SetAttributes(
+			attribute.String("outcome", "rate_limited"),
+			attribute.Bool("idempotent_replay", admission.IdempotentReplay),
+		)
 		return nil, challengegenerated.AppErrorFromOtpRateLimited("otp send throttled").
-			WithRecovery("retry", retryAfter)
+			WithRecovery("retry", admission.RetryAfterSeconds)
 	}
 	code, err := s.otpCodeGenerator()
 	if err != nil {
@@ -95,11 +164,8 @@ func (s *AuthService) SendOtp(
 	}
 	expiresAt := time.Now().UTC().Add(time.Duration(otpCodeExpirySeconds) * time.Second)
 	canonicalChallengeID := "otp_ch_" + strings.TrimRight(challengeID, "=")
+	requestID := stableOTPRequestID(canonicalChallengeID)
 	destinationHash := hashOTPPhone(normalized)
-	idempotencyScope := destinationHash
-	if bindingTicketRef != "" {
-		idempotencyScope += ":" + bindingTicketRef
-	}
 	challengeResult, err := s.authenticationChallenges.CreateChallenge(
 		ctx,
 		challengeapp.CreateChallengeCommand{
@@ -112,33 +178,46 @@ func (s *AuthService) SendOtp(
 				destinationHash,
 				[]byte(code),
 			),
-			BindingTicketRef: bindingTicketRef,
-			IdempotencyKey: "otp:" + idempotencyScope + ":" +
-				expiresAt.Format("200601021504"),
-			ExpiresAt: expiresAt,
+			BindingTicketRef:  bindingTicketRef,
+			DeliveryRequestID: requestID,
+			DeliveryStatus:    challengemodel.DeliveryStatusQueued,
+			IdempotencyKey:    idempotencyKey,
+			ExpiresAt:         expiresAt,
 		},
 	)
 	if err != nil {
-		return nil, generated.AppErrorFromInternalError("otp challenge save failed")
+		return nil, err
 	}
 	canonicalChallengeID = challengeResult.Challenge.ID
-	requestID := stableOTPRequestID(canonicalChallengeID)
-	result := &OtpSendResult{
-		MaskedPhone:      maskPhoneForDisplay(normalized),
-		ExpiresInSeconds: int(otpCodeExpirySeconds),
-		RequestID:        requestID,
-		ChallengeID:      canonicalChallengeID,
-		DeliveryStatus:   "queued",
+	requestID = challengeResult.Challenge.DeliveryRequestID
+	expiresInSeconds := int(time.Until(challengeResult.Challenge.ExpiresAt).Seconds())
+	if expiresInSeconds < 0 {
+		expiresInSeconds = 0
 	}
+	result := &OtpSendResult{
+		MaskedPhone:       maskPhoneForDisplay(normalized),
+		ExpiresInSeconds:  expiresInSeconds,
+		RequestID:         requestID,
+		ChallengeID:       canonicalChallengeID,
+		DeliveryStatus:    string(challengeResult.Challenge.DeliveryStatus),
+		RetryAfterSeconds: admission.RetryAfterSeconds,
+	}
+	span.SetAttributes(
+		attribute.String("delivery_status", result.DeliveryStatus),
+		attribute.Bool("idempotent_replay", challengeResult.IdempotentReplay),
+	)
 	if challengeResult.IdempotentReplay {
+		span.SetAttributes(attribute.String("outcome", "idempotent_replay"))
 		return result, nil
 	}
 	if s.externalClient == nil {
-		_, _ = s.authenticationChallenges.CancelChallenge(
-			ctx,
-			challengeapp.CancelChallengeCommand{ChallengeID: canonicalChallengeID},
+		s.markOtpDeliveryFailed(ctx, requestID, "client_unavailable")
+		result.DeliveryStatus = string(challengemodel.DeliveryStatusFailed)
+		span.SetAttributes(
+			attribute.String("outcome", "delivery_failed"),
+			attribute.String("delivery_status", result.DeliveryStatus),
 		)
-		return nil, challengegenerated.AppErrorFromOtpProviderFailed("otp external interaction client unavailable")
+		return result, nil
 	}
 	codeRef, err := s.otpCodeSealer.Seal(
 		otpseal.Secret{Phone: normalized, Code: code},
@@ -149,31 +228,52 @@ func (s *AuthService) SendOtp(
 		},
 	)
 	if err != nil {
-		_, _ = s.authenticationChallenges.CancelChallenge(
-			ctx,
-			challengeapp.CancelChallengeCommand{ChallengeID: canonicalChallengeID},
+		s.markOtpDeliveryFailed(ctx, requestID, "seal_failed")
+		result.DeliveryStatus = string(challengemodel.DeliveryStatusFailed)
+		span.SetAttributes(
+			attribute.String("outcome", "delivery_failed"),
+			attribute.String("delivery_status", result.DeliveryStatus),
 		)
-		return nil, generated.AppErrorFromInternalError("otp code reference sealing failed")
+		return result, nil
 	}
 	if _, err := s.externalClient.SubmitSMSOTP(ctx, SMSOTPDispatchRequest{
-		RequestID:   requestID,
-		ChallengeID: canonicalChallengeID,
-		PhoneHash:   destinationHash,
-		MaskedPhone: result.MaskedPhone,
-		CodeRef:     codeRef,
-		IdempotencyKey: "otp:" + idempotencyScope + ":" +
-			expiresAt.Format("200601021504"),
-		ExpiresAt: expiresAt,
+		RequestID:      requestID,
+		ChallengeID:    canonicalChallengeID,
+		PhoneHash:      destinationHash,
+		MaskedPhone:    result.MaskedPhone,
+		CodeRef:        codeRef,
+		IdempotencyKey: idempotencyKey,
+		ExpiresAt:      expiresAt,
+		Platform:       platform,
+		RequestRef:     requestID,
 	}); err != nil {
-		_, _ = s.authenticationChallenges.CancelChallenge(
-			ctx,
-			challengeapp.CancelChallengeCommand{ChallengeID: canonicalChallengeID},
-		)
+		// Integration 可能已经接受请求但响应在链路中丢失；保持 challenge
+		// pending，客户端以同一 Idempotency-Key 重放读取当前权威状态。
+		span.SetAttributes(attribute.String("outcome", "delivery_confirming"))
 		return nil, challengegenerated.AppErrorFromOtpProviderFailed(
 			"otp integration submit failed",
 		)
 	}
+	span.SetAttributes(attribute.String("outcome", "accepted"))
 	return result, nil
+}
+
+func (s *AuthService) markOtpDeliveryFailed(
+	ctx context.Context,
+	requestID string,
+	failureKind string,
+) {
+	reportCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+	defer cancel()
+	_, _ = s.authenticationChallenges.ReportDeliveryResult(
+		reportCtx,
+		challengeapp.ReportDeliveryResultCommand{
+			EventID:    "otp_local_" + failureKind + "_" + requestID,
+			RequestID:  requestID,
+			Status:     challengemodel.DeliveryStatusFailed,
+			OccurredAt: time.Now().UTC(),
+		},
+	)
 }
 
 func stableOTPRequestID(challengeID string) string {
@@ -197,10 +297,19 @@ func otpChallengePurpose(sourceOperation string) string {
 type OtpSendResult struct {
 	MaskedPhone       string `json:"maskedPhone"`
 	ExpiresInSeconds  int    `json:"expiresInSeconds"`
-	RequestID         string `json:"requestId,omitempty"`
-	ChallengeID       string `json:"challengeId,omitempty"`
+	RequestID         string `json:"requestId"`
+	ChallengeID       string `json:"challengeId"`
 	DeliveryStatus    string `json:"deliveryStatus"`
-	RetryAfterSeconds int    `json:"retryAfterSeconds,omitempty"`
+	RetryAfterSeconds int    `json:"retryAfterSeconds"`
+}
+
+func otpSendCommandFingerprint(phone, purpose, bindingTicketRef string) string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		strings.TrimSpace(phone),
+		strings.TrimSpace(purpose),
+		strings.TrimSpace(bindingTicketRef),
+	}, "\x00")))
+	return hex.EncodeToString(sum[:])
 }
 
 // verifyOtp 通过 AuthenticationChallenge 对象专属 Facade 校验瞬时凭据；
@@ -281,33 +390,6 @@ func (s *AuthService) LoginWithPhone(
 		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("persist consent record: %v", err))
 	}
 	return result, nil
-}
-
-func (s *AuthService) HandleOtpDeliveryCallback(
-	ctx context.Context,
-	challengeID string,
-	status string,
-) error {
-	if s.authenticationChallenges == nil {
-		return generated.AppErrorFromInternalError(
-			"authentication challenge facade unavailable",
-		)
-	}
-	switch strings.TrimSpace(status) {
-	case "delivered", "sent_unconfirmed", "active", "queued":
-		// delivery 是外部交互事实，Challenge 保持 pending 直到验证/过期。
-		return nil
-	case "failed", "dead_letter":
-		_, err := s.authenticationChallenges.CancelChallenge(
-			ctx,
-			challengeapp.CancelChallengeCommand{
-				ChallengeID: strings.TrimSpace(challengeID),
-			},
-		)
-		return err
-	default:
-		return generated.AppErrorFromInvalidArgument("otp delivery status unsupported")
-	}
 }
 
 const otpCodeExpirySeconds = 5 * 60

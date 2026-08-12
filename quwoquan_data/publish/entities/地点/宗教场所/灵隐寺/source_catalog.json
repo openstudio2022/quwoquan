@@ -1,0 +1,37 @@
+{
+  "schema": "quwoquan_data.object_source_catalog",
+  "policyRevision": "encyclopedia-primary",
+  "primaryEvidenceRef": "evidence/sources/homepage-source-ef25443ca6a4da8a2bf7/meta.json",
+  "primarySource": {
+    "schema": "quwoquan_data.object_source_evidence",
+    "sourceUnitId": "homepage-source-ef25443ca6a4da8a2bf7",
+    "entityName": "灵隐寺",
+    "sourceKind": "wikipedia",
+    "extractor": "wikipedia_api",
+    "canonicalUrl": "https://zh.wikipedia.org/wiki/%E7%81%B5%E9%9A%90%E5%AF%BA",
+    "sourceUrl": "https://zh.wikipedia.org/wiki/%E7%81%B5%E9%9A%90%E5%AF%BA",
+    "title": "维基百科",
+    "fetchedAt": "2026-08-12T07:26:24Z",
+    "snapshotHash": "sha256:8feb19845fe2a6410108d9722a459992e1790b012960fef73b02d29d7c916313",
+    "policyRevision": "encyclopedia-primary",
+    "sourceUseMode": "factual_reference_only",
+    "evidenceRef": "evidence/sources/homepage-source-ef25443ca6a4da8a2bf7/meta.json"
+  },
+  "sources": [
+    {
+      "schema": "quwoquan_data.object_source_evidence",
+      "sourceUnitId": "homepage-source-ef25443ca6a4da8a2bf7",
+      "entityName": "灵隐寺",
+      "sourceKind": "wikipedia",
+      "extractor": "wikipedia_api",
+      "canonicalUrl": "https://zh.wikipedia.org/wiki/%E7%81%B5%E9%9A%90%E5%AF%BA",
+      "sourceUrl": "https://zh.wikipedia.org/wiki/%E7%81%B5%E9%9A%90%E5%AF%BA",
+      "title": "维基百科",
+      "fetchedAt": "2026-08-12T07:26:24Z",
+      "snapshotHash": "sha256:8feb19845fe2a6410108d9722a459992e1790b012960fef73b02d29d7c916313",
+      "policyRevision": "encyclopedia-primary",
+      "sourceUseMode": "factual_reference_only",
+      "evidenceRef": "evidence/sources/homepage-source-ef25443ca6a4da8a2bf7/meta.json"
+    }
+  ]
+}

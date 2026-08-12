@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_fact_appender.dart';
 import 'package:quwoquan_app/runtime/transport/generated/search/search_request_page_ids.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 /// 检索反馈事实对象的 invocation context 工厂。
 typedef SearchFeedbackInvocationContextFactory =
     CloudOperationInvocationContext Function(String clientPageId);

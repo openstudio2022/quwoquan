@@ -413,11 +413,11 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
           .read(contentMediaSourceReaderProvider)
           .prepare(path);
       final uploaded = await uploadService.uploadPreparedSource(
-            source: source,
-            mediaType: MediaType.image,
-            mimeType: contentMediaMimeTypeForPath(path, MediaType.image),
-            uploadStream: ref.read(contentMediaStreamObjectUploadProvider),
-          );
+        source: source,
+        mediaType: MediaType.image,
+        mimeType: contentMediaMimeTypeForPath(path, MediaType.image),
+        uploadStream: ref.read(contentMediaStreamObjectUploadProvider),
+      );
       if (!mounted) return;
       setState(() => _attachmentMediaIds.add(uploaded.assetId));
       _scheduleDraftSave();

@@ -219,9 +219,11 @@ void main() {
     await challenge.sendOtp(
       SendOtpCommand(
         phone: '13800000000',
+        platform: OtpClientPlatform.ios,
         sourceOperation: 'bind_phone',
         bindingTicket: 'binding-ticket-1',
       ),
+      idempotencyKey: 'account-identity-facets-otp-000001',
     );
     await challenge.createAlipayAuthorizationRequest(
       CreateAlipayAuthorizationRequestCommand(platform: 'ios'),
@@ -392,12 +394,15 @@ void main() {
   });
 }
 
-CloudOperationInvocationContext _context(String clientPageId) =>
-    CloudOperationInvocationContext(
-      surfaceId: 'login',
-      clientPageId: clientPageId,
-      actor: const CloudOperationActorContext(accountId: 'owner-1'),
-    );
+CloudOperationInvocationContext _context(
+  String clientPageId, {
+  String? idempotencyKey,
+}) => CloudOperationInvocationContext(
+  surfaceId: 'login',
+  clientPageId: clientPageId,
+  idempotencyKey: idempotencyKey,
+  actor: const CloudOperationActorContext(accountId: 'owner-1'),
+);
 
 Object? _responseFor(CloudOperationContract operation) {
   return switch (operation.canonicalOperationId) {
@@ -415,6 +420,8 @@ Object? _responseFor(CloudOperationContract operation) {
         'expiresInSeconds': 300,
         'deliveryStatus': 'queued',
         'retryAfterSeconds': 60,
+        'requestId': 'otp-request-1',
+        'challengeId': 'otp-challenge-1',
       },
     AppCloudOperationIds
         .userAuthenticationChallengeCreateAlipayAuthorizationRequest =>

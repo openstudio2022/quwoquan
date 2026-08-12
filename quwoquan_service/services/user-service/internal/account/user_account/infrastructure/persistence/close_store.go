@@ -14,6 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	accountports "quwoquan_service/services/user-service/internal/account/user_account/domain/ports"
+	userevent "quwoquan_service/services/user-service/internal/account/user_account/domain/user/event"
+	userports "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 )
 
 type CloseStore struct {
@@ -148,6 +150,23 @@ func (store *CloseStore) CommitClose(
 		accountVersion,
 		personaIDs,
 		effectiveClosedAt,
+	); err != nil {
+		return accountports.CloseResult{}, err
+	}
+	if err := appendUserProfileSearchProjections(
+		ctx,
+		tx,
+		[]userports.UserProfileSearchProjection{{
+			UserID:         accountID,
+			ProfileVersion: accountVersion,
+			EventType:      userevent.UserAccountClosed,
+			OccurredAt:     effectiveClosedAt,
+			Payload: userports.UserProfileSearchProjectionPayload{
+				Operation:    "delete",
+				IdentityTags: []string{},
+				UpdatedAt:    effectiveClosedAt,
+			},
+		}},
 	); err != nil {
 		return accountports.CloseResult{}, err
 	}

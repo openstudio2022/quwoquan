@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import json
+import urllib.parse
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -336,6 +337,23 @@ def test_frontier_admits_only_registry_commercial_article_crawl_sites(monkeypatc
     ] == ["frontier_test"]
 
 
+def test_wikipedia_article_profile_is_registry_admitted() -> None:
+    sites = {
+        str(row["siteId"]): row
+        for row in article_frontier_profile.article_search_sites()
+    }
+
+    wikipedia = sites["wikipedia_zh"]
+    profile = wikipedia["siteCrawlProfile"]
+    assert profile["fetchMode"] == "mediawiki_api"
+    assert profile["contentLanes"] == ["article"]
+    assert profile["articleCommercialAdmission"] == "commercial_release"
+    assert article_frontier_profile.article_url_allowed(
+        "https://zh.wikipedia.org/wiki/%E5%8D%97%E6%B5%94%E9%95%87",
+        wikipedia,
+    )
+
+
 def test_frontier_rate_limit_and_backoff_are_enforced(monkeypatch):
     candidate = "https://guide.example.test/article/rate.html"
     site = _site(
@@ -468,6 +486,52 @@ def test_mediawiki_api_search_discovers_canonical_seed_before_admission(
         and row.reason == "entity_alias_topic_relevance_failed"
         for row in outcome.sites[0].frontier
     )
+
+
+def test_mediawiki_search_accepts_long_exact_entity_anchor_in_related_body(
+    monkeypatch,
+):
+    _install_registry(monkeypatch, _mediawiki_site())
+    entity = "成都大熊猫繁育研究基地"
+    exact = f"https://guide.example.test/wiki/{urllib.parse.quote(entity)}"
+    related = f"https://guide.example.test/wiki/{urllib.parse.quote('大熊猫')}"
+
+    def fake_fetch(url: str, *, timeout: int) -> network_io.HttpFetchResult:
+        if url == TERMS_URL:
+            return _response(url, body="terms")
+        if url.startswith("https://guide.example.test/w/api.php?"):
+            return _response(
+                url,
+                body=json.dumps(
+                    {"query": {"search": [{"ns": 0, "title": "大熊猫"}]}},
+                    ensure_ascii=False,
+                ),
+            )
+        if url == "https://guide.example.test/robots.txt":
+            return _response(url, body="User-agent: *\nAllow: /\n")
+        if url == exact:
+            return _response(url, status=404)
+        if url == related:
+            return _response(
+                url,
+                body=(
+                    "<html><title>大熊猫</title><body>"
+                    "成都大熊猫繁育研究基地承担大熊猫迁地保护与公众教育。"
+                    "</body></html>"
+                ),
+            )
+        raise AssertionError(url)
+
+    monkeypatch.setattr(network_io, "fetch_http", fake_fetch)
+    outcome = discover_article_source_frontier(
+        entity,
+        topics=("迁地保护",),
+        limit=1,
+        daily_budget=InMemoryDailyPageBudget(),
+    )
+
+    assert [candidate.canonical_url for candidate in outcome.candidates] == [related]
+    assert outcome.candidates[0].relevance_score == 0.99
 
 
 def test_mediawiki_api_search_network_failure_is_typed_availability_blocker(
@@ -690,9 +754,11 @@ def test_network_unavailable_is_typed_blocked_not_synthetic_success(monkeypatch)
     assert any(row.decision.value == "blocked" for row in outcome.sites[0].frontier)
 
 
+@pytest.mark.parametrize("article_commercial_mode", [True, False])
 def test_article_plan_mainline_retains_frontier_evidence(
     monkeypatch,
     tmp_path,
+    article_commercial_mode,
 ):
     ctrip_site = {
         **_site(
@@ -774,7 +840,7 @@ def test_article_plan_mainline_retains_frontier_evidence(
         prior_article_sources=[],
         homepage_sources=[],
         required_article_bases=1,
-        article_commercial_mode=True,
+        article_commercial_mode=article_commercial_mode,
         force=True,
     )
 

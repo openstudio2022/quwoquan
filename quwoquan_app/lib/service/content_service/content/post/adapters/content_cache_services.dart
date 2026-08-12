@@ -490,6 +490,7 @@ class ContentQuerySnapshotStore {
     this.maxEntries = 80,
     this.freshFor = const Duration(minutes: 5),
     this.maximumAge = const Duration(hours: 24),
+    this.hydrationDeadline = const Duration(milliseconds: 1500),
     bool persistToPreferences = false,
     String storageKey = defaultStorageKey,
     ContentQuerySnapshotPersistencePolicy persistencePolicy =
@@ -517,9 +518,13 @@ class ContentQuerySnapshotStore {
         'must be greater than or equal to freshFor',
       );
     }
-    _hydration = _persistToPreferences
-        ? _hydrateFromPreferences()
-        : Future<void>.value();
+    if (hydrationDeadline <= Duration.zero) {
+      throw ArgumentError.value(
+        hydrationDeadline,
+        'hydrationDeadline',
+        'must be positive',
+      );
+    }
   }
 
   static const String defaultStorageKey = 'qwq.content_query_snapshots';
@@ -527,6 +532,7 @@ class ContentQuerySnapshotStore {
   final int maxEntries;
   final Duration freshFor;
   final Duration maximumAge;
+  final Duration hydrationDeadline;
   final bool _persistToPreferences;
   final String _storageKey;
   final ContentQuerySnapshotPersistencePolicy _persistencePolicy;
@@ -536,12 +542,32 @@ class ContentQuerySnapshotStore {
   final LinkedHashMap<String, ContentQuerySnapshot> _snapshots =
       LinkedHashMap<String, ContentQuerySnapshot>();
   final Set<String> _diskBackedKeys = <String>{};
-  late final Future<void> _hydration;
+  Future<void>? _hydration;
+  int _hydrationGeneration = 0;
   Future<void>? _persistenceDrain;
   bool _persistenceDirty = false;
 
-  Future<void> ensureHydrated() {
-    return _hydration;
+  Future<void> ensureHydrated() async {
+    if (!_persistToPreferences) {
+      return;
+    }
+    final existing = _hydration;
+    final Future<void> hydration;
+    if (existing != null) {
+      hydration = existing;
+    } else {
+      final generation = ++_hydrationGeneration;
+      hydration = _hydrateFromPreferences(generation);
+      _hydration = hydration;
+    }
+    try {
+      await hydration.timeout(hydrationDeadline);
+    } catch (_) {
+      if (identical(_hydration, hydration)) {
+        _hydration = null;
+        _hydrationGeneration += 1;
+      }
+    }
   }
 
   CacheReadResult<ContentQuerySnapshot>? get(String key) {
@@ -673,75 +699,72 @@ class ContentQuerySnapshotStore {
     }
   }
 
-  Future<void> _hydrateFromPreferences() async {
-    try {
-      final raw = await _persistenceBackend.read(_storageKey);
-      if (raw == null || raw.isEmpty) {
-        return;
-      }
-      if (_utf8WireLength(
-            raw,
-            stopAfter: _persistencePolicy.maxPersistedBytes,
-          ) >
-          _persistencePolicy.maxPersistedBytes) {
-        await _persistenceBackend.remove(_storageKey);
-        return;
-      }
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) {
-        return;
-      }
-      final rawSnapshots = decoded['snapshots'];
-      if (rawSnapshots is! List) {
-        return;
-      }
-      final decodedSnapshots = <ContentQuerySnapshot>[];
-      var expiredCount = 0;
-      for (final rawSnapshot in rawSnapshots) {
-        if (rawSnapshot is! Map) {
-          continue;
-        }
-        final snapshot = ContentQuerySnapshot.fromMap(
-          Map<String, dynamic>.from(rawSnapshot),
-        );
-        if (snapshot == null) {
-          continue;
-        }
-        if (_snapshotAge(snapshot) > maximumAge) {
-          expiredCount += 1;
-          continue;
-        }
-        decodedSnapshots.add(snapshot);
-      }
-      final persistableSnapshots = _persistencePolicy
-          .selectPersistableSnapshots(decodedSnapshots);
-      var restoredCount = 0;
-      for (final snapshot in persistableSnapshots) {
-        _snapshots.remove(snapshot.key);
-        _snapshots[snapshot.key] = snapshot;
-        _diskBackedKeys.add(snapshot.key);
-        restoredCount += 1;
-      }
-      while (_snapshots.length > maxEntries) {
-        final evicted = _snapshots.keys.first;
-        _snapshots.remove(evicted);
-        _diskBackedKeys.remove(evicted);
-      }
-      if (restoredCount > 0) {
-        _telemetrySink.record('query_snapshot.restore', <String, Object?>{
-          'count': restoredCount,
-          'storageKey': _storageKey,
-        });
-      }
-      if (expiredCount > 0) {
-        _telemetrySink.record('query_snapshot.expire', <String, Object?>{
-          'count': expiredCount,
-          'source': 'restore',
-        });
-        _schedulePersist();
-      }
-    } catch (_) {
+  Future<void> _hydrateFromPreferences(int generation) async {
+    final raw = await _persistenceBackend.read(_storageKey);
+    if (generation != _hydrationGeneration || raw == null || raw.isEmpty) {
       return;
+    }
+    if (_utf8WireLength(raw, stopAfter: _persistencePolicy.maxPersistedBytes) >
+        _persistencePolicy.maxPersistedBytes) {
+      await _persistenceBackend.remove(_storageKey);
+      return;
+    }
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map<String, dynamic>) {
+      return;
+    }
+    final rawSnapshots = decoded['snapshots'];
+    if (rawSnapshots is! List) {
+      return;
+    }
+    final decodedSnapshots = <ContentQuerySnapshot>[];
+    var expiredCount = 0;
+    for (final rawSnapshot in rawSnapshots) {
+      if (rawSnapshot is! Map) {
+        continue;
+      }
+      final snapshot = ContentQuerySnapshot.fromMap(
+        Map<String, dynamic>.from(rawSnapshot),
+      );
+      if (snapshot == null) {
+        continue;
+      }
+      if (_snapshotAge(snapshot) > maximumAge) {
+        expiredCount += 1;
+        continue;
+      }
+      decodedSnapshots.add(snapshot);
+    }
+    if (generation != _hydrationGeneration) {
+      return;
+    }
+    final persistableSnapshots = _persistencePolicy.selectPersistableSnapshots(
+      decodedSnapshots,
+    );
+    var restoredCount = 0;
+    for (final snapshot in persistableSnapshots) {
+      _snapshots.remove(snapshot.key);
+      _snapshots[snapshot.key] = snapshot;
+      _diskBackedKeys.add(snapshot.key);
+      restoredCount += 1;
+    }
+    while (_snapshots.length > maxEntries) {
+      final evicted = _snapshots.keys.first;
+      _snapshots.remove(evicted);
+      _diskBackedKeys.remove(evicted);
+    }
+    if (restoredCount > 0) {
+      _telemetrySink.record('query_snapshot.restore', <String, Object?>{
+        'count': restoredCount,
+        'storageKey': _storageKey,
+      });
+    }
+    if (expiredCount > 0) {
+      _telemetrySink.record('query_snapshot.expire', <String, Object?>{
+        'count': expiredCount,
+        'source': 'restore',
+      });
+      _schedulePersist();
     }
   }
 

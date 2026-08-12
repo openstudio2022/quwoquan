@@ -10,6 +10,7 @@ import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
 /// - X-Client-Sent-At：端侧发送时间（用于端云时延/对齐）
 /// - X-Client-Device-Platform：android/ios/web/desktop
 /// - X-Client-App-Version：端侧版本（可用 dart-define 注入）
+/// - X-Client-App-Build：端侧单调递增构建号（可用 dart-define 注入）
 /// - X-Trace-Id / X-Request-Id：分段可读的追踪 ID（见云侧 error_codes.md）
 class CloudRequestHeaders {
   CloudRequestHeaders._();
@@ -27,17 +28,9 @@ class CloudRequestHeaders {
 
   static String get appVersion => _clientContext.appVersion;
 
-  static String platform() => _clientContext.platform;
+  static String get appBuild => _clientContext.appBuild;
 
-  /// 灰度路由维度头：仅在端侧持有真实值时注入（缺失 = 该维度不参与匹配）。
-  static Map<String, String> _grayRoutingDimensionHeaders() {
-    final regionCode = _clientContext.regionCode?.trim() ?? '';
-    final carrier = _clientContext.carrier?.trim() ?? '';
-    return <String, String>{
-      if (regionCode.isNotEmpty) 'X-Client-Region-Code': regionCode,
-      if (carrier.isNotEmpty) 'X-Client-Carrier': carrier,
-    };
-  }
+  static String platform() => _clientContext.platform;
 
   static Map<String, String> forPage(String pageId) {
     final ts = _toBase36(DateTime.now().microsecondsSinceEpoch);
@@ -53,8 +46,8 @@ class CloudRequestHeaders {
       'X-Client-Sent-At': nowIso,
       'X-Client-Device-Platform': platform(),
       'X-Client-App-Version': appVersion,
+      'X-Client-App-Build': appBuild,
       'X-Client-Locale': _clientContext.locale,
-      ..._grayRoutingDimensionHeaders(),
       // 追踪：分段可读，可从 ID 直接看出源头/页面/会话/时间
       'X-Trace-Id': traceId,
       'X-Request-Id': requestId,
@@ -117,8 +110,8 @@ class CloudRequestHeaders {
       'X-Client-Sent-At': nowIso,
       'X-Client-Device-Platform': platform(),
       'X-Client-App-Version': appVersion,
+      'X-Client-App-Build': appBuild,
       'X-Client-Locale': _clientContext.locale,
-      ..._grayRoutingDimensionHeaders(),
       'X-Trace-Id': traceId,
       'X-Request-Id': requestId,
     };

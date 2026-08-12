@@ -1,31 +1,33 @@
-# prod 灰度阶段配置（可扩展）
-# 供唯一的 deploy-prod-auto transaction 与 platform-ops-service 读取。
-#
-# 单一真相源边界（防止第二套数）：
-# - 本文件只声明 stage 名称、step、独立执行目标与 rollback_on_slo_gate；
-# - SLO 阈值 / readback 窗口 / 最小样本唯一来源是
-#   quwoquan_ops/policies/config-release/slo_thresholds.yaml（readback 段）；
-# - 阶段审批由 GitHub `environment: production` required reviewers 承担，
-#   不在本文件重复声明 approval 字段。
-#
-# gray-initial、carry-on、full 均属于 prod rollout stage，
-# 差别仅在本 stages；不得引入 prod-gray 第二环境。
-#
-# gray-initial / carry-on 只更新独立 gray compose，并由稳定 Caddy 按
-# routing_policy.stageDimensions 导入真实流量；full 才替换 prod compose。
+# prod 生产灰度阶段。它们是 prod rollout stage，不是独立环境。
+# SLO 绝对阈值继续由 policies/config-release/slo_thresholds.yaml 唯一声明。
 stages:
-  - name: gray-initial
+  - name: canary
+    step: 0
+    basis_points: 0
+    execution_target: candidate
+    routing_profile: canary
+    rollback_on_slo_gate: true
+  - name: "5"
     step: 5
-    execution_target: gray
-    routing_profile: gray-initial
+    basis_points: 500
+    execution_target: candidate
+    routing_profile: "5"
     rollback_on_slo_gate: true
-  - name: carry-on
-    step: 25
-    execution_target: gray
-    routing_profile: carry-on
+  - name: "20"
+    step: 20
+    basis_points: 2000
+    execution_target: candidate
+    routing_profile: "20"
     rollback_on_slo_gate: true
-  - name: full
+  - name: "50"
+    step: 50
+    basis_points: 5000
+    execution_target: candidate
+    routing_profile: "50"
+    rollback_on_slo_gate: true
+  - name: "100"
     step: 100
-    execution_target: prod
-    routing_profile: full
+    basis_points: 10000
+    execution_target: stable
+    routing_profile: "100"
     rollback_on_slo_gate: true

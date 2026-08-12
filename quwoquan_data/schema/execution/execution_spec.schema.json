@@ -221,6 +221,7 @@
         "requiredWorkers",
         "partitionCount",
         "capacityPlanDigest",
+        "workerHostSetBinding",
         "executionBranch",
         "gitCommitSha"
       ],
@@ -236,6 +237,12 @@
         "capacityPlanDigest": {
           "type": "string",
           "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "workerHostSetBinding": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "governed_worker_host_binding.schema.json"}
+          ]
         },
         "scaleSourcePool": {"$ref": "scale_source_pool_binding.schema.json"},
         "sourcePoolEvidenceRootRef": {"type": "string", "minLength": 1},
@@ -272,7 +279,7 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "backend": {"const": "reliabletask"},
+        "backend": {"enum": ["local_file", "reliabletask"]},
         "reliableTask": {
           "type": "object",
           "required": ["taskType", "queue", "store", "readyIndex"],

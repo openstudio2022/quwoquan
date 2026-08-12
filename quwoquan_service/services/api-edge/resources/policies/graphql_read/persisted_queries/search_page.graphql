@@ -1,0 +1,19 @@
+query SearchPage($input: SearchPageInput!) {
+  searchPage(input: $input) {
+    items {
+      objectRef
+      resultType
+      title
+      subtitle
+      snippet
+      thumbnailUrl
+      action
+    }
+    facets {
+      key
+      count
+    }
+    suggestions
+    nextCursor
+  }
+}

@@ -83,15 +83,30 @@ CREATORS = tuple(
         "authorId": row["authorId"],
         "personaId": f"author-profile-{index}",
         "displayName": f"内容作者 {index}",
-        "avatarAssetId": f"creator-avatar-{index}",
-        "avatarSha256": "sha256:"
-        + hashlib.sha256(b"\xff\xd8\xff\xe0").hexdigest(),
-        "avatarPublicSliceKey": (
-            f"media/avatar/s/asset/creator-avatar-{index}/v1/source.jpg"
-        ),
+        "avatarAssetId": None if index == 2 else f"creator-avatar-{index}",
+        "avatarSha256": None
+        if index == 2
+        else "sha256:" + hashlib.sha256(b"\xff\xd8\xff\xe0").hexdigest(),
+        "avatarPublicSliceKey": None
+        if index == 2
+        else f"media/avatar/s/asset/creator-avatar-{index}/v1/source.jpg",
     }
     for index, row in enumerate(POSTS, start=1)
 )
+CREATORS_BY_AUTHOR = {row["authorId"]: row for row in CREATORS}
+
+
+def _projected_post(row: dict[str, object]) -> dict[str, object]:
+    creator = CREATORS_BY_AUTHOR[str(row["authorId"])]
+    return {
+        **row,
+        "authorDisplayName": creator["displayName"],
+        "authorAvatarUrl": (
+            "https://media.test/" + str(creator["avatarPublicSliceKey"])
+            if creator["avatarPublicSliceKey"]
+            else ""
+        ),
+    }
 
 
 def _write_release(root: Path) -> Path:
@@ -110,23 +125,25 @@ def _write_release(root: Path) -> Path:
         },
     )
     for creator in CREATORS:
+        profile = {
+            "schema": "quwoquan_data.creator_profile",
+            "creatorId": creator["creatorRef"],
+            "authorId": creator["authorId"],
+            "personaId": creator["personaId"],
+            "displayName": creator["displayName"],
+        }
+        if creator["avatarAssetId"]:
+            profile["avatarAsset"] = {
+                "assetId": creator["avatarAssetId"],
+                "kind": "avatar",
+                "sha256": creator["avatarSha256"],
+            }
         write_json(
             release
             / "payload/objects/creators"
             / creator["creatorRef"]
             / "profile.json",
-            {
-                "schema": "quwoquan_data.creator_profile",
-                "creatorId": creator["creatorRef"],
-                "authorId": creator["authorId"],
-                "personaId": creator["personaId"],
-                "displayName": creator["displayName"],
-                "avatarAsset": {
-                    "assetId": creator["avatarAssetId"],
-                    "kind": "avatar",
-                    "sha256": creator["avatarSha256"],
-                },
-            },
+            profile,
         )
     for post in POSTS:
         manifest = {"contentType": post["contentType"]}
@@ -160,6 +177,7 @@ def _write_release(root: Path) -> Path:
                     ],
                 }
                 for creator in CREATORS
+                if creator["avatarAssetId"]
             ]
             + [
                 {
@@ -202,7 +220,11 @@ def _write_release(root: Path) -> Path:
                 },
             ],
             "issues": [],
-            "counts": {"assets": len(CREATORS) + 3, "issues": 0},
+            "counts": {
+                "assets": sum(1 for creator in CREATORS if creator["avatarAssetId"])
+                + 3,
+                "issues": 0,
+            },
         },
     )
     return release
@@ -214,7 +236,7 @@ def _write_import_report(root: Path, *, environment: DeploymentEnvironment) -> P
         report,
         {
             "schema": "quwoquan.content_import_report",
-            "status": "active",
+            "status": "imported",
             "environment": environment.value,
             "releaseId": RELEASE_ID,
             "sourceOwner": "qwq_data",
@@ -228,6 +250,9 @@ def _write_import_report(root: Path, *, environment: DeploymentEnvironment) -> P
                 {
                     "postRef": row["postRef"],
                     "postId": row["postId"],
+                    "contentId": f"content-{row['postId']}",
+                    "contentVersion": 1,
+                    "usageScope": "commercial",
                     "contentType": row["contentType"],
                     "authorId": row["authorId"],
                 }
@@ -312,20 +337,30 @@ def _get_json(
     if path.startswith("content/posts/"):
         assert page_id == "content.post.get"
         post_id = path.rsplit("/", 1)[-1]
-        payload = next((row for row in POSTS if row["postId"] == post_id), None)
+        payload = next(
+            (_projected_post(row) for row in POSTS if row["postId"] == post_id),
+            None,
+        )
     elif path == "content/feed":
         assert page_id == "content.feed.list"
         content_type = query.get("type", "")
         identity = query.get("identity", "")
         channel_id = query.get("channelId", "")
-        rows = list(POSTS)
+        rows = [
+            {
+                key: value
+                for key, value in row.items()
+                if key not in {"postRef", "sourceAttribution"}
+            }
+            for row in (_projected_post(post) for post in POSTS)
+        ]
         if identity and identity != "work":
             rows = []
         if content_type:
             rows = [row for row in rows if row["contentType"] == content_type]
         if channel_id == "premium_stream":
             rows = [row for row in rows if row["contentType"] == "video"]
-        payload = {"items": rows}
+        payload = {"items": rows, "objectCards": []}
     elif path.startswith("user/"):
         assert page_id == "user.profile"
         persona_id = path.rsplit("/", 1)[-1]
@@ -340,6 +375,8 @@ def _get_json(
                 "subjectType": "creator",
                 "avatarUrl": (
                     "https://media.test/" + creator["avatarPublicSliceKey"]
+                    if creator["avatarPublicSliceKey"]
+                    else ""
                 ),
             }
     status = 200 if payload is not None else 404
@@ -403,6 +440,18 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
 
     monkeypatch.setattr(subject.PublicApiClient, "get_bytes", _get_bytes)
     monkeypatch.setattr(subject.PublicApiClient, "get_json", _get_json)
+
+    def _post_json(_client, path: str, *, page_id: str, body, **_kwargs):
+        assert path == "search"
+        assert page_id == "search.global"
+        object_id = str((body.get("ids") or [""])[0])
+        return PublicApiResponse(
+            status=200,
+            payload={"hits": [{"objectId": object_id}]},
+            operation=_operation(path, page_id, status=200),
+        )
+
+    monkeypatch.setattr(subject.PublicApiClient, "post_json", _post_json)
     monkeypatch.setattr(
         subject.PublicApiClient,
         "login_fresh_guest",
@@ -437,11 +486,21 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
         "video",
     }
     assert {row["authorProfileStatus"] for row in payload["posts"]} == {200}
-    assert {row["avatarMediaReady"] for row in payload["creators"]} == {True}
-    assert {row["avatarProbeCount"] for row in payload["creators"]} == {1}
-    assert {row["avatarProbe"]["hashVerified"] for row in payload["creators"]} == {
-        True
+    assert {row["avatarMediaReady"] for row in payload["creators"]} == {
+        False,
+        True,
     }
+    assert {row["avatarProbeCount"] for row in payload["creators"]} == {0, 1}
+    assert {
+        row["avatarProbe"]["hashVerified"]
+        for row in payload["creators"]
+        if row["avatarProbe"] is not None
+    } == {True}
+    default_avatar = next(
+        row for row in payload["creators"] if row["usesPlatformDefaultAvatar"]
+    )
+    assert default_avatar["avatarAssetId"] is None
+    assert default_avatar["avatarUrl"] == ""
     assert payload["mediaDeliveryBaseUrl"] == "https://media.test"
     assert {row["sourceAttributionReady"] for row in payload["posts"]} == {True}
     assert sum(row["mediaProbeCount"] for row in payload["posts"]) == 3
@@ -469,6 +528,128 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
     serialized = report.read_text(encoding="utf-8")
     assert "fresh-guest-token" not in serialized
     assert "installId" not in serialized
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        {"items": []},
+        {"items": [], "objectCards": None},
+        {"items": [], "objectCards": {}},
+    ],
+)
+def test_visible_release_feed__rejects_invalid_object_cards_envelope__local_contract(
+    payload: object,
+) -> None:
+    client = SimpleNamespace(
+        get_json=lambda *_args, **_kwargs: SimpleNamespace(status=200, payload=payload)
+    )
+
+    with pytest.raises(
+        subject.PostApiVerificationError,
+        match="response payload must be an object|lacks objectCards array",
+    ):
+        subject._verify_visible_release_feed(
+            client,
+            cases_by_id={},
+            creators_by_author={},
+            name="discovery_work",
+            query={"identity": "work"},
+        )
+
+
+def test_feed_item_match__accepts_canonical_projection_subset__local_contract() -> None:
+    case = SimpleNamespace(
+        post_ref="article/test-article-a",
+        author_id="creator-article-a",
+        content_type=SimpleNamespace(value="article"),
+    )
+    creator = SimpleNamespace(
+        display_name="内容作者 1",
+        avatar_url=(
+            "https://media.test/media/avatar/s/asset/creator-avatar-1/v1/source.jpg"
+        ),
+    )
+
+    matched = subject._feed_item_matches_release(
+        {
+            "postId": "post-article-a",
+            "contentType": "article",
+            "contentIdentity": "work",
+            "authorId": "creator-article-a",
+            "authorDisplayName": "内容作者 1",
+            "authorAvatarUrl": (
+                "https://media.test/media/avatar/s/asset/creator-avatar-1/v1/source.jpg"
+            ),
+        },
+        cases_by_id={"post-article-a": case},
+        creators_by_author={"creator-article-a": creator},
+        endpoint="canonical subset feed",
+    )
+
+    assert matched == "post-article-a"
+
+
+@pytest.mark.parametrize("missing_field", ["authorDisplayName", "authorAvatarUrl"])
+def test_feed_item_match__rejects_missing_creator_snapshot__local_contract(
+    missing_field: str,
+) -> None:
+    case = SimpleNamespace(
+        post_ref="article/test-article-a",
+        author_id="creator-article-a",
+        content_type=SimpleNamespace(value="article"),
+    )
+    creator = SimpleNamespace(
+        display_name="内容作者 1",
+        avatar_url=(
+            "https://media.test/media/avatar/s/asset/creator-avatar-1/v1/source.jpg"
+        ),
+    )
+    item = {
+        "postId": "post-article-a",
+        "contentType": "article",
+        "contentIdentity": "work",
+        "authorId": "creator-article-a",
+        "authorDisplayName": "内容作者 1",
+        "authorAvatarUrl": creator.avatar_url,
+    }
+    item.pop(missing_field)
+
+    with pytest.raises(
+        subject.PostApiVerificationError,
+        match=rf"lacks required {missing_field}",
+    ):
+        subject._feed_item_matches_release(
+            item,
+            cases_by_id={"post-article-a": case},
+            creators_by_author={"creator-article-a": creator},
+            endpoint="creator snapshot feed",
+        )
+
+
+@pytest.mark.parametrize("unknown_field", ["sourceTaskId", "qualityScore"])
+def test_feed_item_match__rejects_unknown_projection_field__local_contract(
+    unknown_field: str,
+) -> None:
+    item = {
+        "postId": "post-article-a",
+        "contentType": "article",
+        "contentIdentity": "work",
+        "authorId": "creator-article-a",
+        unknown_field: "must-not-pass",
+    }
+
+    with pytest.raises(
+        subject.PostApiVerificationError,
+        match=rf"unknown ContentPostProjection fields: {unknown_field}",
+    ):
+        subject._feed_item_matches_release(
+            item,
+            cases_by_id={},
+            creators_by_author={},
+            endpoint="unknown field feed",
+        )
 
 
 def test_post_api_verification__rejects_incomplete_releaseimport_binding__contract__local_contract(

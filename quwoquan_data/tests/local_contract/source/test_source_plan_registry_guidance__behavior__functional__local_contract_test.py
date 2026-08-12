@@ -546,9 +546,9 @@ def test_source_category_coverage_uses_explicit_registry_category():
     assert "乐山大佛景区管委会" not in coverage["unknownPlatforms"]
 
 def test_article_base_candidate_limit_has_research_buffer():
-    assert _article_base_candidate_limit(1) == 3
-    assert _article_base_candidate_limit(4) == 16
-    assert _article_base_candidate_limit(10) == 32
+    assert source_quality_mod._article_base_candidate_limit(1) == 12
+    assert source_quality_mod._article_base_candidate_limit(4) == 16
+    assert source_quality_mod._article_base_candidate_limit(10) == 32
 
 def test_homepage_entity_specific_support_override_is_removed():
     assert not hasattr(source_quality_mod, "_known_homepage_support_websites")

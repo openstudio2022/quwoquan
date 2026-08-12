@@ -29,6 +29,10 @@
           "pattern": "^sha256:[0-9a-f]{64}$"
         },
         "objectTransactionId": {"type": "string", "minLength": 1},
+        "poolDeliveryIntentId": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
         "resultEnvelopeRef": {"type": "string", "minLength": 1},
         "acceptanceClass": {
           "enum": [
@@ -53,7 +57,8 @@
             "required": [
               "canonicalObjectRef",
               "canonicalObjectSha256",
-              "objectTransactionId"
+              "objectTransactionId",
+              "poolDeliveryIntentId"
             ]
           }
         }

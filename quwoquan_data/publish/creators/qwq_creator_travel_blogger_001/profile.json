@@ -3,6 +3,14 @@
   "creatorId": "qwq_creator_travel_blogger_001",
   "userId": "builtin_travel_blogger",
   "authorId": "builtin_travel_blogger",
+  "version": 1,
+  "admission": {
+    "processResult": "completed",
+    "qualityResult": "passed",
+    "evidenceRef": "evidence/system_builtin_author_admission.json",
+    "evidenceDigest": "sha256:32e0484fd8fe796956f8ee910629c6d9ae9828da577ef9d66b90de3c9584759e"
+  },
+  "status": "active",
   "personaId": "builtin_travel_blogger",
   "displayName": "阿宁在路上",
   "userHandle": "ning_on_road",

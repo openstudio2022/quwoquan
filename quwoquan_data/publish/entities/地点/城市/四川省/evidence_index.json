@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260812--travel-homepage-m100--china--scale-008",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/城市/四川省",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:c1d0be32fd205bb4a158b536d2cc5d57e2605ab0cd1f4fdda23ff001c8d0ee15"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:5c26df03765b3f462d0054d4c30483fda17abec23cd9b75c949b61319967ce1c"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:ed6060680b47caa676a6726bbb4f7b61e2cfd794faf58d664b828a39fedbe6a4"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:0937b3c7a04f05b9262f50fb7c30fa3ee907a750f43fa15f9dea43ed2b15b03a"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:20f3cd240b2ddf085ff4f0077a3c9f3f7acceef333f6e59f1ccaea435089aee7"
+    }
+  ]
+}

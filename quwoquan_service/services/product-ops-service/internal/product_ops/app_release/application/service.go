@@ -11,6 +11,11 @@ import (
 const (
 	PlatformIOS     = "ios"
 	PlatformAndroid = "android"
+	PlatformWeb     = "web"
+
+	UpdateStateNone      = "none"
+	UpdateStateAvailable = "available"
+	UpdateStateRequired  = "required"
 )
 
 var (
@@ -21,6 +26,8 @@ var (
 type Release struct {
 	LatestVersion               string
 	LatestBuild                 string
+	MinimumSupportedVersion     string
+	MinimumSupportedBuild       string
 	UpdateURL                   string
 	RecoveryURL                 string
 	APKURL                      string
@@ -36,6 +43,7 @@ type Catalog struct {
 	PublicOrigin string
 	IOS          Release
 	Android      Release
+	Web          Release
 }
 
 type VersionQuery struct {
@@ -45,16 +53,21 @@ type VersionQuery struct {
 }
 
 type VersionResult struct {
-	LatestVersion string `json:"latestVersion"`
-	LatestBuild   string `json:"latestBuild"`
-	UpdateURL     string `json:"updateUrl"`
-	RecoveryURL   string `json:"recoveryUrl"`
+	Platform                string `json:"platform"`
+	LatestVersion           string `json:"latestVersion"`
+	LatestBuild             string `json:"latestBuild"`
+	MinimumSupportedVersion string `json:"minimumSupportedVersion"`
+	MinimumSupportedBuild   string `json:"minimumSupportedBuild"`
+	UpdateState             string `json:"updateState"`
+	UpdateURL               string `json:"updateUrl"`
+	RecoveryURL             string `json:"recoveryUrl"`
 }
 
 type Service struct {
 	catalog          Catalog
 	iosAvailable     bool
 	androidAvailable bool
+	webAvailable     bool
 }
 
 func NewService(catalog Catalog) (*Service, error) {
@@ -66,7 +79,8 @@ func NewService(catalog Catalog) (*Service, error) {
 	publicHosts := []string{publicURL.Hostname()}
 	iosAvailable := releaseConfigured(catalog.IOS)
 	androidAvailable := releaseConfigured(catalog.Android)
-	if !iosAvailable && !androidAvailable {
+	webAvailable := releaseConfigured(catalog.Web)
+	if !iosAvailable && !androidAvailable && !webAvailable {
 		return nil, ErrReleaseUnavailable
 	}
 	if iosAvailable {
@@ -79,10 +93,16 @@ func NewService(catalog Catalog) (*Service, error) {
 			return nil, err
 		}
 	}
+	if webAvailable {
+		if err := validateRelease(PlatformWeb, catalog.Web, publicHosts); err != nil {
+			return nil, err
+		}
+	}
 	return &Service{
 		catalog:          catalog,
 		iosAvailable:     iosAvailable,
 		androidAvailable: androidAvailable,
+		webAvailable:     webAvailable,
 	}, nil
 }
 
@@ -100,11 +120,29 @@ func (s *Service) Version(query VersionQuery) (VersionResult, error) {
 	if !ok {
 		return VersionResult{}, ErrReleaseUnavailable
 	}
+	minimumComparison, err := CompareBuild(query.BuildNumber, release.MinimumSupportedBuild)
+	if err != nil {
+		return VersionResult{}, ErrReleaseUnavailable
+	}
+	latestComparison, err := CompareBuild(query.BuildNumber, release.LatestBuild)
+	if err != nil {
+		return VersionResult{}, ErrReleaseUnavailable
+	}
+	updateState := UpdateStateNone
+	if minimumComparison < 0 {
+		updateState = UpdateStateRequired
+	} else if latestComparison < 0 {
+		updateState = UpdateStateAvailable
+	}
 	return VersionResult{
-		LatestVersion: release.LatestVersion,
-		LatestBuild:   release.LatestBuild,
-		UpdateURL:     release.UpdateURL,
-		RecoveryURL:   release.RecoveryURL,
+		Platform:                query.Platform,
+		LatestVersion:           release.LatestVersion,
+		LatestBuild:             release.LatestBuild,
+		MinimumSupportedVersion: release.MinimumSupportedVersion,
+		MinimumSupportedBuild:   release.MinimumSupportedBuild,
+		UpdateState:             updateState,
+		UpdateURL:               release.UpdateURL,
+		RecoveryURL:             release.RecoveryURL,
 	}, nil
 }
 
@@ -114,6 +152,8 @@ func (s *Service) Release(platform string) (Release, bool) {
 		return s.catalog.IOS, s.iosAvailable
 	case PlatformAndroid:
 		return s.catalog.Android, s.androidAvailable
+	case PlatformWeb:
+		return s.catalog.Web, s.webAvailable
 	default:
 		return Release{}, false
 	}
@@ -122,7 +162,10 @@ func (s *Service) Release(platform string) (Release, bool) {
 func releaseConfigured(release Release) bool {
 	return strings.TrimSpace(release.LatestVersion) != "" ||
 		strings.TrimSpace(release.LatestBuild) != "" ||
+		strings.TrimSpace(release.MinimumSupportedVersion) != "" ||
+		strings.TrimSpace(release.MinimumSupportedBuild) != "" ||
 		strings.TrimSpace(release.UpdateURL) != "" ||
+		strings.TrimSpace(release.RecoveryURL) != "" ||
 		strings.TrimSpace(release.APKURL) != ""
 }
 
@@ -134,6 +177,8 @@ func NormalizePlatform(raw string) string {
 		return PlatformIOS
 	case "android", "harmony", "harmonyos", "openharmony":
 		return PlatformAndroid
+	case "web":
+		return PlatformWeb
 	default:
 		return ""
 	}
@@ -170,15 +215,28 @@ func CompareBuild(left, right string) (int, error) {
 func validateRelease(platform string, release Release, publicHosts []string) error {
 	release.LatestVersion = strings.TrimSpace(release.LatestVersion)
 	release.LatestBuild = strings.TrimSpace(release.LatestBuild)
-	if release.LatestVersion == "" || !isPositiveDecimal(release.LatestBuild) {
-		return fmt.Errorf("%s release version/build is invalid", platform)
+	release.MinimumSupportedVersion = strings.TrimSpace(release.MinimumSupportedVersion)
+	release.MinimumSupportedBuild = strings.TrimSpace(release.MinimumSupportedBuild)
+	if release.LatestVersion == "" || !isPositiveDecimal(release.LatestBuild) ||
+		release.MinimumSupportedVersion == "" || !isPositiveDecimal(release.MinimumSupportedBuild) {
+		return fmt.Errorf("%s release version/build policy is invalid", platform)
+	}
+	minimumToLatest, err := CompareBuild(release.MinimumSupportedBuild, release.LatestBuild)
+	if err != nil || minimumToLatest > 0 {
+		return fmt.Errorf("%s minimum supported build exceeds latest build", platform)
 	}
 	if err := validateHTTPSURL(release.RecoveryURL, publicHosts); err != nil {
 		return fmt.Errorf("%s recovery url: %w", platform, err)
 	}
 	if platform == PlatformIOS {
-		if strings.TrimSpace(release.UpdateURL) != "" {
-			return errors.New("public ios release must not expose a native update url")
+		if err := validateHTTPSURL(release.UpdateURL, []string{"apps.apple.com"}); err != nil {
+			return fmt.Errorf("ios update url: %w", err)
+		}
+		return nil
+	}
+	if platform == PlatformWeb {
+		if err := validateHTTPSURL(release.UpdateURL, publicHosts); err != nil {
+			return fmt.Errorf("web update url: %w", err)
 		}
 		return nil
 	}

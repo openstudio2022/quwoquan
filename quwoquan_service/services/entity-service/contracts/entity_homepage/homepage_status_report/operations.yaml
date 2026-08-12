@@ -110,6 +110,64 @@ api_routes:
       anonymous_policy: deny
       visibility: private
     request_body_kind: object
+  - method: GET
+    path: /homepages/{homepageId}/status-reports/mine
+    operation: GetMyPendingHomepageStatusReport
+    commercial:
+      status: ready
+    actor: persona
+    application:
+      kind: query
+      facet: HomepageStatusReportQueryFacade
+      method: getMyPending
+      reader: MyPendingHomepageStatusReportReader
+      slice: HomepageStatusReportSlice
+    authorization:
+      principal: persona
+      ownership_policy: author_self
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - ENTITY.USER.status_report_not_found
+      - ENTITY.USER.permission_denied
+      - ENTITY.USER.invalid_argument
+      - ENTITY.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: redacted
+    telemetry:
+      metric: entity_homepage_status_report_mine_get
+      trace: true
+      attributes:
+        - homepage_id
+        - reason
+        - outcome
+    slo:
+      latency_p95_ms: 300
+      availability_percent: 99.5
+    request_bindings:
+      path:
+        - name: homepageId
+          field: homepageId
+      query:
+        - name: reason
+          field: reason
+          required: true
+    description: 当前 persona 对该主页和原因唯一 pending_review 状态上报；不存在时返回 canonical status_report_not_found
+    request_entity: GetMyPendingHomepageStatusReportQuery
+    response_entity: HomepageStatusReportView
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_body_kind: none
   - method: POST
     path: /homepages/{homepageId}/status-reports/{reportId}:review
     operation: ReviewHomepageStatusReport
@@ -171,6 +229,7 @@ consumers:
   - name: app
     capabilities:
       - create_homepage_status_report
+      - get_my_pending_homepage_status_report
   - name: platform-ops
     capabilities:
       - list_homepage_status_reports
@@ -208,6 +267,22 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_status_report/mongo_store__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-my-pending-homepage-status-report-local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetMyPendingHomepageStatusReport}
+    runner_source_path: quwoquan_service/services/entity-service/tests/local_contract/entity_homepage/homepage_status_report/facade__functional__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: get-my-pending-homepage-status-report-api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-002
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: GetMyPendingHomepageStatusReport}
+    runner_source_path: quwoquan_service/services/entity-service/tests/api_integration/entity_homepage/homepage_status_report/mongo_store__data_consistency__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: review-homepage-status-report-local
     spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-001
     producer: service
@@ -237,6 +312,22 @@ readiness_cases:
     producer: app
     layer: api_integration
     target: {kind: operation, id: CreateHomepageStatusReport}
+    runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage_status_report/homepage_status_report_remote__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_status_report_get_my_pending_homepage_status_report_app_local
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target: {kind: operation, id: GetMyPendingHomepageStatusReport}
+    runner_source_path: quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_status_report/homepage_status_report_remote__local_contract_test.dart
+    executions:
+      - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: homepage_status_report_get_my_pending_homepage_status_report_app_api
+    spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-002
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetMyPendingHomepageStatusReport}
     runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage_status_report/homepage_status_report_remote__api_integration_test.dart
     executions:
       - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}

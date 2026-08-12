@@ -35,15 +35,47 @@ SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 OCI_REF_RE = re.compile(r"^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")
 SERVICE_RE = re.compile(r"^[a-z][a-z0-9-]{1,62}$")
 SAFE_VALUE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:@/+\-]{0,255}$")
-STAGES = {"gray-initial", "carry-on", "full"}
+STAGES = {"canary", "5", "20", "50", "100"}
+STAGE_STEPS = {"canary": "0", "5": "5", "20": "20", "50": "50", "100": "100"}
 DECISIONS = {"continue", "pause", "rolled_back", "rollback_failed"}
 ROLLBACK_OUTCOMES = {"not_triggered", "rolled_back", "rollback_failed"}
 RECEIPT_ID_RE = re.compile(r"^[0-9a-f]{64}$")
 POSITIVE_INTEGER_RE = re.compile(r"^[1-9][0-9]*$")
 STAGE_RECEIPT_ID_FIELDS = {
-    "gray-initial": "gray_initial_receipt_id",
-    "carry-on": "carry_on_receipt_id",
-    "full": "full_receipt_id",
+    "canary": "canary_receipt_id",
+    "5": "percent_5_receipt_id",
+    "20": "percent_20_receipt_id",
+    "50": "percent_50_receipt_id",
+    "100": "percent_100_receipt_id",
+}
+PROMOTION_EVIDENCE_FIELDS = frozenset(
+    {
+        "schema",
+        "authority",
+        "candidateId",
+        "artifactDigest",
+        "campaignId",
+        "routingPolicyDigest",
+        "stage",
+        "observedFrom",
+        "observedUntil",
+        "durationSeconds",
+        "syntheticRequestCount",
+        "candidateRequestCount",
+        "uniqueCandidateInstallations",
+        "platforms",
+        "audiences",
+        "supportedAppCoverage",
+        "source",
+        "evidenceDigest",
+    }
+)
+PROMOTION_THRESHOLDS = {
+    "canary": (0, 0, 6, 2, 120),
+    "5": (30 * 60, 1000, 50, 10, 0),
+    "20": (2 * 60 * 60, 5000, 200, 30, 0),
+    "50": (24 * 60 * 60, 20000, 1000, 100, 0),
+    "100": (0, 0, 3, 1, 0),
 }
 REQUEST_FIELDS = frozenset(
     {
@@ -95,9 +127,11 @@ STATE_FIELDS = frozenset(
         "contract_graph_digest",
         "adapter_digest",
         "last_good_candidate_digest",
-        "gray_initial_receipt_id",
-        "carry_on_receipt_id",
-        "full_receipt_id",
+        "canary_receipt_id",
+        "percent_5_receipt_id",
+        "percent_20_receipt_id",
+        "percent_50_receipt_id",
+        "percent_100_receipt_id",
         "generation",
         "receipt_id",
         "updated_at",
@@ -265,6 +299,183 @@ def _require_timestamp(value: object, *, field: str) -> dt.datetime:
     return parsed
 
 
+def _require_non_negative_integer(value: object, *, field: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{field} must be a non-negative integer")
+    return value
+
+
+def validate_promotion_evidence(
+    value: object,
+    *,
+    candidate_id: object,
+    artifact_digest: object,
+    stage: object,
+) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != PROMOTION_EVIDENCE_FIELDS:
+        raise ValueError("promotionEvidence has an invalid shape")
+    if (
+        value.get("schema") != "prod-rollout-stage-promotion-evidence"
+        or value.get("authority") != "protected-prod-runner"
+        or value.get("candidateId") != candidate_id
+        or value.get("artifactDigest") != artifact_digest
+        or value.get("stage") != stage
+        or not _require_safe_string(value.get("campaignId"), field="campaignId")
+        or not isinstance(value.get("routingPolicyDigest"), str)
+        or SHA256_RE.fullmatch(value["routingPolicyDigest"]) is None
+        or not isinstance(value.get("evidenceDigest"), str)
+        or SHA256_RE.fullmatch(value["evidenceDigest"]) is None
+    ):
+        raise ValueError("promotionEvidence binding is invalid")
+    unsigned = dict(value)
+    evidence_digest = unsigned.pop("evidenceDigest")
+    if "sha256:" + hashlib.sha256(_canonical_bytes(unsigned)).hexdigest() != evidence_digest:
+        raise ValueError("promotionEvidence digest is invalid")
+
+    observed_from = _require_timestamp(
+        value.get("observedFrom"), field="promotionEvidence.observedFrom"
+    )
+    observed_until = _require_timestamp(
+        value.get("observedUntil"), field="promotionEvidence.observedUntil"
+    )
+    duration = _require_non_negative_integer(
+        value.get("durationSeconds"), field="promotionEvidence.durationSeconds"
+    )
+    if observed_until < observed_from or duration != int(
+        (observed_until - observed_from).total_seconds()
+    ):
+        raise ValueError("promotionEvidence observation interval is invalid")
+    minimum_duration, minimum_requests, minimum_installations, per_platform, synthetic = (
+        PROMOTION_THRESHOLDS[str(stage)]
+    )
+    requests = _require_non_negative_integer(
+        value.get("candidateRequestCount"),
+        field="promotionEvidence.candidateRequestCount",
+    )
+    installations = _require_non_negative_integer(
+        value.get("uniqueCandidateInstallations"),
+        field="promotionEvidence.uniqueCandidateInstallations",
+    )
+    synthetic_requests = _require_non_negative_integer(
+        value.get("syntheticRequestCount"),
+        field="promotionEvidence.syntheticRequestCount",
+    )
+    if (
+        duration < minimum_duration
+        or requests < minimum_requests
+        or installations < minimum_installations
+        or synthetic_requests < synthetic
+    ):
+        raise ValueError("promotionEvidence does not satisfy the stage threshold")
+
+    platforms = value.get("platforms")
+    allowed_platforms = {"android", "ios", "web"}
+    if (
+        not isinstance(platforms, dict)
+        or not platforms
+        or not set(platforms).issubset(allowed_platforms)
+        or (stage in {"canary", "100"} and set(platforms) != allowed_platforms)
+    ):
+        raise ValueError("promotionEvidence platforms are invalid")
+    platform_requests = 0
+    platform_installations = 0
+    for platform, item in platforms.items():
+        if not isinstance(item, dict) or set(item) != {
+            "candidateRequestCount",
+            "uniqueCandidateInstallations",
+        }:
+            raise ValueError(f"promotionEvidence platform {platform} is invalid")
+        platform_requests += _require_non_negative_integer(
+            item.get("candidateRequestCount"), field=f"platforms.{platform}.requests"
+        )
+        platform_count = _require_non_negative_integer(
+            item.get("uniqueCandidateInstallations"),
+            field=f"platforms.{platform}.installations",
+        )
+        if platform_count < per_platform:
+            raise ValueError(
+                f"promotionEvidence platform {platform} lacks required installations"
+            )
+        platform_installations += platform_count
+    if platform_requests != requests or platform_installations != installations:
+        raise ValueError("promotionEvidence platform totals are inconsistent")
+
+    audiences = value.get("audiences")
+    if not isinstance(audiences, dict) or set(audiences) != {"regions", "carriers"}:
+        raise ValueError("promotionEvidence audiences are invalid")
+    for dimension in ("regions", "carriers"):
+        audience = audiences[dimension]
+        if not isinstance(audience, dict) or set(audience) != {"mode", "observations"}:
+            raise ValueError(f"promotionEvidence {dimension} is invalid")
+        observations = audience.get("observations")
+        if not isinstance(observations, list) or not observations:
+            raise ValueError(f"promotionEvidence {dimension} observations are missing")
+        seen: set[str] = set()
+        has_unknown = False
+        has_top = False
+        for item in observations:
+            if not isinstance(item, dict) or set(item) != {
+                "value",
+                "top",
+                "candidateRequestCount",
+                "uniqueCandidateInstallations",
+            }:
+                raise ValueError(f"promotionEvidence {dimension} observation is invalid")
+            segment = _require_safe_string(
+                item.get("value"), field=f"promotionEvidence.{dimension}.value"
+            )
+            if segment in seen or not isinstance(item.get("top"), bool):
+                raise ValueError(f"promotionEvidence {dimension} segment is invalid")
+            seen.add(segment)
+            segment_requests = _require_non_negative_integer(
+                item.get("candidateRequestCount"),
+                field=f"promotionEvidence.{dimension}.requests",
+            )
+            segment_installations = _require_non_negative_integer(
+                item.get("uniqueCandidateInstallations"),
+                field=f"promotionEvidence.{dimension}.installations",
+            )
+            has_unknown = has_unknown or segment == "unknown"
+            has_top = has_top or (item["top"] and segment != "unknown")
+            if audience.get("mode") == "include" and (
+                segment_requests < 100 or segment_installations < 10
+            ):
+                raise ValueError(
+                    f"promotionEvidence directed {dimension} lacks required samples"
+                )
+        if audience.get("mode") == "all":
+            if not has_unknown or not has_top:
+                raise ValueError(
+                    f"promotionEvidence all-mode {dimension} lacks top/unknown observations"
+                )
+        elif audience.get("mode") != "include":
+            raise ValueError(f"promotionEvidence {dimension} mode is invalid")
+
+    coverage = value.get("supportedAppCoverage")
+    if (
+        not isinstance(coverage, dict)
+        or set(coverage) != {"mode", "complete"}
+        or not isinstance(coverage.get("complete"), bool)
+        or (stage == "100" and coverage.get("complete") is not True)
+    ):
+        raise ValueError("promotionEvidence supported App coverage is invalid")
+    source = value.get("source")
+    if (
+        not isinstance(source, dict)
+        or set(source) != {"authority", "queryDigest", "receiptDigest", "generatedAt"}
+        or source.get("authority") != "prod-observability-plane"
+        or any(
+            not isinstance(source.get(field), str)
+            or SHA256_RE.fullmatch(source[field]) is None
+            for field in ("queryDigest", "receiptDigest")
+        )
+        or _require_timestamp(source.get("generatedAt"), field="source.generatedAt")
+        < observed_until
+    ):
+        raise ValueError("promotionEvidence source is invalid")
+    return dict(value)
+
+
 def _validate_check_summaries(
     value: object, *, field: str
 ) -> list[dict[str, Any]]:
@@ -358,6 +569,8 @@ def _validate_request(value: object) -> dict[str, Any]:
         raise ValueError("stage is invalid")
     if value.get("triggerStage") not in STAGES:
         raise ValueError("triggerStage is invalid")
+    if value.get("step") != STAGE_STEPS[value["stage"]]:
+        raise ValueError("step does not match stage")
     for field in ("fromReleaseEvidenceRef", "toReleaseEvidenceRef"):
         if not isinstance(value.get(field), str) or OCI_REF_RE.fullmatch(value[field]) is None:
             raise ValueError(f"{field} must be an exact immutable OCI ref")
@@ -389,6 +602,13 @@ def _validate_request(value: object) -> dict[str, Any]:
         raise ValueError("expectedGeneration must be a non-negative integer")
     if not isinstance(value.get("sloReadback"), dict):
         raise ValueError("sloReadback must be an object")
+    if service == "prod-stack" and decision == "continue":
+        validate_promotion_evidence(
+            value["sloReadback"].get("promotionEvidence"),
+            candidate_id=value.get("toCandidateDigest"),
+            artifact_digest=value.get("artifactDigest"),
+            stage=value.get("triggerStage"),
+        )
     _validate_check_summaries(value.get("postChecks"), field="postChecks")
     last_good = value.get("lastGoodCandidateDigest")
     if not isinstance(last_good, str) or SHA256_RE.fullmatch(last_good) is None:
@@ -1066,15 +1286,15 @@ def commit_soak(root: Path, request: object) -> dict[str, Any]:
         readback = _validated_readback(root, service)
         state = readback["state"]
         if (
-            state.get("trigger_stage") != "full"
-            or state.get("stage") != "full"
+            state.get("trigger_stage") != "100"
+            or state.get("stage") != "100"
             or state.get("decision") != "continue"
             or state.get("rollback_outcome") != "not_triggered"
         ):
             raise RuntimeError(
                 "GATE_BLOCK: prod soak requires current successful full rollout state"
             )
-        full_receipt_id = state.get("full_receipt_id", "")
+        full_receipt_id = state.get("percent_100_receipt_id", "")
         if full_receipt_id != payload["fullRolloutReceiptId"]:
             raise RuntimeError("GATE_BLOCK: prod soak full rollout receipt drift")
         full_receipt = _load_hosted_receipt(

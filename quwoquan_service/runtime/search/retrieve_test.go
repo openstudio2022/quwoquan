@@ -56,6 +56,40 @@ func TestRetrieveRanksByTermCoverage(t *testing.T) {
 	}
 }
 
+func TestRetrievePreservesCanonicalFlatCardNavigation(t *testing.T) {
+	response, err := Retrieve(context.Background(), RetrieveRequest{
+		Targets: []Target{TargetArticle},
+		Terms:   []string{"西湖"},
+	}, NewSliceBackend([]Document{{
+		ObjectType: ObjectTypeContentPost,
+		ObjectID:   "post_flat_card",
+		Title:      "西湖摄影",
+		Summary:    "西湖取景指南",
+		DeepLink:   "quwoquan://content/posts/post_flat_card",
+		Visibility: "public",
+		Fields: map[string]string{
+			"thumbnailUrl": "https://cdn.example/thumbnail.webp",
+			"coverUrl":     "https://cdn.example/cover.webp",
+		},
+	}}), Viewer{})
+	if err != nil {
+		t.Fatalf("retrieve: %v", err)
+	}
+	if len(response.Hits) != 1 {
+		t.Fatalf("hits=%d", len(response.Hits))
+	}
+	hit := response.Hits[0]
+	if hit.DeepLink != "quwoquan://content/posts/post_flat_card" {
+		t.Fatalf("deepLink=%q", hit.DeepLink)
+	}
+	if hit.ThumbnailURL != "https://cdn.example/thumbnail.webp" {
+		t.Fatalf("thumbnailUrl=%q", hit.ThumbnailURL)
+	}
+	if len(response.Citations) != 1 || response.Citations[0].DeepLink != hit.DeepLink {
+		t.Fatalf("citation did not preserve canonical DeepLink: %#v", response.Citations)
+	}
+}
+
 func TestRetrieveNameAnchorResolvesAuthor(t *testing.T) {
 	// names=[alice] + targets=[article] must associate by author without type.
 	resp, err := Retrieve(context.Background(), RetrieveRequest{

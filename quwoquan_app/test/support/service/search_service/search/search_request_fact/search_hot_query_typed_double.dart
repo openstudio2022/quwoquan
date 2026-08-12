@@ -1,7 +1,8 @@
 import 'package:quwoquan_app/service/search_service/search/search_request_fact/application/search_hot_query_reader.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
+
 /// local_contract 热词读模型：只消费 search-service canonical 场景。
 final class SearchHotQueryTypedDouble implements SearchHotQueryReader {
   SearchHotQueryTypedDouble() : _items = _loadItems();
@@ -16,9 +17,9 @@ final class SearchHotQueryTypedDouble implements SearchHotQueryReader {
   }
 
   static List<SearchTermHeatItem> _loadItems() {
-    final decoded = objectScenarioSeedReader.document('search');
-    final seedSets = decoded['seedSets'] as Map<String, dynamic>? ?? const {};
-    final core = seedSets['search_hot_queries_core'] as Map<String, dynamic>?;
+    final decoded = objectContractExampleReader.document('search');
+    final examples = decoded['examples'] as Map<String, dynamic>? ?? const {};
+    final core = examples['search_hot_queries_core'] as Map<String, dynamic>?;
     final rawItems = core?['hot_queries'] as List?;
     if (rawItems == null) {
       throw StateError(

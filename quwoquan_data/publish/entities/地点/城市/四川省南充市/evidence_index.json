@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260812--travel-homepage-m100--china--scale-008",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/城市/四川省南充市",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:e934ce145482c397f918867250ed6c3cf26b57265a8da4d086e69dce4e1f264d"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:5f2e16858491e9ecf2a0ec71ddbf5e21bc9161f523860c79e2715892d373e018"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:fa3d95abb15684b77da0a4c199bc51d4b0815f87b7c3ced5ca1f8cf2a3cff0d6"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:5f1247f51d2ca5fe8f50aac1610d29bd44284339899ebb05a38e25ce7cc440b8"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:193f8c80ecb0d996a46101c2e8f0e6a3df4ef72c0a5b54a6842370b5bc2eabfa"
+    }
+  ]
+}

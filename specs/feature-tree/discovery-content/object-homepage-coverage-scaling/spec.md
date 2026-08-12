@@ -42,8 +42,9 @@
 - 静态 family、provider、schema、prompt/template 与 reference 不含运行实例值。
 - execution packet 的 request 与 target set 均固化在 `0.plan`，且 output 删除后仍可从受版本控制的静态输入重建。
 - 四类载体均能由同一 CLI 门面创建、review、promote 与聚合 release。
-- homepage/article/image/video 的 quota/count 只表达请求负载与规模验证 `100/100/100/10`、扩展规模 `1000/1000/1000/100` target；每路至少一个对象闭合对象硬门且所有合格对象均发布即可形成结构性 promotion，shortfall、discard、video popularity availability/coverage 与 automatic recovery 统计不否决。
-- 扩展规模 workload 只能精确绑定同一 release/manifest/source/catalog identity 的 create-once 规模验证 promotion receipt。
+- homepage/article/image/video 的 quota/count 同时表达日常请求负载与累计 milestone target；日常 publish 允许 partial 并发布全部合格对象，M100 的唯一目标为 `100/100/100/10`，后继规模按当前池中唯一合格对象计算差额。
+- milestone 只表示池中已达到的累计规模，不是日常 Research 发布的前驱门；历史批次、不同 source identity 与既有 release 中的合格对象可以按稳定对象身份累计，未达到目标时如实报告 gap 并继续增量发布。
+- 文章配图率、素材来源分布、视频热度、automatic recovery、资源利用、soak、重试与吞吐只记录过程和统计，不改变单对象的质量、授权范围或 Research 发布资格；完全重复作品不重复计数，但不阻断同批其它对象。
 - release 只绑定 execution/source digest 与 desired state；环境 receipt、rollback/replay 通过 ship 写入输出。
 
 <a id="req-002"></a>
@@ -71,8 +72,8 @@
 - THEN 静态 family、provider、schema、prompt/template 与 reference 不含运行实例值。
 - THEN execution packet 的 request 与 target set 均固化在 `0.plan`，且 output 删除后仍可从受版本控制的静态输入重建。
 - THEN 四类载体均能由同一 CLI 门面创建、review、promote 与聚合 release。
-- THEN 规模验证 promotion 证明四路真实执行、每路至少一个 hard-qualified 对象全部发布、同源与资源隔离成立；receipt 记录 target/qualified/shortfall 及各 rate 分子分母，并明确 video popularity 与 automatic recovery 为统计且非阻断，不要求 target、恢复样本数或比率命中。
-- THEN 扩展规模 workload 精确绑定该规模验证 promotion identity，不以其它 release、计划值或聚合成功替代。
+- THEN 池按稳定对象身份累计四类唯一合格对象，M100 只以 `100/100/100/10` 判断目标是否达到；未达到时返回 gap，已合格对象仍可形成 partial Research release。
+- THEN 文章配图、来源分布、视频热度、automatic recovery、资源利用、soak、重试与吞吐保留为统计，且其变化不改变质量合格并具有目标环境使用范围的对象准入结果。
 - THEN release 只绑定 execution/source digest 与 desired state；环境 receipt、rollback/replay 通过 ship 写入输出。
 
 ## 8. 开放事项

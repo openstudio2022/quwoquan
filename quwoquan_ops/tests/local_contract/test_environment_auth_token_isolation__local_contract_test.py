@@ -8,7 +8,6 @@ from types import SimpleNamespace
 from unittest import mock
 
 from quwoquan_ops.cli import stackctl
-from quwoquan_ops.cli.lib import local_environment_auth
 from quwoquan_ops.cli.lib import release_video_delivery
 from quwoquan_ops.cli.probes import run_environment_integration_probe as probe
 
@@ -61,7 +60,7 @@ def test_health_probe_records_unreadable_local_auth_as_gate_block(
         mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
         mock.patch.object(
             stackctl,
-            "open_reference_acceptance_session",
+            "open_test_data_acceptance_session",
             side_effect=PermissionError("auth directory is not readable"),
         ),
     ):
@@ -92,7 +91,7 @@ def test_health_probe_binds_local_managed_ca_before_reference_auth(
         mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
         mock.patch.object(
             stackctl,
-            "open_reference_acceptance_session",
+            "open_test_data_acceptance_session",
             side_effect=_capture_session,
         ),
         mock.patch.object(
@@ -122,7 +121,7 @@ def test_public_release_readback_does_not_require_candidate_identity(
         mock.patch.object(stackctl, "_resolve_test_auth_token", return_value=""),
         mock.patch.object(
             stackctl,
-            "open_reference_acceptance_session",
+            "open_test_data_acceptance_session",
             side_effect=AssertionError("public release checks must not open identity"),
         ),
         mock.patch.object(
@@ -151,19 +150,18 @@ def test_public_release_readback_does_not_require_candidate_identity(
 
 def test_intersection_smoke_keeps_acceptance_token_out_of_process_argv() -> None:
     module = runpy.run_path(str(INTERSECTION_SMOKE_RUNNER))
-    session = SimpleNamespace(
-        owner_id="fixture_user_current",
-        persona_id="fixture_user_current",
-        access_token="secret-acceptance-token",
-    )
     completed = SimpleNamespace(returncode=0)
 
     with (
-        mock.patch.object(
-            local_environment_auth,
-            "open_reference_acceptance_session",
-            return_value=session,
-        ) as open_session,
+        mock.patch.dict(
+            os.environ,
+            {
+                "QWQ_TEST_DATA_ACCESS_TOKEN": "secret-acceptance-token",
+                "QWQ_TEST_DATA_OWNER_ID": "typed-owner",
+                "QWQ_TEST_DATA_PERSONA_ID": "typed-persona",
+            },
+            clear=False,
+        ),
         mock.patch.object(
             release_video_delivery,
             "resolve_readiness_path",
@@ -211,10 +209,6 @@ def test_intersection_smoke_keeps_acceptance_token_out_of_process_argv() -> None
     smoke_command = smoke_call.args[0]
     child_environment = smoke_call.kwargs["env"]
 
-    assert open_session.call_args.kwargs == {
-        "environment": "gamma",
-        "target_name": "gamma-local",
-    }
     assert all(
         "secret-acceptance-token" not in argument
         for call in run.call_args_list

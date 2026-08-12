@@ -1,0 +1,29 @@
+{
+  "schema": "quwoquan_data.review_attestation",
+  "stage": "5.review",
+  "executionId": "20260810--travel-article-m1--china-dujiangyan-research-062aa4a3-epoch10-not-m100--scale-002",
+  "executionBinding": "frozen",
+  "objectRef": "都江堰__article_frontier_wikipedia_zh_2277977f8f49",
+  "decision": "approved",
+  "deterministicGate": {
+    "status": "passed",
+    "issues": []
+  },
+  "independentReviewer": {
+    "status": "passed",
+    "provider": "cursor_sdk",
+    "model": "auto",
+    "modelFamily": "auto",
+    "runId": "run-d9dc0637-2881-4721-9243-7257592e9347",
+    "resultHash": "sha256:e2de057c50dd2187b87b5418bf5a71560452bf6bfb2c6dc161c25b1486db95fd"
+  },
+  "mediaRefReview": {
+    "status": "passed",
+    "issues": []
+  },
+  "repair": {
+    "status": "not_required"
+  },
+  "finalizationRef": "5.review/finalization_report.json",
+  "evidenceIndexRef": "5.review/evidence_index.json"
+}

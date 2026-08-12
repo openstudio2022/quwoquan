@@ -27,7 +27,7 @@ class ResolvedCampaignScale:
 
 
 class CampaignScaleError(ValueError):
-    """Invalid campaign scale or quota (GATE_BLOCK)."""
+    """Invalid campaign scale or minimum workload floor (GATE_BLOCK)."""
 
 
 @lru_cache(maxsize=1)
@@ -135,11 +135,13 @@ def resolve_campaign_scale(
 
 
 def campaign_workload_targets(scale: str) -> dict[str, int]:
-    """Resolve the canonical per-carrier workload for one campaign scale.
+    """Resolve the canonical per-carrier minimum for one campaign scale.
 
     Governed research milestones deliberately do not use the numeric scale as
     the video workload.  Keeping this decision here prevents M10000 from
-    silently expanding video from the policy target of 1000 to 10000.
+    silently raising the video floor from 1000 to 10000.  These values never
+    truncate a full frontier: every additional qualified object remains
+    admissible and publishable.
     """
 
     resolved = resolve_campaign_scale(scale=scale)

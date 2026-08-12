@@ -1,0 +1,39 @@
+{
+  "schema": "quwoquan_data.evidence_index",
+  "stage": "5.review",
+  "executionId": "20260810--travel-homepage-m1--china-panda-base-research-b7c02f9f-epoch6-not-m100--scale-001",
+  "executionBinding": "frozen",
+  "objectRef": "/entity/地点/景区/成都大熊猫繁育研究基地",
+  "evidence": [
+    {
+      "kind": "deterministic_gate",
+      "ref": "5.review/deterministic_gate.json",
+      "sha256": "sha256:8d7a036267494c5c441083655926e26f680541072999cae76e6fb8fa59759270"
+    },
+    {
+      "kind": "media_ref_review",
+      "ref": "5.review/media_ref_review.json",
+      "sha256": "sha256:934293cdbb428a19a75ffebd66f26920f83d497127e0363312259d60fef56623"
+    },
+    {
+      "kind": "review",
+      "ref": "5.review/review.json",
+      "sha256": "sha256:6cb28ad391142ac16581da5bcbd53c1714eed015c6f64b7df8232eb3b68c0804"
+    },
+    {
+      "kind": "provenance",
+      "ref": "5.review/provenance.json",
+      "sha256": "sha256:e650ff6d80eb6134851cd9dd20516da5739330337654ddd42c1612f6d92e477b"
+    },
+    {
+      "kind": "finalization",
+      "ref": "5.review/finalization_report.json",
+      "sha256": "sha256:601197321d887b39b4c09a416d587d6727fb7f72a03dbfa78f4a5a5273b751a8"
+    },
+    {
+      "kind": "independent_reviewer_result",
+      "ref": "5.review/reviewer_result.json",
+      "sha256": "sha256:fcf5e4e1a7a2ee6ee9dcd30fe8c73bdb23f4c9ab8e981cc281516613c6ef0b30"
+    }
+  ]
+}

@@ -25,19 +25,21 @@ from content.execution.planning.recipe.model import (
     _runtime_preflight_argv,
 )
 from content.execution.queue.core import _read_job, _write_job
-from content.execution.queue.backend import ReliableTaskJobSetCollisionError
 from content.execution.queue.jobs import enqueue_ref_job
 from content.execution.queue.model import QueueLease
+from content.execution.queue.reliabletask.author import (
+    _recover_completed_author_outcome,
+)
 from content.execution.queue.reliabletask.fleet import (
     _has_audited_remote_recovery,
     fleet_batch_timeout_seconds,
 )
+from content.execution.queue.reliabletask.job_set import (
+    ReliableTaskJobSetCollisionError,
+)
 from content.execution.queue.reliabletask.report import (
     ReliableTaskFleetOutcome,
     ReliableTaskFleetReport,
-)
-from content.execution.queue.reliabletask.author import (
-    _recover_completed_author_outcome,
 )
 from content.execution.workspace import execution_root
 from content.templates.registry import TemplateRegistry
@@ -865,6 +867,10 @@ def test_failed_commercial_batch_does_not_block_nonempty_publish_closure(
     from content.execution.queue.reliabletask import fleet as reliabletask_fleet
 
     monkeypatch.setattr(reliabletask_fleet, "run_reliabletask_fleet", run_fleet)
+    monkeypatch.setattr(
+        "content.execution.preflight.pool_delivery.record_pool_delivery_preflight",
+        lambda _execution_id: ({"poolDeliveryReady": True}, {}, None),
+    )
     result = reliabletask_dispatch.dispatch_reliabletask_checkpoint(
         ctx,
         ExecutionStage.PUBLISH,

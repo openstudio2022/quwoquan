@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -91,7 +92,8 @@ func buildAgentLoop(
 	}, orchestration.ReactRuntime{
 		Model: model,
 		Tools: orchestration.DefaultToolCoordinator{
-			Registry: registry,
+			Registry:               registry,
+			RuntimeCandidateDigest: strings.TrimSpace(os.Getenv("QWQ_RELEASE_CANDIDATE_DIGEST")),
 		},
 	}, nil)
 	loop.DurableSubtasks = orchestration.NewDurableSubtaskCoordinator(
@@ -254,7 +256,11 @@ func buildToolRegistry(
 		}
 		handlers[name] = handler
 	}
-	if err := tool.RegisterCanonical(&registry, handlers); err != nil {
+	if err := tool.RegisterCanonical(
+		&registry,
+		handlers,
+		canonicalToolUnavailability(appEnv, configProvider),
+	); err != nil {
 		return tool.Registry{}, err
 	}
 	return registry, nil

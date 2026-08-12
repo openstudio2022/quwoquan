@@ -21,6 +21,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from content.release.canonical import canonical_video_inventory
 from content.release.canonical.canonical_image_inventory import (
     assert_image_index_ready,
     assert_image_manifest_unique,
@@ -244,16 +245,23 @@ def _bootstrap_inventory(publish_root: Path, path: Path) -> dict[str, Any]:
                     document["inventoryDigest"],
                 ),
             )
+            manifest_paths = tuple(
+                str(row["path"])
+                for row in rows
+                if str(row["path"]).startswith("posts/")
+                and str(row["path"]).endswith("/manifest.json")
+            )
             bootstrap_image_index(
                 connection,
                 publish_root=publish_root,
                 inventory_digest=str(document["inventoryDigest"]),
-                manifest_paths=tuple(
-                    str(row["path"])
-                    for row in rows
-                    if str(row["path"]).startswith("posts/")
-                    and str(row["path"]).endswith("/manifest.json")
-                ),
+                manifest_paths=manifest_paths,
+            )
+            canonical_video_inventory.bootstrap_video_index(
+                connection,
+                publish_root=publish_root,
+                inventory_digest=str(document["inventoryDigest"]),
+                manifest_paths=manifest_paths,
             )
         os.replace(temporary, path)
     finally:
@@ -329,6 +337,11 @@ def load_or_bootstrap_inventory(publish_root: Path) -> dict[str, Any]:
         with _connect(path) as connection:
             document = _metadata_document(connection, publish_root=publish_root)
             bootstrap_image_index(
+                connection,
+                publish_root=publish_root,
+                inventory_digest=str(document["inventoryDigest"]),
+            )
+            canonical_video_inventory.bootstrap_video_index(
                 connection,
                 publish_root=publish_root,
                 inventory_digest=str(document["inventoryDigest"]),
@@ -454,6 +467,10 @@ def write_inventory(publish_root: Path, document: Mapping[str, Any]) -> None:
                 connection,
                 inventory_digest=str(current["inventoryDigest"]),
             )
+            canonical_video_inventory.assert_video_index_ready(
+                connection,
+                inventory_digest=str(current["inventoryDigest"]),
+            )
             for mutation in mutations:
                 if not isinstance(mutation, Mapping):
                     raise ObjectTransactionError("canonical inventory mutation drift")
@@ -479,6 +496,12 @@ def write_inventory(publish_root: Path, document: Mapping[str, Any]) -> None:
                         (row["path"], row["sha256"], row["bytes"], row["leafHash"]),
                     )
             sync_image_index_delta(
+                connection,
+                publish_root=publish_root,
+                mutations=mutations,
+                inventory_digest=str(pending["inventoryDigest"]),
+            )
+            canonical_video_inventory.sync_video_index_delta(
                 connection,
                 publish_root=publish_root,
                 mutations=mutations,
@@ -537,9 +560,7 @@ def validate_delta_materialization(
         )
         expects_absence = (
             reverse and raw.get("operation") == "create"
-        ) or (
-            not reverse and raw.get("operation") == "delete"
-        )
+        ) or (not reverse and raw.get("operation") == "delete")
         if expects_absence:
             if destination.exists():
                 raise ObjectTransactionError(
@@ -559,10 +580,14 @@ def validate_delta_materialization(
             )
 
 
+assert_canonical_video_unique = canonical_video_inventory.assert_canonical_video_unique
+
+
 __all__ = [
     "INVENTORY_SCHEMA",
     "apply_inventory_delta",
     "assert_canonical_image_unique",
+    "assert_canonical_video_unique",
     "canonical_inventory_path",
     "load_or_bootstrap_inventory",
     "validate_delta_materialization",

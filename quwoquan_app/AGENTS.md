@@ -32,6 +32,7 @@
  判成单对象、`multi_object_page` 信号随之消失。不得为了让派生器闭嘴而删减 `object_ids`；
  同步工具会把这类页面报成 `REVIEW [multi_object_single_presentation]` 等待拆页裁决。
 - App 端在 `alpha/beta/gamma/prod` 全部使用同一个 production Remote composition；环境只提供 runtime package/endpoints，App 可见第一方业务数据只来自环境已激活的 canonical immutable release。任何 runner、UAT support 或启动脚本均不得注入 Mock/fixture，也不得保留 Mock/Remote 切换入口。
+- `local_contract` 对象级 double 直接消费语言内 typed builder/generator 或最小 contract example；禁止在 Dart builder 中重建 `seedSets`、`repositoryExpectations`、`requiresSeedReset` 等场景文档结构，也禁止让独立 eval corpus 选择 App Repository 或环境数据重置策略。
 - 新页面、入口、详情、搜索、创作、消息或推荐相关改动，必须补曝光、停留、异常、关键点击、`referralSource`/`feedRequestId`/trace 传递；内容消费页还要补消费深度和互动反馈。
 - 用户反馈、点赞/评论/收藏/分享/关注、搜索点击、内容停留等行为必须能回流到推荐和运营分析，不得只停留在 UI 状态。
 - 当前阶段未上线：发现不合理 UI/Repository/Provider/路由实现时直接替换为正确模式，不为旧错误保留兼容分支、fallback 或 allowlist。

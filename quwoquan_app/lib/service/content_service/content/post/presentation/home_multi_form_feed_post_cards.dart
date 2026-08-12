@@ -555,7 +555,7 @@ class _FollowingArticleCard extends StatelessWidget {
 
   String get _headlineText {
     final title = item.normalizedTitle;
-    final body = item.normalizedBody;
+    final body = item.articlePreviewText;
     if (title.isNotEmpty) return title;
     if (body.isNotEmpty) return body;
     return '文章';
@@ -563,7 +563,7 @@ class _FollowingArticleCard extends StatelessWidget {
 
   String get _supportingText {
     final title = item.normalizedTitle;
-    final body = item.normalizedBody;
+    final body = item.articlePreviewText;
     if (title.isEmpty || body.isEmpty || title == body) {
       return '';
     }

@@ -632,6 +632,71 @@ func TestGeneratedOperationGuardPanicsOnMalformedOrDuplicateRoute(t *testing.T) 
 	}
 }
 
+func TestGeneratedOperationGuardLeavesSharedGraphQLRouteToPersistedQueryAuthorizer(t *testing.T) {
+	t.Parallel()
+
+	descriptors := []OperationSecurityDescriptor{
+		{
+			CanonicalOperationID: "content.post.GetPost",
+			ContractGraphSHA256:  testContractGraphSHA256,
+			Transport:            "graphql",
+			Method:               http.MethodPost,
+			PathTemplate:         "/graphql",
+			OperationKind:        "query",
+			AuthMode:             "public",
+			ActorRequirement:     "none",
+			Principal:            "public",
+			CommercialStatus:     "ready",
+		},
+		{
+			CanonicalOperationID: "content.post.GetPostMedia",
+			ContractGraphSHA256:  testContractGraphSHA256,
+			Transport:            "graphql",
+			Method:               http.MethodPost,
+			PathTemplate:         "/graphql",
+			OperationKind:        "query",
+			AuthMode:             "public",
+			ActorRequirement:     "none",
+			Principal:            "public",
+			CommercialStatus:     "ready",
+		},
+	}
+
+	ownerCalls := 0
+	runtimeHandler := EnforceRuntimeOperationContract(descriptors)(
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			ownerCalls++
+			w.WriteHeader(http.StatusNoContent)
+		}),
+	)
+	runtimeResponse := httptest.NewRecorder()
+	runtimeHandler.ServeHTTP(
+		runtimeResponse,
+		httptest.NewRequest(http.MethodPost, "/graphql", nil),
+	)
+	if runtimeResponse.Code != http.StatusNoContent || ownerCalls != 1 {
+		t.Fatalf(
+			"specialized GraphQL boundary did not receive request: status=%d calls=%d",
+			runtimeResponse.Code,
+			ownerCalls,
+		)
+	}
+
+	publicHandler := RequireGeneratedOperationAuthorization(descriptors)(
+		http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			t.Fatal("generic public guard must not select a GraphQL operation")
+		}),
+	)
+	publicResponse := httptest.NewRecorder()
+	publicHandler.ServeHTTP(
+		publicResponse,
+		httptest.NewRequest(http.MethodPost, "/graphql", nil),
+	)
+	if publicResponse.Code != http.StatusNotFound {
+		t.Fatalf("generic public GraphQL status=%d want=%d", publicResponse.Code, http.StatusNotFound)
+	}
+}
+
 func TestGeneratedOperationGuardSelectsMostSpecificMatchingRoute(t *testing.T) {
 	t.Parallel()
 

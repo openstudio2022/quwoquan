@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/gathering_board_ports.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart' as cloud;
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    as cloud;
 
 GatheringBoardChatSlice gatheringBoardChatFromWire(
   cloud.GatheringChatBoardSlice wire,

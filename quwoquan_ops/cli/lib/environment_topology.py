@@ -61,7 +61,7 @@ LOCAL_PUBLIC_PORT_ROLES = {
     "mediaAvatar": "media-edge",
     "mediaImage": "media-edge",
     "mediaVideo": "media-edge",
-    "mediaUpload": "media-edge",
+    "mediaUpload": "object-storage-edge",
 }
 LOCAL_ORIGIN_PORT_ROLES = {
     "mediaOrigin": "media-origin",
@@ -496,8 +496,8 @@ def validate_environment_topology(
                 expected_port_role = None
                 if target_name != "prod-hosted":
                     expected_port_role = LOCAL_PUBLIC_PORT_ROLES[field]
-                    if target_name == "gamma-local" and field == "mediaUpload":
-                        expected_port_role = "object-storage-edge"
+                    if target_name == "prod-sim" and field == "mediaUpload":
+                        expected_port_role = "media-edge"
                 if role.get("portRole") != expected_port_role:
                     issues.append(
                         f"{target_name}: resolvedUrlRoles.{field}.portRole must be "
@@ -540,8 +540,8 @@ def validate_environment_topology(
                 )
             if isinstance(public_bases, dict):
                 for field, role_name in LOCAL_PUBLIC_PORT_ROLES.items():
-                    if target_name == "gamma-local" and field == "mediaUpload":
-                        role_name = "object-storage-edge"
+                    if target_name == "prod-sim" and field == "mediaUpload":
+                        role_name = "media-edge"
                     value = str(public_bases.get(field, "")).strip()
                     actual_port = _url_port(value)
                     expected_port = role_ports.get(role_name)

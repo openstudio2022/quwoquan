@@ -1,4 +1,4 @@
-"""Creator avatar governance consumes canonical CAS and rights evidence only."""
+"""Creator avatar governance checks canonical CAS, readability and quality only."""
 
 from __future__ import annotations
 
@@ -56,6 +56,7 @@ def _fixture(
         "\n".join(
             [
                 f"creatorProfileId: {creator_ref}",
+                "version: 1",
                 "authorId: author_test",
                 "personaId: author_test",
                 "displayName: 测试作者",
@@ -64,6 +65,11 @@ def _fixture(
                 "bio: 测试",
                 "creatorArchetype: editor",
                 "status: active",
+                "admission:",
+                "  processResult: completed",
+                "  qualityResult: passed",
+                "  evidenceRef: evidence/author-admission.json",
+                f"  evidenceDigest: sha256:{'0' * 64}",
                 "publicProfileTagRefs: []",
                 "disclosure:",
                 "  type: platform_virtual_creator",
@@ -171,15 +177,19 @@ def test_materialize_creator_avatar_is_traceable_and_idempotent(
     assert first["cropBox"] == [100, 0, 1500, 1400]
     assert first["dimensions"] == [1280, 1280]
     assert (publish / str(first["objectKey"])).is_file()
-    rights = json.loads(
-        (pool / str(first["rightsSnapshotRef"])).read_text(encoding="utf-8")
+    evidence = json.loads(
+        (pool / str(first["evidenceRef"])).read_text(encoding="utf-8")
     )
-    assert rights["depictsIdentifiablePerson"] is False
-    assert rights["commercialRights"]["snapshot"]["ref"].endswith(
+    assert evidence["processResult"] == "completed"
+    assert evidence["qualityResult"] == "passed"
+    assert evidence["checks"] == {
+        "format": "passed",
+        "readable": "passed",
+        "clarity": "passed",
+        "safety": "passed",
+    }
+    assert evidence["sourceEvidence"]["ref"].endswith(
         "rights_snapshots/source-landscape.json"
-    )
-    assert rights["commercialRights"]["modifications"].startswith(
-        "deterministic center-square crop"
     )
     profile = json.loads(
         (publish / "creators/creator_test/profile.json").read_text(encoding="utf-8")
@@ -205,26 +215,29 @@ def test_materialize_creator_avatar_requires_subject_attestation(
     assert "avatarAsset" not in profile.read_text(encoding="utf-8")
 
 
-def test_materialize_creator_avatar_rejects_unverified_source_rights(
+def test_materialize_creator_avatar_accepts_unverified_source_rights_for_all_environments(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    pool, _, source_object_ref, source_asset_id = _fixture(
+    pool, publish, source_object_ref, source_asset_id = _fixture(
         tmp_path,
         monkeypatch,
         verified=False,
     )
 
-    with pytest.raises(avatar.CreatorAvatarError, match="clean app-publish"):
-        avatar.materialize_creator_avatar(
-            creator_ref="creator_test",
-            source_object_ref=source_object_ref,
-            source_asset_id=source_asset_id,
-            confirm_non_identifiable_person=True,
-        )
+    result = avatar.materialize_creator_avatar(
+        creator_ref="creator_test",
+        source_object_ref=source_object_ref,
+        source_asset_id=source_asset_id,
+        confirm_non_identifiable_person=True,
+    )
 
     profile = next((pool / "profiles").rglob("*.creator.yaml"))
-    assert "avatarAsset" not in profile.read_text(encoding="utf-8")
+    assert "avatarAsset" in profile.read_text(encoding="utf-8")
+    projected = json.loads(
+        (publish / "creators/creator_test/profile.json").read_text(encoding="utf-8")
+    )
+    assert projected["avatarAsset"]["sha256"] == result["sha256"]
 
 
 def test_materialize_creator_avatar_rolls_back_new_artifacts_on_projection_failure(

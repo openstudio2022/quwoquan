@@ -33,6 +33,7 @@ class UserRequestPageIds {
     'GetLatestContactDiscovery': 'user.get.latest.contact.discovery',
     'GetMeProfile': 'user.get.me.profile',
     'GetNotificationSettings': 'user.notification_settings.get',
+    'GetOtpDeliveryReadiness': 'user.get.otp.delivery.readiness',
     'GetPersonaLifecycleGuard': 'user.personas.lifecycle_guard',
     'GetPersonaManagementSummary': 'user.personas.summary',
     'GetPersonaProfile': 'user.get.sub.account.profile',
@@ -49,6 +50,7 @@ class UserRequestPageIds {
     'InitiateContactDiscovery': 'user.initiate.contact.discovery',
     'InvalidateDevicePushEndpoint': 'user.invalidate.device.push.endpoint',
     'IssueAccountAppealCredential': 'user.issue.account.appeal.credential',
+    'IssueWhitelistedResearchSession': 'user.issue.whitelisted.research.session',
     'ListBlockedUsers': 'user.block.list',
     'ListCredentials': 'user.list.credentials',
     'ListFollowers': 'user.followers',
@@ -127,6 +129,7 @@ class UserRequestPageIds {
   static const String getLatestContactDiscovery = 'user.get.latest.contact.discovery';
   static const String getMeProfile = 'user.get.me.profile';
   static const String getNotificationSettings = 'user.notification_settings.get';
+  static const String getOtpDeliveryReadiness = 'user.get.otp.delivery.readiness';
   static const String getPersonaLifecycleGuard = 'user.personas.lifecycle_guard';
   static const String getPersonaManagementSummary = 'user.personas.summary';
   static const String getPersonaProfile = 'user.get.sub.account.profile';
@@ -143,6 +146,7 @@ class UserRequestPageIds {
   static const String initiateContactDiscovery = 'user.initiate.contact.discovery';
   static const String invalidateDevicePushEndpoint = 'user.invalidate.device.push.endpoint';
   static const String issueAccountAppealCredential = 'user.issue.account.appeal.credential';
+  static const String issueWhitelistedResearchSession = 'user.issue.whitelisted.research.session';
   static const String listBlockedUsers = 'user.block.list';
   static const String listCredentials = 'user.list.credentials';
   static const String listFollowers = 'user.followers';

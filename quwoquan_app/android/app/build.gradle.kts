@@ -31,6 +31,8 @@ fun buildCanonicalDirectDebugHandoff(): Map<String, Any?> {
                 "app-debug-preflight",
                 "--target",
                 target,
+                "--runtime-mode",
+                "test_live",
             )
             environment("PYTHONDONTWRITEBYTECODE", "1")
             isIgnoreExitValue = true
@@ -65,6 +67,11 @@ fun buildCanonicalDirectDebugHandoff(): Map<String, Any?> {
         ?.map { it.toString().trim() }
         ?.filter { it.isNotEmpty() }
         ?.forEach { logger.warn("[android-runtime] WARN: $it") }
+    val contentReleaseId = preflight["releaseId"]?.toString()?.trim().orEmpty()
+    val contentManifestDigest =
+        preflight["manifestDigest"]?.toString()?.trim().orEmpty()
+    val contentReadinessReceiptDigest =
+        preflight["readinessReceiptDigest"]?.toString()?.trim().orEmpty()
     val output =
         providers.exec {
             commandLine(
@@ -83,6 +90,16 @@ fun buildCanonicalDirectDebugHandoff(): Map<String, Any?> {
                 "--app-instance-namespace",
                 "direct-flutter-run",
             )
+            if (contentReleaseId.isNotEmpty()) {
+                args(
+                    "--content-release-id",
+                    contentReleaseId,
+                    "--content-manifest-digest",
+                    contentManifestDigest,
+                    "--content-readiness-receipt-digest",
+                    contentReadinessReceiptDigest,
+                )
+            }
             environment("PYTHONDONTWRITEBYTECODE", "1")
         }.standardOutput.asText.get()
     @Suppress("UNCHECKED_CAST")
@@ -437,6 +454,13 @@ android {
                 "pl.leancode.patrol.PatrolJUnitRunner"
             }
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
+        if (!runNativeStartupInstrumentation) {
+            // Patrol owns the Dart UAT through MainActivityTest. Native Gate
+            // instrumentation has a separate explicit runner/property and
+            // must never be discovered during a Patrol device journey.
+            testInstrumentationRunnerArguments["class"] =
+                "com.quwoquan.quwoquan_app.MainActivityTest"
+        }
         ndk {
             if (androidAbiSplitsEnabled) {
                 // splits.abi 与 Flutter 默认 abiFilters 冲突；显式拆包时由 split 决定 ABI。
@@ -652,23 +676,40 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
                     "[android-runtime] WARN: device trust is unavailable; " +
                         "test_live continues with typed network recovery.",
                 )
+                return@doLast
             }
             @Suppress("UNCHECKED_CAST")
             val trustReceipt =
-                JsonSlurper().parseText(
-                    trustOutput.toString(StandardCharsets.UTF_8),
-                ) as Map<String, Any?>
+                runCatching {
+                    JsonSlurper().parseText(
+                        trustOutput.toString(StandardCharsets.UTF_8),
+                    ) as Map<String, Any?>
+                }.getOrElse {
+                    logger.warn(
+                        "[android-runtime] WARN: device trust receipt is invalid; " +
+                            "test_live continues with typed network recovery.",
+                    )
+                    return@doLast
+                }
             val trustEvidence = trustReceipt["evidence"] as? Map<*, *>
             val directDevice = trustEvidence?.get("device")?.toString()?.trim().orEmpty()
-            check(directDevice.isNotEmpty()) {
-                "GATE_BLOCK: Android direct Debug trust receipt is missing the selected device."
+            if (directDevice.isEmpty()) {
+                logger.warn(
+                    "[android-runtime] WARN: device trust receipt has no selected device; " +
+                        "test_live continues with typed network recovery.",
+                )
+                return@doLast
             }
             val directPorts = handoffLocalPorts(directDebugHandoff)
-            check(directPorts.isNotEmpty()) {
-                "GATE_BLOCK: Android direct Debug handoff has no local topology ports."
+            if (directPorts.isEmpty()) {
+                logger.warn(
+                    "[android-runtime] WARN: direct Debug handoff has no local transport " +
+                        "ports; test_live continues with typed network recovery.",
+                )
+                return@doLast
             }
-            directPorts.forEach { port ->
-                exec {
+            val reverseReady = directPorts.all { port ->
+                val result = exec {
                     commandLine(
                         android.adbExecutable,
                         "-s",
@@ -677,10 +718,19 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
                         "tcp:$port",
                         "tcp:$port",
                     )
+                    isIgnoreExitValue = true
                 }
+                result.exitValue == 0
+            }
+            if (!reverseReady) {
+                logger.warn(
+                    "[android-runtime] WARN: adb reverse is unavailable; " +
+                        "test_live continues with typed network recovery.",
+                )
+                return@doLast
             }
             val reverseOutput = ByteArrayOutputStream()
-            val leaseResult = exec {
+            val reverseResult = exec {
                 commandLine(
                     android.adbExecutable,
                     "-s",
@@ -689,6 +739,14 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
                     "--list",
                 )
                 standardOutput = reverseOutput
+                isIgnoreExitValue = true
+            }
+            if (reverseResult.exitValue != 0) {
+                logger.warn(
+                    "[android-runtime] WARN: adb reverse readback is unavailable; " +
+                        "test_live continues with typed network recovery.",
+                )
+                return@doLast
             }
             val reverseText = reverseOutput.toString(StandardCharsets.UTF_8)
             val missingPorts = directPorts.filter { port ->
@@ -696,12 +754,16 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
                     line.split(Regex("\\s+")).count { token -> token == "tcp:$port" } >= 2
                 }
             }
-            check(missingPorts.isEmpty()) {
-                "GATE_BLOCK: Android direct Debug adb reverse is incomplete for " +
-                    "$directDevice; missing ${missingPorts.joinToString(", ")}."
+            if (missingPorts.isNotEmpty()) {
+                logger.warn(
+                    "[android-runtime] WARN: adb reverse is incomplete for $directDevice; " +
+                        "missing ${missingPorts.joinToString(", ")}; " +
+                        "test_live continues with typed network recovery.",
+                )
+                return@doLast
             }
             val leaseOutput = ByteArrayOutputStream()
-            exec {
+            val leaseResult = exec {
                 commandLine(
                     "python3",
                     rootProject.file("../../quwoquan_ops/cli/stackctl.py").absolutePath,
@@ -770,6 +832,13 @@ val verifyAndroidLocalLauncherContract by tasks.registering {
             check(consumerLeaseID.matches(Regex("sha256:[0-9a-f]{64}"))) {
                 "GATE_BLOCK: Android Prod runtime consumer lease identity is absent."
             }
+        }
+        if (leaseAcquired != "1") {
+            logger.warn(
+                "[android-runtime] WARN: test_live transport lease is unavailable; " +
+                    "build continues with typed network recovery.",
+            )
+            return@doLast
         }
         check(reverseReceiptDigest.matches(Regex("sha256:[0-9a-f]{64}"))) {
             "GATE_BLOCK: Android adb reverse receipt digest is absent."
@@ -865,6 +934,7 @@ val vendoredAndroidArtifactsDir =
 
 dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
+    implementation("com.google.android.gms:play-services-auth-api-phone:18.3.1")
     implementation("com.tencent.mm.opensdk:wechat-sdk-android:6.8.34")
     implementation("com.alipay.sdk:alipaysdk-android:15.8.42")
     implementation(

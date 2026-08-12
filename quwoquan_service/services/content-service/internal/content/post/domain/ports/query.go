@@ -248,7 +248,7 @@ type PostCreatorDisclosureSlice struct {
 	Visible     bool   `json:"visible" bson:"visible"`
 }
 
-// PostSourceAttributionSlice 是外部来源视频的用户可见权利披露白名单。
+// PostSourceAttributionSlice 是外部来源内容的用户可见权利披露白名单。
 type PostSourceAttributionSlice struct {
 	IsOriginal                    bool      `json:"isOriginal" bson:"isOriginal"`
 	OriginalCreatorID             string    `json:"originalCreatorId,omitempty" bson:"originalCreatorId,omitempty"`

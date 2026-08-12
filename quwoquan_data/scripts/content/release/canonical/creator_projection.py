@@ -14,9 +14,6 @@ from content.release.canonical.object_transaction_contract import (
     _safe_id,
     _safe_rel,
 )
-from content.release.canonical.creator_avatar_rights import (
-    creator_avatar_rights_issue,
-)
 from core.io import write_json
 from core.media_asset_url import is_cas_media_object_key, sha256_file
 from core.paths import CONTROL_PLANE_CREATOR_POOL_ROOT, PUBLISH_ROOT
@@ -60,11 +57,11 @@ def _avatar_asset_projection(
         "objectKey",
         "bytes",
         "mimeType",
-        "rightsSnapshotRef",
+        "evidenceRef",
     }
     if not isinstance(raw, Mapping) or set(raw) != expected_fields:
         raise ObjectTransactionError(
-            "creator avatarAsset must bind identity, private CAS, bytes, MIME and rights snapshot"
+            "creator avatarAsset must bind identity, private CAS, bytes, MIME and quality evidence"
         )
     asset_id = str(raw.get("assetId") or "").strip()
     kind = str(raw.get("kind") or "").strip()
@@ -72,9 +69,9 @@ def _avatar_asset_projection(
     object_key = str(raw.get("objectKey") or "").strip()
     byte_count = raw.get("bytes")
     mime_type = str(raw.get("mimeType") or "").strip()
-    rights_ref = _safe_rel(
-        str(raw.get("rightsSnapshotRef") or ""),
-        label="avatarAsset.rightsSnapshotRef",
+    evidence_ref = _safe_rel(
+        str(raw.get("evidenceRef") or ""),
+        label="avatarAsset.evidenceRef",
     )
     if (
         not asset_id
@@ -103,15 +100,15 @@ def _avatar_asset_projection(
         raise ObjectTransactionError(
             "creator avatarAsset CAS bytes are missing or drifted"
         )
-    rights_source = CONTROL_PLANE_CREATOR_POOL_ROOT / rights_ref
+    evidence_source = CONTROL_PLANE_CREATOR_POOL_ROOT / evidence_ref
     try:
-        rights = json.loads(rights_source.read_text(encoding="utf-8"))
+        evidence = json.loads(evidence_source.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ObjectTransactionError(
-            f"creator avatarAsset rights snapshot unreadable: {rights_source}"
+            f"creator avatarAsset quality evidence unreadable: {evidence_source}"
         ) from exc
     manifest_asset = (
-        rights.get("manifestAsset") if isinstance(rights, Mapping) else None
+        evidence.get("manifestAsset") if isinstance(evidence, Mapping) else None
     )
     if (
         not isinstance(manifest_asset, Mapping)
@@ -119,19 +116,7 @@ def _avatar_asset_projection(
         or str(manifest_asset.get("sha256") or "") != sha256
     ):
         raise ObjectTransactionError(
-            "creator avatarAsset rights snapshot identity drift"
-        )
-    rights_issue = creator_avatar_rights_issue(
-        rights,
-        asset_id=asset_id,
-        sha256=sha256,
-        object_key=object_key,
-        byte_count=byte_count,
-        mime_type=mime_type,
-    )
-    if rights_issue:
-        raise ObjectTransactionError(
-            f"creator avatarAsset commercial rights invalid: {rights_issue}"
+            "creator avatarAsset quality evidence identity drift"
         )
     profile_ref = {"assetId": asset_id, "kind": kind, "sha256": sha256}
     asset_ref = {
@@ -140,7 +125,7 @@ def _avatar_asset_projection(
         "bytes": byte_count,
         "mimeType": mime_type,
     }
-    return profile_ref, asset_ref, rights_source
+    return profile_ref, asset_ref, evidence_source
 
 
 def project_creator_object(creator_ref: str, target: Path) -> Path:
@@ -148,7 +133,24 @@ def project_creator_object(creator_ref: str, target: Path) -> Path:
     creator_ref = _safe_id(creator_ref, label="creatorRef")
     source = _creator_profile_path(creator_ref)
     payload = yaml.safe_load(source.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict) or str(payload.get("status") or "") != "active":
+    if not isinstance(payload, dict):
+        raise ObjectTransactionError(f"creator profile is invalid: {creator_ref}")
+    version = payload.get("version")
+    admission = payload.get("admission")
+    if (
+        str(payload.get("status") or "") != "active"
+        or not isinstance(version, int)
+        or isinstance(version, bool)
+        or version < 1
+        or not isinstance(admission, Mapping)
+        or admission.get("processResult") != "completed"
+        or admission.get("qualityResult") != "passed"
+        or not str(admission.get("evidenceRef") or "").strip()
+        or not _SHA256_RE.fullmatch(
+            str(admission.get("evidenceDigest") or "").strip()
+        )
+        or "usageScope" in admission
+    ):
         raise ObjectTransactionError(f"creator profile is not active: {creator_ref}")
     target.mkdir(parents=True, exist_ok=True)
     tag_refs = sorted(
@@ -175,6 +177,9 @@ def project_creator_object(creator_ref: str, target: Path) -> Path:
         "creatorId": creator_ref,
         "userId": str(payload.get("authorId") or ""),
         "authorId": str(payload.get("authorId") or ""),
+        "version": version,
+        "admission": dict(admission),
+        "status": "active",
         "personaId": str(
             payload.get("personaId") or payload.get("authorId") or ""
         ),
@@ -189,12 +194,16 @@ def project_creator_object(creator_ref: str, target: Path) -> Path:
     avatar_projection = _avatar_asset_projection(payload)
     asset_refs: list[dict[str, object]] = []
     if avatar_projection is not None:
-        avatar_asset, asset_ref, rights_source = avatar_projection
+        avatar_asset, asset_ref, evidence_source = avatar_projection
         profile["avatarAsset"] = avatar_asset
         asset_refs.append(asset_ref)
         rights_root = target / "rights_snapshots"
         rights_root.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(rights_source, rights_root / rights_source.name)
+        # Media closure keeps one owner-bound evidence file in its existing
+        # internal folder. Avatar eligibility is already decided by identity,
+        # readability and quality; this file is never interpreted as a
+        # Research/Commercial scope.
+        shutil.copy2(evidence_source, rights_root / evidence_source.name)
     write_json(target / "profile.json", profile)
     write_json(target / "assets.refs.json", {"assets": asset_refs})
     (target / "works.refs.ndjson").write_text("", encoding="utf-8")

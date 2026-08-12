@@ -5,151 +5,80 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	rtsearch "quwoquan_service/runtime/search"
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/searchclient"
 )
 
-// A search surface that ignores the objectTypes filter is the whole reason this
-// enforcement cannot live in the request. This stub answers every query with one
-// hit and one citation per object type, including the ones 小趣 must never see.
-func newIgnoringSearchStub(t *testing.T) *httptest.Server {
-	t.Helper()
-	objectTypes := []string{
-		rtsearch.ObjectTypeContentPost,
-		rtsearch.ObjectTypeChatMessage,
-		rtsearch.ObjectTypeChatConversation,
-		rtsearch.ObjectTypeChatContact,
-		rtsearch.ObjectTypeUserProfile,
-		rtsearch.ObjectTypeCircle,
-		"content.private_draft",
-	}
-	return httptest.NewServer(http.HandlerFunc(func(
-		writer http.ResponseWriter,
-		request *http.Request,
-	) {
-		hits := make([]rtsearch.RetrieveHit, 0, len(objectTypes))
-		citations := make([]rtsearch.Citation, 0, len(objectTypes))
-		for _, objectType := range objectTypes {
-			hits = append(hits, rtsearch.RetrieveHit{
-				ObjectType: objectType,
-				ObjectID:   objectType + "-1",
-				Title:      objectType,
-			})
-			citations = append(citations, rtsearch.Citation{
-				CitationID: objectType + "-citation",
-				ObjectType: objectType,
-				ObjectID:   objectType + "-1",
-				Title:      objectType,
-			})
-		}
+func TestAppSearchRejectsOwnerHitsThatObjectContractsClose(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(writer).Encode(rtsearch.RetrieveResponse{
-			Hits:      hits,
-			Citations: citations,
-			Provenance: rtsearch.Provenance{
-				Provider:    "search-service",
-				GeneratedAt: time.Unix(1_700_000_000, 0).UTC(),
+		writer.Header().Set("X-Contract-Graph-SHA256", testSHA256)
+		_ = json.NewEncoder(writer).Encode(map[string]any{
+			"interpretedQuery": map[string]any{
+				"normalized": "西湖", "tokens": []string{}, "variants": []string{},
+				"detectedEntities": []string{}, "detectedTags": []string{}, "selectedObjectTypes": []string{},
 			},
+			"hits": []map[string]any{{
+				"objectRef": "opaque-private", "objectType": "chat.message", "title": "私密消息",
+			}},
+			"citations": []any{}, "facets": []any{}, "degradeSignals": []any{},
+			"provenance": map[string]any{"source": "search_index_view", "generatedAt": time.Unix(1_700_000_000, 0).UTC()},
+			"nextCursor": "",
 		})
 	}))
-}
-
-func TestAppSearchDropsHitsForObjectTypesTheContractClosesToTheAssistant(t *testing.T) {
-	server := newIgnoringSearchStub(t)
 	defer server.Close()
-
-	client, err := searchclient.New(server.URL, server.Client())
+	client, err := searchclient.New(server.URL, server.Client(), searchAuthorizationFixture{}, testSHA256)
 	if err != nil {
 		t.Fatalf("new search client: %v", err)
 	}
-	result, err := client.Handler()(t.Context(), toolpkg.Request{
-		Input: map[string]any{"query": "西湖"},
-	})
-	if err != nil {
-		t.Fatalf("execute app_search adapter: %v", err)
-	}
-
-	readable := map[string]bool{}
-	for _, objectType := range searchclient.AssistantReadableObjectTypes() {
-		readable[objectType] = true
-	}
-	results, ok := result.Output["results"].([]map[string]any)
-	if !ok {
-		t.Fatalf("results=%#v", result.Output["results"])
-	}
-	if len(results) == 0 {
-		t.Fatal("every hit was dropped; the filter must keep the open object types")
-	}
-	for _, hit := range results {
-		objectID, _ := hit["objectId"].(string)
-		// objectId is `<objectType>-1` in the stub, so a leaked type is nameable.
-		for closed := range map[string]bool{
-			rtsearch.ObjectTypeChatMessage:      true,
-			rtsearch.ObjectTypeChatConversation: true,
-			rtsearch.ObjectTypeChatContact:      true,
-			rtsearch.ObjectTypeUserProfile:      true,
-			"content.private_draft":             true,
-		} {
-			if objectID == closed+"-1" {
-				t.Fatalf(
-					"app_search returned a hit for %q, which no object contract opens "+
-						"to the assistant",
-					closed,
-				)
-			}
-		}
-	}
-
-	citations, ok := result.Output["citations"].([]map[string]any)
-	if !ok {
-		t.Fatalf("citations=%#v", result.Output["citations"])
-	}
-	for _, citation := range citations {
-		objectType, _ := citation["objectType"].(string)
-		if !readable[objectType] {
-			t.Fatalf(
-				"app_search returned a citation for %q, which is not citable by the "+
-					"assistant",
-				objectType,
-			)
-		}
-	}
-	// user.profile is registered searchable and reachable in the index, but its
-	// owner opens only owner-scoped reads. This client queries the shared index
-	// without an end-user identity, so it must not surface those rows at all.
-	if readable[rtsearch.ObjectTypeUserProfile] {
-		t.Fatal("user.profile must not be readable through the unscoped index query")
+	_, err = client.Handler()(t.Context(), boundSearchRequest(map[string]any{"query": "西湖"}, 1))
+	if err == nil {
+		t.Fatal("owner widened result escaped Assistant access enforcement")
 	}
 }
 
-func TestRetrieveRefusesToWidenToObjectTypesTheAssistantMayNotRead(t *testing.T) {
-	server := newIgnoringSearchStub(t)
+func TestAppSearchClosedObjectTypeFailsBeforeOwnerCall(t *testing.T) {
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { calls.Add(1) }))
 	defer server.Close()
-
-	client, err := searchclient.New(server.URL, server.Client())
+	client, err := searchclient.New(server.URL, server.Client(), searchAuthorizationFixture{}, testSHA256)
 	if err != nil {
 		t.Fatalf("new search client: %v", err)
 	}
-	// Asking only for closed types must not fall through to an unfiltered query:
-	// an empty objectTypes list means "every type" on the wire.
-	response, err := client.Retrieve(
-		t.Context(),
-		"西湖",
-		[]string{rtsearch.ObjectTypeChatMessage, rtsearch.ObjectTypeUserProfile},
-		10,
-	)
-	if err != nil {
-		t.Fatalf("retrieve: %v", err)
+	_, err = client.Handler()(t.Context(), boundSearchRequest(map[string]any{
+		"query": "西湖",
+		"searchQueries": []any{map[string]any{
+			"dimension": "private", "query": "聊天", "objectTypes": []any{"chat.message"},
+		}},
+	}, 2))
+	if err == nil {
+		t.Fatal("closed object type was accepted")
 	}
-	if len(response.Hits) != 0 || len(response.Citations) != 0 {
-		t.Fatalf(
-			"caller-requested closed types returned hits=%d citations=%d",
-			len(response.Hits),
-			len(response.Citations),
-		)
+	if calls.Load() != 0 {
+		t.Fatalf("closed object request reached owner %d time(s)", calls.Load())
+	}
+}
+
+func TestAssistantSearchAccessIsGeneratedAndDigestBound(t *testing.T) {
+	readable := searchclient.AssistantReadableObjectTypes()
+	if len(readable) == 0 || searchclient.AssistantAccessPolicyDigest() == "" {
+		t.Fatalf("generated assistant access is empty: readable=%v digest=%q", readable, searchclient.AssistantAccessPolicyDigest())
+	}
+	readable[0] = "mutated"
+	if searchclient.AssistantReadableObjectTypes()[0] == "mutated" {
+		t.Fatal("callers can mutate generated assistant access")
+	}
+}
+
+func boundSearchRequest(input map[string]any, maximumToolCalls int) toolpkg.Request {
+	return toolpkg.Request{
+		ToolName: "app_search", RunID: "run-access", TurnID: "turn-access",
+		ToolCatalogDigest: testSHA256, RuntimeCandidateDigest: testSHA256,
+		ContractGraphDigest: testSHA256, MaximumToolCalls: maximumToolCalls,
+		Input: input,
 	}
 }

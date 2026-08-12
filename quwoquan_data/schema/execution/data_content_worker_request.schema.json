@@ -22,7 +22,8 @@
         "idempotencyKey",
         "jobSetEnvelopeDigest",
         "jobSetDigest",
-        "actualTaskDigest"
+        "actualTaskDigest",
+        "maxAttempts"
       ],
       "additionalProperties": false,
       "properties": {
@@ -53,8 +54,33 @@
         "actualTaskDigest": {
           "type": "string",
           "pattern": "^sha256:[0-9a-f]{64}$"
-        }
-      }
+        },
+        "maxAttempts": {"type": "integer", "minimum": 1},
+        "workerHostSetDigest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "workerHostGeneration": {"type": "integer", "minimum": 1},
+        "workerFencingToken": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "workerHostScopeId": {"type": "string", "minLength": 1}
+      },
+      "allOf": [{
+        "if": {"anyOf": [
+          {"required": ["workerHostSetDigest"]},
+          {"required": ["workerHostGeneration"]},
+          {"required": ["workerFencingToken"]},
+          {"required": ["workerHostScopeId"]}
+        ]},
+        "then": {"required": [
+          "workerHostSetDigest",
+          "workerHostGeneration",
+          "workerFencingToken",
+          "workerHostScopeId"
+        ]}
+      }]
     }
   }
 }

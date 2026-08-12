@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import unittest
 from copy import deepcopy
+from unittest import mock
 
 from quwoquan_ops.cli.lib import provider_runtime_composition as subject
 from quwoquan_ops.cli.lib.external_provider_governance import load_and_compile
@@ -240,6 +241,27 @@ class ProviderRuntimeCompositionContractTest(unittest.TestCase):
                 expected_environment="alpha",
                 expected_target="alpha-local",
             )
+
+    def test_package_self_verify_does_not_read_current_endpoint_contracts(self) -> None:
+        composition = compile_provider_runtime_composition(
+            environment="alpha",
+            target="alpha-local",
+            compiled=self.compiled,
+        )
+
+        with mock.patch.object(
+            subject,
+            "_load_endpoint_contracts",
+            side_effect=AssertionError("self_verify must not read current contracts"),
+        ):
+            validated = validate_provider_runtime_composition(
+                composition,
+                expected_environment="alpha",
+                expected_target="alpha-local",
+                require_current_contracts=False,
+            )
+
+        self.assertEqual(validated, composition)
 
         missing_workload = deepcopy(composition)
         missing_workload["workloads"] = [

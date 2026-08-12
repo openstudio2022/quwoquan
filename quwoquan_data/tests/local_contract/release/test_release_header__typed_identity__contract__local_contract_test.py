@@ -5,6 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from content.release.canonical.object_source_identity import (
+    source_identity_digest,
+    source_identity_set,
+)
 from content.release.canonical.release_header import (
     ReleaseHeaderError,
     validate_release_header,
@@ -82,6 +86,216 @@ def test_typed_header_accepts_one_derived_content_identity() -> None:
     document = _header(release_id="content-typed-002")
 
     assert validate_release_header(document) == document
+
+
+def _target_environment_identity_set_header() -> dict[str, object]:
+    document = _header(release_id="content-alpha-identity-set-001")
+    execution_id = str(document["executionIds"][0])
+    identity = {
+        "executionId": execution_id,
+        "sourceRevision": str(document.pop("sourceRevision")),
+        "sourceDigest": str(document.pop("sourceDigest")),
+        "entityCatalogDigest": str(document.pop("entityCatalogDigest")),
+    }
+    identities, identity_set_digest = source_identity_set([identity])
+    document.update(
+        {
+            "targetEnvironment": "alpha",
+            "releaseMode": "research",
+            "poolDigest": "sha256:" + "3" * 64,
+            "counts": {"article": 1, "image": 0, "video": 0, "total": 1},
+            "contents": [
+                {
+                    "contentId": "content-alpha-001",
+                    "version": 1,
+                    "postRef": "article/alpha-work/1",
+                    "executionId": execution_id,
+                    "sourceIdentityDigest": source_identity_digest(identity),
+                }
+            ],
+            "authors": [],
+            "buildResult": "completed",
+            "sourceIdentities": identities,
+            "sourceIdentitySetDigest": identity_set_digest,
+        }
+    )
+    return document
+
+
+def test_typed_header_accepts_research_target_environment_identity_set() -> None:
+    document = _target_environment_identity_set_header()
+
+    assert validate_release_header(document) == document
+
+
+def test_typed_header_rejects_scalar_and_set_identity_together() -> None:
+    document = _target_environment_identity_set_header()
+    source_digest = str(document["sourceDigests"][0]["digest"])
+    document.update(
+        {
+            "sourceDigest": source_digest,
+            "entityCatalogDigest": _ENTITY_CATALOG_DIGEST,
+            "sourceRevision": content_source_revision(
+                source_digest=source_digest,
+                entity_catalog_digest=_ENTITY_CATALOG_DIGEST,
+            ),
+        }
+    )
+
+    with pytest.raises(ReleaseHeaderError, match="mutually exclusive"):
+        validate_release_header(document)
+
+
+@pytest.mark.parametrize("mode", ["commercial", "non_pool"])
+def test_typed_header_rejects_identity_set_outside_research_pool(mode: str) -> None:
+    document = _target_environment_identity_set_header()
+    if mode == "commercial":
+        document.update(
+            {
+                "releaseClass": "commercial",
+                "productLifecycleState": "commercial",
+                "releaseMode": "commercial",
+            }
+        )
+    else:
+        for key in (
+            "targetEnvironment",
+            "releaseMode",
+            "poolDigest",
+            "counts",
+            "contents",
+            "authors",
+            "buildResult",
+        ):
+            document.pop(key)
+
+    with pytest.raises(ReleaseHeaderError, match="research pool"):
+        validate_release_header(document)
+
+
+def test_typed_header_accepts_environment_neutral_exact_m100_research_cohort() -> None:
+    document = _header(release_id="content-m100-001")
+    execution_id = str(document["executionIds"][0])
+    identity = {
+        "executionId": execution_id,
+        "sourceRevision": str(document.pop("sourceRevision")),
+        "sourceDigest": str(document.pop("sourceDigest")),
+        "entityCatalogDigest": str(document.pop("entityCatalogDigest")),
+    }
+    identities, identity_set_digest = source_identity_set([identity])
+    identity_digest = source_identity_digest(identity)
+    contents = [
+        {
+            "contentId": f"content-{index}",
+            "version": 1,
+            "postRef": f"{content_type}/work-{index}/1",
+            "executionId": execution_id,
+            "sourceIdentityDigest": identity_digest,
+        }
+        for content_type, start, count in (
+            ("article", 0, 100),
+            ("image", 100, 100),
+            ("video", 200, 10),
+        )
+        for index in range(start, start + count)
+    ]
+    document.update({
+        "milestone": "M100",
+        "milestoneTargets": {
+            "homepage": 100,
+            "article": 100,
+            "image": 100,
+            "video": 10,
+        },
+        "releaseMode": "research",
+        "poolDigest": "sha256:" + "3" * 64,
+        "counts": {"article": 100, "image": 100, "video": 10, "total": 210},
+        "contents": contents,
+        "authors": [],
+        "buildResult": "completed",
+        "sourceIdentities": identities,
+        "sourceIdentitySetDigest": identity_set_digest,
+    })
+
+    assert validate_release_header(document) == document
+
+
+def test_milestone_header_preserves_two_execution_identities_and_rejects_drift() -> None:
+    document = _header(release_id="content-m100-cross-identity")
+    first_execution = str(document["executionIds"][0])
+    first_identity = {
+        "executionId": first_execution,
+        "sourceRevision": str(document.pop("sourceRevision")),
+        "sourceDigest": str(document.pop("sourceDigest")),
+        "entityCatalogDigest": str(document.pop("entityCatalogDigest")),
+    }
+    second_digest = "sha256:" + "9" * 64
+    second_execution = "20260806--travel-image--china--scale-002"
+    second_identity = {
+        "executionId": second_execution,
+        "sourceRevision": content_source_revision(
+            source_digest=second_digest,
+            entity_catalog_digest=_ENTITY_CATALOG_DIGEST,
+        ),
+        "sourceDigest": second_digest,
+        "entityCatalogDigest": _ENTITY_CATALOG_DIGEST,
+    }
+    identities, identity_set_digest = source_identity_set(
+        [first_identity, second_identity]
+    )
+    identity_digests = {
+        first_execution: source_identity_digest(first_identity),
+        second_execution: source_identity_digest(second_identity),
+    }
+    contents = []
+    for content_type, start, count in (
+        ("article", 0, 100),
+        ("image", 100, 100),
+        ("video", 200, 10),
+    ):
+        for index in range(start, start + count):
+            execution_id = first_execution if index % 2 == 0 else second_execution
+            contents.append(
+                {
+                    "contentId": f"cross-content-{index}",
+                    "version": 1,
+                    "postRef": f"{content_type}/cross-work-{index}/1",
+                    "executionId": execution_id,
+                    "sourceIdentityDigest": identity_digests[execution_id],
+                }
+            )
+    source_documents = list(document["sourceDigests"])
+    source_documents.append(
+        {**source_documents[0], "digest": second_digest}
+    )
+    document.update(
+        {
+            "executionIds": sorted([first_execution, second_execution]),
+            "sourceDigests": sorted(
+                source_documents, key=lambda row: str(row["digest"])
+            ),
+            "milestone": "M100",
+            "milestoneTargets": {
+                "homepage": 100,
+                "article": 100,
+                "image": 100,
+                "video": 10,
+            },
+            "releaseMode": "research",
+            "poolDigest": "sha256:" + "3" * 64,
+            "counts": {"article": 100, "image": 100, "video": 10, "total": 210},
+            "contents": contents,
+            "authors": [],
+            "buildResult": "completed",
+            "sourceIdentities": identities,
+            "sourceIdentitySetDigest": identity_set_digest,
+        }
+    )
+
+    assert validate_release_header(document) == document
+    document["contents"][0]["sourceIdentityDigest"] = "sha256:" + "f" * 64
+    with pytest.raises(ReleaseHeaderError, match="closure drifted"):
+        validate_release_header(document)
 
 
 def test_ship_loader_uses_typed_header_boundary(tmp_path: Path) -> None:

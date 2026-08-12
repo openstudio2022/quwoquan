@@ -13,6 +13,7 @@
 {{persona_block}}
 
 {{writing_intent_line}}
+{{article_category_line}}
 
 {{narrative_block}}
 

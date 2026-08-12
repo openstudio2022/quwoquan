@@ -5,6 +5,7 @@ import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_f
 import 'package:quwoquan_app/runtime/di/app_cloud_client_context_provider.dart';
 import 'package:quwoquan_app/runtime/di/app_cloud_operation_telemetry_sink.dart';
 import 'package:quwoquan_app/runtime/di/cloud_http_client_provider.dart';
+import 'package:quwoquan_app/runtime/transport/graphql_read/generated/search_page.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final cloudClientContextProvider = Provider<CloudClientContextProvider>((ref) {
@@ -31,6 +32,26 @@ final generatedCloudOperationClientProvider =
         telemetrySink: AppCloudOperationTelemetrySink(
           clientContextProvider: clientContext,
         ),
+      );
+    });
+
+final generatedCloudOperationExecutorProvider =
+    Provider<CloudOperationExecutor>((ref) {
+      final clientContext = ref.watch(cloudClientContextProvider);
+      return buildGeneratedCloudOperationExecutor(
+        httpClient: ref.watch(cloudHttpClientProvider),
+        clientContextProvider: clientContext,
+        environment: ref.watch(cloudRuntimeEnvironmentProvider),
+        telemetrySink: AppCloudOperationTelemetrySink(
+          clientContextProvider: clientContext,
+        ),
+      );
+    });
+
+final generatedSearchPageGraphQLClientProvider =
+    Provider<GeneratedSearchPageGraphQLClient>((ref) {
+      return GeneratedSearchPageGraphQLClient(
+        ref.watch(generatedCloudOperationExecutorProvider),
       );
     });
 

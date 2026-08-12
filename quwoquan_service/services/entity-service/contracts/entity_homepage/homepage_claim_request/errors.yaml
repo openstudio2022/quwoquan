@@ -33,7 +33,7 @@ errors:
   http_status: 404
   emitted_by:
   - surface: http
-    operations: [ReviewHomepageClaimRequest]
+    operations: [GetMyPendingHomepageClaimRequest, ReviewHomepageClaimRequest]
   recovery_action: surface
   disruption_level: inlineCard
   dart_const: claimNotFound

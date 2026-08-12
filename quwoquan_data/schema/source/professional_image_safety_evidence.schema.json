@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/source/professional_image_safety_evidence.schema.json",
+  "type": "object",
+  "required": [
+    "schema", "assetId", "entityId", "observedEntityId", "sourceUrl",
+    "contentSha256", "bytes",
+    "dimensions", "status", "entityMatch", "privacyRisk", "minorRisk",
+    "maliciousMediaRisk", "watermarkStatus", "reviewedAt", "reviewer"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "quwoquan_data.professional_image_safety_review_evidence"
+    },
+    "assetId": {"type": "string", "minLength": 1},
+    "entityId": {"type": "string", "minLength": 1},
+    "observedEntityId": {"type": "string", "minLength": 1},
+    "sourceUrl": {"type": "string", "pattern": "^https://"},
+    "contentSha256": {"$ref": "#/$defs/sha256"},
+    "bytes": {"type": "integer", "minimum": 1},
+    "dimensions": {
+      "type": "object",
+      "required": ["width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1}
+      }
+    },
+    "status": {"enum": ["passed", "blocked", "pending"]},
+    "entityMatch": {"enum": ["matched", "mismatch", "unknown"]},
+    "privacyRisk": {"enum": ["none", "present", "unknown"]},
+    "minorRisk": {"enum": ["none", "present", "unknown"]},
+    "maliciousMediaRisk": {"enum": ["none", "present", "unknown"]},
+    "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
+    "reviewedAt": {"type": "string", "minLength": 1},
+    "reviewer": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

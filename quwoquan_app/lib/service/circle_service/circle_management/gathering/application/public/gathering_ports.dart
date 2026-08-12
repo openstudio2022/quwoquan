@@ -19,7 +19,7 @@ abstract interface class GatheringCommandWriter {
   );
 
   Future<GatheringCommandResult> watchAvailability(
-    GatheringVersionCommandInput input,
+    GatheringAvailabilityWatchCommandInput input,
   );
 
   Future<GatheringCommandResult> reviewApplication(

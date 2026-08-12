@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 import urllib.parse
 from pathlib import Path
 from typing import Any
@@ -29,6 +31,161 @@ from governance.coverage.master_list import (
     load_master_list_file,
     master_list_files,
 )
+
+
+SOURCE_INVALID_TARGET = "DATA.SOURCE.INVALID_TARGET"
+_ENTITY_REF_RE = re.compile(
+    r"^/entity/([^/\s]+)/([^/\s]+)/(\S(?:[^/]*\S)?)$"
+)
+
+
+class SourceReadinessTargetError(ValueError):
+    """Typed fail-closed error for exact canonical source-ready targets."""
+
+    code = SOURCE_INVALID_TARGET
+
+    def __init__(self, issues: list[str] | tuple[str, ...]) -> None:
+        normalized = tuple(str(issue).strip() for issue in issues if str(issue).strip())
+        if not normalized:
+            raise ValueError("source-readiness target error requires an issue")
+        self.issues = normalized
+        super().__init__(f"{self.code}: " + "; ".join(normalized))
+
+
+def _normalize_required_entity_refs(
+    required_entity_refs: list[str] | tuple[str, ...],
+) -> tuple[str, ...]:
+    normalized: list[str] = []
+    malformed: list[str] = []
+    for raw in required_entity_refs:
+        value = unicodedata.normalize("NFKC", str(raw)).strip()
+        if not _ENTITY_REF_RE.fullmatch(value):
+            malformed.append(repr(str(raw)))
+            continue
+        normalized.append(value)
+    if malformed:
+        raise SourceReadinessTargetError(
+            [f"malformed required entity refs: {malformed}"]
+        )
+    duplicates = sorted(
+        {ref for ref in normalized if normalized.count(ref) > 1}
+    )
+    if duplicates:
+        raise SourceReadinessTargetError(
+            [f"duplicate required entity refs: {duplicates}"]
+        )
+    return tuple(normalized)
+
+
+def canonical_source_ready_name(candidate: dict[str, Any]) -> str:
+    """Return the normalized canonical candidate name used by entity refs."""
+
+    name = unicodedata.normalize(
+        "NFKC",
+        str(candidate.get("canonicalName") or candidate.get("name") or ""),
+    ).strip()
+    if not name or "/" in name:
+        raise ValueError("source-ready canonical name is empty or contains '/'")
+    return name
+
+
+def canonical_source_ready_entity_ref(
+    candidate: dict[str, Any],
+    *,
+    entity_type: str | None = None,
+) -> str:
+    """Derive one canonical entity ref from governed name and type evidence."""
+
+    resolved_type = entity_type
+    if resolved_type is None:
+        classified = _source_ready_type_evidence(candidate)
+        if classified is None:
+            raise ValueError("source-ready candidate has no governed type evidence")
+        resolved_type = classified[0]
+    normalized_type = unicodedata.normalize("NFKC", str(resolved_type)).strip()
+    parts = normalized_type.split("/")
+    if len(parts) != 2 or any(not part or any(ch.isspace() for ch in part) for part in parts):
+        raise ValueError("source-ready entity type must contain two non-empty segments")
+    return f"/entity/{parts[0]}/{parts[1]}/{canonical_source_ready_name(candidate)}"
+
+
+def resolve_required_master_candidates(
+    required_entity_refs: list[str] | tuple[str, ...],
+    *,
+    provinces: list[str],
+) -> tuple[tuple[str, ...], list[dict[str, Any]]]:
+    """Resolve ordered exact refs from the canonical nationwide master view.
+
+    The full scan is repository-local and performs no provider I/O.  It is used
+    to distinguish a missing ref from a real ref outside the requested province
+    set and to reject globally ambiguous canonical refs before a run directory
+    can be created.
+    """
+
+    normalized_refs = _normalize_required_entity_refs(required_entity_refs)
+    if not normalized_refs:
+        return (), []
+    wanted_refs = set(normalized_refs)
+    matches: dict[str, list[dict[str, Any]]] = {
+        ref: [] for ref in normalized_refs
+    }
+    for candidate in _master_candidates([]):
+        classified = _source_ready_type_evidence(candidate)
+        if classified is None:
+            continue
+        try:
+            entity_ref = canonical_source_ready_entity_ref(
+                candidate,
+                entity_type=classified[0],
+            )
+        except ValueError:
+            continue
+        if entity_ref not in wanted_refs:
+            continue
+        matches[entity_ref].append(
+            {
+                **candidate,
+                "canonicalName": canonical_source_ready_name(candidate),
+                "entityType": classified[0],
+                "canonicalEntityRef": entity_ref,
+                "typeTagRefs": classified[1],
+            }
+        )
+
+    selected_provinces = set(provinces)
+    issues: list[str] = []
+    resolved: list[dict[str, Any]] = []
+    for entity_ref in normalized_refs:
+        candidates = matches[entity_ref]
+        if not candidates:
+            issues.append(f"missing canonical master ref: {entity_ref}")
+            continue
+        if len(candidates) > 1:
+            locations = sorted(
+                {
+                    "/".join(
+                        str(candidate.get(field) or "")
+                        for field in ("province", "city", "district")
+                    )
+                    for candidate in candidates
+                }
+            )
+            issues.append(
+                f"ambiguous canonical master ref: {entity_ref} -> {locations}"
+            )
+            continue
+        candidate = candidates[0]
+        province = str(candidate.get("province") or "")
+        if province not in selected_provinces:
+            issues.append(
+                f"canonical master ref is outside selected provinces: "
+                f"{entity_ref} -> {province}"
+            )
+            continue
+        resolved.append(candidate)
+    if issues:
+        raise SourceReadinessTargetError(issues)
+    return normalized_refs, resolved
 
 
 def _read_candidates(paths: list[Path]) -> list[dict[str, Any]]:

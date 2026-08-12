@@ -135,9 +135,9 @@ class PublicFixtureSliceIdentityTest(unittest.TestCase):
         self.assertEqual(len(issues), 1)
         self.assertIn("禁止使用 mock/seed", issues[0])
 
-    def test_service_support_fixture_json_is_scanned(self) -> None:
+    def test_fixture_scan_excludes_retired_user_pool_dump(self) -> None:
         paths = gate._fixture_media_scan_paths()
-        self.assertTrue(
+        self.assertFalse(
             any(
                 "services/user-service/tests/support/contract_fixtures/user_pool.json"
                 in path.as_posix()

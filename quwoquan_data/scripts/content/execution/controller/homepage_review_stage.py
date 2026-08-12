@@ -95,7 +95,11 @@ def _review_homepage_target(
     if not name:
         return []
     domain, etype = require_domain_etype(target.get("entityType"), context=name)
-    obj = resolve_entity_object_dir(ctx.execution_id, name, etype_hint=etype)
+    obj = resolve_entity_object_dir(
+        ctx.execution_id,
+        name,
+        etype_hint=f"{domain}/{etype}",
+    )
     review_dir = obj / "5.review"
     attestation_path = review_dir / "attestation.json"
     if not attestation_path.is_file():

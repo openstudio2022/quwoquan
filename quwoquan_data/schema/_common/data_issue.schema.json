@@ -46,9 +46,11 @@
         "DATA.QUEUE.STARTUP_FAILED",
         "DATA.QUEUE.RESULT_ENVELOPE_INVALID",
         "DATA.QUEUE.TIMEOUT",
+        "DATA.POOL.DELIVERY_UNAVAILABLE",
         "DATA.SCALE.ATTAINMENT_SHORTFALL",
         "DATA.SCALE.PREDECESSOR_IDENTITY_DRIFT",
         "DATA.SCALE.M10000_WALL_CLOCK_BUDGET_EXCEEDED",
+        "DATA.SCALE.REMOTE_HOST_EXECUTOR_UNAVAILABLE",
         "DATA.INTERNAL.UNEXPECTED"
       ]
     },
@@ -73,6 +75,7 @@
         "rewind_download",
         "rewind_compose",
         "retry_agent",
+        "retry_delivery",
         "manual_review",
         "stop"
       ]

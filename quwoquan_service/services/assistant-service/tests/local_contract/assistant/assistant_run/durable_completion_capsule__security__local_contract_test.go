@@ -173,7 +173,7 @@ func TestCommittedPresentationReplacementRecoveryKeepsRevisionBounded(t *testing
 			base.mu.Lock()
 			seed := base.runs[run.RunID]
 			seed.PresentationDocument = map[string]any{
-				"templateRef": "assistant.answer.previous", "templateDigest": "sha256:previous",
+				"templateRef": "assistant.answer.previous", "templateDigest": "sha256:" + strings.Repeat("a", 64),
 				"revision": int64(4), "rootNodeId": "previous-root",
 				"fallbackPlainText": "旧答案", "committedAt": "2026-08-08T00:00:00Z",
 			}

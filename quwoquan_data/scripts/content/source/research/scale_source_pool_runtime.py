@@ -7,27 +7,34 @@ mirror after the campaign has frozen its selected-only snapshot.
 from __future__ import annotations
 
 import hashlib
+import json
+import re
+import unicodedata
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
-from core.entity_object import parse_entity_ref
 from core.carrier_contract import research_plan_files
+from core.entity_object import parse_entity_ref
 from core.io import read_json, write_json
-from core.paths import STAGE_DOWNLOAD
+from core.paths import OUTPUT_ROOT, STAGE_DOWNLOAD
 from core.schema import assert_valid
 
 from content.execution.campaign.external_input_runtime import (
     bound_runtime_external_input_context,
 )
 from content.execution.campaign.source_pool_binding import load_capsule_source_pool
-from content.source.research.homepage_article_source_ready_batch import (
-    CAPSULE_SCHEMA as SOURCE_READY_CAPSULE_SCHEMA,
-    validate_source_ready_candidate_capsule,
+from content.source.research.scale_source_pool_runtime_inputs import (
+    direct_selected_rows,
+    source_ready_capsule,
+)
+from content.source.research.scale_source_pool_evidence_path import (
+    compute_evidence_file_sha256,
+    resolve_evidence_file,
 )
 from content.source.source_unit import resolve_entity_object_dir
 from content.source.source_unit_writer import write_source_unit
-
 
 RUNTIME_INPUT_UNBOUND = "DATA.SOURCE.POOL.RUNTIME_INPUT_UNBOUND"
 
@@ -71,11 +78,22 @@ def _manifest(capsule_root: Path) -> dict[str, Any]:
 
 
 def _selected_rows(
-    *, execution_id: str, carrier: str
+    *,
+    execution_id: str,
+    carrier: str,
+    direct_selection: Mapping[str, Any] | None = None,
 ) -> tuple[Path, Path, dict[str, Any], list[dict[str, Any]]]:
     context = bound_runtime_external_input_context(execution_id, carrier)
     if context is None or context.capsule_root is None:
-        raise _fail("campaign capsule runtime context is not bound")
+        try:
+            return direct_selected_rows(
+                execution_id=execution_id,
+                carrier=carrier,
+                direct_selection=direct_selection,
+                output_root=OUTPUT_ROOT,
+            )
+        except (KeyError, OSError, TypeError, ValueError) as exc:
+            raise _fail(f"standalone source-pool binding is invalid: {exc}") from exc
     capsule_root = context.capsule_root.expanduser().resolve()
     try:
         manifest = _manifest(capsule_root)
@@ -101,68 +119,43 @@ def _selected_rows(
         by_id = {str(row["candidateId"]): row for row in rows}
         if len(by_id) != len(selected_ids) or set(by_id) != set(selected_ids):
             raise ValueError("selected lane candidates drift from frozen selection")
-        return capsule_root, snapshot_root, binding, [by_id[value] for value in selected_ids]
+        return (
+            capsule_root,
+            snapshot_root / "evidence",
+            binding,
+            [by_id[value] for value in selected_ids],
+        )
     except ScaleSourcePoolRuntimeError:
         raise
     except (KeyError, OSError, TypeError, ValueError) as exc:
         raise _fail(f"frozen source-pool selection is invalid: {exc}") from exc
 
-
-def _source_ready_capsule(
-    row: Mapping[str, Any], *, snapshot_root: Path
-) -> dict[str, Any]:
-    evidence_root = snapshot_root / "evidence"
-    relative = Path(str(row.get("sourceUnitRef") or ""))
-    if not str(relative) or relative.is_absolute() or ".." in relative.parts:
-        raise _fail("selected source-ready candidate ref is unsafe")
-    path = evidence_root / relative
-    try:
-        value = read_json(path)
-        if not isinstance(value, Mapping) or value.get("schema") != SOURCE_READY_CAPSULE_SCHEMA:
-            raise TypeError("selected candidate is not a source-ready capsule")
-        capsule = validate_source_ready_candidate_capsule(
-            value, evidence_root=evidence_root
-        )
-    except (OSError, TypeError, ValueError) as exc:
-        raise _fail(f"selected source-ready candidate is invalid: {exc}") from exc
-    candidate = capsule["candidate"]
-    checks = {
-        "carrier": (capsule.get("carrier"), row.get("carrier")),
-        "candidateId": (candidate.get("candidateId"), row.get("candidateId")),
-        "entityRef": (candidate.get("entityRef"), row.get("entityRef")),
-        "observedEntityRef": (
-            candidate.get("observedEntityRef"), row.get("observedEntityRef")
-        ),
-        **{
-            field: (candidate.get(field), row.get(field))
-            for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest")
-        },
-    }
-    drift = sorted(field for field, values in checks.items() if values[0] != values[1])
-    if drift:
-        raise _fail(
-            "selected candidate row drifts from its source-ready capsule: "
-            + ", ".join(drift)
-        )
-    return capsule
-
-
 def frozen_scale_source_pool_candidates(
-    execution_id: str, carrier: str
+    execution_id: str,
+    carrier: str,
+    *,
+    direct_selection: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], ...]:
     """Return exact lane candidates after physical selected-snapshot validation."""
 
-    _, snapshot_root, binding, rows = _selected_rows(
-        execution_id=execution_id, carrier=carrier
+    _, evidence_root, binding, rows = _selected_rows(
+        execution_id=execution_id,
+        carrier=carrier,
+        direct_selection=direct_selection,
     )
     result: list[dict[str, Any]] = []
     for row in rows:
         value = dict(row)
+        value["sourcePoolEvidenceRoot"] = evidence_root
         if carrier in {"homepage", "article"}:
-            value["sourceReadyCapsule"] = _source_ready_capsule(
-                row, snapshot_root=snapshot_root
-            )
-            value["sourceReadyEvidenceRoot"] = snapshot_root / "evidence"
+            try:
+                capsule, candidate_root = source_ready_capsule(
+                    row, evidence_root=evidence_root
+                )
+            except (OSError, TypeError, ValueError) as exc:
+                raise _fail(f"selected source-ready candidate is invalid: {exc}") from exc
+            value["sourceReadyCapsule"] = capsule
+            value["sourceReadyEvidenceRoot"] = candidate_root
         if any(
             value.get(field) != binding.get(field)
             for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest")
@@ -173,13 +166,20 @@ def frozen_scale_source_pool_candidates(
 
 
 def frozen_scale_source_pool_targets(
-    execution_id: str, carrier: str
+    execution_id: str,
+    carrier: str,
+    *,
+    direct_selection: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], ...]:
     """Project exact candidate entity identities into execution coverage targets."""
 
     targets: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
-    for row in frozen_scale_source_pool_candidates(execution_id, carrier):
+    for row in frozen_scale_source_pool_candidates(
+        execution_id,
+        carrier,
+        direct_selection=direct_selection,
+    ):
         parsed = parse_entity_ref(str(row.get("entityRef") or ""))
         if parsed is None:
             raise _fail(f"invalid candidate entityRef: {row.get('entityRef')!r}")
@@ -189,6 +189,10 @@ def frozen_scale_source_pool_targets(
             raise _fail(f"duplicate selected entity target: {identity[0]}/{name}")
         seen.add(identity)
         target: dict[str, Any] = {"entityType": identity[0], "name": name}
+        if identity[0] == "地点/城市":
+            # 行政实体的完整 canonical ref 来自冻结 source-pool；runtime join
+            # 必须逐字节消费它，不能仅凭同名城市重新构造或模糊匹配。
+            target["canonicalEntityRef"] = str(row["entityRef"])
         if carrier == "homepage":
             capsule = row.get("sourceReadyCapsule")
             candidate = capsule.get("candidate") if isinstance(capsule, Mapping) else None
@@ -216,7 +220,10 @@ def select_frozen_source_pool_targets(
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Validate request cardinality and emit the immutable selection receipt."""
 
-    rows = [dict(row) for row in targets]
+    rows = _enrich_frozen_targets_from_discovery(
+        targets,
+        discovery_path=discovery_path,
+    )
     selected_names = tuple(sorted(str(row.get("name") or "") for row in rows))
     requested_names = tuple(sorted(target_names))
     expected_count = int(lane_selection.get("candidateCount") or 0)
@@ -239,12 +246,86 @@ def select_frozen_source_pool_targets(
     }
 
 
+def _enrich_frozen_targets_from_discovery(
+    targets: tuple[dict[str, Any], ...],
+    *,
+    discovery_path: Path,
+) -> list[dict[str, Any]]:
+    """Join exact source-pool identities back to governed geography metadata.
+
+    Source-pool candidates deliberately carry the canonical entity identity and
+    source evidence, while the execution spec owns ``geoTagRef`` and taxonomy
+    fields needed by qualification/materialization.  The join is exact on
+    canonical name + entity type and fails closed on missing or ambiguous rows;
+    it never performs network discovery or changes the frozen candidate order.
+    """
+
+    from governance.coverage.admin_entity_catalog import admin_entity_partitions
+
+    from content.execution.planning.selection_discovery import (
+        apply_master_list_fields,
+        leaf_selection_name,
+        load_partitions,
+    )
+
+    def exact_text(value: object) -> str:
+        return unicodedata.normalize("NFKC", str(value or "")).strip()
+
+    by_identity: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    if any(str(row.get("entityType") or "").strip() != "地点/城市" for row in targets):
+        for partition in load_partitions(discovery_path):
+            for leaf in partition.get("leaves") or []:
+                if not isinstance(leaf, Mapping):
+                    continue
+                name = exact_text(leaf_selection_name(leaf))
+                entity_type = exact_text(leaf.get("entityType"))
+                if name and entity_type:
+                    by_identity.setdefault((entity_type, name), []).append(leaf)
+
+    admin_by_identity: dict[tuple[str, str, str], list[Mapping[str, Any]]] = {}
+    if any(str(row.get("entityType") or "").strip() == "地点/城市" for row in targets):
+        for partition in admin_entity_partitions():
+            for leaf in partition.get("leaves") or []:
+                if not isinstance(leaf, Mapping):
+                    continue
+                identity = (
+                    exact_text(leaf.get("entityType")),
+                    exact_text(leaf_selection_name(leaf)),
+                    exact_text(leaf.get("canonicalEntityRef")),
+                )
+                if all(identity):
+                    admin_by_identity.setdefault(identity, []).append(leaf)
+
+    enriched: list[dict[str, Any]] = []
+    for target in targets:
+        row = dict(target)
+        identity = (
+            exact_text(row.get("entityType")),
+            exact_text(row.get("name")),
+        )
+        if identity[0] == "地点/城市":
+            canonical_ref = exact_text(row.get("canonicalEntityRef"))
+            matches = admin_by_identity.get((*identity, canonical_ref), [])
+            authority = "admin"
+        else:
+            matches = by_identity.get(identity, [])
+            authority = "discovery"
+        if len(matches) != 1:
+            reason = "missing" if not matches else "ambiguous"
+            raise _fail(
+                f"{reason} governed {authority} target for "
+                f"{identity[0]}/{identity[1]}"
+            )
+        enriched.append(apply_master_list_fields(row, matches[0]))
+    return enriched
+
+
 def _candidate_source(candidate: Mapping[str, Any], carrier: str) -> dict[str, Any]:
     source = (
         candidate["primarySource"] if carrier == "homepage" else candidate
     )
     assert isinstance(source, Mapping)
-    return {
+    result = {
         "source_id": str(source["sourceUnitId"]),
         "platform": str(source["platform"]),
         "url": str(source["sourceUrl"]),
@@ -256,13 +337,17 @@ def _candidate_source(candidate: Mapping[str, Any], carrier: str) -> dict[str, A
         "extractor": str(source["extractor"]),
         "policyRevision": str(source["policyRevision"]),
         "sourceUseMode": "factual_reference_only",
-        "publishMediaMode": "illustrated",
+        "publishMediaMode": str(
+            candidate.get("publishMediaMode") or "illustrated"
+        ),
         "category": str(source["sourceKind"]),
         "discoveryProvider": "frozen_scale_source_pool",
         "matchConfidence": 1.0,
         "evidenceReason": "immutable source-ready candidate capsule",
         "sourceRole": "base",
-        "imageEvidenceMode": "same_source",
+        "imageEvidenceMode": (
+            "" if candidate.get("publishMediaMode") == "text_only" else "same_source"
+        ),
         "entityMatch": "accepted",
         "researchLane": carrier,
         "articleCommercialAdmission": (
@@ -274,7 +359,18 @@ def _candidate_source(candidate: Mapping[str, Any], carrier: str) -> dict[str, A
         ),
         "runtimeInputMode": "frozen_scale_source_pool",
         "sourcePoolCandidateId": str(candidate["candidateId"]),
+        "sourceAttribution": dict(candidate["sourceAttribution"]),
     }
+    if carrier == "article" and candidate.get("articleCategory"):
+        result.update(
+            {
+                "articleCategory": str(candidate["articleCategory"]),
+                "writingIntent": str(candidate["writingIntent"]),
+                "topicTagRefs": list(candidate["topicTagRefs"]),
+                "sourceClassification": dict(candidate["sourceClassification"]),
+            }
+        )
+    return result
 
 
 def write_frozen_scale_source_pool_plans(
@@ -352,6 +448,163 @@ def _image_rows(candidate: Mapping[str, Any], carrier: str) -> list[Mapping[str,
     return [row for row in candidate.get("assets") or [] if isinstance(row, Mapping)]
 
 
+def _wiki_file_key(value: object) -> str:
+    text = unquote(str(value or "")).strip()
+    match = re.search(r"(?:File|文件):([^/?#]+)", text, re.IGNORECASE)
+    if match:
+        text = match.group(1)
+    elif ":" in text and text.split(":", 1)[0] in {"File", "文件"}:
+        text = text.split(":", 1)[1]
+    return re.sub(r"\s+", " ", text.replace("_", " ")).strip().casefold()
+
+
+def _frozen_homepage_media_inputs(
+    *,
+    capsule: Mapping[str, Any],
+    evidence_root: Path,
+) -> tuple[dict[str, Any], dict[str, dict[str, Any]], dict[str, Any]]:
+    """Restore exact selected-hero placement from immutable acquisition bytes.
+
+    Homepage source-ready capsules intentionally bind a small carrier-selective
+    media set, while their acquisition evidence retains the exact MediaWiki raw
+    response.  Runtime materialization must project the selected hero's real
+    placement from those frozen bytes; inventing a generic lead placement would
+    hide locator maps and break the page-media enumeration contract.
+    """
+
+    from core.wiki_wikitext import parse_wikitext_layout, placements_from_layout
+
+    from content.source.mediawiki_page import _revision_wikitext
+    from content.source.research.homepage_article_source_ready_evidence import (
+        assert_source_ready_evidence_matches_capsule,
+        file_sha256,
+        validate_source_ready_acquisition_evidence,
+    )
+
+    candidate = capsule.get("candidate")
+    provenance = capsule.get("provenance")
+    if not isinstance(candidate, Mapping) or not isinstance(provenance, Mapping):
+        raise _fail("frozen homepage capsule lacks candidate/provenance")
+    evidence_ref = Path(str(provenance.get("discoveryEvidenceRef") or ""))
+    if not str(evidence_ref) or evidence_ref.is_absolute() or ".." in evidence_ref.parts:
+        raise _fail("frozen homepage acquisition evidence ref is unsafe")
+    try:
+        evidence = read_json(evidence_root / evidence_ref)
+        if not isinstance(evidence, Mapping):
+            raise TypeError("acquisition evidence must be one object")
+        validated = validate_source_ready_acquisition_evidence(evidence)
+        assert_source_ready_evidence_matches_capsule(validated, capsule)
+    except (OSError, TypeError, ValueError) as exc:
+        raise _fail(f"frozen homepage acquisition evidence is invalid: {exc}") from exc
+    if validated.get("carrier") != "homepage":
+        raise _fail("frozen homepage acquisition evidence carrier drift")
+    source = validated.get("sourceUnit")
+    if not isinstance(source, Mapping) or source.get("sourceKind") != "wikipedia":
+        raise _fail("frozen homepage source does not bind MediaWiki placement evidence")
+    raw_ref = Path(str(source.get("rawEvidenceRef") or ""))
+    if not str(raw_ref) or raw_ref.is_absolute() or ".." in raw_ref.parts:
+        raise _fail("frozen homepage raw evidence ref is unsafe")
+    raw_path = evidence_root / raw_ref
+    try:
+        if file_sha256(raw_path) != source.get("rawEvidenceFileSha256"):
+            raise ValueError("rawEvidenceFileSha256 drift")
+        raw_document = read_json(raw_path)
+        if not isinstance(raw_document, Mapping):
+            raise TypeError("raw MediaWiki evidence must be one object")
+        mediawiki_raw = raw_document.get("mediawikiRaw")
+        if mediawiki_raw is not None:
+            if not isinstance(mediawiki_raw, str):
+                raise TypeError("mediawikiRaw must be serialized JSON")
+            raw_document = json.loads(mediawiki_raw)
+        responses = raw_document.get("responses")
+        if not isinstance(responses, list) or not responses:
+            raise ValueError("MediaWiki raw evidence lacks responses")
+        first = responses[0]
+        query = first.get("query") if isinstance(first, Mapping) else None
+        pages = query.get("pages") if isinstance(query, Mapping) else None
+        page_rows = [row for row in (pages or {}).values() if isinstance(row, Mapping)]
+        if len(page_rows) != 1:
+            raise ValueError("MediaWiki raw evidence page identity is not exact")
+        page = page_rows[0]
+        revisions = page.get("revisions")
+        revision_rows = [
+            row for row in (revisions or []) if isinstance(row, Mapping)
+        ]
+        if len(revision_rows) != 1:
+            raise ValueError("MediaWiki raw evidence revision identity is not exact")
+        revision = revision_rows[0]
+        if (
+            int(page.get("pageid") or 0) != int(source.get("pageId") or 0)
+            or str(page.get("title") or "") != str(source.get("resolvedTitle") or "")
+            or int(revision.get("revid") or page.get("lastrevid") or 0)
+            != int(source.get("revisionId") or 0)
+        ):
+            raise ValueError("MediaWiki raw evidence identity drift")
+        wikitext = _revision_wikitext(revision).strip()
+        if not wikitext:
+            raise ValueError("MediaWiki raw evidence lacks revision wikitext")
+    except (KeyError, OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise _fail(f"frozen homepage raw evidence is invalid: {exc}") from exc
+
+    layout = parse_wikitext_layout(
+        wikitext,
+        source_kind="wikipedia",
+        title=str(source["resolvedTitle"]),
+    )
+    hero = candidate.get("hero")
+    if not isinstance(hero, Mapping):
+        raise _fail("frozen homepage candidate lacks hero")
+    hero_key = _wiki_file_key(hero.get("sourcePageUrl"))
+    matching_figures = [
+        dict(block)
+        for block in layout.get("blocks") or []
+        if isinstance(block, Mapping)
+        and block.get("type") == "figure"
+        and _wiki_file_key(block.get("fileTitle")) == hero_key
+    ]
+    if not hero_key or not matching_figures:
+        raise _fail("frozen homepage hero is absent from exact MediaWiki placements")
+    selected_layout = {
+        **layout,
+        "blocks": matching_figures,
+        "figureCount": len(matching_figures),
+        "tables": [],
+    }
+    placements = placements_from_layout(selected_layout)
+    if not placements:
+        raise _fail("frozen homepage hero placement projection is empty")
+    # The same source asset may appear more than once on a page.  Preserve all
+    # exact occurrences in imagePlacements, while the assets index carries the
+    # earliest occurrence only as its deterministic summary.
+    placement = min(placements, key=lambda row: int(row.get("sourceOrder") or 0))
+    asset_metadata = {
+        str(hero["assetId"]): {
+            "fileName": str(placement.get("fileName") or ""),
+            "caption": str(placement.get("caption") or ""),
+            "placeholderId": str(placement.get("placeholderId") or ""),
+            "placementType": str(placement.get("placementType") or "inline"),
+            "groupId": str(placement.get("groupId") or ""),
+            "sectionSlug": str(placement.get("sectionSlug") or ""),
+            "sourceOrder": int(placement.get("sourceOrder") or 0),
+            "coverCandidateRank": int(placement.get("coverCandidateRank") or 0),
+            "subjectKey": str(placement.get("subjectKey") or ""),
+            "isMapLike": bool(placement.get("isMapLike")),
+            "pageResolvedTitle": str(source["resolvedTitle"]),
+            "pageId": int(source["pageId"]),
+            "pageRevisionId": int(source["revisionId"]),
+        }
+    }
+    funnel = {
+        "candidateCount": 1,
+        "keptCount": 1,
+        "droppedCount": 0,
+        "dedupeRemoved": 0,
+        "drops": [],
+        "fetchFailures": [],
+    }
+    return selected_layout, asset_metadata, funnel
+
+
 def _existing_source_unit(
     execution_id: str,
     source_unit_id: str,
@@ -360,6 +613,10 @@ def _existing_source_unit(
     media_sha256: list[str],
     carrier: str,
     source_url: str,
+    source_attribution: Mapping[str, Any],
+    publish_media_mode: str,
+    image_placements: list[dict[str, Any]] | None,
+    asset_funnel: Mapping[str, Any] | None,
 ) -> dict[str, Any] | None:
     from content.source import source_unit_writer
 
@@ -381,6 +638,16 @@ def _existing_source_unit(
             or meta.get("sourceUnitId") != source_unit_id
             or meta.get("researchLane") != carrier
             or meta.get("url") != source_url
+            or meta.get("sourceAttribution") != dict(source_attribution)
+            or meta.get("publishMediaMode") != publish_media_mode
+            or (
+                image_placements is not None
+                and meta.get("imagePlacements") != image_placements
+            )
+            or (
+                asset_funnel is not None
+                and meta.get("assetFunnel") != dict(asset_funnel)
+            )
             or actual_body != body_sha256
             or actual_media != sorted(media_sha256)
         ):
@@ -398,7 +665,7 @@ def materialize_frozen_scale_source_pool_entity(
 ) -> dict[str, Any] | None:
     """Materialize selected body/media bytes without any network discovery."""
 
-    if carrier not in {"homepage", "article"}:
+    if carrier not in {"homepage", "article", "image"}:
         return None
     matches: list[dict[str, Any]] = []
     for row in frozen_scale_source_pool_candidates(execution_id, carrier):
@@ -408,6 +675,13 @@ def materialize_frozen_scale_source_pool_entity(
     if len(matches) != 1:
         raise _fail(f"{carrier} entity must bind exactly one selected candidate: {entity_id}")
     row = matches[0]
+    if carrier == "image":
+        return _materialize_frozen_image_source_unit(
+            execution_id=execution_id,
+            entity_id=entity_id,
+            entity_type=entity_type,
+            row=row,
+        )
     capsule = row["sourceReadyCapsule"]
     candidate = capsule["candidate"]
     materialization = capsule["materialization"]
@@ -420,22 +694,40 @@ def materialize_frozen_scale_source_pool_entity(
     media_by_id = {
         str(binding["assetId"]): binding for binding in materialization["media"]
     }
+    layout: dict[str, Any] | None = None
+    asset_metadata: dict[str, dict[str, Any]] = {}
+    asset_funnel: dict[str, Any] | None = None
+    image_placements: list[dict[str, Any]] | None = None
+    if carrier == "homepage":
+        layout, asset_metadata, asset_funnel = _frozen_homepage_media_inputs(
+            capsule=capsule,
+            evidence_root=evidence_root,
+        )
+        from core.wiki_wikitext import placements_from_layout
+
+        image_placements = placements_from_layout(layout)
     images: list[dict[str, Any]] = []
     for index, asset in enumerate(_image_rows(candidate, carrier), start=1):
         binding = media_by_id.get(str(asset["assetId"]))
         if binding is None:
             raise _fail(f"selected media binding is missing: {asset['assetId']}")
+        placement = asset_metadata.get(str(asset["assetId"]), {})
         images.append(
             {
                 **dict(asset),
+                **placement,
                 "sourcePath": evidence_root / str(binding["ref"]),
                 "url": str(asset["originalAssetUrl"]),
                 "sourceUrl": str(asset["sourcePageUrl"]),
                 "credit": str(asset["creator"]),
-                "caption": str(asset["assetId"]),
+                "caption": str(placement.get("caption") or asset["assetId"]),
                 "relevance": f"{entity_id} frozen {asset.get('role') or 'hero'} media",
                 "role": str(asset.get("role") or "hero"),
-                "coverCandidateRank": 1 if asset.get("role") in {"hero", "cover"} else index + 1,
+                "coverCandidateRank": int(
+                    placement.get("coverCandidateRank")
+                    if "coverCandidateRank" in placement
+                    else 1 if asset.get("role") in {"hero", "cover"} else index + 1
+                ),
             }
         )
     object_dir = resolve_entity_object_dir(
@@ -450,6 +742,10 @@ def materialize_frozen_scale_source_pool_entity(
         media_sha256=[str(row["contentSha256"]) for row in materialization["media"]],
         carrier=carrier,
         source_url=str(source_unit["sourceUrl"]),
+        source_attribution=candidate["sourceAttribution"],
+        publish_media_mode=str(candidate.get("publishMediaMode") or "illustrated"),
+        image_placements=image_placements,
+        asset_funnel=asset_funnel,
     )
     if existing is not None:
         return existing
@@ -476,15 +772,23 @@ def materialize_frozen_scale_source_pool_entity(
         extractor=str(source_unit["extractor"]),
         policy_revision=str(source_unit["policyRevision"]),
         source_use_mode="factual_reference_only",
-        publish_media_mode="illustrated",
+        publish_media_mode=str(candidate.get("publishMediaMode") or "illustrated"),
         source_role="base",
-        image_evidence_mode="same_source",
+        image_evidence_mode=(
+            "" if candidate.get("publishMediaMode") == "text_only" else "same_source"
+        ),
         research_lane=carrier,
         url=str(source_unit["sourceUrl"]),
-        title=str(source_unit["platform"]),
+        title=str(
+            source_unit.get("resolvedTitle")
+            if carrier == "article"
+            else source_unit["platform"]
+        ),
         target_ref=str(candidate["entityRef"]),
         relevance=f"frozen source-ready evidence for {entity_id}",
         images=images,
+        asset_funnel=asset_funnel,
+        layout=layout,
         execution_id=execution_id,
         build_variants=False,
         source={
@@ -492,6 +796,148 @@ def materialize_frozen_scale_source_pool_entity(
             "fetchedAt": str(source_unit.get("capturedAt") or ""),
         },
         frozen_source_unit_id=str(source_unit["sourceUnitId"]),
+    )
+
+
+def _materialize_frozen_image_source_unit(
+    *,
+    execution_id: str,
+    entity_id: str,
+    entity_type: str,
+    row: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Project one reviewed professional image without provider rediscovery."""
+
+    evidence_root = row.get("sourcePoolEvidenceRoot")
+    if not isinstance(evidence_root, Path):
+        raise _fail("selected image candidate lacks frozen evidence root")
+    try:
+        receipt_path = resolve_evidence_file(
+            evidence_root,
+            row["acquisitionRef"],
+            label="image acquisition receipt",
+        )
+        if compute_evidence_file_sha256(receipt_path) != row["acquisitionFileSha256"]:
+            raise ValueError("image acquisition receipt file SHA drift")
+        receipt = read_json(receipt_path)
+        if not isinstance(receipt, Mapping):
+            raise TypeError("image acquisition receipt must be one object")
+        assert_valid(
+            receipt,
+            "source",
+            "professional_image_acquisition_receipt",
+            label="frozen image acquisition receipt",
+        )
+        if receipt.get("receiptDigest") != row.get("acquisitionDigest"):
+            raise ValueError("image acquisition receipt digest drift")
+        asset_id = str(row["objectRef"]).removeprefix("posts/image/")
+        assets = [
+            asset
+            for asset in receipt.get("assets") or []
+            if isinstance(asset, Mapping) and asset.get("assetId") == asset_id
+        ]
+        if len(assets) != 1:
+            raise ValueError("image candidate must bind exactly one acquisition asset")
+        asset = assets[0]
+        if (
+            asset.get("entityId") != entity_id
+            or asset.get("contentSha256") != row.get("contentSha256")
+            or asset.get("sourceAttribution") != row.get("sourceAttribution")
+            or asset.get("acquisitionStatus") != "acquired"
+            or asset.get("distributionDecision") not in {
+                "research_allowed",
+                "commercial_allowed",
+            }
+        ):
+            raise ValueError("image candidate acquisition binding drift")
+        asset_path = resolve_evidence_file(
+            receipt_path.parent.parent,
+            asset["assetRef"],
+            label="image acquisition CAS asset",
+        )
+        if compute_evidence_file_sha256(asset_path) != asset["contentSha256"]:
+            raise ValueError("image acquisition CAS bytes drift")
+        plan_spec = asset.get("planImageSpec")
+        if not isinstance(plan_spec, Mapping):
+            raise TypeError("image acquisition asset lacks planImageSpec")
+    except (KeyError, OSError, TypeError, ValueError) as exc:
+        raise _fail(f"frozen image acquisition is invalid: {exc}") from exc
+
+    collection_id = f"acquisition:{receipt['manifestId']}:{asset_id}"
+    acquisition_ref = Path(str(row["acquisitionRef"]))
+    acquisition_prefix = ("local", "workspace", "source-acquisition")
+    if acquisition_ref.parts[: len(acquisition_prefix)] == acquisition_prefix:
+        acquisition_ref = Path(*acquisition_ref.parts[len(acquisition_prefix) :])
+    if (
+        acquisition_ref.is_absolute()
+        or ".." in acquisition_ref.parts
+        or len(acquisition_ref.parts) < 2
+        or acquisition_ref.parts[-2] != "receipts"
+        or acquisition_ref.suffix != ".json"
+    ):
+        raise _fail("frozen image acquisition receiptRef is non-canonical")
+    image = {
+        **dict(plan_spec),
+        "sourcePath": asset_path,
+        "sourceCollectionId": collection_id,
+        "acquisitionReceiptRef": acquisition_ref.as_posix(),
+        "professionalAssetId": asset_id,
+        "professionalContentSha256": str(asset["contentSha256"]),
+        "researchLane": "image",
+    }
+    source_attribution = dict(asset["sourceAttribution"])
+    source_body = (
+        "---\n"
+        "researchLane: image\n"
+        f"sourceCollectionId: {collection_id}\n"
+        f"creator: {asset['creator']}\n"
+        f"url: {asset['sourceUrl']}\n"
+        f"license: {asset['license']}\n"
+        "---\n\n"
+        f"{entity_id} 专业图片来源集合，仅供结构化资产与授权链使用。\n"
+    )
+    object_dir = resolve_entity_object_dir(
+        execution_id,
+        entity_id,
+        etype_hint=entity_type,
+    )
+    return write_source_unit(
+        object_dir,
+        ordinal=1,
+        source_id=str(asset.get("provider") or "professional_image"),
+        source_md=source_body,
+        clean_md=source_body,
+        quality={
+            "sourceId": str(asset.get("provider") or "professional_image"),
+            "entity": entity_id,
+            "quality": "High",
+            "score": 100,
+            "reasons": ["frozen_scale_source_pool", "independent_asset_review"],
+            "url": str(asset["sourceUrl"]),
+            "statusCode": 200,
+            "fetchSucceeded": True,
+        },
+        platform=str(asset["platform"]),
+        source_category="image_collection",
+        source_kind="image_collection",
+        extractor="frozen_professional_image_acquisition",
+        policy_revision="scale-source-pool-image-v1",
+        source_use_mode=(
+            "licensed_adaptation"
+            if asset.get("rightsStatus") == "verified"
+            else "rights_audit_only"
+        ),
+        research_lane="image",
+        license_value=str(asset["license"]),
+        url=str(asset["sourceUrl"]),
+        title=str(asset["displayName"]),
+        target_ref=str(row["entityRef"]),
+        relevance=str(asset["relevance"]),
+        images=[image],
+        execution_id=execution_id,
+        build_variants=False,
+        source={"sourceAttribution": source_attribution},
+        frozen_source_unit_id="image-pool-" + str(row["candidateId"]).split("-", 1)[-1],
     )
 
 

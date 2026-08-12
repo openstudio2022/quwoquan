@@ -132,8 +132,11 @@ func (b *QueryBuilder) Build(plan rtsearch.RetrievePlan) map[string]any {
 	}
 
 	body := map[string]any{
-		"size":  plan.Limit,
-		"from":  plan.Offset,
+		// Recall a stable prefix. The Search owner applies the cursor-decoded
+		// offset only after the single canonical cross-type sort; exposing ES
+		// from/search_after would create a second pagination truth.
+		"size":  plan.Offset + plan.Limit,
+		"from":  0,
 		"query": map[string]any{"bool": boolQuery},
 		// Stable sort tie-break: _score primary, then objectId (keyword) so the
 		// top-`size` cutoff is deterministic across replicas, segment merges and

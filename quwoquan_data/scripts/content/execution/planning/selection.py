@@ -18,6 +18,7 @@ from core.runtime_policy import active_runtime_policy
 from content.execution import store, validate_execution_id
 from content.execution.contracts import ExecutionStateTransition
 from content.execution.identity import SelectionPolicy
+from content.execution.planning.capacity_policy import execution_capacity_policy_fields
 from content.execution.planning.selection_discovery import (
     coverage_target_from_selection,
     leaf_selection_name,
@@ -27,13 +28,10 @@ from content.execution.planning.selection_discovery import (
     resolve_target_names,
 )
 from content.execution.planning.selection_materialization import write_selected_task
+from content.execution.planning.source_pool_policy import source_pool_policy_fields
 from content.execution.planning.source_selection import (
     TargetSourceQualifier,
     qualify_source_ready_targets,
-)
-from content.execution.planning.source_pool_policy import source_pool_policy_fields
-from content.execution.planning.execution_plan_readback import (
-    execution_planned_entity_ids,
 )
 
 DEFAULT_ARTICLE_ANGLES = ["planning_consultation", "decision_experience", "route_transport", "seasonal_timing"]
@@ -59,6 +57,7 @@ class SelectionRequest:
     entity_homepages_per_target: int
     image_works_per_target: int
     video_works_per_target: int
+    worker_host_set_binding: Mapping[str, Any] | None = None
     scale_source_pool: Mapping[str, Any] | None = None
     source_pool_evidence_root_ref: str | None = None
     source_pool_selection: Mapping[str, Any] | None = None
@@ -333,6 +332,7 @@ def build_execution_spec(
     required_workers: int,
     partition_count: int,
     capacity_plan_digest: str,
+    worker_host_set_binding: Mapping[str, Any] | None = None,
     scale_source_pool: Mapping[str, Any] | None = None,
     source_pool_evidence_root_ref: str | None = None,
     source_pool_selection: Mapping[str, Any] | None = None,
@@ -374,17 +374,12 @@ def build_execution_spec(
         or oversample_factor < 1
     ):
         raise ValueError("oversampleFactor must be a number >= 1")
-    if isinstance(required_workers, bool) or not isinstance(required_workers, int) or required_workers < 1:
-        raise ValueError("requiredWorkers must be a positive integer")
-    if partition_count not in {16, 32, 64, 128, 256}:
-        raise ValueError("partitionCount must be a governed partition count")
-    if (
-        not isinstance(capacity_plan_digest, str)
-        or len(capacity_plan_digest) != 71
-        or not capacity_plan_digest.startswith("sha256:")
-        or any(character not in "0123456789abcdef" for character in capacity_plan_digest[7:])
-    ):
-        raise ValueError("capacityPlanDigest must be a canonical sha256 digest")
+    capacity_fields = execution_capacity_policy_fields(
+        required_workers=required_workers,
+        partition_count=partition_count,
+        capacity_plan_digest=capacity_plan_digest,
+        worker_host_set_binding=worker_host_set_binding,
+    )
     source_pool_fields = source_pool_policy_fields(
         validated_execution_id,
         binding=scale_source_pool,
@@ -493,9 +488,7 @@ def build_execution_spec(
         "targetObjectCount": target_object_count,
         "approvedQuota": approved_quota,
         "oversampleFactor": float(oversample_factor),
-        "requiredWorkers": required_workers,
-        "partitionCount": partition_count,
-        "capacityPlanDigest": capacity_plan_digest,
+        **capacity_fields,
         # Scale article source plans must use the registry-admitted commercial
         # frontier; they may not fall back to uncontrolled platform sources.
         "articleCommercialClosure": carriers == ["article"],
@@ -506,7 +499,10 @@ def build_execution_spec(
     # 环境回退解析分支，普通 detached 执行仍会在 schema/preflight fail-closed。
     stamp_execution_branch(spec)
     spec["queuePolicy"] = {
-        "backend": "reliabletask",
+        # Semantic author/reviewer state is local create-once journal truth.
+        # ReliableTask remains declared below only as the independent pool
+        # delivery transport selected by the frozen queue envelope.
+        "backend": "local_file",
         "reliableTask": {
             "taskType": "data.content_object.execute",
             "queue": "reliabletask.data.content_supply",
@@ -578,6 +574,7 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         required_workers=request.required_workers,
         partition_count=request.partition_count,
         capacity_plan_digest=request.capacity_plan_digest,
+        worker_host_set_binding=request.worker_host_set_binding,
         scale_source_pool=request.scale_source_pool,
         source_pool_evidence_root_ref=request.source_pool_evidence_root_ref,
         source_pool_selection=request.source_pool_selection,

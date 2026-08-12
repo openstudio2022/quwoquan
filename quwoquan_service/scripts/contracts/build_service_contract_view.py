@@ -27,7 +27,7 @@ from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service
 
 ENV_OUTPUT_PARTS = (".qwq_output", "env", "repo", "local")
 PROVENANCE_FILENAME = ".contract-view-provenance"
-PROVENANCE_SCHEMA_VERSION = 1
+PROVENANCE_FORMAT = "contract-view-provenance"
 
 
 def repository_root() -> Path:
@@ -47,8 +47,32 @@ def load_domain(path: Path, snapshot: ContractViewSnapshot | None = None) -> str
     return domain
 
 
-def safe_output(root: Path, requested: Path) -> Path:
+def safe_output(
+    root: Path,
+    requested: Path,
+    *,
+    external_output_root: Path | None = None,
+) -> Path:
     output = requested.resolve()
+    if external_output_root is not None:
+        allowed = external_output_root.resolve(strict=True)
+        if external_output_root.is_symlink() or not allowed.is_dir():
+            raise ValueError("external output root must be a real directory")
+        repository = root.resolve()
+        if (
+            allowed == repository
+            or repository in allowed.parents
+            or allowed in repository.parents
+        ):
+            raise ValueError("external output root must be outside repository source")
+        if output == allowed or allowed not in output.parents:
+            raise ValueError(f"output must be below external root {allowed}")
+        current = output.parent
+        while current != allowed:
+            if current.exists() and current.is_symlink():
+                raise ValueError(f"output parent cannot be a symlink: {current}")
+            current = current.parent
+        return output
     allowed = root.joinpath(*ENV_OUTPUT_PARTS).resolve()
     if output == allowed or allowed not in output.parents:
         raise ValueError(f"output must be below {allowed}")
@@ -180,7 +204,7 @@ class ContractViewSnapshot:
                 }
             )
         manifest = {
-            "schemaVersion": PROVENANCE_SCHEMA_VERSION,
+            "format": PROVENANCE_FORMAT,
             "viewDigest": digest.hexdigest(),
             "sources": [
                 {"path": path, "sha256": source_digest}
@@ -276,8 +300,17 @@ def build_config_views(
         snapshot.write_derived(target, rendered, schema_paths)
 
 
-def build(root: Path, output: Path) -> Path:
-    output = safe_output(root, output)
+def build(
+    root: Path,
+    output: Path,
+    *,
+    external_output_root: Path | None = None,
+) -> Path:
+    output = safe_output(
+        root,
+        output,
+        external_output_root=external_output_root,
+    )
     if output.exists() or output.is_symlink():
         if output.is_symlink():
             output.unlink()
@@ -352,9 +385,16 @@ def main() -> int:
             "view",
         ),
     )
+    parser.add_argument("--external-output-root", type=Path)
     args = parser.parse_args()
     try:
-        print(build(root, args.output))
+        print(
+            build(
+                root,
+                args.output,
+                external_output_root=args.external_output_root,
+            )
+        )
     except (OSError, ValueError, yaml.YAMLError) as exc:
         print(f"[service-contract-view] FAIL: {exc}", file=sys.stderr)
         return 1

@@ -21,11 +21,11 @@ for _path in (DATA_ROOT, DATA_ROOT / "tests", DATA_ROOT / "scripts"):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from content.post.content_plan_video_validation import (  # noqa: E402
-    _validate_sourced_video,
-)
 from content.execution.controller.content_plan_video import (  # noqa: E402
     sourced_video_object_title,
+)
+from content.post.content_plan_video_validation import (  # noqa: E402
+    _validate_sourced_video,
 )
 from content.post.video.source_video import (  # noqa: E402
     SourcedVideoAsset,
@@ -59,7 +59,7 @@ from core.image_safety import ImageVerdict  # noqa: E402
 from core.paths import execution_root  # noqa: E402
 from core.schema import assert_valid  # noqa: E402
 from core.video_source_admission import (  # noqa: E402
-    assert_video_source_admitted,
+    assert_video_distribution_use_allowed,
 )
 from governance.content_supply_policy import (  # noqa: E402
     load_content_supply_policy,
@@ -121,14 +121,20 @@ def test_real_media_probe_and_sampled_ocr_admit_clean_video(tmp_path: Path) -> N
 def test_video_commercial_matrix_covers_all_sources_and_blocks_wrong_mode() -> None:
     registry = load_content_source_registry()
     assert verify_content_source_registry() == []
-    assert_video_source_admitted(
+    assert_video_distribution_use_allowed(
         registry,
         source_id="douyin",
         source_kind="douyin",
         publication_admission="risk_accepted_attribution_only",
     )
+    assert_video_distribution_use_allowed(
+        registry,
+        source_id="youtube",
+        source_kind="tourism_video_site",
+        publication_admission="research_release",
+    )
     try:
-        assert_video_source_admitted(
+        assert_video_distribution_use_allowed(
             registry,
             source_id="youtube",
             source_kind="tourism_video_site",

@@ -1,0 +1,30 @@
+query ContentPostDetailMedia($postId: ID!, $mediaFirst: Int! = 20) {
+  contentPostDetailMedia(postId: $postId) {
+    postId
+    contentType
+    mediaAssetIds(first: $mediaFirst)
+    mediaUrls(first: $mediaFirst)
+    mediaItems(first: $mediaFirst) {
+      kind
+      mediaAssetId
+      mediaAssetVersion
+      url
+      coverUrl
+      durationMs
+      width
+      height
+      previewTrackManifestUrl
+      previewTrackVersion
+      hlsCmafMasterManifestUrl
+      hlsCmafDescriptorVersion
+      title
+    }
+    thumbnailUrl
+    videoUrl
+    width
+    height
+    durationMs
+    coverStrategy
+    coverFrameTimeMs
+  }
+}

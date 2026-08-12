@@ -105,7 +105,7 @@ func decodeDurableCompletionCapsule(
 	if err := json.Unmarshal([]byte(encoded), &wire); err != nil {
 		return durableCompletionCapsule{}, "", ErrJournalCorrupt
 	}
-	normalized, canonical, canonicalDigest, err := encodeDurableCompletionCapsule(
+	normalized, canonical, payloadDigest, err := encodeDurableCompletionCapsule(
 		ExecutionResult{
 			AnswerText:   wire.AnswerText,
 			Processes:    wire.Processes,
@@ -113,10 +113,10 @@ func decodeDurableCompletionCapsule(
 		},
 		wire.ArtifactRefs,
 	)
-	if err != nil || canonical != encoded || canonicalDigest != strings.TrimSpace(digest) {
+	if err != nil || canonical != encoded || payloadDigest != strings.TrimSpace(digest) {
 		return durableCompletionCapsule{}, "", ErrJournalCorrupt
 	}
-	return normalized, canonicalDigest, nil
+	return normalized, payloadDigest, nil
 }
 
 func completionCapsuleForCurrentAttempt(
@@ -142,7 +142,7 @@ func completionCapsuleForCurrentAttempt(
 		if !encodedOK || !digestOK {
 			return durableCompletionCapsule{}, "", ErrJournalCorrupt
 		}
-		capsule, canonicalDigest, decodeErr := decodeDurableCompletionCapsule(
+		capsule, payloadDigest, decodeErr := decodeDurableCompletionCapsule(
 			encoded,
 			digest,
 		)
@@ -153,7 +153,7 @@ func completionCapsuleForCurrentAttempt(
 			!sameStringSequence(item.ArtifactRefs, capsule.ArtifactRefs) {
 			return durableCompletionCapsule{}, "", ErrJournalCorrupt
 		}
-		return capsule, canonicalDigest, nil
+		return capsule, payloadDigest, nil
 	}
 	return durableCompletionCapsule{}, "", ErrJournalCorrupt
 }

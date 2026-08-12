@@ -123,6 +123,12 @@ def append_article_plan_items(
 ) -> None:
     for candidate in candidates:
         intent = str(candidate.get("writingIntent") or "")
+        article_category = str(candidate.get("articleCategory") or "")
+        topic_tag_refs = [
+            str(ref)
+            for ref in candidate.get("topicTagRefs") or []
+            if str(ref).strip()
+        ]
         title = canonical_article_plan_title(
             target=target,
             draft_title=str(candidate.get("draftTitle") or ""),
@@ -135,6 +141,7 @@ def append_article_plan_items(
             carrier="article",
             target=target,
             intent=intent,
+            topic_tag_refs=topic_tag_refs,
         )
         publish_schedule = scheduler.schedule(creator_assignment)
         asset_refs = list(candidate.get("assetRefs") or [])
@@ -165,7 +172,6 @@ def append_article_plan_items(
             brief["articleSourceUnitFreeze"] = source_unit_freeze
         else:
             brief["publishMediaMode"] = "text_only"
-        write_brief_object(ctx.execution_id, ref, brief, content_type="article")
         item = {
             "ref": ref,
             "kind": "entity",
@@ -192,6 +198,12 @@ def append_article_plan_items(
             "publishSchedule": publish_schedule,
             **creator_assignment,
         }
+        if article_category:
+            brief["articleCategory"] = article_category
+            brief["tagRefs"] = topic_tag_refs
+            item["articleCategory"] = article_category
+            item["tagRefs"] = topic_tag_refs
+        write_brief_object(ctx.execution_id, ref, brief, content_type="article")
         if source_unit_freeze is not None:
             item["articleSourceUnitFreeze"] = source_unit_freeze
         else:
@@ -211,7 +223,9 @@ def append_image_plan_items(
     single_image = len(candidates) == 1
     for index, candidate in enumerate(candidates, start=1):
         ref = f"{target}_image" if single_image else f"{target}_image_{index}"
-        title = str(candidate.get("title") or "").strip()[:80]
+        raw_title = str(candidate.get("title") or "").strip()
+        source_id = str(candidate.get("sourceId") or "").strip()
+        title = "" if raw_title.casefold() == source_id.casefold() else raw_title[:80]
         caption = str(candidate.get("caption") or "").strip()[:300]
         entity_ref = f"/entity/{entity_type}/{target}"
         creator_assignment = scheduler.assign(

@@ -16,7 +16,7 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 | **app_pipeline.yml** | 仅由 mainline `workflow_call` | 四环境 Android/iOS/macOS/Web、Prod Ops Portal 与 immutable App OCI evidence | G2 / 候选 |
 | **pre-release-gate.yml** | `pull_request(main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
 | **app-env-device-matrix-self-hosted.yml** | `pull_request(main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
-| **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 主链，并在 `gray-initial` 承接真实远端集成复验 | G5c |
+| **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 主链，并在 `canary` 承接真实远端集成复验 | G5c |
 | **domain-governance.yml** | 每周、手动 | DNS 唯一记录收敛、DNS-01 续期与加密证书交接 | 环境治理 |
 
 ---
@@ -169,7 +169,7 @@ App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关�
 远端 ECS gamma onebox 部署已退役，所有 `GAMMA_ECS_*` secret/var（`GAMMA_ECS_SSH_KEY`、`GAMMA_ECS_PASSWORD`、`GAMMA_ECS_HOST`、`GAMMA_ECS_REMOTE_DIR`、`GAMMA_ECS_CONTAINER_REGISTRY_MIRROR`、`GAMMA_ECS_*_TIMEOUT_SECONDS` 等）均不再使用。
 
 - `gamma` 仅本地（local-gamma mirror），本地 left-shift 验证不需要任何远端 secret。
-- 真实远端发布、就地升级与集成 / curated 媒体路由复验统一由 prod `gray-initial` rollout stage 承接（见第八节 `deploy-prod-auto.yml`）。
+- 真实远端发布、就地升级与集成 / curated 媒体路由复验统一由 prod `canary` rollout stage 承接（见第八节 `deploy-prod-auto.yml`）。
 - prod 远端访问统一走**按平面 SSH 凭据**（见第八节），不得复用任何 `GAMMA_ECS_*` 命名，亦不再使用单一全权 `PROD_KUBECONFIG`。
 
 ---
@@ -227,7 +227,7 @@ App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关�
 - `PROD_KUBECONFIG` 已退役：一旦检测到该变量被注入，`deploy_to_prod.sh` 与凭据校验脚本都会直接硬失败，禁止 kube 路径复活。
 - `PROD_OPS_SSH_KEY`（relay）与 `PROD_DATA_SSH_KEY`（readonly audit）只在本地 bootstrap / 审计场景下按需生成，不属于当前 GitHub Actions 发布最小 secret 集。
 - 账号一次性创建见 `quwoquan_ops/cli/prod/bootstrap_prod_plane_accounts.sh`（去 root、rootless podman、独立 home/compose 根/credentials）。
-- 灰度（`gray-initial`）取同集群一个实例验证（承接原远端 gamma 验证职责），通过后放量 `full`；二者共享同一物理 ECS 为成本驱动保留项。
+- `canary` 先取 candidate 服务池单实例验证（承接原远端 gamma 验证职责），通过后依次推进 `5/20/50/100`；candidate 与 stable 服务池共享同一物理 ECS 为成本驱动保留项。
 - 非 dry-run 发布禁止使用 workflow 输入中的 SLO 数字；`stackctl deploy` 必须通过
   `PROD_PROMETHEUS_URL` 查询生产窗口，并由
   `quwoquan_ops/policies/config-release/slo_thresholds.yaml` 唯一决定

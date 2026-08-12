@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Material, MaterialType;
@@ -25,15 +26,21 @@ import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
     show journeyEventTrackerProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
-    show homeChannelsProvider;
+    show AppRemoteConfigNotifier, appRemoteConfigProvider, homeChannelsProvider;
+import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart'
+    show appTelemetryContextProvider;
+import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart'
+    show runtimeFailureFromError;
 import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
+import 'package:quwoquan_app/runtime/transport/cloud_retry_policy.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/home_feed_post_open_action.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_multi_form_feed.dart';
 import 'package:quwoquan_app/runtime/di/presentation/content_viewer_composition.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({
@@ -50,7 +57,7 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage>
-    with AutomaticKeepAliveClientMixin {
+    with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
   // 默认频道 = recommend（与 ContentUIConfig.homeChannels 首发推荐频道 id 对齐）。
   static const String _defaultChannelId = 'recommend';
   late String _activeChannelId;
@@ -62,6 +69,16 @@ class _HomePageState extends ConsumerState<HomePage>
   /// 触碰 `ref`（Riverpod 在 widget 卸载阶段使用 ref 不安全）。
   late final JourneyEventTracker _journeyTracker;
   late final DiscoveryFeedMapNotifier _feedNotifier;
+  late final AppRemoteConfigNotifier _remoteConfigNotifier;
+  late final ProviderSubscription<Map<String, AsyncValue<DiscoveryFeedState>>>
+  _feedStateSubscription;
+  StreamSubscription<String>? _networkSubscription;
+  final Map<String, Object> _automaticRecoveryConsumedErrors =
+      <String, Object>{};
+  final Set<String> _automaticRecoveryInFlightChannels = <String>{};
+  final Map<String, Timer> _automaticRecoveryTimers = <String, Timer>{};
+  final math.Random _automaticRecoveryJitter = math.Random();
+  bool _wasBackgrounded = false;
   int _activeChannelReconcileGeneration = 0;
   int _surfaceActivityGeneration = 0;
   String? _pendingActiveChannelFallbackId;
@@ -79,6 +96,39 @@ class _HomePageState extends ConsumerState<HomePage>
     _activeChannelId = _initialTabForRoute(widget.routeLocation);
     _journeyTracker = ref.read(journeyEventTrackerProvider);
     _feedNotifier = ref.read(discoveryFeedMapProvider.notifier);
+    _remoteConfigNotifier = ref.read(appRemoteConfigProvider.notifier);
+    _feedStateSubscription = ref.listenManual(discoveryFeedMapProvider, (
+      previous,
+      next,
+    ) {
+      for (final channelId in _automaticRecoveryConsumedErrors.keys.toList()) {
+        if (_automaticRecoveryInFlightChannels.contains(channelId)) {
+          continue;
+        }
+        if (next[channelId]?.value?.blockingError == null) {
+          _automaticRecoveryConsumedErrors.remove(channelId);
+          _automaticRecoveryTimers.remove(channelId)?.cancel();
+        }
+      }
+      for (final entry in next.entries) {
+        final value = entry.value.value;
+        final error = value?.items.isEmpty == true
+            ? value?.blockingError
+            : null;
+        if (error != null) {
+          _scheduleAutomaticRecovery(entry.key, error);
+        }
+      }
+    }, fireImmediately: true);
+    WidgetsBinding.instance.addObserver(this);
+    _networkSubscription = ref
+        .read(appTelemetryContextProvider)
+        .networkChanges
+        .listen((networkClass) {
+          if (networkClass != 'none') {
+            unawaited(_recoverActiveChannelOnce());
+          }
+        });
     // R20 · 页面级曝光：首页进入即上报一次 enter（页面级停留漏斗起点）。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -93,6 +143,13 @@ class _HomePageState extends ConsumerState<HomePage>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _feedStateSubscription.close();
+    unawaited(_networkSubscription?.cancel());
+    for (final timer in _automaticRecoveryTimers.values) {
+      timer.cancel();
+    }
+    _automaticRecoveryTimers.clear();
     _surfaceActivityGeneration += 1;
     _feedNotifier.cancelChannelRequests(_activeChannelId);
     // R20 · 页面级停留：离开首页时上报停留时长（含异常退出路径）。
@@ -107,6 +164,116 @@ class _HomePageState extends ConsumerState<HomePage>
       },
     );
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _wasBackgrounded = true;
+        return;
+      case AppLifecycleState.inactive:
+        return;
+      case AppLifecycleState.resumed:
+        if (!_wasBackgrounded) {
+          return;
+        }
+        _wasBackgrounded = false;
+        unawaited(_recoverActiveChannelOnce());
+        return;
+    }
+  }
+
+  Future<void> _recoverActiveChannelOnce() async {
+    if (!mounted || !widget.isStartupHomeActive) {
+      return;
+    }
+    final channelId = _activeChannelId;
+    _automaticRecoveryTimers.remove(channelId)?.cancel();
+    final current = ref.read(discoveryFeedMapProvider)[channelId]?.value;
+    final error = current?.items.isEmpty == true
+        ? current?.blockingError
+        : null;
+    if (error == null || !_isAutomaticRecoveryCandidate(error)) {
+      return;
+    }
+    if (identical(_automaticRecoveryConsumedErrors[channelId], error) ||
+        !_automaticRecoveryInFlightChannels.add(channelId)) {
+      return;
+    }
+    _automaticRecoveryConsumedErrors[channelId] = error;
+    try {
+      // 配置与 feed 在冷启动时可能同时失败。先重取幂等 GetAppConfig，再以最新
+      // 频道路由重取 GetFeed；同一阻断态只消费一次自动恢复机会，失败后仍保留
+      // 显式错误与手动重试，不因 connectivity 抖动形成轮询风暴。
+      await _remoteConfigNotifier.refresh();
+      if (!mounted ||
+          !widget.isStartupHomeActive ||
+          channelId != _activeChannelId) {
+        return;
+      }
+      final result = await _feedNotifier.load(channelId, force: true);
+      if (!mounted) {
+        return;
+      }
+      if (result.terminal == DiscoveryFeedLoadTerminal.content ||
+          result.terminal == DiscoveryFeedLoadTerminal.canonicalEmpty ||
+          result.terminal == DiscoveryFeedLoadTerminal.retainedContent) {
+        _automaticRecoveryConsumedErrors.remove(channelId);
+      } else if (result.terminal == DiscoveryFeedLoadTerminal.stillBlocked) {
+        final latestError = ref
+            .read(discoveryFeedMapProvider)[channelId]
+            ?.value
+            ?.blockingError;
+        if (latestError != null) {
+          // 自动 retry 可能生成新的 request/trace/failure 对象；仍把它视为同一
+          // 自动恢复尝试的终态，避免下一次 connectivity 抖动立即再次放大。
+          _automaticRecoveryConsumedErrors[channelId] = latestError;
+        }
+      }
+    } finally {
+      _automaticRecoveryInFlightChannels.remove(channelId);
+    }
+  }
+
+  bool _isAutomaticRecoveryCandidate(Object error) {
+    final failure = runtimeFailureFromError(error);
+    if (failure == null || failure.nature != RuntimeFailureNature.transient) {
+      return false;
+    }
+    return failure.kind == RuntimeFailureKind.network ||
+        failure.kind == RuntimeFailureKind.timeout ||
+        failure.kind == RuntimeFailureKind.unavailable ||
+        failure.kind == RuntimeFailureKind.rateLimited;
+  }
+
+  void _scheduleAutomaticRecovery(String channelId, Object error) {
+    if (!mounted ||
+        !widget.isStartupHomeActive ||
+        channelId != _activeChannelId ||
+        !_isAutomaticRecoveryCandidate(error) ||
+        identical(_automaticRecoveryConsumedErrors[channelId], error) ||
+        _automaticRecoveryInFlightChannels.contains(channelId) ||
+        _automaticRecoveryTimers.containsKey(channelId)) {
+      return;
+    }
+    late final Timer timer;
+    timer = Timer(
+      const CloudRetryPolicy().delayFor(
+        attempt: 0,
+        jitterUnit: _automaticRecoveryJitter.nextDouble(),
+      ),
+      () {
+        if (!identical(_automaticRecoveryTimers[channelId], timer)) {
+          return;
+        }
+        _automaticRecoveryTimers.remove(channelId);
+        unawaited(_recoverActiveChannelOnce());
+      },
+    );
+    _automaticRecoveryTimers[channelId] = timer;
   }
 
   @override

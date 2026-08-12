@@ -1,0 +1,42 @@
+{
+  "executionId": "20260810--travel-video-m1--china-dujiangyan-research-062aa4a3-epoch10-not-m100--scale-003",
+  "agentRunId": "run-ed6a26e0-2ba8-483b-a615-de15c5f20a8d",
+  "agentModel": "auto",
+  "renderStrategy": "sourced_video_transcode",
+  "outputAudioStatus": "none",
+  "sources": [
+    {
+      "assetRef": "sources/都江堰__tourism_video_site__4224c10b/assets/source.mp4",
+      "sourceRef": "https://commons.wikimedia.org/wiki/File:Giant_panda_feeding_-_Dujiangyan_Research_Center_of_Giant_Panda_Breeding_and_Release_-_China_-_Nov._2014.webm",
+      "rightsRef": "sources/都江堰__tourism_video_site__4224c10b/rights/permission_evidence.json",
+      "mediaProbeRef": "sources/都江堰__tourism_video_site__4224c10b/media/probe.json",
+      "watermarkEvidenceRef": "sources/都江堰__tourism_video_site__4224c10b/media/watermark_evidence.json",
+      "audioRightsEvidenceRef": "sources/都江堰__tourism_video_site__4224c10b/rights/audio_rights_evidence.json",
+      "sha256": "sha256:1a0503715e64e833f292be2376e303b881502e360510c4de0b79d2850f0df07f",
+      "isOriginal": false,
+      "originalCreatorId": null,
+      "originalCreatorName": "LWYang",
+      "originalCreatorProfileUrl": null,
+      "platform": "Wikimedia Commons",
+      "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:Giant_panda_feeding_-_Dujiangyan_Research_Center_of_Giant_Panda_Breeding_and_Release_-_China_-_Nov._2014.webm",
+      "originalAssetUrl": "https://commons.wikimedia.org/wiki/File:Giant_panda_feeding_-_Dujiangyan_Research_Center_of_Giant_Panda_Breeding_and_Release_-_China_-_Nov._2014.webm",
+      "attributionText": "都江堰大熊猫中心竹叶取食近景（后段） — LWYang — CC BY 2.0 — https://commons.wikimedia.org/wiki/File:Giant_panda_feeding_-_Dujiangyan_Research_Center_of_Giant_Panda_Breeding_and_Release_-_China_-_Nov._2014.webm",
+      "rightsBasis": "CC BY 2.0",
+      "commercialAuthorizationStatus": "verified",
+      "publicationAdmission": "research_release",
+      "authorizationProofUrl": "https://commons.wikimedia.org/wiki/File:Giant_panda_feeding_-_Dujiangyan_Research_Center_of_Giant_Panda_Breeding_and_Release_-_China_-_Nov._2014.webm",
+      "termsUrl": "https://creativecommons.org/licenses/by/2.0",
+      "riskAcceptanceId": null,
+      "watermarkStatus": "absent",
+      "audioRightsStatus": "no_audio",
+      "modelReleaseStatus": "not_required",
+      "propertyReleaseStatus": "not_required",
+      "collectedAt": "2026-08-10T04:48:07.422848+00:00",
+      "takedownPolicy": "quwoquan_standard_notice_and_takedown",
+      "directDownload": true,
+      "accessControlBypassed": false,
+      "drmDetected": false,
+      "basis": "CC BY 2.0"
+    }
+  ]
+}

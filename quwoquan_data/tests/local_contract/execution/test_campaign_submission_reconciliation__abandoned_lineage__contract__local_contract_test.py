@@ -198,7 +198,7 @@ def test_submission_only_reconciliation_records_expired_ready_preflight(
     write_json(
         expired,
         {
-            "schema": "quwoquan_data.semantic_preflight_receipt",
+            "schema": "quwoquan_data.semantic_provider_preflight_receipt",
             "ready": True,
             "validUntil": "2020-01-01T00:00:00Z",
         },

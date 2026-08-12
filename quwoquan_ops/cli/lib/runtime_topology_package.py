@@ -582,6 +582,24 @@ def load_runtime_topology_package(
             raise RuntimeTopologyPackageError(
                 "runtime topology Compose artifact retains a live build context"
             )
+        workload_selector = parsed.get("x-qwq-workloads")
+        if workload_selector is not None:
+            allowed_workloads = {"full", "content-release", "content-commercial"}
+            if (
+                role != "service"
+                or layer != "environment"
+                or not isinstance(workload_selector, list)
+                or not workload_selector
+                or any(
+                    not isinstance(item, str) or item not in allowed_workloads
+                    for item in workload_selector
+                )
+                or len(workload_selector) != len(set(workload_selector))
+            ):
+                raise RuntimeTopologyPackageError(
+                    "runtime topology workload selector is invalid"
+                )
+            selected = selected and workload in workload_selector
         if selected:
             selected_paths.append(candidate_root / reference.as_posix())
 

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtfailures "quwoquan_service/runtime/failures"
 	assistantgenerated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/presentation"
@@ -171,9 +172,10 @@ func frozenToolMetadataFor(
 }
 
 type DefaultToolCoordinator struct {
-	Now       func() time.Time
-	ForceFail bool
-	Registry  toolpkg.Registry
+	Now                    func() time.Time
+	ForceFail              bool
+	Registry               toolpkg.Registry
+	RuntimeCandidateDigest string
 }
 
 func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (ToolExecution, error) {
@@ -256,16 +258,21 @@ func (c DefaultToolCoordinator) Execute(ctx context.Context, req ToolRequest) (T
 	completed = requested
 	completed.CompletedAt = &completedAt
 	result, err := registry.Execute(ctx, toolpkg.Request{
-		ToolUseID:      toolUseID,
-		IdempotencyKey: toolUseID,
-		ToolName:       toolName,
-		Input:          requested.Input,
-		History:        append([]string{}, req.History...),
-		RunID:          req.Turn.ExecutionRunID,
-		AccountID:      req.Turn.UserID,
-		PersonaID:      req.Turn.RequestContext.PersonaID,
-		SurfaceKind:    req.Turn.RequestContext.SurfaceKind,
-		SurfaceID:      req.Turn.RequestContext.SurfaceID,
+		ToolUseID:              toolUseID,
+		IdempotencyKey:         toolUseID,
+		ToolName:               toolName,
+		Input:                  requested.Input,
+		History:                append([]string{}, req.History...),
+		RunID:                  req.Turn.ExecutionRunID,
+		TurnID:                 req.Turn.TurnID,
+		AccountID:              req.Turn.UserID,
+		PersonaID:              req.Turn.RequestContext.PersonaID,
+		SurfaceKind:            req.Turn.RequestContext.SurfaceKind,
+		SurfaceID:              req.Turn.RequestContext.SurfaceID,
+		ToolCatalogDigest:      assistantgenerated.AssistantToolCatalogDigest,
+		RuntimeCandidateDigest: strings.TrimSpace(c.RuntimeCandidateDigest),
+		ContractGraphDigest:    "sha256:" + operationsecurity.ContractGraphSHA256,
+		MaximumToolCalls:       req.Skill.Budget().MaxToolCalls,
 	})
 	if err != nil {
 		failure := toolFailure(toolName, meta, err)

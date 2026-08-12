@@ -51,6 +51,7 @@ import (
 	"quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/intersectionclient"
 	"quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/searchbackend"
 	"quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/searchmetrics"
+	userprofileinfra "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/userprofile"
 	requesthttp "quwoquan_service/services/search-service/internal/search/search_request_fact/adapters/inbound/http"
 	mqadapter "quwoquan_service/services/search-service/internal/search/search_request_fact/adapters/inbound/mq"
 	requestapplication "quwoquan_service/services/search-service/internal/search/search_request_fact/application"
@@ -226,6 +227,7 @@ func main() {
 	var recentFacade *recentsearch.Facade
 	var accountClosureConsumer *mqadapter.UserAccountClosedConsumer
 	var accountRestrictionConsumer *experimentpolicymq.UserAccountRestrictionConsumer
+	var userProfileProjectionConsumer *experimentpolicymq.UserProfileSearchProjectionConsumer
 	var accountClosureRecovery *requestapplication.SearchRequestAccountClosureRecoveryCommandFacet
 	var accountRestrictionProjection *accountrestrictioninfra.MongoAccountRestrictionProjection
 	var feedbackSignalRelay *feedbackstore.SignalRelay
@@ -356,6 +358,27 @@ func main() {
 				err,
 			)
 		}
+		userProfileProjection, err :=
+			userprofileinfra.NewMongoUserProfileSearchProjection(
+				db,
+				searchruntimees.NewIndexer(built.Client, built.Client.IndexName()),
+			)
+		if err != nil {
+			log.Fatalf("%s UserProfile search projection init failed: %v", serviceName, err)
+		}
+		if err := userProfileProjection.EnsureIndexes(ctx); err != nil {
+			log.Fatalf("%s UserProfile search projection indexes failed: %v", serviceName, err)
+		}
+		userProfileProjectionConsumer, err =
+			experimentpolicymq.NewUserProfileSearchProjectionConsumer(
+				messageTransport,
+				userProfileProjection,
+				serviceName+"-user-profile-projection-"+hostname(),
+				logger,
+			)
+		if err != nil {
+			log.Fatalf("%s UserProfile search projection consumer init failed: %v", serviceName, err)
+		}
 		accountClosureConsumer, err = mqadapter.NewUserAccountClosedConsumer(
 			messageTransport,
 			accountClosureProjection,
@@ -410,8 +433,12 @@ func main() {
 				err,
 			)
 		}
+		if err := userProfileProjectionConsumer.EnsureGroup(ctx); err != nil {
+			log.Fatalf("%s UserProfile search projection consumer group init failed: %v", serviceName, err)
+		}
 		go accountClosureConsumer.Run(ctx)
 		go accountRestrictionConsumer.Run(ctx)
+		go userProfileProjectionConsumer.Run(ctx)
 		log.Printf("%s feedback/query-log + term-heat + recent-search enabled (db=%s)", serviceName, cfg.Mongo.Database)
 	}
 
@@ -422,7 +449,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("%s account restriction backend init failed: %v", serviceName, err)
 	}
-	searchSvc := searchapplication.NewSearchService(accountRestrictedBackend)
+	searchCursorCodec, err := searchapplication.NewSearchCursorCodec(accessTokenConfig.Secret)
+	if err != nil {
+		log.Fatalf("%s search cursor codec init failed: %v", serviceName, err)
+	}
+	searchSvc := searchapplication.NewSearchService(
+		accountRestrictedBackend,
+		searchapplication.WithSearchCursorCodec(searchCursorCodec),
+	)
 	requestFactRecorder := requestapplication.NewRecorder(
 		queryLogSink,
 		searchSignalPort,
@@ -497,8 +531,9 @@ func main() {
 		decorator,
 		metricsRecorder,
 		httpadapter.HandlerConfig{
-			Intersections: intersectionAttacher,
-			RequestFacts:  requestFactRecorder,
+			Intersections:   intersectionAttacher,
+			RequestFacts:    requestFactRecorder,
+			CandidateDigest: strings.TrimSpace(os.Getenv("QWQ_RELEASE_CANDIDATE_DIGEST")),
 		},
 	).Register(routesMux)
 	requesthttp.NewHandler(termHeat).Register(routesMux)
@@ -568,6 +603,14 @@ func main() {
 			"user-account-restriction-consumer",
 			func(context.Context) error {
 				return accountRestrictionConsumer.Healthy(15 * time.Second)
+			},
+		)
+	}
+	if userProfileProjectionConsumer != nil {
+		readiness.Register(
+			"user-profile-search-projection-consumer",
+			func(context.Context) error {
+				return userProfileProjectionConsumer.Healthy(15 * time.Second)
 			},
 		)
 	}

@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/pool_delivery_preflight_receipt.schema.json",
+  "description": "Data-owned ReliableTask delivery readiness, independent from semantic providers and environments.",
+  "type": "object",
+  "required": [
+    "schema",
+    "receiptId",
+    "recordedAt",
+    "preflightProfile",
+    "executionId",
+    "target",
+    "transportDigest",
+    "queueBackendEnvelopeDigest",
+    "deliveryGeneration",
+    "deliveryFencingToken",
+    "workerRef",
+    "workerSha256",
+    "campaignBinding",
+    "mongo",
+    "redis",
+    "owned",
+    "poolDeliveryReady",
+    "issueCode",
+    "evidenceDigest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"const": "quwoquan_data.pool_delivery_preflight_receipt"},
+    "receiptId": {"$ref": "#/$defs/digest"},
+    "recordedAt": {"type": "string", "format": "date-time"},
+    "preflightProfile": {"const": "pool-delivery"},
+    "executionId": {"type": "string", "minLength": 1},
+    "target": {"const": "data-local"},
+    "transportDigest": {"$ref": "#/$defs/digest"},
+    "queueBackendEnvelopeDigest": {"$ref": "#/$defs/digest"},
+    "deliveryGeneration": {"type": "integer", "minimum": 1},
+    "deliveryFencingToken": {"$ref": "#/$defs/digest"},
+    "workerRef": {"type": "string", "minLength": 1},
+    "workerSha256": {"$ref": "#/$defs/digest"},
+    "campaignBinding": {
+      "oneOf": [
+        {"type": "null"},
+        {"$ref": "#/$defs/campaignBinding"}
+      ]
+    },
+    "mongo": {"type": "boolean"},
+    "redis": {"type": "boolean"},
+    "owned": {"type": "boolean"},
+    "poolDeliveryReady": {"type": "boolean"},
+    "issueCode": {
+      "type": ["string", "null"],
+      "enum": ["DATA.POOL.DELIVERY_UNAVAILABLE", null]
+    },
+    "evidenceDigest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "campaignBinding": {
+      "type": "object",
+      "required": [
+        "rootExecutionId",
+        "campaignRunId",
+        "campaignGeneration",
+        "campaignFencingToken",
+        "campaignPlanDigest",
+        "campaignSourceRevision",
+        "campaignSourceDigest",
+        "campaignEntityCatalogDigest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rootExecutionId": {"type": "string", "minLength": 1},
+        "campaignRunId": {"type": "string", "minLength": 1},
+        "campaignGeneration": {"type": "integer", "minimum": 1},
+        "campaignFencingToken": {"$ref": "#/$defs/digest"},
+        "campaignPlanDigest": {"$ref": "#/$defs/digest"},
+        "campaignSourceRevision": {"$ref": "#/$defs/digest"},
+        "campaignSourceDigest": {"$ref": "#/$defs/digest"},
+        "campaignEntityCatalogDigest": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

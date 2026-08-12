@@ -1,6 +1,6 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 import 'rtc_contract_test_builders.dart';
 
 /// CallSession 对象级 typed double（仅测试树可达）。
@@ -223,10 +223,10 @@ final class CallSessionTypedDouble
   }
 
   void _seed() {
-    final root = objectScenarioSeedReader.document('rtc');
-    final seedSets = root['seedSets'];
-    if (seedSets is! Map<Object?, Object?>) return;
-    final core = seedSets['rtc_core'];
+    final root = objectContractExampleReader.document('rtc');
+    final examples = root['examples'];
+    if (examples is! Map<Object?, Object?>) return;
+    final core = examples['rtc_core'];
     if (core is! Map<Object?, Object?>) return;
     final sessions = core['sessions'];
     if (sessions is! List<Object?>) return;

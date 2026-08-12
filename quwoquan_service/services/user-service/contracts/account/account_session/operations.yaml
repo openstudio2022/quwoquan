@@ -417,6 +417,70 @@ api_routes:
     request_entity: LoginAnonymousCommand
     request_body_kind: object
   - method: POST
+    path: /auth/research/session
+    operation: IssueWhitelistedResearchSession
+    actor: account
+    application:
+      kind: command
+      facet: ResearchSessionCommandFacade
+      method: issueWhitelistedResearchSession
+      aggregate_owner: AccountSession
+      mutation_target: AccountSession
+      invariant_target: AccountSession
+    description: 已认证账号仅在命中受管 subjectHash 白名单后换取短期研究态签名证明；签发必须先完成脱敏 durable audit append
+    response_fields:
+      - subjectHash
+      - attestationId
+      - expiresAt
+    authorization:
+      principal: account
+      ownership_policy: authenticated_account_research_allowlist
+    commercial:
+      status: blocked
+      block_reason: research-only identity attestation is never a commercial session
+      gap_id: USER_ACCOUNT_SESSION_RESEARCH_ONLY
+      target_story: multi-carrier-release
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.forbidden
+      - USER.AUTH.account_security_unavailable
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SECRET
+      log_policy: none
+    telemetry:
+      metric: user_research_session_issue
+      trace: true
+      attributes:
+        - environment
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    response_entity: WhitelistedResearchSession
+    response_body: WhitelistedResearchSession
+    response_body_kind: object
+    request_entity: IssueWhitelistedResearchSessionCommand
+    request_body_kind: none
+    request_bindings:
+      injected:
+        - name: authenticatedAccountId
+          field: accountId
+  - method: POST
     path: /auth/token/refresh
     operation: RefreshToken
     actor: none
@@ -528,6 +592,34 @@ api_routes:
     request_entity: LogoutCommand
     request_body_kind: object
 readiness_cases:
+  - case_id: issue-whitelisted-research-session-local
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target:
+      kind: operation
+      id: IssueWhitelistedResearchSession
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/account_session/research_session__security__local_contract_test.go
+    executions:
+      - env: alpha
+        platform: service
+        device: runner
+        provider: redis
+        digest_binding: candidate
+  - case_id: issue-whitelisted-research-session-app-local
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+    producer: app
+    layer: local_contract
+    target:
+      kind: operation
+      id: IssueWhitelistedResearchSession
+    runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/account_session/research_identity_remote__security__local_contract_test.dart
+    executions:
+      - env: alpha
+        platform: app
+        device: runner
+        provider: none
+        digest_binding: candidate
   - case_id: refresh-token-local
     spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/auth-token-lifecycle/spec.md#gwt-002
     producer: service

@@ -19,7 +19,11 @@ from content.source.research.text_match import (
     _text_mentions_entity,
 )
 from content.source.research.wiki_common import _OPENVERSE_API, _strip_html
-from content.source.research.wiki_core import _claim_string_values, _wikidata_claims
+from content.source.research.wiki_core import (
+    _claim_string_values,
+    _wikidata_claims,
+    _wikidata_item_for_zhwiki,
+)
 from content.source.research.wiki_media_subjects import (
     wikimedia_subject_evidence_by_file,
 )
@@ -131,6 +135,21 @@ def _commons_images(
             if len(images) >= limit:
                 return images
     return images
+
+
+def commons_images_for_entity(
+    entity_id: str,
+    *,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    """Return entity-matched open-license Commons originals for source units."""
+
+    return _commons_images(
+        entity_id,
+        entity_aliases=entity_aliases,
+        limit=limit,
+    )
 
 def commons_images_for_titles(
     titles: list[str],
@@ -308,6 +327,26 @@ def _wikidata_commons_images(
                 return images[:limit]
     return images[:limit]
 
+
+def wikidata_commons_images_for_entity(
+    wiki_title: str,
+    *,
+    entity_id: str,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    """Return exact P18/P373 Commons originals for one bound zh-wiki entity."""
+
+    qid = _wikidata_item_for_zhwiki(wiki_title)
+    if not qid:
+        return []
+    return _wikidata_commons_images(
+        qid,
+        entity_id=entity_id,
+        entity_aliases=entity_aliases,
+        limit=limit,
+    )
+
 def _openverse_images(
     entity_id: str,
     *,
@@ -390,3 +429,18 @@ def _openverse_images(
             if len(images) >= limit:
                 return images
     return images
+
+
+def openverse_images_for_entity(
+    entity_id: str,
+    *,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+    limit: int = 12,
+) -> list[dict[str, Any]]:
+    """Return entity-matched open-license originals from the Openverse index."""
+
+    return _openverse_images(
+        entity_id,
+        entity_aliases=entity_aliases,
+        limit=limit,
+    )

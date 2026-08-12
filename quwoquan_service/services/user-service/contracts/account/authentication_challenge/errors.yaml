@@ -71,8 +71,22 @@ errors:
   dart_const: otpRateLimited
   go_const: ErrOtpRateLimited
   user_message:
-    zh: 尝试次数较多
+    zh: 获取过于频繁
     en: Too many attempts
+- code: USER.AUTH.otp_idempotency_conflict
+  reason: idempotency_conflict
+  emitted_by:
+  - surface: http
+    operations:
+    - SendOtp
+  http_status: 409
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: otpIdempotencyConflict
+  go_const: ErrOtpIdempotencyConflict
+  user_message:
+    zh: 本次验证码请求已失效，请重新获取
+    en: This verification request is no longer valid; request a new code
 - code: USER.AUTH.otp_provider_failed
   reason: third_party_failure
   emitted_by:

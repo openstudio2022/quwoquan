@@ -8,6 +8,7 @@
     "schema",
     "transactionId",
     "executionId",
+    "publishMediaMode",
     "sourcePolicyRevision",
     "target",
     "closure",
@@ -23,6 +24,13 @@
     "executionId": {
       "type": "string",
       "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(pilot|scale|full)-[0-9]{3,}$"
+    },
+    "inputPayloadDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "publishMediaMode": {
+      "enum": ["not_applicable", "text_only", "embedded_media"]
     },
     "sourcePolicyRevision": {
       "enum": [
@@ -108,7 +116,6 @@
         },
         "casRefs": {
           "type": "array",
-          "minItems": 1,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -182,5 +189,33 @@
     "schema": {
       "const": "quwoquan_data.object_transaction_package"
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"publishMediaMode": {"const": "text_only"}},
+        "required": ["publishMediaMode"]
+      },
+      "then": {
+        "properties": {
+          "target": {
+            "properties": {"objectKind": {"const": "posts"}},
+            "required": ["objectKind"]
+          },
+          "closure": {
+            "properties": {"casRefs": {"maxItems": 0}},
+            "required": ["casRefs"]
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "closure": {
+            "properties": {"casRefs": {"minItems": 1}},
+            "required": ["casRefs"]
+          }
+        }
+      }
+    }
+  ]
 }

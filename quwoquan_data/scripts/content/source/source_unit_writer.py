@@ -12,7 +12,6 @@
         source.quality.json  # 来源质量
         assets/{NNN}_{slug}.{ext}   # 该来源自带图片
         assets/index.json    # 每图 sourceAssetId/fileName/url/sha256/license/relevance/variants
-
 证据链：source -> source asset -> writing pack asset -> article asset:// ->
 post assets/{assetId} -> manifest.sourceAssetRef（相对 batch 根）。
 """
@@ -36,9 +35,13 @@ from core.paths import (
     object_source_unit_dir,
     relative_execution_ref,
 )
+from core.source_attribution import source_attribution_fragment
 
 from content.execution.runtime_contract import stage_execution_context
 from content.source.source_snapshot_redaction import redact_raw_source_snapshot
+from content.source.source_unit_manifest_media import (
+    apply_image_collection_manifest_defaults,
+)
 
 SOURCE_UNIT_MANIFEST = "meta.json"
 SOURCE_UNIT_ASSET_INDEX = "assets/index.json"
@@ -321,7 +324,14 @@ def write_source_unit(
             "inlinePlaceholderId": str(img.get("placeholderId") or ""),
             # 布局/封面候选语义（来自 source.layout.json figure；非结构源为空/默认）：
             # placementType=infoboxLead|locatorMap|inline|groupMember；rank=-1 禁封面。
-            "placementType": str(img.get("placementType") or ""),
+            "placementType": str(
+                img.get("placementType")
+                or (
+                    "infoboxLead"
+                    if resolved_source_kind == "image_collection" and k == 1
+                    else "groupMember" if resolved_source_kind == "image_collection" else ""
+                )
+            ),
             "groupId": str(img.get("groupId") or ""),
             "sectionSlug": str(img.get("sectionSlug") or ""),
             "sourceOrder": int(img.get("sourceOrder") or 0),
@@ -338,8 +348,8 @@ def write_source_unit(
                 execution_id,
                 img,
             ),
-            # 视觉主体描述 = 原图注（仅原图注，无则空，禁止伪造）。
-            "visualSubject": str(img.get("caption") or ""),
+            # provider 原图主体优先；图位 caption 仅在无独立证据时回退。
+            "visualSubject": str(img.get("visualSubject") or img.get("caption") or ""),
             # Commons category -> Wikidata 多语言标签，是视觉主体别名的唯一
             # provider 证据；下游只能消费这些冻结行，不能自行翻译文件名。
             "visualSubjectEvidence": [
@@ -435,6 +445,7 @@ def write_source_unit(
         },
         "assetCount": len(asset_index),
     }
+    manifest.update(source_attribution_fragment(source_payload))
     article_site_id = str(source_payload.get("articleSiteId") or "").strip()
     article_profile_digest = str(
         source_payload.get("sourceDiscoveryProfileDigest") or ""
@@ -448,6 +459,16 @@ def write_source_unit(
         manifest["sourceDiscoveryProfileDigest"] = article_profile_digest
     if article_admission:
         manifest["articleCommercialAdmission"] = article_admission
+    article_category = str(source_payload.get("articleCategory") or "").strip()
+    if article_category:
+        manifest["articleCategory"] = article_category
+        manifest["writingIntent"] = str(source_payload.get("writingIntent") or "")
+        manifest["topicTagRefs"] = [
+            str(item) for item in source_payload.get("topicTagRefs") or []
+        ]
+        manifest["sourceClassification"] = dict(
+            source_payload.get("sourceClassification") or {}
+        )
     requested_title = str(source_payload.get("requestedTitle") or "").strip()
     resolved_title = str(source_payload.get("resolvedTitle") or "").strip()
     redirect_chain = source_payload.get("redirectChain")
@@ -532,6 +553,11 @@ def write_source_unit(
         manifest["entityFocusVerdict"] = focus_verdict
     if asset_funnel:
         manifest["assetFunnel"] = dict(asset_funnel)
+    apply_image_collection_manifest_defaults(
+        manifest,
+        source_kind=resolved_source_kind,
+        asset_index=asset_index,
+    )
     # A video lane has two distinct admissible material types: direct-video
     # source units and rights-cleared still-frame collections.  The strict
     # direct-video contract applies only to the former.  Applying it to a
@@ -543,7 +569,7 @@ def write_source_unit(
         )
 
         assert_video_source_unit_invariants(manifest)
-    if research_lane in {"homepage", "video"}:
+    if research_lane in {"homepage", "article", "video"}:
         from core.schema import assert_valid
 
         assert_valid(

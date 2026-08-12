@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from content.release.canonical.release_header import validate_release_header
+from content.release.canonical.environment_release_selection import DATA_POST_CAPS
 from content.release.environment.topology import (
     EnvironmentReleaseMode,
     EnvironmentReleaseTarget,
@@ -57,6 +58,54 @@ def release_has_posts(contract: Mapping[str, Any]) -> bool:
     if not isinstance(posts, list):
         raise SystemExit("[ship] release desiredRefs.posts is invalid")
     return bool(posts)
+
+
+def assert_environment_release_policy(
+    *,
+    release: Path,
+    contract: Mapping[str, Any],
+    environment: str,
+) -> None:
+    """Fail closed on environment mode and Data Post capacity drift."""
+
+    env = str(environment).strip()
+    if env not in DATA_POST_CAPS:
+        raise SystemExit(
+            f"[ship] DATA.RELEASE.ENVIRONMENT_POLICY_INVALID: unsupported environment {env!r}"
+        )
+    desired_refs = contract.get("desiredRefs")
+    posts = desired_refs.get("posts") if isinstance(desired_refs, Mapping) else None
+    if not isinstance(posts, list):
+        raise SystemExit(
+            "[ship] DATA.RELEASE.ENVIRONMENT_POLICY_INVALID: desiredRefs.posts must be an array"
+        )
+    post_refs = [str(item).strip() for item in posts]
+    if any(not item for item in post_refs) or len(post_refs) != len(set(post_refs)):
+        raise SystemExit(
+            "[ship] DATA.RELEASE.ENVIRONMENT_POLICY_INVALID: Data Post refs must be unique and non-empty"
+        )
+    cap = DATA_POST_CAPS[env]
+    if cap is not None and len(post_refs) > cap:
+        raise SystemExit(
+            "[ship] DATA.RELEASE.POST_CAP_EXCEEDED: "
+            f"environment={env} count={len(post_refs)} cap={cap}"
+        )
+    header = read_json(payload_file(release, "release.json"))
+    target_environment = str(header.get("targetEnvironment") or "").strip()
+    if target_environment and target_environment != env:
+        raise SystemExit(
+            "[ship] DATA.RELEASE.TARGET_ENVIRONMENT_MISMATCH: "
+            f"manifest={target_environment} requested={env}"
+        )
+    release_class = str(header.get("releaseClass") or "").strip()
+    lifecycle = str(header.get("productLifecycleState") or "").strip()
+    if release_class not in {"research", "commercial"} or lifecycle != release_class:
+        raise SystemExit(
+            "[ship] DATA.RELEASE.USAGE_SCOPE_MISMATCH: "
+            "environment names cannot derive authorization; immutable "
+            f"releaseClass/lifecycle={release_class or '<missing>'}/"
+            f"{lifecycle or '<missing>'}"
+        )
 
 
 def release_media_public_slices(release: Path) -> dict[str, str]:

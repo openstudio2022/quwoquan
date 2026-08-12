@@ -5,7 +5,22 @@ set -euo pipefail
 APP_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$APP_DIR/.." && pwd)"
 REQUESTED_ENVIRONMENT="${QWQ_ENVIRONMENT:-}"
+REQUESTED_TARGET=""
+RUN_MODE="content-live"
+ENSURE_RUNTIME=0
 FLUTTER_ARGUMENTS=()
+
+print_usage() {
+  cat <<'EOF'
+Usage: ./run.sh [--env alpha|beta|gamma] [--target alpha-local|beta-local|gamma-local]
+                [--mode content-live|ui-only] [--ensure-runtime] -d <device>
+
+content-live is the default and starts Flutter only after the selected Research
+release passes runtime, release, API, media, Search and Recommendation delivery.
+ui-only allows a non-promotable development launch without claiming content readiness.
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --env)
@@ -29,6 +44,38 @@ while [[ $# -gt 0 ]]; do
       REQUESTED_ENVIRONMENT="$value"
       shift
       ;;
+    --target)
+      if [[ -z "${2:-}" ]]; then
+        echo "[run] GATE_BLOCK: --target requires alpha-local|beta-local|gamma-local." >&2
+        exit 2
+      fi
+      REQUESTED_TARGET="$2"
+      shift 2
+      ;;
+    --target=*)
+      REQUESTED_TARGET="${1#*=}"
+      shift
+      ;;
+    --mode)
+      if [[ -z "${2:-}" ]]; then
+        echo "[run] GATE_BLOCK: --mode requires content-live|ui-only." >&2
+        exit 2
+      fi
+      RUN_MODE="$2"
+      shift 2
+      ;;
+    --mode=*)
+      RUN_MODE="${1#*=}"
+      shift
+      ;;
+    --ensure-runtime)
+      ENSURE_RUNTIME=1
+      shift
+      ;;
+    -h|--help)
+      print_usage
+      exit 0
+      ;;
     *)
       FLUTTER_ARGUMENTS+=("$1")
       shift
@@ -36,6 +83,33 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 set -- "${FLUTTER_ARGUMENTS[@]}"
+
+case "$RUN_MODE" in
+  content-live|ui-only) ;;
+  *)
+    echo "[run] GATE_BLOCK: --mode requires content-live|ui-only." >&2
+    exit 2
+    ;;
+esac
+
+if [[ -n "$REQUESTED_TARGET" ]]; then
+  case "$REQUESTED_TARGET" in
+    alpha-local) TARGET_ENVIRONMENT=alpha ;;
+    beta-local) TARGET_ENVIRONMENT=beta ;;
+    gamma-local) TARGET_ENVIRONMENT=gamma ;;
+    *)
+      echo "[run] GATE_BLOCK: --target requires alpha-local|beta-local|gamma-local." >&2
+      exit 2
+      ;;
+  esac
+  if [[ -n "$REQUESTED_ENVIRONMENT" \
+     && "$REQUESTED_ENVIRONMENT" != "$TARGET_ENVIRONMENT" ]]; then
+    echo "[run] GATE_BLOCK: --target conflicts with the selected environment." >&2
+    exit 2
+  fi
+  REQUESTED_ENVIRONMENT="$TARGET_ENVIRONMENT"
+fi
+
 export QWQ_ENVIRONMENT="${REQUESTED_ENVIRONMENT:-alpha}"
 export QWQ_APP_RUNTIME_ENV="$QWQ_ENVIRONMENT"
 case "$QWQ_APP_RUNTIME_ENV" in
@@ -45,11 +119,154 @@ case "$QWQ_APP_RUNTIME_ENV" in
     exit 2
     ;;
 esac
-export QWQ_LAUNCH_TARGET="${QWQ_APP_RUNTIME_ENV}-local"
+export QWQ_LAUNCH_TARGET="${REQUESTED_TARGET:-${QWQ_APP_RUNTIME_ENV}-local}"
+export QWQ_APP_RUN_MODE="$RUN_MODE"
 export QWQ_APP_BUILD_CONTEXT=runtime
 export QWQ_APP_LAUNCH_POLICY=test_live
 
 cd "$APP_DIR"
+
+if [[ "$ENSURE_RUNTIME" == "1" ]]; then
+  echo "[run] GATE_BLOCK: --ensure-runtime requires an explicit frozen candidate identity; the App launcher cannot infer or mutate it." >&2
+  exit 2
+fi
+
+PREFLIGHT_PURPOSE=runtime
+if [[ "$RUN_MODE" == "content-live" ]]; then
+  PREFLIGHT_PURPOSE=content_live
+fi
+
+echo "[run] validating $PREFLIGHT_PURPOSE for $QWQ_LAUNCH_TARGET..."
+if ! APP_CONTENT_PREFLIGHT_JSON="$(
+  PYTHONDONTWRITEBYTECODE=1 python3 \
+    "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
+    app-debug-preflight --purpose "$PREFLIGHT_PURPOSE" \
+    --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live
+)"; then
+  echo "$APP_CONTENT_PREFLIGHT_JSON" >&2
+  exit 2
+fi
+
+APP_CONTENT_EXPORTS="$(
+  python3 - "$APP_CONTENT_PREFLIGHT_JSON" "$RUN_MODE" "$QWQ_LAUNCH_TARGET" <<'PY'
+import json
+import shlex
+import sys
+
+payload = json.loads(sys.argv[1])
+run_mode = sys.argv[2]
+target = sys.argv[3]
+purpose = "content_live" if run_mode == "content-live" else "runtime"
+recovery_command = (
+    "python3 quwoquan_ops/cli/stackctl.py --output-format json "
+    f"app-debug-preflight --purpose {purpose} --target {target} "
+    "--runtime-mode test_live"
+)
+
+if payload.get("purpose") != purpose:
+    print(json.dumps({
+        "contentLive": "blocked",
+        "reason": "preflight purpose mismatch",
+        "recoveryCommand": recovery_command,
+    }, ensure_ascii=False), file=sys.stderr)
+    raise SystemExit(2)
+
+if run_mode == "content-live":
+    content_binding = payload.get("contentBinding") or {}
+    first_blocker = str(
+        payload.get("firstBlocker")
+        or next(iter(payload.get("details") or payload.get("warnings") or []), "")
+        or "content-live readiness is not passed"
+    )
+    required = {
+        "releaseId": str(payload.get("releaseId") or "").strip(),
+        "verifyRunId": str(content_binding.get("verifyRunId") or "").strip(),
+        "manifestDigest": str(payload.get("manifestDigest") or "").strip(),
+        "readinessReceiptDigest": str(
+            payload.get("readinessReceiptDigest") or ""
+        ).strip(),
+    }
+    if (
+        payload.get("status") != "passed"
+        or payload.get("contentLive") != "passed"
+        or payload.get("contentBindingState") != "bound"
+        or any(not value for value in required.values())
+    ):
+        print(json.dumps({
+            "contentLive": "gate_block",
+            "reason": first_blocker,
+            "recoveryCommand": str(
+                payload.get("recoveryCommand") or recovery_command
+            ),
+        }, ensure_ascii=False), file=sys.stderr)
+        raise SystemExit(2)
+    for key, value in (
+        ("QWQ_CONTENT_RELEASE_ID", required["releaseId"]),
+        ("QWQ_CONTENT_VERIFY_RUN_ID", required["verifyRunId"]),
+        ("QWQ_CONTENT_MANIFEST_DIGEST", required["manifestDigest"]),
+        (
+            "QWQ_CONTENT_READINESS_RECEIPT_DIGEST",
+            required["readinessReceiptDigest"],
+        ),
+    ):
+        print(f"export {key}={shlex.quote(value)}")
+else:
+    if (
+        payload.get("status") not in {"passed", "warning"}
+        or payload.get("nonPromotable") is not True
+    ):
+        print(json.dumps({
+            "contentLive": "not_evaluated",
+            "reason": str(payload.get("firstBlocker") or "runtime preflight blocked"),
+            "recoveryCommand": recovery_command,
+        }, ensure_ascii=False), file=sys.stderr)
+        raise SystemExit(2)
+    for warning in payload.get("warnings") or []:
+        print(f"[run] WARN: {warning}", file=sys.stderr)
+PY
+)" || {
+  echo "[run] GATE_BLOCK: selected launch mode preflight did not pass." >&2
+  exit 2
+}
+eval "$APP_CONTENT_EXPORTS"
+
+APP_CONTENT_DELIVERY_JSON='{}'
+if [[ "$RUN_MODE" == "content-live" ]]; then
+  if ! APP_CONTENT_DELIVERY_JSON="$(
+    PYTHONDONTWRITEBYTECODE=1 python3 \
+      "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
+      verify --env "$QWQ_APP_RUNTIME_ENV" --target "$QWQ_LAUNCH_TARGET" \
+      --kind content-delivery --profile integration \
+      --data-release-id "$QWQ_CONTENT_RELEASE_ID" \
+      --data-verify-run-id "$QWQ_CONTENT_VERIFY_RUN_ID" \
+      --data-manifest-digest "$QWQ_CONTENT_MANIFEST_DIGEST"
+  )"; then
+    python3 - \
+      "$APP_CONTENT_DELIVERY_JSON" "$QWQ_CONTENT_RELEASE_ID" \
+      "$QWQ_APP_RUNTIME_ENV" <<'PY' >&2
+import json
+import sys
+
+try:
+    payload = json.loads(sys.argv[1])
+except json.JSONDecodeError:
+    payload = {}
+first_blocker = str(
+    next(iter(payload.get("details") or []), "content delivery verification failed")
+)
+recovery_command = (
+    "python3 quwoquan_data/scripts/cli.py release supply-chain-drill "
+    f"--release-id {sys.argv[2]} --env {sys.argv[3]} --profile delivery"
+)
+print(json.dumps({
+    "contentLive": "gate_block",
+    "reason": first_blocker,
+    "recoveryCommand": recovery_command,
+}, ensure_ascii=False))
+PY
+    exit 2
+  fi
+fi
 
 echo "[run] verifying local Flutter package resolution..."
 if ! flutter pub get --offline; then
@@ -92,7 +309,7 @@ parse_flutter_device_id() {
 for argument in "$@"; do
   case "$argument" in
     -t|--target|--target=*)
-      echo "[run] GATE_BLOCK: select alpha|beta|gamma with QWQ_ENVIRONMENT; raw Flutter target overrides are forbidden."
+      echo "[run] GATE_BLOCK: raw Flutter entrypoint overrides are forbidden; use launcher --target before Flutter arguments."
       exit 2
       ;;
   esac
@@ -129,52 +346,6 @@ then
   echo "[run] GATE_BLOCK: a connected iOS/Android device is required before runtime preflight." >&2
   exit 2
 fi
-
-echo "[run] validating test_live launch safety for $QWQ_LAUNCH_TARGET..."
-if ! APP_CONTENT_PREFLIGHT_JSON="$(
-  PYTHONDONTWRITEBYTECODE=1 python3 \
-    "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" --output-format json \
-    app-debug-preflight --target "$QWQ_LAUNCH_TARGET"
-)"; then
-  echo "$APP_CONTENT_PREFLIGHT_JSON" >&2
-  echo "[run] GATE_BLOCK: test_live launch safety validation failed." >&2
-  exit 2
-fi
-if ! python3 - "$APP_CONTENT_PREFLIGHT_JSON" <<'PY'
-import json
-import sys
-
-payload = json.loads(sys.argv[1])
-if payload.get("status") not in {"passed", "warning"}:
-    raise SystemExit("App Debug preflight did not allow test_live")
-for warning in payload.get("warnings") or []:
-    print(f"[run] WARN: {warning}", file=sys.stderr)
-PY
-then
-  echo "[run] GATE_BLOCK: App Debug preflight returned an invalid test_live receipt." >&2
-  exit 2
-fi
-APP_CONTENT_EXPORTS="$(
-  python3 - "$APP_CONTENT_PREFLIGHT_JSON" <<'PY'
-import json
-import shlex
-import sys
-
-payload = json.loads(sys.argv[1])
-for key, field in (
-    ("QWQ_CONTENT_RELEASE_ID", "releaseId"),
-    ("QWQ_CONTENT_MANIFEST_DIGEST", "manifestDigest"),
-    ("QWQ_CONTENT_READINESS_RECEIPT_DIGEST", "readinessReceiptDigest"),
-):
-    value = str(payload.get(field) or "").strip()
-    if value:
-        print(f"export {key}={shlex.quote(value)}")
-PY
-)" || {
-  echo "[run] GATE_BLOCK: App content preflight returned an invalid receipt." >&2
-  exit 2
-}
-eval "$APP_CONTENT_EXPORTS"
 
 ANDROID_LOCAL_GATEWAY_BASE_URL=""
 ANDROID_LOCAL_LEGAL_BASE_URL=""
@@ -228,6 +399,7 @@ if [[ -n "$DEVICE_ID" ]]; then
     PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - \
       "$DEVICE_ID" "$QWQ_APP_RUNTIME_ENV" "$QWQ_LAUNCH_TARGET" <<'PY'
 import hashlib
+import os
 import re
 import shlex
 import subprocess
@@ -252,34 +424,51 @@ device_kind = detect_device_kind(
 )
 print(f"export QWQ_RUN_DEVICE_KIND={shlex.quote(device_kind)}")
 if device_kind.startswith("android"):
-    topology = load_environment_topology()
-    overrides = resolve_app_endpoint_overrides(environment, device_kind, topology=topology)
-    before = subprocess.run(
-        ["adb", "-s", device_id, "reverse", "--list"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if before.returncode != 0:
-        raise SystemExit("unable to read existing adb reverse mappings")
-    preexisting_ports = {
-        int(match.group(1))
-        for match in re.finditer(r"tcp:(\d+)\s+tcp:\d+", before.stdout)
-    }
-    forwards = subprocess.run(
-        ["adb", "forward", "--list"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if forwards.returncode != 0:
-        raise SystemExit("unable to read existing adb forward mappings")
-    vm_forward_preexisting = any(
-        fields[:2] == [device_id, "tcp:8888"]
-        for fields in (line.split() for line in forwards.stdout.splitlines())
-        if len(fields) >= 2
-    )
-    ports = enable_android_adb_reverse(device_id, target, topology=topology)
+    try:
+        topology = load_environment_topology()
+        overrides = resolve_app_endpoint_overrides(
+            environment,
+            device_kind,
+            topology=topology,
+        )
+        before = subprocess.run(
+            ["adb", "-s", device_id, "reverse", "--list"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if before.returncode != 0:
+            raise RuntimeError("unable to read existing adb reverse mappings")
+        preexisting_ports = {
+            int(match.group(1))
+            for match in re.finditer(r"tcp:(\d+)\s+tcp:\d+", before.stdout)
+        }
+        forwards = subprocess.run(
+            ["adb", "forward", "--list"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if forwards.returncode != 0:
+            raise RuntimeError("unable to read existing adb forward mappings")
+        vm_forward_preexisting = any(
+            fields[:2] == [device_id, "tcp:8888"]
+            for fields in (line.split() for line in forwards.stdout.splitlines())
+            if len(fields) >= 2
+        )
+        ports = enable_android_adb_reverse(device_id, target, topology=topology)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        if os.environ.get("QWQ_APP_RUN_MODE") == "content-live":
+            raise SystemExit(
+                f"content-live transport preparation failed: {exc}"
+            )
+        print(
+            "[run] WARN: Android transport preparation is unavailable; "
+            f"test_live continues with typed network recovery: {exc}",
+            file=sys.stderr,
+        )
+        print("export QWQ_ANDROID_TRANSPORT_READY=0")
+        raise SystemExit(0)
     port_list = ",".join(str(port) for port in ports)
     owned_port_list = ",".join(
         str(port) for port in ports if int(port) not in preexisting_ports
@@ -298,6 +487,7 @@ if device_kind.startswith("android"):
         ).hexdigest()
     ))
     print("export QWQ_ANDROID_LOCAL_TARGET=" + shlex.quote(target))
+    print("export QWQ_ANDROID_TRANSPORT_READY=1")
     print("export ANDROID_LOCAL_GATEWAY_BASE_URL=" + shlex.quote(overrides["gatewayBaseUrl"]))
     print("export ANDROID_LOCAL_LEGAL_BASE_URL=" + shlex.quote(overrides["legalBaseUrl"]))
     print(
@@ -348,20 +538,28 @@ if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
     DEVICE_TRUST_COMMAND+=(--allow-unprovisioned-system-trust)
   fi
   if ! PYTHONDONTWRITEBYTECODE=1 "${DEVICE_TRUST_COMMAND[@]}" >/dev/null; then
-    echo "[run] WARN: target-bound device trust is unavailable; test_live will start with typed network recovery." >&2
+    if [[ "$RUN_MODE" == "content-live" ]]; then
+      echo "[run] GATE_BLOCK: content-live requires target-bound device trust." >&2
+      exit 2
+    fi
+    echo "[run] WARN: target-bound device trust is unavailable; ui-only remains nonPromotable." >&2
   fi
 fi
 
 if [[ "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
   export ANDROID_SERIAL="$DEVICE_ID"
   if [[ -z "$QWQ_ANDROID_LOCAL_PORTS" ]]; then
-    echo "[run] GATE_BLOCK: Android topology did not provide reverse ports."
-    exit 2
+    if [[ "$RUN_MODE" == "content-live" ]]; then
+      echo "[run] GATE_BLOCK: content-live requires complete Android reverse ports." >&2
+      exit 2
+    fi
+    echo "[run] WARN: Android reverse ports are unavailable; ui-only remains nonPromotable." >&2
   fi
 fi
 
 if [[ "${QWQ_RUN_DEVICE_KIND:-}" == "ios-simulator" \
-   || "${QWQ_RUN_DEVICE_KIND:-}" == android* ]]; then
+   || ("${QWQ_RUN_DEVICE_KIND:-}" == android* \
+      && -n "$QWQ_ANDROID_LOCAL_PORTS") ]]; then
   LEASE_COMMAND=(
     "$RUNTIME_STACKCTL_PYTHON" "$ROOT_DIR/quwoquan_ops/cli/stackctl.py"
     --output-format json consumer-lease acquire
@@ -397,7 +595,11 @@ PY
     export QWQ_CONSUMER_LEASE_ID
     QWQ_CONSUMER_LEASE_ACQUIRED=1
   else
-    echo "[run] WARN: runtime consumer lease is unavailable; compile-first test_live continues." >&2
+    if [[ "$RUN_MODE" == "content-live" ]]; then
+      echo "[run] GATE_BLOCK: content-live requires a runtime consumer lease." >&2
+      exit 2
+    fi
+    echo "[run] WARN: runtime consumer lease is unavailable; ui-only remains nonPromotable." >&2
   fi
 fi
 
@@ -486,6 +688,7 @@ PY
 }
 eval "$HANDOFF_EXPORTS"
 export QWQ_APP_LAUNCH_MODE="$LAUNCH_MODE"
+export QWQ_LAUNCH_HANDOFF_JSON="$HANDOFF_JSON"
 export QWQ_DART_DEFINES_DIGEST="$DART_DEFINES_DIGEST"
 export QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST="$RUNTIME_CONFIG_DIGEST"
 export QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST="$EFFECTIVE_LAUNCH_MANIFEST_DIGEST"
@@ -508,7 +711,13 @@ if [[ "$QWQ_CONSUMER_LEASE_ACQUIRED" == "1" ]]; then
       --readiness-receipt-digest "$QWQ_CONTENT_READINESS_RECEIPT_DIGEST"
     )
   fi
-  PYTHONDONTWRITEBYTECODE=1 "${LEASE_BIND_COMMAND[@]}" >/dev/null
+  if ! PYTHONDONTWRITEBYTECODE=1 "${LEASE_BIND_COMMAND[@]}" >/dev/null; then
+    if [[ "$RUN_MODE" == "content-live" ]]; then
+      echo "[run] GATE_BLOCK: content-live failed to bind the consumer lease to the verified handoff." >&2
+      exit 2
+    fi
+    echo "[run] WARN: failed to bind the runtime consumer lease to the final handoff digest." >&2
+  fi
 fi
 VERIFY_HANDOFF_CMD=(
   python3 "$APP_DIR/scripts/device/verify_flutter_run_defines.py"
@@ -567,6 +776,8 @@ python3 - \
   "$DEVICE_ID" \
   "${QWQ_RUN_DEVICE_KIND:-unknown}" \
   "$EFFECTIVE_LAUNCH_MANIFEST_DIGEST" \
+  "$RUN_MODE" \
+  "$APP_CONTENT_DELIVERY_JSON" \
   "$TEST_LIVE_REPORT_PATH" <<'PY'
 import json
 import pathlib
@@ -580,9 +791,12 @@ import sys
     device_id,
     platform,
     handoff_digest,
+    run_mode,
+    delivery_json,
     report_path,
 ) = sys.argv[1:]
 preflight = json.loads(preflight_json)
+delivery = json.loads(delivery_json)
 exit_code = int(flutter_exit_code)
 runtime_checks = list(preflight.get("runtimeChecks") or [])
 service_health = {
@@ -602,6 +816,9 @@ report = {
     "target": target,
     "deviceId": device_id,
     "platform": platform,
+    "runMode": run_mode,
+    "nonPromotable": run_mode == "ui-only",
+    "contentLive": preflight.get("contentLive", "not_evaluated"),
     "launchPolicy": "test_live",
     "compileStatus": "passed" if exit_code == 0 else "failed_or_not_completed",
     "launchStatus": "completed" if exit_code == 0 else "failed_or_not_completed",
@@ -610,6 +827,10 @@ report = {
     "serviceHealth": service_health,
     "contentAvailability": preflight.get("contentAvailability")
     or {"state": "unbound"},
+    "contentDelivery": {
+        "status": "passed" if delivery.get("exitCode") == 0 else "not_evaluated",
+        "counts": delivery.get("counts") or {},
+    },
     "providerAvailability": provider_availability,
     "effectiveLaunchManifestDigest": handoff_digest,
 }

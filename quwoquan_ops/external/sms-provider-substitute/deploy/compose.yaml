@@ -28,7 +28,7 @@ services:
       - ${QWQ_COMPOSE_SMS_SUBSTITUTE_TLS_KEY_FILE:?target SMS key is required}:/run/secrets/sms-provider-substitute/server.key:ro
       - ${QWQ_COMPOSE_SMS_SUBSTITUTE_CA_FILE:?target SMS CA is required}:/run/secrets/sms-provider-substitute/ca.crt:ro
     healthcheck:
-      test: ["CMD", "wget", "--ca-certificate=/run/secrets/sms-provider-substitute/ca.crt", "-qO-", "https://127.0.0.1:9443/healthz"]
+      test: ["CMD", "/usr/local/bin/sms-provider-substitute", "healthcheck"]
       interval: 5s
       timeout: 2s
       start_period: 5s

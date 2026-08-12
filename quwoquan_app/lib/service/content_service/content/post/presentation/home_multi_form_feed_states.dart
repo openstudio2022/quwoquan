@@ -229,3 +229,68 @@ class _HomeFeedCompletedEmptyState extends StatelessWidget {
     );
   }
 }
+
+/// test_live 尚未绑定 active release 时的显式可恢复终态。
+///
+/// `no_active_release` 是服务端确认的 canonical empty，不是健康的“内容已加载完毕”；
+/// 这里保留 unavailable 语义并允许用户在 release 激活后重试同一 Remote Query。
+class _HomeFeedNoActiveReleaseState extends StatelessWidget {
+  const _HomeFeedNoActiveReleaseState({
+    required this.isDark,
+    required this.onRetry,
+  });
+
+  final bool isDark;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final pageBackground =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final primaryText = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final secondaryText = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return ColoredBox(
+      color: pageBackground,
+      child: AppTerminalViewport(
+        padding: EdgeInsets.all(AppSpacing.containerLg),
+        child: Column(
+          key: const ValueKey<String>('home-feed-no-active-release'),
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              SearchText.recoveryContentUnavailableTitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppTypography.iosTitle3,
+                fontWeight: AppTypography.semiBold,
+                color: primaryText,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              SearchText.recoveryContentUnavailableMessage,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: AppTypography.iosBody,
+                color: secondaryText,
+                height: AppSpacing.textLineHeightBody,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.containerMd),
+            CupertinoButton.filled(
+              key: const ValueKey<String>('home-feed-no-active-release-retry'),
+              onPressed: onRetry,
+              child: const Text(SearchText.reload),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

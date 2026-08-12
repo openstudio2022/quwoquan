@@ -26,7 +26,7 @@ OBSERVATION_FIELDS = frozenset(
 TASK_REQUIRED_FIELDS = frozenset(
     {
         "jobId", "entityRef", "stage", "sourceRevision", "status",
-        "attempts", "createdAt", "updatedAt", "leaseState",
+        "attempts", "maxAttempts", "createdAt", "updatedAt", "leaseState",
     }
 )
 TASK_OPTIONAL_FIELDS = frozenset(
@@ -44,13 +44,15 @@ class ExpectedTask:
     entity_ref: str
     stage: str
     source_revision: str
+    max_attempts: int
 
-    def as_document(self) -> dict[str, str]:
+    def as_document(self) -> dict[str, object]:
         return {
             "jobId": self.job_id,
             "entityRef": self.entity_ref,
             "stage": self.stage,
             "sourceRevision": self.source_revision,
+            "maxAttempts": self.max_attempts,
         }
 
 
@@ -243,11 +245,15 @@ def job_set_targets(
                     "sourceRevision",
                 )
             }
+            max_attempts = raw.get("maxAttempts")
             if (
                 not all(fields.values())
                 or fields["executionId"] != execution_id
                 or fields["carrier"] != carrier
                 or fields["stage"] != stage
+                or isinstance(max_attempts, bool)
+                or not isinstance(max_attempts, int)
+                or max_attempts < 1
             ):
                 raise observer_error(
                     "FROZEN_TARGET_INVALID",
@@ -260,6 +266,7 @@ def job_set_targets(
                     entity_ref=fields["entityRef"],
                     stage=fields["stage"],
                     source_revision=fields["sourceRevision"],
+                    max_attempts=max_attempts,
                 )
             )
         rows.sort(key=lambda row: row.job_id)

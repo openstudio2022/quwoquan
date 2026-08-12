@@ -13,42 +13,27 @@ from typing import Any
 
 from core import paths
 from core.io import read_json
-from core.schema import assert_valid
-from core.source_digest import current_source_digest
-from governance.coverage.distribution import load_content_distribution_policy
-
-from content.execution.campaign.external_inputs import (
-    content_source_revision,
-    external_inputs_digest,
+from core.source_digest import (
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
 )
+
 from content.execution.campaign.lane import CAMPAIGN_CARRIERS
 from content.execution.campaign.scale import (
-    CampaignScaleError,
     resolve_campaign_scale,
 )
 from content.execution.campaign.submission_reconciliation import (
     load_submission_reconciliation_receipt,
     reconciliation_reference,
 )
-from content.execution.controller.execute.pre_acquisition_handoff import (
-    freeze_carrier_pre_acquisition_inputs,
-)
-from content.execution.identity import build_execution_id, parse_execution_id
+from content.execution.identity import build_execution_id
 from content.execution.model_contract import (
-    CURSOR_AUTO_SEMANTIC_SELECTION_ID,
     DEFAULT_SEMANTIC_SELECTION_ID,
-    normalize_semantic_selection_id,
 )
-from content.execution.planning.semantic_preflight_admission import (
-    bind_semantic_preflight_receipt,
-    validate_semantic_preflight_binding_at,
-)
-from content.execution.request import resolve_candidate_pool
 from content.release.canonical.research_scale_predecessor import (
     ResearchScalePredecessorError,
     load_predecessor_promotion,
 )
-from content.execution.workspace import entity_catalog_digest
 
 ENVELOPE_SCHEMA = "quwoquan_data.content_campaign_request_envelope"
 
@@ -75,6 +60,7 @@ def envelopes_root(*, root: Path | None = None) -> Path:
 def scale_root(
     scale: str,
     *,
+    scope: str,
     vertical: str = "travel",
     root: Path | None = None,
     sequence: int = 1,
@@ -83,21 +69,36 @@ def scale_root(
     vertical_id = _normalize_vertical(vertical)
     if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 1:
         raise ValueError("campaign envelope sequence must be a positive integer")
-    scale_path = envelopes_root(root=root) / vertical_id / resolved.scale
-    return scale_path if sequence == 1 else scale_path / f"retry-{sequence:03d}"
+    scope_id = str(scope).strip()
+    if not _SCOPE_TOKEN_RE.fullmatch(scope_id):
+        raise ValueError("campaign envelope scope token is invalid")
+    return (
+        envelopes_root(root=root)
+        / vertical_id
+        / resolved.scale
+        / scope_id
+        / f"sequence-{sequence:03d}"
+    )
 
 
 def envelope_path(
     scale: str,
     carrier: str,
     *,
+    scope: str,
     vertical: str = "travel",
     root: Path | None = None,
     sequence: int = 1,
 ) -> Path:
     if carrier not in _OPERATIONS:
         raise ValueError(f"unsupported carrier: {carrier}")
-    parent = scale_root(scale, vertical=vertical, root=root, sequence=sequence)
+    parent = scale_root(
+        scale,
+        scope=scope,
+        vertical=vertical,
+        root=root,
+        sequence=sequence,
+    )
     return parent / f"{carrier}.json"
 
 
@@ -141,13 +142,17 @@ def _git_branch(repo_root: Path) -> str:
 def _require_stable_source_inputs(
     source_document: dict[str, object],
     *,
+    execution_bundle: dict[str, object],
     repo_root: Path,
 ) -> None:
     """Reject content drift, without requiring a shared worktree to be clean."""
-    observed = current_source_digest(repo_root=repo_root).to_document()
-    if observed != source_document:
+    observed = current_source_definition_snapshot(repo_root=repo_root).to_document()
+    observed_bundle = current_execution_bundle_identity(
+        repo_root=repo_root
+    ).to_document()
+    if observed != source_document or observed_bundle != execution_bundle:
         raise ValueError(
-            "campaign envelope sourceDigest inputs changed during freeze"
+            "campaign envelope source snapshot/execution bundle changed during freeze"
         )
 
 
@@ -249,6 +254,7 @@ def _research_scale_promotion_ref(
 
 from content.execution.campaign.request_envelope_build import build_envelope
 
+
 def load_campaign_envelope(
     path: Path,
     *,
@@ -281,12 +287,16 @@ def write_scale_envelopes(
     sequence: int = 1,
     semantic_selection_id: str = DEFAULT_SEMANTIC_SELECTION_ID,
     semantic_preflight_receipt: Path | None = None,
+    capacity_host_set: Path | None = None,
     semantic_preflight_output_root: Path | None = None,
     predecessor_execution_ids_by_carrier: Mapping[str, str] | None = None,
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
     promotion_output_root: Path | None = None,
+    alpha_m100_readiness_receipt: Path | None = None,
+    alpha_m100_app_uat_receipt: Path | None = None,
+    alpha_m100_acceptance_output_root: Path | None = None,
     pre_acquisition_handoff: Path | None = None,
     pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
@@ -315,12 +325,16 @@ def write_scale_envelopes(
         sequence=sequence,
         semantic_selection_id=semantic_selection_id,
         semantic_preflight_receipt=semantic_preflight_receipt,
+        capacity_host_set=capacity_host_set,
         semantic_preflight_output_root=semantic_preflight_output_root,
         predecessor_execution_ids_by_carrier=predecessor_execution_ids_by_carrier,
         predecessor_reconciliation_receipt=predecessor_reconciliation_receipt,
         reconciliation_output_root=reconciliation_output_root,
         promotion_receipt=promotion_receipt,
         promotion_output_root=promotion_output_root,
+        alpha_m100_readiness_receipt=alpha_m100_readiness_receipt,
+        alpha_m100_app_uat_receipt=alpha_m100_app_uat_receipt,
+        alpha_m100_acceptance_output_root=alpha_m100_acceptance_output_root,
         pre_acquisition_handoff=pre_acquisition_handoff,
         pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
         external_input_refs_by_carrier=external_input_refs_by_carrier,
@@ -347,12 +361,16 @@ def write_campaign_envelopes(
     sequence: int = 1,
     semantic_selection_id: str = DEFAULT_SEMANTIC_SELECTION_ID,
     semantic_preflight_receipt: Path | None = None,
+    capacity_host_set: Path | None = None,
     semantic_preflight_output_root: Path | None = None,
     predecessor_execution_ids_by_carrier: Mapping[str, str] | None = None,
     predecessor_reconciliation_receipt: Path | None = None,
     reconciliation_output_root: Path | None = None,
     promotion_receipt: Path | None = None,
     promotion_output_root: Path | None = None,
+    alpha_m100_readiness_receipt: Path | None = None,
+    alpha_m100_app_uat_receipt: Path | None = None,
+    alpha_m100_acceptance_output_root: Path | None = None,
     pre_acquisition_handoff: Path | None = None,
     pre_acquisition_handoff_output_root: Path | None = None,
     external_input_refs_by_carrier: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
@@ -380,12 +398,16 @@ def write_campaign_envelopes(
         sequence=sequence,
         semantic_selection_id=semantic_selection_id,
         semantic_preflight_receipt=semantic_preflight_receipt,
+        capacity_host_set=capacity_host_set,
         semantic_preflight_output_root=semantic_preflight_output_root,
         predecessor_execution_ids_by_carrier=predecessor_execution_ids_by_carrier,
         predecessor_reconciliation_receipt=predecessor_reconciliation_receipt,
         reconciliation_output_root=reconciliation_output_root,
         promotion_receipt=promotion_receipt,
         promotion_output_root=promotion_output_root,
+        alpha_m100_readiness_receipt=alpha_m100_readiness_receipt,
+        alpha_m100_app_uat_receipt=alpha_m100_app_uat_receipt,
+        alpha_m100_acceptance_output_root=alpha_m100_acceptance_output_root,
         pre_acquisition_handoff=pre_acquisition_handoff,
         pre_acquisition_handoff_output_root=pre_acquisition_handoff_output_root,
         external_input_refs_by_carrier=external_input_refs_by_carrier,
@@ -403,8 +425,9 @@ __all__ = [
     "load_campaign_envelope",
     "load_submission_reconciliation_receipt",
     "normalize_execution_scope",
-    "scale_root",
+    "read_json",
     "reconciliation_reference",
+    "scale_root",
     "write_campaign_envelopes",
     "write_scale_envelopes",
 ]

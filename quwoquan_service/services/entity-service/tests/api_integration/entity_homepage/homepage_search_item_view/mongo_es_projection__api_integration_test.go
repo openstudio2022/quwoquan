@@ -91,6 +91,9 @@ func TestHomepageSearchItemViewPersistsMonotonicCheckpointAndTombstone(t *testin
 	if applied, err := handler.Apply(ctx, published); err != nil || !applied {
 		t.Fatalf("project published event: applied=%v err=%v", applied, err)
 	}
+	if applied, err := handler.Apply(ctx, published); err != nil || !applied {
+		t.Fatalf("equal-version replay must repair missing Elasticsearch document: applied=%v err=%v", applied, err)
+	}
 	stale := published
 	stale.SourceVersion = 1
 	stale.DisplayName = "stale title"
@@ -120,7 +123,7 @@ func TestHomepageSearchItemViewPersistsMonotonicCheckpointAndTombstone(t *testin
 	cluster.mu.Lock()
 	upserts, deletes := cluster.upserts, cluster.deletes
 	cluster.mu.Unlock()
-	if upserts != 1 || deletes != 1 {
+	if upserts != 2 || deletes != 1 {
 		t.Fatalf("stale events touched Elasticsearch: upserts=%d deletes=%d", upserts, deletes)
 	}
 }

@@ -13,7 +13,7 @@ import (
 )
 
 type integrationFixturePack struct {
-	SeedSets map[string]integrationFixtureSeedSet `json:"seedSets"`
+	Examples map[string]integrationFixtureSeedSet `json:"examples"`
 }
 
 type integrationFixtureSeedSet struct {
@@ -35,7 +35,7 @@ func TestContractFixtureSeed_LocationPOIReadsViaHandler(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load integration fixture: %v", err)
 	}
-	seed := pack.SeedSets["location_poi_core"]
+	seed := pack.Examples["location_poi_core"]
 	pois := make([]model.POI, 0, len(seed.POIs))
 	for _, item := range seed.POIs {
 		pois = append(pois, model.POI{

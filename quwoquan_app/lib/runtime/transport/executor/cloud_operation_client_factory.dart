@@ -13,7 +13,23 @@ GeneratedCloudOperationClient buildGeneratedCloudOperationClient({
   required CloudOperationTelemetrySink telemetrySink,
   CloudRuntimeEnvironment? environment,
 }) {
-  final executor = AppGeneratedCloudOperationExecutor(
+  return GeneratedCloudOperationClient(
+    buildGeneratedCloudOperationExecutor(
+      httpClient: httpClient,
+      clientContextProvider: clientContextProvider,
+      telemetrySink: telemetrySink,
+      environment: environment,
+    ),
+  );
+}
+
+CloudOperationExecutor buildGeneratedCloudOperationExecutor({
+  required CloudHttpClient httpClient,
+  required CloudClientContextProvider clientContextProvider,
+  required CloudOperationTelemetrySink telemetrySink,
+  CloudRuntimeEnvironment? environment,
+}) {
+  return AppGeneratedCloudOperationExecutor(
     environment: environment ?? CloudRuntimeEnvironment.fromCompileTime(),
     transport: HttpCloudJsonTransport(httpClient),
     headerFactory: CloudOperationHeaderFactory(
@@ -21,5 +37,4 @@ GeneratedCloudOperationClient buildGeneratedCloudOperationClient({
     ),
     telemetrySink: telemetrySink,
   );
-  return GeneratedCloudOperationClient(executor);
 }

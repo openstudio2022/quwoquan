@@ -181,6 +181,7 @@ func sendFederatedBindingOtp(
 		"1.0.0",
 		"bind_phone",
 		outcome.BindingTicket,
+		"credential-contract-bind-otp-000001",
 	)
 	if err != nil {
 		t.Fatalf("send bind-phone otp: %v", err)

@@ -17,6 +17,8 @@ import io.flutter.plugin.common.*
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import java.lang.ref.WeakReference
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 /** FlutterCallkitIncomingPlugin */
@@ -47,6 +49,44 @@ class FlutterCallkitIncomingPlugin : FlutterPlugin, MethodCallHandler, ActivityA
         private val eventChannels = mutableMapOf<BinaryMessenger, EventChannel>()
         private val eventHandlers = mutableMapOf<BinaryMessenger, EventCallbackHandler>()
         private val eventCallbacks = mutableListOf<WeakReference<CallkitEventCallback>>()
+        private val phoneAccountRegistrationInFlight = AtomicBoolean(false)
+        private val phoneAccountRegistered = AtomicBoolean(false)
+
+        private fun schedulePhoneAccountRegistration(context: Context) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+            if (phoneAccountRegistered.get()) {
+                Log.d(TAG, "PhoneAccount registration already completed.")
+                return
+            }
+            if (!phoneAccountRegistrationInFlight.compareAndSet(false, true)) {
+                Log.d(TAG, "PhoneAccount registration already in flight.")
+                return
+            }
+
+            val registrationExecutor = Executors.newSingleThreadExecutor { runnable ->
+                Thread(runnable, "callkit-phone-account-registration").apply {
+                    isDaemon = true
+                }
+            }
+            try {
+                registrationExecutor.execute {
+                    try {
+                        InAppCallManager(context.applicationContext).registerPhoneAccount()
+                        phoneAccountRegistered.set(true)
+                        Log.i(TAG, "PhoneAccount registration completed off the main thread.")
+                    } catch (error: Exception) {
+                        Log.e(TAG, "PhoneAccount registration failed off the main thread.", error)
+                    } finally {
+                        phoneAccountRegistrationInFlight.set(false)
+                    }
+                }
+            } catch (error: RuntimeException) {
+                phoneAccountRegistrationInFlight.set(false)
+                Log.e(TAG, "PhoneAccount registration scheduling failed.", error)
+            } finally {
+                registrationExecutor.shutdown()
+            }
+        }
 
         fun sendEvent(event: String, body: Map<String, Any?>) {
             send(event, body)
@@ -180,9 +220,7 @@ class FlutterCallkitIncomingPlugin : FlutterPlugin, MethodCallHandler, ActivityA
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         sharePluginWithRegister(flutterPluginBinding)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            InAppCallManager(flutterPluginBinding.applicationContext).registerPhoneAccount()
-        }
+        schedulePhoneAccountRegistration(flutterPluginBinding.applicationContext)
     }
 
     public fun showIncomingNotification(data: Data) {

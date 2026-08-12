@@ -1,6 +1,8 @@
 package searchclient
 
-import "sort"
+import (
+	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
+)
 
 // app_search used to call the canonical SearchIndexView with no objectTypes at
 // all, so it returned every type the unified index holds. That made it a way
@@ -35,45 +37,34 @@ import "sort"
 // contracts on every gate run and blocks on any difference, so widening a grant
 // here without changing the owning object's declaration fails.
 var (
-	assistantReadableObjectTypes = map[string]bool{
-		"circle.circle":            true,
-		"circle.group":             true,
-		"content.post":             true,
-		"entity.homepage":          true,
-		"integration.location_poi": true,
-		"location.place":           true,
-		"web.document":             true,
-	}
-
-	assistantCitableObjectTypes = map[string]bool{
-		"circle.circle":            true,
-		"circle.group":             true,
-		"content.post":             true,
-		"entity.homepage":          true,
-		"integration.location_poi": true,
-		"location.place":           true,
-		"web.document":             true,
-	}
+	assistantReadableObjectTypes = objectTypeSet(generated.AssistantSearchReadableObjectTypes)
+	assistantCitableObjectTypes  = objectTypeSet(generated.AssistantSearchCitableObjectTypes)
 )
 
 // AssistantReadableObjectTypes is the object types app_search may ask for and
 // may hand back. Callers must not extend the returned slice; widening the reach
 // of 小趣 is an object contract change.
 func AssistantReadableObjectTypes() []string {
-	return sortedKeys(assistantReadableObjectTypes)
+	return append([]string(nil), generated.AssistantSearchReadableObjectTypes...)
 }
 
 // AssistantCitableObjectTypes is the subset that may additionally be reproduced
 // as a citation in a user-visible answer.
 func AssistantCitableObjectTypes() []string {
-	return sortedKeys(assistantCitableObjectTypes)
+	return append([]string(nil), generated.AssistantSearchCitableObjectTypes...)
 }
 
-func sortedKeys(set map[string]bool) []string {
-	result := make([]string, 0, len(set))
-	for key := range set {
-		result = append(result, key)
+// AssistantAccessPolicyDigest binds a retrieval plan to the exact generated
+// readable/citable projection. A later object-contract change therefore makes
+// the old plan unverifiable instead of silently widening its scope.
+func AssistantAccessPolicyDigest() string {
+	return generated.AssistantSearchAccessPolicyDigest
+}
+
+func objectTypeSet(values []string) map[string]bool {
+	result := make(map[string]bool, len(values))
+	for _, value := range values {
+		result[value] = true
 	}
-	sort.Strings(result)
 	return result
 }

@@ -20,7 +20,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/application/footprint_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 import '../../../../runtime/remote_api_path_test_harness.dart';
 import 'content_mock_data.dart';
 import 'test_content_app_config.dart';
@@ -147,7 +147,7 @@ const String _mockContentDefaultAuthorAvatarUrl =
     'media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png';
 
 List<ContentPostViewData>? _contractSeedPosts() {
-  final seed = objectScenarioSeedReader.contentSeedSet();
+  final seed = objectContractExampleReader.contentExample();
   final posts = seed?['posts'];
   final contractPosts = <ContentPostViewData>[];
   if (posts is! List) {
@@ -339,7 +339,7 @@ class MockContentRepository
 
   /// 精品池成员（home_feed_core.featuredFeedPostIds，env-seed-first 唯一池 seed）。
   Set<String> _premiumPoolPostIds() {
-    final raw = objectScenarioSeedReader.contentSeedSet(
+    final raw = objectContractExampleReader.contentExample(
       'home_feed_core',
     )?['featuredFeedPostIds'];
     if (raw is! List) {
@@ -718,7 +718,7 @@ extension _MockContentPosts on MockContentRepository {
     if (trimmed.isEmpty) {
       return null;
     }
-    final raw = objectScenarioSeedReader.contentSeedSet()?['posts'];
+    final raw = objectContractExampleReader.contentExample()?['posts'];
     if (raw is! List) {
       return null;
     }
@@ -866,7 +866,7 @@ class MockFootprintRepository implements FootprintRepository {
     String? cursor,
     int limit = ContentDiscoveryFeedQuery.defaultLimit,
   }) async {
-    final seed = objectScenarioSeedReader.contentSeedSet('footprint_core');
+    final seed = objectContractExampleReader.contentExample('footprint_core');
     final rawItems = seed?['items'];
     if (rawItems is! List) {
       return const CursorPage<FootprintEntry>(items: <FootprintEntry>[]);
@@ -903,7 +903,7 @@ class MockFootprintRepository implements FootprintRepository {
   }
 
   static Map<String, Map<String, dynamic>> _discoveryPostsById() {
-    final seed = objectScenarioSeedReader.contentSeedSet();
+    final seed = objectContractExampleReader.contentExample();
     final rawPosts = seed?['posts'];
     final byId = <String, Map<String, dynamic>>{};
     if (rawPosts is List) {

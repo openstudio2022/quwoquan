@@ -29,6 +29,8 @@ def handle_distributed_campaign_stage(args: Any, identity: Any) -> bool:
             result_path = run_campaign_lane(
                 root_execution_id,
                 identity.content_type.value,
+                recover_stage=getattr(args, "recover_stage", None),
+                recovery_reason=getattr(args, "recovery_reason", None),
             )
         else:
             if (

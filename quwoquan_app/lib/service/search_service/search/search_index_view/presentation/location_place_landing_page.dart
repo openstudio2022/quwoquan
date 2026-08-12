@@ -66,8 +66,7 @@ class LocationPlaceLandingPage extends StatefulWidget {
       _LocationPlaceLandingPageState();
 }
 
-class _LocationPlaceLandingPageState
-    extends State<LocationPlaceLandingPage> {
+class _LocationPlaceLandingPageState extends State<LocationPlaceLandingPage> {
   late final JourneyEventTracker _journeyTracker;
   LocationPlaceReadResult? _resolved;
   Object? _loadFailure;

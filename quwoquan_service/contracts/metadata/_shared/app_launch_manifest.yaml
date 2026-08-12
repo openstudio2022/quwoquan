@@ -38,10 +38,10 @@ content_binding_contract:
 launch_policies:
   test_live:
     environments: [alpha, beta, gamma]
-    content_binding_state: unbound
+    content_binding_modes: [unbound, run_bound]
   prod_release:
     environments: [prod]
-    content_binding_state: bound
+    content_binding_modes: [immutable_release]
 
 schemas:
   app_effective_launch_manifest:
@@ -104,7 +104,7 @@ schemas:
       - transport.required=false 时端口和本地 transport identity 必须为空；这种 package-only 或未附带设备 transport 的 handoff 不得成为 runtime UAT 证据。
       - prod-hosted 必须令 local transport 为 false，且全部端口与本地 transport identity 为空。
       - recoveryBaseUrl 与 publicWebBaseUrl 必须是 HTTPS origin；appDownloadBaseUrl 允许 path，但三个 URL 都不得包含 query、fragment 或凭据。
-      - 内容绑定字段必须全空或全部完整；test_live 只允许 Alpha/Beta/Gamma 且 contentBindingState=unbound，prod_release 只允许 Prod 且必须绑定非空 releaseId 和两个 sha256 identity。
+      - 内容绑定字段必须全空或全部完整；test_live 只允许 Alpha/Beta/Gamma，默认 unbound，且仅可把显式绑定到当前 running mutable attempt 的完整三元投影为 run_bound；禁止 generic bound、implicit latest、candidate 或 package。prod_release 只允许 Prod 的 immutable_release，且必须绑定非空 releaseId 和两个 sha256 identity。
 
   app_launcher_handoff:
     schema_value: app-launcher-handoff

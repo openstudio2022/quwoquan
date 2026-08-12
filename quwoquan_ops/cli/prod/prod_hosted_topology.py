@@ -23,9 +23,11 @@ ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod/access-isolation.yaml"
 INSTANCES = ("prevalidate", "gray", "prod")
 EXECUTION_PLANES = ("service", "edge")
 STAGE_INSTANCE = {
-    "gray-initial": "gray",
-    "carry-on": "gray",
-    "full": "prod",
+    "canary": "gray",
+    "5": "gray",
+    "20": "gray",
+    "50": "gray",
+    "100": "prod",
 }
 _SAFE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
 _SSH_HOST = re.compile(r"[A-Za-z0-9.-]+")
@@ -168,8 +170,8 @@ def _instance_specs(access: dict[str, Any]) -> dict[str, dict[str, Any]]:
         )
     expected_stages = {
         "prevalidate": [],
-        "gray": ["gray-initial", "carry-on"],
-        "prod": ["full"],
+        "gray": ["canary", "5", "20", "50"],
+        "prod": ["100"],
     }
     for instance, raw in specs.items():
         if not isinstance(raw, dict):

@@ -313,13 +313,12 @@ def validate_readiness_closure(
         desired=desired,
     )
     coverage = asset_admission.get("articleMediaCoverage")
-    if (
-        not isinstance(coverage, Mapping)
-        or float(coverage.get("illustratedRate") or 0.0) < 0.9
-        or float(coverage.get("textOnlyRate") or 0.0) > 0.1
-    ):
+    # Coverage is a truthful operating statistic. A text-only Article remains
+    # a valid Research object; only an Article declared illustrated must close
+    # its own cover/body media references.
+    if not isinstance(coverage, Mapping):
         raise ReleaseReadinessClosureError(
-            "release articleMediaCoverage does not satisfy the 90/10 gate"
+            "release articleMediaCoverage statistics are missing"
         )
     desired_tag_refs = {
         _normalized_ref(tag_ref, kind="tags") for tag_ref in desired["tags"]
@@ -384,15 +383,33 @@ def validate_readiness_closure(
             profile.get("personaId"), label=f"creator personaId {normalized}"
         )
         avatar = profile.get("avatarAsset")
+        evidence = creator_evidence.get(normalized)
+        if avatar is None:
+            if (
+                evidence is None
+                or evidence.get("authorId") != author_id
+                or evidence.get("personaId") != persona_id
+                or evidence.get("avatarAssetId") is not None
+                or evidence.get("avatarUrl") != ""
+                or evidence.get("avatarMediaReady") is not False
+                or evidence.get("avatarProbeCount") != 0
+                or evidence.get("avatarProbe") is not None
+                or evidence.get("usesPlatformDefaultAvatar") is not True
+            ):
+                raise ReleaseReadinessClosureError(
+                    f"creator default-avatar readback drifts from release object: {normalized}"
+                )
+            author_ids.append(author_id)
+            creator_author_ids[normalized] = author_id
+            continue
         if not isinstance(avatar, Mapping):
             raise ReleaseReadinessClosureError(
-                f"release creator avatar binding is missing: {normalized}"
+                f"release creator avatar binding is invalid: {normalized}"
             )
         avatar_id = _text(
             avatar.get("assetId"), label=f"creator avatarAssetId {normalized}"
         )
         media = media_by_id.get(avatar_id)
-        evidence = creator_evidence.get(normalized)
         if (
             media is None
             or evidence is None
@@ -402,6 +419,9 @@ def validate_readiness_closure(
             or evidence.get("authorId") != author_id
             or evidence.get("personaId") != persona_id
             or evidence.get("avatarAssetId") != avatar_id
+            or evidence.get("avatarMediaReady") is not True
+            or evidence.get("avatarProbeCount") != 1
+            or evidence.get("usesPlatformDefaultAvatar") is not False
         ):
             raise ReleaseReadinessClosureError(
                 f"creator/avatar readback drifts from release object: {normalized}"

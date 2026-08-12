@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_command_writer.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_claim_request/application/public/homepage_claim_request_query_reader.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/transport/generated/entity/entity_request_page_ids.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -6,8 +7,9 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 typedef HomepageClaimRequestInvocationContextFactory =
     CloudOperationInvocationContext Function(
       String clientPageId,
-      AppUiSurface surface,
-    );
+      AppUiSurface surface, {
+      String? idempotencyKey,
+    });
 
 /// HomepageClaimRequest 的 production generated-client adapter。
 final class RemoteHomepageClaimRequestWriter
@@ -24,6 +26,7 @@ final class RemoteHomepageClaimRequestWriter
   Future<HomepageClaimRequestView> createClaimRequest({
     required String homepageId,
     required HomepageClaimRequestDraft draft,
+    String? clientRequestId,
   }) => client.entityHomepageClaimRequestCreateHomepageClaimRequest(
     CreateHomepageClaimRequestCommand(
       homepageId: homepageId,
@@ -36,6 +39,30 @@ final class RemoteHomepageClaimRequestWriter
     ),
     context: invocationContext(
       EntityRequestPageIds.createHomepageClaimRequest,
+      AppUiSurfaces.homepageClaim,
+      idempotencyKey: clientRequestId,
+    ),
+  );
+}
+
+/// HomepageClaimRequest 本人待审记录的 production generated-client adapter。
+final class RemoteHomepageClaimRequestReader
+    implements HomepageClaimRequestQueryReader {
+  const RemoteHomepageClaimRequestReader({
+    required this.client,
+    required this.invocationContext,
+  });
+
+  final GeneratedCloudOperationClient client;
+  final HomepageClaimRequestInvocationContextFactory invocationContext;
+
+  @override
+  Future<HomepageClaimRequestView> getMyPendingClaimRequest({
+    required String homepageId,
+  }) => client.entityHomepageClaimRequestGetMyPendingHomepageClaimRequest(
+    GetMyPendingHomepageClaimRequestQuery(homepageId: homepageId),
+    context: invocationContext(
+      EntityRequestPageIds.getMyPendingHomepageClaimRequest,
       AppUiSurfaces.homepageClaim,
     ),
   );

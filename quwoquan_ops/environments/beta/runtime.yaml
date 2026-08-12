@@ -10,7 +10,7 @@
     "publicContentDistribution": false,
     "sharingDisabled": true,
     "exportDisabled": true,
-    "searchIndexingDisabled": true,
+    "searchIndexingDisabled": false,
     "internalAppSignatureRequired": true,
     "researchBadgeRequired": true,
     "shortLivedSignedMediaUrlsRequired": true,
@@ -28,7 +28,7 @@
     "mediaAvatar": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/avatar", "tlsProfile": "local-managed"},
     "mediaImage": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/image", "tlsProfile": "local-managed"},
     "mediaVideo": {"scheme": "https", "host": "cdn.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/media/video", "tlsProfile": "local-managed"},
-    "mediaUpload": {"scheme": "https", "host": "upload.beta.quwoquan.com", "portRole": "media-edge", "pathBase": "/", "tlsProfile": "local-managed"}
+    "mediaUpload": {"scheme": "https", "host": "upload.beta.quwoquan.com", "portRole": "object-storage-edge", "pathBase": "/", "tlsProfile": "local-managed"}
   },
   "subnets": {
     "edge": "172.31.10.0/24",

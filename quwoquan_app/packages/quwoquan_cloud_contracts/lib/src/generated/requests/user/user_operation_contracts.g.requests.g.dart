@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 9dff7c19b7bfdfbcf8f59da172e812257230604b7a887a9112450a5a199c96a4
+// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
 
 part of '../../../user/user_operation_contracts.g.dart';
 
@@ -892,6 +892,10 @@ final class InitiateContactDiscoveryCommand {
   };
 }
 
+final class IssueWhitelistedResearchSessionCommand {
+  const IssueWhitelistedResearchSessionCommand();
+}
+
 final class ListBlockedUsersQuery {
   static const int defaultLimit = 20;
   static const int maximumLimit = 100;
@@ -1430,6 +1434,10 @@ final class MarkFollowedSubjectVisitedCommand {
   };
 }
 
+final class OtpDeliveryReadinessQuery {
+  const OtpDeliveryReadinessQuery();
+}
+
 final class PersonaRelationshipListQuery {
   static const int defaultLimit = 20;
   static const int maximumLimit = 100;
@@ -1817,7 +1825,7 @@ final class SendOtpCommand {
   SendOtpCommand({
     required String phone,
     String? deviceId,
-    String? platform,
+    required OtpClientPlatform platform,
     String? appVersion,
     String? sourceOperation,
     String? bindingTicket,
@@ -1834,7 +1842,7 @@ final class SendOtpCommand {
 
   final String phone;
   final String? deviceId;
-  final String? platform;
+  final OtpClientPlatform platform;
   final String? appVersion;
   final String? sourceOperation;
   final String? bindingTicket;
@@ -1844,7 +1852,7 @@ final class SendOtpCommand {
     return SendOtpCommand(
       phone: _generatedRequestString(map["phone"], '$path.phone'),
       deviceId: map["deviceId"] == null ? null : _generatedRequestString(map["deviceId"], '$path.deviceId'),
-      platform: map["platform"] == null ? null : _generatedRequestString(map["platform"], '$path.platform'),
+      platform: switch (map["platform"]) { "ios" => OtpClientPlatform.ios, "android" => OtpClientPlatform.android, "web" => OtpClientPlatform.web, "acceptance" => OtpClientPlatform.acceptance, _ => throw FormatException('$path.platform' + ' has an invalid enum value'), },
       appVersion: map["appVersion"] == null ? null : _generatedRequestString(map["appVersion"], '$path.appVersion'),
       sourceOperation: map["sourceOperation"] == null ? null : _generatedRequestString(map["sourceOperation"], '$path.sourceOperation'),
       bindingTicket: map["bindingTicket"] == null ? null : _generatedRequestString(map["bindingTicket"], '$path.bindingTicket'),
@@ -1854,7 +1862,7 @@ final class SendOtpCommand {
   Map<String, Object?> toWire() => <String, Object?>{
     "phone": this.phone,
     if (this.deviceId != null) "deviceId": this.deviceId!,
-    if (this.platform != null) "platform": this.platform!,
+    "platform": this.platform.wireName,
     if (this.appVersion != null) "appVersion": this.appVersion!,
     if (this.sourceOperation != null) "sourceOperation": this.sourceOperation!,
     if (this.bindingTicket != null) "bindingTicket": this.bindingTicket!,
@@ -2291,6 +2299,11 @@ final class UserSyncPullRequestWire {
   };
 }
 
+CloudOperationRequestPayload encodeUserAccountSessionIssueWhitelistedResearchSessionGeneratedRequest(IssueWhitelistedResearchSessionCommand request) {
+  return CloudOperationRequestPayload(
+  );
+}
+
 CloudOperationRequestPayload encodeUserAccountSessionLoginAnonymousGeneratedRequest(LoginAnonymousCommand request) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
@@ -2395,6 +2408,11 @@ CloudOperationRequestPayload encodeUserAuthenticationChallengeCreateAlipayAuthor
   );
 }
 
+CloudOperationRequestPayload encodeUserAuthenticationChallengeGetOtpDeliveryReadinessGeneratedRequest(OtpDeliveryReadinessQuery request) {
+  return CloudOperationRequestPayload(
+  );
+}
+
 CloudOperationRequestPayload encodeUserAuthenticationChallengeResolveOneTapLoginHintGeneratedRequest(ResolveOneTapLoginHintCommand request) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
@@ -2412,7 +2430,7 @@ CloudOperationRequestPayload encodeUserAuthenticationChallengeSendOtpGeneratedRe
     body: <String, Object?>{
       "phone": request.phone,
       if (request.deviceId != null) "deviceId": request.deviceId!,
-      if (request.platform != null) "platform": request.platform!,
+      "platform": request.platform.wireName,
       if (request.appVersion != null) "appVersion": request.appVersion!,
       if (request.sourceOperation != null) "sourceOperation": request.sourceOperation!,
       if (request.bindingTicket != null) "bindingTicket": request.bindingTicket!,

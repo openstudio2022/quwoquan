@@ -6,7 +6,11 @@ import io
 from pathlib import Path
 
 import pytest
-from content.execution.campaign import request_envelope as campaign_request_envelope, submission as campaign_submission
+from content.execution.campaign import request_envelope as campaign_request_envelope
+from content.execution.campaign import (
+    request_envelope_build as campaign_request_envelope_build,
+)
+from content.execution.campaign import submission as campaign_submission
 from content.execution.campaign.external_input_runtime import (
     ExternalInputRuntimeContext,
     freeze_execution_external_input_envelope,
@@ -71,6 +75,14 @@ def _governed_acquisition_handoff(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "content.source.professional_image_acquisition.guard_acquisition_source_identity",
         lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        "content.source.professional_image_acquisition.load_bound_safety_evidence",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        "content.source.professional_image_acquisition.validate_image_safety_payload",
+        lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
         "content.execution.controller.execute.pre_acquisition_handoff.bind_pre_acquisition_handoff",
@@ -225,6 +237,29 @@ def _acquisition(tmp_path: Path) -> tuple[Path, list[dict[str, object]]]:
                     "reviewedAt": "2026-08-05T00:05:00Z",
                     "reviewer": "local-contract-reviewer",
                     "evidenceRef": "evidence/pinterest-photo-1.json",
+                    "safetyEvidenceFileSha256": "sha256:" + "f" * 64,
+                },
+                "sourceAttribution": {
+                    "isOriginal": False,
+                    "originalCreatorId": None,
+                    "originalCreatorName": "摄影师甲",
+                    "originalCreatorProfileUrl": None,
+                    "platform": "Pinterest",
+                    "sourcePostUrl": "https://www.pinterest.example/pin/1",
+                    "originalAssetUrl": "https://www.pinterest.example/pin/1",
+                    "attributionText": "摄影师甲 / CC BY 4.0 / Pinterest",
+                    "rightsBasis": "CC BY 4.0",
+                    "commercialAuthorizationStatus": "verified",
+                    "publicationAdmission": "commercial_release",
+                    "authorizationProofUrl": "https://www.pinterest.example/pin/1",
+                    "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
+                    "riskAcceptanceId": None,
+                    "watermarkStatus": "absent",
+                    "audioRightsStatus": "no_audio",
+                    "modelReleaseStatus": "not_required",
+                    "propertyReleaseStatus": "not_required",
+                    "collectedAt": "2026-08-05T00:00:00Z",
+                    "takedownPolicy": "quwoquan_standard_notice_and_takedown",
                 },
             }
         ],
@@ -313,6 +348,7 @@ def _submission(
         "requiredWorkers": 1,
         "partitionCount": 16,
         "capacityPlanDigest": "sha256:" + "6" * 64,
+        "workerHostSetBinding": None,
         "topic": None,
         "targetNames": [],
         "sourceProviders": [],
@@ -500,10 +536,16 @@ def _capsule(
     snapshot_digest = payload_digest(snapshot_stable)
     stable = {
         "schema": "quwoquan_data.content_campaign_source_capsule",
-        "format": "source-snapshot-v1",
+        "format": "source-capsule-v2",
+        "gitBranch": str(plan["gitBranch"]),
         "gitCommitSha": "c" * 40,
         "sourceRevision": SOURCE_REVISION,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "f" * 64,
+            "inputs": ["quwoquan_data/scripts"],
+        },
         "entityCatalogDigest": CATALOG_DIGEST,
         "roots": ["quwoquan_data"],
         "laneExternalInputs": lane_payload,
@@ -534,9 +576,11 @@ def _capsule(
         path=capsule_path,
         ref=capsule_path.relative_to(runtime.output_root).as_posix(),
         capsule_digest=capsule_digest,
+        git_branch=str(plan["gitBranch"]),
         commit_sha="c" * 40,
         source_revision=SOURCE_REVISION,
         source_digest=SOURCE_DIGEST,
+        execution_bundle_digest="sha256:" + "f" * 64,
         entity_catalog_digest=CATALOG_DIGEST,
         external_inputs_digest=str(plan["externalInputsDigest"]),
         lane_external_inputs=lane_payload,
@@ -819,7 +863,7 @@ def test_request_envelope_freezes_content_addressed_external_refs(
         lambda **_kwargs: FrozenSource(),
     )
     monkeypatch.setattr(
-        campaign_request_envelope,
+        campaign_request_envelope_build,
         "entity_catalog_digest",
         lambda _ref: CATALOG_DIGEST,
     )
@@ -1024,9 +1068,11 @@ def test_same_execution_cannot_replace_external_inputs_without_new_retry(
         path=capsule.path,
         ref=capsule.ref,
         capsule_digest="sha256:" + ("e" * 64),
+        git_branch=capsule.git_branch,
         commit_sha=capsule.commit_sha,
         source_revision=capsule.source_revision,
         source_digest=capsule.source_digest,
+        execution_bundle_digest=capsule.execution_bundle_digest,
         entity_catalog_digest=capsule.entity_catalog_digest,
         external_inputs_digest=capsule.external_inputs_digest,
         lane_external_inputs={

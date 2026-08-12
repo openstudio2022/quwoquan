@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/service/tag_service/tag/tag_node_view/application/public/tag_catalog_query.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_scenario_seed_reader.dart';
+import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 
 /// Tag 目录对象级替身：只在 local_contract 中读取 tag-service canonical 场景。
 final class TagCatalogTypedDouble implements TagCatalogQuery {
@@ -17,18 +17,21 @@ final class TagCatalogTypedDouble implements TagCatalogQuery {
     );
   }
 
-  TagCatalogTypedDouble._({required this.taxonomyReleaseId, required this._catalog});
+  TagCatalogTypedDouble._({
+    required this.taxonomyReleaseId,
+    required this._catalog,
+  });
 
   final String taxonomyReleaseId;
   final _TagCatalogFixture _catalog;
 
   static _TagCatalogFixture _loadCatalog() {
     final decoded = _requiredObject(
-      objectScenarioSeedReader.document('tag'),
+      objectContractExampleReader.document('tag'),
       'tag fixture root',
     );
-    final seedSets = _requiredObject(decoded['seedSets'], 'tag seedSets');
-    final coreValue = seedSets['tag_catalog_core'];
+    final examples = _requiredObject(decoded['examples'], 'tag examples');
+    final coreValue = examples['tag_catalog_core'];
     if (coreValue == null) {
       throw StateError('tag fixture is missing the tag_catalog_core scenario');
     }

@@ -1,12 +1,6 @@
-backend: mongodb
+backend: owner_named_readers
 role: projection
-collections:
-  rm_assistant_tasks:
-    entity: AssistantTaskView
-    role: projection
-    indexes:
-    - {name: uq_assistant_task_account_task, keys: {accountId: 1, taskId: 1}, unique: true}
-    - {name: idx_assistant_task_account_status_updated, keys: {accountId: 1, status: 1, updatedAt: -1}}
-  assistant_task_projection_checkpoints:
-    entity: AssistantTaskProjectionCheckpoint
-    role: checkpoint
+description: >-
+  AssistantTaskView 不物化数据库或缓存副本；读取时只经 SkillSubscription
+  owner named reader 与 digest 验证的 active SkillCatalog 联邦派生。任务身份、状态、
+  nextAttemptAt 与 updatedAt 继续只由 SkillSubscription 持久化。

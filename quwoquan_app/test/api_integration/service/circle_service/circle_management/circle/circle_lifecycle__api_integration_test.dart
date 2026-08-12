@@ -1,7 +1,9 @@
 // spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-002
+// spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001
 // readiness_case: circle_create_circle_app_api
 // readiness_case: circle_update_circle_app_api
 // readiness_case: circle_get_circle_app_api
+// readiness_case: circle_get_circle_stats_app_api
 // readiness_case: circle_archive_circle_app_api
 
 /// Circle aggregate API integration contract.
@@ -18,6 +20,8 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/generated/circle/circle_errors.g.dart';
 
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -81,6 +85,35 @@ void main() {
       );
       expect(detail.description, 'L3 更新描述');
       expect(detail.version, 2, reason: '详情回读必须暴露聚合版本');
+    });
+
+    test('GetCircleStats 返回同圈 typed KPI 且缺失圈保留 canonical failure', () async {
+      final stats = await _api.query.stats(
+        CircleStatsQuery(circleId: circleId),
+      );
+      expect(stats.circleId, circleId);
+      expect(stats.memberCount, greaterThanOrEqualTo(1));
+      expect(stats.postCount, greaterThanOrEqualTo(0));
+      expect(stats.discussionCount, greaterThanOrEqualTo(0));
+      expect(stats.weeklyActiveCount, greaterThanOrEqualTo(0));
+      expect(stats.likeCount, greaterThanOrEqualTo(0));
+      expect(stats.storageUsedBytes, greaterThanOrEqualTo(0));
+      expect(stats.storageQuotaBytes, greaterThanOrEqualTo(0));
+
+      await expectLater(
+        _api.query.stats(
+          const CircleStatsQuery(circleId: 'missing_circle_stats_000000'),
+        ),
+        throwsA(
+          isA<CloudException>()
+              .having((error) => error.statusCode, 'statusCode', 404)
+              .having(
+                (error) => error.code,
+                'code',
+                CircleErrorCode.circleNotFound.code,
+              ),
+        ),
+      );
     });
 
     test('ArchiveCircle 命名迁移；已归档时 no-op receipt 不递增版本', () async {

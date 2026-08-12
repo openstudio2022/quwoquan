@@ -1,6 +1,7 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-002
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/unrecoverable-runtime-recovery/spec.md#gwt-001
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/runtime/shell/recovery/recovery_operation_gateway.dart';
 import 'package:quwoquan_app/runtime/shell/recovery/recovery_state_machine.dart';
 
 void main() {
@@ -19,6 +20,8 @@ void main() {
       machine.confirmVersion(
         currentBuild: 18100,
         latestBuild: 18201,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.available,
         updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
         recoveryUrl: 'https://quwoquan.com/',
         trustedBaseUrls: trustedBaseUrls,
@@ -31,6 +34,8 @@ void main() {
       machine.confirmVersion(
         currentBuild: 18100,
         latestBuild: 18300,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.available,
         updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
         recoveryUrl: 'https://quwoquan.com/',
         trustedBaseUrls: trustedBaseUrls,
@@ -58,6 +63,8 @@ void main() {
         machine.confirmVersion(
           currentBuild: 18100,
           latestBuild: 18201,
+          minimumSupportedBuild: 18000,
+          updateState: RecoveryUpdateState.available,
           updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
           recoveryUrl: 'https://quwoquan.com/',
           trustedBaseUrls: trustedBaseUrls,
@@ -75,6 +82,8 @@ void main() {
       machine.confirmVersion(
         currentBuild: 18100,
         latestBuild: 18201,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.available,
         updateUrl: 'javascript:alert(1)',
         recoveryUrl: 'https://quwoquan.com/',
         trustedBaseUrls: trustedBaseUrls,
@@ -86,6 +95,8 @@ void main() {
       machine.confirmVersion(
         currentBuild: 18100,
         latestBuild: 18201,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.available,
         updateUrl: 'https://attacker.example/quwoquan.apk',
         recoveryUrl: 'https://quwoquan.com/',
         trustedBaseUrls: trustedBaseUrls,
@@ -100,6 +111,8 @@ void main() {
       machine.confirmVersion(
         currentBuild: 18201,
         latestBuild: 18201,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.none,
         updateUrl: '',
         recoveryUrl: 'https://quwoquan.com/',
         trustedBaseUrls: trustedBaseUrls,
@@ -108,5 +121,61 @@ void main() {
     );
     expect(machine.snapshot.phase, RecoveryPhase.startupLatest);
     expect(machine.snapshot.updateUrl, isEmpty);
+  });
+
+  test('build below minimum is marked as a required update', () {
+    final machine = RecoveryStateMachine();
+    expect(
+      machine.confirmVersion(
+        currentBuild: 17000,
+        latestBuild: 18201,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.required,
+        updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
+        recoveryUrl: 'https://quwoquan.com/',
+        trustedBaseUrls: trustedBaseUrls,
+      ),
+      isTrue,
+    );
+    expect(machine.snapshot.phase, RecoveryPhase.startupUpdateRequired);
+    expect(machine.snapshot.requiresUpdate, isTrue);
+  });
+
+  test('minimum-build recovery accepts required only', () {
+    final machine = RecoveryStateMachine(
+      initial: const RecoverySnapshot(
+        phase: RecoveryPhase.runtimeVersionChecking,
+      ),
+    );
+    expect(
+      machine.confirmVersion(
+        currentBuild: 18100,
+        latestBuild: 18201,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.available,
+        requiredUpdateOnly: true,
+        updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
+        recoveryUrl: 'https://quwoquan.com/',
+        trustedBaseUrls: trustedBaseUrls,
+      ),
+      isFalse,
+    );
+    expect(machine.snapshot.phase, RecoveryPhase.runtimeVersionChecking);
+
+    expect(
+      machine.confirmVersion(
+        currentBuild: 17000,
+        latestBuild: 18201,
+        minimumSupportedBuild: 18000,
+        updateState: RecoveryUpdateState.required,
+        requiredUpdateOnly: true,
+        updateUrl: 'https://cdn.quwoquan.com/download/android/latest.json',
+        recoveryUrl: 'https://quwoquan.com/',
+        trustedBaseUrls: trustedBaseUrls,
+      ),
+      isTrue,
+    );
+    expect(machine.snapshot.phase, RecoveryPhase.runtimeUpdateRequired);
+    expect(machine.snapshot.requiresUpdate, isTrue);
   });
 }

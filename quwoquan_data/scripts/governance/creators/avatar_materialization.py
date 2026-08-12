@@ -12,8 +12,8 @@ from pathlib import Path
 
 import yaml
 from content.release.canonical import creator_projection
-from content.release.canonical.creator_commercial_closure import (
-    creator_commercial_closure_issues,
+from content.release.canonical.creator_avatar_quality import (
+    creator_avatar_quality_issues,
 )
 from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
@@ -161,13 +161,13 @@ def _project_creator(creator_ref: str, *, publish_root: Path) -> bool:
         if had_target:
             os.replace(target, backup)
         os.replace(staging, target)
-        issues = creator_commercial_closure_issues(
+        issues = creator_avatar_quality_issues(
             publish_root,
             creator_refs=[creator_ref],
         )
         if issues:
             raise CreatorAvatarError(
-                f"projected creator commercial closure failed: {issues}"
+                f"projected creator avatar quality closure failed: {issues}"
             )
         if backup.is_dir():
             shutil.rmtree(backup)
@@ -192,25 +192,25 @@ def persist_creator_avatar(
     creator_pool_root: Path,
     object_key: str,
     derivative_body: bytes,
-    rights_ref: str,
-    rights_document: Mapping[str, object],
+    evidence_ref: str,
+    evidence_document: Mapping[str, object],
     avatar_asset: Mapping[str, object],
 ) -> dict[str, bool]:
     """Persist immutable bytes/evidence, then update and project one profile."""
 
     cas_path = publish_root / object_key
-    rights_path = creator_pool_root / rights_ref
-    rights_body = _json_bytes(rights_document)
+    evidence_path = creator_pool_root / evidence_ref
+    evidence_body = _json_bytes(evidence_document)
     cas_created = False
-    rights_created = False
+    evidence_created = False
     try:
         cas_created = _create_once(cas_path, derivative_body)
-        rights_created = _create_once(rights_path, rights_body)
+        evidence_created = _create_once(evidence_path, evidence_body)
     except (OSError, ValueError) as exc:
         if cas_created:
             _remove_created(cas_path, derivative_body, stop=publish_root)
-        if rights_created:
-            _remove_created(rights_path, rights_body, stop=creator_pool_root)
+        if evidence_created:
+            _remove_created(evidence_path, evidence_body, stop=creator_pool_root)
         if isinstance(exc, CreatorAvatarError):
             raise
         raise CreatorAvatarError(
@@ -229,14 +229,14 @@ def persist_creator_avatar(
             _replace_bytes_if_unchanged(profile_path, after, before)
         if cas_created:
             _remove_created(cas_path, derivative_body, stop=publish_root)
-        if rights_created:
-            _remove_created(rights_path, rights_body, stop=creator_pool_root)
+        if evidence_created:
+            _remove_created(evidence_path, evidence_body, stop=creator_pool_root)
         if isinstance(exc, CreatorAvatarError):
             raise
         raise CreatorAvatarError(f"creator avatar projection failed: {exc}") from exc
     return {
         "cas": cas_created,
-        "rights": rights_created,
+        "evidence": evidence_created,
         "profile": profile_changed,
         "projection": projection_changed,
     }
