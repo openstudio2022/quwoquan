@@ -35,6 +35,16 @@ fields:
   - {name: likeCount, type: int, nullable: false}
   - {name: commentCount, type: int, nullable: false}
   - {name: shareCount, type: int, nullable: false}
+  # viewer 维度点赞态：true/false 为服务端权威值；null 表示本次响应未附着
+  # viewer 态（匿名请求或读路径未 decorate），端侧不得据 null 回滚本地状态。
+  - {name: viewerLiked, type: bool, nullable: true}
+  # 内容的主实体锚点（canonical homepage 引用）：想去 CTA、实体跳转与
+  # 地点类交集的意图信号源；无实体锚点的内容两字段均为 null。
+  - {name: primaryHomepageId, type: string, nullable: true}
+  - {name: primaryHomepageType, type: string, nullable: true}
+  # 共同经历回流引用（作者主动关联的 canonical Gathering ID）：feed/沉浸卡
+  # 溯源标「他们从这条内容出发一起去了」的物理载体；作者删除或取消关联为 null。
+  - {name: gatheringRef, type: string, nullable: true}
   - {name: createdAt, type: timestamp, nullable: true}
   - {name: updatedAt, type: timestamp, nullable: true}
   - {name: publishedAt, type: timestamp, nullable: true}

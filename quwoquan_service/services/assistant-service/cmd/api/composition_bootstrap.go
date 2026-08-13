@@ -1,7 +1,8 @@
-package main
+package bootstrap
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log"
 	"os"
@@ -19,6 +20,7 @@ import (
 
 type assistantAPIRuntime struct {
 	appEnv                   string
+	configDigest             string
 	config                   config
 	addr                     string
 	instanceID               string
@@ -74,7 +76,7 @@ func bootstrapAssistantAPIRuntime() (*assistantAPIRuntime, error) {
 	if addr == "" {
 		addr = ":18087"
 	}
-	instanceID := getenvOrDefault("SERVICE_INSTANCE_ID", hostname())
+	instanceID := assistantModuleEnvironmentValue("SERVICE_INSTANCE_ID", hostname())
 
 	runtimeLogExporter, err := robs.NewHTTPRuntimeLogFieldExporter(
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
@@ -116,6 +118,7 @@ func bootstrapAssistantAPIRuntime() (*assistantAPIRuntime, error) {
 	}
 	return &assistantAPIRuntime{
 		appEnv:                   appEnv,
+		configDigest:             fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%#v:%s", cfg, configVersion)))),
 		config:                   cfg,
 		addr:                     addr,
 		instanceID:               instanceID,

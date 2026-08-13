@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-const MutableTestLiveOperationIdentitySchema = "stackctl.mutable_test_live_runtime.v1"
+const MutableTestLiveOperationIdentitySchema = "stackctl.mutable_test_live_runtime"
 
 const (
 	runtimeIdentitySchemaEnv              = "QWQ_RUNTIME_IDENTITY_SCHEMA"

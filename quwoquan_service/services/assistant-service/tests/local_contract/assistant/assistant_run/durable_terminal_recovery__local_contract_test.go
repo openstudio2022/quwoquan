@@ -299,7 +299,7 @@ func assertRecoveredTerminalRun(
 	}
 	if counts["answer_delta"] != 1 || counts["root_task_completed"] != 1 ||
 		counts["presentation_snapshot"] != 1 ||
-		counts["presentation_commit"] != 1 || counts["presentation_patch"] != 0 ||
+		counts["presentation_commit"] != 1 ||
 		counts["completed"] != 1 ||
 		stateCounts[generated.AssistantRunStateReflecting.WireName()] != 1 ||
 		stateCounts[generated.AssistantRunStateSynthesizing.WireName()] != 1 ||

@@ -200,8 +200,10 @@ func (runtime *externalInteractionContractRuntime) handleExternalInteractionRequ
 		strings.TrimSpace(payload.Payload["codeRef"]) == "" ||
 		payload.Payload["phoneHash"] != payload.PayloadDigest ||
 		strings.TrimSpace(payload.Payload["maskedRecipient"]) == "" ||
-		payload.Payload["templateId"] != "sms_otp_login_acceptance" ||
-		payload.Payload["platform"] != "acceptance" ||
+		!validOTPTemplateForPlatform(
+			payload.Payload["platform"],
+			payload.Payload["templateId"],
+		) ||
 		payload.Payload["requestRef"] != payload.RequestID {
 		http.Error(writer, "external interaction contract rejected", http.StatusBadRequest)
 		return
@@ -212,6 +214,16 @@ func (runtime *externalInteractionContractRuntime) handleExternalInteractionRequ
 		RequestID: payload.RequestID,
 		Status:    "accepted",
 	})
+}
+
+func validOTPTemplateForPlatform(platform string, templateID string) bool {
+	expected := map[string]string{
+		"ios":        "sms_otp_login_ios_domain_bound",
+		"android":    "sms_otp_login_android_retriever",
+		"web":        "sms_otp_login_web",
+		"acceptance": "sms_otp_login_acceptance",
+	}[strings.ToLower(strings.TrimSpace(platform))]
+	return expected != "" && templateID == expected
 }
 
 func TestExternalInteractionContractRuntime_ProductionClientSubmitsSecretReference(t *testing.T) {
@@ -236,7 +248,7 @@ func TestExternalInteractionContractRuntime_ProductionClientSubmitsSecretReferen
 		CodeRef:        codeRef,
 		PhoneHash:      strings.Repeat("a", 64),
 		MaskedPhone:    "+86****3901",
-		Platform:       "acceptance",
+		Platform:       "ios",
 		RequestRef:     "otp_req_contract",
 		IdempotencyKey: "otp:contract:202607140125",
 		ExpiresAt:      expiresAt,

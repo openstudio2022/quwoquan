@@ -9,12 +9,13 @@ import (
 
 //nolint:gochecknoglobals
 var (
-	ErrSkillPackageAssetUnavailable = errors.New("ASSISTANT.DEPENDENCY.skill_package_asset_unavailable")
-	ErrSkillPackageCapabilityDenied = errors.New("ASSISTANT.USER.skill_package_capability_denied")
-	ErrSkillPackageDigestMismatch   = errors.New("ASSISTANT.USER.skill_package_digest_mismatch")
-	ErrSkillPackageInvalid          = errors.New("ASSISTANT.USER.skill_package_invalid")
-	ErrSkillPackageRevisionConflict = errors.New("ASSISTANT.USER.skill_package_revision_conflict")
-	ErrSkillPackageSignatureInvalid = errors.New("ASSISTANT.SYSTEM.skill_package_signature_invalid")
+	ErrSkillPackageAssetUnavailable         = errors.New("ASSISTANT.DEPENDENCY.skill_package_asset_unavailable")
+	ErrSkillPackageCapabilityDenied         = errors.New("ASSISTANT.USER.skill_package_capability_denied")
+	ErrSkillPackageDigestMismatch           = errors.New("ASSISTANT.USER.skill_package_digest_mismatch")
+	ErrSkillPackageEvaluationReceiptInvalid = errors.New("ASSISTANT.USER.skill_package_evaluation_receipt_invalid")
+	ErrSkillPackageInvalid                  = errors.New("ASSISTANT.USER.skill_package_invalid")
+	ErrSkillPackageRevisionConflict         = errors.New("ASSISTANT.USER.skill_package_revision_conflict")
+	ErrSkillPackageSignatureInvalid         = errors.New("ASSISTANT.SYSTEM.skill_package_signature_invalid")
 )
 
 // AppErrorFromSkillPackageAssetUnavailable returns *AppError for ASSISTANT.DEPENDENCY.skill_package_asset_unavailable (user_message from errors.yaml).
@@ -33,6 +34,12 @@ func AppErrorFromSkillPackageCapabilityDenied(debugMessage string) *rterr.AppErr
 func AppErrorFromSkillPackageDigestMismatch(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_package_digest_mismatch")
 	return rterr.NewAppError(code, "技能包完整性校验失败", debugMessage).WithMetadata("skill_package_digest_mismatch", 400).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromSkillPackageEvaluationReceiptInvalid returns *AppError for ASSISTANT.USER.skill_package_evaluation_receipt_invalid (user_message from errors.yaml).
+func AppErrorFromSkillPackageEvaluationReceiptInvalid(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("ASSISTANT.USER.skill_package_evaluation_receipt_invalid")
+	return rterr.NewAppError(code, "技能包评测凭据与待激活版本不一致", debugMessage).WithMetadata("skill_package_evaluation_receipt_invalid", 400).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromSkillPackageInvalid returns *AppError for ASSISTANT.USER.skill_package_invalid (user_message from errors.yaml).

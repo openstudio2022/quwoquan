@@ -293,7 +293,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: ListSkillSubscriptions}
-  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__api_integration_test.go
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: create-skill-subscription-local
@@ -309,7 +309,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: CreateSkillSubscription}
-  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__api_integration_test.go
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: get-skill-subscription-local
@@ -325,7 +325,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: GetSkillSubscription}
-  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__api_integration_test.go
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: update-skill-subscription-status-local
@@ -341,7 +341,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: UpdateSkillSubscriptionStatus}
-  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__api_integration_test.go
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_subscription/command_store__atomicity__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: tick-skill-subscription-cron-local
@@ -424,3 +424,12 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/skill_subscription/skill_subscription_remote__api_integration_test.dart
   executions:
   - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: skill_subscription_release_consent_app_uat
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-context-proactive-runtime/spec.md#gwt-001
+  producer: app
+  layer: user_acceptance
+  target: {kind: page, id: assistant.skill_center}
+  runner_source_path: quwoquan_app/test/user_acceptance/service/assistant_service/assistant/skill_subscription/skill_release_consent__user_acceptance_test.dart
+  executions:
+    - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+    - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

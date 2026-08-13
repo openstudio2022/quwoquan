@@ -1,6 +1,7 @@
-package main
+package bootstrap
 
 import (
+	"fmt"
 	"log"
 	"log/slog"
 	"strings"
@@ -18,15 +19,15 @@ import (
 
 func buildRankedRecommendationGateway(
 	cfg config,
-) deliveryapp.RankedRecommendationGateway {
+) (deliveryapp.RankedRecommendationGateway, error) {
 	if !cfg.RecModelService.Enabled || strings.TrimSpace(cfg.RecModelService.URL) == "" {
-		log.Fatal("content-service requires recommendation-service ranked page endpoint")
+		return nil, fmt.Errorf("content-service requires recommendation-service ranked page endpoint")
 	}
 	tokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
 	if err != nil {
-		log.Fatalf("ranked recommendation service auth config invalid: %v", err)
+		return nil, fmt.Errorf("ranked recommendation service auth config invalid: %w", err)
 	}
 	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		tokenConfig,
@@ -34,25 +35,25 @@ func buildRankedRecommendationGateway(
 		[]string{"recommendation.ranked_page"},
 	)
 	if err != nil {
-		log.Fatalf("ranked recommendation service credentials invalid: %v", err)
+		return nil, fmt.Errorf("ranked recommendation service credentials invalid: %w", err)
 	}
 	client, err := deliveryrecommendation.NewHTTPClient(
 		cfg.RecModelService.URL,
 		credentials,
 	)
 	if err != nil {
-		log.Fatalf("ranked recommendation service client invalid: %v", err)
+		return nil, fmt.Errorf("ranked recommendation service client invalid: %w", err)
 	}
-	return client
+	return client, nil
 }
 
-func buildAuthorImpactProjectionReader(cfg config) postports.AuthorImpactProjectionReader {
+func buildAuthorImpactProjectionReader(cfg config) (postports.AuthorImpactProjectionReader, error) {
 	if !cfg.RecModelService.Enabled || strings.TrimSpace(cfg.RecModelService.URL) == "" {
-		log.Fatal("content-service requires recommendation-service feature profile reader")
+		return nil, fmt.Errorf("content-service requires recommendation-service feature profile reader")
 	}
 	tokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
-		log.Fatalf("recommendation feature profile auth config invalid: %v", err)
+		return nil, fmt.Errorf("recommendation feature profile auth config invalid: %w", err)
 	}
 	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		tokenConfig,
@@ -60,25 +61,27 @@ func buildAuthorImpactProjectionReader(cfg config) postports.AuthorImpactProject
 		[]string{"recommendation.feature_profile.read"},
 	)
 	if err != nil {
-		log.Fatalf("recommendation feature profile credentials invalid: %v", err)
+		return nil, fmt.Errorf("recommendation feature profile credentials invalid: %w", err)
 	}
 	client, err := recinfra.NewAuthorImpactReaderClient(
 		cfg.RecModelService.URL,
 		credentials,
 	)
 	if err != nil {
-		log.Fatalf("recommendation feature profile client invalid: %v", err)
+		return nil, fmt.Errorf("recommendation feature profile client invalid: %w", err)
 	}
-	return client
+	return client, nil
 }
 
-func buildIntersectionProjectionReader(cfg config) *recinfra.IntersectionReaderClient {
+func buildGatheringSocialProofProjectionReader(
+	cfg config,
+) (postports.GatheringSocialProofProjectionReader, error) {
 	if !cfg.RecModelService.Enabled || strings.TrimSpace(cfg.RecModelService.URL) == "" {
-		log.Fatal("content-service requires recommendation-service intersection projection reader")
+		return nil, fmt.Errorf("content-service requires recommendation-service social proof reader")
 	}
 	tokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
-		log.Fatalf("recommendation intersection projection auth config invalid: %v", err)
+		return nil, fmt.Errorf("recommendation social proof auth config invalid: %w", err)
 	}
 	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		tokenConfig,
@@ -86,16 +89,42 @@ func buildIntersectionProjectionReader(cfg config) *recinfra.IntersectionReaderC
 		[]string{"recommendation.feature_profile.read"},
 	)
 	if err != nil {
-		log.Fatalf("recommendation intersection projection credentials invalid: %v", err)
+		return nil, fmt.Errorf("recommendation social proof credentials invalid: %w", err)
+	}
+	client, err := recinfra.NewSocialProofReaderClient(
+		cfg.RecModelService.URL,
+		credentials,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("recommendation social proof client invalid: %w", err)
+	}
+	return client, nil
+}
+
+func buildIntersectionProjectionReader(cfg config) (*recinfra.IntersectionReaderClient, error) {
+	if !cfg.RecModelService.Enabled || strings.TrimSpace(cfg.RecModelService.URL) == "" {
+		return nil, fmt.Errorf("content-service requires recommendation-service intersection projection reader")
+	}
+	tokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		return nil, fmt.Errorf("recommendation intersection projection auth config invalid: %w", err)
+	}
+	credentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		tokenConfig,
+		"content-service",
+		[]string{"recommendation.feature_profile.read"},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("recommendation intersection projection credentials invalid: %w", err)
 	}
 	client, err := recinfra.NewIntersectionReaderClient(
 		cfg.RecModelService.URL,
 		credentials,
 	)
 	if err != nil {
-		log.Fatalf("recommendation intersection projection client invalid: %v", err)
+		return nil, fmt.Errorf("recommendation intersection projection client invalid: %w", err)
 	}
-	return client
+	return client, nil
 }
 
 // buildRecommendationSignalRuntime keeps the read cache and buffered write
@@ -119,10 +148,10 @@ func composeRecommendationModelScorer(
 	appEnv string,
 	logger *slog.Logger,
 	recOpts []rtrec.EngineOption,
-) []rtrec.EngineOption {
+) ([]rtrec.EngineOption, error) {
 	if (appEnv == "beta" || appEnv == "gamma" || appEnv == "prod") &&
 		(!cfg.RecModelService.Enabled || strings.TrimSpace(cfg.RecModelService.URL) == "") {
-		log.Fatalf("recommendation service is required in APP_ENV=%s", appEnv)
+		return nil, fmt.Errorf("recommendation service is required in APP_ENV=%s", appEnv)
 	}
 	if cfg.RecModelService.Enabled && cfg.RecModelService.URL != "" {
 		timeout := time.Duration(cfg.RecModelService.TimeoutMs) * time.Millisecond
@@ -133,7 +162,7 @@ func composeRecommendationModelScorer(
 			runtimeconfig.EnvRuntimeConfigProvider{},
 		)
 		if err != nil {
-			log.Fatalf("recommendation service auth config invalid: %v", err)
+			return nil, fmt.Errorf("recommendation service auth config invalid: %w", err)
 		}
 		modelCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 			modelTokenConfig,
@@ -141,7 +170,7 @@ func composeRecommendationModelScorer(
 			[]string{"recommendation.model.score"},
 		)
 		if err != nil {
-			log.Fatalf("recommendation service credentials invalid: %v", err)
+			return nil, fmt.Errorf("recommendation service credentials invalid: %w", err)
 		}
 		client, err := recinfra.NewHTTPModelServiceClient(
 			cfg.RecModelService.URL,
@@ -149,10 +178,10 @@ func composeRecommendationModelScorer(
 			modelCredentials,
 		)
 		if err != nil {
-			log.Fatalf("recommendation service client invalid: %v", err)
+			return nil, fmt.Errorf("recommendation service client invalid: %w", err)
 		}
 		recOpts = append(recOpts, rtrec.WithScorer(newProductionScorer(client, timeout, logger)))
 		log.Printf("content-service recommendation-service enabled url=%s timeout=%v scorer=cascade(remote->rule)", cfg.RecModelService.URL, timeout)
 	}
-	return recOpts
+	return recOpts, nil
 }

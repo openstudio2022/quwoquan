@@ -1,13 +1,16 @@
-package main
+package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -22,6 +25,7 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
+	"quwoquan_service/runtime/servicehost"
 	entitycomposition "quwoquan_service/services/entity-service/cmd/internal/composition"
 	httpadapter "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/adapters/inbound/http"
 	homepageapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage/application"
@@ -78,24 +82,57 @@ type config struct {
 	} `yaml:"user_account_security_authority"`
 }
 
-func main() {
+// Module is entity-service's service-owned servicehost adapter.
+type Module struct {
+	configDigest string
+	server       *http.Server
+	health       *rthealth.Checker
+	listener     net.Listener
+	admission    atomic.Bool
+	serveError   chan error
+
+	workerCancel context.CancelFunc
+	workerGroup  sync.WaitGroup
+	workerStart  []func(context.Context)
+	cleanup      func()
+	runContext   context.Context
+}
+
+var _ servicehost.Module = (*Module)(nil)
+
+// NewModule assembles entity-service's private dependencies and HTTP contract.
+// The process host owns binding, worker lifetime, readiness admission and
+// shutdown; this constructor returns every fail-fast composition error.
+func NewModule() (_ *Module, resultErr error) {
+	cleanup := func() {}
+	initialized := false
+	defer func() {
+		if !initialized {
+			cleanup()
+		}
+	}()
+
 	cfg, err := loadRuntimeConfig()
 	if err != nil {
-		log.Fatalf("entity-service config load failed: %v", err)
+		return nil, fmt.Errorf("entity-service config load failed: %w", err)
 	}
 	normalizeDefaults(&cfg)
 	controlplane.StartReleaseConfigAttestation(
 		"entity-service",
 		getenvOrDefault("APP_ENV", "alpha"),
 		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
-		strings.TrimSpace(os.Getenv("CONFIG_VERSION")),
+		strings.TrimSpace(
+			servicehost.ModuleEnvironmentValue("entity-service", "CONFIG_VERSION"),
+		),
 		strings.TrimSpace(os.Getenv("IMAGE_VERSION")),
 	)
 
 	ctx := context.Background()
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "entity-service", SamplingRatio: 0.1})
-	defer otelShutdown()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		otelShutdown()
+	})
 
 	appEnv := getenvOrDefault("APP_ENV", "alpha")
 	messageTransportRouter, messageTransportSceneModes, err := buildEntityMessageTransportRouter(
@@ -103,9 +140,11 @@ func main() {
 		cfg,
 	)
 	if err != nil {
-		log.Fatalf("entity-service message transport Redis config invalid: %v", err)
+		return nil, fmt.Errorf("entity-service message transport Redis config invalid: %w", err)
 	}
-	defer messageTransportRouter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		_ = messageTransportRouter.Close()
+	})
 	messageTransport, err := requireEntityAPIMessageTransport(
 		ctx,
 		appEnv,
@@ -113,7 +152,7 @@ func main() {
 		messageTransportSceneModes,
 	)
 	if err != nil {
-		log.Fatalf("entity-service message transport preflight failed: %v", err)
+		return nil, fmt.Errorf("entity-service message transport preflight failed: %w", err)
 	}
 	var homepageStore application.HomepageDataStore
 	var mongoPing func(context.Context) error
@@ -125,36 +164,41 @@ func main() {
 	if mongoURI == "" {
 		// production composition 在所有环境都只装配权威存储；alpha fixture
 		// 由独立 runner/test composition 注入，禁止服务入口回退内存实现。
-		log.Fatalf("entity-service requires ENTITY_MONGO_URI when APP_ENV=%s", appEnv)
+		return nil, fmt.Errorf("entity-service requires ENTITY_MONGO_URI when APP_ENV=%s", appEnv)
 	}
 	if mongoURI != "" {
 		mongoDBName := getenvOrDefault("ENTITY_MONGO_DATABASE", cfg.Mongo.Database)
 		if mongoDBName == "" {
 			mongoDBName = "quwoquan_entity"
 		}
-		mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: mongoURI}, "entity-service")
+		mongoClient, connectErr := rtmongo.Connect(ctx, rtmongo.ConnectConfig{URI: mongoURI})
+		if connectErr != nil {
+			return nil, fmt.Errorf("entity-service mongo connect failed: %w", connectErr)
+		}
+		cleanup = servicehost.ChainCleanup(cleanup, func() {
+			_ = mongoClient.Disconnect(context.Background())
+		})
 		mongoDatabase = mongoClient.Database(mongoDBName)
 		mongoHomepageStore := homepagepersistence.NewMongoHomepageStore(mongoDatabase)
 		if err := mongoHomepageStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("entity-service homepage indexes failed: %v", err)
+			return nil, fmt.Errorf("entity-service homepage indexes failed: %w", err)
 		}
 		homepageStore = mongoHomepageStore
 		reviewStore = reviewpersistence.NewMongoReviewStore(mongoDatabase)
 		if err := reviewStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("entity-service homepage review indexes failed: %v", err)
+			return nil, fmt.Errorf("entity-service homepage review indexes failed: %w", err)
 		}
 		claimStore = claimpersistence.NewMongoStore(mongoDatabase)
 		if err := claimStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("entity-service homepage claim indexes failed: %v", err)
+			return nil, fmt.Errorf("entity-service homepage claim indexes failed: %w", err)
 		}
 		statusReportStore = statuspersistence.NewMongoStore(mongoDatabase)
 		if err := statusReportStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("entity-service homepage status report indexes failed: %v", err)
+			return nil, fmt.Errorf("entity-service homepage status report indexes failed: %w", err)
 		}
 		mongoPing = func(hctx context.Context) error {
 			return mongoClient.Ping(hctx, nil)
 		}
-		defer mongoClient.Disconnect(ctx)
 	}
 	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
 	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
@@ -164,21 +208,25 @@ func main() {
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
 	)
 	if err != nil {
-		log.Fatalf("entity-service runtime log exporter init failed: %v", err)
+		return nil, fmt.Errorf("entity-service runtime log exporter init failed: %w", err)
 	}
-	defer runtimeLogExporter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		runtimeLogExporter.Close()
+	})
 	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
 	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
-	defer standardLogWriter.Close()
-	defer errorLogWriter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		errorLogWriter.Close()
+		standardLogWriter.Close()
+	})
 	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
 	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, robs.TraceLogLevelInfo, nil)
 	if err != nil {
-		log.Fatalf("entity-service process logger init failed: %v", err)
+		return nil, fmt.Errorf("entity-service process logger init failed: %w", err)
 	}
 	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
-		log.Fatalf("entity-service exception logger init failed: %v", err)
+		return nil, fmt.Errorf("entity-service exception logger init failed: %w", err)
 	}
 
 	// Assemble the write-time search index. ES endpoints/credentials come from the
@@ -188,7 +236,7 @@ func main() {
 	searchitemindex.ApplyESEnvOverrides(&cfg.ES)
 	searchBuilt, err := searchitemindex.Build(cfg.ES)
 	if err != nil {
-		log.Fatalf("entity-service search index build failed: %v", err)
+		return nil, fmt.Errorf("entity-service search index build failed: %w", err)
 	}
 	if err := searchBuilt.EnsureIndex(ctx); err != nil {
 		// SearchIndexView is a derived projection. Keep Homepage commands
@@ -201,7 +249,7 @@ func main() {
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
 	if err != nil {
-		log.Fatalf("entity-service access token config invalid: %v", err)
+		return nil, fmt.Errorf("entity-service access token config invalid: %w", err)
 	}
 	accountSecurityAuthorityBaseURL := getenvOrDefault(
 		"ENTITY_USER_ACCOUNT_SECURITY_AUTHORITY_BASE_URL",
@@ -215,7 +263,7 @@ func main() {
 		},
 	)
 	if err != nil {
-		log.Fatalf("entity-service account security authority init failed: %v", err)
+		return nil, fmt.Errorf("entity-service account security authority init failed: %w", err)
 	}
 
 	var serviceOpts []application.HomepageServiceOption
@@ -223,7 +271,7 @@ func main() {
 	if searchBuilt.Indexer != nil {
 		searchItemIndex := searchitempersistence.NewESIndex(searchBuilt.Indexer, mongoDatabase)
 		if err := searchItemIndex.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("entity-service homepage search item indexes failed: %v", err)
+			return nil, fmt.Errorf("entity-service homepage search item indexes failed: %w", err)
 		}
 		searchItemProjection = entitycomposition.NewHomepageSearchItemProjection(searchItemIndex)
 		serviceOpts = append(serviceOpts, application.WithProjector(searchItemProjection))
@@ -241,7 +289,7 @@ func main() {
 				[]string{"content.object_intersections.read"},
 			)
 		if credentialErr != nil {
-			log.Fatalf("entity-service content credential init failed: %v", credentialErr)
+			return nil, fmt.Errorf("entity-service content credential init failed: %w", credentialErr)
 		}
 		intersectionReader, readerErr := homepageexternal.NewContentIntersectionReader(
 			homepageexternal.ContentIntersectionConfig{
@@ -251,7 +299,7 @@ func main() {
 			},
 		)
 		if readerErr != nil {
-			log.Fatalf("entity-service content intersection reader failed: %v", readerErr)
+			return nil, fmt.Errorf("entity-service content intersection reader failed: %w", readerErr)
 		}
 		serviceOpts = append(serviceOpts, application.WithIntersectionReader(intersectionReader))
 	}
@@ -266,7 +314,7 @@ func main() {
 			searchItemProjection,
 		)
 		if relayErr != nil {
-			log.Fatalf("entity-service homepage search relay failed: %v", relayErr)
+			return nil, fmt.Errorf("entity-service homepage search relay failed: %w", relayErr)
 		}
 		projectionRunners = append(projectionRunners, namedProjectionRunner{
 			name: "homepage-search", runner: searchRelay,
@@ -281,14 +329,14 @@ func main() {
 			Queue:      claimStore,
 		})
 		if facadeErr != nil {
-			log.Fatalf("entity-service homepage claim facade failed: %v", facadeErr)
+			return nil, fmt.Errorf("entity-service homepage claim facade failed: %w", facadeErr)
 		}
 		claimProjector, projectorErr := application.NewClaimHomepageProjector(
 			claimStore,
 			homepageLifecycleHandler,
 		)
 		if projectorErr != nil {
-			log.Fatalf("entity-service homepage claim projector failed: %v", projectorErr)
+			return nil, fmt.Errorf("entity-service homepage claim projector failed: %w", projectorErr)
 		}
 		projectionRunners = append(projectionRunners, namedProjectionRunner{
 			name: "homepage-claim", runner: claimProjector,
@@ -303,14 +351,14 @@ func main() {
 			Queue:      statusReportStore,
 		})
 		if facadeErr != nil {
-			log.Fatalf("entity-service homepage status report facade failed: %v", facadeErr)
+			return nil, fmt.Errorf("entity-service homepage status report facade failed: %w", facadeErr)
 		}
 		statusProjector, projectorErr := application.NewStatusHomepageProjector(
 			statusReportStore,
 			homepageService,
 		)
 		if projectorErr != nil {
-			log.Fatalf("entity-service homepage status projector failed: %v", projectorErr)
+			return nil, fmt.Errorf("entity-service homepage status projector failed: %w", projectorErr)
 		}
 		projectionRunners = append(projectionRunners, namedProjectionRunner{
 			name: "homepage-status", runner: statusProjector,
@@ -325,13 +373,12 @@ func main() {
 		homepageService,
 		hostname(),
 	)
-	go followConsumer.Run(ctx)
 	homepageStreamRelay, relayErr := homepageapp.NewLifecycleOutboxRelay(
 		homepageStore,
 		entitymessaging.NewHomepageLifecycleStreamPublisher(messageTransport),
 	)
 	if relayErr != nil {
-		log.Fatalf("entity-service homepage lifecycle stream relay failed: %v", relayErr)
+		return nil, fmt.Errorf("entity-service homepage lifecycle stream relay failed: %w", relayErr)
 	}
 	projectionRunners = append(projectionRunners, namedProjectionRunner{
 		name: "homepage-lifecycle-stream", runner: homepageStreamRelay,
@@ -342,7 +389,7 @@ func main() {
 			entitymessaging.NewHomepageClaimLifecycleStreamPublisher(messageTransport),
 		)
 		if streamErr != nil {
-			log.Fatalf("entity-service claim lifecycle stream relay failed: %v", streamErr)
+			return nil, fmt.Errorf("entity-service claim lifecycle stream relay failed: %w", streamErr)
 		}
 		projectionRunners = append(projectionRunners, namedProjectionRunner{
 			name: "homepage-claim-lifecycle-stream", runner: claimStreamRelay,
@@ -354,7 +401,7 @@ func main() {
 			entitymessaging.NewHomepageStatusLifecycleStreamPublisher(messageTransport),
 		)
 		if streamErr != nil {
-			log.Fatalf("entity-service status lifecycle stream relay failed: %v", streamErr)
+			return nil, fmt.Errorf("entity-service status lifecycle stream relay failed: %w", streamErr)
 		}
 		projectionRunners = append(projectionRunners, namedProjectionRunner{
 			name: "homepage-status-lifecycle-stream", runner: statusStreamRelay,
@@ -366,7 +413,7 @@ func main() {
 		time.Now,
 	)
 	if err != nil {
-		log.Fatalf("EntityHomepage Host authority composition failed: %v", err)
+		return nil, fmt.Errorf("entity homepage host authority composition failed: %w", err)
 	}
 	httpHandler := httpadapter.NewHandler(homepageService).
 		WithHostAuthorityEvaluator(homepageHostAuthorityEvaluator)
@@ -383,7 +430,7 @@ func main() {
 			Homepage:  homepageService,
 		})
 		if err != nil {
-			log.Fatalf("entity-service homepage review facade failed: %v", err)
+			return nil, fmt.Errorf("entity-service homepage review facade failed: %w", err)
 		}
 		httpHandler = httpHandler.WithReviewHandler(reviewhttp.NewHandler(reviewFacade))
 		reviewRelay, relayErr := reviewapp.NewSummaryRelay(
@@ -393,14 +440,14 @@ func main() {
 			homepageLifecycleHandler,
 		)
 		if relayErr != nil {
-			log.Fatalf("entity-service homepage review summary relay failed: %v", relayErr)
+			return nil, fmt.Errorf("entity-service homepage review summary relay failed: %w", relayErr)
 		}
 		projectionRunners = append(projectionRunners, namedProjectionRunner{
 			name: "homepage-review-summary", runner: reviewRelay,
 		})
 		reviewPublisher, publisherErr := reviewmessaging.NewEventPublisher(messageTransport)
 		if publisherErr != nil {
-			log.Fatalf("entity-service HomepageReview event publisher failed: %v", publisherErr)
+			return nil, fmt.Errorf("entity-service homepage review event publisher failed: %w", publisherErr)
 		}
 		reviewStreamRelay, streamErr := reviewapp.NewOutboxRelay(
 			reviewStore,
@@ -409,19 +456,16 @@ func main() {
 			"entity.homepage-review-event-stream",
 		)
 		if streamErr != nil {
-			log.Fatalf("entity-service HomepageReview stream relay failed: %v", streamErr)
+			return nil, fmt.Errorf("entity-service homepage review stream relay failed: %w", streamErr)
 		}
 		projectionRunners = append(projectionRunners, namedProjectionRunner{
 			name: "homepage-review-event-stream", runner: reviewStreamRelay,
 		})
 	}
-	for _, runner := range projectionRunners {
-		go runProjectionLoop(ctx, runner)
-	}
 	handler := httpHandler.Routes()
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
-		log.Fatalf("entity-service access token verifier invalid: %v", err)
+		return nil, fmt.Errorf("entity-service access token verifier invalid: %w", err)
 	}
 	rootMux := http.NewServeMux()
 	healthChecker := rthealth.NewChecker()
@@ -436,6 +480,7 @@ func main() {
 		accountSecurityAuthority.CheckAccountSecurityAuthority,
 	)
 	rootMux.HandleFunc("/healthz", healthChecker.Handler())
+	rootMux.HandleFunc("/readyz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
 	rootMux.Handle("/", entityguard.Handler(handler))
 	serverCfg := rthttp.HTTPServerMiddlewareConfig{
@@ -457,15 +502,146 @@ func main() {
 			AccessTokenVerifier:      accessVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(withObs),
-		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: timeouts.ReadHeader,
 		WriteTimeout:      timeouts.Write,
 		IdleTimeout:       timeouts.Idle,
 	}
-	log.Printf("entity-service listening on %s", addr)
-	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
-		log.Fatalf("entity-service: %v", err)
+	module := &Module{
+		configDigest: strings.TrimSpace(
+			servicehost.ModuleEnvironmentValue("entity-service", "CONFIG_VERSION"),
+		),
+		server:     server,
+		health:     healthChecker,
+		serveError: make(chan error, 1),
+		workerStart: append(
+			[]func(context.Context){followConsumer.Run},
+			projectionWorkerStarts(projectionRunners)...,
+		),
+		cleanup: cleanup,
 	}
+	if module.configDigest == "" {
+		module.configDigest = fmt.Sprintf("%s:%s", appEnv, cfg.Service.Name)
+	}
+	server.Handler = module.admissionHandler(server.Handler)
+	server.BaseContext = func(net.Listener) context.Context {
+		if module.runContext != nil {
+			return module.runContext
+		}
+		return context.Background()
+	}
+	initialized = true
+	return module, nil
+}
+
+func (module *Module) Name() string { return "entity-service" }
+
+func (module *Module) ConfigDigest() string {
+	if module == nil {
+		return ""
+	}
+	return module.configDigest
+}
+
+func (module *Module) ValidateConfig(context.Context) error {
+	if module == nil || module.server == nil || module.health == nil || module.cleanup == nil {
+		return errors.New("entity-service module is incomplete")
+	}
+	return nil
+}
+
+func (module *Module) PrepareMigration(context.Context) error {
+	return nil
+}
+
+func (module *Module) Bind(context.Context) error {
+	if module == nil || module.server == nil {
+		return errors.New("entity-service HTTP server is unavailable")
+	}
+	listener, err := net.Listen("tcp", module.server.Addr)
+	if err != nil {
+		return fmt.Errorf("entity-service listener bind: %w", err)
+	}
+	module.listener = listener
+	return nil
+}
+
+func (module *Module) Start(ctx context.Context) error {
+	if module == nil || module.listener == nil {
+		return errors.New("entity-service listener is not bound")
+	}
+	module.runContext, module.workerCancel = context.WithCancel(ctx)
+	for _, start := range module.workerStart {
+		module.workerGroup.Add(1)
+		module.startWorker(start)
+	}
+	module.workerGroup.Add(1)
+	go func() {
+		defer module.workerGroup.Done()
+		if err := module.server.Serve(module.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			select {
+			case module.serveError <- err:
+			case <-module.runContext.Done():
+			}
+		}
+	}()
+	return nil
+}
+
+func (module *Module) Ready(ctx context.Context) error {
+	if result := module.health.Check(ctx); result.Status != "ok" {
+		return fmt.Errorf("entity-service readiness failed: %v", result.FailedChecks)
+	}
+	select {
+	case err := <-module.serveError:
+		return fmt.Errorf("entity-service listener failed: %w", err)
+	default:
+		return nil
+	}
+}
+
+func (module *Module) OpenAdmission(context.Context) error {
+	module.admission.Store(true)
+	return nil
+}
+
+func (module *Module) Shutdown(ctx context.Context) error {
+	module.admission.Store(false)
+	var result error
+	if module.server != nil {
+		result = errors.Join(result, module.server.Shutdown(ctx))
+	}
+	if module.workerCancel != nil {
+		module.workerCancel()
+		module.workerGroup.Wait()
+		module.workerCancel = nil
+	}
+	if module.cleanup != nil {
+		module.cleanup()
+		module.cleanup = nil
+	}
+	return result
+}
+
+func (module *Module) startWorker(start func(context.Context)) {
+	go func() {
+		defer module.workerGroup.Done()
+		start(module.runContext)
+	}()
+}
+
+func (module *Module) admissionHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/healthz", "/readyz", "/metrics":
+			next.ServeHTTP(writer, request)
+			return
+		}
+		if !module.admission.Load() {
+			http.Error(writer, `{"status":"unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
 }
 
 type projectionRunner interface {
@@ -475,6 +651,17 @@ type projectionRunner interface {
 type namedProjectionRunner struct {
 	name   string
 	runner projectionRunner
+}
+
+func projectionWorkerStarts(runners []namedProjectionRunner) []func(context.Context) {
+	starts := make([]func(context.Context), 0, len(runners))
+	for _, runner := range runners {
+		runner := runner
+		starts = append(starts, func(ctx context.Context) {
+			runProjectionLoop(ctx, runner)
+		})
+	}
+	return starts
 }
 
 func runProjectionLoop(ctx context.Context, named namedProjectionRunner) {
@@ -521,10 +708,17 @@ func projectionRetryDelay(base time.Duration, attempt int) time.Duration {
 
 func loadRuntimeConfig() (config, error) {
 	cfg := config{}
-	serviceName := getenvOrDefault("SERVICE_NAME", "entity-service")
+	serviceName := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("entity-service", "SERVICE_NAME"),
+	)
+	if serviceName == "" {
+		serviceName = "entity-service"
+	}
 	appEnv := getenvOrDefault("APP_ENV", "alpha")
 	configRoot := strings.TrimSpace(os.Getenv("CONFIG_ROOT"))
-	configVersion := strings.TrimSpace(os.Getenv("CONFIG_VERSION"))
+	configVersion := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("entity-service", "CONFIG_VERSION"),
+	)
 	if !isValidAppEnv(appEnv) {
 		return config{}, fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
 	}

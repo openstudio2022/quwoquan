@@ -140,7 +140,7 @@ func TestEntityAccountSecurityAuthorityUsesTargetTopologyForLocalEnvironments(
 	expectedBindings := map[string]string{
 		filepath.Join(
 			repoRoot,
-			"quwoquan_app/scripts/device/start_app_beta_manual.sh",
+			"quwoquan_app/scripts/tools/device/beta_manual_app.sh",
 		): `ENTITY_USER_ACCOUNT_SECURITY_AUTHORITY_BASE_URL="http://127.0.0.1:${USER_PORT}"`,
 		filepath.Join(
 			repoRoot,

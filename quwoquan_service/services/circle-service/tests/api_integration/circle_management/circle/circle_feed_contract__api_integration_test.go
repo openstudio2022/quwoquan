@@ -1,4 +1,15 @@
 // spec_ref: specs/feature-tree/circle-community/spec.md#dom-002
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-002.t1
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-002.t2
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-002.t6
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-002.t7
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-002.t8
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-002.t9
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-002.t11
+// spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/spec.md#sit-002.t3
+// spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/spec.md#sit-002.t6
+// spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/spec.md#sit-002.t7
+// spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/spec.md#sit-002.t8
 // readiness_case: list-circle-discovery-feed-api
 // readiness_case: get-circle-feed-api
 package api_integration

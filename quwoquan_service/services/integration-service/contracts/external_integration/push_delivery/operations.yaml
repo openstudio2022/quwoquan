@@ -17,6 +17,12 @@ description: 'PushDelivery 是 ExternalInteraction 的类型化外部引用，�
 
   deliveryKey collapse 语义，cancel 必须关闭来电面并压制乱序迟到 ring。
 
+  action=alert 是通用可见推送类别（title/body 通知栏展示 + targetType/targetId
+
+  路由锚点，deliveryKey 承担 collapse），仅 FCM 承接；APNs VoIP 通道对 alert
+
+  返回结构化不可用（iOS 可见推送依赖独立 alert 端点种类，见所属 spec OPEN）。
+
   '
 upstreams:
   user_push_endpoint_secret:
@@ -105,3 +111,11 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/push_delivery/push_delivery_worker__idempotency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb-https-provider, digest_binding: candidate}
+- case_id: push_delivery_provider_conformance_ops_env
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-003
+  producer: ops
+  layer: environment_acceptance
+  target: {kind: object, id: integration.push_delivery}
+  runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/integration-service/ci/push_delivery_provider_conformance.py
+  executions:
+    - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}

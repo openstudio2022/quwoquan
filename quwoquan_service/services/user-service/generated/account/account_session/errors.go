@@ -23,6 +23,7 @@ var (
 	ErrAccountSuspended           = errors.New("USER.AUTH.account_suspended")
 	ErrAccountDeleted             = errors.New("USER.AUTH.account_deleted")
 	ErrTokenStale                 = errors.New("USER.AUTH.token_stale")
+	ErrResearchIdentityInvalid    = errors.New("USER.USER.research_identity_invalid")
 	ErrAccountSecurityUnavailable = errors.New("USER.AUTH.account_security_unavailable")
 	ErrMfaRequired                = errors.New("USER.AUTH.mfa_required")
 )
@@ -103,6 +104,12 @@ func AppErrorFromAccountDeleted(debugMessage string) *rerrors.AppError {
 func AppErrorFromTokenStale(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrTokenStale.Error()))
 	return rerrors.NewAppError(code, "登录凭据已失效，请重新登录", debugMessage).WithMetadata("token_stale", 401).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromResearchIdentityInvalid returns *AppError for USER.USER.research_identity_invalid (user_message from errors.yaml).
+func AppErrorFromResearchIdentityInvalid(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrResearchIdentityInvalid.Error()))
+	return rerrors.NewAppError(code, "当前研究态身份无效或已过期", debugMessage).WithMetadata("forbidden", 403).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromAccountSecurityUnavailable returns *AppError for USER.AUTH.account_security_unavailable (user_message from errors.yaml).

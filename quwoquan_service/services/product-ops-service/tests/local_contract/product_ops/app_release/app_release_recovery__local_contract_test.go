@@ -248,6 +248,72 @@ func TestUnknownDeviceGetsChoicePageWithoutThirdPartyNavigation(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-003
+func TestAppReleaseErrorPathsUseRuntimeErrorEnvelope(t *testing.T) {
+	service := newAppReleaseService(t)
+	mux := http.NewServeMux()
+	httpadapter.NewHandler(service).Register(mux)
+
+	cases := []struct {
+		name       string
+		target     string
+		wantStatus int
+		wantCode   string
+	}{
+		{
+			name:       "invalid version query",
+			target:     "/ops/app-recovery/version?platform=unknown",
+			wantStatus: http.StatusBadRequest,
+			wantCode:   "OPS.USER.app_release_query_invalid",
+		},
+		{
+			name:       "unknown download route",
+			target:     "/download/windows",
+			wantStatus: http.StatusNotFound,
+			wantCode:   "GATEWAY.USER.route_not_found",
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, testCase.target, nil)
+			request.Header.Set("X-Request-Id", "req-envelope-1")
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, request)
+
+			if response.Code != testCase.wantStatus {
+				t.Fatalf(
+					"status=%d want=%d body=%s",
+					response.Code,
+					testCase.wantStatus,
+					response.Body.String(),
+				)
+			}
+			var envelope map[string]any
+			if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+				t.Fatalf("decode error envelope: %v", err)
+			}
+			if envelope["code"] != testCase.wantCode {
+				t.Fatalf("code=%v want=%s", envelope["code"], testCase.wantCode)
+			}
+			// 完整 RuntimeErrorResponse 信封：不允许退化为裸 {"code": ...}。
+			userMessage, _ := envelope["userMessage"].(string)
+			if strings.TrimSpace(userMessage) == "" {
+				t.Fatalf("userMessage missing in envelope: %s", response.Body.String())
+			}
+			if envelope["requestId"] != "req-envelope-1" {
+				t.Fatalf("requestId=%v want=req-envelope-1", envelope["requestId"])
+			}
+			for _, field := range []string{"kind", "origin", "nature"} {
+				value, _ := envelope[field].(string)
+				if strings.TrimSpace(value) == "" {
+					t.Fatalf("%s missing in envelope: %s", field, response.Body.String())
+				}
+			}
+		})
+	}
+}
+
 func newAppReleaseService(t *testing.T) *apprelease.Service {
 	t.Helper()
 	service, err := apprelease.NewService(appReleaseCatalog())

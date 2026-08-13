@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import integrationconfig "quwoquan_service/services/integration-service/internal/external_integration/external_interaction/infrastructure/runtimeconfig"
 

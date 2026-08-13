@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 
 func startOutboundShareOutboxRelay(
 	ctx context.Context,
+	workers *workerRegistry,
 	reader shareports.OutboxReader,
 	checkpoints shareports.ProjectionCheckpointStore,
 	publisher shareports.OutboxPublisher,
@@ -33,11 +34,11 @@ func startOutboundShareOutboxRelay(
 	logger *slog.Logger,
 ) *outboundshareapp.OutboxRelay {
 	relay := outboundshareapp.NewOutboxRelay(reader, checkpoints, publisher, consumer)
-	go func() {
-		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	workers.Add(func(workerCtx context.Context) {
+		if err := relay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			logger.Error("OutboundShareFact outbox relay stopped", "consumer", consumer, "error", err)
 		}
-	}()
+	})
 	healthChecker.Register(healthName, func(_ context.Context) error {
 		return relay.Healthy(5 * time.Second)
 	})
@@ -46,6 +47,7 @@ func startOutboundShareOutboxRelay(
 
 func startProfileInteractionReadFactRelay(
 	ctx context.Context,
+	workers *workerRegistry,
 	reader readfactports.OutboxReader,
 	checkpoints readfactports.ProjectionCheckpointStore,
 	publisher readfactports.OutboxPublisher,
@@ -60,11 +62,11 @@ func startProfileInteractionReadFactRelay(
 		publisher,
 		consumer,
 	)
-	go func() {
-		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	workers.Add(func(workerCtx context.Context) {
+		if err := relay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			logger.Error("ProfileInteractionReadFact relay stopped", "consumer", consumer, "error", err)
 		}
-	}()
+	})
 	healthChecker.Register(healthName, func(_ context.Context) error {
 		return relay.Healthy(5 * time.Second)
 	})
@@ -73,6 +75,7 @@ func startProfileInteractionReadFactRelay(
 
 func startCommentOutboxRelay(
 	ctx context.Context,
+	workers *workerRegistry,
 	reader commentports.OutboxReader,
 	checkpoints commentports.ProjectionCheckpointStore,
 	publisher commentports.OutboxPublisher,
@@ -82,11 +85,11 @@ func startCommentOutboxRelay(
 	logger *slog.Logger,
 ) *commentapp.OutboxRelay {
 	relay := commentapp.NewOutboxRelay(reader, checkpoints, publisher, consumer)
-	go func() {
-		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	workers.Add(func(workerCtx context.Context) {
+		if err := relay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			logger.Error("Comment outbox relay stopped", "consumer", consumer, "error", err)
 		}
-	}()
+	})
 	healthChecker.Register(healthName, func(_ context.Context) error {
 		return relay.Healthy(5 * time.Second)
 	})
@@ -99,6 +102,7 @@ func startCommentOutboxRelay(
 // converged consumer.
 func startPostOutboxRelay(
 	ctx context.Context,
+	workers *workerRegistry,
 	reader postports.OutboxReader,
 	checkpoints postports.ProjectionCheckpointStore,
 	publisher postports.OutboxPublisher,
@@ -108,11 +112,11 @@ func startPostOutboxRelay(
 	logger *slog.Logger,
 ) *postapp.OutboxRelay {
 	relay := postapp.NewOutboxRelay(reader, checkpoints, publisher, consumer)
-	go func() {
-		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	workers.Add(func(workerCtx context.Context) {
+		if err := relay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			logger.Error("content post outbox relay stopped", "consumer", consumer, "error", err)
 		}
-	}()
+	})
 	healthChecker.Register(healthName, func(_ context.Context) error {
 		return relay.Healthy(5 * time.Second)
 	})
@@ -122,6 +126,7 @@ func startPostOutboxRelay(
 // startReactionOutboxRelay 为外部事件与每个 reaction projection 分配独立 checkpoint。
 func startReactionOutboxRelay(
 	ctx context.Context,
+	workers *workerRegistry,
 	reader reactionports.OutboxReader,
 	checkpoints reactionports.ProjectionCheckpointStore,
 	publisher reactionports.OutboxPublisher,
@@ -131,11 +136,11 @@ func startReactionOutboxRelay(
 	logger *slog.Logger,
 ) *reactionapp.OutboxRelay {
 	relay := reactionapp.NewOutboxRelay(reader, checkpoints, publisher, consumer)
-	go func() {
-		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	workers.Add(func(workerCtx context.Context) {
+		if err := relay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			logger.Error("ContentReaction outbox relay stopped", "consumer", consumer, "error", err)
 		}
-	}()
+	})
 	healthChecker.Register(healthName, func(_ context.Context) error {
 		return relay.Healthy(5 * time.Second)
 	})
@@ -145,6 +150,7 @@ func startReactionOutboxRelay(
 // startModerationOutboxRelay 为 PostModerationCase 事实分配独立 consumer checkpoint。
 func startModerationOutboxRelay(
 	ctx context.Context,
+	workers *workerRegistry,
 	reader moderationports.OutboxReader,
 	checkpoints moderationports.ProjectionCheckpointStore,
 	publisher moderationports.OutboxPublisher,
@@ -154,11 +160,11 @@ func startModerationOutboxRelay(
 	logger *slog.Logger,
 ) *moderationapp.OutboxRelay {
 	relay := moderationapp.NewOutboxRelay(reader, checkpoints, publisher, consumer)
-	go func() {
-		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	workers.Add(func(workerCtx context.Context) {
+		if err := relay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			logger.Error("PostModerationCase outbox relay stopped", "consumer", consumer, "error", err)
 		}
-	}()
+	})
 	healthChecker.Register(healthName, func(_ context.Context) error {
 		return relay.Healthy(5 * time.Second)
 	})
@@ -170,6 +176,7 @@ func startModerationOutboxRelay(
 // directly from the request transaction.
 func startReportOutboxRelay(
 	ctx context.Context,
+	workers *workerRegistry,
 	reader reportports.OutboxReader,
 	checkpoints reportports.ProjectionCheckpointStore,
 	publisher reportports.OutboxPublisher,
@@ -179,11 +186,11 @@ func startReportOutboxRelay(
 	logger *slog.Logger,
 ) *reportapp.OutboxRelay {
 	relay := reportapp.NewOutboxRelay(reader, checkpoints, publisher, consumer)
-	go func() {
-		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	workers.Add(func(workerCtx context.Context) {
+		if err := relay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			logger.Error("content report outbox relay stopped", "consumer", consumer, "error", err)
 		}
-	}()
+	})
 	healthChecker.Register(healthName, func(_ context.Context) error {
 		return relay.Healthy(5 * time.Second)
 	})

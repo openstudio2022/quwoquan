@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-005
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-005.t5
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-005.t4
 // readiness_case: deliver-realtime-call-signals-local
 package local_contract
 

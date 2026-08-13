@@ -485,11 +485,11 @@ func sourceHash(v any) string {
 }
 
 // RuntimePostID derives the public Post identity from the stable contentId.
-// legacyPostRef is used only while importing a pre-contentId immutable release.
-func RuntimePostID(contentID string, legacyPostRef ...string) string {
+// postRef is used only while importing a pre-contentId immutable release.
+func RuntimePostID(contentID string, postRef ...string) string {
 	identity := strings.TrimSpace(contentID)
-	if identity == "" && len(legacyPostRef) > 0 {
-		identity = strings.TrimSpace(legacyPostRef[0])
+	if identity == "" && len(postRef) > 0 {
+		identity = strings.TrimSpace(postRef[0])
 	}
 	if identity == "" {
 		return ""
@@ -498,10 +498,10 @@ func RuntimePostID(contentID string, legacyPostRef ...string) string {
 	return "data_post_" + hex.EncodeToString(sum[:])
 }
 
-// LegacyRuntimePostID identifies a Post imported before contentId became the
-// runtime identity owner. Import migration may remove this ID, but never emits
-// it for a newly admitted content record.
-func LegacyRuntimePostID(postRef string) string {
+// RuntimePostIDFromPostRef identifies a Post imported before contentId became
+// the runtime identity owner. Import migration may remove this ID, but never
+// emits it for a newly admitted content record.
+func RuntimePostIDFromPostRef(postRef string) string {
 	return RuntimePostID(strings.TrimSpace(postRef))
 }
 

@@ -2,13 +2,13 @@
 // overwrites the trusted network attribute; api-edge verifies credentials,
 // authorizes the generated ContractGraph operation, consumes shared Redis
 // quota, and only then proxies to the owning service.
-package main
+package bootstrap
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -16,6 +16,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
@@ -27,6 +28,7 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	rtobs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
+	"quwoquan_service/runtime/servicehost"
 	httpadapter "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/adapters/inbound/http"
 	admissionapp "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/application"
 	admissionmetrics "quwoquan_service/services/api-edge/internal/edge_security/rate_limit_bucket/infrastructure/observability"
@@ -43,57 +45,81 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-func main() {
-	if err := run(); err != nil {
-		log.Fatalf("api-edge: %v", err)
-	}
+// Module is api-edge's service-owned adapter for the composed process host.
+type Module struct {
+	configDigest string
+	server       *http.Server
+	readiness    *rthealth.Checker
+	listener     net.Listener
+	admission    atomic.Bool
+	serveError   chan error
+	cleanup      func()
 }
 
-func run() error {
-	serviceName := envOrDefault("SERVICE_NAME", "api-edge")
+var _ servicehost.Module = (*Module)(nil)
+
+// NewModule assembles api-edge's private dependencies and its HTTP contract
+// surface. Binding, readiness admission and shutdown remain process lifecycle
+// responsibilities of servicehost.
+func NewModule() (_ *Module, resultErr error) {
+	cleanup := func() {}
+	initialized := false
+	defer func() {
+		if !initialized {
+			cleanup()
+		}
+	}()
+	serviceName := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("api-edge", "SERVICE_NAME"),
+	)
+	if serviceName == "" {
+		serviceName = "api-edge"
+	}
 	environment := envOrDefault("APP_ENV", "alpha")
 	configRoot := strings.TrimSpace(os.Getenv("CONFIG_ROOT"))
 	config, err := loadRuntimeConfig(serviceName, environment, configRoot)
 	if err != nil {
-		return fmt.Errorf("runtime config invalid: %w", err)
+		return nil, fmt.Errorf("runtime config invalid: %w", err)
 	}
 	rolloutNetworkResolver, err := rolloutnetworkcatalog.Load(
 		config.Rollout.NetworkAttributeCatalog,
 		config.Rollout.Policy,
 	)
 	if err != nil {
-		return fmt.Errorf("rollout network attribute catalog invalid: %w", err)
+		return nil, fmt.Errorf("rollout network attribute catalog invalid: %w", err)
 	}
 	controlplane.StartReleaseConfigAttestation(
 		serviceName,
 		environment,
 		configRoot,
-		strings.TrimSpace(os.Getenv("CONFIG_VERSION")),
+		strings.TrimSpace(
+			servicehost.ModuleEnvironmentValue("api-edge", "CONFIG_VERSION"),
+		),
 		strings.TrimSpace(os.Getenv("IMAGE_VERSION")),
 	)
 
 	accessConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
-		return fmt.Errorf("access token config invalid: %w", err)
+		return nil, fmt.Errorf("access token config invalid: %w", err)
 	}
 	accessVerifier, err := rtauth.NewHS256Verifier(accessConfig)
 	if err != nil {
-		return fmt.Errorf("access token verifier invalid: %w", err)
+		return nil, fmt.Errorf("access token verifier invalid: %w", err)
 	}
 	deviceConfig, err := rtauth.LoadDeviceTicketConfig(runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
-		return fmt.Errorf("device ticket config invalid: %w", err)
+		return nil, fmt.Errorf("device ticket config invalid: %w", err)
 	}
 	deviceVerifier, err := rtauth.NewHS256Verifier(deviceConfig)
 	if err != nil {
-		return fmt.Errorf("device ticket verifier invalid: %w", err)
+		return nil, fmt.Errorf("device ticket verifier invalid: %w", err)
 	}
 	operatorVerifier, err := rtauth.NewOIDCVerifierFromEnv("OPS_OIDC")
 	if err != nil {
-		return fmt.Errorf("operator OIDC verifier invalid: %w", err)
+		return nil, fmt.Errorf("operator OIDC verifier invalid: %w", err)
 	}
 	if environment == "prod" && operatorVerifier == nil {
-		return fmt.Errorf("operator OIDC verifier is required in prod")
+		return nil, fmt.Errorf("operator OIDC verifier is required in prod")
 	}
 
 	authorityTimeout := time.Duration(
@@ -105,7 +131,7 @@ func run() error {
 		[]string{"user.account.security.read"},
 	)
 	if err != nil {
-		return fmt.Errorf("account security authority credentials invalid: %w", err)
+		return nil, fmt.Errorf("account security authority credentials invalid: %w", err)
 	}
 	authority, err := rtauth.NewHTTPAccountSecurityAuthority(
 		rtauth.HTTPAccountSecurityAuthorityConfig{
@@ -118,17 +144,19 @@ func run() error {
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("account security authority invalid: %w", err)
+		return nil, fmt.Errorf("account security authority invalid: %w", err)
 	}
 
 	redisClient, err := admissionredis.NewClient(config.redisConfig())
 	if err != nil {
-		return fmt.Errorf("shared Redis client invalid: %w", err)
+		return nil, fmt.Errorf("shared Redis client invalid: %w", err)
 	}
-	defer redisClient.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		redisClient.Close()
+	})
 	store, err := admissionredis.NewWithClient(redisClient)
 	if err != nil {
-		return fmt.Errorf("shared admission store invalid: %w", err)
+		return nil, fmt.Errorf("shared admission store invalid: %w", err)
 	}
 	admission, err := admissionapp.NewService(
 		environment,
@@ -137,15 +165,15 @@ func run() error {
 		admissionmetrics.NewMetrics(nil),
 	)
 	if err != nil {
-		return fmt.Errorf("admission service invalid: %w", err)
+		return nil, fmt.Errorf("admission service invalid: %w", err)
 	}
 	assignmentStore, err := rolloutredis.New(redisClient)
 	if err != nil {
-		return fmt.Errorf("rollout assignment store invalid: %w", err)
+		return nil, fmt.Errorf("rollout assignment store invalid: %w", err)
 	}
 	allocationKey, err := rolloutapp.AllocationKey(config.Rollout.Enabled, os.LookupEnv)
 	if err != nil {
-		return fmt.Errorf("rollout allocation key invalid: %w", err)
+		return nil, fmt.Errorf("rollout allocation key invalid: %w", err)
 	}
 	rolloutEvaluator, err := rolloutapp.NewEvaluator(
 		config.Rollout.Policy,
@@ -154,11 +182,11 @@ func run() error {
 		30*24*time.Hour,
 	)
 	if err != nil {
-		return fmt.Errorf("rollout evaluator invalid: %w", err)
+		return nil, fmt.Errorf("rollout evaluator invalid: %w", err)
 	}
 	minimumBuildExemptPaths, err := config.minimumBuildExemptPaths()
 	if err != nil {
-		return fmt.Errorf("minimum build exemptions invalid: %w", err)
+		return nil, fmt.Errorf("minimum build exemptions invalid: %w", err)
 	}
 	minimumBuildMiddleware, err := rollouthttp.MinimumBuildMiddleware(
 		config.minimumBuildPolicy(),
@@ -166,22 +194,22 @@ func run() error {
 		newMinimumBuildMetrics(nil),
 	)
 	if err != nil {
-		return fmt.Errorf("minimum build middleware invalid: %w", err)
+		return nil, fmt.Errorf("minimum build middleware invalid: %w", err)
 	}
 
 	descriptors := admissionapp.AllOperationDescriptors()
 	ownerRoutes, err := buildOwnerRoutes(config.Upstreams)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := admissionapp.ValidateDescriptorOwners(descriptors); err != nil {
-		return err
+		return nil, err
 	}
 	var candidateOwnerRoutes []httpadapter.OwnerRoute
 	if config.Rollout.Enabled {
 		candidateOwnerRoutes, err = buildOwnerRoutes(config.CandidateUpstreams)
 		if err != nil {
-			return fmt.Errorf("candidate owner routes invalid: %w", err)
+			return nil, fmt.Errorf("candidate owner routes invalid: %w", err)
 		}
 	}
 	ownerProxy, err := httpadapter.NewOwnerProxy(httpadapter.OwnerProxyConfig{
@@ -191,7 +219,7 @@ func run() error {
 		ContractGraphSHA256:  operationsecurity.ContractGraphSHA256,
 	})
 	if err != nil {
-		return fmt.Errorf("owner proxy invalid: %w", err)
+		return nil, fmt.Errorf("owner proxy invalid: %w", err)
 	}
 	rolloutObserver := rolloutmetrics.NewMetrics(nil)
 
@@ -215,7 +243,7 @@ func run() error {
 		os.LookupEnv,
 	)
 	if err != nil {
-		return fmt.Errorf("operation authorization boundary invalid: %w", err)
+		return nil, fmt.Errorf("operation authorization boundary invalid: %w", err)
 	}
 	businessHandler = operationAuthorization(businessHandler)
 	businessHandler = rollouthttp.MinimumBuildForAuthenticatedClients(
@@ -239,38 +267,38 @@ func run() error {
 			[]byte(config.GraphQLRead.TrustedPublicKeysJSON),
 			&trustedPublicKeys,
 		); err != nil {
-			return fmt.Errorf("GraphQL trusted public keys invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL trusted public keys invalid: %w", err)
 		}
 		signatureVerifier, err := registryinfra.NewEd25519SignatureVerifier(
 			trustedPublicKeys,
 		)
 		if err != nil {
-			return fmt.Errorf("GraphQL registry signature verifier invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL registry signature verifier invalid: %w", err)
 		}
 		registryLoader, err := registryinfra.NewSignedFileLoader(signatureVerifier)
 		if err != nil {
-			return fmt.Errorf("GraphQL signed registry loader invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL signed registry loader invalid: %w", err)
 		}
 		stableContentOrigin, err := parseOrigin(config.Upstreams["content"])
 		if err != nil {
-			return fmt.Errorf("GraphQL stable content owner origin invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL stable content owner origin invalid: %w", err)
 		}
 		var candidateContentOrigin *url.URL
 		if config.Rollout.Enabled {
 			candidateContentOrigin, err = parseOrigin(config.CandidateUpstreams["content"])
 			if err != nil {
-				return fmt.Errorf("GraphQL candidate content owner origin invalid: %w", err)
+				return nil, fmt.Errorf("GraphQL candidate content owner origin invalid: %w", err)
 			}
 		}
 		stableSearchOrigin, err := parseOrigin(config.Upstreams["search"])
 		if err != nil {
-			return fmt.Errorf("GraphQL stable search owner origin invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL stable search owner origin invalid: %w", err)
 		}
 		var candidateSearchOrigin *url.URL
 		if config.Rollout.Enabled {
 			candidateSearchOrigin, err = parseOrigin(config.CandidateUpstreams["search"])
 			if err != nil {
-				return fmt.Errorf("GraphQL candidate search owner origin invalid: %w", err)
+				return nil, fmt.Errorf("GraphQL candidate search owner origin invalid: %w", err)
 			}
 		}
 		contentOwnerCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
@@ -279,7 +307,7 @@ func run() error {
 			[]string{ownerquery.ContentPostOwnerReadScope()},
 		)
 		if err != nil {
-			return fmt.Errorf("GraphQL content owner credentials invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL content owner credentials invalid: %w", err)
 		}
 		contentOwnerExecutor, err := ownerquery.NewContentPostQueryExecutor(
 			stableContentOrigin,
@@ -291,7 +319,7 @@ func run() error {
 			contentOwnerCredentials,
 		)
 		if err != nil {
-			return fmt.Errorf("GraphQL content owner executor invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL content owner executor invalid: %w", err)
 		}
 		searchOwnerCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 			accessConfig,
@@ -299,7 +327,7 @@ func run() error {
 			[]string{ownerquery.SearchOwnerReadScope()},
 		)
 		if err != nil {
-			return fmt.Errorf("GraphQL search owner credentials invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL search owner credentials invalid: %w", err)
 		}
 		searchOwnerAccountCredentials, err := rtauth.NewHS256ServiceAccountAuthorizationProvider(
 			accessConfig,
@@ -307,7 +335,7 @@ func run() error {
 			[]string{ownerquery.SearchOwnerReadScope()},
 		)
 		if err != nil {
-			return fmt.Errorf("GraphQL search owner account credentials invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL search owner account credentials invalid: %w", err)
 		}
 		searchOwnerExecutor, err := ownerquery.NewSearchPageQueryExecutor(
 			stableSearchOrigin,
@@ -320,26 +348,27 @@ func run() error {
 			searchOwnerAccountCredentials,
 		)
 		if err != nil {
-			return fmt.Errorf("GraphQL search owner executor invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL search owner executor invalid: %w", err)
 		}
 		ownerExecutor, err := ownerquery.NewQueryExecutorRouter(
 			contentOwnerExecutor,
 			searchOwnerExecutor,
 		)
 		if err != nil {
-			return fmt.Errorf("GraphQL owner executor router invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL owner executor router invalid: %w", err)
 		}
 		graphRuntime, err = graphread.NewRuntime(context.Background(), graphread.Options{
 			Environment:     environment,
 			Config:          config.GraphQLRead,
 			RegistryLoader:  registryLoader,
 			OwnerExecutor:   ownerExecutor,
+			EntryValidator:  ownerquery.ValidateExecutableEntry,
 			Admission:       admission,
 			Rollout:         rolloutEvaluator,
 			RolloutObserver: rolloutObserver,
 		})
 		if err != nil {
-			return fmt.Errorf("GraphQL read runtime invalid: %w", err)
+			return nil, fmt.Errorf("GraphQL read runtime invalid: %w", err)
 		}
 		graphHandler = graphread.RequestMetadataMiddleware(
 			config.Edge.TrustedNetworkHeader,
@@ -384,21 +413,30 @@ func run() error {
 	}
 	root.Handle("/", businessHandler)
 
-	nodeID := envOrDefault("SERVICE_INSTANCE_ID", hostName())
+	nodeID := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("api-edge", "SERVICE_INSTANCE_ID"),
+	)
+	if nodeID == "" {
+		nodeID = hostName()
+	}
 	otelShutdown := rtotel.MustInit(rtotel.Config{
 		ServiceName:   serviceName,
 		SamplingRatio: 0.1,
 	})
-	defer otelShutdown()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		otelShutdown()
+	})
 	runtimeLogExporter, err := rtobs.NewHTTPRuntimeLogFieldExporter(
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
 	)
 	if err != nil {
-		return fmt.Errorf("runtime log exporter invalid: %w", err)
+		return nil, fmt.Errorf("runtime log exporter invalid: %w", err)
 	}
-	defer runtimeLogExporter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		runtimeLogExporter.Close()
+	})
 	standardLogWriter := rtobs.NewRuntimeLogExportWriter(
 		os.Stdout,
 		512,
@@ -409,8 +447,10 @@ func run() error {
 		512,
 		runtimeLogExporter.Export,
 	)
-	defer standardLogWriter.Close()
-	defer errorLogWriter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		errorLogWriter.Close()
+		standardLogWriter.Close()
+	})
 	ioLogger := rtobs.NewIOAccessLogger(standardLogWriter)
 	filter := rtobs.NewKVMetadataFilter(nil)
 	processLogger, err := rtobs.NewProcessTraceLogger(
@@ -420,11 +460,11 @@ func run() error {
 		filter,
 	)
 	if err != nil {
-		return fmt.Errorf("process logger invalid: %w", err)
+		return nil, fmt.Errorf("process logger invalid: %w", err)
 	}
 	exceptionLogger, err := rtobs.NewExceptionLogger(standardLogWriter, errorLogWriter, filter)
 	if err != nil {
-		return fmt.Errorf("exception logger invalid: %w", err)
+		return nil, fmt.Errorf("exception logger invalid: %w", err)
 	}
 	observed := rthttp.NewHTTPServerMiddleware(
 		root,
@@ -453,8 +493,107 @@ func run() error {
 		WriteTimeout:      timeouts.Write,
 		IdleTimeout:       timeouts.Idle,
 	}
-	log.Printf("api-edge listening on %s contractGraph=%s", server.Addr, operationsecurity.ContractGraphSHA256)
-	return rthttp.ListenAndServeGraceful(server, 15*time.Second)
+	module := &Module{
+		configDigest: strings.TrimSpace(
+			servicehost.ModuleEnvironmentValue("api-edge", "CONFIG_VERSION"),
+		),
+		server:     server,
+		readiness:  readiness,
+		serveError: make(chan error, 1),
+		cleanup:    cleanup,
+	}
+	if module.configDigest == "" {
+		module.configDigest = operationsecurity.ContractGraphSHA256
+	}
+	server.Handler = module.admissionHandler(server.Handler)
+	initialized = true
+	return module, nil
+}
+
+func (module *Module) Name() string { return "api-edge" }
+
+func (module *Module) ConfigDigest() string {
+	if module == nil {
+		return ""
+	}
+	return module.configDigest
+}
+
+func (module *Module) ValidateConfig(context.Context) error {
+	if module == nil || module.server == nil || module.readiness == nil || module.cleanup == nil {
+		return errors.New("api-edge module is incomplete")
+	}
+	return nil
+}
+
+func (module *Module) PrepareMigration(context.Context) error {
+	return nil
+}
+
+func (module *Module) Bind(context.Context) error {
+	listener, err := net.Listen("tcp", module.server.Addr)
+	if err != nil {
+		return fmt.Errorf("api-edge listener bind: %w", err)
+	}
+	module.listener = listener
+	return nil
+}
+
+func (module *Module) Start(context.Context) error {
+	if module.listener == nil {
+		return errors.New("api-edge listener is not bound")
+	}
+	go func() {
+		if err := module.server.Serve(module.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			module.serveError <- err
+		}
+	}()
+	return nil
+}
+
+func (module *Module) Ready(ctx context.Context) error {
+	if result := module.readiness.Check(ctx); result.Status != "ok" {
+		return fmt.Errorf("api-edge readiness failed: %v", result.FailedChecks)
+	}
+	select {
+	case err := <-module.serveError:
+		return fmt.Errorf("api-edge listener failed: %w", err)
+	default:
+		return nil
+	}
+}
+
+func (module *Module) OpenAdmission(context.Context) error {
+	module.admission.Store(true)
+	return nil
+}
+
+func (module *Module) Shutdown(ctx context.Context) error {
+	module.admission.Store(false)
+	var result error
+	if module.server != nil {
+		result = errors.Join(result, module.server.Shutdown(ctx))
+	}
+	if module.cleanup != nil {
+		module.cleanup()
+		module.cleanup = nil
+	}
+	return result
+}
+
+func (module *Module) admissionHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/healthz", "/readyz", "/metrics":
+			next.ServeHTTP(writer, request)
+			return
+		}
+		if !module.admission.Load() {
+			writeUnavailable(writer)
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
 }
 
 type minimumBuildMetrics struct {

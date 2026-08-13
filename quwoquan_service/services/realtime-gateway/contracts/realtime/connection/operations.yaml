@@ -629,3 +629,11 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/api_integration/service/realtime_gateway/realtime/connection/connection_remote__api_integration_test.dart
   executions:
   - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: connection_transport_conformance_ops_env
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-002
+  producer: ops
+  layer: environment_acceptance
+  target: {kind: object, id: realtime.connection}
+  runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/realtime-gateway/ci/message_transport_provider_conformance.py
+  executions:
+    - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}

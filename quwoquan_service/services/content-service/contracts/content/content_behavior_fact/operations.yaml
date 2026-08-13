@@ -18,7 +18,7 @@ api_routes:
       invariant_target: ContentBehaviorFact
     request_entity: ReportContentBehaviorsCommand
     authorization:
-      principal: public
+      principal: persona_or_device
       ownership_policy: authenticated_persona_or_derived_device_actor
     commercial:
       status: ready

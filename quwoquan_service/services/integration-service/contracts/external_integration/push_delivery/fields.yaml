@@ -1,4 +1,4 @@
-description: PushDelivery 防腐层引用与其五类领域事件载荷的唯一字段真相源。
+description: PushDelivery 防腐层引用与其五类领域事件载荷的唯一字段真相源。callId 仅来电类别（action=ring/cancel）携带；通用 alert 类别（action=alert）无 callId。
 fields:
 - name: endpointRef
   source: endpointRef
@@ -26,7 +26,7 @@ types:
     - {name: action, type: enum, enum_ref: PushDeliveryAction, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: endpointRef, type: string, constraints: [NOT_NULL], classification: SECRET, log_policy: hash, api_exposure: none, ops_exposure: none}
     - {name: deliveryKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
-    - {name: callId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: callId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: callType, type: enum, enum_ref: CallType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: queuedAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
   PushDeliveryProviderAttemptedEvent:
@@ -42,7 +42,7 @@ types:
     - {name: requestId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
     - {name: action, type: enum, enum_ref: PushDeliveryAction, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: deliveryKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
-    - {name: callId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: callId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: provider, type: enum, enum_ref: ExternalInteractionProvider, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: providerRequestDigest, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: none, ops_exposure: read}
     - {name: status, type: enum, enum_ref: ExternalInteractionAttemptStatus, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
@@ -51,7 +51,7 @@ types:
     - {name: requestId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
     - {name: action, type: enum, enum_ref: PushDeliveryAction, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: deliveryKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
-    - {name: callId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: callId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: provider, type: enum, enum_ref: ExternalInteractionProvider, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
     - {name: normalizedError, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
     - {name: recoveryAction, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}

@@ -28,6 +28,7 @@ type FeedService struct {
 	objectCardPolicy func() recpolicy.ObjectCardConfig
 	filterObserver   FeedFilterObserver
 	viewerBlocks     FeedViewerBlockReader
+	viewerReactions  FeedViewerReactionReader
 	activeSupply     ActiveSupplyReader
 	cursorCodec      *FeedCursorCodec
 	deliveryPages    deliveryapp.Store
@@ -77,6 +78,49 @@ type FeedViewerBlockReader interface {
 func WithFeedViewerBlockReader(reader FeedViewerBlockReader) FeedServiceOption {
 	return func(service *FeedService) {
 		service.viewerBlocks = reader
+	}
+}
+
+// FeedViewerReactionReader 返回 viewer persona 对一批 Post 的点赞事实
+// （postId → true）。真相源是 content_reaction 聚合，跨对象实现只在 cmd 组合。
+type FeedViewerReactionReader interface {
+	ReadPostLikedFlags(
+		ctx context.Context,
+		viewerPersonaID string,
+		postIDs []string,
+	) (map[string]bool, error)
+}
+
+func WithFeedViewerReactionReader(reader FeedViewerReactionReader) FeedServiceOption {
+	return func(service *FeedService) {
+		service.viewerReactions = reader
+	}
+}
+
+// attachViewerLiked 为 items 附着 viewer 点赞态（契约字段 viewerLiked）。
+// 匿名 viewer 或未装配 reader 时保持 null（契约声明的未附着态）；读失败与
+// 交集附着同一纪律——静默降级为未附着，不阻断内容主路径，端侧不得据 null
+// 回滚本地状态。
+func (s *FeedService) attachViewerLiked(
+	ctx context.Context,
+	viewerPersonaID string,
+	items []FeedItemView,
+) {
+	viewerPersonaID = strings.TrimSpace(viewerPersonaID)
+	if s.viewerReactions == nil || viewerPersonaID == "" || len(items) == 0 {
+		return
+	}
+	postIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		postIDs = append(postIDs, item.PostID)
+	}
+	flags, err := s.viewerReactions.ReadPostLikedFlags(ctx, viewerPersonaID, postIDs)
+	if err != nil {
+		return
+	}
+	for i := range items {
+		liked := flags[items[i].PostID]
+		items[i].ViewerLiked = &liked
 	}
 }
 
@@ -161,7 +205,10 @@ type FeedItemView struct {
 	LikeCount                int64    `json:"likeCount"`
 	CommentCount             int64    `json:"commentCount"`
 	ShareCount               int64    `json:"shareCount"`
-	CreatedAt                string   `json:"createdAt"`
+	// ViewerLiked viewer 维度点赞态：true/false 为服务端权威值；nil（wire 省略）
+	// 表示本次响应未附着 viewer 态（匿名请求或附着降级），端侧不得据此回滚本地态。
+	ViewerLiked *bool  `json:"viewerLiked,omitempty"`
+	CreatedAt   string `json:"createdAt"`
 	// UpdatedAt 最后实质更新时间；与 createdAt 相等或更早时端只显示创作时间。零值省略。
 	UpdatedAt string `json:"updatedAt,omitempty"`
 	// PublishedAt 首次公开时间；零值（未发布/未知）时省略。
@@ -173,6 +220,11 @@ type FeedItemView struct {
 	RecallPath      string  `json:"recallPath,omitempty"`
 	ContentVertical string  `json:"contentVertical,omitempty"`
 	SupplySource    string  `json:"supplySource,omitempty"`
+	// PrimaryHomepageID/Type 主实体锚点：想去 CTA 与实体跳转的意图信号源。
+	PrimaryHomepageID   string `json:"primaryHomepageId,omitempty"`
+	PrimaryHomepageType string `json:"primaryHomepageType,omitempty"`
+	// GatheringRef 共同经历回流引用：feed 卡溯源标的物理载体。
+	GatheringRef string `json:"gatheringRef,omitempty"`
 }
 
 type ListFeedResponse struct {
@@ -474,6 +526,9 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			RecallPath:               recallPath,
 			ContentVertical:          contentVertical,
 			SupplySource:             supplySource,
+			PrimaryHomepageID:        post.PrimaryHomepageID,
+			PrimaryHomepageType:      post.PrimaryHomepageType,
+			GatheringRef:             post.GatheringRef,
 		})
 		if canonicalReleasePostDelivered(
 			post,
@@ -513,8 +568,10 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		if len(replay.items) == 0 {
 			terminalOutcome = rtrec.FeedTerminalEmpty
 		}
+		replayItems := append([]FeedItemView{}, replay.items...)
+		s.attachViewerLiked(ctx, req.ViewerPersonaID, replayItems)
 		return &ListFeedResponse{
-			Items:               append([]FeedItemView{}, replay.items...),
+			Items:               replayItems,
 			Outcome:             feedOutcomeForItemCount(len(replay.items)),
 			EmptyReason:         feedEmptyReasonForContinuation(len(replay.items)),
 			ObjectCards:         append([]ObjectCardView{}, replay.objectCards...),
@@ -812,8 +869,10 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		requestedCursor,
 		route.FeedType == rtrec.FeedFollow,
 	)
+	responseItems := append([]FeedItemView{}, views...)
+	s.attachViewerLiked(ctx, req.ViewerPersonaID, responseItems)
 	return &ListFeedResponse{
-		Items:               append([]FeedItemView{}, views...),
+		Items:               responseItems,
 		Outcome:             responseOutcome,
 		EmptyReason:         responseEmptyReason,
 		ObjectCards:         append([]ObjectCardView{}, objectCards...),

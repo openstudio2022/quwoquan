@@ -1,9 +1,10 @@
-package main
+package bootstrap
 
 import (
 	"fmt"
 	"os"
 	configrelease "quwoquan_service/runtime/configrelease"
+	"quwoquan_service/runtime/servicehost"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -58,10 +59,18 @@ type config struct {
 }
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = getenvOrDefault("SERVICE_NAME", "user-service")
+	serviceName = strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("user-service", "SERVICE_NAME"),
+	)
+	if serviceName == "" {
+		serviceName = "user-service"
+	}
 	appEnv = getenvOrDefault("APP_ENV", "alpha")
 	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = os.Getenv("CONFIG_VERSION")
+	configVersion = servicehost.ModuleEnvironmentValue(
+		"user-service",
+		"CONFIG_VERSION",
+	)
 	imageVersion = os.Getenv("IMAGE_VERSION")
 	if !isValidAppEnv(appEnv) {
 		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)

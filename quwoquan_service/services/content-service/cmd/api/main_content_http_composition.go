@@ -1,10 +1,12 @@
-package main
+package bootstrap
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	rthealth "quwoquan_service/runtime/health"
@@ -13,6 +15,7 @@ import (
 	rtredis "quwoquan_service/runtime/redis"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	commenthttp "quwoquan_service/services/content-service/internal/content/comment/adapters/inbound/http"
+	contentpublicweb "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commentpersistence "quwoquan_service/services/content-service/internal/content/comment/infrastructure/persistence"
 	behaviorhttp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/adapters/inbound/http"
@@ -20,6 +23,7 @@ import (
 	behaviorpersistence "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/persistence"
 	reactionhttp "quwoquan_service/services/content-service/internal/content/content_reaction/adapters/inbound/http"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
+	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	reactionpersistence "quwoquan_service/services/content-service/internal/content/content_reaction/infrastructure/persistence"
 	deliverypost "quwoquan_service/services/content-service/internal/content/feed_delivery_page/adapters/inbound/post"
 	deliveryapp "quwoquan_service/services/content-service/internal/content/feed_delivery_page/application"
@@ -61,6 +65,7 @@ import (
 
 type contentHTTPHandlerInput struct {
 	ctx                          context.Context
+	workers                      *workerRegistry
 	logger                       *slog.Logger
 	healthChecker                *rthealth.Checker
 	router                       *rtredis.Router
@@ -91,6 +96,7 @@ type contentHTTPHandlerInput struct {
 	wishlistStateReader          ports.WishlistStateReader
 	dailyMetricsStore            *behaviorpersistence.DailyMetricsStore
 	authorImpactProjectionReader ports.AuthorImpactProjectionReader
+	gatheringSocialProofReader   ports.GatheringSocialProofProjectionReader
 	intersectionService          *intersectionapp.IntersectionService
 	outboundShareFacades         *outboundshareapp.Facades
 	profileInteractionFacades    *profileinteractionapp.Facades
@@ -101,10 +107,14 @@ type contentHTTPHandlerInput struct {
 type contentHTTPHandlers struct {
 	business        http.Handler
 	internalGraphQL http.Handler
+	// publicWeb 是 post 对象的公开 SEO HTML 读面（public-content-web-entry
+	// 第一段）；未配置 CONTENT_PUBLIC_WEB_ORIGIN 时为 nil，不暴露该面。
+	publicWeb http.Handler
 }
 
-func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers {
+func buildContentHTTPHandler(input contentHTTPHandlerInput) (contentHTTPHandlers, error) {
 	ctx := input.ctx
+	workers := input.workers
 	logger := input.logger
 	healthChecker := input.healthChecker
 	router := input.router
@@ -153,13 +163,13 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 		feedServiceOpts = append(feedServiceOpts, feedapp.WithFeedIntersectionProvider(intersectionService))
 	}
 	if activeSupplyReader == nil {
-		log.Fatal("content-service active supply reader is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service active supply reader is not configured")
 	}
 	if feedCursorCodec == nil {
-		log.Fatal("content-service feed cursor codec is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service feed cursor codec is not configured")
 	}
 	if rankedRecommendation == nil {
-		log.Fatal("content-service ranked recommendation gateway is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service ranked recommendation gateway is not configured")
 	}
 	feedServiceOpts = append(
 		feedServiceOpts,
@@ -181,29 +191,37 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 		),
 	)
 	if postQueryReader == nil {
-		log.Fatal("content-service Post query reader is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service Post query reader is not configured")
 	}
 	if viewerBlockReader == nil {
-		log.Fatal("content-service viewer block reader is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service viewer block reader is not configured")
 	}
+	if input.reactionStore == nil {
+		return contentHTTPHandlers{}, fmt.Errorf("content-service reaction store is not configured")
+	}
+	viewerReactionReader := viewerPostReactionReader{store: input.reactionStore}
 	feedServiceOpts = append(
 		feedServiceOpts,
 		feedapp.WithFeedViewerBlockReader(viewerBlockReader),
+		feedapp.WithFeedViewerReactionReader(viewerReactionReader),
 	)
 	feedService := feedapp.NewFeedService(postQueryReader, feedServiceOpts...)
 	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
 		Detail:       postQueryReader,
 		Author:       postQueryReader,
+		Gathering:    postQueryReader,
+		SocialProof:  input.gatheringSocialProofReader,
 		Tombstones:   store,
 		ViewerBlocks: viewerBlockReader,
 	})
 	if reactionStore == nil || reactionServiceCore == nil || commentDataAdapter == nil || commentServiceCore == nil {
-		log.Fatal("content-service Comment/ContentReaction object composition is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service Comment/ContentReaction object composition is not configured")
 	}
 	reactionService := reactionapp.BindFacades(reactionServiceCore)
 	commentService := commentapp.BindFacades(commentServiceCore)
 	startCommentReportModerationProjection(
 		ctx,
+		workers,
 		reportStore,
 		commentService,
 		healthChecker,
@@ -216,12 +234,13 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 	postServiceCore := postapp.NewPostService(postDataPorts, postServiceOpts...)
 	postService := postapp.BindFacades(postServiceCore)
 	if moderationStore == nil {
-		log.Fatal("content-service PostModerationCase store is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service PostModerationCase store is not configured")
 	}
 	// 审核决定 → Post lifecycle：独立 moderation outbox checkpoint，
 	// 仅 exact post revision 可执行内部三次 CAS；无公开 If-Match/Saga。
 	startModerationOutboxRelay(
 		ctx,
+		workers,
 		moderationStore,
 		moderationStore,
 		postapp.NewPostModerationDecisionHandler(postService),
@@ -257,7 +276,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 		behaviorapp.WithFeedPatchEmitter(feedPatchEmitter),
 	}
 	if onboardingTaxonomy == nil {
-		log.Fatal("content-service onboarding interest taxonomy validator is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service onboarding interest taxonomy validator is not configured")
 	}
 	behaviorOpts = append(
 		behaviorOpts,
@@ -280,7 +299,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 		)
 	}
 	if intersectionService == nil {
-		log.Fatal("content-service IntersectionVisitState object composition is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service IntersectionVisitState object composition is not configured")
 	}
 	handlerOpts = append(
 		handlerOpts,
@@ -296,14 +315,14 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 		httpadapter.WithContentBehaviorHandler(behaviorhttp.NewHandler(behaviorService)),
 	)
 	if outboundShareFacades == nil {
-		log.Fatal("content-service OutboundShareFact object composition is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service OutboundShareFact object composition is not configured")
 	}
 	handlerOpts = append(
 		handlerOpts,
 		httpadapter.WithOutboundShareHandler(outboundsharehttp.NewHandler(outboundShareFacades)),
 	)
 	if profileInteractionFacades == nil {
-		log.Fatal("content-service ProfileInteraction object composition is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service ProfileInteraction object composition is not configured")
 	}
 	handlerOpts = append(
 		handlerOpts,
@@ -313,7 +332,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 		),
 	)
 	if filterCatalogFacades == nil {
-		log.Fatal("content-service FilterCatalogRelease object composition is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service FilterCatalogRelease object composition is not configured")
 	}
 	handlerOpts = append(
 		handlerOpts,
@@ -322,7 +341,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 		),
 	)
 	if moderationFacades == nil {
-		log.Fatal("content-service PostModerationCase object composition is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service PostModerationCase object composition is not configured")
 	}
 	handlerOpts = append(
 		handlerOpts,
@@ -335,16 +354,24 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 		httpadapter.WithMediaAssetHandler(mediaassethttp.NewHandler(mediaService)),
 	)
 	if originalAccessQuotaService == nil {
-		log.Fatal("content-service OriginalAccessQuota object composition is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service OriginalAccessQuota object composition is not configured")
+	}
+	if input.mediaRuntime.originalAccessAuditQuery == nil {
+		return contentHTTPHandlers{}, fmt.Errorf("content-service OriginalAccessQuota audit readback composition is not configured")
 	}
 	handlerOpts = append(
 		handlerOpts,
 		httpadapter.WithOriginalAccessQuotaHandler(
-			originalaccessquotahttp.NewHandler(originalAccessQuotaService),
+			originalaccessquotahttp.NewHandler(
+				originalAccessQuotaService,
+				originalaccessquotahttp.WithAuditQuery(
+					input.mediaRuntime.originalAccessAuditQuery,
+				),
+			),
 		),
 	)
 	if input.mediaRuntime.mediaUploadSessionService == nil {
-		log.Fatal("content-service MediaUploadSession object composition is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service MediaUploadSession object composition is not configured")
 	}
 	handlerOpts = append(
 		handlerOpts,
@@ -353,7 +380,7 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 		),
 	)
 	if mediaImageReprocessService == nil {
-		log.Fatal("content-service MediaImageReprocessRun object composition is not configured")
+		return contentHTTPHandlers{}, fmt.Errorf("content-service MediaImageReprocessRun object composition is not configured")
 	}
 	handlerOpts = append(
 		handlerOpts,
@@ -364,6 +391,10 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 	if authorImpactProjectionReader != nil {
 		handlerOpts = append(handlerOpts, httpadapter.WithAuthorImpactProjectionReader(authorImpactProjectionReader))
 	}
+	handlerOpts = append(
+		handlerOpts,
+		httpadapter.WithViewerReactionReader(viewerReactionReader),
+	)
 
 	contentHandler := httpadapter.NewContentHandler(
 		feedService,
@@ -381,12 +412,48 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) contentHTTPHandlers 
 		input.contractGraphSHA256,
 	)
 	if err != nil {
-		log.Fatalf("content-service internal GraphQL handler invalid: %v", err)
+		return contentHTTPHandlers{}, fmt.Errorf("content-service internal GraphQL handler invalid: %w", err)
+	}
+	// 公开 SEO HTML 读面（public-content-web-entry 第一段）：只在部署层
+	// 配置公开 Web origin 时暴露；可见性复用 GetPost 公开读语义。正文图片
+	// 的公网地址由 CONTENT_PUBLIC_WEB_CDN_ORIGIN + PublicSliceKey 派生。
+	var publicWebHandler http.Handler
+	if origin := strings.TrimSpace(
+		os.Getenv("CONTENT_PUBLIC_WEB_ORIGIN"),
+	); origin != "" {
+		publicWebHandler = contentpublicweb.NewHandler(
+			origin,
+			os.Getenv("CONTENT_PUBLIC_WEB_CDN_ORIGIN"),
+			postQueryService,
+			postQueryReader,
+		).Routes()
 	}
 	return contentHTTPHandlers{
 		business:        contentHandler,
 		internalGraphQL: internalGraphQLHandler,
+		publicWeb:       publicWebHandler,
+	}, nil
+}
+
+// viewerPostReactionReader 把 content_reaction 聚合的批量点赞读适配为 post
+// feed/详情的 FeedViewerReactionReader 端口；跨对象 adapter 只在 cmd 组合。
+type viewerPostReactionReader struct {
+	store *reactionpersistence.MongoContentReactionStore
+}
+
+func (r viewerPostReactionReader) ReadPostLikedFlags(
+	ctx context.Context,
+	viewerPersonaID string,
+	postIDs []string,
+) (map[string]bool, error) {
+	actor, err := reactiondomain.NewActor(
+		reactiondomain.ActorDimensionPersona,
+		viewerPersonaID,
+	)
+	if err != nil {
+		return nil, err
 	}
+	return r.store.ReadPostReactionLikedFlags(ctx, actor, postIDs)
 }
 
 func buildOnboardingInterestTaxonomyValidator(

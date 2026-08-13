@@ -27,12 +27,20 @@ externalDependencies:
         endpointEnvs: {base: INTEGRATION_LOCATION_NOMINATIM_BASE_URL}
         secretRefs: []
         defaultTimeoutMs: 5000
+      ext.map.nominatim.protocol_substitute:
+        endpointEnvs: {base: INTEGRATION_LOCATION_NOMINATIM_BASE_URL}
+        secretRefs: []
+        defaultTimeoutMs: 5000
   - capability: location.route.read
     port: LocationRouteReadPort
     operations: [route]
     conformance: location_route_read
     adapterContracts:
       ext.route.osrm:
+        endpointEnvs: {base: INTEGRATION_LOCATION_OSRM_BASE_URL}
+        secretRefs: []
+        defaultTimeoutMs: 8000
+      ext.route.osrm.protocol_substitute:
         endpointEnvs: {base: INTEGRATION_LOCATION_OSRM_BASE_URL}
         secretRefs: []
         defaultTimeoutMs: 8000

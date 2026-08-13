@@ -59,20 +59,25 @@ PROVIDER_RUNTIME_SOURCE_REQUIREMENTS = {
         "validate_provider_runtime_composition",
         "load_and_compile",
     ),
-    "quwoquan_ops/cli/lib/deployment_candidate_manifest.py": (
+    "quwoquan_ops/cli/lib/deployment_candidate_manifest/provider_runtime_package.py": (
         '"providerRuntime"',
         "validate_packaged_provider_runtime",
         "seal_provider_runtime_package_images",
     ),
-    "quwoquan_ops/cli/stackctl.py": (
+    # stackctl.py 已按域拆分为 commands/ 包；token 位于对应域模块。
+    "quwoquan_ops/cli/commands/provider_runtime_binding.py": (
         "_active_provider_runtime(",
         "QWQ_PROVIDER_RUNTIME_COMPOSE_FILES",
+    ),
+    "quwoquan_ops/cli/commands/up_domain.py": (
         "providerRuntimeDigest",
     ),
-    "quwoquan_ops/cli/lib/startup_attempt_receipt.py": (
+    # startup_attempt_receipt 已由单文件拆分为同名包；token 位于 constants 子模块。
+    "quwoquan_ops/cli/lib/startup_attempt_receipt/constants.py": (
         '"providerRuntimeDigest"',
     ),
-    "quwoquan_ops/cli/lib/local_env_gate_matrix.py": (
+    # local_env_gate_matrix 已由单文件拆分为同名包；token 位于 evidence 子模块。
+    "quwoquan_ops/cli/lib/local_env_gate_matrix/evidence.py": (
         "validate_packaged_provider_runtime",
     ),
     "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh": (
@@ -172,7 +177,7 @@ def message_transport_observability_issues(
         dashboard_source = json.loads(dashboard_path.read_text(encoding="utf-8"))
     dashboard_expressions = {
         target.get("expr")
-        for row in dashboard_source.get("dashboard", {}).get("panels", [])
+        for row in dashboard_source.get("panels", [])
         if isinstance(row, dict)
         for target in row.get("targets", [])
         if isinstance(target, dict)

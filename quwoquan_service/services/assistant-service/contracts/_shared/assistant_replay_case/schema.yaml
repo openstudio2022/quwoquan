@@ -24,7 +24,22 @@ subcontracts:
       - { name: inputText, type: string, default: '' }
       - { name: skillId, type: string, required: true }
       - { name: domainId, type: string, required: true }
+      # 空值表示 reactive(必须经 production routing);"proactive" 表示订阅触发,
+      # 必须携带 trustedTriggerIdentity,缺失时执行 fail-closed。
+      - { name: triggerType, type: string, default: '' }
+      - { name: trustedTriggerIdentity, type: object, ref: trusted_trigger_identity, default: {} }
       - { name: clientContext, type: map, default: {} }
+  trusted_trigger_identity:
+    class_name: AssistantReplayTrustedTriggerIdentityWire
+    fields:
+      - { name: kind, type: string, default: '' }
+      - { name: triggerId, type: string, default: '' }
+      - { name: occurredAt, type: string, default: '' }
+      - { name: subscriptionRef, type: string, default: '' }
+      - { name: signalRefs, type: list<string>, default: [] }
+      - { name: reason, type: string, default: '' }
+      - { name: dedupeKey, type: string, default: '' }
+      - { name: deliveryPolicyRef, type: string, default: '' }
   model_step:
     class_name: AssistantReplayModelStepWire
     fields:
@@ -40,6 +55,8 @@ subcontracts:
       - { name: input, type: map, default: {} }
       - { name: result, type: map, default: {} }
       - { name: failure, type: map, default: {} }
+      # 空值表示 completed;"waiting_confirmation" 模拟需要用户审批的工具提案。
+      - { name: status, type: string, default: '' }
   expectations:
     class_name: AssistantReplayExpectationsWire
     fields:

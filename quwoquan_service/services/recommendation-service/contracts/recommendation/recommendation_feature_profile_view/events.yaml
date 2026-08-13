@@ -1,0 +1,8 @@
+description: RecommendationFeatureProfileView 的派生事实事件；只在诚实事实转变时发布，不携带未公开参与者身份。
+events:
+- name: IntersectionFacilitationRecorded
+  description: 某次 Gathering 首次达成经历级（≥2 名 active 参与者各自持有 active 公开回顾）且溯源链回到创作者内容时，向每位种草内容创作者发布一次促成事实；同一 Gathering 只发布一次，不重复、不计分。payload 只携带计数与公开经历引用（gatheringId 可回链公开详情与共同经历聚合区），不暴露参与者名单。
+  delivery_semantics: durable_stream
+  topic: events.recommendation.intersections
+  payload_entity: IntersectionFacilitationEventPayload
+  payload_fields: [facilitationId, gatheringId, creatorPersonaId, seedPostId, occurredAt]

@@ -67,6 +67,22 @@ assistant_access:
     mode: public
     scopes:
     - assistant.circle.circle.read
+    reader:
+      descriptor_id: circle.circle_context
+      resolver_ref: circle.current_context
+      owner_service: circle-service
+      owner_operation_ref: circle.circle.GetCircle
+      input_schema_ref: circle.CircleDetailQuery
+      output_schema_ref: assistant.ContextSegment
+      object_type_ref: circle.Circle
+      authority: domain_canonical
+      sensitivity: public
+      accepted_source_kinds: [domain]
+      surface_kinds: [personal, shared, public]
+      max_freshness_seconds: 900
+      cache_ttl_seconds: 60
+      artifact_policy: inline_bounded
+      citation_policy: entity_reference
   cite:
     mode: public_citation
     scopes:

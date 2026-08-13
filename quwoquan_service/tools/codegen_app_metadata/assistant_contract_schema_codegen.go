@@ -372,7 +372,15 @@ func renderAssistantSchemaClass(
 	}
 	b.WriteString("  });\n\n")
 	for _, field := range fields {
-		b.WriteString(fmt.Sprintf("  final %s %s;\n", assistantResolveFieldDartType(field, schema, index), field.Name))
+		dartType := assistantResolveFieldDartType(field, schema, index)
+		b.WriteString(fmt.Sprintf("  final %s %s;\n", dartType, field.Name))
+		recordEnumFieldBinding(enumFieldBinding{
+			DartClass:    className,
+			DartField:    field.Name,
+			DartType:     dartType,
+			EnumRef:      field.EnumRef,
+			ContractType: field.Type,
+		})
 	}
 	b.WriteString("\n")
 	b.WriteString(fmt.Sprintf(

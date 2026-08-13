@@ -468,6 +468,39 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /auth/research/session/attestation:
+        get:
+            operationId: GetResearchSessionAttestation
+            x-contract-operation-id: user.account_session.GetResearchSessionAttestation
+            x-object-id: user.account_session
+            x-actor: account
+            x-application:
+                kind: query
+                facet: ResearchSessionQueryFacade
+                method: getResearchSessionAttestation
+                reader: ResearchSessionAttestationReader
+                slice: ResearchSessionAttestationView
+            parameters:
+                - name: X-Research-Identity-Attestation
+                  in: header
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ResearchSessionAttestationView'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /auth/token/refresh:
         post:
             operationId: RefreshToken
@@ -3795,6 +3828,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RelationshipView
+            x-contract-placeholder: true
+        ResearchSessionAttestationView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ResearchSessionAttestationView
             x-contract-placeholder: true
         ResolveOneTapLoginHintCommand:
             type: object

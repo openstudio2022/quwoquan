@@ -573,6 +573,51 @@ func (s *MongoContentReactionStore) ReadCommentReactionValues(
 	return values, nil
 }
 
+// ReadPostReactionLikedFlags 批量返回 actor 对一批 Post 的点赞事实
+// （postId → true；未点赞的 post 不出现在结果中）。供 feed/详情读路径
+// 附着 viewerLiked 投影字段，真相源与 LikePost/UnlikePost 同一聚合集合。
+func (s *MongoContentReactionStore) ReadPostReactionLikedFlags(
+	ctx context.Context,
+	actor reactiondomain.Actor,
+	postIDs []string,
+) (map[string]bool, error) {
+	if err := actor.Validate(); err != nil {
+		return nil, err
+	}
+	ids := uniqueNonEmptyStrings(postIDs)
+	flags := map[string]bool{}
+	if len(ids) == 0 {
+		return flags, nil
+	}
+	cursor, err := s.aggregates.Find(
+		ctx,
+		bson.M{
+			"targetKind":     string(reactiondomain.TargetKindPost),
+			"targetId":       bson.M{"$in": ids},
+			"actorDimension": string(actor.Dimension),
+			"actorId":        actor.ID,
+			"reaction":       string(reactiondomain.ValueLike),
+		},
+		options.Find().SetProjection(bson.M{"targetId": 1}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+	var rows []struct {
+		TargetID string `bson:"targetId"`
+	}
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		if row.TargetID != "" {
+			flags[row.TargetID] = true
+		}
+	}
+	return flags, nil
+}
+
 // ReadAuthorLikedFlags 批量返回「Post 作者赞过该评论」事实：入参按 postAuthorId
 // 分组 commentIds，单次 $or 查询覆盖全部分组，返回 commentId → liked。
 func (s *MongoContentReactionStore) ReadAuthorLikedFlags(

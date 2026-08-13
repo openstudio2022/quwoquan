@@ -73,6 +73,64 @@ api_routes:
       visibility: private
     description: 校验 MediaAsset named Reader、引用 Post named visibility reader 与资产策略后，在 viewer/media/purpose 窗口内原子预留一次额度并签发短时原图访问授权。
     request_body_kind: object
+  - method: GET
+    path: /content/media/original-access-audits/{auditId}
+    operation: GetOriginalImageAccessAudit
+    actor: persona
+    application:
+      kind: query
+      facet: OriginalAccessAuditQueryFacade
+      method: getOriginalImageAccessAudit
+      reader: OriginalAccessAuditReader
+      slice: OriginalImageAccessAuditView
+    authorization:
+      principal: persona
+      ownership_policy: original_access_audit_owner
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.unauthorized
+      - CONTENT.USER.original_access_denied
+      - CONTENT.SYSTEM.storage_read_failed
+    privacy:
+      request_classification: INTERNAL
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: content_media_original_access_audit_readback
+      trace: true
+      attributes:
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    request_entity: GetOriginalImageAccessAuditQuery
+    request_body_kind: none
+    request_bindings:
+      path:
+        - name: auditId
+          field: auditId
+    response_fields:
+      - auditId
+      - mediaId
+      - outcome
+      - ttlSeconds
+      - expiresAt
+    response_entity: OriginalImageAccessAuditView
+    response_body: OriginalImageAccessAuditView
+    response_body_kind: object
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    description: grant 所属 persona（含研究态受管身份）回读自身原图访问 audit 事实；audit 缺失或非本人一律按拒绝 fail closed，不暴露存在性。
 consumers:
   - name: app
     capabilities:
@@ -94,6 +152,14 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/content-service/tests/api_integration/media/original_access_quota/http_mongo_reserve__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+  - case_id: get-original-image-access-audit-local
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target: {kind: operation, id: GetOriginalImageAccessAudit}
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/media/original_access_quota/application/audit_readback__security__local_contract_test.go
+    executions:
+      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
   - case_id: original_access_quota_reserve_original_image_access_grant_app_local
     spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-003
     producer: app

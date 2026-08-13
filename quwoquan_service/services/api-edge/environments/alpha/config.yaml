@@ -26,5 +26,8 @@ overrides:
   sys.api-edge.rate_limit.operation.content_post_get_feed.limit: 400
   sys.api-edge.rate_limit.operation.content_post_get_feed.window_seconds: 1
   sys.api-edge.rate_limit.operation.content_post_get_feed.state_failure: fail_closed
+  sys.api-edge.rate_limit.operation.ops_recovery_failure_report.limit: 30
+  sys.api-edge.rate_limit.operation.ops_recovery_failure_report.window_seconds: 60
+  sys.api-edge.rate_limit.operation.ops_recovery_failure_report.state_failure: fail_closed
 secretRefs: {}
 externalBindings: {}

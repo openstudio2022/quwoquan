@@ -12,6 +12,10 @@ USER_ACCOUNT_STREAM = "events.user.account"
 USER_ACCOUNT_RESTRICTION_DLQ = (
     "events.user.account.recommendation-candidate-restriction.dlq"
 )
+
+from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.projection_metrics import (
+    record_projection_outcome,
+)
 CONSUMER_GROUP = "recommendation-candidate-account-restriction"
 MAX_ATTEMPTS = 5
 RETENTION_SECONDS = 7 * 24 * 60 * 60
@@ -272,6 +276,15 @@ class UserAccountRestrictionConsumer:
         self._projection.clear_source_failure(failure_id)
 
     def process_once(self) -> int:
+        try:
+            processed = self._process_once_inner()
+        except Exception:
+            record_projection_outcome("user_account_restriction", "error")
+            raise
+        record_projection_outcome("user_account_restriction", "ok")
+        return processed
+
+    def _process_once_inner(self) -> int:
         self.ensure_group()
         seen: set[str] = set()
         messages: list[tuple[str, dict[str, str]]] = []

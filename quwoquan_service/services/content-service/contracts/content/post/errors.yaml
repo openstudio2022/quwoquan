@@ -53,6 +53,19 @@ errors:
   user_message:
     zh: 无权编辑此内容
     en: Not allowed to edit this post
+- code: CONTENT.USER.gathering_participation_required
+  reason: forbidden
+  http_status: 403
+  emitted_by:
+  - surface: http
+    operations: [SubmitPostPublication]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: gatheringParticipationRequired
+  go_const: ErrGatheringParticipationRequired
+  user_message:
+    zh: 只有这次行动的有效参与者才能关联共同经历
+    en: Only an active participant of this gathering can attach it to a post
 - code: CONTENT.USER.forbidden_delete
   reason: forbidden
   http_status: 403
@@ -114,6 +127,7 @@ errors:
     - content.media_asset.SelectAutoVideoCover
     - content.media_asset.SelectManualVideoCover
     - content.media_asset.UpdateMediaAssetAccessPolicy
+    - content.original_access_quota.GetOriginalImageAccessAudit
     - content.original_access_quota.ReserveOriginalImageAccessGrant
     - content.media_upload_session.AbortMediaUpload
     - content.media_upload_session.CompleteMediaUpload
@@ -164,6 +178,8 @@ errors:
     - GetFeed
     - SubmitPostPublication
     - ListUserPosts
+    - ListPostsByGathering
+    - GetGatheringSocialProof
     - GetPost
     - UpdatePostSettings
     - PromotePostToWork
@@ -419,6 +435,8 @@ errors:
     operations:
     - GetFeed
     - ListUserPosts
+    - ListPostsByGathering
+    - GetGatheringSocialProof
     - GetPost
     - GetAuthorImpact
     - ListAuthorImpactEvidence
@@ -439,6 +457,7 @@ errors:
     - content.media_asset.GetMediaAssetDeliveryReference
     - content.media_asset.GetMediaAssetReference
     - content.media_asset.GetOwnedMediaAsset
+    - content.original_access_quota.GetOriginalImageAccessAudit
     - content.original_access_quota.ReserveOriginalImageAccessGrant
     - content.media_upload_session.GetMediaUploadSession
     - content.post_moderation_case.GetCurrentPostModerationCase
@@ -475,7 +494,7 @@ errors:
   http_status: 500
   emitted_by:
   - surface: http
-    operations: [GetFeed, GetResearchReleaseReadback, SubmitPostPublication, ListUserPosts, GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, content.intersection_visit_state.GetMyIntersectionSummary, content.intersection_visit_state.ListMyIntersections, content.intersection_visit_state.GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
+    operations: [GetFeed, GetResearchReleaseReadback, SubmitPostPublication, ListUserPosts, ListPostsByGathering, GetGatheringSocialProof, GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, content.intersection_visit_state.GetMyIntersectionSummary, content.intersection_visit_state.ListMyIntersections, content.intersection_visit_state.GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
   - surface: graphql
     operations: [GetPostSemantic, GetPostMedia, GetPostArticleRenderAssets, GetPostArticleEntities]
   recovery_action: surface

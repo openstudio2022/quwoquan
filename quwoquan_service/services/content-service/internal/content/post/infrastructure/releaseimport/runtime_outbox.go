@@ -862,7 +862,7 @@ func RepairImportedPostOutboxEvent(
 	return &audit, nil
 }
 
-type legacyImportedPostDeletedPayload struct {
+type releaseScopedImportedPostDeletedPayload struct {
 	PostID        string `json:"postId"`
 	ReleaseID     string `json:"releaseId"`
 	ReleaseDigest string `json:"releaseDigest"`
@@ -893,11 +893,11 @@ func validateRepairableImportedPostDeletedPayload(
 		gotKeys = append(gotKeys, key)
 	}
 	sort.Strings(gotKeys)
-	legacyKeys := []string{"deletedAt", "postId", "releaseDigest", "releaseId", "sourceOwner"}
+	releaseScopedKeys := []string{"deletedAt", "postId", "releaseDigest", "releaseId", "sourceOwner"}
 	intermediateKeys := []string{"authorId", "contentIdentity", "contentType", "deletedAt", "postId", "status"}
 	switch {
-	case slicesEqualStrings(gotKeys, legacyKeys):
-		return validateLegacyImportedPostDeletedPayload(existing, expected, opts)
+	case slicesEqualStrings(gotKeys, releaseScopedKeys):
+		return validateReleaseScopedImportedPostDeletedPayload(existing, expected, opts)
 	case slicesEqualStrings(gotKeys, intermediateKeys):
 		return validateIntermediateImportedPostDeletedPayload(existing, expected)
 	default:
@@ -905,14 +905,14 @@ func validateRepairableImportedPostDeletedPayload(
 	}
 }
 
-func validateLegacyImportedPostDeletedPayload(
+func validateReleaseScopedImportedPostDeletedPayload(
 	existing ImportedPostOutboxEventSnapshot,
 	expected postports.OutboxEvent,
 	opts ImportOptions,
 ) error {
 	var keyset map[string]json.RawMessage
 	if err := json.Unmarshal(existing.PayloadJSON, &keyset); err != nil {
-		return fmt.Errorf("GATE_BLOCK: legacy PostDeleted payload is not JSON")
+		return fmt.Errorf("GATE_BLOCK: release-scoped PostDeleted payload is not JSON")
 	}
 	wantKeys := []string{"deletedAt", "postId", "releaseDigest", "releaseId", "sourceOwner"}
 	gotKeys := make([]string, 0, len(keyset))
@@ -921,25 +921,25 @@ func validateLegacyImportedPostDeletedPayload(
 	}
 	sort.Strings(gotKeys)
 	if !slicesEqualStrings(gotKeys, wantKeys) {
-		return fmt.Errorf("GATE_BLOCK: legacy PostDeleted payload keyset is not repairable")
+		return fmt.Errorf("GATE_BLOCK: release-scoped PostDeleted payload keyset is not repairable")
 	}
-	var legacy legacyImportedPostDeletedPayload
+	var payload releaseScopedImportedPostDeletedPayload
 	decoder := json.NewDecoder(bytes.NewReader(existing.PayloadJSON))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&legacy); err != nil {
-		return fmt.Errorf("GATE_BLOCK: decode legacy PostDeleted payload: %w", err)
+	if err := decoder.Decode(&payload); err != nil {
+		return fmt.Errorf("GATE_BLOCK: decode release-scoped PostDeleted payload: %w", err)
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
-		return fmt.Errorf("GATE_BLOCK: legacy PostDeleted payload contains trailing JSON")
+		return fmt.Errorf("GATE_BLOCK: release-scoped PostDeleted payload contains trailing JSON")
 	}
-	deletedAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(legacy.DeletedAt))
-	if err != nil || legacy.PostID != expected.AggregateID ||
-		legacy.ReleaseID != opts.ReleaseID ||
-		legacy.ReleaseDigest != opts.ManifestDigest ||
-		legacy.SourceOwner != opts.SourceOwner ||
+	deletedAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(payload.DeletedAt))
+	if err != nil || payload.PostID != expected.AggregateID ||
+		payload.ReleaseID != opts.ReleaseID ||
+		payload.ReleaseDigest != opts.ManifestDigest ||
+		payload.SourceOwner != opts.SourceOwner ||
 		!deletedAt.Equal(expected.OccurredAt) {
-		return fmt.Errorf("GATE_BLOCK: legacy PostDeleted payload binding drift")
+		return fmt.Errorf("GATE_BLOCK: release-scoped PostDeleted payload binding drift")
 	}
 	return nil
 }

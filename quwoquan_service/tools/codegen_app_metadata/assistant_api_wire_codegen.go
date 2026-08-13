@@ -38,12 +38,7 @@ func loadAssistantCloudAPISource(
 			ff.Entities[name] = entity
 		}
 	}
-	enumCatalog, err := readAssistantEnumCatalog(filepath.Join(
-		metadataDir,
-		"assistant",
-		"_shared",
-		"enums.yaml",
-	))
+	enumCatalog, err := loadAssistantEnumCatalog(metadataDir)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -451,8 +446,33 @@ func assistantWireEmitEntityDart(
 	}
 	for _, f := range ent.Fields {
 		nul := assistantWireFieldNullable(f)
+		// A field declared `type: enum` whose enum_ref is not in the catalog
+		// used to fall through to `String`, which is how SkillPackageAssetKind
+		// and friends stayed untyped for so long: the contract said enum, the
+		// App got an unvalidated string, and nothing reported it.
+		if strings.TrimSpace(f.Type) == "enum" &&
+			strings.TrimSpace(f.EnumRef) != "" &&
+			!assistantWireHasEnum(enumCatalog, f.EnumRef) {
+			exitErr(fmt.Errorf(
+				"assistant wire %s.%s declares type: enum with enum_ref %q, but no "+
+					"assistant contract owns that enum; declare it in the owning "+
+					"object's fields.yaml `enums:` block or in "+
+					"assistant/_shared/enums.yaml",
+				name,
+				f.Name,
+				strings.TrimSpace(f.EnumRef),
+			))
+		}
 		dt := assistantWireDartType(ff, enumCatalog, f, nul)
 		fmt.Fprintf(b, "  final %s %s;\n", dt, f.Name)
+		recordEnumFieldBinding(enumFieldBinding{
+			DartClass:      name,
+			DartField:      f.Name,
+			DartType:       dt,
+			EnumRef:        f.EnumRef,
+			ContractType:   f.Type,
+			ClientDartType: f.ClientDartType,
+		})
 	}
 	b.WriteString("\n")
 	fmt.Fprintf(b, "  factory %s.fromJson(Map<String, dynamic> json) {\n", name)

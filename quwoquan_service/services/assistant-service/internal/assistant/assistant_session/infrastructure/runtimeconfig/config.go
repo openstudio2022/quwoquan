@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	configrelease "quwoquan_service/runtime/configrelease"
+	"quwoquan_service/runtime/servicehost"
 	"strconv"
 	"strings"
 
@@ -98,10 +99,18 @@ type Config struct {
 }
 
 func ResolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = getenvOrDefault("SERVICE_NAME", "assistant-service")
+	serviceName = strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("assistant-service", "SERVICE_NAME"),
+	)
+	if serviceName == "" {
+		serviceName = "assistant-service"
+	}
 	appEnv = getenvOrDefault("APP_ENV", "alpha")
 	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = os.Getenv("CONFIG_VERSION")
+	configVersion = servicehost.ModuleEnvironmentValue(
+		"assistant-service",
+		"CONFIG_VERSION",
+	)
 	imageVersion = os.Getenv("IMAGE_VERSION")
 	if !IsValidAppEnv(appEnv) {
 		return "", "", "", "", "", fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)

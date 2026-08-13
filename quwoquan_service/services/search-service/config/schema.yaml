@@ -69,6 +69,9 @@ configs:
   sensitive: false
   default: 800
 - key: sys.search-service.es.shards
+  # 分片策略（search-storage-topology REQ-007）：单主分片消除跨分片 IDF 评分抖动，
+  # 当前数据量远低于官方单分片 10-50GB 区间下限；QPS 增长加副本，数据量逼近
+  # 单分片上限时经 split/alias 重建扩分片。
   type: int
   scope: workload
   reload: restart
@@ -109,7 +112,9 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: 1
+  # 跨服务 durable 事实流的发布/消费方必须共用同一 db（运行时事实为 db0）；
+  # 共享单实例时 scene 隔离靠 key 前缀而非 db。
+  default: 0
 - key: sys.search-service.redis.general.mode
   type: string
   scope: workload

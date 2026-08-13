@@ -32,6 +32,7 @@ import (
 	behaviorpersistence "quwoquan_service/services/content-service/internal/content/content_behavior_fact/infrastructure/persistence"
 	reactionhttp "quwoquan_service/services/content-service/internal/content/content_reaction/adapters/inbound/http"
 	reactionapp "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction"
+	reactiondomain "quwoquan_service/services/content-service/internal/content/content_reaction/domain/reaction"
 	reactionmessaging "quwoquan_service/services/content-service/internal/content/content_reaction/infrastructure/messaging"
 	reactionpersistence "quwoquan_service/services/content-service/internal/content/content_reaction/infrastructure/persistence"
 	tombstonepost "quwoquan_service/services/content-service/internal/content/deleted_post_tombstone/adapters/inbound/post"
@@ -47,6 +48,7 @@ import (
 	accessinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/accesscontrol"
 	contentmessaging "quwoquan_service/services/content-service/internal/content/post/infrastructure/messaging"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence"
+	recinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 	profileactivityhttp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/adapters/inbound/http"
 	profileinteractionapp "quwoquan_service/services/content-service/internal/content/profile_interaction_activity_view/application"
@@ -71,6 +73,7 @@ import (
 	moderationhttp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/adapters/inbound/http"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
 	moderationpersistence "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/infrastructure/persistence"
+	feedsupport "quwoquan_service/services/content-service/tests/support"
 )
 
 var (
@@ -79,6 +82,7 @@ var (
 	testPostService             *postapp.PostService
 	testCommentService          *commentapp.CommentService
 	postOutboxRelay             *postapp.OutboxRelay
+	postDiscoveryFeedRelay      *postapp.OutboxRelay
 	postReactionLifecycleRelay  *postapp.OutboxRelay
 	postCommentTombstoneRelay   *postapp.OutboxRelay
 	commentOutboxRelay          *commentapp.OutboxRelay
@@ -197,6 +201,7 @@ func drainPostOutboxForHarness(ctx context.Context) error {
 	}
 	if postReactionLifecycleRelay == nil ||
 		postCommentTombstoneRelay == nil ||
+		postDiscoveryFeedRelay == nil ||
 		profilePostTargetRelay == nil {
 		return fmt.Errorf("content-service api_integration requires a Post projection relay")
 	}
@@ -208,6 +213,9 @@ func drainPostOutboxForHarness(ctx context.Context) error {
 	}
 	if _, err := postCommentTombstoneRelay.Drain(ctx, 100); err != nil {
 		return fmt.Errorf("drain Post Comment tombstone projection: %w", err)
+	}
+	if _, err := postDiscoveryFeedRelay.Drain(ctx, 100); err != nil {
+		return fmt.Errorf("drain Post discovery feed projection: %w", err)
 	}
 	if _, err := profilePostTargetRelay.Drain(ctx, 100); err != nil {
 		return fmt.Errorf("drain Post profile interaction target projection: %w", err)
@@ -460,16 +468,31 @@ func TestMain(m *testing.M) {
 		}}, mongoopts.UpdateOne().SetUpsert(true)); err != nil {
 		panic(fmt.Errorf("seed api integration active supply post: %w", err))
 	}
+	// recommend/channel 排序经由 ranked recommendation gateway；api_integration
+	// 复用测试树内 typed 引擎替身（同一 hotPath Redis 场景），候选召回读取与
+	// 生产同源的 Mongo posts 物化，禁止另建第二套候选清单。
+	rankedEngine := rtrec.NewEngine(
+		hotPath,
+		[]rtrec.CandidateSource{mongoFeedCandidateSource{
+			posts: mongoDB.Collection("posts"),
+		}},
+	)
 	feedService := feedapp.NewFeedService(
 		persistence.NewMongoPostQueryReader(mongoDB.Collection("posts")),
-		feedapp.WithFeedViewerBlockReader(personaBlockReader),
-		feedapp.WithActiveSupplyReader(persistence.NewMongoActiveSupplyReader(
-			activeSupplyDB,
-			integrationEnvironment,
-		)),
-		feedapp.WithFeedDeliveryPageStore(
-			deliveryredis.NewStore(testRouter.Scene("rec")),
-		),
+		feedsupport.RankedRecommendationOptions(
+			rankedEngine,
+			feedapp.WithFeedViewerBlockReader(personaBlockReader),
+			feedapp.WithFeedViewerReactionReader(
+				viewerPostReactionReaderForTest{store: testReactionStore},
+			),
+			feedapp.WithActiveSupplyReader(persistence.NewMongoActiveSupplyReader(
+				activeSupplyDB,
+				integrationEnvironment,
+			)),
+			feedapp.WithFeedDeliveryPageStore(
+				deliveryredis.NewStore(testRouter.Scene("rec")),
+			),
+		)...,
 	)
 	testFeedService = feedService
 
@@ -551,6 +574,10 @@ func TestMain(m *testing.M) {
 			testsupport.AllowPublicationRateGate{},
 			testsupport.FixedPublicationSafetyGate{},
 		),
+		// Circle Participation provider-state：api_integration 用测试内
+		// typed 状态桩模拟 Circle owner 的参与断言（真实进程链仍是
+		// HTTP → application → Mongo）；缺登记状态即 fail-closed。
+		postapp.WithGatheringParticipationReader(testGatheringParticipations),
 	)
 	testPostService = postServiceCore
 	postOutboxRelay = postapp.NewOutboxRelay(
@@ -558,6 +585,16 @@ func TestMain(m *testing.M) {
 		postStore,
 		contentmessaging.NewPostOutboxPublisher(eventSpy),
 		"api-integration-event-spy",
+	)
+	postDiscoveryFeedRelay = postapp.NewOutboxRelay(
+		postStore,
+		postStore,
+		contentmessaging.NewPostOutboxPublisher(
+			contentmessaging.NewInProcessProjectorPublisher(
+				recinfra.NewDiscoveryFeedProjector(mongoDB),
+			),
+		),
+		"api-integration-discovery-projection",
 	)
 	commentOutboxRelay = commentapp.NewOutboxRelay(
 		commentStore,
@@ -619,6 +656,7 @@ func TestMain(m *testing.M) {
 		postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
 			Detail:       postQueryReader,
 			Author:       postQueryReader,
+			Gathering:    postQueryReader,
 			Tombstones:   postStore,
 			ViewerBlocks: personaBlockReader,
 		}),
@@ -643,6 +681,9 @@ func TestMain(m *testing.M) {
 		),
 		contenhttp.WithPostModerationCaseHandler(
 			moderationhttp.NewHandler(testModerationFacades),
+		),
+		contenhttp.WithViewerReactionReader(
+			viewerPostReactionReaderForTest{store: testReactionStore},
 		),
 	).Routes()
 	testHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -682,6 +723,20 @@ func TestMain(m *testing.M) {
 				},
 			}
 			r = r.WithContext(rtauth.WithPrincipal(r.Context(), principal))
+		}
+		if _, attributed := rtoperation.FromContext(r.Context()); !attributed {
+			principal, _ := rtauth.PrincipalFromContext(r.Context())
+			requestID := strings.TrimSpace(r.Header.Get("X-Request-Id"))
+			r = r.WithContext(rtoperation.WithContext(
+				r.Context(),
+				rtoperation.Context{
+					OperationID: "content.api-integration",
+					RequestID:   requestID,
+					TraceID:     requestID,
+					SessionID:   strings.TrimSpace(r.Header.Get("X-Client-Session-Id")),
+					Actor:       principal.Actor,
+				},
+			))
 		}
 		baseHandler.ServeHTTP(w, r)
 		// Production owns continuously running durable relays. The synchronous
@@ -883,4 +938,105 @@ func cleanPosts(t *testing.T) {
 		}
 	}
 	eventSpy.Reset()
+}
+
+// mongoFeedCandidateSource recalls ranked-window candidates from the same
+// materialized posts collection the API writes through. It keeps recommend-sort
+// integration tests on real command-created supply instead of a fixture list.
+type mongoFeedCandidateSource struct {
+	posts *mongo.Collection
+}
+
+func (source mongoFeedCandidateSource) Recall(
+	ctx context.Context,
+	request rtrec.RecallRequest,
+) ([]rtrec.ContentCandidate, error) {
+	limit := request.Limit
+	if limit <= 0 || limit > 200 {
+		limit = 200
+	}
+	cursor, err := source.posts.Find(
+		ctx,
+		bson.M{
+			"status":           "published",
+			"visibility":       "public",
+			"moderationStatus": "approved",
+		},
+		mongoopts.Find().
+			SetSort(bson.D{{Key: "publishedAt", Value: -1}, {Key: "_id", Value: 1}}).
+			SetLimit(int64(limit)),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("recall published posts: %w", err)
+	}
+	defer cursor.Close(ctx)
+	candidates := make([]rtrec.ContentCandidate, 0, limit)
+	for cursor.Next(ctx) {
+		var document struct {
+			ID              string    `bson:"_id"`
+			ContentType     string    `bson:"contentType"`
+			ContentVertical string    `bson:"contentVertical"`
+			AuthorID        string    `bson:"authorId"`
+			Title           string    `bson:"title"`
+			TagRefs         []string  `bson:"tagRefs"`
+			PublishedAt     time.Time `bson:"publishedAt"`
+			ViewCount       int64     `bson:"viewCount"`
+			LikeCount       int64     `bson:"likeCount"`
+			CommentCount    int64     `bson:"commentCount"`
+			ShareCount      int64     `bson:"shareCount"`
+			SourceOwner     string    `bson:"sourceOwner"`
+			ReleaseID       string    `bson:"releaseId"`
+			ManifestDigest  string    `bson:"manifestDigest"`
+			LifecycleStatus string    `bson:"lifecycleStatus"`
+		}
+		if err := cursor.Decode(&document); err != nil {
+			return nil, fmt.Errorf("decode recall candidate: %w", err)
+		}
+		publishedAt := document.PublishedAt
+		if publishedAt.IsZero() {
+			publishedAt = time.Now().UTC()
+		}
+		candidates = append(candidates, rtrec.ContentCandidate{
+			ContentID:       document.ID,
+			ContentType:     document.ContentType,
+			ContentVertical: document.ContentVertical,
+			AuthorID:        document.AuthorID,
+			Title:           document.Title,
+			Tags:            append([]string(nil), document.TagRefs...),
+			PublishedAt:     publishedAt,
+			ViewCount:       document.ViewCount,
+			LikeCount:       document.LikeCount,
+			CommentCount:    document.CommentCount,
+			ShareCount:      document.ShareCount,
+			SourceOwner:     document.SourceOwner,
+			ReleaseID:       document.ReleaseID,
+			ManifestDigest:  document.ManifestDigest,
+			LifecycleStatus: document.LifecycleStatus,
+		})
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("iterate recall candidates: %w", err)
+	}
+	return candidates, nil
+}
+
+// viewerPostReactionReaderForTest 与 cmd 组合的 viewerPostReactionReader 同构：
+// 把 content_reaction 聚合的批量点赞读适配为 feed/详情的 viewerLiked 附着端口。
+type viewerPostReactionReaderForTest struct {
+	store *reactionpersistence.MongoContentReactionStore
+}
+
+func (r viewerPostReactionReaderForTest) ReadPostLikedFlags(
+	ctx context.Context,
+	viewerPersonaID string,
+	postIDs []string,
+) (map[string]bool, error) {
+	actor, err := reactiondomain.NewActor(
+		reactiondomain.ActorDimensionPersona,
+		viewerPersonaID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return r.store.ReadPostReactionLikedFlags(ctx, actor, postIDs)
 }

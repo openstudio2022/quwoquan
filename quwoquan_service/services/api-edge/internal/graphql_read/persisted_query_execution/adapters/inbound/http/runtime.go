@@ -20,7 +20,6 @@ import (
 	rolloutapp "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/application"
 	graphapp "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/application"
 	graphdomain "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/domain"
-	ownerinfra "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/owner"
 )
 
 var sha256ReferencePattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
@@ -45,6 +44,7 @@ type Options struct {
 	Config          Config
 	RegistryLoader  graphapp.RegistryLoader
 	OwnerExecutor   graphapp.Executor
+	EntryValidator  graphapp.EntryValidator
 	Admission       *admissionapp.Service
 	Rollout         *rolloutapp.Evaluator
 	RolloutObserver rolloutapp.Observer
@@ -125,6 +125,9 @@ func NewRuntime(ctx context.Context, options Options) (*Runtime, error) {
 	if options.OwnerExecutor == nil {
 		return nil, errors.New("GraphQL owner executor is required")
 	}
+	if options.EntryValidator == nil {
+		return nil, errors.New("GraphQL entry validator is required")
+	}
 	registry, err := options.RegistryLoader.Load(
 		ctx,
 		config.RegistryFile,
@@ -137,7 +140,11 @@ func NewRuntime(ctx context.Context, options Options) (*Runtime, error) {
 	if registry == nil || !registry.IsSignedRelease() {
 		return nil, errors.New("GraphQL registry loader returned an unverified release")
 	}
-	authorizer, err := newRegistryAuthorizer(graphQLReadOperationDescriptors(), registry)
+	authorizer, err := newRegistryAuthorizer(
+		graphQLReadOperationDescriptors(),
+		registry,
+		options.EntryValidator,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("GraphQL registry authorization invalid: %w", err)
 	}
@@ -189,15 +196,18 @@ func graphQLReadOperationDescriptors() []rtauth.OperationSecurityDescriptor {
 }
 
 type registryAuthorizer struct {
-	descriptors map[string]rtauth.OperationSecurityDescriptor
+	descriptors    map[string]rtauth.OperationSecurityDescriptor
+	entryValidator graphapp.EntryValidator
 }
 
 func newRegistryAuthorizer(
 	descriptors []rtauth.OperationSecurityDescriptor,
 	registry *graphdomain.Registry,
+	entryValidator graphapp.EntryValidator,
 ) (*registryAuthorizer, error) {
 	authorizer := &registryAuthorizer{
-		descriptors: make(map[string]rtauth.OperationSecurityDescriptor, len(descriptors)),
+		descriptors:    make(map[string]rtauth.OperationSecurityDescriptor, len(descriptors)),
+		entryValidator: entryValidator,
 	}
 	for _, descriptor := range descriptors {
 		authorizer.descriptors[descriptor.CanonicalOperationID] = descriptor
@@ -240,7 +250,7 @@ func (authorizer *registryAuthorizer) validateEntry(entry graphdomain.Entry) err
 		!sameStringSet(descriptor.Scopes, entry.Authorization.Scopes) {
 		return fmt.Errorf("operation %s authorization binding drifted", entry.CanonicalOperationID)
 	}
-	if err := ownerinfra.ValidateExecutableEntry(entry); err != nil {
+	if err := authorizer.entryValidator(entry); err != nil {
 		return fmt.Errorf("registry executor %s has no composition binding", entry.ExecutorKey)
 	}
 	return nil
@@ -390,7 +400,7 @@ func (executor *admissionExecutor) Execute(
 		return graphapp.ExecutionResult{}, fmt.Errorf("GraphQL rollout decision: %w", err)
 	}
 	executor.observe(string(rolloutDecision.Target), rolloutSubject, rolloutDecision.Reason)
-	ctx = ownerinfra.WithSearchSessionID(ctx, metadata.SessionID)
+	ctx = graphapp.WithSearchSessionID(ctx, metadata.SessionID)
 	return executor.next.Execute(
 		rolloutapp.WithTarget(ctx, rolloutDecision.Target),
 		entry,

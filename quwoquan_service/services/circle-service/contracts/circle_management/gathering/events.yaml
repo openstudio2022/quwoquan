@@ -13,11 +13,12 @@ events:
   payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, roomBindingStatus, conversationId, occurredAt]
   no_consumer_reason: Chat room ensure 的目标 runtime 与回执 consumer 尚未实现；M1 不把同步端口或计划中的 consumer 伪装成已存在订阅。
 - name: GatheringPublished
-  description: room-ready Gathering 已从 draft 原子进入 published。
+  description: room-ready Gathering 已从 draft 原子进入 published；Recommendation 据此登记发起级社会证明证据（organizer + 溯源引用 + 发布时冻结的公开政策维度事实 maxParticipants/admissionPolicy，供漏斗按活动特征诚实切片，不携带名单或私密答案）。
   delivery_semantics: transactional_outbox
   wire_event_type: GatheringPublished
+  topic: events.circle.gatherings
   payload_entity: GatheringEventPayload
-  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, revisionId, revisionNumber, revisionDigest, roomBindingStatus, conversationId, occurredAt]
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, revisionId, revisionNumber, revisionDigest, roomBindingStatus, conversationId, sourceRefs, maxParticipants, admissionPolicy, occurredAt]
 - name: GatheringRevisionAppended
   description: append-only GatheringRevision 已追加并推进 root current revision pointer。
   delivery_semantics: transactional_outbox

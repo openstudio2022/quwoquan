@@ -45,6 +45,7 @@ errors:
     - circle.circle_membership.RejectCircleMember
     - circle.circle_membership.UpdateCircleMembershipRole
     - circle.circle_post_placement.PlacePostInCircle
+    - circle.gathering.ListMyHostedGatherings
   http_status: 400
   recovery_action: surface
   disruption_level: inlineCard

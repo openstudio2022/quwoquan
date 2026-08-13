@@ -14,7 +14,11 @@ func TestCanonicalRegistryRequiresHandlerOrExplicitUnavailableBinding(t *testing
 		poiTool   = "location_poi_search"
 		routeTool = "location_route_read"
 	)
-	handlers := canonicalCloudHandlersExcept(poiTool, routeTool)
+	handlers := canonicalCloudHandlersExcept(
+		poiTool,
+		routeTool,
+		"intersection.read_mine",
+	)
 	unavailable := toolpkg.UnavailableCanonicalBindings(toolpkg.RuntimeAvailability{})
 	for _, toolName := range []string{poiTool, routeTool} {
 		binding, found := unavailable[toolName]
@@ -47,19 +51,26 @@ func TestCanonicalRegistryRequiresHandlerOrExplicitUnavailableBinding(t *testing
 }
 
 func TestCanonicalRuntimeAvailabilityRequiresReadyBindingBeforeLocationRegistration(t *testing.T) {
-	if unavailable := toolpkg.UnavailableCanonicalBindings(toolpkg.RuntimeAvailability{
+	unavailable := toolpkg.UnavailableCanonicalBindings(toolpkg.RuntimeAvailability{
 		LocationPublicProviderReady: true,
-	}); len(unavailable) != 0 {
-		t.Fatalf("ready location provider retained unavailable bindings: %#v", unavailable)
+	})
+	if _, found := unavailable["location_poi_search"]; found {
+		t.Fatalf("ready location provider retained unavailable binding: %#v", unavailable)
+	}
+	if binding := unavailable["intersection.read_mine"]; binding.BindingKind != "domain_reader" ||
+		binding.Reason != "intersection_reader_binding_not_ready" {
+		t.Fatalf("intersection availability=%#v", binding)
 	}
 
 	registry := toolpkg.BaseRegistry()
 	err := toolpkg.RegisterCanonical(
 		&registry,
-		canonicalCloudHandlersExcept("location_poi_search", "location_route_read"),
-		toolpkg.UnavailableCanonicalBindings(toolpkg.RuntimeAvailability{
-			LocationPublicProviderReady: true,
-		}),
+		canonicalCloudHandlersExcept(
+			"location_poi_search",
+			"location_route_read",
+			"intersection.read_mine",
+		),
+		unavailable,
 	)
 	if err == nil || !strings.Contains(err.Error(), "location_poi_search") {
 		t.Fatalf("ready-without-handler must fail startup, got %v", err)

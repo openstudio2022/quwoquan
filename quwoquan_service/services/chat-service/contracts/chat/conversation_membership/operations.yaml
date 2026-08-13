@@ -859,3 +859,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/chat_service/chat/conversation_membership/conversation_membership_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: conversation_membership_group_admins_app_uat
+    spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-002
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: chat.group_admins}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/chat_service/chat/conversation_membership/group_admins_remote__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

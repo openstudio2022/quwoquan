@@ -137,6 +137,9 @@ func (s *PostService) SubmitPostPublication(
 	if err := validatePostPublicationPayload(&post); err != nil {
 		return PostPublicationReceipt{}, err
 	}
+	if err := s.validateGatheringReference(ctx, &post, command.AuthorID); err != nil {
+		return PostPublicationReceipt{}, err
+	}
 	post.ContentDigest = postContentDigest(&post)
 	admissionDecision, err := s.admitPostPublication(ctx, command, &post, now)
 	if err != nil {
@@ -212,6 +215,48 @@ func (s *PostService) SubmitPostPublication(
 	}
 	return PostPublicationReceipt{},
 		contentgenerated.AppErrorFromStorageWriteFailed(commitErr.Error())
+}
+
+// validateGatheringReference 守住共同经历回流引用的诚实红线：post.gatheringRef
+// 只在 Circle owner 证明作者当前持有 active Participation 后才允许落库。
+// 端口未装配或 Circle 不可用一律 fail-closed（unavailable ≠ allow），
+// 禁止用时间到达、聊天记录或单方声明替代参与事实。
+func (s *PostService) validateGatheringReference(
+	ctx context.Context,
+	post *postmodel.Post,
+	authorID string,
+) error {
+	gatheringRef := strings.TrimSpace(post.GatheringRef)
+	post.GatheringRef = gatheringRef
+	if gatheringRef == "" {
+		return nil
+	}
+	if s.gatheringParticipationReader == nil {
+		return contentgenerated.AppErrorFromRequiredDependencyUnavailable(
+			"gathering participation reader is not configured; gatheringRef publication is fail-closed",
+		)
+	}
+	status, err := s.gatheringParticipationReader.GetParticipationStatus(
+		ctx,
+		gatheringRef,
+		strings.TrimSpace(authorID),
+	)
+	if err != nil {
+		var appError *rterr.AppError
+		if errors.As(err, &appError) {
+			return appError
+		}
+		return contentgenerated.AppErrorFromRequiredDependencyUnavailable(
+			"gathering participation verification unavailable: " + err.Error(),
+		)
+	}
+	if status.GatheringID != gatheringRef ||
+		status.ParticipationState != "active" {
+		return contentgenerated.AppErrorFromGatheringParticipationRequired(
+			"author holds no active participation in the referenced gathering",
+		)
+	}
+	return nil
 }
 
 func validatePostPublicationIdentity(command SubmitPostPublicationCommand) error {

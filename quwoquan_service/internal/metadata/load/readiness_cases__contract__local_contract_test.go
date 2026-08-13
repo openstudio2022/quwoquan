@@ -20,7 +20,7 @@ const (
 	syntheticServiceRunner       = "quwoquan_service/services/demo-service/tests/api_integration/demo_context/demo_object/operation_alpha__api_integration_test.go"
 	syntheticPythonServiceRunner = "quwoquan_service/services/demo-service/tests/api_integration/demo_context/demo_object/test_operation_alpha__api_integration_test.py"
 	syntheticAppRunner           = "quwoquan_app/test/user_acceptance/service/demo_service/demo_context/demo_object/page_uat_test.dart"
-	syntheticOpsRunner           = "quwoquan_ops/tests/acceptance/replay/demo/demo_context/demo_object/object_replay_test.py"
+	syntheticOpsRunner           = "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/demo-service/object_replay.py"
 )
 
 type readinessCaseRepo struct {

@@ -32,6 +32,9 @@ class PostLifecycleEvent:
     author_avatar_url: str
     homepage_id: str
     visited: bool
+    gathering_id: str
+    recap: bool
+    tag_refs: tuple[str, ...]
     occurred_at: datetime
     event_digest: str
 
@@ -77,6 +80,15 @@ def decode_post_lifecycle(values: dict[str, str]) -> PostLifecycleEvent | None:
     assert occurred_at is not None
     author_id = str(payload.get("authorId") or "").strip()
     homepage_id = str(payload.get("primaryHomepageId") or "").strip()
+    gathering_id = str(payload.get("gatheringRef") or "").strip()
+    # 内容标签（发布确认页真实采集的公开事实）：漏斗类目镜头的维度源；
+    # 缺失按空处理，不臆造。
+    raw_tag_refs = payload.get("tagRefs") or []
+    tag_refs = tuple(
+        str(tag).strip()
+        for tag in (raw_tag_refs if isinstance(raw_tag_refs, list) else [])
+        if str(tag).strip()
+    )
     visited_at = _time(payload.get("visitedAt"), required=False)
     if event_type in UPSERT_EVENTS:
         eligibility = {
@@ -93,10 +105,12 @@ def decode_post_lifecycle(values: dict[str, str]) -> PostLifecycleEvent | None:
         "authorId": author_id,
         "eventId": event_id,
         "eventType": event_type,
+        "gatheringRef": gathering_id,
         "homepageId": homepage_id,
         "occurredAt": occurred_at.isoformat(),
         "postId": post_id,
         "postVersion": version,
+        "tagRefs": list(tag_refs),
         "visitedAt": visited_at.isoformat() if visited_at is not None else "",
         "visible": visible,
     }
@@ -113,6 +127,11 @@ def decode_post_lifecycle(values: dict[str, str]) -> PostLifecycleEvent | None:
         author_avatar_url=str(payload.get("authorAvatarUrlSnapshot") or "").strip(),
         homepage_id=homepage_id,
         visited=visible and visited_at is not None and bool(homepage_id),
+        gathering_id=gathering_id,
+        # 公开回顾事实：作者主动关联 gatheringRef 且内容公开可见时才成立；
+        # 删除/隐私撤回事件回落为 False（经历交集据此收敛）。
+        recap=visible and bool(gathering_id) and bool(author_id),
+        tag_refs=tag_refs,
         occurred_at=occurred_at,
         event_digest=digest,
     )
@@ -134,6 +153,9 @@ class PostLifecycleConsumer(DurableProjectionConsumer):
                     author_avatar_url=event.author_avatar_url,
                     homepage_id=event.homepage_id,
                     visited=event.visited,
+                    gathering_id=event.gathering_id,
+                    recap=event.recap,
+                    tag_refs=event.tag_refs,
                     occurred_at=event.occurred_at,
                 )
 

@@ -1,0 +1,51 @@
+# 系统上下文信封：随助手轮次持久化的时间/设备/权限/位置披露快照。
+# 曾是 App 侧手写 serde（system_context_envelope.dart 手写 fromJson/toJson），
+# 收编进 schema 后由 codegen 单轨发射；location 历史上的 country/region/city
+# 双键读随收编删除，wire 只认 canonical 单键。
+dart_class: SystemContextEnvelope
+library_path: service/assistant_service/assistant/assistant_run/domain/system_context_envelope.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/system_context_envelope.g.dart
+contract: system_context_envelope
+kind: runtime_context_contract
+fields:
+  - { name: contractId, type: string, default: 'system_context_envelope' }
+  - { name: time, type: object, ref: system_time_context, default: {} }
+  - { name: device, type: object, ref: device_summary, default: {} }
+  - { name: permissions, type: object, ref: permission_summary, default: {} }
+  - { name: location, type: object, ref: system_location_context, default: {} }
+subcontracts:
+  system_time_context:
+    class_name: SystemTimeContext
+    fields:
+      - { name: referenceNowIso, type: string, default: '' }
+      - { name: timezone, type: string, default: '' }
+      - { name: locale, type: string, default: '' }
+      - { name: granularity, type: enum, enum_ref: ContextGranularity, default: coarse }
+  device_summary:
+    class_name: DeviceSummary
+    fields:
+      - { name: os, type: string, default: '' }
+      - { name: model, type: string, default: '' }
+      - { name: appVersion, type: string, default: '' }
+      - { name: granularity, type: enum, enum_ref: ContextGranularity, default: coarse }
+  permission_summary:
+    class_name: PermissionSummary
+    fields:
+      - { name: locationGranted, type: bool, default: false }
+      - { name: contactsGranted, type: bool, default: false }
+      - { name: photosGranted, type: bool, default: false }
+      - { name: cameraGranted, type: bool, default: false }
+      - { name: notificationsGranted, type: bool, default: false }
+      - { name: granularity, type: enum, enum_ref: ContextGranularity, default: coarse }
+  system_location_context:
+    class_name: SystemLocationContext
+    fields:
+      - { name: countryCode, type: string, default: '' }
+      - { name: countryName, type: string, default: '' }
+      - { name: adminAreaLevel1, type: string, default: '' }
+      - { name: adminAreaLevel2, type: string, default: '' }
+      - { name: adminAreaLevel3, type: string, default: '' }
+      - { name: adminAreaLevel4, type: string, default: '' }
+      - { name: formattedAddress, type: string, default: '' }
+      - { name: timezone, type: string, default: '' }
+      - { name: granularity, type: enum, enum_ref: LocationGranularity, default: city }

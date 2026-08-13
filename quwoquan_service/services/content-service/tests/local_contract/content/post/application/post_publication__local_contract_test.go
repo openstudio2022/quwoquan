@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-003
 package post_test
 
 import (

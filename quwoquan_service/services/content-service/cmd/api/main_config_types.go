@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import (
 	postruntimeconfig "quwoquan_service/services/content-service/internal/content/post/infrastructure/runtimeconfig"
@@ -84,6 +84,13 @@ type config struct {
 		URL       string `yaml:"url"`
 		TimeoutMs int    `yaml:"timeout_ms"`
 	} `yaml:"tag_service"`
+
+	// CircleService 是共同经历回流引用（post.gatheringRef）的 Participation
+	// 校验上游；缺失时携带 gatheringRef 的发布 fail-closed。
+	CircleService struct {
+		URL       string `yaml:"url"`
+		TimeoutMs int    `yaml:"timeout_ms"`
+	} `yaml:"circle_service"`
 
 	Embedding struct {
 		// Enabled 开启 embedding 写入管线（PostPublished → posts.embedding）。

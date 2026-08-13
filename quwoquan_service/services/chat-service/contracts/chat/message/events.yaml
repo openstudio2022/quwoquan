@@ -12,6 +12,8 @@ events:
   - type
   - content
   - mediaAssetId
+  - audioDurationMs
+  - audioWaveform
   - card
   - replyToMessageId
   - mentions

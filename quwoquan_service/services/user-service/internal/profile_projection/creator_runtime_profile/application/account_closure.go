@@ -5,7 +5,12 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	rtobs "quwoquan_service/runtime/observability"
 )
+
+// 契约 runtime_entrypoints[].telemetry.metric 同名计数器（outcome=ok|error）。
+var creatorProfileProjectionOutcomes = rtobs.NewEntrypointOutcomeCounter("user_creator_runtime_profile_projection")
 
 type AccountClosedEvent struct {
 	AccountID  string
@@ -28,7 +33,14 @@ func NewAccountClosureProjector(store AccountClosureStore) *AccountClosureProjec
 	return &AccountClosureProjector{store: store}
 }
 
-func (p *AccountClosureProjector) Apply(ctx context.Context, event AccountClosedEvent) error {
+func (p *AccountClosureProjector) Apply(ctx context.Context, event AccountClosedEvent) (err error) {
+	defer func() {
+		outcome := "ok"
+		if err != nil {
+			outcome = "error"
+		}
+		creatorProfileProjectionOutcomes.WithLabelValues(outcome).Inc()
+	}()
 	if strings.TrimSpace(event.AccountID) == "" || len(event.PersonaIDs) == 0 || event.ClosedAt.IsZero() {
 		return fmt.Errorf("CreatorRuntimeProfile account closure identity and closedAt are required")
 	}

@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import (
 	"fmt"
@@ -15,14 +15,23 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
+	"quwoquan_service/runtime/servicehost"
 	generated "quwoquan_service/services/chat-service/generated/chat/conversation"
 )
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = getenvOrDefault("SERVICE_NAME", "chat-service")
+	serviceName = strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("chat-service", "SERVICE_NAME"),
+	)
+	if serviceName == "" {
+		serviceName = "chat-service"
+	}
 	appEnv = getenvOrDefault("APP_ENV", "alpha")
 	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = os.Getenv("CONFIG_VERSION")
+	configVersion = servicehost.ModuleEnvironmentValue(
+		"chat-service",
+		"CONFIG_VERSION",
+	)
 	imageVersion = os.Getenv("IMAGE_VERSION")
 
 	if !isValidAppEnv(appEnv) {

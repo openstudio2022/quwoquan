@@ -135,6 +135,23 @@ func deriveReadinessEvidence(catalog *ast.Catalog, repoRoot string, errs *[]erro
 			entrypoint.ID,
 		)
 	}
+	// Ops runner 证据与 readiness case 声明同源：case 的 runner_source_path 已由
+	// loader 按 canonical 规则（service_ops 实现层）校验，这里直接把它作为入口
+	// 证据，避免与固定树扫描形成第二份位置真相源。
+	opsRunners := map[string]map[ast.ReadinessLayer][]string{}
+	for _, caseContract := range catalog.ReadinessCases {
+		if caseContract.Producer != ast.ReadinessProducerOps {
+			continue
+		}
+		byLayer := opsRunners[caseContract.ObjectID]
+		if byLayer == nil {
+			byLayer = map[ast.ReadinessLayer][]string{}
+			opsRunners[caseContract.ObjectID] = byLayer
+		}
+		byLayer[caseContract.Layer] = append(
+			byLayer[caseContract.Layer], caseContract.RunnerSourcePath,
+		)
+	}
 	// 发布写入索引按服务扫描一次即可复用：同一服务的所有对象共享同一份索引。
 	writeIndexes := newServiceWriteIndexCache()
 	// 反向缺口（有事务性写入但没有声明位）要回答「全仓有没有人声明这张表」，所以声明位
@@ -204,6 +221,7 @@ func deriveReadinessEvidence(catalog *ast.Catalog, repoRoot string, errs *[]erro
 			writeIndex,
 			objectPublications[object.ID],
 			declaredAnywhere,
+			opsRunners[object.ID],
 		)
 		if evidenceErr != nil {
 			*errs = append(*errs, evidenceErr)
@@ -225,6 +243,7 @@ func deriveObjectEvidence(
 	writeIndex *serviceWriteIndex,
 	publication storagePublication,
 	declaredAnywhere map[string]struct{},
+	opsRunners map[ast.ReadinessLayer][]string,
 ) (ast.ObjectReadinessEvidence, error) {
 	production, err := collectCloudProduction(repoRoot, objectRoot)
 	if err != nil {
@@ -347,6 +366,36 @@ func deriveObjectEvidence(
 		if err != nil {
 			return ast.ObjectReadinessEvidence{}, err
 		}
+		// readiness case 声明的 ops runner（loader 已按 service_ops canonical 规则
+		// 校验）同样是入口证据；与固定树扫描合并去重，保持与 case 声明单轨同源。
+		declared := opsRunners[ast.ReadinessLayer(target.layer)]
+		if len(declared) == 0 {
+			continue
+		}
+		seen := map[string]struct{}{}
+		for _, artifact := range *target.set {
+			seen[artifact.Path] = struct{}{}
+		}
+		for _, runner := range declared {
+			absolute := filepath.Join(repoRoot, filepath.FromSlash(runner))
+			relative := relativePath(repoRoot, absolute)
+			if _, duplicate := seen[relative]; duplicate {
+				continue
+			}
+			digest, digestErr := fileDigest(absolute)
+			if digestErr != nil {
+				if errors.Is(digestErr, fs.ErrNotExist) {
+					continue
+				}
+				return ast.ObjectReadinessEvidence{}, digestErr
+			}
+			seen[relative] = struct{}{}
+			*target.set = append(*target.set, ast.EvidenceArtifact{
+				Path:   relative,
+				SHA256: digest,
+			})
+		}
+		sortEvidenceArtifacts(*target.set)
 	}
 	normalizeEvidence(&evidence)
 	return evidence, nil

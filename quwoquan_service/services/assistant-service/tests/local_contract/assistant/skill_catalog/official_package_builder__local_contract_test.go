@@ -40,7 +40,16 @@ func TestOfficialPackageBuilderEmitsIndividuallyAddressedSignedAssets(
 			BuildID:          "local-contract-build",
 			SourceRepository: "quwoquan",
 			SourceRevision:   strings.Repeat("a", 40),
-			BuiltAt:          time.Date(2026, 8, 2, 6, 0, 0, 0, time.UTC),
+			BuiltAt: time.Date(
+				2026,
+				8,
+				2,
+				6,
+				0,
+				0,
+				123456789,
+				time.UTC,
+			),
 			RuntimeCompatibility: packagemodel.RuntimeCompatibility{
 				APIVersion:            packagemodel.RuntimeAPIVersion,
 				MinimumRuntimeVersion: "1.0.0",
@@ -57,16 +66,33 @@ func TestOfficialPackageBuilderEmitsIndividuallyAddressedSignedAssets(
 	if err != nil {
 		t.Fatalf("build official Skill package: %v", err)
 	}
+	if got, want := built.Release.Provenance.BuiltAt.Nanosecond(), 123000000; got != want {
+		t.Fatalf("BSON-stable builtAt nanosecond = %d, want %d", got, want)
+	}
 	assertRoutingFallbackReplayDigestComesFromCanonicalSource(t, bundle)
 	assertCanonicalPackageDigests(t, built)
+	receipt, err := packagemodel.PassedEvaluationReceiptFor(
+		built.Release,
+		time.Date(2026, 8, 2, 6, 30, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("bind evaluation receipt to built package: %v", err)
+	}
 	publication := packageartifact.PublicationArtifact{
-		CommandID:        "local-contract-publication",
-		ExpectedRevision: 0,
-		ActivatedBy:      "local-contract-operator",
-		Release:          built.Release,
+		CommandID:         "local-contract-publication",
+		ExpectedRevision:  0,
+		ActivatedBy:       "local-contract-operator",
+		Release:           built.Release,
+		EvaluationReceipt: receipt,
 	}
 	if err := publication.Validate(); err != nil {
 		t.Fatalf("publisher rejected canonical built package: %v", err)
+	}
+	// 缺评测 receipt 的 publication 必须 fail-closed。
+	withoutReceipt := publication
+	withoutReceipt.EvaluationReceipt = packagemodel.EvaluationReceipt{}
+	if err := withoutReceipt.Validate(); err == nil {
+		t.Fatal("publication without evaluation receipt was accepted")
 	}
 	if len(built.Files) != len(built.Release.Assets) || len(built.Files) < 20 {
 		t.Fatalf("built files=%d assets=%d", len(built.Files), len(built.Release.Assets))

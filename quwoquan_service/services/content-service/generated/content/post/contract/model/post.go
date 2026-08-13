@@ -62,6 +62,7 @@ type Post struct {
 	CaptureDisclosure         []string                 `json:"captureDisclosure" bson:"captureDisclosure"`
 	CaptureFeatureRefs        []string                 `json:"captureFeatureRefs" bson:"captureFeatureRefs"`
 	PrimaryHomepageId         string                   `json:"primaryHomepageId" bson:"primaryHomepageId"`
+	GatheringRef              string                   `json:"gatheringRef" bson:"gatheringRef"`
 	PrimaryHomepageType       string                   `json:"primaryHomepageType" bson:"primaryHomepageType"`
 	PrimaryHomepageSnapshot   PostHomepageSnapshot     `json:"primaryHomepageSnapshot" bson:"primaryHomepageSnapshot"`
 	Status                    string                   `json:"status" bson:"status"`

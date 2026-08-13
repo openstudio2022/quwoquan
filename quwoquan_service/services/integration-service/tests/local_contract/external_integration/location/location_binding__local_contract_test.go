@@ -59,10 +59,42 @@ func TestResolveLocationLookupUsesNonprodProtocolSubstituteAndProdRealProvider(t
 	}
 }
 
-func TestPublicLocationBindingsDefaultUnavailableInAllEnvironments(
+func TestPublicLocationBindingsAlphaSubstituteAndOtherEnvironmentsBlocked(
 	t *testing.T,
 ) {
-	for _, environment := range []string{"alpha", "beta", "gamma", "prod"} {
+	values := runtimeconfig.MapRuntimeConfigProvider{Values: map[string]string{
+		"INTEGRATION_LOCATION_NOMINATIM_BASE_URL": "https://nominatim.example.test",
+		"INTEGRATION_LOCATION_OSRM_BASE_URL":      "https://osrm.example.test",
+	}}
+	policy := PublicProviderRuntimePolicy{
+		ConfigRef:          "config:integration.public_provider",
+		RatePolicyRef:      "config:integration.public_provider",
+		ProbePassed:        true,
+		RateLimitPerSecond: 1,
+	}
+	binding, err := ResolvePublicLocationCapability(
+		"alpha",
+		LocationPOISearchCapabilityID,
+		values,
+		policy,
+	)
+	if err != nil {
+		t.Fatalf("alpha POI substitute binding failed: %v", err)
+	}
+	if binding.AdapterID != "ext.map.nominatim.protocol_substitute" ||
+		len(binding.Secrets) != 0 {
+		t.Fatalf("alpha POI binding drift: %+v", binding)
+	}
+	// route.read 在四环境保持未启用：App 无路线消费页面，UAT journey 无法闭环。
+	if _, routeErr := ResolvePublicLocationCapability(
+		"alpha",
+		LocationRouteReadCapabilityID,
+		values,
+		policy,
+	); !errors.Is(routeErr, ErrPublicLocationCapabilityBlocked) {
+		t.Fatalf("alpha route.read error = %v, want blocked", routeErr)
+	}
+	for _, environment := range []string{"beta", "gamma", "prod"} {
 		for _, capability := range []string{
 			LocationPOISearchCapabilityID,
 			LocationRouteReadCapabilityID,
@@ -70,16 +102,8 @@ func TestPublicLocationBindingsDefaultUnavailableInAllEnvironments(
 			_, err := ResolvePublicLocationCapability(
 				environment,
 				capability,
-				runtimeconfig.MapRuntimeConfigProvider{Values: map[string]string{
-					"INTEGRATION_LOCATION_NOMINATIM_BASE_URL": "https://nominatim.example.test",
-					"INTEGRATION_LOCATION_OSRM_BASE_URL":      "https://osrm.example.test",
-				}},
-				PublicProviderRuntimePolicy{
-					ConfigRef:          "config:integration.public_provider",
-					RatePolicyRef:      "config:integration.public_provider",
-					ProbePassed:        true,
-					RateLimitPerSecond: 1,
-				},
+				values,
+				policy,
 			)
 			if !errors.Is(err, ErrPublicLocationCapabilityBlocked) {
 				t.Fatalf(

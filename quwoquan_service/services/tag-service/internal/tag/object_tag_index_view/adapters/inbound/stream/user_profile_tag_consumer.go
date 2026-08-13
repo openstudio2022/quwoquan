@@ -16,8 +16,12 @@ import (
 	"time"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
+	rtobs "quwoquan_service/runtime/observability"
 	ports "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/domain/ports"
 )
+
+// 契约 runtime_entrypoints[].telemetry.metric 同名计数器（outcome=ok|error）。
+var tagProjectionOutcomes = rtobs.NewEntrypointOutcomeCounter("tag_object_tag_index_projection")
 
 const (
 	UserAccountEventStream               = "events.user.account"
@@ -88,7 +92,14 @@ func (consumer *UserProfileTagConsumer) EnsureGroup(ctx context.Context) error {
 
 func (consumer *UserProfileTagConsumer) ProcessOnce(
 	ctx context.Context,
-) (int, error) {
+) (processed int, err error) {
+	defer func() {
+		outcome := "ok"
+		if err != nil {
+			outcome = "error"
+		}
+		tagProjectionOutcomes.WithLabelValues(outcome).Inc()
+	}()
 	if err := consumer.EnsureGroup(ctx); err != nil {
 		consumer.recordFailure(err)
 		return 0, err
@@ -120,7 +131,7 @@ func (consumer *UserProfileTagConsumer) ProcessOnce(
 		consumer.recordFailure(err)
 		return 0, fmt.Errorf("read user profile tag events: %w", err)
 	}
-	processed := 0
+	processed = 0
 	var firstErr error
 	for _, message := range uniqueProfileTagDeliveries(claimed, fresh) {
 		if err := consumer.processMessage(ctx, message); err != nil {

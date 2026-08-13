@@ -1308,3 +1308,79 @@ tools:
       prohibitedOperations: [auto_join, auto_approve_application, auto_invite]
     resilience: {timeoutMs: 3000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
     recovery: {action: fail_turn, disruptionLevel: partial}
+
+  - toolName: intersection.read_mine
+    displayName: 读取我的交集
+    description: 读取当前用户的交集只读投影（云侧 IntersectionReason）：主句、维度、强度、时效与行动提示，用于把「都想去 / 同圈 / 共同经历」等可证共同点转成可确认的行动建议（如经 gathering.propose_create_draft 起草）。只读、不产生任何写入；交集句只透传云侧 primaryText，禁止拼句或改写；不得据此宣称对方空闲、到场或任何模型外事实。
+    namespace: intersection
+    placement: cloud
+    inputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        dimension: {type: string}
+        filter: {type: string}
+        limit: {type: integer, minimum: 1, maximum: 50}
+        cursor: {type: string}
+      required: [limit]
+    outputSchema:
+      type: object
+      additionalProperties: false
+      properties:
+        intersections:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              intersectionId: {type: string}
+              kind: {type: string}
+              dimension: {type: string}
+              intersectionClass: {type: string}
+              primaryText: {type: string}
+              displayName: {type: string}
+              objectKind: {type: string}
+              strength: {type: number}
+              freshAt: {type: string}
+              expiresAt: {type: string}
+              actionKeys:
+                type: array
+                items: {type: string}
+            required: [intersectionId, kind, dimension, intersectionClass, primaryText]
+        nextCursor: {type: string}
+      required: [intersections]
+    requiresConfirmation: false
+    idempotency: read_only
+    sensitivity: private
+    environmentScopes: [alpha, beta, gamma, prod]
+    serverInjectedInputs: []
+    readOnly: true
+    riskTier: low
+    ownerService: content-service
+    ownerOperationId: content.intersection_visit_state.ListMyIntersections
+    ownerRequestEntity: ListMyIntersectionsQuery
+    ownerResponseEntity: IntersectionReasonPageSlice
+    contractDigest: sha256:201cbb5842dfdda0eaccd62fe111e3c9bb0e9dff5ede7a5302e452096e9daa4f
+    requiredAuth:
+      grantKind: delegated_query
+      scopes: [content.intersection.mine.read]
+      resourceType: content.intersection_visit_state
+      resourceIdSource: subject
+    requiredCapability: content.intersection.mine.read
+    capability:
+      capabilityKey: content.intersection.mine.read
+      connectorRequirement: none
+      consentScopes: [content.intersection.mine.read]
+      allowedSurfaceKinds: [conversation]
+      recheckAtExecution: true
+    approvalPolicy: {mode: none, userConfirmationRequiredBeforeEffect: false}
+    redaction:
+      policy: viewer_scoped_reasons_only
+      omittedFields: [subjectContext, actorEvidence]
+    audit:
+      eventName: assistant.intersection.read_mine
+      includeRequestDigest: true
+      includeGrantJti: true
+      neverLog: [delegatedGrant]
+    resilience: {timeoutMs: 5000, maxAttempts: 1, retryBackoffMs: 0, loopDetectionWindow: 3}
+    recovery: {action: fail_turn, disruptionLevel: partial}

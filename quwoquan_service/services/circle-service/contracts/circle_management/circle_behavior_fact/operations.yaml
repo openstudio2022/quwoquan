@@ -66,6 +66,6 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: ReportCircleBehavior}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_behavior_fact/append_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_behavior_fact/append_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}

@@ -74,3 +74,16 @@ errors:
   user_message:
     zh: 评分暂时不可用
     en: Scoring is temporarily unavailable
+# Python 模型运行时进程内未捕获的异常，由 runtime log exporter 打成 exception_log
+# 的 errorCode；不经 HTTP surface 返回，用户只会看到评分降级。
+- code: RECOMMENDATION.SYSTEM.model_runtime_exception
+  reason: model_runtime_exception
+  emitted_by:
+  - {surface: worker}
+  recovery_action: retry
+  disruption_level: snackbar
+  recovery_after_seconds: 3
+  go_const: ErrModelRuntimeException
+  user_message:
+    zh: 模型运行时异常，请稍后重试
+    en: Model runtime raised an exception; please retry later

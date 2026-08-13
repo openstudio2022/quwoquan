@@ -27,7 +27,7 @@ const (
 	searchPageCanonicalOperationID = "gateway.persisted_query_execution.SearchPage"
 	searchPageOperationName        = "SearchPage"
 	searchPageObjectID             = "gateway.persisted_query_execution"
-	searchPageSHA256Hash           = "894a7b1541100c4ffa20e446d7969aa6bb1c6aa385d025cc2a8c7b625ba50d58"
+	searchPageSHA256Hash           = "111b715594655786eba342c5cbebe7ea1338a9cf016ed0f35f54096802583478"
 	searchOwnerScope               = "search.search_index_view.graphql.read"
 	maxSearchOwnerResponseBytes    = 4 * 1024 * 1024
 	maxSearchQueryBytes            = 1024
@@ -46,16 +46,44 @@ var searchObjectTypeBindings = map[string]string{
 	"USER_PROFILE":    "user.profile",
 }
 
-type searchSessionKey struct{}
-
-// WithSearchSessionID binds the already-sanitized public ingress session to an
-// owner request. The value never comes from GraphQL variables and therefore
-// cannot be used to smuggle a different principal through a persisted query.
-func WithSearchSessionID(ctx context.Context, sessionID string) context.Context {
-	return context.WithValue(ctx, searchSessionKey{}, strings.TrimSpace(sessionID))
+var searchContentTypeBindings = map[string]string{
+	"ARTICLE": "article",
+	"IMAGE":   "image",
+	"VIDEO":   "video",
 }
 
+var searchContentTypeBindingsReverse = func() map[string]string {
+	reverse := make(map[string]string, len(searchContentTypeBindings))
+	for enumValue, canonical := range searchContentTypeBindings {
+		reverse[canonical] = enumValue
+	}
+	return reverse
+}()
+
 func SearchOwnerReadScope() string { return searchOwnerScope }
+
+// SearchObjectTypeBindings exposes the GraphQL-enum -> canonical objectType
+// bindings so contract tests can pin them against the vocabulary the real
+// search-service accepts (rtsearch.CloudSearchableObjectTypes). The historic
+// break — the edge sending vocabulary the owner rejects while test stubs
+// accepted it — must stay structurally impossible.
+func SearchObjectTypeBindings() map[string]string {
+	out := make(map[string]string, len(searchObjectTypeBindings))
+	for enumValue, canonical := range searchObjectTypeBindings {
+		out[enumValue] = canonical
+	}
+	return out
+}
+
+// SearchContentTypeBindings exposes the GraphQL-enum -> canonical contentType
+// bindings for the same single-track contract tests.
+func SearchContentTypeBindings() map[string]string {
+	out := make(map[string]string, len(searchContentTypeBindings))
+	for enumValue, canonical := range searchContentTypeBindings {
+		out[enumValue] = canonical
+	}
+	return out
+}
 
 func ValidateSearchPageEntry(entry domain.Entry) error {
 	if entry.OperationName != searchPageOperationName ||
@@ -105,7 +133,10 @@ func NewSearchPageQueryExecutor(
 		return nil, errors.New("SearchPage owner service and account credentials are required")
 	}
 	if client == nil {
-		client = &http.Client{Timeout: 3 * time.Second}
+		// 预算级联：GraphQL 入口给 SearchPage 2000ms，owner client 兜底不得高于
+		// 该外层预算（历史 3s 倒挂会让外层已放弃、内层还在计算）。请求本身经
+		// NewRequestWithContext 继承上游 deadline，此处只是失配保险。
+		client = &http.Client{Timeout: 2 * time.Second}
 	}
 	clientCopy := *client
 	clientCopy.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
@@ -141,7 +172,8 @@ func (executor *SearchPageQueryExecutor) Execute(
 	}
 	payload, err := json.Marshal(searchOwnerRequest{
 		Query: input.query, Mode: "result", ObjectTypes: input.objectTypes,
-		Limit: input.first, Cursor: input.after,
+		ContentTypes: input.contentTypes,
+		Limit:        input.first, Cursor: input.after,
 	})
 	if err != nil {
 		return application.ExecutionResult{}, fmt.Errorf("encode SearchPage owner request: %w", err)
@@ -204,10 +236,11 @@ func (executor *SearchPageQueryExecutor) Execute(
 }
 
 type searchPageInput struct {
-	query       string
-	first       int
-	after       string
-	objectTypes []string
+	query        string
+	first        int
+	after        string
+	objectTypes  []string
+	contentTypes []string
 }
 
 func decodeSearchPageInput(variables map[string]any) (searchPageInput, error) {
@@ -218,7 +251,7 @@ func decodeSearchPageInput(variables map[string]any) (searchPageInput, error) {
 	if !ok || raw == nil {
 		return searchPageInput{}, errors.New("SearchPage input must be an object")
 	}
-	allowed := map[string]bool{"query": true, "first": true, "after": true, "objectTypes": true}
+	allowed := map[string]bool{"query": true, "first": true, "after": true, "objectTypes": true, "contentTypes": true}
 	for key := range raw {
 		if !allowed[key] {
 			return searchPageInput{}, fmt.Errorf("SearchPage input field %s is not registered", key)
@@ -245,28 +278,35 @@ func decodeSearchPageInput(variables map[string]any) (searchPageInput, error) {
 			return searchPageInput{}, errors.New("SearchPage after must be an opaque bounded cursor")
 		}
 	}
-	objectTypes, err := decodeSearchObjectTypes(raw["objectTypes"])
+	objectTypes, err := decodeSearchEnumList(raw["objectTypes"], "objectTypes", searchObjectTypeBindings)
 	if err != nil {
 		return searchPageInput{}, err
 	}
-	return searchPageInput{query: query, first: first, after: after, objectTypes: objectTypes}, nil
+	contentTypes, err := decodeSearchEnumList(raw["contentTypes"], "contentTypes", searchContentTypeBindings)
+	if err != nil {
+		return searchPageInput{}, err
+	}
+	return searchPageInput{
+		query: query, first: first, after: after,
+		objectTypes: objectTypes, contentTypes: contentTypes,
+	}, nil
 }
 
-func decodeSearchObjectTypes(value any) ([]string, error) {
+func decodeSearchEnumList(value any, label string, bindings map[string]string) ([]string, error) {
 	if value == nil {
 		return nil, nil
 	}
 	items, ok := value.([]any)
-	if !ok || len(items) > len(searchObjectTypeBindings) {
-		return nil, errors.New("SearchPage objectTypes must be a bounded list")
+	if !ok || len(items) > len(bindings) {
+		return nil, fmt.Errorf("SearchPage %s must be a bounded list", label)
 	}
 	seen := map[string]bool{}
 	result := make([]string, 0, len(items))
 	for _, item := range items {
 		name, ok := item.(string)
-		canonical, exists := searchObjectTypeBindings[name]
+		canonical, exists := bindings[name]
 		if !ok || !exists || seen[canonical] {
-			return nil, errors.New("SearchPage objectTypes contains an unsupported or duplicate value")
+			return nil, fmt.Errorf("SearchPage %s contains an unsupported or duplicate value", label)
 		}
 		seen[canonical] = true
 		result = append(result, canonical)
@@ -313,8 +353,7 @@ func searchRequestIdentityFromContext(ctx context.Context) (searchRequestIdentit
 			return searchRequestIdentity{accountID: accountID}, nil
 		}
 	}
-	sessionID, _ := ctx.Value(searchSessionKey{}).(string)
-	sessionID = strings.TrimSpace(sessionID)
+	sessionID := strings.TrimSpace(application.SearchSessionID(ctx))
 	if sessionID == "" || len(sessionID) > maxSearchIdentityBytes || containsControl(sessionID) {
 		return searchRequestIdentity{}, errors.New("anonymous SearchPage requires a bounded session identity")
 	}
@@ -374,9 +413,10 @@ func (executor *SearchPageQueryExecutor) originForTarget(target rolloutdomain.Ta
 }
 
 type searchOwnerRequest struct {
-	Query       string   `json:"query"`
-	Mode        string   `json:"mode"`
-	ObjectTypes []string `json:"objectTypes,omitempty"`
-	Limit       int      `json:"limit"`
-	Cursor      string   `json:"cursor,omitempty"`
+	Query        string   `json:"query"`
+	Mode         string   `json:"mode"`
+	ObjectTypes  []string `json:"objectTypes,omitempty"`
+	ContentTypes []string `json:"contentTypes,omitempty"`
+	Limit        int      `json:"limit"`
+	Cursor       string   `json:"cursor,omitempty"`
 }

@@ -62,6 +62,11 @@ collections:
         canonicalEntityId: 1
         publishedAt: -1
       sparse: true
+    - name: idx_posts_gathering_ref
+      keys:
+        gatheringRef: 1
+        publishedAt: -1
+      sparse: true
     - name: idx_posts_publish_intent
       keys:
         authorId: 1

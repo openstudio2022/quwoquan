@@ -3,12 +3,13 @@ package assistant_run_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	presentation "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/presentation"
 )
 
-func TestPresentationStreamAppliesOrderedSnapshotPatchCommitAndIdempotentReplay(t *testing.T) {
+func TestPresentationStreamAppliesSnapshotCommitReplacementAndIdempotentReplay(t *testing.T) {
 	template := validPresentationTemplate()
 	document := presentation.Document{
 		TemplateRef:       presentation.TemplateRef(template),
@@ -31,39 +32,45 @@ func TestPresentationStreamAppliesOrderedSnapshotPatchCommitAndIdempotentReplay(
 	if err := projection.Apply(snapshot); err != nil {
 		t.Fatalf("Apply(idempotent snapshot) error = %v", err)
 	}
-	updatedTitle := template.Nodes[1]
-	updatedTitle.Title = "updated title"
-	patch := presentation.StreamEvent{
-		Type:         generated.AssistantStreamEventTypePresentationPatch,
-		BaseRevision: 1,
-		Revision:     2,
-		Patches: []presentation.NodePatch{{
-			Operation: presentation.PatchReplace,
-			NodeID:    updatedTitle.NodeID,
-			Node:      &updatedTitle,
-		}},
-	}
-	if err := projection.Apply(patch); err != nil {
-		t.Fatalf("Apply(patch) error = %v", err)
-	}
 	commit := presentation.StreamEvent{
 		Type:         generated.AssistantStreamEventTypePresentationCommit,
-		BaseRevision: 2,
-		Revision:     3,
+		BaseRevision: 1,
+		Revision:     2,
 	}
 	if err := projection.Apply(commit); err != nil {
 		t.Fatalf("Apply(commit) error = %v", err)
 	}
-	result, committed := projection.Snapshot()
-	if !committed || result.Revision != 3 || result.Nodes[1].Title != "updated title" {
-		t.Fatalf("projection snapshot = %#v committed=%v", result, committed)
-	}
 	if err := projection.Apply(commit); err != nil {
 		t.Fatalf("Apply(idempotent commit) error = %v", err)
 	}
+	replacement := document
+	replacement.Revision = 3
+	replacement.Nodes = append([]presentation.Node(nil), document.Nodes...)
+	replacement.Nodes[1].Title = "updated title"
+	replacementSnapshot := presentation.StreamEvent{
+		Type:         generated.AssistantStreamEventTypePresentationSnapshot,
+		BaseRevision: 2,
+		Revision:     3,
+		Document:     &replacement,
+	}
+	if err := projection.Apply(replacementSnapshot); err != nil {
+		t.Fatalf("Apply(replacement snapshot) error = %v", err)
+	}
+	replacementCommit := presentation.StreamEvent{
+		Type:         generated.AssistantStreamEventTypePresentationCommit,
+		BaseRevision: 3,
+		Revision:     4,
+	}
+	if err := projection.Apply(replacementCommit); err != nil {
+		t.Fatalf("Apply(replacement commit) error = %v", err)
+	}
+	result, committed := projection.Snapshot()
+	if !committed || result.Revision != 4 || result.Nodes[1].Title != "updated title" {
+		t.Fatalf("projection snapshot = %#v committed=%v", result, committed)
+	}
 }
 
-func TestPresentationStreamRejectsOutOfOrderConflictAndUnsafeTreePatch(t *testing.T) {
+func TestPresentationStreamRejectsOutOfOrderConflictAndInvalidReplacement(t *testing.T) {
 	template := validPresentationTemplate()
 	document := presentation.Document{
 		TemplateRef:       presentation.TemplateRef(template),
@@ -89,17 +96,6 @@ func TestPresentationStreamRejectsOutOfOrderConflictAndUnsafeTreePatch(t *testin
 	}); !errors.Is(err, presentation.ErrPresentationRevision) {
 		t.Fatalf("out-of-order error = %v", err)
 	}
-	if err := projection.Apply(presentation.StreamEvent{
-		Type:         generated.AssistantStreamEventTypePresentationPatch,
-		BaseRevision: 1,
-		Revision:     2,
-		Patches: []presentation.NodePatch{{
-			Operation: presentation.PatchRemove,
-			NodeID:    template.RootNodeID,
-		}},
-	}); !errors.Is(err, presentation.ErrPresentationRevision) {
-		t.Fatalf("root removal error = %v", err)
-	}
 	conflictingDocument := document
 	conflictingDocument.FallbackMarkdown = "different"
 	if err := projection.Apply(presentation.StreamEvent{
@@ -108,5 +104,25 @@ func TestPresentationStreamRejectsOutOfOrderConflictAndUnsafeTreePatch(t *testin
 		Document: &conflictingDocument,
 	}); !errors.Is(err, presentation.ErrPresentationRevision) {
 		t.Fatalf("same-revision conflict error = %v", err)
+	}
+	if err := projection.Apply(presentation.StreamEvent{
+		Type:         generated.AssistantStreamEventTypePresentationCommit,
+		BaseRevision: 1,
+		Revision:     2,
+	}); err != nil {
+		t.Fatalf("Apply(commit) error = %v", err)
+	}
+	committedReplacement := document
+	committedReplacement.Revision = 3
+	committedReplacement.CommittedAt = time.Date(
+		2026, time.August, 8, 0, 0, 0, 0, time.UTC,
+	)
+	if err := projection.Apply(presentation.StreamEvent{
+		Type:         generated.AssistantStreamEventTypePresentationSnapshot,
+		BaseRevision: 2,
+		Revision:     3,
+		Document:     &committedReplacement,
+	}); !errors.Is(err, presentation.ErrPresentationRevision) {
+		t.Fatalf("committed replacement snapshot error = %v", err)
 	}
 }

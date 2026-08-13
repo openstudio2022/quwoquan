@@ -49,6 +49,20 @@ assistant_access:
     mode: owner_scoped
     scopes:
     - assistant.user.user_account.read
+    reader:
+      descriptor_id: account.user_interest_profile
+      resolver_ref: user.interest_profile
+      owner_service: user-service
+      owner_operation_ref: user.user_account.GetUserInterestProfile
+      input_schema_ref: assistant.GetAssistantRunQuery
+      output_schema_ref: assistant.ContextSegment
+      object_type_ref: user.UserAccount
+      authority: domain_canonical
+      sensitivity: private
+      accepted_source_kinds: [memory]
+      surface_kinds: [personal]
+      artifact_policy: inline_bounded
+      citation_policy: source_reference
   cite:
     mode: none
     scopes: []

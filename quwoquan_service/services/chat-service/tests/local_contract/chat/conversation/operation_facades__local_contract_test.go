@@ -19,6 +19,7 @@ package local_contract
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -150,6 +151,52 @@ type operationReadinessAnnouncement struct{}
 
 func (operationReadinessAnnouncement) SendAnnouncementSystemMessage(context.Context, string, string, string, string) error {
 	return nil
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-003
+func TestConversationErrorPathUsesCompleteRuntimeErrorEnvelope(t *testing.T) {
+	// 非法 JSON 在进入 application facet 之前被拒绝，handler 依赖可为空。
+	handler := chathttp.NewChatHandler(nil, nil, nil, nil, nil)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/chat/conversations",
+		strings.NewReader(`{not json`),
+	)
+	request = request.WithContext(rtauth.WithPrincipal(
+		request.Context(),
+		rtauth.Principal{
+			Actor: operation.ActorContext{
+				AccountID: "account-owner",
+				PersonaID: "persona-owner",
+			},
+		},
+	))
+	request.Header.Set("X-Request-Id", "req-envelope-chat")
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if envelope["code"] != "CHAT.USER.invalid_argument" {
+		t.Fatalf("code=%v", envelope["code"])
+	}
+	if envelope["requestId"] != "req-envelope-chat" {
+		t.Fatalf("requestId=%v", envelope["requestId"])
+	}
+	for _, field := range []string{"userMessage", "kind", "origin", "nature"} {
+		value, _ := envelope[field].(string)
+		if value == "" {
+			t.Fatalf("%s missing in envelope: %s", field, response.Body.String())
+		}
+	}
 }
 
 func TestConversationProductionRoutesExecuteAllPublicApplicationFacets(t *testing.T) {

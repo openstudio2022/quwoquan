@@ -231,6 +231,10 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleListReports(w, r)
 	case "ListUserPosts":
 		h.handleListUserPosts(w, r)
+	case "ListPostsByGathering":
+		h.handleListPostsByGathering(w, r)
+	case "GetGatheringSocialProof":
+		h.handleGetGatheringSocialProof(w, r)
 	case "MarkIntersectionsVisited":
 		h.dispatchIntersectionVisitState(w, r, func(handler intersectionVisitStateHTTPHandler) {
 			handler.MarkVisited(w, r)
@@ -265,6 +269,12 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 			return
 		}
 		h.originalAccessQuotaHandler.Reserve(w, r)
+	case "GetOriginalImageAccessAudit":
+		if h.originalAccessQuotaHandler == nil {
+			writeHTTPError(w, r, contentgenerated.AppErrorFromRequiredDependencyUnavailable("OriginalAccessQuota HTTP adapter is not configured"))
+			return
+		}
+		h.originalAccessQuotaHandler.GetAudit(w, r)
 	case "ResolveReport":
 		h.handleResolveReport(w, r)
 	case "RevokeGatheringSafetyTermination":

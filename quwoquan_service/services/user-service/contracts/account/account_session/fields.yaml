@@ -322,6 +322,28 @@ types:
         type: string
         constraints:
           - NOT_BLANK
+  ResearchSessionAttestationQuery:
+    fields:
+      - name: researchIdentityAttestation
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_wire_name: X-Research-Identity-Attestation
+  ResearchSessionAttestationView:
+    fields:
+      - name: subjectHash
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: attestationId
+        type: string
+        constraints:
+          - NOT_BLANK
+      - name: expiresAt
+        type: timestamp
+        constraints:
+          - NOT_NULL
   ActivePersonaEnvelope:
     fields:
       - {name: personaId, type: string, constraints: [NOT_BLANK]}

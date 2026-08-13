@@ -7,7 +7,7 @@
     "sessionId": "asn_replay_direct",
     "turnId": "atn_replay_direct",
     "userId": "u_replay",
-    "inputText": "What can XiaoQu do for daily planning?",
+    "inputText": "闲聊:What can XiaoQu do for daily planning?",
     "clientContext": {
       "surfaceId": "assistant.personal"
     }

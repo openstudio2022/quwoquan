@@ -52,6 +52,11 @@ var SupportedEventTypes = []string{
 const (
 	AssistantMentionedStream  = "events.chat.assistant_mentions"
 	AssistantMembershipStream = "events.chat.assistant_memberships"
+	// ChatMessagesStream 是面向 notification-service 的 MessageSent durable
+	// 扇出（离线推送投影的至少一次事件源）。与 rt:resume:chat:user:{id}
+	// 的 realtime 补洞坐标物理隔离：本 stream 走 general durable scene，
+	// 消费者是通知投影，不是 realtime-gateway。
+	ChatMessagesStream = "events.chat.messages"
 )
 
 const (
@@ -432,7 +437,67 @@ func (p *EventPublisher) PublishRecordedDomainEvent(
 			return fmt.Errorf("publish assistant membership stream: %w", err)
 		}
 	}
+	// 仅 outbox 主路径（带稳定 eventId）的 MessageSent 进入离线推送扇出，
+	// 通知投影以 eventId 幂等去重；无 eventId 的即时路径不产生投递事实。
+	if eventType == messageevent.MessageSent {
+		durable, err := p.chatMessageDurableMessage(ctx, evt)
+		if err != nil {
+			return fmt.Errorf("resolve chat message durable recipients: %w", err)
+		}
+		if _, err := p.transport.AppendDurable(ctx, durable); err != nil {
+			return fmt.Errorf("publish chat messages stream: %w", err)
+		}
+	}
 	return nil
+}
+
+// chatMessageDurableMessage 构造面向通知投影的最小化事件
+//（chat-offline-push-delivery REQ-004：只携带投递决策与推送预览所需字段，
+// 不携带 card/media/mentions 细节）。收件人为会话活跃成员去除发送者。
+func (p *EventPublisher) chatMessageDurableMessage(
+	ctx context.Context,
+	evt DomainEvent,
+) (runtimemessaging.DurableMessage, error) {
+	recipients, err := p.recipients(ctx, evt.ConversationID)
+	if err != nil {
+		return runtimemessaging.DurableMessage{}, err
+	}
+	senderID := stringPayload(evt.Payload, "senderId")
+	offlineRecipients := make([]string, 0, len(recipients))
+	for _, userID := range recipients {
+		if userID == senderID {
+			continue
+		}
+		offlineRecipients = append(offlineRecipients, userID)
+	}
+	encodedRecipients, err := json.Marshal(offlineRecipients)
+	if err != nil {
+		return runtimemessaging.DurableMessage{}, err
+	}
+	seq := ""
+	if rawSeq, exists := evt.Payload["seq"]; exists && rawSeq != nil {
+		seq = streamString(rawSeq)
+	}
+	fields := []runtimemessaging.DurableField{
+		{Name: "eventId", Value: evt.EventID},
+		{Name: "eventType", Value: evt.Type},
+		{Name: "conversationId", Value: evt.ConversationID},
+		{Name: "messageId", Value: stringPayload(evt.Payload, "messageId")},
+		{Name: "seq", Value: seq},
+		{Name: "senderId", Value: senderID},
+		{
+			Name:  "senderDisplayNameSnapshot",
+			Value: stringPayload(evt.Payload, "senderDisplayNameSnapshot"),
+		},
+		{Name: "messageType", Value: stringPayload(evt.Payload, "type")},
+		{Name: "content", Value: stringPayload(evt.Payload, "content")},
+		{Name: "recipients", Value: string(encodedRecipients)},
+		{Name: "occurredAt", Value: evt.Timestamp.Format(time.RFC3339Nano)},
+	}
+	return runtimemessaging.DurableMessage{
+		Stream: ChatMessagesStream,
+		Fields: fields,
+	}, nil
 }
 
 func isSupportedEventType(eventType string) bool {

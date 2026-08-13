@@ -51,10 +51,12 @@ query ContentPostDetailBase($postId: ID!) {
     }
     status
     visibility
+    gatheringRef
     likeCount
     commentCount
     shareCount
     viewCount
+    viewerLiked
     createdAt
     updatedAt
     publishedAt

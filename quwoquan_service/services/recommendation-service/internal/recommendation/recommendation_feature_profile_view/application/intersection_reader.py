@@ -6,6 +6,7 @@ from typing import Any, Mapping, Protocol
 
 
 ALLOWED_INTERSECTION_CLASSES = frozenset({"fact", "affinity"})
+ALLOWED_SOCIAL_PROOF_ANCHORS = frozenset({"organizer", "entity", "content", "creator"})
 ALLOWED_SUPPLY_KEYS = frozenset(
     {"entity_page_view", "entity_wishlist", "circle_membership", "post_declared_visit"}
 )
@@ -159,6 +160,49 @@ class Reader:
         )
         self._validate_snapshot(snapshot.reasons, snapshot.generated_at)
         return snapshot
+
+    def get_gathering_social_proof(
+        self,
+        *,
+        anchor_kind: str,
+        object_id: str,
+    ) -> dict[str, int]:
+        """四锚点两级诚实社会证明计数（读时聚合，不落计数缓存）。
+
+        anchorKind 闭集 organizer/entity/content/creator；计数只从发起证据、
+        active Participation 与公开回顾事实派生，无内容的行动永远不进经历级。
+        """
+        anchor = anchor_kind.strip()
+        normalized_object = object_id.strip()
+        if anchor not in ALLOWED_SOCIAL_PROOF_ANCHORS or not normalized_object:
+            raise ValueError("gathering social proof query is invalid")
+        return self._store.read_gathering_social_proof(
+            anchor_kind=anchor,
+            object_id=normalized_object,
+        )
+
+    def get_flywheel_funnel(
+        self,
+        *,
+        window_from,
+        window_to,
+        source_object_kind: str = "",
+        source_object_id: str = "",
+        capacity_tier: str = "",
+        tag_ref: str = "",
+    ) -> dict[str, object]:
+        """北极星漏斗多维诚实快照（分子分母只从域事实投影派生）。"""
+        tier = capacity_tier.strip()
+        if tier and tier not in {"duo", "group"}:
+            raise ValueError("flywheel funnel capacityTier is invalid")
+        return self._store.read_flywheel_funnel(
+            window_from=window_from,
+            window_to=window_to,
+            source_object_kind=source_object_kind.strip(),
+            source_object_id=source_object_id.strip(),
+            capacity_tier=tier,
+            tag_ref=tag_ref.strip(),
+        )
 
     def get_supply(self, *, supply_key: str) -> IntersectionSupplySnapshot:
         normalized_key = supply_key.strip()

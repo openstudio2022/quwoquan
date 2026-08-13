@@ -52,7 +52,7 @@ REQUIRED_CODE_EVIDENCE = (
     "quwoquan_service/services/notification-service/tests/api_integration/notification_delivery/notification/interaction_notification_stream__api_integration_test.go",
     "quwoquan_ops/cli/lib/test_data/providers/content_service.py",
     "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/run_report_feedback_lifecycle_probe.py",
-    "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/report_feedback_probe_support.py",
+    "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/support/report_feedback_probe_support.py",
 )
 
 

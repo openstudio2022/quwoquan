@@ -78,7 +78,9 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: 3
+  # 跨服务 durable 事实流（events.rtc.*）的发布/消费方必须共用同一 db
+  # （运行时事实为 db0）；共享单实例时 scene 隔离靠 key 前缀而非 db。
+  default: 0
 - key: sys.rtc-service.redis.general.mode
   type: string
   scope: workload
@@ -99,7 +101,8 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: 4
+  # realtime 推送流由 realtime-gateway（db0）消费，发布侧必须同 db。
+  default: 0
 - key: sys.rtc-service.redis.realtime.mode
   type: string
   scope: workload

@@ -1,6 +1,11 @@
-package main
+package bootstrap
 
-import "quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimeconfig"
+import (
+	"strings"
+
+	"quwoquan_service/runtime/servicehost"
+	"quwoquan_service/services/assistant-service/internal/assistant/assistant_session/infrastructure/runtimeconfig"
+)
 
 type redisPoolCfg = runtimeconfig.RedisPoolConfig
 type redisSceneCfg = runtimeconfig.RedisSceneConfig
@@ -22,4 +27,14 @@ func mergeConfigFile(cfg *config, path string) error {
 
 func applyEnvOverrides(cfg *config) error {
 	return runtimeconfig.ApplyEnvOverrides(cfg)
+}
+
+func assistantModuleEnvironmentValue(key string, fallback string) string {
+	value := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("assistant-service", key),
+	)
+	if value == "" {
+		return fallback
+	}
+	return value
 }

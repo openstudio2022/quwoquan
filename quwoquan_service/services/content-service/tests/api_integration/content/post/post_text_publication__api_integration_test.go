@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-002.t1
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-002.t2
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-003.t1
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-003.t2
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-003.t3
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-003.t4
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
 // readiness_case: apply-post-lifecycle-events-api
 package api_integration
@@ -34,6 +40,7 @@ type textPublicationHTTPHarness struct {
 	service *postapp.PostService
 }
 
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-002
 func TestTextPublicationLengthAndRateAdmissionThroughHTTP(t *testing.T) {
 	cleanPosts(t)
 	t.Cleanup(func() { cleanPosts(t) })
@@ -119,6 +126,8 @@ func TestTextPublicationLengthAndRateAdmissionThroughHTTP(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-003
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
 func TestTextPublicationSafetyAndModerationRoundTripThroughHTTP(t *testing.T) {
 	testCases := []struct {
 		name             string
@@ -378,6 +387,95 @@ func newTextPublicationHTTPHarness(
 		).Routes(),
 		store:   store,
 		service: service,
+	}
+}
+
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-006
+func TestTextPublicationSemanticMentionProjectionRoundTripThroughHTTP(t *testing.T) {
+	cleanPosts(t)
+	t.Cleanup(func() { cleanPosts(t) })
+
+	harness := newTextPublicationHTTPHarness(
+		t,
+		postgovernance.NewRedisPublicationRateGate(
+			requireTestRouter(t).Scene("general"),
+		),
+		testsupport.FixedPublicationSafetyGate{
+			Decision: postports.PublicationSafetyAllow,
+		},
+	)
+	authorID := "persona-text-publication-mentions"
+	response := publishTextThroughHarness(
+		t,
+		harness.handler,
+		authorID,
+		"intent-semantic-mentions",
+		"draft-semantic-mentions",
+		map[string]any{
+			"contentType": "micro",
+			"body":        "九寨沟的秋天值得专程去一次",
+			"visibility":  "public",
+			"semanticMentions": []map[string]any{
+				{
+					"mentionId": "m_entity_published",
+					"kind":      "entity",
+					"status":    "published",
+					"targetRef": "/entity/地点/景区/九寨沟",
+				},
+				{
+					"mentionId": "m_tag_published",
+					"kind":      "tag",
+					"status":    "published",
+					"targetRef": "tag:topic:川西秋色",
+				},
+				{
+					"mentionId": "m_entity_pending",
+					"kind":      "entity",
+					"status":    "pending",
+					"targetRef": "/entity/地点/景区/黄龙",
+				},
+			},
+		},
+	)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf(
+			"mention publication status=%d body=%s",
+			response.Code,
+			response.Body.String(),
+		)
+	}
+	receipt := decodeTestObject(t, response)
+	postID := asTestString(receipt["postId"])
+	if postID == "" {
+		t.Fatalf("publication receipt has no postId: %+v", receipt)
+	}
+
+	// 公开读回：只有 published mention 进入 entityRefs/tagRefs 投影；
+	// pending mention 不得伪装成事实标签。
+	request := authenticatedPublicationRequest(
+		t,
+		http.MethodGet,
+		"/content/posts/"+postID,
+		authorID,
+		nil,
+	)
+	readback := httptest.NewRecorder()
+	harness.handler.ServeHTTP(readback, request)
+	if readback.Code != http.StatusOK {
+		t.Fatalf("GetPost status=%d body=%s", readback.Code, readback.Body.String())
+	}
+	detail := decodeTestObject(t, readback)
+	entityRefs, _ := detail["entityRefs"].([]any)
+	tagRefs, _ := detail["tagRefs"].([]any)
+	if len(entityRefs) != 1 || asTestString(entityRefs[0]) != "/entity/地点/景区/九寨沟" {
+		t.Fatalf("entityRefs=%v want published mention only", entityRefs)
+	}
+	if len(tagRefs) != 1 || asTestString(tagRefs[0]) != "tag:topic:川西秋色" {
+		t.Fatalf("tagRefs=%v want published mention only", tagRefs)
+	}
+	mentions, _ := detail["semanticMentions"].([]any)
+	if len(mentions) != 3 {
+		t.Fatalf("semanticMentions=%v want all three author mentions retained", mentions)
 	}
 }
 

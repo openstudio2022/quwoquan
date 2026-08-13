@@ -322,15 +322,15 @@ func TestElasticsearchLogSinkProvidesAllReadPortsAndMasksSensitiveFields(
 		t.Fatalf("GetPageExperienceStats() = %+v", pageStats)
 	}
 
-	sessions, totalEvents, err := store.ListDistinctSessions(ctx, from, to, 100)
+	sessions, pageViews, err := store.ListDistinctSessions(ctx, from, to, 100)
 	if err != nil {
 		t.Fatalf("ListDistinctSessions() error = %v", err)
 	}
-	if totalEvents != 3 || len(sessions) != 2 {
+	if pageViews != 2 || len(sessions) != 2 {
 		t.Fatalf(
-			"ListDistinctSessions() = %v, %d; want two sessions and three events",
+			"ListDistinctSessions() = %v, %d; want two sessions and two page views",
 			sessions,
-			totalEvents,
+			pageViews,
 		)
 	}
 
@@ -935,6 +935,8 @@ func elasticsearchReadFixture(
 					map[string]any{"key": map[string]any{"sessionId": "s.a.1"}},
 					map[string]any{"key": map[string]any{"sessionId": "s.b.1"}},
 				}},
+				// PV = page_open 过滤计数（窗口内 3 条事件中 2 条为 page_open）。
+				"pageViews": map[string]any{"doc_count": 2},
 			},
 		})
 	case strings.Contains(path, "runtime-diagnostics-raw"):

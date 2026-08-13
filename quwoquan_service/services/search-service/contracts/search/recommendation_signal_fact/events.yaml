@@ -1,0 +1,18 @@
+events:
+- name: SearchRecommendationSignalPublished
+  description: 归一化查询意图或真实点击被发布到推荐短期特征流；曝光结果不得写成点击亲和
+  delivery_semantics: durable_stream
+  topic: events.search.recommendation_signals
+  payload_entity: RecommendationSignalFact
+  payload_fields:
+  - signalId
+  - signalType
+  - searchRequestId
+  - sessionId
+  - userId
+  - normalizedQuery
+  - relatedTerms
+  - engagedObjectIds
+  - experimentBucket
+  - resultCount
+  - createdAt

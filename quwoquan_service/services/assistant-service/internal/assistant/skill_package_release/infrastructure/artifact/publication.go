@@ -16,6 +16,9 @@ type PublicationArtifact struct {
 	ExpectedRevision int                  `json:"expectedRevision"`
 	ActivatedBy      string               `json:"activatedBy"`
 	Release          packagemodel.Release `json:"release"`
+	// EvaluationReceipt 是激活的必备输入:证明轨迹回放评测在 exact package
+	// digest 与 exact replay corpus asset digest 上通过。
+	EvaluationReceipt packagemodel.EvaluationReceipt `json:"evaluationReceipt"`
 }
 
 func (artifact PublicationArtifact) Validate() error {
@@ -31,6 +34,12 @@ func (artifact PublicationArtifact) Validate() error {
 	digest, err := packagemodel.Digest(normalized)
 	if err != nil || digest != normalized.ReleaseDigest {
 		return fmt.Errorf("Skill package release digest is invalid")
+	}
+	if err := packagemodel.ValidateEvaluationReceipt(
+		artifact.EvaluationReceipt,
+		normalized,
+	); err != nil {
+		return fmt.Errorf("Skill package publication evaluation receipt is invalid: %w", err)
 	}
 	return nil
 }

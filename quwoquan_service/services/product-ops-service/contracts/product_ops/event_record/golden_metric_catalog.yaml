@@ -1,6 +1,23 @@
+# 黄金指标注册表（唯一业务指标字典，analytics-metric-dictionary 的机器可校验载体）。
+#
+# 每条指标声明：身份（metric_id/business/tier/owner）、来源轨（source.track）、
+# 唯一权威计算口径（source）、阈值目标（target）、告警绑定（alerting，可选）、
+# 展示落点（display，可选）与时效目标（freshness_seconds）。
+#
+# - source.track 闭集见 registration_rules.allowed_source_tracks：
+#   * product_telemetry：ES 权威事件（event_catalog.yaml 定义的 eventType）。
+#   * behavior_attribution：推荐行为归因 Prometheus series（BehaviorSignal 轨，
+#     禁止伪装成 Ops 事件；这里只登记指标口径，不搬事实）。
+# - alerting 声明该指标绑定的告警名与触发阈值；阈值必须落在 target 的违反侧，
+#   且与告警定义文件中的数值逐字一致（由 verify_metric_threshold_homology 门禁校验）。
+#   未声明 alerting 的 primary 指标属于待补告警缺口，禁止新增第二处阈值真相源。
+# - display.portal_level 决定 Portal L1-L4 API 中 L1/L2 层卡片成员；L3/L4 由
+#   契约 SLI 轨与基础设施轨自动归属，不进入本字典。
 registration_rules:
   max_primary_metrics_per_business: 3
-  required_source_track: product_telemetry
+  allowed_source_tracks:
+  - product_telemetry
+  - behavior_attribution
   forbidden_dimensions:
   - sessionId
   - requestId
@@ -11,6 +28,9 @@ registration_rules:
   - pageName
   - appVersion
   - networkClass
+alerting_policies:
+  prometheus: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+  elasticsearch_product_telemetry: quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml
 metrics:
 - metric_id: app_anr_rate
   business: app_experience
@@ -19,7 +39,8 @@ metrics:
   source:
     track: product_telemetry
     numerator_event_type: app_anr_outcome
-    numerator_result: detected
+    numerator_filters:
+      result: detected
     denominator_event_type: app_startup
     aggregation: unique_session_ratio
   dimensions:
@@ -30,6 +51,13 @@ metrics:
   target:
     operator: less_than
     value: 0.0047
+  alerting:
+    policy: prometheus
+    alert_name: AppANREventRateHigh
+    threshold: 0.0047
+  display:
+    portal_level: L1
+    label: ANR 会话率
   freshness_seconds: 300
 - metric_id: page_first_usable_p95_ms
   business: app_experience
@@ -48,6 +76,9 @@ metrics:
   target:
     operator: less_than_or_equal
     value: 2000
+  display:
+    portal_level: L1
+    label: 页面首可用 P95
   freshness_seconds: 300
 - metric_id: page_error_recovery_rate
   business: app_experience
@@ -56,9 +87,11 @@ metrics:
   source:
     track: product_telemetry
     numerator_event_type: page_error_outcome
-    numerator_result: recovered
+    numerator_filters:
+      result: recovered
     denominator_event_type: page_error_outcome
-    denominator_result: shown
+    denominator_filters:
+      result: shown
     aggregation: event_ratio
   dimensions:
   - pageName
@@ -70,6 +103,9 @@ metrics:
   target:
     operator: greater_than_or_equal
     value: 0.8
+  display:
+    portal_level: L1
+    label: 页面错误恢复率
   freshness_seconds: 300
 - metric_id: app_jank_frame_rate
   business: app_experience
@@ -91,6 +127,15 @@ metrics:
   target:
     operator: less_than
     value: 0.01
+  # 告警阈值 0.05 是 Prometheus 低基数近实时预警口径（仅 home|video_book 页面），
+  # 权威去重会话率仍从 ES 回读；阈值差异在此显式登记，禁止隐式漂移。
+  alerting:
+    policy: prometheus
+    alert_name: AppJankFrameRateHigh
+    threshold: 0.05
+  display:
+    portal_level: L1
+    label: 卡顿帧率
   freshness_seconds: 300
 - metric_id: video_playback_ready_p95_ms
   business: app_experience
@@ -110,6 +155,14 @@ metrics:
   target:
     operator: less_than_or_equal
     value: 2000
+  # target 2000ms 是体验目标；ES 告警在显著劣化（3000ms）才触发，差异显式登记。
+  alerting:
+    policy: elasticsearch_product_telemetry
+    alert_name: product-video-ready-p95-high
+    threshold: 3000
+  display:
+    portal_level: L1
+    label: 视频起播 P95
   freshness_seconds: 300
 - metric_id: video_playback_rebuffer_ratio
   business: app_experience
@@ -131,4 +184,222 @@ metrics:
   target:
     operator: less_than
     value: 0.02
+  alerting:
+    policy: elasticsearch_product_telemetry
+    alert_name: product-video-rebuffer-rate-high
+    threshold: 0.02
+  display:
+    portal_level: L1
+    label: 视频卡顿占比
+  freshness_seconds: 300
+- metric_id: journey_completion_rate
+  business: core_journey
+  tier: primary
+  owner: runtime-client-foundation
+  # 主旅程完成率：page_return / page_open。原 L1-L4 API 硬编码的
+  # five_tab_journey_completion_rate 收编于此，Portal 成员由本条驱动。
+  source:
+    track: product_telemetry
+    numerator_event_type: page_return
+    denominator_event_type: page_open
+    aggregation: event_ratio
+  dimensions:
+  - pageName
+  - appVersion
+  - networkClass
+  target:
+    operator: greater_than_or_equal
+    value: 0.9
+  display:
+    portal_level: L1
+    label: 主旅程完成率
+  freshness_seconds: 300
+- metric_id: crashed_session_rate
+  business: app_stability
+  tier: primary
+  owner: runtime-client-foundation
+  # 崩溃会话率（1 - crash-free sessions rate）：出现 runtime_exception 的
+  # 去重会话数 / 启动会话数。runtime_exception 含非致命异常，属于保守上界。
+  source:
+    track: product_telemetry
+    numerator_event_type: runtime_exception
+    denominator_event_type: app_startup
+    aggregation: unique_session_ratio
+  dimensions:
+  - pageName
+  - errorCode
+  - appVersion
+  - networkClass
+  target:
+    operator: less_than
+    value: 0.005
+  display:
+    portal_level: L1
+    label: 崩溃会话率
+  freshness_seconds: 300
+- metric_id: login_success_rate
+  business: account_access
+  tier: primary
+  owner: user-identity-profile-relationship
+  source:
+    track: product_telemetry
+    numerator_event_type: login_funnel
+    numerator_filters:
+      result: login_success
+    denominator_event_type: login_funnel
+    denominator_filters:
+      result: exposed
+    aggregation: unique_session_ratio
+  dimensions:
+  - pageName
+  - appVersion
+  - networkClass
+  - entryMode
+  - provider
+  target:
+    operator: greater_than_or_equal
+    value: 0.8
+  alerting:
+    policy: prometheus
+    alert_name: LoginCompletionRateLow
+    threshold: 0.8
+  display:
+    portal_level: L2
+    label: 登录成功率
+  freshness_seconds: 300
+- metric_id: content_publish_success_rate
+  business: content_creation
+  tier: primary
+  owner: discovery-content
+  source:
+    track: product_telemetry
+    numerator_event_type: content_publication
+    numerator_filters:
+      publicationStage: published
+      result: success
+    denominator_event_type: content_publication
+    denominator_filters:
+      publicationStage: submit_started
+    aggregation: event_ratio
+  dimensions:
+  - pageName
+  - appVersion
+  - networkClass
+  - contentType
+  target:
+    operator: greater_than_or_equal
+    value: 0.95
+  display:
+    portal_level: L2
+    label: 发布成功率
+  freshness_seconds: 300
+- metric_id: search_effective_click_rate
+  business: search_discovery
+  tier: primary
+  owner: global-search-experience
+  # 事件级近似口径（click/submit）；requestId 去重的权威口径在
+  # search_funnel rollup（effectiveActionRate），告警绑定 rollup 口径。
+  source:
+    track: product_telemetry
+    numerator_event_type: search_result_click
+    denominator_event_type: search_query_submit
+    aggregation: event_ratio
+  dimensions:
+  - pageName
+  - appVersion
+  - networkClass
+  - objectType
+  target:
+    operator: greater_than_or_equal
+    value: 0.2
+  alerting:
+    policy: elasticsearch_product_telemetry
+    alert_name: product-search-effective-action-rate-low
+    threshold: 0.2
+  display:
+    portal_level: L2
+    label: 搜索有效点击率
+  freshness_seconds: 300
+- metric_id: feed_click_through_rate
+  business: content_consumption
+  tier: primary
+  owner: recommendation-platform
+  # 推荐 CTR 唯一权威口径 = engagement{action=click} / impressed，
+  # 与 recommendation_slo.yaml#click_through_rate 及告警共用同一分子 series；
+  # recommendation_feed_click_total 为七态漏斗诊断计数，不作 SLI 分子。
+  source:
+    track: behavior_attribution
+    numerator_series: recommendation_feed_engagement_total
+    numerator_series_labels:
+      action: click
+    denominator_series: recommendation_feed_impressed_total
+    aggregation: series_rate_ratio
+  dimensions: []
+  target:
+    operator: greater_than_or_equal
+    value: 0.05
+  alerting:
+    policy: prometheus
+    alert_name: RecommendationClickThroughRateLow
+    threshold: 0.05
+  display:
+    portal_level: L2
+    label: 推荐 CTR
+  freshness_seconds: 60
+# 交集飞轮北极星三比例：分子分母唯一真相源为 recommendation 内部读面
+# GetRecommendationFlywheelFunnel（域事实读时聚合，时间窗必填，可按
+# sourceObjectKind/sourceObjectId/capacityTier/tagRef 切片）。诚实红线：
+# 空数据为零、越界 truncated、无预聚合缓存、读面只给分子分母不下发百分比；
+# Ops product_telemetry 轨（gathering_join_succeeded 等）只作体验辅证，
+# 不得充当分子分母。series 字段此处登记读面响应字段名而非 Prometheus series。
+- metric_id: flywheel_wishlist_to_join_rate
+  business: intersection_flywheel
+  tier: primary
+  owner: object-homepage-network
+  source:
+    track: domain_fact_readface
+    numerator_series: wishlistToJoinedCount
+    denominator_series: wishlistedPersonaCount
+    aggregation: readface_ratio
+  dimensions:
+  - sourceObjectKind
+  - sourceObjectId
+  - capacityTier
+  - tagRef
+  target:
+    operator: greater_than_or_equal
+    value: 0.0
+  freshness_seconds: 300
+- metric_id: flywheel_formed_to_experienced_rate
+  business: intersection_flywheel
+  tier: primary
+  owner: object-homepage-network
+  source:
+    track: domain_fact_readface
+    numerator_series: experiencedCount
+    denominator_series: formedCount
+    aggregation: readface_ratio
+  dimensions:
+  - sourceObjectKind
+  - sourceObjectId
+  - capacityTier
+  - tagRef
+  target:
+    operator: greater_than_or_equal
+    value: 0.0
+  freshness_seconds: 300
+- metric_id: flywheel_facilitation_republish_rate
+  business: intersection_flywheel
+  tier: primary
+  owner: object-homepage-network
+  source:
+    track: domain_fact_readface
+    numerator_series: creatorRepublishedCount
+    denominator_series: facilitationNotifiedCount
+    aggregation: readface_ratio
+  dimensions:
+  - tagRef
+  target:
+    operator: greater_than_or_equal
+    value: 0.0
   freshness_seconds: 300

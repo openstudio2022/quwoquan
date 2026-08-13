@@ -14,6 +14,7 @@ func main() {
 	var contractGraphPath string
 	var contractGraphLockPath string
 	var generatedManifestPath string
+	var fieldBindingReportPath string
 	var assistantRuntimeEnumsGoOutput string
 	var checkAssistantRuntimeEnumsGo bool
 	var citationDestinationsGoOutput string
@@ -27,6 +28,12 @@ func main() {
 	flag.StringVar(&contractGraphPath, "contract-graph", "generated/contract_graph.json", "fixed ContractGraph JSON bundle")
 	flag.StringVar(&contractGraphLockPath, "contract-graph-lock", "../quwoquan_app/tool/cloud_codegen/contract_graph.lock.json", "accepted App ContractGraph lock")
 	flag.StringVar(&generatedManifestPath, "generated-manifest", "../quwoquan_app/tool/cloud_codegen/generated_manifest.json", "App generated output manifest")
+	flag.StringVar(
+		&fieldBindingReportPath,
+		"emit-field-binding-report",
+		"../quwoquan_app/tool/cloud_codegen/field_binding_report.json",
+		"contract enum_ref to generated Dart field binding report consumed by the enum typed-binding gate",
+	)
 	flag.StringVar(
 		&shellNavigationManifestPath,
 		"shell-navigation-manifest",
@@ -631,6 +638,9 @@ func main() {
 		exitErr(err)
 	}
 	if err := removeUntrackedGeneratedOutputs(); err != nil {
+		exitErr(err)
+	}
+	if err := writeFieldBindingReport(fieldBindingReportPath); err != nil {
 		exitErr(err)
 	}
 	if err := writeGeneratedManifest(generatedManifestPath); err != nil {

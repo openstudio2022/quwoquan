@@ -14,6 +14,7 @@ import (
 // intentionally has no score, index, embedding, features, raw objectId, or
 // arbitrary payload field, so DisallowUnknownFields rejects backend leakage.
 type searchOwnerResponse struct {
+	SearchRequestID  string                      `json:"searchRequestId"`
 	InterpretedQuery searchOwnerInterpretedQuery `json:"interpretedQuery"`
 	Hits             []searchOwnerHit            `json:"hits"`
 	Citations        []searchOwnerCitation       `json:"citations"`
@@ -33,13 +34,28 @@ type searchOwnerInterpretedQuery struct {
 }
 
 type searchOwnerHit struct {
-	ObjectRef    string `json:"objectRef"`
-	ObjectType   string `json:"objectType"`
-	ContentType  string `json:"contentType,omitempty"`
-	Title        string `json:"title"`
-	Snippet      string `json:"snippet,omitempty"`
-	ThumbnailURL string `json:"thumbnailUrl,omitempty"`
-	Action       string `json:"action,omitempty"`
+	ObjectRef    string                  `json:"objectRef"`
+	ObjectType   string                  `json:"objectType"`
+	ContentType  string                  `json:"contentType,omitempty"`
+	Title        string                  `json:"title"`
+	Snippet      string                  `json:"snippet,omitempty"`
+	ThumbnailURL string                  `json:"thumbnailUrl,omitempty"`
+	Action       string                  `json:"action,omitempty"`
+	RankPosition int                     `json:"rankPosition"`
+	MatchedTerms []string                `json:"matchedTerms"`
+	RankReasons  []searchOwnerRankReason `json:"rankReasons"`
+	Evidence     []searchOwnerEvidence   `json:"evidence"`
+}
+
+type searchOwnerRankReason struct {
+	Code   string  `json:"code"`
+	Label  string  `json:"label"`
+	Weight float64 `json:"weight"`
+}
+
+type searchOwnerEvidence struct {
+	Field   string `json:"field"`
+	Snippet string `json:"snippet"`
 }
 
 type searchOwnerCitation struct {
@@ -71,25 +87,37 @@ type searchOwnerProvenance struct {
 }
 
 type searchPageData struct {
-	Items       []searchPageItem  `json:"items"`
-	Facets      []searchPageFacet `json:"facets"`
-	Suggestions []string          `json:"suggestions"`
-	NextCursor  *string           `json:"nextCursor"`
+	Items           []searchPageItem          `json:"items"`
+	Facets          []searchPageFacet         `json:"facets"`
+	Suggestions     []string                  `json:"suggestions"`
+	MatchedTerms    []string                  `json:"matchedTerms"`
+	DegradeSignals  []searchPageDegradeSignal `json:"degradeSignals"`
+	SearchRequestID string                    `json:"searchRequestId"`
+	NextCursor      *string                   `json:"nextCursor"`
 }
 
 type searchPageItem struct {
 	ObjectRef    string  `json:"objectRef"`
 	ResultType   string  `json:"resultType"`
+	ContentType  *string `json:"contentType"`
 	Title        string  `json:"title"`
 	Subtitle     *string `json:"subtitle"`
 	Snippet      *string `json:"snippet"`
 	ThumbnailURL *string `json:"thumbnailUrl"`
 	Action       string  `json:"action"`
+	RankPosition int     `json:"rankPosition"`
+	RankReason   *string `json:"rankReason"`
 }
 
 type searchPageFacet struct {
 	Key   string `json:"key"`
 	Count int    `json:"count"`
+}
+
+type searchPageDegradeSignal struct {
+	Code       string  `json:"code"`
+	Message    string  `json:"message"`
+	ObjectType *string `json:"objectType"`
 }
 
 func decodeSearchOwnerPage(encoded []byte, pageSize int) (searchPageData, error) {
@@ -109,9 +137,6 @@ func decodeSearchOwnerPage(encoded []byte, pageSize int) (searchPageData, error)
 		owner.InterpretedQuery.DetectedTags == nil || owner.InterpretedQuery.SelectedObjectTypes == nil {
 		return searchPageData{}, errors.New("SearchPage owner response contains a nullable collection")
 	}
-	if len(owner.DegradeSignals) != 0 {
-		return searchPageData{}, errors.New("SearchPage owner returned a partial/degraded result")
-	}
 	if len(owner.Hits) > pageSize || len(owner.Facets) > pageSize || len(owner.InterpretedQuery.Variants) > pageSize {
 		return searchPageData{}, errors.New("SearchPage owner exceeded the requested page bound")
 	}
@@ -120,6 +145,10 @@ func decodeSearchOwnerPage(encoded []byte, pageSize int) (searchPageData, error)
 	}
 	if _, err := time.Parse(time.RFC3339Nano, owner.Provenance.GeneratedAt); err != nil {
 		return searchPageData{}, errors.New("SearchPage owner provenance time is invalid")
+	}
+	searchRequestID, err := boundedText(owner.SearchRequestID, "searchRequestId", 256, false)
+	if err != nil {
+		return searchPageData{}, err
 	}
 	var nextCursor *string
 	if owner.NextCursor != "" {
@@ -162,8 +191,43 @@ func decodeSearchOwnerPage(encoded []byte, pageSize int) (searchPageData, error)
 		seenSuggestions[term] = true
 		suggestions = append(suggestions, term)
 	}
+	matchedTerms := make([]string, 0, len(owner.InterpretedQuery.Tokens))
+	seenTerms := map[string]bool{}
+	for _, value := range owner.InterpretedQuery.Tokens {
+		term, err := boundedText(value, "matched term", maxSearchQueryBytes, false)
+		if err != nil {
+			return searchPageData{}, err
+		}
+		if seenTerms[term] {
+			continue
+		}
+		seenTerms[term] = true
+		matchedTerms = append(matchedTerms, term)
+	}
+	// Degrade signals pass through as typed data: a partially degraded search is
+	// still a served result and the App owns the degrade banner semantics.
+	degradeSignals := make([]searchPageDegradeSignal, 0, len(owner.DegradeSignals))
+	for _, signal := range owner.DegradeSignals {
+		code, err := boundedText(signal.Code, "degrade code", 256, false)
+		if err != nil {
+			return searchPageData{}, err
+		}
+		message, err := boundedText(signal.Message, "degrade message", 1024, false)
+		if err != nil {
+			return searchPageData{}, err
+		}
+		objectType, err := optionalText(signal.ObjectType, "degrade objectType", 256)
+		if err != nil {
+			return searchPageData{}, err
+		}
+		degradeSignals = append(degradeSignals, searchPageDegradeSignal{
+			Code: code, Message: message, ObjectType: objectType,
+		})
+	}
 	return searchPageData{
-		Items: items, Facets: facets, Suggestions: suggestions, NextCursor: nextCursor,
+		Items: items, Facets: facets, Suggestions: suggestions,
+		MatchedTerms: matchedTerms, DegradeSignals: degradeSignals,
+		SearchRequestID: searchRequestID, NextCursor: nextCursor,
 	}, nil
 }
 
@@ -192,9 +256,28 @@ func projectSearchPageItem(hit searchOwnerHit) (searchPageItem, error) {
 	if err != nil {
 		return searchPageItem{}, err
 	}
+	if hit.RankPosition < 0 {
+		return searchPageItem{}, errors.New("rankPosition must be non-negative")
+	}
+	var rankReason *string
+	for _, reason := range hit.RankReasons {
+		label := strings.TrimSpace(reason.Label)
+		if label == "" {
+			continue
+		}
+		validated, err := boundedText(label, "rankReason", 256, false)
+		if err != nil {
+			return searchPageItem{}, err
+		}
+		rankReason = &validated
+		break
+	}
 	return searchPageItem{
-		ObjectRef: objectRef, ResultType: resultType, Title: title,
-		Subtitle: nil, Snippet: snippet, ThumbnailURL: thumbnailURL, Action: action,
+		ObjectRef: objectRef, ResultType: resultType,
+		ContentType: searchPageContentTypeForCanonical(hit.ContentType),
+		Title:       title,
+		Subtitle:    nil, Snippet: snippet, ThumbnailURL: thumbnailURL, Action: action,
+		RankPosition: hit.RankPosition, RankReason: rankReason,
 	}, nil
 }
 
@@ -205,6 +288,17 @@ func searchPageObjectTypeForCanonical(value string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// searchPageContentTypeForCanonical maps the owner canonical content vocabulary
+// (article/image/video) onto the SearchPageContentType GraphQL enum. Anything
+// outside the closed set stays null instead of leaking backend variants.
+func searchPageContentTypeForCanonical(value string) *string {
+	enumValue, known := searchContentTypeBindingsReverse[strings.ToLower(strings.TrimSpace(value))]
+	if !known {
+		return nil
+	}
+	return &enumValue
 }
 
 func boundedText(value, label string, maximum int, allowEmpty bool) (string, error) {

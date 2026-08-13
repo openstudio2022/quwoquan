@@ -64,25 +64,48 @@ func (c *UserAvatarUpdateConsumer) Start(ctx context.Context) error {
 		return err
 	}
 	go func() {
-		defer func() {
-			if closeErr := sub.Close(); closeErr != nil {
-				c.logger.Warn("close user avatar subscription failed", "err", closeErr)
-			}
-		}()
-		ch := sub.Channel()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case msg, ok := <-ch:
-				if !ok {
-					return
-				}
-				c.handleMessage(ctx, msg.Payload)
-			}
+		if err := c.consume(ctx, sub); err != nil && ctx.Err() == nil {
+			c.logger.Error("user avatar consumer stopped", "err", err)
 		}
 	}()
 	return nil
+}
+
+// Run consumes avatar events until ctx is cancelled. Composition roots use this
+// blocking form so their worker supervisor can wait for the subscription to
+// close before shared Redis, Mongo and message resources are released.
+func (c *UserAvatarUpdateConsumer) Run(ctx context.Context) error {
+	if c == nil || c.client == nil || c.storage.UserStates == nil {
+		return nil
+	}
+	sub, err := c.client.Subscribe(ctx, userProfileEventChannel)
+	if err != nil {
+		return err
+	}
+	return c.consume(ctx, sub)
+}
+
+func (c *UserAvatarUpdateConsumer) consume(
+	ctx context.Context,
+	sub rtredis.Subscription,
+) error {
+	defer func() {
+		if closeErr := sub.Close(); closeErr != nil {
+			c.logger.Warn("close user avatar subscription failed", "err", closeErr)
+		}
+	}()
+	ch := sub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case msg, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			c.handleMessage(ctx, msg.Payload)
+		}
+	}
 }
 
 func (c *UserAvatarUpdateConsumer) handleMessage(ctx context.Context, payload string) {

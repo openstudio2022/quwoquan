@@ -42,6 +42,18 @@ class SubjectClosureReader(Protocol):
     def exists(self, account_id: str) -> bool: ...
 
 
+class ExclusionProfileReader(Protocol):
+    """Reads the subject's current strong negative-feedback profile.
+
+    Windows stay immutable, but every page served from an existing window must
+    project out content the subject has since disliked/hidden ("强反馈只影响
+    未来窗口"): already-delivered client history is untouched, while any page
+    read after the feedback excludes the offending items.
+    """
+
+    def read_for_scoring(self, subject_id: str) -> dict: ...
+
+
 class IdempotencyConflictError(RuntimeError):
     pass
 
@@ -74,11 +86,13 @@ class Facade:
         store: WindowStore,
         ranker: CandidateRanker,
         subject_closures: SubjectClosureReader,
+        exclusion_profiles: ExclusionProfileReader,
         window_id_factory: Callable[[str], str] | None = None,
     ) -> None:
         self._store = store
         self._ranker = ranker
         self._subject_closures = subject_closures
+        self._exclusion_profiles = exclusion_profiles
         self._window_id_factory = window_id_factory or (
             lambda idempotency_key: str(
                 uuid5(NAMESPACE_URL, f"quwoquan:recommendation-window:{idempotency_key}")
@@ -170,9 +184,40 @@ class Facade:
             raise SubjectClosedError("closed subjects cannot read recommendation windows")
         return self._page(window, from_ordinal=from_ordinal, limit=limit)
 
-    @staticmethod
-    def _page(window: RankedRecommendationWindow, *, from_ordinal: int, limit: int) -> RankedRecommendationPage:
+    def _current_hard_exclusions(
+        self,
+        subject_id: str,
+    ) -> tuple[set[str], set[str], set[str]]:
+        profile = self._exclusion_profiles.read_for_scoring(subject_id)
+        def _normalized(field: str) -> set[str]:
+            return {
+                str(value).strip()
+                for value in profile.get(field) or []
+                if str(value).strip()
+            }
+        return (
+            _normalized("negativeContentIds"),
+            _normalized("hiddenAuthorIds"),
+            _normalized("hiddenContentTypes"),
+        )
+
+    def _page(self, window: RankedRecommendationWindow, *, from_ordinal: int, limit: int) -> RankedRecommendationPage:
         items, next_ordinal = window.page(from_ordinal=from_ordinal, limit=limit)
+        # 未来窗口精确过滤：窗口本体与 ordinal 保持不可变，但每次读取都按
+        # subject 当前强负反馈投影过滤；页因此可以变短，next_ordinal 不受影响。
+        negative, hidden_authors, hidden_types = self._current_hard_exclusions(
+            window.subject_id
+        )
+        if negative or hidden_authors or hidden_types:
+            items = tuple(
+                item
+                for item in items
+                if item.content_id not in negative
+                and str(item.item_feature_snapshot.get("authorId") or "").strip()
+                not in hidden_authors
+                and str(item.item_feature_snapshot.get("contentType") or "").strip()
+                not in hidden_types
+            )
         return RankedRecommendationPage(
             window_id=window.window_id,
             scenario=window.scenario,

@@ -20,6 +20,10 @@ import (
 	ownerinfra "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/owner"
 )
 
+// contentContractGraphDigest is the opaque ContractGraph binding for the
+// content owner fixture; sha256("api-integration").
+const contentContractGraphDigest = "sha256:49ed3c40ba683b36c6e4806a69ace867924a499461d47ec4fbda8e4e91e5d53c"
+
 func TestPersistedGraphQLSelectsStableAndCandidateContentOwners(t *testing.T) {
 	stableCalls := 0
 	candidateCalls := 0
@@ -57,14 +61,14 @@ func newGraphQLOwner(t *testing.T, title string, calls *int) *httptest.Server {
 		if request.Method != http.MethodPost || request.URL.Path != "/internal/graphql" {
 			t.Errorf("owner request=%s %s", request.Method, request.URL.Path)
 		}
-		if request.Header.Get("X-Contract-Graph-SHA256") != "sha256:api-integration" {
+		if request.Header.Get("X-Contract-Graph-SHA256") != contentContractGraphDigest {
 			t.Errorf("missing ContractGraph binding")
 		}
 		if request.Header.Get("Authorization") != "Bearer graphql-api-integration" {
 			t.Errorf("missing service credential")
 		}
 		response.Header().Set("Content-Type", "application/json")
-		response.Header().Set("X-Contract-Graph-SHA256", "sha256:api-integration")
+		response.Header().Set("X-Contract-Graph-SHA256", contentContractGraphDigest)
 		payload := apiBaseOwnerPost(title)
 		_ = json.NewEncoder(response).Encode(map[string]any{
 			"data": map[string]any{"contentPostDetailBase": payload},
@@ -93,7 +97,7 @@ func newGraphQLContentExecutor(
 		stable,
 		candidate,
 		http.DefaultClient,
-		"sha256:api-integration",
+		contentContractGraphDigest,
 		contentOwnerServiceCredential{},
 	)
 	if err != nil {
@@ -112,7 +116,7 @@ func contentPostEntry() domain.Entry {
 		panic(err)
 	}
 	return domain.Entry{
-		SHA256Hash:           "3c1481366f84401aa2d89280925d5943bf040f7c94cf757fb5cc219f00a7f71b",
+		SHA256Hash:           "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110",
 		OperationName:        "ContentPostDetailBase",
 		OperationType:        domain.OperationTypeQuery,
 		CanonicalOperationID: "content.post.GetPost",
@@ -215,7 +219,7 @@ func apiBaseOwnerPost(title string) map[string]any {
 		"locationName": nil, "geoTagRef": nil, "visitedAt": nil,
 		"primaryHomepageId": nil, "canonicalEntityId": nil, "primaryHomepageType": nil,
 		"primaryHomepageSnapshot": nil, "status": "published", "visibility": "public",
-		"likeCount": 1, "commentCount": 2, "shareCount": 3, "viewCount": 4,
+		"likeCount": 1, "commentCount": 2, "shareCount": 3, "viewCount": 4, "viewerLiked": nil,
 		"createdAt": "2026-08-11T00:00:00Z", "updatedAt": "2026-08-11T00:01:00Z",
 		"publishedAt": nil,
 	}

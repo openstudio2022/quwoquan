@@ -25,6 +25,7 @@ const recallTimeLimit = 2 * time.Minute
 
 const (
 	messageContentRuneLimit      = 5000
+	messageAudioWaveformMaxItems = 128
 	messageCardTitleRuneLimit    = 120
 	messageCardAttributeLimit    = 16
 	messageCardAttributeKeyLimit = 64
@@ -107,6 +108,9 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 	if err != nil {
 		return nil, err
 	}
+	if err := s.validateReplyTarget(ctx, req); err != nil {
+		return nil, err
+	}
 	if _, err := s.resolveCommandMedia(ctx, req); err != nil {
 		return nil, err
 	}
@@ -127,6 +131,8 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 		Type:                      req.Type,
 		Content:                   req.Content,
 		MediaAssetID:              strings.TrimSpace(req.MediaAssetID),
+		AudioDurationMs:           req.AudioDurationMs,
+		AudioWaveform:             req.AudioWaveform,
 		Card:                      card,
 		ReplyToMessageID:          req.ReplyToMessageId,
 		Mentions:                  req.Mentions,
@@ -145,6 +151,8 @@ func (s *MessageService) SendMessage(ctx context.Context, req SendMessageRequest
 			"type":                      msg.Type,
 			"content":                   msg.Content,
 			"mediaAssetId":              msg.MediaAssetID,
+			"audioDurationMs":           msg.AudioDurationMs,
+			"audioWaveform":             msg.AudioWaveform,
 			"card":                      msg.Card,
 			"replyToMessageId":          msg.ReplyToMessageID,
 			"mentions":                  msg.Mentions,
@@ -417,6 +425,34 @@ func (s *MessageService) SendGreetingOpeningMessage(
 	return s.cache.InvalidateConversation(ctx, conversationID)
 }
 
+// validateReplyTarget 校验引用回复的目标：必须存在且属于同一会话，
+// 否则脏 ID 入库后接收端引用块永远解析失败。已撤回目标允许引用
+//（渲染为撤回占位），与主流 IM 语义一致。
+func (s *MessageService) validateReplyTarget(
+	ctx context.Context,
+	req SendMessageRequest,
+) error {
+	replyTo := strings.TrimSpace(req.ReplyToMessageId)
+	if replyTo == "" {
+		return nil
+	}
+	target, err := s.messages.FindMessageByID(ctx, replyTo)
+	if err != nil {
+		if errors.Is(err, messagemodel.ErrMessageNotFound) {
+			return generated.AppErrorFromMessageInvalid(
+				"replyToMessageId does not reference an existing message",
+			)
+		}
+		return err
+	}
+	if target.ConversationID != req.ConversationId {
+		return generated.AppErrorFromMessageInvalid(
+			"replyToMessageId references a message from another conversation",
+		)
+	}
+	return nil
+}
+
 func validateMessageCommand(req SendMessageRequest) (*messagemodel.MessageCard, error) {
 	messageType := strings.TrimSpace(req.Type)
 	if _, ok := map[string]struct{}{
@@ -432,6 +468,24 @@ func validateMessageCommand(req SendMessageRequest) (*messagemodel.MessageCard, 
 	}
 	if messageType == "text" && strings.TrimSpace(req.Content) == "" {
 		return nil, generated.AppErrorFromMessageInvalid("text message content is required")
+	}
+	if messageType != "audio" {
+		if req.AudioDurationMs != 0 || len(req.AudioWaveform) != 0 {
+			return nil, generated.AppErrorFromMessageInvalid(
+				"audio metadata is only allowed on audio messages",
+			)
+		}
+	} else {
+		if req.AudioDurationMs < 0 {
+			return nil, generated.AppErrorFromMessageInvalid(
+				"audioDurationMs must be positive",
+			)
+		}
+		if len(req.AudioWaveform) > messageAudioWaveformMaxItems {
+			return nil, generated.AppErrorFromMessageInvalid(
+				"audioWaveform exceeds 128 samples",
+			)
+		}
 	}
 	if messageType != "card" {
 		if req.Card != nil {

@@ -91,7 +91,7 @@ func Build(cfg ESConfig, reader PostReader, opts ...Option) (Built, error) {
 	if err != nil {
 		return Built{}, err
 	}
-	indexer := es.NewIndexer(client, client.IndexName())
+	indexer := es.NewIndexer(client, client.WriteIndexName())
 	return Built{
 		Client:    client,
 		Indexer:   indexer,

@@ -23,6 +23,9 @@ type ActivateInput struct {
 	ReleaseDigest    string
 	ExpectedRevision int
 	ActivatedBy      string
+	// EvaluationReceipt 是激活的必备输入：必须证明轨迹回放评测在 exact
+	// package digest 与 exact replay corpus asset digest 上通过。
+	EvaluationReceipt model.EvaluationReceipt
 }
 
 type RollbackInput struct {
@@ -167,10 +170,19 @@ func (service *Service) Activate(
 	); readErr != nil || replayed {
 		return ActivationResult{Activation: stored, Replayed: replayed}, readErr
 	}
-	if _, err := service.resolver.ResolveRelease(
+	resolved, err := service.resolver.ResolveRelease(
 		ctx,
 		input.PackageID,
 		input.ReleaseDigest,
+	)
+	if err != nil {
+		return ActivationResult{}, err
+	}
+	// 评测 receipt 必须与待激活 release 的 exact package/corpus digest 一致，
+	// 否则 fail-closed：不允许拿旧版本或其他语料的评测结论激活新 release。
+	if err := model.ValidateEvaluationReceipt(
+		input.EvaluationReceipt,
+		resolved.Release,
 	); err != nil {
 		return ActivationResult{}, err
 	}

@@ -6,12 +6,16 @@ class _GroupCapabilityGrid extends StatelessWidget {
     required this.enabledCapabilities,
     required this.onVoiceCall,
     required this.onVideoCall,
+    this.onOpenBoard,
   });
 
   final bool isDark;
   final List<String> enabledCapabilities;
   final VoidCallback onVoiceCall;
   final VoidCallback onVideoCall;
+
+  /// 活动群（gatheringId 绑定）直达 Board；普通群不展示活动格。
+  final VoidCallback? onOpenBoard;
 
   bool _enabled(String capability) {
     return enabledCapabilities.isEmpty ||
@@ -31,6 +35,14 @@ class _GroupCapabilityGrid extends StatelessWidget {
         icon: CupertinoIcons.folder,
         enabled: _enabled('file'),
       ),
+      if (onOpenBoard != null)
+        _GroupCapabilityItem(
+          key: const ValueKey<String>('chat_settings_board_entry'),
+          label: ChatText.groupCapabilityActivity,
+          icon: CupertinoIcons.calendar,
+          enabled: true,
+          onPressed: onOpenBoard,
+        ),
       _GroupCapabilityItem(
         label: CallText.callGroupVoice,
         icon: CupertinoIcons.phone,
@@ -54,6 +66,7 @@ class _GroupCapabilityGrid extends StatelessWidget {
           .map(
             (item) => Expanded(
               child: CupertinoButton(
+                key: item.key,
                 padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
                 onPressed: item.enabled ? item.onPressed : null,
                 child: Column(
@@ -88,12 +101,14 @@ class _GroupCapabilityItem {
     required this.icon,
     required this.enabled,
     this.onPressed,
+    this.key,
   });
 
   final String label;
   final IconData icon;
   final bool enabled;
   final VoidCallback? onPressed;
+  final Key? key;
 }
 
 class _MemberAvatar extends StatelessWidget {

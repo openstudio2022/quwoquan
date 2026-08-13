@@ -1,4 +1,5 @@
-package main
+// Package bootstrap owns search-service's private composition for servicehost.
+package bootstrap
 
 import (
 	"context"
@@ -12,6 +13,8 @@ import (
 	configrelease "quwoquan_service/runtime/configrelease"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -31,6 +34,7 @@ import (
 	rtotel "quwoquan_service/runtime/otel"
 	rtredis "quwoquan_service/runtime/redis"
 	searchruntimees "quwoquan_service/runtime/search/es"
+	"quwoquan_service/runtime/servicehost"
 	recenthttp "quwoquan_service/services/search-service/internal/search/recent_search_state/adapters/inbound/http"
 	"quwoquan_service/services/search-service/internal/search/recent_search_state/application"
 	recentmetrics "quwoquan_service/services/search-service/internal/search/recent_search_state/infrastructure/metrics"
@@ -67,6 +71,25 @@ const serviceName = "search-service"
 // from the query/feedback logs. The read-model TTL is wider than this so a brief
 // rebuild stall never empties the served heat.
 const heatRebuildInterval = 10 * time.Minute
+
+// Module keeps search-service's public HTTP contract and private resources
+// together while servicehost owns process lifecycle coordination.
+type Module struct {
+	configDigest string
+	server       *http.Server
+	readiness    *rthealth.Checker
+	listener     net.Listener
+	admission    atomic.Bool
+	serveError   chan error
+
+	workerCancel context.CancelFunc
+	workerGroup  sync.WaitGroup
+	workerStart  []func(context.Context)
+	cleanup      func()
+	runContext   context.Context
+}
+
+var _ servicehost.Module = (*Module)(nil)
 
 type config struct {
 	Service struct {
@@ -106,10 +129,20 @@ type config struct {
 	} `yaml:"contentService"`
 }
 
-func main() {
+// NewModule performs fail-fast service-owned assembly. It does not bind a
+// listener, start workers, manage signals, or decide process exit status.
+func NewModule() (_ *Module, resultErr error) {
+	cleanup := func() {}
+	initialized := false
+	defer func() {
+		if !initialized {
+			cleanup()
+		}
+	}()
+
 	cfg, err := loadRuntimeConfig()
 	if err != nil {
-		log.Fatalf("%s config load failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s config load failed: %w", serviceName, err)
 	}
 	normalizeDefaults(&cfg)
 	applyESEnvOverrides(&cfg.ES)
@@ -122,13 +155,15 @@ func main() {
 		serviceName,
 		appEnv,
 		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
-		strings.TrimSpace(os.Getenv("CONFIG_VERSION")),
+		strings.TrimSpace(
+			servicehost.ModuleEnvironmentValue("search-service", "CONFIG_VERSION"),
+		),
 		strings.TrimSpace(os.Getenv("IMAGE_VERSION")),
 	)
 	configProvider := runtimeconfig.EnvRuntimeConfigProvider{}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(configProvider)
 	if err != nil {
-		log.Fatalf("%s access token config invalid: %v", serviceName, err)
+		return nil, fmt.Errorf("%s access token config invalid: %w", serviceName, err)
 	}
 	accountSecurityAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig,
@@ -136,7 +171,7 @@ func main() {
 		[]string{"user.account.security.read"},
 	)
 	if err != nil {
-		log.Fatalf("%s account security authority credential init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s account security authority credential init failed: %w", serviceName, err)
 	}
 	accountSecurityAuthorityTimeout := time.Duration(
 		cfg.AccountSecurityAuthority.TimeoutMs,
@@ -150,33 +185,35 @@ func main() {
 		},
 	)
 	if err != nil {
-		log.Fatalf("%s account security authority config invalid: %v", serviceName, err)
+		return nil, fmt.Errorf("%s account security authority config invalid: %w", serviceName, err)
 	}
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
-		log.Fatalf("%s access token verifier invalid: %v", serviceName, err)
+		return nil, fmt.Errorf("%s access token verifier invalid: %w", serviceName, err)
 	}
 	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(configProvider)
 	if err != nil {
-		log.Fatalf("%s device ticket config invalid: %v", serviceName, err)
+		return nil, fmt.Errorf("%s device ticket config invalid: %w", serviceName, err)
 	}
 	deviceVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
 	if err != nil {
-		log.Fatalf("%s device ticket verifier invalid: %v", serviceName, err)
+		return nil, fmt.Errorf("%s device ticket verifier invalid: %w", serviceName, err)
 	}
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: serviceName, SamplingRatio: 0.1})
-	defer otelShutdown()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		otelShutdown()
+	})
 
 	built, err := searchbackend.Build(cfg.ES)
 	if err != nil {
-		log.Fatalf("%s backend assembly failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s backend assembly failed: %w", serviceName, err)
 	}
 	if err := built.EnsureIndex(ctx); err != nil {
 		if errors.Is(err, searchruntimees.ErrIndexSchemaIncompatible) {
-			log.Fatalf("%s search index schema migration failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s search index schema migration failed: %w", serviceName, err)
 		}
-		log.Fatalf("%s search index initialization failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s search index initialization failed: %w", serviceName, err)
 	}
 
 	logger := slog.Default()
@@ -184,7 +221,9 @@ func main() {
 	feedbackMetrics := feedbackmetrics.NewRecorder()
 	recentMetrics := recentmetrics.NewRecorder()
 	redisRouter, messageTransportSceneModes := buildRedisRouter(cfg)
-	defer redisRouter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		_ = redisRouter.Close()
+	})
 	messageTransport, err := requireSearchAPIMessageTransport(
 		ctx,
 		appEnv,
@@ -192,30 +231,30 @@ func main() {
 		messageTransportSceneModes,
 	)
 	if err != nil {
-		log.Fatalf("%s message transport construction failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s message transport construction failed: %w", serviceName, err)
 	}
 	if err := redisRouter.PingAll(ctx); err != nil {
-		log.Fatalf("%s redis unavailable: %v", serviceName, err)
+		return nil, fmt.Errorf("%s redis unavailable: %w", serviceName, err)
 	}
 	searchSignalPublisher, err := searchsignals.NewStreamPublisher(messageTransport, logger)
 	if err != nil {
-		log.Fatalf("%s search signal publisher init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s search signal publisher init failed: %w", serviceName, err)
 	}
 	searchSignalAppender, err := signalfactapplication.NewAppender(searchSignalPublisher)
 	if err != nil {
-		log.Fatalf("%s search signal appender init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s search signal appender init failed: %w", serviceName, err)
 	}
 	searchSignalPort, err := signalfactadapter.NewAppender(searchSignalAppender)
 	if err != nil {
-		log.Fatalf("%s search signal inbound port init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s search signal inbound port init failed: %w", serviceName, err)
 	}
 	experimentAssignmentPublisher, err := experimentassignment.NewPublisher(messageTransport)
 	if err != nil {
-		log.Fatalf("%s experiment assignment publisher init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s experiment assignment publisher init failed: %w", serviceName, err)
 	}
 	experiments, err := searchapplication.NewExperiments(experimentAssignmentPublisher)
 	if err != nil {
-		log.Fatalf("%s experiment resolver init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s experiment resolver init failed: %w", serviceName, err)
 	}
 
 	// Mongo is authoritative for query logs, feedback facts, term heat,
@@ -232,26 +271,33 @@ func main() {
 	var accountRestrictionProjection *accountrestrictioninfra.MongoAccountRestrictionProjection
 	var feedbackSignalRelay *feedbackstore.SignalRelay
 	var experimentPolicyConsumer *experimentpolicymq.ExperimentPolicyConsumer
+	var heatStore *queryheatstore.Store
 	if strings.TrimSpace(cfg.Mongo.URI) == "" {
-		log.Fatalf("%s mongo.uri is required", serviceName)
+		return nil, fmt.Errorf("%s mongo.uri is required", serviceName)
 	}
 	{
-		client := rtmongodb.MustConnect(ctx, rtmongodb.ConnectConfig{
+		client, err := rtmongodb.Connect(ctx, rtmongodb.ConnectConfig{
 			URI: cfg.Mongo.URI, Database: cfg.Mongo.Database,
-		}, serviceName)
+		})
+		if err != nil {
+			return nil, fmt.Errorf("%s mongo connect failed: %w", serviceName, err)
+		}
+		cleanup = servicehost.ChainCleanup(cleanup, func() {
+			_ = client.Disconnect(context.Background())
+		})
 		db := client.Database(cfg.Mongo.Database)
 		experimentPolicyStore, err := experimentpolicy.NewMongoStore(db)
 		if err != nil {
-			log.Fatalf("%s Experiment policy store init failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s Experiment policy store init failed: %w", serviceName, err)
 		}
 		if err := experimentPolicyStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("%s Experiment policy index initialization failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s Experiment policy index initialization failed: %w", serviceName, err)
 		}
 		if policy, found, err := experimentPolicyStore.Load(ctx, searchapplication.SearchRankingExperimentID); err != nil {
-			log.Fatalf("%s Experiment policy restore failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s Experiment policy restore failed: %w", serviceName, err)
 		} else if found {
 			if err := experiments.ApplyPolicy(policy); err != nil {
-				log.Fatalf("%s stored Experiment policy invalid: %v", serviceName, err)
+				return nil, fmt.Errorf("%s stored Experiment policy invalid: %w", serviceName, err)
 			}
 		}
 		experimentPolicyConsumer, err = experimentpolicymq.NewExperimentPolicyConsumer(
@@ -262,22 +308,21 @@ func main() {
 			logger,
 		)
 		if err != nil {
-			log.Fatalf("%s Experiment policy consumer init failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s Experiment policy consumer init failed: %w", serviceName, err)
 		}
 		if _, err := experimentPolicyConsumer.ProcessOnce(ctx); err != nil {
-			log.Fatalf("%s Experiment policy initial projection failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s Experiment policy initial projection failed: %w", serviceName, err)
 		}
-		go experimentPolicyConsumer.Run(ctx)
 		feedbackStore := feedbackstore.NewStore(db)
 		queryStore := querylogstore.NewStore(db)
 		indexCtx, indexCancel := context.WithTimeout(ctx, 30*time.Second)
 		if err := feedbackStore.EnsureIndexes(indexCtx); err != nil {
 			indexCancel()
-			log.Fatalf("%s search feedback index initialization failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s search feedback index initialization failed: %w", serviceName, err)
 		}
 		if err := queryStore.EnsureIndexes(indexCtx); err != nil {
 			indexCancel()
-			log.Fatalf("%s search query index initialization failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s search query index initialization failed: %w", serviceName, err)
 		}
 		indexCancel()
 		feedbackSink = feedbackStore
@@ -288,15 +333,14 @@ func main() {
 			logger,
 		)
 		if err != nil {
-			log.Fatalf(
+			return nil, fmt.Errorf(
 				"%s feedback signal relay init failed: %v",
 				serviceName,
 				err,
 			)
 		}
-		go feedbackSignalRelay.Run(ctx)
 		queryLogSink = queryStore
-		heatStore := queryheatstore.NewStore(
+		heatStore = queryheatstore.NewStore(
 			db,
 			feedbackStore,
 			queryheat.Config{},
@@ -309,10 +353,9 @@ func main() {
 			time.Duration(getenvInt("SEARCH_RELATED_TERMS_CACHE_TTL_MS", 2000))*time.Millisecond,
 			getenvInt("SEARCH_RELATED_TERMS_CACHE_MAX", 1024),
 			metricsRecorder)
-		startHeatRebuildLoop(ctx, heatStore, logger)
 		recentStore := recentsearchstore.NewStore(db)
 		if err := recentStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf(
+			return nil, fmt.Errorf(
 				"%s recent search index initialization failed: %v",
 				serviceName,
 				err,
@@ -320,12 +363,12 @@ func main() {
 		}
 		recentFacade, err = recentsearch.NewFacade(recentStore)
 		if err != nil {
-			log.Fatalf("%s recent search facade init failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s recent search facade init failed: %w", serviceName, err)
 		}
 		accountRestrictionProjection, err =
 			accountrestrictioninfra.NewMongoAccountRestrictionProjection(db)
 		if err != nil {
-			log.Fatalf(
+			return nil, fmt.Errorf(
 				"%s user account restriction projection init failed: %v",
 				serviceName,
 				err,
@@ -338,21 +381,21 @@ func main() {
 			feedbackStore,
 		)
 		if err != nil {
-			log.Fatalf(
+			return nil, fmt.Errorf(
 				"%s UserAccountClosed projection init failed: %v",
 				serviceName,
 				err,
 			)
 		}
 		if err := accountClosureProjection.EnsureIndexes(ctx); err != nil {
-			log.Fatalf(
+			return nil, fmt.Errorf(
 				"%s UserAccountClosed projection indexes failed: %v",
 				serviceName,
 				err,
 			)
 		}
 		if err := accountRestrictionProjection.EnsureIndexes(ctx); err != nil {
-			log.Fatalf(
+			return nil, fmt.Errorf(
 				"%s user account restriction projection indexes failed: %v",
 				serviceName,
 				err,
@@ -361,13 +404,13 @@ func main() {
 		userProfileProjection, err :=
 			userprofileinfra.NewMongoUserProfileSearchProjection(
 				db,
-				searchruntimees.NewIndexer(built.Client, built.Client.IndexName()),
+				searchruntimees.NewIndexer(built.Client, built.Client.WriteIndexName()),
 			)
 		if err != nil {
-			log.Fatalf("%s UserProfile search projection init failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s UserProfile search projection init failed: %w", serviceName, err)
 		}
 		if err := userProfileProjection.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("%s UserProfile search projection indexes failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s UserProfile search projection indexes failed: %w", serviceName, err)
 		}
 		userProfileProjectionConsumer, err =
 			experimentpolicymq.NewUserProfileSearchProjectionConsumer(
@@ -377,7 +420,7 @@ func main() {
 				logger,
 			)
 		if err != nil {
-			log.Fatalf("%s UserProfile search projection consumer init failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s UserProfile search projection consumer init failed: %w", serviceName, err)
 		}
 		accountClosureConsumer, err = mqadapter.NewUserAccountClosedConsumer(
 			messageTransport,
@@ -388,7 +431,7 @@ func main() {
 			mqadapter.DefaultUserAccountClosedConsumerConfig(),
 		)
 		if err != nil {
-			log.Fatalf(
+			return nil, fmt.Errorf(
 				"%s UserAccountClosed consumer init failed: %v",
 				serviceName,
 				err,
@@ -402,7 +445,7 @@ func main() {
 				logger,
 			)
 		if err != nil {
-			log.Fatalf(
+			return nil, fmt.Errorf(
 				"%s account restriction consumer init failed: %v",
 				serviceName,
 				err,
@@ -413,32 +456,29 @@ func main() {
 				accountClosureConsumer,
 			)
 		if err != nil {
-			log.Fatalf(
+			return nil, fmt.Errorf(
 				"%s UserAccountClosed recovery facet init failed: %v",
 				serviceName,
 				err,
 			)
 		}
 		if err := accountClosureConsumer.EnsureGroup(ctx); err != nil {
-			log.Fatalf(
+			return nil, fmt.Errorf(
 				"%s UserAccountClosed consumer group init failed: %v",
 				serviceName,
 				err,
 			)
 		}
 		if err := accountRestrictionConsumer.EnsureGroup(ctx); err != nil {
-			log.Fatalf(
+			return nil, fmt.Errorf(
 				"%s account restriction consumer group init failed: %v",
 				serviceName,
 				err,
 			)
 		}
 		if err := userProfileProjectionConsumer.EnsureGroup(ctx); err != nil {
-			log.Fatalf("%s UserProfile search projection consumer group init failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s UserProfile search projection consumer group init failed: %w", serviceName, err)
 		}
-		go accountClosureConsumer.Run(ctx)
-		go accountRestrictionConsumer.Run(ctx)
-		go userProfileProjectionConsumer.Run(ctx)
 		log.Printf("%s feedback/query-log + term-heat + recent-search enabled (db=%s)", serviceName, cfg.Mongo.Database)
 	}
 
@@ -447,15 +487,18 @@ func main() {
 		accountRestrictionProjection,
 	)
 	if err != nil {
-		log.Fatalf("%s account restriction backend init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s account restriction backend init failed: %w", serviceName, err)
 	}
 	searchCursorCodec, err := searchapplication.NewSearchCursorCodec(accessTokenConfig.Secret)
 	if err != nil {
-		log.Fatalf("%s search cursor codec init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s search cursor codec init failed: %w", serviceName, err)
 	}
 	searchSvc := searchapplication.NewSearchService(
 		accountRestrictedBackend,
 		searchapplication.WithSearchCursorCodec(searchCursorCodec),
+		// 翻页快照（REQ-007/OPEN-005）：首个后续页惰性 OpenPIT，之后每页续期；
+		// 快照失效按 cursor fail-closed，不静默退化为无快照查询。
+		searchapplication.WithPaginationSnapshots(built.Client),
 	)
 	requestFactRecorder := requestapplication.NewRecorder(
 		queryLogSink,
@@ -479,14 +522,14 @@ func main() {
 		[]string{"content.object_intersections.read"},
 	)
 	if err != nil {
-		log.Fatalf("%s content intersection credential init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s content intersection credential init failed: %w", serviceName, err)
 	}
 	intersectionReader, err := intersectionclient.New(intersectionclient.Config{
 		BaseURL:       contentBaseURL,
 		Authorization: contentAuthorization,
 	})
 	if err != nil {
-		log.Fatalf("%s content intersection reader init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s content intersection reader init failed: %w", serviceName, err)
 	}
 	intersectionAttacher := searchapplication.NewIntersectionAttacher(
 		intersectionReader,
@@ -508,21 +551,25 @@ func main() {
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
 	)
 	if err != nil {
-		log.Fatalf("%s runtime log exporter init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s runtime log exporter init failed: %w", serviceName, err)
 	}
-	defer runtimeLogExporter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		runtimeLogExporter.Close()
+	})
 	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
 	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
-	defer standardLogWriter.Close()
-	defer errorLogWriter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		errorLogWriter.Close()
+		standardLogWriter.Close()
+	})
 	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
 	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, robs.TraceLogLevelInfo, nil)
 	if err != nil {
-		log.Fatalf("%s process logger init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s process logger init failed: %w", serviceName, err)
 	}
 	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
-		log.Fatalf("%s exception logger init failed: %v", serviceName, err)
+		return nil, fmt.Errorf("%s exception logger init failed: %w", serviceName, err)
 	}
 
 	routesMux := http.NewServeMux()
@@ -534,6 +581,9 @@ func main() {
 			Intersections:   intersectionAttacher,
 			RequestFacts:    requestFactRecorder,
 			CandidateDigest: strings.TrimSpace(os.Getenv("QWQ_RELEASE_CANDIDATE_DIGEST")),
+			// 热点首屏 result 缓存：TTL 受 index freshness（30s）约束，
+			// singleflight 防同 key 过期击穿（spike 档同热词并发穿透是真实场景）。
+			OwnerSearchCache: searchapplication.NewOwnerSearchCache(10*time.Second, 512),
 		},
 	).Register(routesMux)
 	requesthttp.NewHandler(termHeat).Register(routesMux)
@@ -558,7 +608,7 @@ func main() {
 			},
 		)
 		if err != nil {
-			log.Fatalf("%s account-closure recovery route failed: %v", serviceName, err)
+			return nil, fmt.Errorf("%s account-closure recovery route failed: %w", serviceName, err)
 		}
 	}
 	rootMux := http.NewServeMux()
@@ -652,10 +702,148 @@ func main() {
 		WriteTimeout:      timeouts.Write,
 		IdleTimeout:       timeouts.Idle,
 	}
-	log.Printf("%s listening on %s (es.enabled=%t)", serviceName, cfg.Service.HTTP.Addr, cfg.ES.Enabled)
-	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
-		log.Fatalf("%s: %v", serviceName, err)
+	module := &Module{
+		configDigest: strings.TrimSpace(
+			servicehost.ModuleEnvironmentValue("search-service", "CONFIG_VERSION"),
+		),
+		server:     server,
+		readiness:  readiness,
+		serveError: make(chan error, 1),
+		workerStart: []func(context.Context){
+			experimentPolicyConsumer.Run,
+			feedbackSignalRelay.Run,
+			accountClosureConsumer.Run,
+			accountRestrictionConsumer.Run,
+			userProfileProjectionConsumer.Run,
+			func(workerCtx context.Context) {
+				startHeatRebuildLoop(workerCtx, heatStore, logger)
+			},
+		},
+		cleanup: cleanup,
 	}
+	if module.configDigest == "" {
+		module.configDigest = fmt.Sprintf("%s:%s", appEnv, cfg.Service.Name)
+	}
+	server.Handler = module.admissionHandler(server.Handler)
+	server.BaseContext = func(net.Listener) context.Context {
+		if module.runContext != nil {
+			return module.runContext
+		}
+		return context.Background()
+	}
+	initialized = true
+	return module, nil
+}
+
+func (module *Module) Name() string { return serviceName }
+
+func (module *Module) ConfigDigest() string {
+	if module == nil {
+		return ""
+	}
+	return module.configDigest
+}
+
+func (module *Module) ValidateConfig(context.Context) error {
+	if module == nil || module.server == nil || module.readiness == nil || module.cleanup == nil {
+		return errors.New("search-service module is incomplete")
+	}
+	return nil
+}
+
+func (module *Module) PrepareMigration(context.Context) error {
+	return nil
+}
+
+func (module *Module) Bind(context.Context) error {
+	if module == nil || module.server == nil {
+		return errors.New("search-service HTTP server is unavailable")
+	}
+	listener, err := net.Listen("tcp", module.server.Addr)
+	if err != nil {
+		return fmt.Errorf("search-service listener bind: %w", err)
+	}
+	module.listener = listener
+	return nil
+}
+
+func (module *Module) Start(ctx context.Context) error {
+	if module == nil || module.listener == nil {
+		return errors.New("search-service listener is not bound")
+	}
+	module.runContext, module.workerCancel = context.WithCancel(ctx)
+	for _, start := range module.workerStart {
+		module.workerGroup.Add(1)
+		module.startWorker(start)
+	}
+	module.workerGroup.Add(1)
+	go func() {
+		defer module.workerGroup.Done()
+		if err := module.server.Serve(module.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			select {
+			case module.serveError <- err:
+			case <-module.runContext.Done():
+			}
+		}
+	}()
+	return nil
+}
+
+func (module *Module) Ready(ctx context.Context) error {
+	if result := module.readiness.Check(ctx); result.Status != "ok" {
+		return fmt.Errorf("search-service readiness failed: %v", result.FailedChecks)
+	}
+	select {
+	case err := <-module.serveError:
+		return fmt.Errorf("search-service listener failed: %w", err)
+	default:
+		return nil
+	}
+}
+
+func (module *Module) OpenAdmission(context.Context) error {
+	module.admission.Store(true)
+	return nil
+}
+
+func (module *Module) Shutdown(ctx context.Context) error {
+	module.admission.Store(false)
+	var result error
+	if module.server != nil {
+		result = errors.Join(result, module.server.Shutdown(ctx))
+	}
+	if module.workerCancel != nil {
+		module.workerCancel()
+		module.workerGroup.Wait()
+		module.workerCancel = nil
+	}
+	if module.cleanup != nil {
+		module.cleanup()
+		module.cleanup = nil
+	}
+	return result
+}
+
+func (module *Module) startWorker(start func(context.Context)) {
+	go func() {
+		defer module.workerGroup.Done()
+		start(module.runContext)
+	}()
+}
+
+func (module *Module) admissionHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/healthz", "/readyz", "/metrics":
+			next.ServeHTTP(writer, request)
+			return
+		}
+		if !module.admission.Load() {
+			http.Error(writer, `{"status":"unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
 }
 
 func generatedSearchOperationHandler(next http.Handler) http.Handler {
@@ -666,10 +854,17 @@ func generatedSearchOperationHandler(next http.Handler) http.Handler {
 
 func loadRuntimeConfig() (config, error) {
 	cfg := config{}
-	serviceName := getenvOrDefault("SERVICE_NAME", "search-service")
+	serviceName := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("search-service", "SERVICE_NAME"),
+	)
+	if serviceName == "" {
+		serviceName = "search-service"
+	}
 	appEnv := getenvOrDefault("APP_ENV", "alpha")
 	configRoot := strings.TrimSpace(os.Getenv("CONFIG_ROOT"))
-	configVersion := strings.TrimSpace(os.Getenv("CONFIG_VERSION"))
+	configVersion := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("search-service", "CONFIG_VERSION"),
+	)
 	if !isValidAppEnv(appEnv) {
 		return config{}, fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
 	}
@@ -853,19 +1048,17 @@ func startHeatRebuildLoop(ctx context.Context, store *queryheatstore.Store, logg
 		}
 		logger.InfoContext(runCtx, "search term-heat rebuilt", slog.Int("terms", written))
 	}
-	go func() {
-		rebuild()
-		ticker := time.NewTicker(heatRebuildInterval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				rebuild()
-			}
+	rebuild()
+	ticker := time.NewTicker(heatRebuildInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			rebuild()
 		}
-	}()
+	}
 }
 
 func getenvOrDefault(key, fallback string) string {

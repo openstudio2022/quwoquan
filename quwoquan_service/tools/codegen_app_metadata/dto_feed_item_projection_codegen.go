@@ -34,6 +34,15 @@ func renderFeedItemDtoDart(proj clientProjection) string {
 			dartType += "?"
 		}
 		b.WriteString(fmt.Sprintf("  final %s %s;\n", dartType, f.Name))
+		recordEnumFieldBinding(enumFieldBinding{
+			DartClass:      className,
+			DartField:      f.Name,
+			DartType:       dartType,
+			EnumRef:        f.EnumRef,
+			ContractType:   f.WireType,
+			ContractSource: "content/content/post/projections/discovery_feed.yaml",
+			ClientDartType: f.DartType,
+		})
 	}
 	b.WriteString("\n")
 

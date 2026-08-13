@@ -1231,7 +1231,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: ReportMediaConnected}
-  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_timeout_and_connected_contract__api_integration_test.go
+  runner_source_path: quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/call_timeout_and_connected_contract__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
 - case_id: invite-to-call-local
@@ -1634,3 +1634,20 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/local_contract/service/rtc_service/rtc/call_session/rtc_call_session_remote__local_contract_test.dart
   executions:
   - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: call_session_one_to_one_app_uat
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-003
+  producer: app
+  layer: user_acceptance
+  target: {kind: page, id: rtc.video}
+  runner_source_path: quwoquan_app/test/user_acceptance/service/rtc_service/rtc/call_session/provider_prod_remote_call_provider__user_acceptance_test.dart
+  executions:
+    - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+    - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}
+- case_id: call_session_room_transport_conformance_ops_env
+  spec_ref: specs/feature-tree/chat-conversation/realtime-call/media-infrastructure/spec.md#gwt-004
+  producer: ops
+  layer: environment_acceptance
+  target: {kind: object, id: rtc.call_session}
+  runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/rtc-service/ci/rtc_room_transport_provider_conformance.py
+  executions:
+    - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}

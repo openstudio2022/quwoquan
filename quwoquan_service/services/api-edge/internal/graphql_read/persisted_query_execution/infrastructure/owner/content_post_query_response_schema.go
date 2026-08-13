@@ -163,7 +163,8 @@ func baseResponseSpec() objectSpec {
 		"status":                  requiredString(), "visibility": requiredString(),
 		"likeCount": requiredInt(), "commentCount": requiredInt(),
 		"shareCount": requiredInt(), "viewCount": requiredInt(),
-		"createdAt": requiredString(), "updatedAt": requiredString(), "publishedAt": nullableString(),
+		"viewerLiked": nullableBool(),
+		"createdAt":   requiredString(), "updatedAt": requiredString(), "publishedAt": nullableString(),
 	})
 }
 
@@ -298,6 +299,9 @@ func requiredInt() responseValueSpec   { return responseValueSpec{kind: response
 func nullableInt() responseValueSpec   { return responseValueSpec{kind: responseInt, nullable: true} }
 func requiredFloat() responseValueSpec { return responseValueSpec{kind: responseFloat} }
 func requiredBool() responseValueSpec  { return responseValueSpec{kind: responseBool} }
+func nullableBool() responseValueSpec {
+	return responseValueSpec{kind: responseBool, nullable: true}
+}
 func requiredObject(spec objectSpec) responseValueSpec {
 	return responseValueSpec{kind: responseObject, object: &spec}
 }

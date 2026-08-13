@@ -3,7 +3,6 @@ overrides:
   sys.search-service.accountSecurityAuthority.timeoutMs: 300
   sys.search-service.contentService.baseUrl: http://content-service:18080
   sys.search-service.es.enabled: true
-  sys.search-service.es.shards: 3
   sys.search-service.redis.rec.mode: cluster
   sys.search-service.redis.rec.tls: true
 secretRefs:

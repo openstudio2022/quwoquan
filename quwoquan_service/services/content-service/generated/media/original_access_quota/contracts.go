@@ -2,6 +2,8 @@
 package generated
 
 const (
+	RouteGetOriginalImageAccessAuditMethod     = "GET"
+	RouteGetOriginalImageAccessAuditPath       = "/content/media/original-access-audits/{auditId}"
 	RouteReserveOriginalImageAccessGrantMethod = "POST"
 	RouteReserveOriginalImageAccessGrantPath   = "/content/media/{mediaId}/original:access"
 )

@@ -3,5 +3,6 @@ kind: Kustomization
 resources:
   - deployment.yaml
   - service.yaml
-  - hpa.yaml
   - pdb.yaml
+# HPA 是 prod-only 弹性（2..6，见 environments/prod/deploy/hpa.yaml）：
+# alpha/beta/gamma 固定单副本，base 若装 HPA 会与环境 replicas=1 冲突。

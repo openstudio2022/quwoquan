@@ -433,6 +433,10 @@ func GatheringEventPayloadFor(
 		addRevisionPayload(payload, gathering)
 		payload["roomBindingStatus"] = gathering.RoomBindingStatus
 		addConversationPayload(payload, gathering)
+		payload["sourceRefs"] = gatheringSourceRefsPayload(gathering)
+		// 发布时冻结的公开政策维度事实（漏斗按活动特征诚实切片）。
+		payload["maxParticipants"] = gathering.PolicySet.CapacityPolicy.MaxParticipants
+		payload["admissionPolicy"] = gathering.PolicySet.AdmissionPolicy
 	case gatheringevent.GatheringRevisionAppended:
 		payload["actorPersonaId"] = actorPersonaID
 		addRevisionPayload(payload, gathering)
@@ -463,6 +467,24 @@ func GatheringEventPayloadFor(
 		addAvailabilityWatchPayload(payload, previous, gathering)
 	}
 	return payload
+}
+
+// gatheringSourceRefsPayload 只携带最小 canonical 溯源引用（objectKind + objectId），
+// 供 recommendation 社会证明按实体/内容/创作者锚点归集；不复制标题或快照。
+func gatheringSourceRefsPayload(gathering model.Gathering) []map[string]any {
+	refs := make([]map[string]any, 0, len(gathering.Purpose.SourceObjectRefs))
+	for _, source := range gathering.Purpose.SourceObjectRefs {
+		objectKind := strings.TrimSpace(source.ObjectRef.ObjectTypeRef)
+		objectID := strings.TrimSpace(source.ObjectRef.ObjectID)
+		if objectKind == "" || objectID == "" {
+			continue
+		}
+		refs = append(refs, map[string]any{
+			"objectKind": objectKind,
+			"objectId":   objectID,
+		})
+	}
+	return refs
 }
 
 func gatheringInvitationEventPayload(

@@ -202,6 +202,68 @@
                 "type": "string",
                 "pattern": "^assistant\\.[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.read$"
               }
+            },
+            "reader": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "descriptor_id",
+                "resolver_ref",
+                "owner_service",
+                "owner_operation_ref",
+                "input_schema_ref",
+                "output_schema_ref",
+                "object_type_ref",
+                "authority",
+                "sensitivity",
+                "accepted_source_kinds",
+                "surface_kinds",
+                "artifact_policy",
+                "citation_policy"
+              ],
+              "properties": {
+                "descriptor_id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$"
+                },
+                "resolver_ref": { "type": "string", "minLength": 1 },
+                "owner_service": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$"
+                },
+                "owner_operation_ref": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]*$"
+                },
+                "input_schema_ref": { "type": "string", "minLength": 1 },
+                "output_schema_ref": { "type": "string", "minLength": 1 },
+                "object_type_ref": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]*$"
+                },
+                "authority": {
+                  "enum": ["domain_canonical", "user_declared"]
+                },
+                "sensitivity": { "enum": ["public", "internal", "private"] },
+                "accepted_source_kinds": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "type": "string", "minLength": 1 }
+                },
+                "surface_kinds": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "enum": ["personal", "shared", "public"] }
+                },
+                "max_freshness_seconds": { "type": "integer", "minimum": 0 },
+                "cache_ttl_seconds": { "type": "integer", "minimum": 0 },
+                "artifact_policy": { "enum": ["inline_bounded"] },
+                "citation_policy": {
+                  "enum": ["entity_reference", "source_reference"]
+                }
+              }
             }
           }
         },

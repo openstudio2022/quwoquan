@@ -21,7 +21,6 @@ circle_tabs:
   body_slot: discussion
   section_types:
   - chat
-  - storage
   order: 1
 - id: members
   label_key: circle_tab_members
@@ -45,8 +44,3 @@ circle_sections:
   icon: chat_bubble_2
   tab_id: discussion
   order: 2
-- section_type: storage
-  label_key: circle_section_storage
-  icon: folder
-  tab_id: discussion
-  order: 3

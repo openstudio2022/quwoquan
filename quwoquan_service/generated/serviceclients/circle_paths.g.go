@@ -29,78 +29,82 @@ type CircleGatheringOperationMetadata struct {
 }
 
 const (
-	CircleGatheringAcceptGatheringInvitationOperationID      = "circle.gathering.AcceptGatheringInvitation"
-	CircleGatheringAcceptGatheringInvitationPathTemplate     = "/gatherings/{gatheringId}:accept-invitation"
-	CircleGatheringAcknowledgeGatheringRevisionOperationID   = "circle.gathering.AcknowledgeGatheringRevision"
-	CircleGatheringAcknowledgeGatheringRevisionPathTemplate  = "/gatherings/{gatheringId}:acknowledge-revision"
-	CircleGatheringApplyToGatheringOperationID               = "circle.gathering.ApplyToGathering"
-	CircleGatheringApplyToGatheringPathTemplate              = "/gatherings/{gatheringId}:apply"
-	CircleGatheringAssignGatheringCoHostOperationID          = "circle.gathering.AssignGatheringCoHost"
-	CircleGatheringAssignGatheringCoHostPathTemplate         = "/gatherings/{gatheringId}:assign-co-host"
-	CircleGatheringCancelGatheringOperationID                = "circle.gathering.CancelGathering"
-	CircleGatheringCancelGatheringPathTemplate               = "/gatherings/{gatheringId}:cancel"
-	CircleGatheringChangeGatheringCapacityOperationID        = "circle.gathering.ChangeGatheringCapacity"
-	CircleGatheringChangeGatheringCapacityPathTemplate       = "/gatherings/{gatheringId}:change-capacity"
-	CircleGatheringCompleteGatheringOperationID              = "circle.gathering.CompleteGathering"
-	CircleGatheringCompleteGatheringPathTemplate             = "/gatherings/{gatheringId}:complete"
-	CircleGatheringCompleteGatheringSelfOperationID          = "circle.gathering.CompleteGatheringSelf"
-	CircleGatheringCompleteGatheringSelfPathTemplate         = "/gatherings/{gatheringId}:complete-self"
-	CircleGatheringCreateGatheringDraftOperationID           = "circle.gathering.CreateGatheringDraft"
-	CircleGatheringCreateGatheringDraftPathTemplate          = "/gatherings"
-	CircleGatheringDeclareGatheringArrivalOperationID        = "circle.gathering.DeclareGatheringArrival"
-	CircleGatheringDeclareGatheringArrivalPathTemplate       = "/gatherings/{gatheringId}:declare-arrival"
-	CircleGatheringDeclareGatheringLeaveEarlyOperationID     = "circle.gathering.DeclareGatheringLeaveEarly"
-	CircleGatheringDeclareGatheringLeaveEarlyPathTemplate    = "/gatherings/{gatheringId}:leave-early"
-	CircleGatheringDeclineGatheringInvitationOperationID     = "circle.gathering.DeclineGatheringInvitation"
-	CircleGatheringDeclineGatheringInvitationPathTemplate    = "/gatherings/{gatheringId}:decline-invitation"
-	CircleGatheringEndGatheringEarlyOperationID              = "circle.gathering.EndGatheringEarly"
-	CircleGatheringEndGatheringEarlyPathTemplate             = "/gatherings/{gatheringId}:end-early"
-	CircleGatheringGetGatheringOperationID                   = "circle.gathering.GetGathering"
-	CircleGatheringGetGatheringPathTemplate                  = "/gatherings/{gatheringId}"
-	CircleGatheringGetPublicGatheringOperationID             = "circle.gathering.GetPublicGathering"
-	CircleGatheringGetPublicGatheringPathTemplate            = "/public/gatherings/{gatheringId}"
-	CircleGatheringInviteToGatheringOperationID              = "circle.gathering.InviteToGathering"
-	CircleGatheringInviteToGatheringPathTemplate             = "/gatherings/{gatheringId}:invite"
-	CircleGatheringJoinOpenGatheringOperationID              = "circle.gathering.JoinOpenGathering"
-	CircleGatheringJoinOpenGatheringPathTemplate             = "/gatherings/{gatheringId}:join-open"
-	CircleGatheringLeaveGatheringOperationID                 = "circle.gathering.LeaveGathering"
-	CircleGatheringLeaveGatheringPathTemplate                = "/gatherings/{gatheringId}:leave"
-	CircleGatheringListGatheringApplicationsOperationID      = "circle.gathering.ListGatheringApplications"
-	CircleGatheringListGatheringApplicationsPathTemplate     = "/gatherings/{gatheringId}/applications"
-	CircleGatheringListGatheringRosterOperationID            = "circle.gathering.ListGatheringRoster"
-	CircleGatheringListGatheringRosterPathTemplate           = "/gatherings/{gatheringId}/roster"
-	CircleGatheringListGatheringsByHostOperationID           = "circle.gathering.ListGatheringsByHost"
-	CircleGatheringListGatheringsByHostPathTemplate          = "/gatherings/by-host"
-	CircleGatheringListGatheringsBySourceOperationID         = "circle.gathering.ListGatheringsBySource"
-	CircleGatheringListGatheringsBySourcePathTemplate        = "/gatherings/by-source"
-	CircleGatheringPauseGatheringAdmissionOperationID        = "circle.gathering.PauseGatheringAdmission"
-	CircleGatheringPauseGatheringAdmissionPathTemplate       = "/gatherings/{gatheringId}:pause-admission"
-	CircleGatheringPublishGatheringOperationID               = "circle.gathering.PublishGathering"
-	CircleGatheringPublishGatheringPathTemplate              = "/gatherings/{gatheringId}:publish"
-	CircleGatheringReinstateGatheringParticipantOperationID  = "circle.gathering.ReinstateGatheringParticipant"
-	CircleGatheringReinstateGatheringParticipantPathTemplate = "/gatherings/{gatheringId}:reinstate"
-	CircleGatheringRemoveGatheringParticipantOperationID     = "circle.gathering.RemoveGatheringParticipant"
-	CircleGatheringRemoveGatheringParticipantPathTemplate    = "/gatherings/{gatheringId}:remove"
-	CircleGatheringResumeGatheringAdmissionOperationID       = "circle.gathering.ResumeGatheringAdmission"
-	CircleGatheringResumeGatheringAdmissionPathTemplate      = "/gatherings/{gatheringId}:resume-admission"
-	CircleGatheringReviewGatheringApplicationOperationID     = "circle.gathering.ReviewGatheringApplication"
-	CircleGatheringReviewGatheringApplicationPathTemplate    = "/gatherings/{gatheringId}:review-application"
-	CircleGatheringRevokeGatheringCoHostOperationID          = "circle.gathering.RevokeGatheringCoHost"
-	CircleGatheringRevokeGatheringCoHostPathTemplate         = "/gatherings/{gatheringId}:revoke-co-host"
-	CircleGatheringRevokeGatheringInvitationOperationID      = "circle.gathering.RevokeGatheringInvitation"
-	CircleGatheringRevokeGatheringInvitationPathTemplate     = "/gatherings/{gatheringId}:revoke-invitation"
-	CircleGatheringSafetyTerminateGatheringOperationID       = "circle.gathering.SafetyTerminateGathering"
-	CircleGatheringSafetyTerminateGatheringPathTemplate      = "/gatherings/{gatheringId}:safety-terminate"
-	CircleGatheringTransferGatheringOrganizerOperationID     = "circle.gathering.TransferGatheringOrganizer"
-	CircleGatheringTransferGatheringOrganizerPathTemplate    = "/gatherings/{gatheringId}:transfer-organizer"
-	CircleGatheringUnwatchGatheringAvailabilityOperationID   = "circle.gathering.UnwatchGatheringAvailability"
-	CircleGatheringUnwatchGatheringAvailabilityPathTemplate  = "/gatherings/{gatheringId}:unwatch-availability"
-	CircleGatheringUpdateGatheringOperationID                = "circle.gathering.UpdateGathering"
-	CircleGatheringUpdateGatheringPathTemplate               = "/gatherings/{gatheringId}"
-	CircleGatheringWatchGatheringAvailabilityOperationID     = "circle.gathering.WatchGatheringAvailability"
-	CircleGatheringWatchGatheringAvailabilityPathTemplate    = "/gatherings/{gatheringId}:watch-availability"
-	CircleGatheringWithdrawGatheringApplicationOperationID   = "circle.gathering.WithdrawGatheringApplication"
-	CircleGatheringWithdrawGatheringApplicationPathTemplate  = "/gatherings/{gatheringId}:withdraw-application"
+	CircleGatheringAcceptGatheringInvitationOperationID        = "circle.gathering.AcceptGatheringInvitation"
+	CircleGatheringAcceptGatheringInvitationPathTemplate       = "/gatherings/{gatheringId}:accept-invitation"
+	CircleGatheringAcknowledgeGatheringRevisionOperationID     = "circle.gathering.AcknowledgeGatheringRevision"
+	CircleGatheringAcknowledgeGatheringRevisionPathTemplate    = "/gatherings/{gatheringId}:acknowledge-revision"
+	CircleGatheringApplyToGatheringOperationID                 = "circle.gathering.ApplyToGathering"
+	CircleGatheringApplyToGatheringPathTemplate                = "/gatherings/{gatheringId}:apply"
+	CircleGatheringAssignGatheringCoHostOperationID            = "circle.gathering.AssignGatheringCoHost"
+	CircleGatheringAssignGatheringCoHostPathTemplate           = "/gatherings/{gatheringId}:assign-co-host"
+	CircleGatheringCancelGatheringOperationID                  = "circle.gathering.CancelGathering"
+	CircleGatheringCancelGatheringPathTemplate                 = "/gatherings/{gatheringId}:cancel"
+	CircleGatheringChangeGatheringCapacityOperationID          = "circle.gathering.ChangeGatheringCapacity"
+	CircleGatheringChangeGatheringCapacityPathTemplate         = "/gatherings/{gatheringId}:change-capacity"
+	CircleGatheringCompleteGatheringOperationID                = "circle.gathering.CompleteGathering"
+	CircleGatheringCompleteGatheringPathTemplate               = "/gatherings/{gatheringId}:complete"
+	CircleGatheringCompleteGatheringSelfOperationID            = "circle.gathering.CompleteGatheringSelf"
+	CircleGatheringCompleteGatheringSelfPathTemplate           = "/gatherings/{gatheringId}:complete-self"
+	CircleGatheringCreateGatheringDraftOperationID             = "circle.gathering.CreateGatheringDraft"
+	CircleGatheringCreateGatheringDraftPathTemplate            = "/gatherings"
+	CircleGatheringDeclareGatheringArrivalOperationID          = "circle.gathering.DeclareGatheringArrival"
+	CircleGatheringDeclareGatheringArrivalPathTemplate         = "/gatherings/{gatheringId}:declare-arrival"
+	CircleGatheringDeclareGatheringLeaveEarlyOperationID       = "circle.gathering.DeclareGatheringLeaveEarly"
+	CircleGatheringDeclareGatheringLeaveEarlyPathTemplate      = "/gatherings/{gatheringId}:leave-early"
+	CircleGatheringDeclineGatheringInvitationOperationID       = "circle.gathering.DeclineGatheringInvitation"
+	CircleGatheringDeclineGatheringInvitationPathTemplate      = "/gatherings/{gatheringId}:decline-invitation"
+	CircleGatheringEndGatheringEarlyOperationID                = "circle.gathering.EndGatheringEarly"
+	CircleGatheringEndGatheringEarlyPathTemplate               = "/gatherings/{gatheringId}:end-early"
+	CircleGatheringGetGatheringOperationID                     = "circle.gathering.GetGathering"
+	CircleGatheringGetGatheringPathTemplate                    = "/gatherings/{gatheringId}"
+	CircleGatheringGetGatheringParticipationStatusOperationID  = "circle.gathering.GetGatheringParticipationStatus"
+	CircleGatheringGetGatheringParticipationStatusPathTemplate = "/internal/circle/gatherings/{gatheringId}/participations/{personaId}"
+	CircleGatheringGetPublicGatheringOperationID               = "circle.gathering.GetPublicGathering"
+	CircleGatheringGetPublicGatheringPathTemplate              = "/public/gatherings/{gatheringId}"
+	CircleGatheringInviteToGatheringOperationID                = "circle.gathering.InviteToGathering"
+	CircleGatheringInviteToGatheringPathTemplate               = "/gatherings/{gatheringId}:invite"
+	CircleGatheringJoinOpenGatheringOperationID                = "circle.gathering.JoinOpenGathering"
+	CircleGatheringJoinOpenGatheringPathTemplate               = "/gatherings/{gatheringId}:join-open"
+	CircleGatheringLeaveGatheringOperationID                   = "circle.gathering.LeaveGathering"
+	CircleGatheringLeaveGatheringPathTemplate                  = "/gatherings/{gatheringId}:leave"
+	CircleGatheringListGatheringApplicationsOperationID        = "circle.gathering.ListGatheringApplications"
+	CircleGatheringListGatheringApplicationsPathTemplate       = "/gatherings/{gatheringId}/applications"
+	CircleGatheringListGatheringRosterOperationID              = "circle.gathering.ListGatheringRoster"
+	CircleGatheringListGatheringRosterPathTemplate             = "/gatherings/{gatheringId}/roster"
+	CircleGatheringListGatheringsByHostOperationID             = "circle.gathering.ListGatheringsByHost"
+	CircleGatheringListGatheringsByHostPathTemplate            = "/gatherings/by-host"
+	CircleGatheringListGatheringsBySourceOperationID           = "circle.gathering.ListGatheringsBySource"
+	CircleGatheringListGatheringsBySourcePathTemplate          = "/gatherings/by-source"
+	CircleGatheringListMyHostedGatheringsOperationID           = "circle.gathering.ListMyHostedGatherings"
+	CircleGatheringListMyHostedGatheringsPathTemplate          = "/gatherings/mine"
+	CircleGatheringPauseGatheringAdmissionOperationID          = "circle.gathering.PauseGatheringAdmission"
+	CircleGatheringPauseGatheringAdmissionPathTemplate         = "/gatherings/{gatheringId}:pause-admission"
+	CircleGatheringPublishGatheringOperationID                 = "circle.gathering.PublishGathering"
+	CircleGatheringPublishGatheringPathTemplate                = "/gatherings/{gatheringId}:publish"
+	CircleGatheringReinstateGatheringParticipantOperationID    = "circle.gathering.ReinstateGatheringParticipant"
+	CircleGatheringReinstateGatheringParticipantPathTemplate   = "/gatherings/{gatheringId}:reinstate"
+	CircleGatheringRemoveGatheringParticipantOperationID       = "circle.gathering.RemoveGatheringParticipant"
+	CircleGatheringRemoveGatheringParticipantPathTemplate      = "/gatherings/{gatheringId}:remove"
+	CircleGatheringResumeGatheringAdmissionOperationID         = "circle.gathering.ResumeGatheringAdmission"
+	CircleGatheringResumeGatheringAdmissionPathTemplate        = "/gatherings/{gatheringId}:resume-admission"
+	CircleGatheringReviewGatheringApplicationOperationID       = "circle.gathering.ReviewGatheringApplication"
+	CircleGatheringReviewGatheringApplicationPathTemplate      = "/gatherings/{gatheringId}:review-application"
+	CircleGatheringRevokeGatheringCoHostOperationID            = "circle.gathering.RevokeGatheringCoHost"
+	CircleGatheringRevokeGatheringCoHostPathTemplate           = "/gatherings/{gatheringId}:revoke-co-host"
+	CircleGatheringRevokeGatheringInvitationOperationID        = "circle.gathering.RevokeGatheringInvitation"
+	CircleGatheringRevokeGatheringInvitationPathTemplate       = "/gatherings/{gatheringId}:revoke-invitation"
+	CircleGatheringSafetyTerminateGatheringOperationID         = "circle.gathering.SafetyTerminateGathering"
+	CircleGatheringSafetyTerminateGatheringPathTemplate        = "/gatherings/{gatheringId}:safety-terminate"
+	CircleGatheringTransferGatheringOrganizerOperationID       = "circle.gathering.TransferGatheringOrganizer"
+	CircleGatheringTransferGatheringOrganizerPathTemplate      = "/gatherings/{gatheringId}:transfer-organizer"
+	CircleGatheringUnwatchGatheringAvailabilityOperationID     = "circle.gathering.UnwatchGatheringAvailability"
+	CircleGatheringUnwatchGatheringAvailabilityPathTemplate    = "/gatherings/{gatheringId}:unwatch-availability"
+	CircleGatheringUpdateGatheringOperationID                  = "circle.gathering.UpdateGathering"
+	CircleGatheringUpdateGatheringPathTemplate                 = "/gatherings/{gatheringId}"
+	CircleGatheringWatchGatheringAvailabilityOperationID       = "circle.gathering.WatchGatheringAvailability"
+	CircleGatheringWatchGatheringAvailabilityPathTemplate      = "/gatherings/{gatheringId}:watch-availability"
+	CircleGatheringWithdrawGatheringApplicationOperationID     = "circle.gathering.WithdrawGatheringApplication"
+	CircleGatheringWithdrawGatheringApplicationPathTemplate    = "/gatherings/{gatheringId}:withdraw-application"
 )
 
 var circleGatheringOperations = []CircleGatheringOperationMetadata{
@@ -326,10 +330,10 @@ var circleGatheringOperations = []CircleGatheringOperationMetadata{
 		Permissions:      nil,
 		Idempotency:      "required",
 		SuccessStatus:    200,
-		CommercialStatus: "blocked",
-		CommercialReason: "尚未暴露到 App 的 Gathering 运维与次级生命周期操作仍缺三层测试、四环境 SLO 与回滚证据",
-		CommercialGapID:  "CIRCLE_GATHERING_COMMERCIAL_CLOSURE",
-		CommercialStory:  "circle-community-gathering-coordination",
+		CommercialStatus: "ready",
+		CommercialReason: "",
+		CommercialGapID:  "",
+		CommercialStory:  "",
 		ContractDigest:   "sha256:f7db8a5a97a61350453aeed92b404635c655acc15ba397042a88334d7fb0c262",
 	},
 	{
@@ -369,6 +373,25 @@ var circleGatheringOperations = []CircleGatheringOperationMetadata{
 		CommercialGapID:  "",
 		CommercialStory:  "",
 		ContractDigest:   "sha256:d91c863073da2b87268a3e5f135958ec66747cf8a72c5511c8e4e89eef8cfc68",
+	},
+	{
+		OperationID:      CircleGatheringGetGatheringParticipationStatusOperationID,
+		Method:           "GET",
+		PathTemplate:     CircleGatheringGetGatheringParticipationStatusPathTemplate,
+		RequestEntity:    "GatheringParticipationStatusQuery",
+		ResponseEntity:   "GatheringParticipationStatusSlice",
+		OperationKind:    "query",
+		AuthMode:         "required",
+		Principal:        "service",
+		Scopes:           []string{"circle.gathering.participation_status.read"},
+		Permissions:      nil,
+		Idempotency:      "none",
+		SuccessStatus:    200,
+		CommercialStatus: "ready",
+		CommercialReason: "",
+		CommercialGapID:  "",
+		CommercialStory:  "",
+		ContractDigest:   "sha256:1a77464f77f39c2ce0a5477d18375ecfeb82962b88f7916a627703d47c63501d",
 	},
 	{
 		OperationID:      CircleGatheringGetPublicGatheringOperationID,
@@ -497,10 +520,10 @@ var circleGatheringOperations = []CircleGatheringOperationMetadata{
 		Permissions:      nil,
 		Idempotency:      "none",
 		SuccessStatus:    200,
-		CommercialStatus: "blocked",
-		CommercialReason: "尚未暴露到 App 的 Gathering 运维与次级生命周期操作仍缺三层测试、四环境 SLO 与回滚证据",
-		CommercialGapID:  "CIRCLE_GATHERING_COMMERCIAL_CLOSURE",
-		CommercialStory:  "circle-community-gathering-coordination",
+		CommercialStatus: "ready",
+		CommercialReason: "",
+		CommercialGapID:  "",
+		CommercialStory:  "",
 		ContractDigest:   "sha256:875bd95936d4739e9929762bcad1aadc008a798120cb4acfe84e1a945a95e47c",
 	},
 	{
@@ -516,11 +539,30 @@ var circleGatheringOperations = []CircleGatheringOperationMetadata{
 		Permissions:      nil,
 		Idempotency:      "none",
 		SuccessStatus:    200,
-		CommercialStatus: "blocked",
-		CommercialReason: "尚未暴露到 App 的 Gathering 运维与次级生命周期操作仍缺三层测试、四环境 SLO 与回滚证据",
-		CommercialGapID:  "CIRCLE_GATHERING_COMMERCIAL_CLOSURE",
-		CommercialStory:  "circle-community-gathering-coordination",
+		CommercialStatus: "ready",
+		CommercialReason: "",
+		CommercialGapID:  "",
+		CommercialStory:  "",
 		ContractDigest:   "sha256:72f226a75c02f37994ba81c37150dbe61fcb67c5c099ea5e43e0aad7b43a9e4f",
+	},
+	{
+		OperationID:      CircleGatheringListMyHostedGatheringsOperationID,
+		Method:           "GET",
+		PathTemplate:     CircleGatheringListMyHostedGatheringsPathTemplate,
+		RequestEntity:    "GatheringMineListQuery",
+		ResponseEntity:   "GatheringByHostPageSlice",
+		OperationKind:    "query",
+		AuthMode:         "required",
+		Principal:        "persona",
+		Scopes:           nil,
+		Permissions:      nil,
+		Idempotency:      "none",
+		SuccessStatus:    200,
+		CommercialStatus: "ready",
+		CommercialReason: "",
+		CommercialGapID:  "",
+		CommercialStory:  "",
+		ContractDigest:   "sha256:6f2b6c37c9b002f1575ffeac273ea543b602cca1fdfdee342e7bafa57a64d139",
 	},
 	{
 		OperationID:      CircleGatheringPauseGatheringAdmissionOperationID,
@@ -841,50 +883,54 @@ func LookupCircleGatheringOperation(
 		return cloneCircleGatheringOperation(circleGatheringOperations[12]), true
 	case CircleGatheringGetGatheringOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[13]), true
-	case CircleGatheringGetPublicGatheringOperationID:
+	case CircleGatheringGetGatheringParticipationStatusOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[14]), true
-	case CircleGatheringInviteToGatheringOperationID:
+	case CircleGatheringGetPublicGatheringOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[15]), true
-	case CircleGatheringJoinOpenGatheringOperationID:
+	case CircleGatheringInviteToGatheringOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[16]), true
-	case CircleGatheringLeaveGatheringOperationID:
+	case CircleGatheringJoinOpenGatheringOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[17]), true
-	case CircleGatheringListGatheringApplicationsOperationID:
+	case CircleGatheringLeaveGatheringOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[18]), true
-	case CircleGatheringListGatheringRosterOperationID:
+	case CircleGatheringListGatheringApplicationsOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[19]), true
-	case CircleGatheringListGatheringsByHostOperationID:
+	case CircleGatheringListGatheringRosterOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[20]), true
-	case CircleGatheringListGatheringsBySourceOperationID:
+	case CircleGatheringListGatheringsByHostOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[21]), true
-	case CircleGatheringPauseGatheringAdmissionOperationID:
+	case CircleGatheringListGatheringsBySourceOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[22]), true
-	case CircleGatheringPublishGatheringOperationID:
+	case CircleGatheringListMyHostedGatheringsOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[23]), true
-	case CircleGatheringReinstateGatheringParticipantOperationID:
+	case CircleGatheringPauseGatheringAdmissionOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[24]), true
-	case CircleGatheringRemoveGatheringParticipantOperationID:
+	case CircleGatheringPublishGatheringOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[25]), true
-	case CircleGatheringResumeGatheringAdmissionOperationID:
+	case CircleGatheringReinstateGatheringParticipantOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[26]), true
-	case CircleGatheringReviewGatheringApplicationOperationID:
+	case CircleGatheringRemoveGatheringParticipantOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[27]), true
-	case CircleGatheringRevokeGatheringCoHostOperationID:
+	case CircleGatheringResumeGatheringAdmissionOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[28]), true
-	case CircleGatheringRevokeGatheringInvitationOperationID:
+	case CircleGatheringReviewGatheringApplicationOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[29]), true
-	case CircleGatheringSafetyTerminateGatheringOperationID:
+	case CircleGatheringRevokeGatheringCoHostOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[30]), true
-	case CircleGatheringTransferGatheringOrganizerOperationID:
+	case CircleGatheringRevokeGatheringInvitationOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[31]), true
-	case CircleGatheringUnwatchGatheringAvailabilityOperationID:
+	case CircleGatheringSafetyTerminateGatheringOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[32]), true
-	case CircleGatheringUpdateGatheringOperationID:
+	case CircleGatheringTransferGatheringOrganizerOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[33]), true
-	case CircleGatheringWatchGatheringAvailabilityOperationID:
+	case CircleGatheringUnwatchGatheringAvailabilityOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[34]), true
-	case CircleGatheringWithdrawGatheringApplicationOperationID:
+	case CircleGatheringUpdateGatheringOperationID:
 		return cloneCircleGatheringOperation(circleGatheringOperations[35]), true
+	case CircleGatheringWatchGatheringAvailabilityOperationID:
+		return cloneCircleGatheringOperation(circleGatheringOperations[36]), true
+	case CircleGatheringWithdrawGatheringApplicationOperationID:
+		return cloneCircleGatheringOperation(circleGatheringOperations[37]), true
 	default:
 		return CircleGatheringOperationMetadata{}, false
 	}
@@ -973,6 +1019,13 @@ func CircleGatheringGetGatheringPath(gatheringID string) string {
 	return result
 }
 
+func CircleGatheringGetGatheringParticipationStatusPath(gatheringID string, personaID string) string {
+	result := CircleGatheringGetGatheringParticipationStatusPathTemplate
+	result = strings.ReplaceAll(result, "{gatheringId}", url.PathEscape(strings.TrimSpace(gatheringID)))
+	result = strings.ReplaceAll(result, "{personaId}", url.PathEscape(strings.TrimSpace(personaID)))
+	return result
+}
+
 func CircleGatheringGetPublicGatheringPath(gatheringID string) string {
 	result := CircleGatheringGetPublicGatheringPathTemplate
 	result = strings.ReplaceAll(result, "{gatheringId}", url.PathEscape(strings.TrimSpace(gatheringID)))
@@ -1016,6 +1069,11 @@ func CircleGatheringListGatheringsByHostPath() string {
 
 func CircleGatheringListGatheringsBySourcePath() string {
 	result := CircleGatheringListGatheringsBySourcePathTemplate
+	return result
+}
+
+func CircleGatheringListMyHostedGatheringsPath() string {
+	result := CircleGatheringListMyHostedGatheringsPathTemplate
 	return result
 }
 

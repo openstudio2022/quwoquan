@@ -100,6 +100,15 @@ class _Evidence:
             "post_declared_visit": 1,
         }[supply_key]
 
+    wishlisted: dict[str, tuple[str, ...]] = {}
+    experienced: dict[str, tuple[str, ...]] = {}
+
+    def list_wishlisted_entities(self, persona_id: str, limit: int):
+        return tuple(self.wishlisted.get(persona_id, ()))[:limit]
+
+    def list_experienced_gatherings(self, persona_id: str, limit: int):
+        return tuple(self.experienced.get(persona_id, ()))[:limit]
+
 
 def _materializer() -> tuple[Materializer, _Writer]:
     writer = _Writer()

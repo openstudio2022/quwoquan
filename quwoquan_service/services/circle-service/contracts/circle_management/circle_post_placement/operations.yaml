@@ -229,7 +229,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: PlacePostInCircle}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: remove-post-from-circle-local
@@ -245,7 +245,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: RemovePostFromCircle}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: pin-circle-post-local
@@ -261,7 +261,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: PinCirclePost}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: feature-circle-post-local
@@ -277,7 +277,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: FeatureCirclePost}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_post_placement/placement_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: project-content-post-lifecycle-local

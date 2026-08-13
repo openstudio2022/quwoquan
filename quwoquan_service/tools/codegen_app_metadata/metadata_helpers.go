@@ -19,6 +19,7 @@ func writeFile(path string, content string) {
 		exitErr(err)
 	}
 	recordGeneratedFile(path, data)
+	attachPendingEnumFieldBindings(path)
 	fmt.Printf("generated: %s\n", path)
 }
 

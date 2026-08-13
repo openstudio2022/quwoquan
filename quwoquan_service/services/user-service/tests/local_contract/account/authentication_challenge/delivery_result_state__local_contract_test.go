@@ -9,6 +9,9 @@ import (
 	challengemodel "quwoquan_service/services/user-service/internal/account/authentication_challenge/domain/model"
 )
 
+// phoneDestinationHash is the hashed OTP destination fixture; sha256("phone").
+const phoneDestinationHash = "sha256:45569da57f4b7bf472d7a864ef4781451cae6383fee9fb0ae40c59aa1ce475b7"
+
 func TestAuthenticationChallengeDeliveryResultIsIdempotentAndMonotonic(t *testing.T) {
 	t.Parallel()
 	createdAt := time.Date(2026, 8, 10, 8, 0, 0, 0, time.UTC)
@@ -16,7 +19,7 @@ func TestAuthenticationChallengeDeliveryResultIsIdempotentAndMonotonic(t *testin
 		ID:                "challenge-1",
 		Purpose:           "login",
 		Channel:           "sms",
-		DestinationHash:   "sha256:phone",
+		DestinationHash:   phoneDestinationHash,
 		SecretRef:         "sealed:otp",
 		DeliveryRequestID: "otp_req_123",
 		DeliveryStatus:    challengemodel.DeliveryStatusQueued,
@@ -87,7 +90,7 @@ func TestAuthenticationChallengeDeliveryFailureCancelsPendingChallenge(t *testin
 		ID:                "challenge-failed",
 		Purpose:           "login",
 		Channel:           "sms",
-		DestinationHash:   "sha256:phone",
+		DestinationHash:   phoneDestinationHash,
 		SecretRef:         "sealed:otp",
 		DeliveryRequestID: "otp_req_failed",
 		DeliveryStatus:    challengemodel.DeliveryStatusQueued,

@@ -1,7 +1,7 @@
 {
-  "schema": "qwq.eval_corpus_manifest.v1",
+  "schema": "qwq.eval_corpus_manifest",
   "corpusFile": "assistant_runtime_smoke_scenarios.json",
-  "sha256": "39d724836a18892206125c05ba2727e4e80962e764679e1b1ed45ad4ea2b2406",
+  "sha256": "a106fb9e0332be5cc0cb6142faba42df08e0a3d274085684ee87ca590e5b1cc6",
   "caseCount": 5,
   "purpose": "assistant-runtime-protocol-smoke"
 }

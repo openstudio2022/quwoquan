@@ -15,6 +15,7 @@ import (
 	rtoperation "quwoquan_service/runtime/operation"
 	rolloutapp "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/application"
 	rolloutdomain "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/domain"
+	graphapp "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/application"
 	"quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/domain"
 	ownerinfra "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/owner"
 )
@@ -27,7 +28,7 @@ func TestSearchPageExecutorCallsOneResultOwnerAndProjectsOnlyTypedPageFields(t *
 			t.Fatalf("owner request=%s %s", request.Method, request.URL.EscapedPath())
 		}
 		if request.Header.Get("Authorization") != "Bearer search-owner-token" ||
-			request.Header.Get("X-Contract-Graph-SHA256") != "sha256:test-graph" ||
+			request.Header.Get("X-Contract-Graph-SHA256") != testGraphContractDigest ||
 			request.Header.Get("X-Session-Id") != "anon-session-1" {
 			t.Fatalf("owner headers=%v", request.Header)
 		}
@@ -43,6 +44,7 @@ func TestSearchPageExecutorCallsOneResultOwnerAndProjectsOnlyTypedPageFields(t *
 			t.Fatalf("query text leaked to owner payload=%v", payload)
 		}
 		writeSearchOwnerResponse(response, map[string]any{
+			"searchRequestId": "search.req.owner-1",
 			"interpretedQuery": map[string]any{
 				"normalized": "大理", "tokens": []any{"大理"}, "variants": []any{"洱海"},
 				"detectedEntities": []any{}, "detectedTags": []any{}, "selectedObjectTypes": []any{"content.post"},
@@ -52,6 +54,10 @@ func TestSearchPageExecutorCallsOneResultOwnerAndProjectsOnlyTypedPageFields(t *
 				"contentType": "article", "title": "大理古城", "snippet": "日落路线",
 				"thumbnailUrl": "https://cdn.example/post-1.webp",
 				"action":       "quwoquan://content/posts/post-1",
+				"rankPosition": 1,
+				"matchedTerms": []any{"大理"},
+				"rankReasons":  []any{map[string]any{"code": "term", "label": "标题命中", "weight": 3.0}},
+				"evidence":     []any{map[string]any{"field": "title", "snippet": "大理古城"}},
 			}},
 			"citations":      []any{},
 			"facets":         []any{map[string]any{"key": "content.post", "label": "内容", "count": 1}},
@@ -63,7 +69,7 @@ func TestSearchPageExecutorCallsOneResultOwnerAndProjectsOnlyTypedPageFields(t *
 	defer ownerServer.Close()
 
 	executor := newSearchPageExecutor(t, ownerServer.URL, nil)
-	ctx := ownerinfra.WithSearchSessionID(context.Background(), "anon-session-1")
+	ctx := graphapp.WithSearchSessionID(context.Background(), "anon-session-1")
 	result, err := executor.Execute(ctx, searchPageEntry(), map[string]any{
 		"input": map[string]any{
 			"query": "大理", "first": json.Number("20"),
@@ -79,16 +85,18 @@ func TestSearchPageExecutorCallsOneResultOwnerAndProjectsOnlyTypedPageFields(t *
 	encoded := string(result.Data)
 	for _, expected := range []string{
 		`"searchPage"`, `"items"`, `"objectRef":"objref_v1_opaque_post_1"`,
-		`"resultType":"CONTENT_POST"`, `"title":"大理古城"`, `"subtitle":null`,
+		`"resultType":"CONTENT_POST"`, `"contentType":"ARTICLE"`, `"title":"大理古城"`, `"subtitle":null`,
 		`"snippet":"日落路线"`, `"thumbnailUrl":"https://cdn.example/post-1.webp"`,
-		`"action":"quwoquan://content/posts/post-1"`, `"facets"`, `"suggestions":["洱海"]`,
+		`"action":"quwoquan://content/posts/post-1"`, `"rankPosition":1`, `"rankReason":"标题命中"`,
+		`"facets"`, `"suggestions":["洱海"]`, `"matchedTerms":["大理"]`,
+		`"degradeSignals":[]`, `"searchRequestId":"search.req.owner-1"`,
 		`"nextCursor":"cursor_v1_opaque_next"`,
 	} {
 		if !strings.Contains(encoded, expected) {
 			t.Fatalf("typed SearchPage missing %s: %s", expected, encoded)
 		}
 	}
-	for _, forbidden := range []string{"cards", "pageInfo", "objectType", "contentType", "label", "score", "matchedTerms", "rankReasons", "evidence", "provider", "experimentBucket", "objectId", "index", "embedding", "features"} {
+	for _, forbidden := range []string{"cards", "pageInfo", `"objectType"`, `"label"`, `"score"`, `"weight"`, `"rankReasons"`, `"evidence"`, "provider", "experimentBucket", "objectId", `"index"`, "embedding", "features"} {
 		if strings.Contains(encoded, forbidden) {
 			t.Fatalf("private owner field %s leaked: %s", forbidden, encoded)
 		}
@@ -107,10 +115,10 @@ func TestSearchPageExecutorRejectsEntryVariablesAndIdentityBeforeOwnerCall(t *te
 		entry     domain.Entry
 		variables map[string]any
 	}{
-		{name: "executor drift", ctx: ownerinfra.WithSearchSessionID(context.Background(), "session-1"), entry: mutateSearchPageEntry(func(entry *domain.Entry) { entry.ExecutorKey = "search.other" }), variables: validSearchPageVariables()},
-		{name: "mode injection", ctx: ownerinfra.WithSearchSessionID(context.Background(), "session-1"), entry: searchPageEntry(), variables: map[string]any{"input": map[string]any{"query": "大理", "mode": "suggest"}}},
-		{name: "page too large", ctx: ownerinfra.WithSearchSessionID(context.Background(), "session-1"), entry: searchPageEntry(), variables: map[string]any{"input": map[string]any{"query": "大理", "first": json.Number("21")}}},
-		{name: "unknown object type", ctx: ownerinfra.WithSearchSessionID(context.Background(), "session-1"), entry: searchPageEntry(), variables: map[string]any{"input": map[string]any{"query": "大理", "objectTypes": []any{"RAW_INDEX"}}}},
+		{name: "executor drift", ctx: graphapp.WithSearchSessionID(context.Background(), "session-1"), entry: mutateSearchPageEntry(func(entry *domain.Entry) { entry.ExecutorKey = "search.other" }), variables: validSearchPageVariables()},
+		{name: "mode injection", ctx: graphapp.WithSearchSessionID(context.Background(), "session-1"), entry: searchPageEntry(), variables: map[string]any{"input": map[string]any{"query": "大理", "mode": "suggest"}}},
+		{name: "page too large", ctx: graphapp.WithSearchSessionID(context.Background(), "session-1"), entry: searchPageEntry(), variables: map[string]any{"input": map[string]any{"query": "大理", "first": json.Number("21")}}},
+		{name: "unknown object type", ctx: graphapp.WithSearchSessionID(context.Background(), "session-1"), entry: searchPageEntry(), variables: map[string]any{"input": map[string]any{"query": "大理", "objectTypes": []any{"RAW_INDEX"}}}},
 		{name: "anonymous without session", ctx: context.Background(), entry: searchPageEntry(), variables: validSearchPageVariables()},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -144,14 +152,37 @@ func TestSearchPageExecutorPreservesAuthenticatedPrincipalForServiceOwnerCall(t 
 	}
 }
 
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-003
+func TestSearchPageExecutorPassesThroughTypedDegradeSignals(t *testing.T) {
+	ownerServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		payload := emptySearchOwnerResponse()
+		payload["degradeSignals"] = []any{map[string]any{
+			"code": "SEARCH.MIDDLEWARE.unavailable", "message": "partial", "objectType": "circle.group",
+		}}
+		writeSearchOwnerResponse(response, payload)
+	}))
+	defer ownerServer.Close()
+	executor := newSearchPageExecutor(t, ownerServer.URL, nil)
+	ctx := graphapp.WithSearchSessionID(context.Background(), "session-1")
+	result, err := executor.Execute(ctx, searchPageEntry(), validSearchPageVariables())
+	if err != nil {
+		t.Fatalf("degraded search is still a served result: %v", err)
+	}
+	encoded := string(result.Data)
+	for _, expected := range []string{
+		`"degradeSignals":[{`, `"code":"SEARCH.MIDDLEWARE.unavailable"`, `"message":"partial"`, `"objectType":"circle.group"`,
+	} {
+		if !strings.Contains(encoded, expected) {
+			t.Fatalf("degrade signal must pass through typed, missing %s: %s", expected, encoded)
+		}
+	}
+}
+
 func TestSearchPageExecutorFailsClosedOnPartialOrPrivateOwnerResponse(t *testing.T) {
 	for _, testCase := range []struct {
 		name   string
 		mutate func(map[string]any)
 	}{
-		{name: "partial degrade", mutate: func(response map[string]any) {
-			response["degradeSignals"] = []any{map[string]any{"code": "SEARCH.MIDDLEWARE.unavailable", "message": "partial"}}
-		}},
 		{name: "raw index", mutate: func(response map[string]any) {
 			response["hits"] = []any{map[string]any{"objectRef": "objref", "objectType": "content.post", "contentType": "article", "title": "title", "index": "private-index"}}
 		}},
@@ -168,7 +199,7 @@ func TestSearchPageExecutorFailsClosedOnPartialOrPrivateOwnerResponse(t *testing
 			}))
 			defer ownerServer.Close()
 			executor := newSearchPageExecutor(t, ownerServer.URL, nil)
-			ctx := ownerinfra.WithSearchSessionID(context.Background(), "session-1")
+			ctx := graphapp.WithSearchSessionID(context.Background(), "session-1")
 			if _, err := executor.Execute(ctx, searchPageEntry(), validSearchPageVariables()); err == nil {
 				t.Fatal("partial/private owner response must fail closed")
 			}
@@ -184,7 +215,7 @@ func TestSearchPageExecutorCandidateWithoutOriginDoesNotFallBack(t *testing.T) {
 	}))
 	defer stableServer.Close()
 	executor := newSearchPageExecutor(t, stableServer.URL, nil)
-	ctx := rolloutapp.WithTarget(ownerinfra.WithSearchSessionID(context.Background(), "session-1"), rolloutdomain.TargetCandidate)
+	ctx := rolloutapp.WithTarget(graphapp.WithSearchSessionID(context.Background(), "session-1"), rolloutdomain.TargetCandidate)
 	if _, err := executor.Execute(ctx, searchPageEntry(), validSearchPageVariables()); err == nil {
 		t.Fatal("candidate target without candidate origin must fail closed")
 	}
@@ -207,7 +238,7 @@ func newSearchPageExecutor(t *testing.T, stableRawURL string, candidateRawURL *s
 		}
 	}
 	executor, err := ownerinfra.NewSearchPageQueryExecutor(
-		stable, candidate, http.DefaultClient, "sha256:test-graph",
+		stable, candidate, http.DefaultClient, testGraphContractDigest,
 		staticServiceCredentials{header: "Bearer search-owner-token"},
 		staticAccountCredentials{},
 	)
@@ -225,7 +256,7 @@ func (staticAccountCredentials) AuthorizationHeaderForAccount(_ context.Context,
 
 func searchPageEntry() domain.Entry {
 	entry := validRegistryEntry()
-	entry.SHA256Hash = "894a7b1541100c4ffa20e446d7969aa6bb1c6aa385d025cc2a8c7b625ba50d58"
+	entry.SHA256Hash = "111b715594655786eba342c5cbebe7ea1338a9cf016ed0f35f54096802583478"
 	entry.OperationName = "SearchPage"
 	entry.CanonicalOperationID = "gateway.persisted_query_execution.SearchPage"
 	entry.ObjectIDs = []string{"gateway.persisted_query_execution"}
@@ -262,6 +293,7 @@ func validSearchPageVariables() map[string]any {
 
 func emptySearchOwnerResponse() map[string]any {
 	return map[string]any{
+		"searchRequestId": "search.req.test-1",
 		"interpretedQuery": map[string]any{
 			"normalized": "大理", "tokens": []any{"大理"}, "variants": []any{},
 			"detectedEntities": []any{}, "detectedTags": []any{}, "selectedObjectTypes": []any{},
@@ -274,6 +306,6 @@ func emptySearchOwnerResponse() map[string]any {
 
 func writeSearchOwnerResponse(response http.ResponseWriter, payload map[string]any) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
-	response.Header().Set("X-Contract-Graph-SHA256", "sha256:test-graph")
+	response.Header().Set("X-Contract-Graph-SHA256", testGraphContractDigest)
 	_ = json.NewEncoder(response).Encode(payload)
 }

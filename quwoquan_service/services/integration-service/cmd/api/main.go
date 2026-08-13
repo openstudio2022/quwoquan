@@ -1,4 +1,6 @@
-package main
+// Package bootstrap owns integration-service's private composition for
+// servicehost.
+package bootstrap
 
 import (
 	"context"
@@ -10,6 +12,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -27,6 +31,7 @@ import (
 	rtotel "quwoquan_service/runtime/otel"
 	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
+	"quwoquan_service/runtime/servicehost"
 	grantadapter "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/adapters/inbound/runtime"
 	grantapp "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/application"
 	grantcandidate "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/infrastructure/candidate"
@@ -66,13 +71,42 @@ import (
 	locationproviderbinding "quwoquan_service/services/integration-service/internal/external_integration/location/infrastructure/providerbinding"
 )
 
-func main() {
-	if err := run(); err != nil {
-		log.Fatalf("integration-service: %v", err)
-	}
+const serviceName = "integration-service"
+
+// Module keeps integration-service's public HTTP contract, workers and private
+// resources together while servicehost owns process lifecycle coordination.
+type Module struct {
+	configDigest string
+	server       *http.Server
+	readiness    *rthealth.Checker
+	listener     net.Listener
+	admission    atomic.Bool
+	serveError   chan error
+
+	workerCancel context.CancelFunc
+	workerGroup  sync.WaitGroup
+	workerStarts []func(context.Context)
+	cleanup      func()
+	runContext   context.Context
+
+	locationAdapter string
+	locationTimeout int64
 }
 
-func run() error {
+var _ servicehost.Module = (*Module)(nil)
+
+// NewModule performs fail-fast service-owned assembly. It does not bind a
+// listener, start workers, manage signals or decide process exit status.
+func NewModule() (*Module, error) {
+	module := &Module{cleanup: func() {}}
+	if err := module.build(); err != nil {
+		module.cleanup()
+		return nil, err
+	}
+	return module, nil
+}
+
+func (module *Module) build() error {
 	cfg, err := loadRuntimeConfig()
 	if err != nil {
 		return fmt.Errorf("config load failed: %w", err)
@@ -95,7 +129,12 @@ func run() error {
 		"integration-service",
 		strings.TrimSpace(cfg.Environment),
 		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
-		strings.TrimSpace(os.Getenv("CONFIG_VERSION")),
+		strings.TrimSpace(
+			servicehost.ModuleEnvironmentValue(
+				"integration-service",
+				"CONFIG_VERSION",
+			),
+		),
 		strings.TrimSpace(os.Getenv("IMAGE_VERSION")),
 	)
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
@@ -199,18 +238,17 @@ func run() error {
 		return fmt.Errorf("route provider binding invalid: %w", routeBindingErr)
 	}
 
-	ctx, cancelRuntime := context.WithCancel(context.Background())
-	defer cancelRuntime()
+	ctx := context.Background()
 
 	redisRouter, redisSceneModes, err := buildIntegrationRedisRouter(cfg)
 	if err != nil {
 		return fmt.Errorf("integration message transport config invalid: %w", err)
 	}
-	defer func() {
+	module.addCleanup(func() {
 		if err := redisRouter.Close(); err != nil {
 			log.Printf("integration-service Redis close failed: %v", err)
 		}
-	}()
+	})
 	redisProbeCtx, cancelRedisProbe := context.WithTimeout(ctx, 10*time.Second)
 	if err := redisRouter.PingAll(redisProbeCtx); err != nil {
 		cancelRedisProbe()
@@ -227,8 +265,8 @@ func run() error {
 		return fmt.Errorf("integration message transport preflight failed: %w", err)
 	}
 
-	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "integration-service", SamplingRatio: 0.1})
-	defer otelShutdown()
+	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: serviceName, SamplingRatio: 0.1})
+	module.addCleanup(otelShutdown)
 
 	// 服务日志上云：stdout/stderr 镜像推送到 Product Ops 内部 runtime log
 	// ingest（机器凭据）；未配置时仅 stdout，推送失败静默降级。
@@ -240,11 +278,13 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("runtime log exporter init failed: %w", err)
 	}
-	defer runtimeLogExporter.Close()
+	module.addCleanup(runtimeLogExporter.Close)
 	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
 	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
-	defer standardLogWriter.Close()
-	defer errorLogWriter.Close()
+	module.addCleanup(func() {
+		errorLogWriter.Close()
+		standardLogWriter.Close()
+	})
 	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
 	kvFilter := robs.NewKVMetadataFilter(nil)
 	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, robs.TraceLogLevelInfo, kvFilter)
@@ -391,13 +431,13 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("MongoDB connect failed: %w", err)
 	}
-	defer func() {
+	module.addCleanup(func() {
 		disconnectCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := mongoClient.Disconnect(disconnectCtx); err != nil {
 			log.Printf("integration-service MongoDB disconnect failed: %v", err)
 		}
-	}()
+	})
 	connectorDefinitionStore := connectordefinitionpersistence.NewMongoStore(
 		mongoClient.Database(cfg.MongoDB.Database),
 	)
@@ -513,11 +553,12 @@ func run() error {
 		30*time.Second,
 		nil,
 	)
-	connectorInvocationLoopDone := make(chan struct{})
-	go func() {
-		defer close(connectorInvocationLoopDone)
-		runConnectorInvocationLoop(ctx, connectorInvocationWorker)
-	}()
+	module.workerStarts = append(
+		module.workerStarts,
+		func(workerCtx context.Context) {
+			runConnectorInvocationLoop(workerCtx, connectorInvocationWorker)
+		},
+	)
 	reliableStore := reliabletaskmongo.NewExternalInteraction(mongoClient.Database(cfg.MongoDB.Database))
 	attemptRuntimeStore := attemptadapter.NewRuntimeStore(reliableStore)
 	deadLetterRepository := deadletterpersistence.NewMongoRepository(
@@ -581,11 +622,7 @@ func run() error {
 	if _, err := accountClosureConsumer.ProcessOnce(ctx); err != nil {
 		return fmt.Errorf("integration account closure consumer preflight failed: %w", err)
 	}
-	accountClosureDone := make(chan struct{})
-	go func() {
-		defer close(accountClosureDone)
-		accountClosureConsumer.Run(ctx)
-	}()
+	module.workerStarts = append(module.workerStarts, accountClosureConsumer.Run)
 	externalResultRelay, err := resultrelay.New(
 		reliableStore,
 		messageTransport,
@@ -597,11 +634,7 @@ func run() error {
 	if _, err := externalResultRelay.ProcessOnce(ctx); err != nil {
 		return fmt.Errorf("external interaction result relay preflight failed: %w", err)
 	}
-	resultRelayDone := make(chan struct{})
-	go func() {
-		defer close(resultRelayDone)
-		externalResultRelay.Run(ctx)
-	}()
+	module.workerStarts = append(module.workerStarts, externalResultRelay.Run)
 	if cfg.Integration.ExternalInteraction.SMS.Enabled {
 		otpIndexCtx, cancelOTPIndexes := context.WithTimeout(ctx, 30*time.Second)
 		otpIndexErr := otpCodeReferenceStore.EnsureIndexes(otpIndexCtx)
@@ -639,7 +672,6 @@ func run() error {
 		return err
 	}
 	var externalService *application.ExternalInteractionService
-	externalLoopDone := make(chan struct{})
 	if len(policies) > 0 {
 		externalService, err = application.NewExternalInteractionService(
 			externalRuntimeStore,
@@ -650,12 +682,12 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("external interaction service init failed: %w", err)
 		}
-		go func() {
-			defer close(externalLoopDone)
-			runExternalInteractionLoop(ctx, externalService)
-		}()
-	} else {
-		close(externalLoopDone)
+		module.workerStarts = append(
+			module.workerStarts,
+			func(workerCtx context.Context) {
+				runExternalInteractionLoop(workerCtx, externalService)
+			},
+		)
 	}
 	operationMux := http.NewServeMux()
 	connectorauthorizationhttp.NewHandler(
@@ -706,6 +738,7 @@ func run() error {
 		},
 	)
 	rootMux.HandleFunc("/healthz", healthChecker.Handler())
+	rootMux.HandleFunc("/readyz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
 	rootMux.Handle(
 		"/",
@@ -735,31 +768,157 @@ func run() error {
 			DeviceTicketVerifier:     deviceVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(withObs),
-		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: timeouts.ReadHeader,
 		WriteTimeout:      timeouts.Write,
 		IdleTimeout:       timeouts.Idle,
 	}
-	log.Printf(
-		"integration-service listening on %s location_adapter=%s timeout_ms=%d",
-		cfg.Service.HTTP.Addr,
-		locationAdapter,
-		locationTimeout,
+	module.configDigest = strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("integration-service", "CONFIG_VERSION"),
 	)
-	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
-		cancelRuntime()
-		waitForWorkerShutdown(externalLoopDone, "external interaction")
-		waitForWorkerShutdown(connectorInvocationLoopDone, "connector invocation")
-		waitForWorkerShutdown(resultRelayDone, "external interaction result relay")
-		waitForWorkerShutdown(accountClosureDone, "account closure consumer")
-		return err
+	if module.configDigest == "" {
+		module.configDigest = fmt.Sprintf("%s:%s", cfg.Environment, cfg.Service.Name)
 	}
-	cancelRuntime()
-	waitForWorkerShutdown(externalLoopDone, "external interaction")
-	waitForWorkerShutdown(connectorInvocationLoopDone, "connector invocation")
-	waitForWorkerShutdown(resultRelayDone, "external interaction result relay")
-	waitForWorkerShutdown(accountClosureDone, "account closure consumer")
+	module.server = server
+	module.readiness = healthChecker
+	module.serveError = make(chan error, 1)
+	module.locationAdapter = locationAdapter
+	module.locationTimeout = locationTimeout
+	server.Handler = module.admissionHandler(server.Handler)
+	server.BaseContext = func(net.Listener) context.Context {
+		if module.runContext != nil {
+			return module.runContext
+		}
+		return context.Background()
+	}
 	return nil
+}
+
+func (module *Module) Name() string { return serviceName }
+
+func (module *Module) ConfigDigest() string {
+	if module == nil {
+		return ""
+	}
+	return module.configDigest
+}
+
+func (module *Module) ValidateConfig(context.Context) error {
+	if module == nil || module.server == nil || module.readiness == nil || module.cleanup == nil {
+		return errors.New("integration-service module is incomplete")
+	}
+	return nil
+}
+
+func (module *Module) PrepareMigration(context.Context) error {
+	return nil
+}
+
+func (module *Module) Bind(context.Context) error {
+	if module == nil || module.server == nil {
+		return errors.New("integration-service HTTP server is unavailable")
+	}
+	listener, err := net.Listen("tcp", module.server.Addr)
+	if err != nil {
+		return fmt.Errorf("integration-service listener bind: %w", err)
+	}
+	module.listener = listener
+	return nil
+}
+
+func (module *Module) Start(ctx context.Context) error {
+	if module == nil || module.listener == nil {
+		return errors.New("integration-service listener is not bound")
+	}
+	module.runContext, module.workerCancel = context.WithCancel(ctx)
+	for _, start := range module.workerStarts {
+		module.workerGroup.Add(1)
+		module.startWorker(start)
+	}
+	module.workerGroup.Add(1)
+	go func() {
+		defer module.workerGroup.Done()
+		log.Printf(
+			"integration-service listening on %s location_adapter=%s timeout_ms=%d",
+			module.server.Addr,
+			module.locationAdapter,
+			module.locationTimeout,
+		)
+		if err := module.server.Serve(module.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			select {
+			case module.serveError <- err:
+			case <-module.runContext.Done():
+			}
+		}
+	}()
+	return nil
+}
+
+func (module *Module) Ready(ctx context.Context) error {
+	if result := module.readiness.Check(ctx); result.Status != "ok" {
+		return fmt.Errorf("integration-service readiness failed: %v", result.FailedChecks)
+	}
+	select {
+	case err := <-module.serveError:
+		return fmt.Errorf("integration-service listener failed: %w", err)
+	default:
+		return nil
+	}
+}
+
+func (module *Module) OpenAdmission(context.Context) error {
+	module.admission.Store(true)
+	return nil
+}
+
+func (module *Module) Shutdown(ctx context.Context) error {
+	module.admission.Store(false)
+	var result error
+	if module.server != nil {
+		if err := module.server.Shutdown(ctx); err != nil {
+			result = errors.Join(result, err)
+			result = errors.Join(result, module.server.Close())
+		}
+	}
+	if module.workerCancel != nil {
+		module.workerCancel()
+		module.workerGroup.Wait()
+		module.workerCancel = nil
+	}
+	if module.cleanup != nil {
+		module.cleanup()
+		module.cleanup = nil
+	}
+	return result
+}
+
+func (module *Module) startWorker(start func(context.Context)) {
+	go func() {
+		defer module.workerGroup.Done()
+		start(module.runContext)
+	}()
+}
+
+func (module *Module) admissionHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/healthz", "/readyz", "/metrics":
+			next.ServeHTTP(writer, request)
+			return
+		}
+		if !module.admission.Load() {
+			http.Error(writer, `{"status":"unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
+}
+
+func (module *Module) addCleanup(cleanup func()) {
+	previousCleanup := module.cleanup
+	module.cleanup = func() {
+		cleanup()
+		previousCleanup()
+	}
 }
 
 func runConnectorInvocationLoop(
@@ -808,15 +967,5 @@ func runExternalInteractionLoop(ctx context.Context, service *application.Extern
 				}
 			}
 		}
-	}
-}
-
-func waitForWorkerShutdown(done <-chan struct{}, name string) {
-	timer := time.NewTimer(5 * time.Second)
-	defer timer.Stop()
-	select {
-	case <-done:
-	case <-timer.C:
-		log.Printf("integration-service %s worker shutdown timed out", name)
 	}
 }

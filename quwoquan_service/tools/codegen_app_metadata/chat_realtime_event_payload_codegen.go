@@ -411,6 +411,14 @@ func emitChatRealtimePayloadClass(
 			dartType += "?"
 		}
 		b.WriteString(fmt.Sprintf("  final %s %s;\n", dartType, field.Name))
+		recordEnumFieldBinding(enumFieldBinding{
+			DartClass:      className,
+			DartField:      field.Name,
+			DartType:       dartType,
+			EnumRef:        field.EnumRef,
+			ContractType:   field.Type,
+			ClientDartType: field.ClientDartType,
+		})
 	}
 	b.WriteString(fmt.Sprintf("\n  factory %s.fromWire(Map<String, dynamic> wire) {\n", className))
 	b.WriteString("    _chatEventRequireExactFields(\n")
@@ -460,7 +468,7 @@ func chatRealtimeEncodeExpression(field fieldDef) (string, error) {
 		return access, nil
 	case "timestamp", "datetime":
 		return access + ".toUtc().toIso8601String()", nil
-	case "[]string":
+	case "[]string", "[]double":
 		return access + ".toList(growable: false)", nil
 	case "enum":
 		return access + ".wireName", nil
@@ -484,6 +492,8 @@ func chatRealtimeDartType(field fieldDef) (string, error) {
 		return "DateTime", nil
 	case "[]string":
 		return "List<String>", nil
+	case "[]double":
+		return "List<double>", nil
 	case "enum":
 		if strings.TrimSpace(field.EnumRef) == "" {
 			return "", fmt.Errorf("enum_ref is required")
@@ -533,6 +543,11 @@ func chatRealtimeDecodeExpression(className string, field fieldDef) (string, err
 			return fmt.Sprintf("_chatEventOptionalStringList(wire, '%s', %s)", field.Name, path), nil
 		}
 		return fmt.Sprintf("_chatEventRequiredStringList(wire, '%s', %s)", field.Name, path), nil
+	case "[]double":
+		if nullable {
+			return fmt.Sprintf("_chatEventOptionalDoubleList(wire, '%s', %s)", field.Name, path), nil
+		}
+		return fmt.Sprintf("_chatEventRequiredDoubleList(wire, '%s', %s)", field.Name, path), nil
 	case "enum":
 		value := fmt.Sprintf("_chatEventRequiredValue(wire, '%s', %s)", field.Name, path)
 		if nullable {
@@ -650,6 +665,21 @@ List<String> _chatEventRequiredStringList(Map<String, dynamic> wire, String fiel
 List<String>? _chatEventOptionalStringList(Map<String, dynamic> wire, String field, String path) {
   if (wire[field] == null) return null;
   return _chatEventRequiredStringList(wire, field, path);
+}
+
+List<double> _chatEventRequiredDoubleList(Map<String, dynamic> wire, String field, String path) {
+  final value = _chatEventRequiredValue(wire, field, path);
+  if (value is! List || value.any((item) => item is! num)) {
+    throw FormatException('$path must be number[]');
+  }
+  return List<double>.unmodifiable(
+    value.map((item) => (item as num).toDouble()),
+  );
+}
+
+List<double>? _chatEventOptionalDoubleList(Map<String, dynamic> wire, String field, String path) {
+  if (wire[field] == null) return null;
+  return _chatEventRequiredDoubleList(wire, field, path);
 }
 
 Map<String, Object?> _chatEventRequiredObject(Map<String, dynamic> wire, String field, String path) {

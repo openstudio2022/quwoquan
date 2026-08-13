@@ -8,11 +8,16 @@ import datetime as dt
 import hashlib
 import json
 import os
+import sys
 import time
 import urllib.parse
 import uuid
 from pathlib import Path
 from typing import Any
+
+_SUPPORT_DIR = Path(__file__).resolve().parents[1] / "support"
+if str(_SUPPORT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SUPPORT_DIR))
 
 from report_feedback_probe_support import (
     LOCAL_TARGETS,

@@ -152,7 +152,7 @@ func TestCredentialBindingPostgresQueryAndUnbindUseCommittedState(t *testing.T) 
 			t.Fatalf("UnbindCredential result=%+v err=%v", revoked, err)
 		}
 		var activeCount int
-		if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM credential_bindings WHERE owner_id=$1 AND status='active'`, "binding-readiness-owner").Scan(&activeCount); err != nil || activeCount != 1 {
+		if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM credential_bindings WHERE owner_id=$1 AND is_active=true`, "binding-readiness-owner").Scan(&activeCount); err != nil || activeCount != 1 {
 			t.Fatalf("active CredentialBinding count=%d err=%v", activeCount, err)
 		}
 	})
@@ -410,7 +410,7 @@ func TestCompleteFederatedPhoneBindingCommitsAtomicPostgresPacket(t *testing.T) 
 		if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM user_profiles WHERE user_id=$1`, grant.OwnerID).Scan(&profileCount); err != nil {
 			t.Fatalf("count committed owner: %v", err)
 		}
-		if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM credential_bindings WHERE owner_id=$1 AND status='active'`, grant.OwnerID).Scan(&bindingCount); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM credential_bindings WHERE owner_id=$1 AND is_active=true`, grant.OwnerID).Scan(&bindingCount); err != nil {
 			t.Fatalf("count committed bindings: %v", err)
 		}
 		if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM account_sessions WHERE account_id=$1 AND status='active'`, grant.OwnerID).Scan(&sessionCount); err != nil {

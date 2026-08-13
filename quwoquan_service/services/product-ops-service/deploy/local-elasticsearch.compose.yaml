@@ -1,22 +1,28 @@
 # Product Ops 在 Alpha/Beta/Gamma 的唯一 Elasticsearch workload。
 # stackctl package 从本文件选择目标架构的不可变镜像与 JVM 参数，并把解析后的
 # Compose 复制进 candidate；up 只允许消费该 candidate artifact。
+#
+# quwoquan/elasticsearch-cjk 是官方 8.13.4 基镜像 + analysis-ik/analysis-pinyin
+# 中文检索插件（specs/feature-tree/global-search-experience/design.md#dec-002）。
+# 本地由 services/product-ops-service/build/elasticsearch/ 的 fetch_plugins.sh +
+# Dockerfile 构建（tag 8.13.4，非浮动）；推送私有 registry 后必须回填为
+# @sha256 digest pin（beta/gamma/prod 只接受 digest 形态）。
 x-qwq-package-elasticsearch:
   runtimeEndpoint: "http://elasticsearch:9200"
   platforms:
     arm64:
-      image: "docker.elastic.co/elasticsearch/elasticsearch@sha256:5af05323c9bfc52fcee63a47c682412a6ef5955ac85966f045a68ba8623db2e1"
+      image: "quwoquan/elasticsearch-cjk:8.13.4"
       cliJavaOpts: "-XX:UseSVE=0"
       esJavaOpts: "-XX:UseSVE=0 -Xms512m -Xmx512m"
     amd64:
-      image: "docker.elastic.co/elasticsearch/elasticsearch@sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f"
+      image: "quwoquan/elasticsearch-cjk:8.13.4"
       cliJavaOpts: ""
       esJavaOpts: "-Xms512m -Xmx512m"
 services:
   elasticsearch:
     # This expression is a checked-in source default only. The packaged copy
     # contains the exact platform image and no runtime selector.
-    image: "${QWQ_COMPOSE_ELASTICSEARCH_IMAGE:-docker.elastic.co/elasticsearch/elasticsearch@sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f}"
+    image: "${QWQ_COMPOSE_ELASTICSEARCH_IMAGE:-quwoquan/elasticsearch-cjk:8.13.4}"
     networks:
       - default
       - edge

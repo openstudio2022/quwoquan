@@ -398,6 +398,24 @@ func (reader *gatheringQueryReaderDouble) ListByHost(
 	return limitGatherings(values, limit), nil
 }
 
+func (reader *gatheringQueryReaderDouble) ListMineByHost(
+	_ context.Context,
+	personaID string,
+	after app.PublicListPosition,
+	limit int,
+) ([]app.GatheringReadModel, error) {
+	values := make([]app.GatheringReadModel, 0)
+	for _, value := range reader.records {
+		if value.HostBinding.HostSubjectKind == "persona" &&
+			value.HostBinding.HostSubjectID == personaID &&
+			publicPositionAfter(value, after) {
+			values = append(values, value)
+		}
+	}
+	sortGatherings(values)
+	return limitGatherings(values, limit), nil
+}
+
 func (reader *gatheringQueryReaderDouble) ListBySource(
 	_ context.Context,
 	source app.CanonicalObjectRef,

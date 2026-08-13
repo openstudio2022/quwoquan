@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 
 func startMediaAssetOutboxRelay(
 	ctx context.Context,
+	workers *workerRegistry,
 	reader mediaports.MediaAssetOutboxReader,
 	checkpoints mediaports.ProjectionCheckpointStore,
 	transport runtimemessaging.DurableRecordAppender,
@@ -47,10 +48,10 @@ func startMediaAssetOutboxRelay(
 	healthChecker.Register("media-asset-outbox-relay", func(context.Context) error {
 		return relay.Healthy(5 * time.Second)
 	})
-	go func() {
-		if err := relay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil && logger != nil {
+	workers.Add(func(workerCtx context.Context) {
+		if err := relay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil && logger != nil {
 			logger.Error("MediaAsset outbox relay stopped", "error", err)
 		}
-	}()
+	})
 	return nil
 }

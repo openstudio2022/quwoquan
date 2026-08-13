@@ -116,6 +116,22 @@ type GatheringProjectionCommand struct {
 	State         string
 }
 
+// GatheringMemberJoinedFact 是活动群成员真实新增（非重放、非角色变更）后
+// 暴露给增强投影（如一次性破冰卡）的最小事实。
+type GatheringMemberJoinedFact struct {
+	SourceEventID  string
+	GatheringID    string
+	ConversationID string
+	PersonaID      string
+	DisplayName    string
+}
+
+// GatheringMemberJoinedHook 在成员新增事务提交后被调用（best-effort 增强，
+// 不得阻断成员投影主事实；实现内部消化自身失败并自证幂等）。
+type GatheringMemberJoinedHook interface {
+	OnGatheringMemberJoined(ctx context.Context, fact GatheringMemberJoinedFact)
+}
+
 type GatheringProjectionResult struct {
 	GatheringID    string `json:"gatheringId"`
 	ConversationID string `json:"conversationId"`
@@ -135,7 +151,16 @@ type GatheringProjectionFacade struct {
 	profiles     GatheringMemberProfileReader
 	states       GatheringProjectionStateStore
 	outbox       GatheringProjectionOutbox
+	memberJoined GatheringMemberJoinedHook
 	now          func() time.Time
+}
+
+// WithGatheringMemberJoinedHook 注册成员新增后的增强投影（一次性破冰卡）。
+func (facade *GatheringProjectionFacade) WithGatheringMemberJoinedHook(
+	hook GatheringMemberJoinedHook,
+) *GatheringProjectionFacade {
+	facade.memberJoined = hook
+	return facade
 }
 
 func NewGatheringProjectionFacade(
@@ -187,7 +212,9 @@ func (facade *GatheringProjectionFacade) Project(
 		GatheringID: command.GatheringID, ConversationID: binding.ConversationID,
 		PersonaID: command.PersonaID, SourceType: command.SourceType, State: command.State,
 	}
+	var joinedFact *GatheringMemberJoinedFact
 	err = facade.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		joinedFact = nil
 		current, currentFound, loadErr := facade.states.LoadGatheringProjectionState(
 			txCtx, command.GatheringID, command.PersonaID, command.SourceType,
 		)
@@ -240,6 +267,16 @@ func (facade *GatheringProjectionFacade) Project(
 		}
 		for index := range membershipEvents {
 			membershipEvents[index].Payload["memberCount"] = count
+			if membershipEvents[index].EventType == "ConversationMemberAdded" {
+				displayName, _ := membershipEvents[index].Payload["displayName"].(string)
+				joinedFact = &GatheringMemberJoinedFact{
+					SourceEventID:  command.SourceEventID,
+					GatheringID:    command.GatheringID,
+					ConversationID: binding.ConversationID,
+					PersonaID:      command.PersonaID,
+					DisplayName:    displayName,
+				}
+			}
 		}
 		if rosterErr := facade.roster.BumpGatheringRoster(txCtx, binding.ConversationID, count); rosterErr != nil {
 			return rosterErr
@@ -259,6 +296,10 @@ func (facade *GatheringProjectionFacade) Project(
 			}},
 		)
 	})
+	if err == nil && joinedFact != nil && facade.memberJoined != nil {
+		// 事务提交后的一次性增强投影：破冰卡失败不回滚成员事实。
+		facade.memberJoined.OnGatheringMemberJoined(ctx, *joinedFact)
+	}
 	return result, err
 }
 

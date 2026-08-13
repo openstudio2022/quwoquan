@@ -19,6 +19,8 @@ type SendMessageRequest struct {
 	Type                      string
 	Content                   string
 	MediaAssetID              string
+	AudioDurationMs           int64
+	AudioWaveform             []float64
 	Card                      *MessageCardCommand
 	ReplyToMessageId          string
 	Mentions                  []string

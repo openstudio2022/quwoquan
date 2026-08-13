@@ -12,9 +12,11 @@ runtime_entrypoints:
     method: decide
     object_owner: RolloutAssignment
   telemetry:
-    metric: gateway_rollout_decision_total
+    # 与运行时实际注册的 emitter 同名同标签（infrastructure/observability/metrics.go
+    # 的有界标签治理版）；决策原因由 reason 承载。
+    metric: api_edge_rollout_decisions_total
     trace: true
-    attributes: [stage, target, platform, appVersion, appBuild, region, carrier, operation, outcome]
+    attributes: [stage, target, platform, appVersion, appBuild, region, carrier, reason]
   slo:
     latency_p95_ms: 20
     failure_ratio_percent: 0.1

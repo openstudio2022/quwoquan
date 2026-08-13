@@ -456,3 +456,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/credential_binding/credential_binding_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: credential_binding_social_login_app_uat
+    spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-002
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: user.login}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/user_service/account/credential_binding/social_login_provider__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

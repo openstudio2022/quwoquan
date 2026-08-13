@@ -128,6 +128,30 @@ fields:
 '
     role: authoritative_state
     reference: true
+  - name: audioDurationMs
+    source: audioDurationMs
+    type: int
+    constraints:
+      - NULLABLE
+      - POSITIVE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    description: 语音消息时长（毫秒）；仅 type=audio 携带，接收端渲染播放时长。
+    role: authoritative_state
+  - name: audioWaveform
+    source: audioWaveform
+    type: '[]double'
+    constraints:
+      - NULLABLE
+      - MAX_ITEMS_128
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: none
+    description: 语音消息归一化波形采样（0..1，至多 128 点）；仅 type=audio 携带。
+    role: authoritative_state
   - name: card
     source: card
     type: MessageCard
@@ -375,6 +399,12 @@ types:
       - name: mediaAssetId
         type: string
         constraints: [NULLABLE]
+      - name: audioDurationMs
+        type: int
+        constraints: [NULLABLE, POSITIVE]
+      - name: audioWaveform
+        type: '[]double'
+        constraints: [NULLABLE, MAX_ITEMS_128]
       - name: card
         type: MessageCard
         constraints: [NULLABLE]
@@ -477,6 +507,20 @@ types:
           - NULLABLE
           - REQUIRED_WHEN_type_card
           - FORBIDDEN_UNLESS_type_card
+      - name: audioDurationMs
+        type: int
+        constraints:
+          - NULLABLE
+          - POSITIVE
+          - FORBIDDEN_UNLESS_type_audio
+        client_dart_type: int?
+      - name: audioWaveform
+        type: '[]double'
+        constraints:
+          - NULLABLE
+          - MAX_ITEMS_128
+          - FORBIDDEN_UNLESS_type_audio
+        client_dart_type: List<double>?
       - name: replyToMessageId
         type: string
         constraints:

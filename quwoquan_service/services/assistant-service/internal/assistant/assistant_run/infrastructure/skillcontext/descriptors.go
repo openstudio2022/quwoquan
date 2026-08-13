@@ -3,6 +3,7 @@ package skillcontext
 import (
 	"fmt"
 
+	readercontract "quwoquan_service/services/assistant-service/generated/assistant/domain_reader_descriptor"
 	generated "quwoquan_service/services/assistant-service/generated/assistant/assistant_session"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/feedbackcontext"
 	readermodel "quwoquan_service/services/assistant-service/internal/assistant/domain_reader_descriptor/domain/model"
@@ -12,6 +13,10 @@ import (
 // The composition root must build one object-owned Catalog from this slice and
 // pass that same Catalog to both DomainReaderDescriptor queries and
 // NewRuntimeRegistry.
+//
+// 跨域公开对象 Reader（circle/content/entity/user）由对象契约的
+// assistant_access.read.reader 声明经 codegen 派生（reader_descriptors.g.go），
+// 此处只保留 assistant_run 自有进程内 seam 的 Reader。
 func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 	descriptors := []readermodel.Descriptor{
 		runDescriptor(
@@ -58,14 +63,6 @@ func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 			[]readermodel.SurfaceKind{readermodel.SurfacePersonal},
 		),
 		runDescriptor(
-			"account.user_interest_profile",
-			"user.interest_profile",
-			[]string{"memory"},
-			generated.AssistantContextAuthorityDomainCanonical,
-			generated.AssistantContextSensitivityPrivate,
-			[]readermodel.SurfaceKind{readermodel.SurfacePersonal},
-		),
-		runDescriptor(
 			"chat.conversation_context",
 			"conversation.current_context",
 			[]string{"conversation"},
@@ -75,36 +72,6 @@ func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 				readermodel.SurfacePersonal,
 				readermodel.SurfaceShared,
 			},
-		),
-		publicObjectDescriptor(
-			"circle.circle_context",
-			"circle.current_context",
-			"circle-service",
-			"circle.circle.GetCircle",
-			"circle.CircleDetailQuery",
-			"circle.Circle",
-			15*60,
-			60,
-		),
-		publicObjectDescriptor(
-			"content.post_context",
-			"content.current_context",
-			"content-service",
-			"content.post.GetPost",
-			"content.ContentPostDetailQuery",
-			"content.Post",
-			5*60,
-			30,
-		),
-		publicObjectDescriptor(
-			"entity.homepage_context",
-			"entity.current_context",
-			"entity-service",
-			"entity.homepage.GetHomepageDetail",
-			"entity.HomepageByIdQuery",
-			"entity.Homepage",
-			60*60,
-			5*60,
 		),
 	}
 
@@ -120,12 +87,6 @@ func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 				"assistant.skill_subscription.GetSkillSubscription",
 			}
 			descriptors[index].ObjectTypeRefs = []string{"assistant.SkillSubscription"}
-		case "user.interest_profile":
-			descriptors[index].OwnerService = "user-service"
-			descriptors[index].OwnerOperationRefs = []string{
-				"user.user_account.GetUserInterestProfile",
-			}
-			descriptors[index].ObjectTypeRefs = []string{"user.UserAccount"}
 		case "conversation.current_context":
 			descriptors[index].MaxFreshnessSeconds = 15 * 60
 			descriptors[index].OwnerOperationRefs = []string{
@@ -134,6 +95,8 @@ func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 			descriptors[index].ObjectTypeRefs = []string{"chat.Conversation", "chat.Message"}
 		}
 	}
+
+	descriptors = append(descriptors, contractDescriptors()...)
 
 	result := make([]readermodel.Descriptor, 0, len(descriptors))
 	for _, value := range descriptors {
@@ -150,36 +113,35 @@ func RuntimeDescriptors() ([]readermodel.Descriptor, error) {
 	return result, nil
 }
 
-func publicObjectDescriptor(
-	descriptorID string,
-	resolverRef string,
-	ownerService string,
-	ownerOperationRef string,
-	inputSchemaRef string,
-	objectTypeRef string,
-	maxFreshnessSeconds int,
-	cacheTTLSeconds int,
-) readermodel.Descriptor {
-	return readermodel.Descriptor{
-		DescriptorID: descriptorID, ResolverRef: resolverRef,
-		OwnerService:        ownerService,
-		OwnerOperationRefs:  []string{ownerOperationRef},
-		InputSchemaRef:      inputSchemaRef,
-		OutputSchemaRef:     "assistant.ContextSegment",
-		ObjectTypeRefs:      []string{objectTypeRef},
-		AcceptedSourceKinds: []string{"domain"},
-		Authority:           generated.AssistantContextAuthorityDomainCanonical,
-		Sensitivity:         generated.AssistantContextSensitivityPublic,
-		MaxFreshnessSeconds: maxFreshnessSeconds,
-		CacheTTLSeconds:     cacheTTLSeconds,
-		SurfaceKinds: []readermodel.SurfaceKind{
-			readermodel.SurfacePersonal,
-			readermodel.SurfaceShared,
-			readermodel.SurfacePublic,
-		},
-		ArtifactPolicy: readermodel.ArtifactInlineBounded,
-		CitationPolicy: readermodel.CitationEntityReference,
+// contractDescriptors maps the codegen catalogue derived from object contract
+// `assistant_access.read.reader` declarations into the Reader domain model.
+func contractDescriptors() []readermodel.Descriptor {
+	entries := readercontract.ContractReaderDescriptors()
+	descriptors := make([]readermodel.Descriptor, 0, len(entries))
+	for _, entry := range entries {
+		surfaces := make([]readermodel.SurfaceKind, 0, len(entry.SurfaceKinds))
+		for _, surface := range entry.SurfaceKinds {
+			surfaces = append(surfaces, readermodel.SurfaceKind(surface))
+		}
+		descriptors = append(descriptors, readermodel.Descriptor{
+			DescriptorID:        entry.DescriptorID,
+			ResolverRef:         entry.ResolverRef,
+			OwnerService:        entry.OwnerService,
+			OwnerOperationRefs:  []string{entry.OwnerOperationRef},
+			InputSchemaRef:      entry.InputSchemaRef,
+			OutputSchemaRef:     entry.OutputSchemaRef,
+			ObjectTypeRefs:      []string{entry.ObjectTypeRef},
+			AcceptedSourceKinds: append([]string(nil), entry.AcceptedSourceKinds...),
+			Authority:           generated.AssistantContextAuthority(entry.Authority),
+			Sensitivity:         generated.AssistantContextSensitivity(entry.Sensitivity),
+			MaxFreshnessSeconds: entry.MaxFreshnessSeconds,
+			CacheTTLSeconds:     entry.CacheTTLSeconds,
+			SurfaceKinds:        surfaces,
+			ArtifactPolicy:      readermodel.ArtifactPolicy(entry.ArtifactPolicy),
+			CitationPolicy:      readermodel.CitationPolicy(entry.CitationPolicy),
+		})
 	}
+	return descriptors
 }
 
 func runDescriptor(

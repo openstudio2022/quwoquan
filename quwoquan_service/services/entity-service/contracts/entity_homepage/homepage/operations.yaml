@@ -1180,3 +1180,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/api_integration/service/entity_service/entity_homepage/homepage/homepage_generated_remote__api_integration_test.dart
     executions:
       - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: homepage_release_consumer_render_app_uat
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-001
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: entity.detail}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/entity_service/entity_homepage/homepage/release_homepage__consumer_render__functional__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

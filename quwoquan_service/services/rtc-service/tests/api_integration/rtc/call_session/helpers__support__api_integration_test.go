@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/media-infrastructure/spec.md#gwt-001
 package api_integration
 
 import (

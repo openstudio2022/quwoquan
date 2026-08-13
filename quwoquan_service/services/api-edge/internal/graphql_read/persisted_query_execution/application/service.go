@@ -45,6 +45,27 @@ type Executor interface {
 	Execute(ctx context.Context, entry domain.Entry, variables map[string]any) (ExecutionResult, error)
 }
 
+// EntryValidator confirms a registry entry is bound to a real owner
+// composition. The binding table lives in the infrastructure layer, so the
+// inbound adapter must consume it through this application port instead of
+// importing infrastructure directly.
+type EntryValidator func(entry domain.Entry) error
+
+type searchSessionKey struct{}
+
+// WithSearchSessionID binds the already-sanitized public ingress session to an
+// owner request. The value never comes from GraphQL variables and therefore
+// cannot be used to smuggle a different principal through a persisted query.
+func WithSearchSessionID(ctx context.Context, sessionID string) context.Context {
+	return context.WithValue(ctx, searchSessionKey{}, strings.TrimSpace(sessionID))
+}
+
+// SearchSessionID reads the ingress session bound by WithSearchSessionID.
+func SearchSessionID(ctx context.Context) string {
+	sessionID, _ := ctx.Value(searchSessionKey{}).(string)
+	return sessionID
+}
+
 // RegistryLoader is the application port for loading one release-bound,
 // signature-verified persisted-query registry. Concrete signature and file
 // adapters are assembled only by the process composition root.

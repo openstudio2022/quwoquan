@@ -1,6 +1,7 @@
 package local_contract
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -112,6 +113,19 @@ func TestRolloutMetricsAreBoundedAndDistinguishMissingSubjectFromStoreFailure(t 
 	failingHandler.ServeHTTP(failingResponse, failingRequest)
 	if failingResponse.Code != http.StatusServiceUnavailable {
 		t.Fatalf("store failure status=%d body=%s", failingResponse.Code, failingResponse.Body.String())
+	}
+	// 错误码契约：assignment store 失败必须以声明的稳定码 fail-closed。
+	var rolloutUnavailableBody struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(failingResponse.Body.Bytes(), &rolloutUnavailableBody); err != nil {
+		t.Fatalf("decode rollout unavailable body: %v", err)
+	}
+	if rolloutUnavailableBody.Code != "GATEWAY.MIDDLEWARE.rollout_state_unavailable" {
+		t.Fatalf(
+			"code=%s want GATEWAY.MIDDLEWARE.rollout_state_unavailable",
+			rolloutUnavailableBody.Code,
+		)
 	}
 	observer.ObserveDecision(application.DecisionObservation{
 		Stage: "5", Target: "stable", Platform: "web", AppVersion: "1.9.0",

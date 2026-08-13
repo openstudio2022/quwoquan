@@ -1,9 +1,10 @@
-package main
+package bootstrap
 
 import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -25,6 +26,7 @@ import (
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/runtime/servicehost"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	httpadapter "quwoquan_service/services/circle-service/internal/circle_management/circle/adapters/inbound/http"
@@ -109,30 +111,37 @@ type config struct {
 	ES searchviewes.Config `yaml:"es"`
 }
 
-func main() {
-	if err := run(); err != nil {
-		log.Fatalf("circle-service: %v", err)
-	}
-}
+// NewModule assembles circle-service without binding a listener, starting
+// workers, admitting traffic, or owning process signals.
+func NewModule() (_ *Module, resultErr error) {
+	cleanups := &cleanupStack{}
+	initialized := false
+	defer func() {
+		if initialized {
+			return
+		}
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = cleanups.Close(cleanupCtx)
+	}()
 
-func run() error {
 	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
 	if err != nil {
-		log.Fatalf("circle-service runtime identity invalid: %v", err)
+		return nil, fmt.Errorf("circle-service runtime identity invalid: %w", err)
 	}
 
 	cfg, err := loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion)
 	if err != nil {
-		log.Fatalf("circle-service config load failed: %v", err)
+		return nil, fmt.Errorf("circle-service config load failed: %w", err)
 	}
 	applyEnvOverrides(&cfg)
 	if err := validateRuntimeConfigurationIdentity(cfg, configVersion, imageVersion); err != nil {
-		log.Fatalf("circle-service config identity failed: %v", err)
+		return nil, fmt.Errorf("circle-service config identity failed: %w", err)
 	}
 
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
-		log.Fatalf("access token config invalid: %v", err)
+		return nil, fmt.Errorf("circle-service access token config invalid: %w", err)
 	}
 	accountSecurityAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig,
@@ -140,7 +149,7 @@ func run() error {
 		[]string{"user.account.security.read"},
 	)
 	if err != nil {
-		log.Fatalf("account security authority credential init failed: %v", err)
+		return nil, fmt.Errorf("circle-service account security authority credential init failed: %w", err)
 	}
 	accountSecurityAuthorityTimeout := time.Duration(cfg.UserAccountSecurityAuthority.TimeoutMs) * time.Millisecond
 	accountSecurityAuthority, err := rtauth.NewHTTPAccountSecurityAuthority(
@@ -152,7 +161,7 @@ func run() error {
 		},
 	)
 	if err != nil {
-		log.Fatalf("account security authority config invalid: %v", err)
+		return nil, fmt.Errorf("circle-service account security authority config invalid: %w", err)
 	}
 
 	addr := getenvOrDefault("CIRCLE_SERVICE_ADDR", cfg.Service.HTTP.Addr)
@@ -160,11 +169,14 @@ func run() error {
 		addr = ":18082"
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := context.Background()
+	workers := &workerRegistry{}
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "circle-service", SamplingRatio: 0.1})
-	defer otelShutdown()
+	cleanups.Add(func(context.Context) error {
+		otelShutdown()
+		return nil
+	})
 
 	// MongoDB
 	mongoURI := getenvOrDefault("CIRCLE_MONGO_URI", cfg.Mongo.URI)
@@ -176,38 +188,41 @@ func run() error {
 		mongoDBName = "quwoquan_circle"
 	}
 
-	mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: mongoURI}, "circle-service")
-	defer mongoClient.Disconnect(ctx)
+	mongoClient, err := rtmongo.Connect(ctx, rtmongo.ConnectConfig{URI: mongoURI})
+	if err != nil {
+		return nil, fmt.Errorf("circle-service MongoDB connect failed: %w", err)
+	}
+	cleanups.Add(mongoClient.Disconnect)
 
 	db := mongoClient.Database(mongoDBName)
 	circleStore := persistence.NewMongoCircleStore(db.Collection("circles"))
 	circleAggregateStore := circlepersistence.NewMongoAggregateStore(db)
 	if err := circleAggregateStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle aggregate indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service circle aggregate indexes failed: %w", err)
 	}
 	gatheringStore := gatheringpersistence.NewMongoAggregateStore(db)
 	if err := gatheringStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("Gathering aggregate indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service Gathering aggregate indexes failed: %w", err)
 	}
 	fileStore := filepersistence.NewMongoAggregateStore(db)
 	if err := fileStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle file indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service circle file indexes failed: %w", err)
 	}
 	fileReaders := filepersistence.NewMongoReaders(db)
 	groupStore := groupersistence.NewMongoAggregateStore(db)
 	if err := groupStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle group indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service circle group indexes failed: %w", err)
 	}
 	groupReaders := groupersistence.NewMongoReaders(db)
 	groupMembershipStore := groupmembershippersistence.NewMongoAggregateStore(db)
 	if err := groupMembershipStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle group membership indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service circle group membership indexes failed: %w", err)
 	}
 	groupMembershipReaders := groupmembershippersistence.NewMongoReaders(db)
 
 	// Redis (via runtime Router)
 	router, messageTransportSceneModes := buildRedisRouter(cfg)
-	defer router.Close()
+	cleanups.Add(func(context.Context) error { return router.Close() })
 	messageTransport, err := requireCircleAPIMessageTransport(
 		ctx,
 		appEnv,
@@ -215,7 +230,7 @@ func run() error {
 		messageTransportSceneModes,
 	)
 	if err != nil {
-		return fmt.Errorf("circle-service message transport preflight failed: %w", err)
+		return nil, fmt.Errorf("circle-service message transport preflight failed: %w", err)
 	}
 	if err := router.PingAll(ctx); err != nil {
 		log.Printf("WARN: circle-service redis ping: %v", err)
@@ -228,7 +243,7 @@ func run() error {
 	feedStore := persistence.NewMongoFeedStore(db)
 	discoveryFeedReader := persistence.NewMongoCircleDiscoveryFeedReader(db)
 	if err := discoveryFeedReader.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle discovery feed indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service circle discovery feed indexes failed: %w", err)
 	}
 	cachedDiscoveryFeedReader := cache.NewCachedCircleDiscoveryFeedReader(
 		discoveryFeedReader,
@@ -236,20 +251,20 @@ func run() error {
 	)
 	placementStore := placementpersistence.NewMongoAggregateStore(db)
 	if err := placementStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle post placement indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service circle post placement indexes failed: %w", err)
 	}
 	placementReaders := placementpersistence.NewMongoPolicyReaders(db)
 	if err := placementReaders.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle post placement policy indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service circle post placement policy indexes failed: %w", err)
 	}
 	membershipStore := membershippersistence.NewMongoAggregateStore(db)
 	if err := membershipStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle membership indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service circle membership indexes failed: %w", err)
 	}
 	membershipReaders := membershippersistence.NewMongoReaders(db)
 	behaviorFactStore := behaviorfactpersistence.NewMongoAppendSink(db)
 	if err := behaviorFactStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle behavior fact indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service circle behavior fact indexes failed: %w", err)
 	}
 
 	// Assemble the write-time search index. ES endpoints/credentials come from the
@@ -261,7 +276,7 @@ func run() error {
 	searchviewes.ApplyEnvOverrides(&cfg.ES)
 	searchBuilt, err := searchviewes.Build(cfg.ES)
 	if err != nil {
-		log.Fatalf("circle-service search index build failed: %v", err)
+		return nil, fmt.Errorf("circle-service search index build failed: %w", err)
 	}
 	if err := searchBuilt.EnsureIndex(ctx); err != nil {
 		// SearchIndexView is a derived read model. A transient ES outage must not
@@ -286,7 +301,7 @@ func run() error {
 		accessTokenConfig, "circle-service", []string{"content.media.reference.read"},
 	)
 	if err != nil {
-		log.Fatalf("content-service credential init failed: %v", err)
+		return nil, fmt.Errorf("circle-service content-service credential init failed: %w", err)
 	}
 	gatheringSafetyCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig,
@@ -294,7 +309,7 @@ func run() error {
 		[]string{"content.gathering.safety.authorize"},
 	)
 	if err != nil {
-		log.Fatalf("Gathering safety authority credential init failed: %v", err)
+		return nil, fmt.Errorf("circle-service Gathering safety authority credential init failed: %w", err)
 	}
 	gatheringSafetyAuthority, err := gatheringexternal.NewHTTPSafetyTerminationAuthorizer(
 		os.Getenv("CONTENT_SERVICE_BASE_URL"),
@@ -302,19 +317,19 @@ func run() error {
 		nil,
 	)
 	if err != nil {
-		log.Fatalf("Gathering safety authority invalid: %v", err)
+		return nil, fmt.Errorf("circle-service Gathering safety authority invalid: %w", err)
 	}
 	gatheringChatCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig, "circle-service", []string{"chat.gathering.write"},
 	)
 	if err != nil {
-		log.Fatalf("Chat Gathering projection credential init failed: %v", err)
+		return nil, fmt.Errorf("circle-service Chat Gathering projection credential init failed: %w", err)
 	}
 	gatheringConversationPort, err := gatheringexternal.NewChatConversationPort(
 		os.Getenv("CHAT_SERVICE_BASE_URL"), gatheringChatCredentials, nil,
 	)
 	if err != nil {
-		log.Fatalf("Chat Gathering projection port invalid: %v", err)
+		return nil, fmt.Errorf("circle-service Chat Gathering projection port invalid: %w", err)
 	}
 	gatheringTargetReader, err := gatheringexternal.NewTargetReader(gatheringexternal.TargetReaderConfig{
 		ContentBaseURL: os.Getenv("CONTENT_SERVICE_BASE_URL"),
@@ -323,7 +338,7 @@ func run() error {
 		Circles:        gatheringCircleReader{circles: circleAggregateStore},
 	})
 	if err != nil {
-		log.Fatalf("Gathering target reader invalid: %v", err)
+		return nil, fmt.Errorf("circle-service Gathering target reader invalid: %w", err)
 	}
 	gatheringCommands := gatheringapp.NewCommandFacade(gatheringStore)
 	gatheringQueryReader := gatheringpersistence.NewMongoGatheringQueryReader(db)
@@ -337,7 +352,7 @@ func run() error {
 		time.Now,
 	)
 	if err != nil {
-		log.Fatalf("Circle Host authority evaluator invalid: %v", err)
+		return nil, fmt.Errorf("circle-service Circle Host authority evaluator invalid: %w", err)
 	}
 	personaHostAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig,
@@ -345,7 +360,7 @@ func run() error {
 		[]string{"user.persona.gathering_host_authority.evaluate"},
 	)
 	if err != nil {
-		log.Fatalf("Persona Host authority credential init failed: %v", err)
+		return nil, fmt.Errorf("circle-service Persona Host authority credential init failed: %w", err)
 	}
 	personaHostAuthorityClient, err := gatheringexternal.NewPersonaHostAuthorityHTTPClient(
 		os.Getenv("USER_SERVICE_BASE_URL"),
@@ -353,7 +368,7 @@ func run() error {
 		nil,
 	)
 	if err != nil {
-		log.Fatalf("Persona Host authority client invalid: %v", err)
+		return nil, fmt.Errorf("circle-service Persona Host authority client invalid: %w", err)
 	}
 	entityHostAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig,
@@ -361,7 +376,7 @@ func run() error {
 		[]string{"entity.homepage.gathering_host_authority.evaluate"},
 	)
 	if err != nil {
-		log.Fatalf("EntityHomepage Host authority credential init failed: %v", err)
+		return nil, fmt.Errorf("circle-service EntityHomepage Host authority credential init failed: %w", err)
 	}
 	entityHostAuthorityClient, err := gatheringexternal.NewEntityHomepageHostAuthorityHTTPClient(
 		os.Getenv("ENTITY_SERVICE_BASE_URL"),
@@ -369,7 +384,7 @@ func run() error {
 		nil,
 	)
 	if err != nil {
-		log.Fatalf("EntityHomepage Host authority client invalid: %v", err)
+		return nil, fmt.Errorf("circle-service EntityHomepage Host authority client invalid: %w", err)
 	}
 	gatheringHostAuthority := gatheringexternal.NewHostAuthorityReader(
 		personaHostAuthorityClient,
@@ -395,7 +410,7 @@ func run() error {
 		os.Getenv("CONTENT_SERVICE_BASE_URL"), contentCredentials, nil,
 	)
 	if err != nil {
-		log.Fatalf("content-service MediaAsset reader invalid: %v", err)
+		return nil, fmt.Errorf("circle-service content-service MediaAsset reader invalid: %w", err)
 	}
 	fileCommands := fileapp.NewCommandFacade(fileStore, fileReaders, mediaAssetReader)
 	fileQueries := fileapp.NewQueryFacade(fileReaders, fileReaders)
@@ -404,7 +419,7 @@ func run() error {
 	groupConversationBindingProjector := groupapp.NewConversationBindingProjector(groupStore)
 	groupConversationBindingFailures := groupersistence.NewMongoConversationBindingFailureStore(db)
 	if err := groupConversationBindingFailures.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle group conversation binding failure indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service group conversation binding failure indexes failed: %w", err)
 	}
 	groupMembershipCommands := groupmembershipapp.NewCommandFacade(
 		groupMembershipStore, groupMembershipReaders, groupMembershipReaders, groupMembershipReaders,
@@ -416,7 +431,7 @@ func run() error {
 	behaviorFactWriter := behaviorfactapp.NewWriter(behaviorFactStore, behaviorFactStore)
 	postLifecycleProjection := placementpersistence.NewMongoPostLifecycleProjection(db)
 	if err := postLifecycleProjection.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle Post lifecycle projection indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service Post lifecycle projection indexes failed: %w", err)
 	}
 	instanceID, _ := os.Hostname()
 	if strings.TrimSpace(instanceID) == "" {
@@ -432,15 +447,15 @@ func run() error {
 		redisClient,
 	)
 	if err := accountClosedProjection.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle UserAccountClosed projection indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service UserAccountClosed projection indexes failed: %w", err)
 	}
 	accountRestrictionProjection, err :=
 		persistence.NewMongoUserAccountRestrictionProjection(db)
 	if err != nil {
-		log.Fatalf("circle account restriction projection invalid: %v", err)
+		return nil, fmt.Errorf("circle-service account restriction projection invalid: %w", err)
 	}
 	if err := accountRestrictionProjection.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("circle account restriction projection indexes failed: %v", err)
+		return nil, fmt.Errorf("circle-service account restriction projection indexes failed: %w", err)
 	}
 	accountClosedConsumer, err := messaging.NewUserAccountClosedConsumer(
 		messageTransport,
@@ -450,13 +465,13 @@ func run() error {
 		nil,
 	)
 	if err != nil {
-		log.Fatalf("circle UserAccountClosed consumer init failed: %v", err)
+		return nil, fmt.Errorf("circle-service UserAccountClosed consumer init failed: %w", err)
 	}
 	accountClosedConsumer.WithUserAccountRestrictionProjection(
 		accountRestrictionProjection,
 	)
 	if err := accountClosedConsumer.EnsureGroup(ctx); err != nil {
-		log.Fatalf("circle UserAccountClosed consumer group failed: %v", err)
+		return nil, fmt.Errorf("circle-service UserAccountClosed consumer group failed: %w", err)
 	}
 	groupConversationBindingConsumer, err := groupmessaging.NewCircleGroupConversationBindingConsumer(
 		messageTransport,
@@ -466,10 +481,10 @@ func run() error {
 		nil,
 	)
 	if err != nil {
-		log.Fatalf("circle group conversation binding consumer init failed: %v", err)
+		return nil, fmt.Errorf("circle-service group conversation binding consumer init failed: %w", err)
 	}
 	if err := groupConversationBindingConsumer.EnsureGroup(ctx); err != nil {
-		log.Fatalf("circle group conversation binding consumer group failed: %v", err)
+		return nil, fmt.Errorf("circle-service group conversation binding consumer group failed: %w", err)
 	}
 	placementCountRelay := placementapp.NewOutboxRelay(
 		placementStore, placementStore,
@@ -514,21 +529,21 @@ func run() error {
 	)
 	gatheringEventPublisher, err := gatheringmessaging.NewEventPublisher(messageTransport)
 	if err != nil {
-		return fmt.Errorf("Gathering event publisher init failed: %w", err)
+		return nil, fmt.Errorf("circle-service Gathering event publisher init failed: %w", err)
 	}
 	gatheringOutboxRelay, err := gatheringapp.NewOutboxRelay(
 		gatheringStore,
 		gatheringEventPublisher,
 	)
 	if err != nil {
-		return fmt.Errorf("Gathering outbox relay init failed: %w", err)
+		return nil, fmt.Errorf("circle-service Gathering outbox relay init failed: %w", err)
 	}
 	if err := messageTransport.SetDurableRetention(
 		ctx,
 		gatheringmessaging.GatheringEventStream,
 		gatheringmessaging.GatheringEventRetention,
 	); err != nil {
-		return fmt.Errorf("Gathering event stream retention preflight failed: %w", err)
+		return nil, fmt.Errorf("circle-service Gathering event stream retention preflight failed: %w", err)
 	}
 	groupOwnerMembershipRelay := groupapp.NewOutboxRelay(
 		groupStore, groupStore,
@@ -556,7 +571,7 @@ func run() error {
 	)
 	circleEventPublisher, err := messaging.NewCircleEventStreamPublisher(messageTransport)
 	if err != nil {
-		return fmt.Errorf("Circle event publisher init failed: %w", err)
+		return nil, fmt.Errorf("circle-service Circle event publisher init failed: %w", err)
 	}
 	circleOutboxRelay := application.NewCircleOutboxRelay(
 		circleAggregateStore,
@@ -569,7 +584,7 @@ func run() error {
 		messaging.CircleEventStream,
 		messaging.CircleEventStreamRetention,
 	); err != nil {
-		return fmt.Errorf("Circle event stream retention preflight failed: %w", err)
+		return nil, fmt.Errorf("circle-service Circle event stream retention preflight failed: %w", err)
 	}
 	var circleSearchRelay *searchviewapp.Relay
 	if searchBuilt.Index != nil {
@@ -602,7 +617,7 @@ func run() error {
 		gatheringQueries,
 	).Register(objectRoutes)
 	if err := registerGatheringPlanRuntime(ctx, objectRoutes, db, gatheringStore); err != nil {
-		log.Fatalf("GatheringPlan runtime composition failed: %v", err)
+		return nil, fmt.Errorf("circle-service GatheringPlan runtime composition failed: %w", err)
 	}
 	objectRoutes.Handle("/", circleHandler)
 	var handler http.Handler = objectRoutes
@@ -615,19 +630,19 @@ func run() error {
 		},
 	)
 	if err != nil {
-		log.Fatalf("circle account-closure recovery route failed: %v", err)
+		return nil, fmt.Errorf("circle-service account-closure recovery route failed: %w", err)
 	}
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
-		log.Fatalf("access token verifier invalid: %v", err)
+		return nil, fmt.Errorf("circle-service access token verifier invalid: %w", err)
 	}
 	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
-		log.Fatalf("device ticket config invalid: %v", err)
+		return nil, fmt.Errorf("circle-service device ticket config invalid: %w", err)
 	}
 	deviceTicketVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
 	if err != nil {
-		log.Fatalf("device ticket verifier invalid: %v", err)
+		return nil, fmt.Errorf("circle-service device ticket verifier invalid: %w", err)
 	}
 	generatedOperationGuard := rtauth.RequireGeneratedOperationAuthorization(
 		operationsecurity.ForDomain("circle"),
@@ -704,91 +719,87 @@ func run() error {
 			return circleSearchRelay.Healthy(5 * time.Second)
 		})
 	}
-	go contentPostConsumer.Run(ctx, 250*time.Millisecond)
-	accountClosedConsumerDone := make(chan struct{})
-	go func() {
-		defer close(accountClosedConsumerDone)
-		accountClosedConsumer.Run(ctx)
-	}()
-	groupConversationBindingDone := make(chan struct{})
-	go func() {
-		defer close(groupConversationBindingDone)
-		groupConversationBindingConsumer.Run(ctx)
-	}()
-	go func() {
-		if err := gatheringReconciler.Run(ctx, 500*time.Millisecond); err != nil && ctx.Err() == nil {
+	workers.Add(func(workerCtx context.Context) {
+		contentPostConsumer.Run(workerCtx, 250*time.Millisecond)
+	})
+	workers.Add(accountClosedConsumer.Run)
+	workers.Add(groupConversationBindingConsumer.Run)
+	workers.Add(func(workerCtx context.Context) {
+		if err := gatheringReconciler.Run(workerCtx, 500*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("Gathering Chat reconciliation stopped: %v", err)
 		}
-	}()
-	go gatheringOutboxRelay.Run(ctx, time.Second)
-	go func() {
-		if err := placementCountRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	})
+	workers.Add(func(workerCtx context.Context) {
+		gatheringOutboxRelay.Run(workerCtx, time.Second)
+	})
+	workers.Add(func(workerCtx context.Context) {
+		if err := placementCountRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("circle post-count projection stopped: %v", err)
 		}
-	}()
-	go func() {
-		if err := placementStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	})
+	workers.Add(func(workerCtx context.Context) {
+		if err := placementStreamRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("circle post-placement stream relay stopped: %v", err)
 		}
-	}()
-	go func() {
-		if err := membershipCountRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	})
+	workers.Add(func(workerCtx context.Context) {
+		if err := membershipCountRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("circle member-count projection stopped: %v", err)
 		}
-	}()
-	go func() {
-		if err := membershipStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	})
+	workers.Add(func(workerCtx context.Context) {
+		if err := membershipStreamRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("circle membership stream relay stopped: %v", err)
 		}
-	}()
-	go func() {
-		if err := behaviorWeeklyActiveRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	})
+	workers.Add(func(workerCtx context.Context) {
+		if err := behaviorWeeklyActiveRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("circle weekly-active projection stopped: %v", err)
 		}
-	}()
-	go func() {
-		if err := behaviorStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	})
+	workers.Add(func(workerCtx context.Context) {
+		if err := behaviorStreamRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("circle behavior-fact stream relay stopped: %v", err)
 		}
-	}()
-	go func() {
-		if err := groupStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	})
+	workers.Add(func(workerCtx context.Context) {
+		if err := groupStreamRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("circle group stream relay stopped: %v", err)
 		}
-	}()
-	go func() {
-		if err := groupOwnerMembershipRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	})
+	workers.Add(func(workerCtx context.Context) {
+		if err := groupOwnerMembershipRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("circle group owner-membership relay stopped: %v", err)
 		}
-	}()
+	})
 	if groupSearchRelay != nil {
-		go func() {
-			if err := groupSearchRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+		workers.Add(func(workerCtx context.Context) {
+			if err := groupSearchRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 				log.Printf("circle group search-index relay stopped: %v", err)
 			}
-		}()
+		})
 	}
-	go func() {
-		if err := groupMembershipStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	workers.Add(func(workerCtx context.Context) {
+		if err := groupMembershipStreamRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("circle group membership stream relay stopped: %v", err)
 		}
-	}()
-	go func() {
-		if err := fileStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	})
+	workers.Add(func(workerCtx context.Context) {
+		if err := fileStreamRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("circle file stream relay stopped: %v", err)
 		}
-	}()
-	go func() {
-		if err := circleOutboxRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+	})
+	workers.Add(func(workerCtx context.Context) {
+		if err := circleOutboxRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 			log.Printf("circle event stream relay stopped: %v", err)
 		}
-	}()
+	})
 	if circleSearchRelay != nil {
-		go func() {
-			if err := circleSearchRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+		workers.Add(func(workerCtx context.Context) {
+			if err := circleSearchRelay.Run(workerCtx, 250*time.Millisecond); err != nil && workerCtx.Err() == nil {
 				log.Printf("circle search-index relay stopped: %v", err)
 			}
-		}()
+		})
 	}
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
@@ -803,21 +814,27 @@ func run() error {
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
 	)
 	if err != nil {
-		log.Fatalf("circle-service runtime log exporter init failed: %v", err)
+		return nil, fmt.Errorf("circle-service runtime log exporter init failed: %w", err)
 	}
-	defer runtimeLogExporter.Close()
+	cleanups.Add(func(context.Context) error {
+		runtimeLogExporter.Close()
+		return nil
+	})
 	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
 	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
-	defer standardLogWriter.Close()
-	defer errorLogWriter.Close()
+	cleanups.Add(func(context.Context) error {
+		errorLogWriter.Close()
+		standardLogWriter.Close()
+		return nil
+	})
 	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
 	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
 	if err != nil {
-		log.Fatalf("circle-service process logger init failed: %v", err)
+		return nil, fmt.Errorf("circle-service process logger init failed: %w", err)
 	}
 	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
-		log.Fatalf("circle-service exception logger init failed: %v", err)
+		return nil, fmt.Errorf("circle-service exception logger init failed: %w", err)
 	}
 	observed := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "circle-service",
@@ -825,8 +842,17 @@ func run() error {
 		ServiceInstanceID: instanceID,
 	}, ioLogger, processLogger, exceptionLogger)
 
-	hotConfigStore := controlplane.NewHotConfigStore()
-	go startConfigSyncLoop(serviceName, appEnv, configRoot, configVersion, imageVersion, instanceID, hotConfigStore)
+	if err := registerConfigSyncWorker(
+		workers,
+		serviceName,
+		appEnv,
+		configRoot,
+		configVersion,
+		imageVersion,
+		instanceID,
+	); err != nil {
+		return nil, err
+	}
 	timeouts := rtauth.ContractHTTPServerTimeouts(
 		operationsecurity.ForDomain("circle"),
 	)
@@ -841,23 +867,30 @@ func run() error {
 		WriteTimeout:      timeouts.Write,
 		IdleTimeout:       timeouts.Idle,
 	}
-	log.Printf("circle-service listening on %s (env=%s)", addr, appEnv)
-	serverErr := rthttp.ListenAndServeGraceful(server, 15*time.Second)
-	cancel()
-	select {
-	case <-accountClosedConsumerDone:
-	case <-time.After(5 * time.Second):
-		log.Printf("WARN: circle UserAccountClosed consumer shutdown timed out")
+	module := &Module{
+		appEnv:       appEnv,
+		configDigest: strings.TrimSpace(configVersion),
+		server:       server,
+		health:       healthChecker,
+		serveError:   make(chan error, 1),
+		workerStarts: workers.starts,
+		cleanup:      cleanups.Close,
 	}
-	select {
-	case <-groupConversationBindingDone:
-	case <-time.After(5 * time.Second):
-		log.Printf("WARN: circle group conversation binding consumer shutdown timed out")
+	if module.configDigest == "" {
+		module.configDigest = strings.TrimSpace(cfg.Config.Version)
 	}
-	if serverErr != nil {
-		return serverErr
+	if module.configDigest == "" {
+		module.configDigest = operationsecurity.ContractGraphSHA256
 	}
-	return nil
+	server.Handler = module.admissionHandler(server.Handler)
+	server.BaseContext = func(net.Listener) context.Context {
+		if module.runContext != nil {
+			return module.runContext
+		}
+		return context.Background()
+	}
+	initialized = true
+	return module, nil
 }
 
 func placementPortsFrom(readers *placementpersistence.MongoPolicyReaders) placementports.PolicyReaders {
@@ -885,10 +918,18 @@ func (reader membershipRoleReader) ReadMembershipRole(ctx context.Context, circl
 }
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = getenvOrDefault("SERVICE_NAME", "circle-service")
+	serviceName = strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("circle-service", "SERVICE_NAME"),
+	)
+	if serviceName == "" {
+		serviceName = "circle-service"
+	}
 	appEnv = getenvOrDefault("APP_ENV", "alpha")
 	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = os.Getenv("CONFIG_VERSION")
+	configVersion = servicehost.ModuleEnvironmentValue(
+		"circle-service",
+		"CONFIG_VERSION",
+	)
 	imageVersion = os.Getenv("IMAGE_VERSION")
 
 	if !isValidAppEnv(appEnv) {

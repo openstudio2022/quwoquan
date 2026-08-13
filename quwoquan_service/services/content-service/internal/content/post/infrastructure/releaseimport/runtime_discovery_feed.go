@@ -273,18 +273,18 @@ func removePriorDiscoveryFeedIdentity(
 	runtimeID string,
 	opts ImportOptions,
 ) error {
-	legacyIdentityFilters := bson.A{bson.M{"postId": bson.M{"$in": bson.A{
-		postRef, LegacyRuntimePostID(postRef),
+	priorIdentityFilters := bson.A{bson.M{"postId": bson.M{"$in": bson.A{
+		postRef, RuntimePostIDFromPostRef(postRef),
 	}}}}
 	if stableContentID := strings.TrimSpace(contentID); stableContentID != "" {
-		legacyIdentityFilters = append(
-			legacyIdentityFilters,
+		priorIdentityFilters = append(
+			priorIdentityFilters,
 			bson.M{"contentId": stableContentID},
 		)
 	}
 	filter := bson.M{
 		"postId": bson.M{"$ne": runtimeID},
-		"$or":    legacyIdentityFilters,
+		"$or":    priorIdentityFilters,
 	}
 	if opts.SourceOwner != "" {
 		filter["sourceOwner"] = opts.SourceOwner

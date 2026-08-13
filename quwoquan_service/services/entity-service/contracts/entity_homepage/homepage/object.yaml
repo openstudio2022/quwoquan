@@ -52,6 +52,22 @@ assistant_access:
     mode: public
     scopes:
     - assistant.entity.homepage.read
+    reader:
+      descriptor_id: entity.homepage_context
+      resolver_ref: entity.current_context
+      owner_service: entity-service
+      owner_operation_ref: entity.homepage.GetHomepageDetail
+      input_schema_ref: entity.HomepageByIdQuery
+      output_schema_ref: assistant.ContextSegment
+      object_type_ref: entity.Homepage
+      authority: domain_canonical
+      sensitivity: public
+      accepted_source_kinds: [domain]
+      surface_kinds: [personal, shared, public]
+      max_freshness_seconds: 3600
+      cache_ttl_seconds: 300
+      artifact_policy: inline_bounded
+      citation_policy: entity_reference
   cite:
     mode: public_citation
     scopes:

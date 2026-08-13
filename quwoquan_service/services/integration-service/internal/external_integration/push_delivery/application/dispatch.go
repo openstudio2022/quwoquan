@@ -18,16 +18,23 @@ import (
 	"quwoquan_service/services/integration-service/generated/external_integration/push_delivery"
 )
 
+// 契约 runtime_entrypoints[].telemetry.metric 同名计数器
+// （outcome=sent_unconfirmed|failed，与 span 的 push.outcome 同源）。
+var providerInvokeOutcomes = rtobs.NewEntrypointOutcomeCounter("integration_push_delivery_provider_invoke")
+
 const (
 	PushEndpointKindAPNSVoIP  = "apns_voip"
 	PushEndpointKindFCM       = "fcm"
 	PushDeliveryActionRing    = "ring"
 	PushDeliveryActionCancel  = "cancel"
+	PushDeliveryActionAlert   = "alert"
 	APNsEnvironmentSandbox    = "sandbox"
 	APNsEnvironmentProduction = "production"
 )
 
-// PushDeliveryMessage 是 provider 消费的强类型来电推送负载。
+// PushDeliveryMessage 是 provider 消费的强类型推送负载。
+// action=ring/cancel 为来电信令（Call* 字段必填）；action=alert 为通用可见
+// 推送（Title/Body/TargetType/TargetID 必填，Call* 字段为空）。
 type PushDeliveryMessage struct {
 	Action          string
 	EndpointRef     string
@@ -38,6 +45,10 @@ type PushDeliveryMessage struct {
 	CallerName      string
 	SourceLabel     string
 	TrustRelation   string
+	Title           string
+	Body            string
+	TargetType      string
+	TargetID        string
 	ExpiresAt       time.Time
 	OccurredAt      time.Time
 }
@@ -218,6 +229,7 @@ func (p *PushDispatchProvider) Send(
 			attribute.String("push.outcome", outcome),
 			attribute.String("error.code", errorCode),
 		)
+		providerInvokeOutcomes.WithLabelValues(outcome).Inc()
 		rtobs.EndSpan(span, err)
 	}()
 
@@ -353,12 +365,24 @@ func ValidatePushDeliveryRequest(request reliabletask.ExternalInteractionRequest
 	if request.Operation != reliabletask.ExternalInteractionOperationPush {
 		return errors.New("request operation is not push_delivery.send")
 	}
-	if len(request.Payload) != 11 {
-		return errors.New("push delivery payload must contain exactly eleven fields")
-	}
-	for key := range request.Payload {
-		if !allowedPushDeliveryPayloadField(key) {
-			return fmt.Errorf("push delivery payload field %s is not allowed", key)
+	action := strings.TrimSpace(request.Payload["action"])
+	if action == PushDeliveryActionAlert {
+		if len(request.Payload) != 10 {
+			return errors.New("push alert payload must contain exactly ten fields")
+		}
+		for key := range request.Payload {
+			if !allowedPushAlertPayloadField(key) {
+				return fmt.Errorf("push alert payload field %s is not allowed", key)
+			}
+		}
+	} else {
+		if len(request.Payload) != 11 {
+			return errors.New("push delivery payload must contain exactly eleven fields")
+		}
+		for key := range request.Payload {
+			if !allowedPushDeliveryPayloadField(key) {
+				return fmt.Errorf("push delivery payload field %s is not allowed", key)
+			}
 		}
 	}
 	message, err := ParsePushDeliveryMessage(request)
@@ -387,6 +411,10 @@ func ParsePushDeliveryMessage(
 		CallerName:      strings.TrimSpace(request.Payload["callerName"]),
 		SourceLabel:     strings.TrimSpace(request.Payload["sourceLabel"]),
 		TrustRelation:   strings.TrimSpace(request.Payload["trustRelation"]),
+		Title:           strings.TrimSpace(request.Payload["title"]),
+		Body:            strings.TrimSpace(request.Payload["body"]),
+		TargetType:      strings.TrimSpace(request.Payload["targetType"]),
+		TargetID:        strings.TrimSpace(request.Payload["targetId"]),
 	}
 	rawExpiresAt := strings.TrimSpace(request.Payload["expiresAt"])
 	expiresAt, err := time.Parse(time.RFC3339, rawExpiresAt)
@@ -400,10 +428,13 @@ func ParsePushDeliveryMessage(
 		return PushDeliveryMessage{}, errors.New("push delivery occurredAt must be RFC3339")
 	}
 	message.OccurredAt = occurredAt.UTC()
+	if message.Action == PushDeliveryActionAlert {
+		return validatedPushAlertMessage(message)
+	}
 	switch {
 	case message.Action != PushDeliveryActionRing &&
 		message.Action != PushDeliveryActionCancel:
-		return PushDeliveryMessage{}, errors.New("push delivery action must be ring or cancel")
+		return PushDeliveryMessage{}, errors.New("push delivery action must be ring, cancel or alert")
 	case message.EndpointRef == "":
 		return PushDeliveryMessage{}, errors.New("push delivery endpointRef is required")
 	case !canonicalPushEndpointRef(message.EndpointRef):
@@ -430,6 +461,46 @@ func ParsePushDeliveryMessage(
 		return PushDeliveryMessage{}, errors.New("push delivery occurredAt must not exceed expiresAt")
 	case message.OccurredAt.After(time.Now().UTC().Add(5 * time.Minute)):
 		return PushDeliveryMessage{}, errors.New("push delivery occurredAt is too far in the future")
+	}
+	return message, nil
+}
+
+// validatedPushAlertMessage 校验通用 alert 类别（契约 push_delivery action=alert）：
+// title/body 通知栏可见文本、targetType/targetId 是 App 端路由锚点，来电字段必须为空。
+func validatedPushAlertMessage(message PushDeliveryMessage) (PushDeliveryMessage, error) {
+	switch {
+	case message.EndpointRef == "":
+		return PushDeliveryMessage{}, errors.New("push alert endpointRef is required")
+	case !canonicalPushEndpointRef(message.EndpointRef):
+		return PushDeliveryMessage{}, errors.New("push alert endpointRef must be a canonical opaque reference")
+	case message.DeliveryKey == "":
+		return PushDeliveryMessage{}, errors.New("push alert deliveryKey is required")
+	case len(message.DeliveryKey) > 256:
+		return PushDeliveryMessage{}, errors.New("push alert deliveryKey is too long")
+	case message.TargetPersonaID == "":
+		return PushDeliveryMessage{}, errors.New("push alert targetPersonaId is required")
+	case message.Title == "":
+		return PushDeliveryMessage{}, errors.New("push alert title is required")
+	case len([]rune(message.Title)) > 128:
+		return PushDeliveryMessage{}, errors.New("push alert title is too long")
+	case message.Body == "":
+		return PushDeliveryMessage{}, errors.New("push alert body is required")
+	case len([]rune(message.Body)) > 256:
+		return PushDeliveryMessage{}, errors.New("push alert body is too long")
+	case message.TargetType == "":
+		return PushDeliveryMessage{}, errors.New("push alert targetType is required")
+	case message.TargetID == "":
+		return PushDeliveryMessage{}, errors.New("push alert targetId is required")
+	case message.CallID != "" || message.CallType != "" ||
+		message.CallerName != "" || message.SourceLabel != "" ||
+		message.TrustRelation != "":
+		return PushDeliveryMessage{}, errors.New("push alert payload must not carry incoming-call fields")
+	case !message.ExpiresAt.After(time.Now().UTC()):
+		return PushDeliveryMessage{}, errors.New("push alert expiresAt must be in the future")
+	case message.OccurredAt.After(message.ExpiresAt):
+		return PushDeliveryMessage{}, errors.New("push alert occurredAt must not exceed expiresAt")
+	case message.OccurredAt.After(time.Now().UTC().Add(5 * time.Minute)):
+		return PushDeliveryMessage{}, errors.New("push alert occurredAt is too far in the future")
 	}
 	return message, nil
 }
@@ -481,6 +552,24 @@ func allowedPushDeliveryPayloadField(key string) bool {
 		"callerName",
 		"sourceLabel",
 		"trustRelation",
+		"expiresAt",
+		"occurredAt":
+		return true
+	default:
+		return false
+	}
+}
+
+func allowedPushAlertPayloadField(key string) bool {
+	switch key {
+	case "action",
+		"endpointRef",
+		"deliveryKey",
+		"targetPersonaId",
+		"title",
+		"body",
+		"targetType",
+		"targetId",
 		"expiresAt",
 		"occurredAt":
 		return true

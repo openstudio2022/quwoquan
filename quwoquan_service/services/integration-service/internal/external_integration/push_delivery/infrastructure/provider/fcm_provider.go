@@ -174,26 +174,7 @@ func (p *FCMProvider) sendPush(
 		return application.PushSendReceipt{}, err
 	}
 	body, err := json.Marshal(fcmSendRequest{
-		Message: fcmMessage{
-			Token: deviceToken,
-			Data: map[string]string{
-				"action":          message.Action,
-				"deliveryKey":     message.DeliveryKey,
-				"callId":          message.CallID,
-				"targetPersonaId": message.TargetPersonaID,
-				"callType":        message.CallType,
-				"callerName":      message.CallerName,
-				"sourceLabel":     message.SourceLabel,
-				"trustRelation":   message.TrustRelation,
-				"expiresAt":       message.ExpiresAt.Format(time.RFC3339),
-				"occurredAt":      message.OccurredAt.Format(time.RFC3339),
-			},
-			Android: fcmAndroidConfig{
-				Priority:    "high",
-				TTL:         strconv.FormatInt(ttlSeconds, 10) + "s",
-				CollapseKey: providerCollapseKey(message.DeliveryKey),
-			},
-		},
+		Message: fcmPayloadForMessage(deviceToken, message, ttlSeconds),
 	})
 	if err != nil {
 		return application.PushSendReceipt{}, &application.PushProviderFailure{
@@ -399,15 +380,72 @@ type fcmSendRequest struct {
 }
 
 type fcmMessage struct {
-	Token   string            `json:"token"`
-	Data    map[string]string `json:"data"`
-	Android fcmAndroidConfig  `json:"android"`
+	Token        string            `json:"token"`
+	Notification *fcmNotification  `json:"notification,omitempty"`
+	Data         map[string]string `json:"data"`
+	Android      fcmAndroidConfig  `json:"android"`
+}
+
+type fcmNotification struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
 }
 
 type fcmAndroidConfig struct {
 	Priority    string `json:"priority"`
 	TTL         string `json:"ttl"`
 	CollapseKey string `json:"collapse_key"`
+}
+
+// fcmPayloadForMessage 按消息类别构造 FCM 形状：
+//   - ring/cancel：data-only 高优消息，由端上来电引擎消费（不弹通知栏）；
+//   - alert：notification 块承载通知栏可见 title/body，data 块只带
+//     targetType/targetId 路由锚点与 collapse 语义键，供 App tap 直达。
+func fcmPayloadForMessage(
+	deviceToken string,
+	message application.PushDeliveryMessage,
+	ttlSeconds int64,
+) fcmMessage {
+	android := fcmAndroidConfig{
+		Priority:    "high",
+		TTL:         strconv.FormatInt(ttlSeconds, 10) + "s",
+		CollapseKey: providerCollapseKey(message.DeliveryKey),
+	}
+	if message.Action == application.PushDeliveryActionAlert {
+		return fcmMessage{
+			Token: deviceToken,
+			Notification: &fcmNotification{
+				Title: message.Title,
+				Body:  message.Body,
+			},
+			Data: map[string]string{
+				"action":          message.Action,
+				"deliveryKey":     message.DeliveryKey,
+				"targetPersonaId": message.TargetPersonaID,
+				"targetType":      message.TargetType,
+				"targetId":        message.TargetID,
+				"expiresAt":       message.ExpiresAt.Format(time.RFC3339),
+				"occurredAt":      message.OccurredAt.Format(time.RFC3339),
+			},
+			Android: android,
+		}
+	}
+	return fcmMessage{
+		Token: deviceToken,
+		Data: map[string]string{
+			"action":          message.Action,
+			"deliveryKey":     message.DeliveryKey,
+			"callId":          message.CallID,
+			"targetPersonaId": message.TargetPersonaID,
+			"callType":        message.CallType,
+			"callerName":      message.CallerName,
+			"sourceLabel":     message.SourceLabel,
+			"trustRelation":   message.TrustRelation,
+			"expiresAt":       message.ExpiresAt.Format(time.RFC3339),
+			"occurredAt":      message.OccurredAt.Format(time.RFC3339),
+		},
+		Android: android,
+	}
 }
 
 type fcmErrorResponse struct {

@@ -180,6 +180,32 @@ _PORTAL_MENU_JSON = r'''{
     },
     {
       "domain": "product-ops",
+      "icon": "flask-conical",
+      "label": "实验运营",
+      "menu_id": "experiment-operations",
+      "object_types": [
+        "experiment"
+      ],
+      "order": 35,
+      "parent_menu_id": "product-ops",
+      "permission_scope": "ops.experiment.read",
+      "route_path": "/product/experiments"
+    },
+    {
+      "domain": "product-ops",
+      "icon": "shield-alert",
+      "label": "账号治理",
+      "menu_id": "account-enforcement",
+      "object_types": [
+        "account_enforcement_case"
+      ],
+      "order": 36,
+      "parent_menu_id": "product-ops",
+      "permission_scope": "ops.account.moderation.write",
+      "route_path": "/product/account-enforcement"
+    },
+    {
+      "domain": "product-ops",
       "icon": "chart-area",
       "label": "四层指标",
       "menu_id": "product-l1-l4",

@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	runtimeconfig "quwoquan_service/runtime/config"
+	"quwoquan_service/runtime/servicehost"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	embeddingapp "quwoquan_service/services/content-service/internal/content/post/application/embedding"
 	"quwoquan_service/services/content-service/internal/content/post/application/ports"
@@ -27,10 +28,18 @@ func contentSliceWorkload() bool {
 }
 
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = getenvOrDefault("SERVICE_NAME", "content-service")
+	serviceName = strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("content-service", "SERVICE_NAME"),
+	)
+	if serviceName == "" {
+		serviceName = "content-service"
+	}
 	appEnv = getenvOrDefault("APP_ENV", "alpha")
 	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = os.Getenv("CONFIG_VERSION")
+	configVersion = servicehost.ModuleEnvironmentValue(
+		"content-service",
+		"CONFIG_VERSION",
+	)
 	imageVersion = os.Getenv("IMAGE_VERSION")
 
 	if !isValidAppEnv(appEnv) {
@@ -41,6 +50,16 @@ func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, i
 		return "", "", "", "", "", fmt.Errorf("CONFIG_VERSION is required when APP_ENV=%s", appEnv)
 	}
 	return serviceName, appEnv, configRoot, configVersion, imageVersion, nil
+}
+
+func contentModuleEnvironmentValue(key string, fallback string) string {
+	value := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("content-service", key),
+	)
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 func isValidAppEnv(env string) bool {

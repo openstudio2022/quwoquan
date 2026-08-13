@@ -212,8 +212,11 @@ type GatheringHostSummarySlice = shared.GatheringHostSummarySlice
 type GatheringIDQuery = shared.GatheringIDQuery
 type GatheringListByHostQuery = shared.GatheringListByHostQuery
 type GatheringListBySourceQuery = shared.GatheringListBySourceQuery
+type GatheringMineListQuery = shared.GatheringMineListQuery
 type GatheringOutcome = shared.GatheringOutcome
 type GatheringPageQuery = shared.GatheringPageQuery
+type GatheringParticipationStatusQuery = shared.GatheringParticipationStatusQuery
+type GatheringParticipationStatusSlice = shared.GatheringParticipationStatusSlice
 type GatheringParticipationVersionCommand = shared.GatheringParticipationVersionCommand
 type GatheringPlace = shared.GatheringPlace
 type GatheringPolicySet = shared.GatheringPolicySet
@@ -332,6 +335,12 @@ func EncodeGetGathering(request GatheringIDQuery) (RequestPacket, error) {
 func DecodeGetGatheringResponse(packet ResponsePacket) (GatheringPrivateDetailSlice, error) {
 	return shared.DecodeGetGatheringResponse(packet)
 }
+func EncodeGetGatheringParticipationStatus(request GatheringParticipationStatusQuery) (RequestPacket, error) {
+	return shared.EncodeGetGatheringParticipationStatus(request)
+}
+func DecodeGetGatheringParticipationStatusResponse(packet ResponsePacket) (GatheringParticipationStatusSlice, error) {
+	return shared.DecodeGetGatheringParticipationStatusResponse(packet)
+}
 func EncodeGetPublicGathering(request GatheringIDQuery) (RequestPacket, error) {
 	return shared.EncodeGetPublicGathering(request)
 }
@@ -379,6 +388,12 @@ func EncodeListGatheringsBySource(request GatheringListBySourceQuery) (RequestPa
 }
 func DecodeListGatheringsBySourceResponse(packet ResponsePacket) (GatheringBySourcePageSlice, error) {
 	return shared.DecodeListGatheringsBySourceResponse(packet)
+}
+func EncodeListMyHostedGatherings(request GatheringMineListQuery) (RequestPacket, error) {
+	return shared.EncodeListMyHostedGatherings(request)
+}
+func DecodeListMyHostedGatheringsResponse(packet ResponsePacket) (GatheringByHostPageSlice, error) {
+	return shared.DecodeListMyHostedGatheringsResponse(packet)
 }
 func EncodePauseGatheringAdmission(request ChangeGatheringAdmissionCommand) (RequestPacket, error) {
 	return shared.EncodePauseGatheringAdmission(request)

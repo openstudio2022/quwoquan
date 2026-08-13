@@ -354,6 +354,84 @@ func TestDerivedEvidenceBindsPhysicalLayersAndTests(t *testing.T) {
 			"demo__replay_test.py")
 }
 
+// producer=ops 的 readiness case runner（loader 按 service_ops canonical 规则校验）
+// 必须与固定树扫描合并进入 ops 层证据；两个位置真相源在 evidence 侧收敛为单轨。
+func TestDerivedEvidenceMergesDeclaredOpsCaseRunner(t *testing.T) {
+	t.Parallel()
+	const opsCaseRunner = "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/" +
+		"demo-service/smoke/demo_environment_probe.py"
+	const fixedTreeRunner = "quwoquan_ops/tests/acceptance/environment_acceptance/" +
+		"demo/demo_context/demo_object/demo__environment_acceptance_test.py"
+	const opsSpecRef = "specs/feature-tree/runtime/" + "demo/spec.md#gwt-001"
+
+	// readiness case 校验要求 operations 源位于 repoRoot 内，metadataDir 因此落在
+	// 服务 contracts 下（与 readinessCaseRepo 同构），并补齐 evidence 派生所需的
+	// domain 声明与最小物理层。
+	repo := syntheticRepo{root: t.TempDir()}
+	serviceRoot := filepath.Join(
+		repo.root, "quwoquan_service", "services", "demo-service",
+	)
+	repo.metadataDir = filepath.Join(serviceRoot, "contracts")
+	repo.write(t, filepath.Join(serviceRoot, "contracts", "domain.yaml"), "domain: demo\n")
+	repo.write(
+		t,
+		filepath.Join(repo.metadataDir, "demo", "demo_context", "context.yaml"),
+		"role: core\n",
+	)
+	repo.write(
+		t,
+		filepath.Join(repo.metadataDir, "demo", "demo_context", "demo_object", "object.yaml"),
+		"kind: aggregate_root\n"+
+			"identity:\n  fields: [demoObjectId]\n"+
+			"access:\n  commands: aggregate_facade_only\n"+
+			"  queries: named_reader_slice_only\n  cross_context: public_contract_only\n",
+	)
+	repo.write(
+		t,
+		filepath.Join(serviceRoot, "internal", "demo_context", "demo_object", "domain", "demo_object.go"),
+		"package domain\n",
+	)
+	repo.write(
+		t,
+		filepath.Join(repo.root, "specs", "feature-tree", "runtime", "demo", "spec.md"),
+		"# Demo\n\n<a id=\"gwt-001\"></a>\n### GWT-001 readiness case\n",
+	)
+	repo.write(
+		t,
+		filepath.Join(repo.root, filepath.FromSlash(opsCaseRunner)),
+		"# spec_ref: "+opsSpecRef+"\n# readiness_case: demo-ops-env\n",
+	)
+	repo.write(
+		t,
+		filepath.Join(repo.root, filepath.FromSlash(fixedTreeRunner)),
+		"# environment_acceptance runner\n",
+	)
+	repo.write(
+		t,
+		filepath.Join(
+			repo.metadataDir, "demo", "demo_context", "demo_object", "operations.yaml",
+		),
+		"description: demo object operations\n"+
+			"readiness_cases:\n"+
+			"  - case_id: demo-ops-env\n"+
+			"    spec_ref: "+opsSpecRef+"\n"+
+			"    producer: ops\n"+
+			"    layer: environment_acceptance\n"+
+			"    target: {kind: object, id: demo.demo_object}\n"+
+			"    runner_source_path: "+opsCaseRunner+"\n"+
+			"    executions:\n"+
+			"      - {env: gamma, platform: linux, device: ci-runner, "+
+			"provider: first-party-https, digest_binding: candidate}\n",
+	)
+
+	evidence := onlyEvidence(t, repo.load(t, load.WithRepoRoot(repo.root)))
+
+	requireArtifacts(t, "ops.environmentAcceptance", evidence.Ops.EnvironmentAcceptance,
+		fixedTreeRunner,
+		opsCaseRunner,
+	)
+}
+
 func TestDerivedEvidenceKeepsApplicationSeparateFromDomain(t *testing.T) {
 	t.Parallel()
 

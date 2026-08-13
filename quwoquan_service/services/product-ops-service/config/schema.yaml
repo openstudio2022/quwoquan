@@ -325,6 +325,30 @@ configs:
   rollout: progressive
   sensitive: false
   default: 5000
+# ES 聚合告警评估循环：policy_path 与 alertmanager_url 均非空才启动；
+# 策略文件真相源是 quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml，
+# 部署时经 configMap/volume 挂载。
+- key: sys.product-ops-service.telemetry_alerts.policy_path
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ""
+- key: sys.product-ops-service.telemetry_alerts.alertmanager_url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: ""
+- key: sys.product-ops-service.telemetry_alerts.interval_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 60000
 - key: sys.product-ops-service.mongodb.database
   type: string
   scope: workload
@@ -364,7 +388,12 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: 1
+  # 跨服务 durable 事实流（events.ops.experiment_policy_activated 等）经
+  # general scene 发布，消费方（recommendation/探针/realtime-gateway）统一
+  # 读 db0；共享单实例时 scene db 必须一致为 0，隔离靠 key 前缀而非 db。
+  # 此前默认 1 使激活事实写入 db1，全栈冷启动在「策略已激活但事实不可见」
+  # 上死锁。
+  default: 0
 - key: sys.product-ops-service.redis.general.mode
   type: string
   scope: workload

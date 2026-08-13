@@ -21,6 +21,48 @@ import (
 
 const lifecycleReceiptRetention = 7 * 24 * time.Hour
 
+// ResolveStandardPublishObligations 在 owner 侧派生发布义务。
+// 端只声明 riskControlPolicyRef；policyDecisionRef / policyDigest /
+// obligationDigest 属于治理证据，由服务对实际 policy 内容确定性计算，
+// 不得要求客户端伪造。三者任一已显式提供（运营管控链路）时保持原值。
+func ResolveStandardPublishObligations(
+	policy contract.GatheringPolicySet,
+) contract.GatheringPolicySet {
+	if strings.TrimSpace(policy.RiskControlPolicyRef) == "" {
+		return policy
+	}
+	if strings.TrimSpace(policy.PolicyDecisionRef) != "" ||
+		strings.TrimSpace(policy.PolicyDigest) != "" ||
+		strings.TrimSpace(policy.ObligationDigest) != "" {
+		return policy
+	}
+	encoded, err := json.Marshal(struct {
+		RiskControlPolicyRef string                             `json:"riskControlPolicyRef"`
+		AudiencePolicy       contract.GatheringAudiencePolicy   `json:"audiencePolicy"`
+		AdmissionPolicy      contract.GatheringAdmissionPolicy  `json:"admissionPolicy"`
+		MaxParticipants      int64                              `json:"maxParticipants"`
+		DisclosurePolicy     contract.GatheringDisclosurePolicy `json:"disclosurePolicy"`
+	}{
+		RiskControlPolicyRef: strings.TrimSpace(policy.RiskControlPolicyRef),
+		AudiencePolicy:       policy.AudiencePolicy,
+		AdmissionPolicy:      policy.AdmissionPolicy,
+		MaxParticipants:      policy.CapacityPolicy.MaxParticipants,
+		DisclosurePolicy:     policy.DisclosurePolicy,
+	})
+	if err != nil {
+		// 编码失败时保持义务缺失，让 publish 按既有校验 fail-closed。
+		return policy
+	}
+	policyDigest := sha256.Sum256(encoded)
+	obligationDigest := sha256.Sum256(
+		[]byte(strings.TrimSpace(policy.RiskControlPolicyRef) + ":standard-obligations"),
+	)
+	policy.PolicyDecisionRef = strings.TrimSpace(policy.RiskControlPolicyRef) + ":standard"
+	policy.PolicyDigest = "sha256:" + hex.EncodeToString(policyDigest[:])
+	policy.ObligationDigest = "sha256:" + hex.EncodeToString(obligationDigest[:])
+	return policy
+}
+
 // ParticipationLifecycleHook 由 Scope C 实现。Scope A 只在聚合 mutation 内调用，
 // 不在此处复制 creator Participation 或 revision acknowledgement 规则。
 type ParticipationLifecycleHook interface {
@@ -152,6 +194,7 @@ func (facade *LifecycleFacade) CreateGatheringDraft(
 		return LifecycleCommandResult{}, err
 	}
 	command.HostBinding = preparation.HostBinding
+	command.PolicySet = ResolveStandardPublishObligations(command.PolicySet)
 	if err := facade.requireNavigableSources(ctx, command.Purpose.SourceObjectRefs); err != nil {
 		return LifecycleCommandResult{}, err
 	}
@@ -240,6 +283,7 @@ func (facade *LifecycleFacade) UpdateGathering(
 	if err := facade.requireNavigableSources(ctx, command.Purpose.SourceObjectRefs); err != nil {
 		return LifecycleCommandResult{}, err
 	}
+	command.PolicySet = ResolveStandardPublishObligations(command.PolicySet)
 	return facade.mutate(
 		ctx,
 		"update",

@@ -297,11 +297,15 @@ func validateReadinessRunnerSource(
 				}) && strings.HasSuffix(parts[len(parts)-1], "_test.dart")
 		}
 	case ast.ReadinessProducerOps:
+		// 跨环境验收脚本的唯一物理位置是
+		// quwoquan_ops/tests/acceptance/user_acceptance/service_ops/<service>
+		// （仓库根 AGENTS.md 治理规则）；conformance 控制面脚本不带 _test 后缀。
+		serviceSegment := contractParts[contractsIndex-1]
 		canonical = (layer == ast.ReadinessLayerEnvironmentAcceptance ||
 			layer == ast.ReadinessLayerRollback || layer == ast.ReadinessLayerReplay) &&
 			prefixMatches([]string{
-				"quwoquan_ops", "tests", "acceptance", string(layer), object.Domain, contextName, objectName,
-			}) && strings.HasSuffix(parts[len(parts)-1], "_test.py")
+				"quwoquan_ops", "tests", "acceptance", "user_acceptance", "service_ops", serviceSegment,
+			}) && strings.HasSuffix(parts[len(parts)-1], ".py")
 	}
 	if !canonical {
 		return fmt.Errorf("runner path is not canonical for producer %q, layer %q and object %q", producer, layer, object.ID)

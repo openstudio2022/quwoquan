@@ -17,6 +17,9 @@ type ObjectPage struct {
 	Visibility   string
 	PublishedISO string
 	AuthorName   string
+	// BodyHTML 是调用方已完成转义/白名单过滤的安全正文 HTML 片段
+	//（如 qwq-rich-md 派生的文章正文），原样注入 <article> 内。
+	BodyHTML string
 }
 
 type HTMLDocument struct {
@@ -126,6 +129,9 @@ func baseHTML(page ObjectPage, canonical string, indexable bool, jsonLD map[stri
 	b.WriteString("<h1>" + html.EscapeString(title) + "</h1>")
 	if description != "" {
 		b.WriteString("<p>" + html.EscapeString(description) + "</p>")
+	}
+	if strings.TrimSpace(page.BodyHTML) != "" {
+		b.WriteString(page.BodyHTML)
 	}
 	b.WriteString("<a href=\"/open?target_entity=" + html.EscapeString(page.ObjectType) + "&target_id=" + html.EscapeString(page.ObjectID) + "\">打开趣我圈 App</a>")
 	b.WriteString("</article></main></body></html>")

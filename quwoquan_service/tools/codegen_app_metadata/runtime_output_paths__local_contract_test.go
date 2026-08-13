@@ -202,7 +202,7 @@ func TestDirectNonAssistantGeneratedTargetsHaveSingleCanonicalOwners(
 			),
 			want: filepath.Join(
 				appDir,
-				"lib/service/entity_service/entity_homepage/homepage/presentation/generated/"+
+				"lib/service/entity_service/entity_homepage/homepage/application/public/generated/"+
 					"homepage_ui_config.g.dart",
 			),
 		},
@@ -420,7 +420,7 @@ func TestGeneratedManifestSeparatesCanonicalAndRetirementRoots(t *testing.T) {
 		"lib/service/content_service/content/post/presentation/generated",
 		"lib/service/content_service/media/media_asset/application/generated",
 		"lib/service/content_service/media/media_upload_session/application/generated",
-		"lib/service/entity_service/entity_homepage/homepage/presentation/generated",
+		"lib/service/entity_service/entity_homepage/homepage/application/public/generated",
 		"lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/generated",
 		"lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated",
 		"lib/runtime/errors/generated",

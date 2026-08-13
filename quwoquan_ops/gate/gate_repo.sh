@@ -63,7 +63,11 @@ python3 quwoquan_ops/gate/verify_github_supply_chain.py
 python3 quwoquan_ops/gate/verify_agent_context_contract.py
 python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
 python3 quwoquan_ops/gate/verify_single_track_contracts.py
-python3 quwoquan_ops/tests/local_contract/test_single_track_contracts__contract__local_contract_test.py
+# 单轨契约合约测试：Python 1000 行硬顶治理后按场景拆分，随门禁一起执行。
+python3 quwoquan_ops/tests/local_contract/gate/test_single_track_contracts__contract__local_contract_test.py
+python3 quwoquan_ops/tests/local_contract/gate/test_single_track_contracts__versioned_identity__local_contract_test.py
+python3 quwoquan_ops/tests/local_contract/gate/test_single_track_contracts__custom_control_documents__local_contract_test.py
+python3 quwoquan_ops/tests/local_contract/gate/test_single_track_contracts__wire_and_alias__local_contract_test.py
 python3 quwoquan_ops/gate/verify_ci_cd_evidence_contracts.py
 python3 quwoquan_ops/gate/verify_behavior_event_type_contract.py
 python3 quwoquan_ops/gate/verify_object_relation_edge_type_contract.py
@@ -81,15 +85,29 @@ python3 quwoquan_ops/gate/scaffold/verify_test_directory_layout.py
 python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
 # 对象 × 层 × UAT/DOM/SIT/GWT 的测试绑定闭合（make verify-test-coverage-map 同源）。
 python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
+# 四质量轴（a11y/observability/performance/reliability/visual）标签覆盖只增不减。
+# 只挂在 make verify-test-nonfunctional-coverage 上时，主门禁链跑不到它，轴覆盖
+# 下滑不会被任何一次提交拦住。
+python3 quwoquan_ops/gate/scaffold/verify_quality_axis_coverage.py
+# 棘轮基线自身的治理留痕：换度量口径必须同批记录旧口径与旧口径实测值，
+# 否则漂移可以靠重建基线无痕销账。
+python3 quwoquan_ops/gate/verify_ratchet_baseline_governance.py
 python3 quwoquan_ops/gate/verify_local_dependency_purity.py
 python3 quwoquan_ops/gate/verify_observability_layout.py
 python3 quwoquan_ops/gate/verify_observability_envelope.py
+# 监控配置面与代码 emit 面同源：幽灵指标、阈值漂移、scrape 拓扑漂移、
+# 看板契约、手写 PromQL 未收敛，任一命中即 BLOCK（Delivery Gate 同链）。
+python3 quwoquan_ops/gate/verify_metric_emitter_existence.py
+python3 quwoquan_ops/gate/verify_metric_threshold_homology.py
+python3 quwoquan_ops/gate/verify_prometheus_scrape_homology.py
+python3 quwoquan_ops/gate/verify_grafana_dashboard_lint.py
+python3 quwoquan_ops/gate/verify_contract_alert_overlay.py
 python3 quwoquan_app/scripts/runtime/observability/verify_content_page_funnel_coverage.py
-python3 quwoquan_ops/tests/local_contract/test_content_page_funnel_coverage__observability__local_contract_test.py
+python3 quwoquan_ops/tests/local_contract/observability/test_content_page_funnel_coverage__observability__local_contract_test.py
 python3 quwoquan_ops/gate/verify_runtime_log_governance.py
 python3 quwoquan_ops/gate/verify_output_layout.py
 python3 quwoquan_ops/gate/verify_output_path_source_contract.py
-python3 quwoquan_ops/tests/local_contract/test_output_path_source_contract__generated_artifact__local_contract_test.py
+python3 quwoquan_ops/tests/local_contract/gate/test_output_path_source_contract__generated_artifact__local_contract_test.py
 python3 quwoquan_ops/gate/verify_external_provider_governance.py
 # Prod 选中绑定与服务 prod config 不得触达非生产 substitute 适配器。
 python3 quwoquan_ops/gate/verify_provider_substitute_prod_purity.py
@@ -98,7 +116,7 @@ python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
 python3 quwoquan_ops/gate/verify_github_artifact_lifecycle.py
 python3 -B quwoquan_ops/gate/verify_python_script_governance.py --scope all --mode check
 PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
-  python3 -B quwoquan_ops/tests/local_contract/test_python_script_governance__derivation__local_contract_test.py
+  python3 -B quwoquan_ops/tests/local_contract/gate/test_python_script_governance__derivation__local_contract_test.py
 python3 quwoquan_ops/gate/verify_markdown_local_links.py
 # 丢弃误写入源码树的 Python 缓存，再跑 root layout（缓存只允许落在 .qwq_output）。
 find "$ROOT" \
@@ -120,25 +138,28 @@ python3 quwoquan_ops/gate/verify_api_path_unversioned.py
 python3 quwoquan_ops/gate/verify_environment_assembly.py
 python3 quwoquan_ops/gate/verify_domain_governance.py
 PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/gate/verify_test_data_architecture.py
+# api_integration 直插存储只允许显式 persistence 专项；一般用例存量棘轮只减不增。
+python3 quwoquan_ops/gate/verify_api_integration_direct_storage.py
+# 正向错误码治理维度：契约声明的错误码必须有测试断言证据；
+# 每服务缺失数棘轮只减不增，新错误码必须带断言测试。
+python3 quwoquan_ops/gate/verify_error_code_assertion_coverage.py
 # 反向错误码治理维度：实现发射但契约无声明位。存量走显式基线（只减不增），
 # 新增未声明码与新增解析盲点 BLOCK；当前只覆盖 runtime NewCode 家族一种发射形态。
 python3 quwoquan_ops/gate/verify_emitted_error_code_declaration.py
-python3 quwoquan_ops/tests/local_contract/test_emitted_error_code_declaration__contract__local_contract_test.py
+python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declaration__contract__local_contract_test.py
   # 门禁自证：挂在 gate 链上的门禁，其配套 local_contract 测试必须也被 gate 链执行；
   # 否则门禁实现回退无人可见。缺口容忍基线已删除，本门禁为零容忍——配套测试统一由
   # make test-gate-companion-local-contract 执行。
   make test-gate-companion-local-contract
   python3 quwoquan_ops/gate/verify_gate_local_contract_execution.py
-  python3 quwoquan_ops/tests/local_contract/test_gate_local_contract_execution__contract__local_contract_test.py
+  python3 quwoquan_ops/tests/local_contract/gate/test_gate_local_contract_execution__contract__local_contract_test.py
   python3 quwoquan_ops/gate/verify_local_env_port_manifest.py
   python3 quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py
-  python3 quwoquan_ops/tests/local_contract/test_config_ack_governed_workload__local_contract_test.py
+  python3 quwoquan_ops/tests/local_contract/environment/test_config_ack_governed_workload__local_contract_test.py
   python3 quwoquan_ops/gate/verify_prod_plane_access_isolation.py
   python3 quwoquan_ops/gate/verify_prod_access_guard.py
   bash quwoquan_service/scripts/verify/contract_graph/verify_contract_metadata.sh
   python3 quwoquan_service/scripts/verify/consistency/verify_tag_ref_source_of_truth.py
-  # 静态 gamma curated 投影器已退役，其退役状态由
-  # quwoquan_ops/tests/local_contract/test_gamma_curated_scenario_projector__local_contract_test.py 守住。
   # 内容域评论计数自洽（缺口A 防回归）：真相源 + 派生产物（*.lite.json / *.gamma-curated.json）
   # 的 commentCount/replyCount 不得与裁剪后评论集漂移。
   bash quwoquan_ops/environments/verify/verify_service_domain_layout.sh
@@ -165,12 +186,35 @@ python3 quwoquan_ops/tests/local_contract/test_emitted_error_code_declaration__c
   python3 quwoquan_service/scripts/user-service/verify_login_dependency_config.py
   python3 quwoquan_service/scripts/verify/consistency/verify_relationship_error_code_gate.py
   python3 quwoquan_service/scripts/verify/consistency/verify_error_recovery_alignment.py
-  python3 quwoquan_ops/tests/local_contract/test_object_alert_coverage__contract_graph_mapping__observability__local_contract_test.py
+  python3 quwoquan_ops/tests/local_contract/observability/test_object_alert_coverage__contract_graph_mapping__observability__local_contract_test.py
   python3 quwoquan_service/scripts/verify/observability/verify_object_alert_coverage.py
+  # 告警表达式求值回归（promtool test rules）：云侧交付面必须证明关键告警
+  # 在注入序列下按预期开火/保持安静；CI service runner 安装 prometheus 提供 promtool。
+  command -v promtool >/dev/null 2>&1 || {
+    echo "[gate] FAIL: promtool is required for alert rule evaluation (install prometheus)"
+    exit 1
+  }
+  promtool test rules "$ROOT"/quwoquan_ops/observability/monitoring/promtool_tests/*.yaml
   # 对象 × 层的结构性证据闭合：由受管管线现场派生 ContractGraph，
   # 任何 STRUCTURAL 缺口直接 BLOCK；不存在债务基线、刷新入口或计数额度。
-  python3 quwoquan_ops/tests/local_contract/test_object_evidence_closure__strict_zero__contract_graph__local_contract_test.py
+  # 合约测试在 Python 1000 行硬顶治理后按场景拆分，全部随门禁一起执行。
+  python3 quwoquan_ops/tests/local_contract/gate/test_object_evidence_closure__strict_zero__contract_graph__local_contract_test.py
+  python3 quwoquan_ops/tests/local_contract/gate/test_object_evidence_closure__strict_zero__structural_policy__local_contract_test.py
+  python3 quwoquan_ops/tests/local_contract/gate/test_object_evidence_closure__strict_zero__dynamic_readiness__local_contract_test.py
+  python3 quwoquan_ops/tests/local_contract/gate/test_object_evidence_closure__strict_zero__artifact_blindspot__local_contract_test.py
+  python3 quwoquan_ops/tests/local_contract/gate/test_object_evidence_closure__strict_zero__page_consumption__local_contract_test.py
   python3 quwoquan_ops/gate/verify_object_evidence_closure.py
+  # 对象开放面 fail-closed 契约闭合：搜索开放、小趣开放与 ES 字段漂移。
+  # 三者均为 strict-zero，无基线、无 allowlist。
+  python3 quwoquan_ops/gate/verify_object_search_policy_closure.py
+  python3 quwoquan_ops/gate/verify_object_assistant_access_closure.py
+  python3 quwoquan_ops/gate/verify_search_index_field_drift.py
+  # 搜索请求过滤词汇单轨：App enum / GraphQL schema / api-edge 映射 /
+  # search-service 校验四处同源，防止 objectTypes 词汇断链回归。
+  python3 quwoquan_ops/gate/verify_search_wire_vocabulary_single_track.py
+  # UAT 与 ops 层测试义务反向派生：磁盘验收测试必须有契约 readiness case，
+  # 存量缺口按棘轮基线只减不增；UA 声明的 runner 路径 strict-zero。
+  python3 quwoquan_ops/gate/verify_readiness_case_coverage.py
   python3 quwoquan_service/scripts/entity-service/entity_homepage/homepage/verify_entity_homepage_object_mainline.py
   python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
   bash quwoquan_ops/environments/verify/verify_service_config_digest_mapping.sh
@@ -226,6 +270,10 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/architecture/verify_concept_naming.py || exit 1
     python3 quwoquan_app/scripts/tag_service/tag/verify_cloud_tag_strict_typing.py || exit 1
     python3 quwoquan_app/scripts/runtime/observability/verify_dart_semantic.py || exit 1
+    python3 quwoquan_app/scripts/runtime/observability/verify_catch_swallow_budget.py || exit 1
+    python3 quwoquan_app/scripts/runtime/observability/verify_theme_binding_ratchet.py || exit 1
+    python3 quwoquan_app/scripts/runtime/observability/verify_journey_action_declaration_ratchet.py || exit 1
+    python3 quwoquan_app/scripts/runtime/page/verify_component_reuse_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/error/verify_unified_error_semantics_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/page/verify_settings_canonical.py || exit 1
     python3 quwoquan_app/scripts/runtime/page/verify_conversation_sheet_canonical.py || exit 1
@@ -288,6 +336,10 @@ run_app() {
     fi
     # 助手手写 + App 搜索仓库：弱类型只减不增棘轮。
     python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_search_weak_typing_ratchet.py || exit 1
+    # 契约 enum_ref 必须以 typed Dart enum 抵达 App；口径来自 codegen 的字段绑定
+    # 报告。此前它只挂在 Makefile 的 gate target 上，而 CI 只跑 gate_repo.sh，
+    # 于是这道门从未在 CI 执行过，基线一路漂移无人拦截。
+    python3 quwoquan_app/scripts/runtime/codegen/verify_app_enum_typed_binding.py || exit 1
     python3 quwoquan_app/scripts/user_service/account/user_account/verify_user_profile_avatar_projection_versions.py || exit 1
     python3 quwoquan_app/scripts/runtime/codegen/verify_metadata_routes_vs_codegen_app.py || exit 1
     python3 quwoquan_app/scripts/runtime/codegen/verify_metadata_response_body_vs_codegen_app.py || exit 1
@@ -295,6 +347,8 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/cloud/verify_cloud_runtime_single_path.py || exit 1
     python3 quwoquan_app/scripts/runtime/auth/verify_auth_policy_contract.py || exit 1
     python3 quwoquan_app/scripts/runtime/auth/verify_login_entry_loop_contract.py || exit 1
+    # RTC 通话商用契约：铃声单轨、信令通道恢复补偿、动效 token、关键测试证据链。
+    python3 quwoquan_app/scripts/rtc_service/rtc/call_session/verify_rtc_call_contract.py || exit 1
     python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py || exit 1
     python3 quwoquan_app/scripts/runtime/platform/verify_startup_environment_matrix.py >/dev/null || exit 1
     python3 quwoquan_app/scripts/runtime/platform/verify_dual_platform_usability_baseline.py || exit 1
@@ -303,9 +357,8 @@ run_app() {
     python3 quwoquan_service/scripts/assistant-service/assistant/assistant_run/verify_assistant_context_contract.py || exit 1
     python3 quwoquan_service/scripts/assistant-service/verify_assistant_security_contract.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py || exit 1
-    python3 quwoquan_ops/gate/verify_app_generated_fixture_assets.py || exit 1
+    python3 quwoquan_app/scripts/env/verify_aggregate_mock_ratchet.py || exit 1
     python3 quwoquan_ops/gate/verify_media_delivery_contract.py || exit 1
-    python3 quwoquan_app/scripts/env/verify_contract_mock_data_inventory.py || exit 1
     python3 quwoquan_app/scripts/runtime/architecture/verify_app_no_integration_test_dir.py || exit 1
     # 五域对象级 generated Remote api_integration 证据：ContractGraph 派生，
     # local_contract 锁 stackctl 接线与单调棘轮，再执行静态边界门禁。
@@ -332,12 +385,16 @@ run_app() {
     python3 quwoquan_ops/cli/gamma/verify_gamma_validation_profiles.py || exit 1
     python3 quwoquan_ops/ci/verify_ci_profile_consistency.py || exit 1
     # R03 文件行数预算（ratchet 只降不升，含 dart+go；pageflip 已登记豁免）
-    PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/test_file_line_budget__source_roots__local_contract_test.py || exit 1
+    PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/tests/local_contract/gate/test_file_line_budget__source_roots__local_contract_test.py || exit 1
     python3 quwoquan_app/scripts/runtime/architecture/verify_file_line_budget.py || exit 1
     # R02 Repository 接口方法数预算（ratchet；伞组合接口免登记）
     python3 quwoquan_app/scripts/runtime/architecture/verify_repository_interface_method_budget.py || exit 1
     # lib/ui 内 Map<String,dynamic> 字面量预算（ratchet 只降不升）
     python3 quwoquan_app/scripts/runtime/page/verify_ui_map_literal_budget.py || exit 1
+    # 性能预算聚合门禁：会话滚动/发送确认与 feed 查询 p95 超预算即阻断合入，
+    # 与静态同相位执行，避免每个 tests shard 重复。
+    # spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/message-runtime-performance-budget/spec.md#gwt-001.t2
+    make verify-performance-budgets || exit 1
   else
     echo "[gate] FAIL: python3 is required for App static verification" >&2
     exit 1

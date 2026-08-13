@@ -1,12 +1,51 @@
 package http_test
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	gatheringhttp "quwoquan_service/services/circle-service/internal/circle_management/gathering/adapters/inbound/http"
 	app "quwoquan_service/services/circle-service/internal/circle_management/gathering/application"
 )
+
+// spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-003
+func TestGatheringActionErrorPathUsesCompleteRuntimeErrorEnvelope(t *testing.T) {
+	mux := http.NewServeMux()
+	gatheringhttp.NewHandler(
+		&app.LifecycleFacade{},
+		&app.CommandFacade{},
+		&app.HostOutcomeFacade{},
+		&app.GatheringQueryFacade{},
+	).Register(mux)
+
+	// 缺 :action 的 gathering 资源路径必须以完整 RuntimeErrorResponse 拒绝。
+	request := httptest.NewRequest(http.MethodPost, "/gatherings/g-1", nil)
+	request.Header.Set("X-Request-Id", "req-envelope-circle")
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if envelope["code"] != "CIRCLE.USER.invalid_argument" {
+		t.Fatalf("code=%v", envelope["code"])
+	}
+	if envelope["requestId"] != "req-envelope-circle" {
+		t.Fatalf("requestId=%v", envelope["requestId"])
+	}
+	for _, field := range []string{"userMessage", "kind", "origin", "nature"} {
+		value, _ := envelope[field].(string)
+		if value == "" {
+			t.Fatalf("%s missing in envelope: %s", field, response.Body.String())
+		}
+	}
+}
 
 // contract_ref: services/circle-service/contracts/circle_management/gathering/operations.yaml
 func TestGatheringRuntimeRegistersAll36OperationsOnUniquePatterns(t *testing.T) {

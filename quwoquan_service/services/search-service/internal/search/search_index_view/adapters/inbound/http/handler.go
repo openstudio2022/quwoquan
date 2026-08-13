@@ -3,6 +3,8 @@ package http
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -41,12 +43,16 @@ type Handler struct {
 	intersections   *application.IntersectionAttacher
 	requestFacts    *requestapplication.Recorder
 	candidateDigest string
+	ownerCache      *application.OwnerSearchCache
 }
 
 type HandlerConfig struct {
 	Intersections   *application.IntersectionAttacher
 	RequestFacts    *requestapplication.Recorder
 	CandidateDigest string
+	// OwnerSearchCache optionally collapses hot first-page result queries
+	// (nil disables caching).
+	OwnerSearchCache *application.OwnerSearchCache
 }
 
 // NewHandler 构造 HTTP 适配器；observer 可为空。
@@ -71,6 +77,7 @@ func NewHandlerWithConfig(
 		intersections:   config.Intersections,
 		requestFacts:    config.RequestFacts,
 		candidateDigest: strings.TrimSpace(config.CandidateDigest),
+		ownerCache:      config.OwnerSearchCache,
 	}
 }
 
@@ -87,13 +94,14 @@ func (h *Handler) Register(mux *http.ServeMux) {
 }
 
 type searchRequestWire struct {
-	Query       string   `json:"query"`
-	Mode        string   `json:"mode"`
-	ObjectTypes []string `json:"objectTypes"`
-	IDs         []string `json:"ids"`
-	Limit       int      `json:"limit"`
-	Cursor      string   `json:"cursor"`
-	Filters     struct {
+	Query        string   `json:"query"`
+	Mode         string   `json:"mode"`
+	ObjectTypes  []string `json:"objectTypes"`
+	ContentTypes []string `json:"contentTypes"`
+	IDs          []string `json:"ids"`
+	Limit        int      `json:"limit"`
+	Cursor       string   `json:"cursor"`
+	Filters      struct {
 		Tags      []string `json:"tags"`
 		TimeRange *struct {
 			From string `json:"from"`
@@ -156,67 +164,27 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 	// query log, heat mining and ranking all key off the same normalized term.
 	normalizedQuery := rtsearch.Analyze(body.Query, nil).Normalized
 	in := application.QueryInput{
-		Query:       body.Query,
-		Mode:        body.Mode,
-		ObjectTypes: body.ObjectTypes,
-		IDs:         body.IDs,
-		Limit:       body.Limit,
-		Tags:        body.Filters.Tags,
-		TimeRange:   parseTimeRange(body),
-		Near:        parseNear(body),
-		Cursor:      body.Cursor,
+		Query:        body.Query,
+		Mode:         body.Mode,
+		ObjectTypes:  body.ObjectTypes,
+		ContentTypes: body.ContentTypes,
+		IDs:          body.IDs,
+		Limit:        body.Limit,
+		Tags:         body.Filters.Tags,
+		TimeRange:    parseTimeRange(body),
+		Near:         parseNear(body),
+		Cursor:       body.Cursor,
 	}
 	caller := queryCallerFrom(r)
 	identity := application.QueryExecutionIdentity{
 		CandidateDigest: h.candidateDigest,
 		PolicyDigest:    h.decorator.PolicyDigest(),
 	}
-	if caller.ServiceName == "api-edge" || strings.EqualFold(strings.TrimSpace(body.Mode), "retrieval") {
-		contractGraphDigest := "sha256:" + operationsecurity.ContractGraphSHA256
-		if caller.ServiceName != "" && r.Header.Get(contractGraphSHA256Header) != contractGraphDigest {
-			writeErr(w, requestID, rterrors.NewInvalidArgument(
-				moduleSearch,
-				"搜索契约暂不可用，请重试。",
-				"search owner ContractGraph binding does not match embedded runtime identity",
-			))
-			return
-		}
-		ownerResponse, ownerErr := h.svc.ExecuteOwnerQuery(r.Context(), in, viewer, caller, identity)
-		if ownerErr != nil {
-			h.writeSearchExecutionError(w, requestID, ownerErr)
-			return
-		}
-		if caller.ServiceName != "" {
-			w.Header().Set(contractGraphSHA256Header, contractGraphDigest)
-		}
-		writeJSON(w, http.StatusOK, ownerResponse)
-		return
-	}
-
-	// 计时覆盖召回、排序与交集 attach；异步 query log 仍在响应后执行。
-	start := time.Now()
-	execution, err := h.svc.Execute(r.Context(), in, viewer, caller, identity)
+	// AB-aware pre-query decision: bucket assignment + related terms + the
+	// query-time BoostTerms of the term_heat arm. Ranking stays single-sourced
+	// in the recall engine; nothing re-ranks after recall.
+	preparation, err := h.decorator.Prepare(r.Context(), normalizedQuery, experimentSubjectKey)
 	if err != nil {
-		h.observeSearch(application.SearchObservation{
-			Mode: body.Mode, Bucket: application.BucketControl,
-			Seconds: time.Since(start).Seconds(), Err: true,
-		})
-		h.writeSearchExecutionError(w, requestID, err)
-		return
-	}
-	resp := execution.Response
-
-	ranked, err := h.decorator.Decorate(
-		r.Context(),
-		resp,
-		normalizedQuery,
-		experimentSubjectKey,
-	)
-	if err != nil {
-		h.observeSearch(application.SearchObservation{
-			Mode: body.Mode, Bucket: application.BucketControl,
-			Seconds: time.Since(start).Seconds(), Err: true,
-		})
 		writeErr(
 			w,
 			requestID,
@@ -228,20 +196,88 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
-	resp.Hits = ranked.Hits
+	// BoostTerms derive from the assigned bucket (principal-stable) and the
+	// slow-moving term-heat read model; a mid-pagination heat refresh may
+	// slightly reorder later pages, which the contract attributes to a real
+	// index/heat release and the App absorbs via objectRef dedup.
+	in.BoostTerms = preparation.BoostTerms
+	// Replica stickiness: the same subject always reads the same replica, so
+	// repeated identical queries never jitter across replica segment-merge
+	// differences. The subject key is hashed before leaving the process (it may
+	// carry an account/persona id).
+	in.ReplicaPreference = replicaPreferenceFor(experimentSubjectKey)
+
+	if caller.ServiceName == "api-edge" || strings.EqualFold(strings.TrimSpace(body.Mode), "retrieval") {
+		contractGraphDigest := "sha256:" + operationsecurity.ContractGraphSHA256
+		if caller.ServiceName != "" && r.Header.Get(contractGraphSHA256Header) != contractGraphDigest {
+			writeErr(w, requestID, rterrors.NewInvalidArgument(
+				moduleSearch,
+				"搜索契约暂不可用，请重试。",
+				"search owner ContractGraph binding does not match embedded runtime identity",
+			))
+			return
+		}
+		start := time.Now()
+		ownerResponse, ownerErr := h.executeOwnerQuery(r.Context(), in, viewer, caller, identity, preparation.ExperimentBucket)
+		if ownerErr != nil {
+			h.observeSearch(application.SearchObservation{
+				Mode: body.Mode, Bucket: preparation.ExperimentBucket,
+				Seconds: time.Since(start).Seconds(), Err: true,
+			})
+			h.writeSearchExecutionError(w, requestID, ownerErr)
+			return
+		}
+		ownerResponse.SearchRequestID = requestID
+		h.observeSearch(application.SearchObservation{
+			Mode:            body.Mode,
+			Bucket:          preparation.ExperimentBucket,
+			Seconds:         time.Since(start).Seconds(),
+			ResultCount:     len(ownerResponse.Hits),
+			Degraded:        len(ownerResponse.DegradeSignals) > 0,
+			TermHeatApplied: preparation.TermHeatApplied(),
+		})
+		if caller.ServiceName != "" {
+			w.Header().Set(contractGraphSHA256Header, contractGraphDigest)
+		}
+		writeJSON(w, http.StatusOK, ownerResponse)
+		h.logQueryAsync(r, requestapplication.QueryLog{
+			SearchRequestID:  requestID,
+			Query:            normalizedQuery,
+			SessionID:        strings.TrimSpace(r.Header.Get(SearchSessionIDHeader)),
+			Mode:             body.Mode,
+			ViewerID:         viewer.UserID,
+			ObjectTypes:      body.ObjectTypes,
+			ResultCount:      len(ownerResponse.Hits),
+			ExperimentBucket: preparation.ExperimentBucket,
+			RelatedTerms:     preparation.RelatedTerms,
+		})
+		return
+	}
+
+	// 计时覆盖召回、排序与交集 attach；异步 query log 仍在响应后执行。
+	start := time.Now()
+	execution, err := h.svc.Execute(r.Context(), in, viewer, caller, identity)
+	if err != nil {
+		h.observeSearch(application.SearchObservation{
+			Mode: body.Mode, Bucket: preparation.ExperimentBucket,
+			Seconds: time.Since(start).Seconds(), Err: true,
+		})
+		h.writeSearchExecutionError(w, requestID, err)
+		return
+	}
+	resp := execution.Response
 	if h.intersections != nil {
 		resp = h.intersections.Attach(r.Context(), viewerPersonaIDFrom(r), resp)
 	}
 	elapsed := time.Since(start).Seconds()
 
-	termHeatApplied := ranked.ExperimentBucket == application.BucketTermHeat && len(ranked.RelatedTerms) > 0
 	h.observeSearch(application.SearchObservation{
 		Mode:            body.Mode,
-		Bucket:          ranked.ExperimentBucket,
+		Bucket:          preparation.ExperimentBucket,
 		Seconds:         elapsed,
 		ResultCount:     len(resp.Hits),
 		Degraded:        len(resp.DegradeSignals) > 0,
-		TermHeatApplied: termHeatApplied,
+		TermHeatApplied: preparation.TermHeatApplied(),
 	})
 
 	writeJSON(w, http.StatusOK, searchResponseWire{
@@ -251,8 +287,8 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		DegradeSignals:   resp.DegradeSignals,
 		Provenance:       resp.Provenance,
 		RequestID:        requestID,
-		ExperimentBucket: ranked.ExperimentBucket,
-		RelatedTerms:     ranked.RelatedTerms,
+		ExperimentBucket: preparation.ExperimentBucket,
+		RelatedTerms:     preparation.RelatedTerms,
 		InterpretedQuery: execution.InterpretedQuery,
 		NextCursor:       execution.NextCursor,
 	})
@@ -267,9 +303,29 @@ func (h *Handler) handleSearch(w http.ResponseWriter, r *http.Request) {
 		ViewerID:         viewer.UserID,
 		ObjectTypes:      body.ObjectTypes,
 		ResultCount:      len(resp.Hits),
-		ExperimentBucket: ranked.ExperimentBucket,
-		RelatedTerms:     ranked.RelatedTerms,
+		ExperimentBucket: preparation.ExperimentBucket,
+		RelatedTerms:     preparation.RelatedTerms,
 	})
+}
+
+// executeOwnerQuery routes hot first-page result queries through the
+// short-TTL owner cache (with singleflight) and everything else straight to
+// the query facade.
+func (h *Handler) executeOwnerQuery(
+	ctx context.Context,
+	in application.QueryInput,
+	viewer rtsearch.Viewer,
+	caller application.QueryCaller,
+	identity application.QueryExecutionIdentity,
+	bucket string,
+) (application.OwnerSearchResponse, error) {
+	execute := func(callCtx context.Context) (application.OwnerSearchResponse, error) {
+		return h.svc.ExecuteOwnerQuery(callCtx, in, viewer, caller, identity)
+	}
+	if h.ownerCache == nil {
+		return execute(ctx)
+	}
+	return h.ownerCache.Execute(ctx, in, identity, bucket, execute)
 }
 
 func (h *Handler) writeSearchExecutionError(w http.ResponseWriter, requestID string, err error) {
@@ -302,6 +358,17 @@ func (h *Handler) observeSearch(observation application.SearchObservation) {
 	if h.observer != nil {
 		h.observer.ObserveSearch(observation)
 	}
+}
+
+// replicaPreferenceFor derives the non-PII replica stickiness token from the
+// stable AB subject key (never the raw account/persona/session value).
+func replicaPreferenceFor(subjectKey string) string {
+	subjectKey = strings.TrimSpace(subjectKey)
+	if subjectKey == "" {
+		return ""
+	}
+	digest := sha256.Sum256([]byte("search-replica-preference\x00" + subjectKey))
+	return hex.EncodeToString(digest[:8])
 }
 
 // SubjectKeyFor returns the canonical stable AB assignment unit: logged-in

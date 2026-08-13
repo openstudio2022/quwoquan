@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/gathering_board_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/navigation/create_entry_navigation_arguments.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/route_unavailable_state.dart';
@@ -49,6 +50,14 @@ class GatheringBoardPageRouteHost extends ConsumerWidget {
           openMembers: (target) => context.push<void>(
             AppRoutePaths.chatManage(id: target.conversationId),
           ),
+          openRecapComposer: (gatheringId, gatheringTitle) =>
+              context.push<void>(
+                AppRoutePaths.create(),
+                extra: CreateEntryArguments(
+                  gatheringId: gatheringId,
+                  gatheringTitle: gatheringTitle,
+                ),
+              ),
         ),
       );
     } catch (error) {

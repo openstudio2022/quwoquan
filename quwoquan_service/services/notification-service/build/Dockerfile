@@ -18,7 +18,7 @@ COPY . .
 RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-    go build ${GO_BUILD_FLAGS} -o /notification-service ./services/notification-service/cmd/api/
+    go build ${GO_BUILD_FLAGS} -o /notification-service ./services/notification-service/cmd/standalone-api/
 
 FROM ${ALPINE_BASE_IMAGE}
 RUN apk add --no-cache ca-certificates tzdata

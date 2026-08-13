@@ -153,6 +153,28 @@ type EventLogStore interface {
 	// GetPageExperienceStats 按 pageName 聚合页面体验事实（打开次数、逐页 TTI
 	// 均值、停留均值、错误次数），供页面矩阵热力图消费；无数据页面不合成。
 	GetPageExperienceStats(context.Context, PageExperienceQuery) ([]PageExperienceStat, error)
+	// GetEventValueStats 读取窗口内某事件数值字段的 P95 与求和统计
+	// （raw 权威回读，与 RTC QoE 同一原始样本口径），承载黄金指标
+	// percentile / sum_ratio 形态的实时计算；无样本显式零计数，不合成。
+	GetEventValueStats(context.Context, EventValueStatsQuery) (EventValueStats, error)
+}
+
+// EventValueStatsQuery 的 ValueField 服务 percentile 形态；
+// Numerator/DenominatorField 服务 sum_ratio 形态，两组互斥使用。
+type EventValueStatsQuery struct {
+	EventType        string
+	Result           string
+	ValueField       string
+	NumeratorField   string
+	DenominatorField string
+	From, To         time.Time
+}
+
+type EventValueStats struct {
+	SampleCount    int64   `json:"sampleCount"`
+	P95            float64 `json:"p95"`
+	NumeratorSum   float64 `json:"numeratorSum"`
+	DenominatorSum float64 `json:"denominatorSum"`
 }
 
 // IncompleteEventBatchRepairer is an optional Port capability for stores whose
@@ -350,6 +372,44 @@ func (s *TelemetryService) ReportStartupDiagnostics(ctx context.Context, proof s
 		return EventBatchAck{}, err
 	}
 	return EventBatchAck{AcceptedCount: len(records)}, nil
+}
+
+// GetEventValueStats 校验事件与字段后读取原始样本统计。字段必须是该
+// 事件在 event_catalog 声明的数值扩展，禁止自由字段透传到存储查询。
+func (s *TelemetryService) GetEventValueStats(
+	ctx context.Context,
+	query EventValueStatsQuery,
+) (EventValueStats, error) {
+	summaryWindow := EventSummaryQuery{From: query.From, To: query.To}
+	if err := normalizeSummaryQuery(&summaryWindow, s.now().UTC()); err != nil {
+		return EventValueStats{}, err
+	}
+	query.From, query.To = summaryWindow.From, summaryWindow.To
+	definition, ok := generated.EventCatalog[query.EventType]
+	if !ok {
+		return EventValueStats{}, ErrInvalidEventQuery
+	}
+	fields := make([]string, 0, 3)
+	if query.ValueField != "" {
+		fields = append(fields, query.ValueField)
+	}
+	if query.NumeratorField != "" {
+		fields = append(fields, query.NumeratorField)
+	}
+	if query.DenominatorField != "" {
+		fields = append(fields, query.DenominatorField)
+	}
+	if len(fields) == 0 {
+		return EventValueStats{}, ErrInvalidEventQuery
+	}
+	for _, field := range fields {
+		_, required := definition.RequiredExtensions[field]
+		_, optional := definition.OptionalExtensions[field]
+		if !required && !optional {
+			return EventValueStats{}, ErrInvalidEventQuery
+		}
+	}
+	return s.events.GetEventValueStats(ctx, query)
 }
 
 func (s *TelemetryService) GetEventSummary(ctx context.Context, query EventSummaryQuery) (EventSummary, error) {

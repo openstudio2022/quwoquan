@@ -81,6 +81,49 @@ types:
     - {name: authorId, source: authorId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: total, source: total, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: items, source: items, type: '[]RecommendationAuthorImpactItem', constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  GetRecommendationGatheringSocialProofQuery:
+    description: 四锚点社会证明内部查询；anchorKind 只接受 organizer/entity/content/creator。
+    fields:
+    - {name: anchorKind, source: anchorKind, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: objectId, source: objectId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: read}
+  IntersectionFacilitationEventPayload:
+    description: 创作者促成事实事件载荷；只含计数与公开经历引用，不含参与者名单或私密事实。
+    fields:
+    - {name: facilitationId, source: facilitationId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: gatheringId, source: gatheringId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: creatorPersonaId, source: creatorPersonaId, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: seedPostId, source: seedPostId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: occurredAt, source: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+  GetRecommendationFlywheelFunnelQuery:
+    description: 北极星漏斗多维查询；时间窗必填，维度过滤全部可选，capacityTier 只接受 duo/group 闭集。
+    fields:
+    - {name: windowFrom, source: windowFrom, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: windowTo, source: windowTo, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: sourceObjectKind, source: sourceObjectKind, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: sourceObjectId, source: sourceObjectId, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: write, ops_exposure: read}
+    - {name: capacityTier, source: capacityTier, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: write, ops_exposure: read}
+    - {name: tagRef, source: tagRef, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: read}
+  RecommendationFlywheelFunnelSnapshot:
+    description: 北极星漏斗诚实快照；只给分子分母不下发百分比，越界以 truncated 标注，比例①=wishlistToJoined/wishlisted，②=experienced/formed，③=creatorRepublished/facilitationNotified。
+    fields:
+    - {name: windowFrom, source: windowFrom, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: windowTo, source: windowTo, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: wishlistedPersonaCount, source: wishlistedPersonaCount, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: wishlistToJoinedCount, source: wishlistToJoinedCount, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: publishedCount, source: publishedCount, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: formedCount, source: formedCount, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: experiencedCount, source: experiencedCount, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: facilitationNotifiedCount, source: facilitationNotifiedCount, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: creatorRepublishedCount, source: creatorRepublishedCount, type: int64, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: truncated, source: truncated, type: bool, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+  RecommendationGatheringSocialProofSummary:
+    description: 四锚点两级诚实社会证明计数；publishedCount 仅 organizer 锚点具有产品语义，formed=已发布且 ≥2 名 active 参与者，experienced=formed 且 ≥2 名参与者各自持有 active 公开回顾。无内容的行动永远不进 experienced。
+    fields:
+    - {name: anchorKind, source: anchorKind, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: objectId, source: objectId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+    - {name: publishedCount, source: publishedCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: formedCount, source: formedCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: experiencedCount, source: experiencedCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   RecommendationAuthorImpactEvidence:
     description: 不含 viewer 身份的单条作者影响事实；Content 仅按 contentId 执行当前权限 hydration。
     fields:

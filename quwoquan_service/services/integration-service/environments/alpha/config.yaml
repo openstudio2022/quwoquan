@@ -19,6 +19,11 @@ externalBindings:
     adapter: ext.map.protocol_fixture
     endpointRef: local_topology:provider-protocol-substitute
   location.poi.search:
-    state: not_required
+    state: enabled
+    adapter: ext.map.nominatim.protocol_substitute
+    endpointRef: local_topology:provider-protocol-substitute
+  # route.read 保持未启用：App 当前无路线消费页面，user_acceptance 层无法提供
+  # 真实 user journey，三层 conformance source 无法闭环；替身 /osrm 协议面与
+  # ext.route.osrm.protocol_substitute adapter 契约已就绪，待消费点落地再翻牌。
   location.route.read:
     state: not_required

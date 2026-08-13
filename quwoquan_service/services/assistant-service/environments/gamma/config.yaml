@@ -2,6 +2,8 @@ overrides:
   sys.assistant-service.account_security_authority.base_url: http://user-service:18081
   sys.assistant-service.account_security_authority.timeout_ms: 300
   sys.assistant-service.notification_service.base_url: http://notification-service:18087
+  # service-core 镜像不再内嵌 skill release 资产；本地环境经 config-root 挂载供给。
+  sys.assistant-service.skill_package.asset_root: /etc/qwq-config/skill-packages/official
   sys.assistant-service.policy_publication.release_artifact_ref: assistant/assistant-default/releases/6579402860644c0273747b33c23962cff013caec0839407afbe7dffdcc50f8e7.json
   sys.assistant-service.policy_publication.rollout_artifact_ref: assistant/assistant-default/rollouts/revision-4.json
 secretRefs:

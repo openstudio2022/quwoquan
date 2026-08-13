@@ -173,6 +173,9 @@ func sendFederatedBindingOtp(
 	phone string,
 ) (*application.OtpSendResult, string) {
 	t.Helper()
+	idempotencyDigest := sha256.Sum256(
+		[]byte(outcome.BindingTicket + "|" + phone),
+	)
 	result, err := authService.SendOtp(
 		context.Background(),
 		phone,
@@ -181,7 +184,8 @@ func sendFederatedBindingOtp(
 		"1.0.0",
 		"bind_phone",
 		outcome.BindingTicket,
-		"credential-contract-bind-otp-000001",
+		"credential-contract-bind-otp-"+
+			hex.EncodeToString(idempotencyDigest[:8]),
 	)
 	if err != nil {
 		t.Fatalf("send bind-phone otp: %v", err)
@@ -693,14 +697,7 @@ func TestFederatedPhoneBinding_PhoneConflictRetainsRecoverableTicket(t *testing.
 	)
 	createTestProfile(t, existingOwner, "已有手机号账号")
 	createTestPersona(t, "existing-phone-persona", existingOwner, "已有手机号账号", true)
-	if _, err := pgPool.Exec(
-		context.Background(),
-		`UPDATE user_profiles SET phone=$2 WHERE user_id=$1`,
-		existingOwner,
-		existingPhone,
-	); err != nil {
-		t.Fatalf("set existing profile phone: %v", err)
-	}
+	seedProfilePhone(t, existingOwner, existingPhone)
 	createTestCredential(t, "existing-phone-credential", existingOwner, "phone", existingPhone)
 
 	authService, wechatLogin := newFederatedLoginTestRuntime(t)

@@ -26,28 +26,47 @@ enum SearchPageObjectType {
   USER_PROFILE
 }
 
+enum SearchPageContentType {
+  ARTICLE
+  IMAGE
+  VIDEO
+}
+
 input SearchPageInput {
   query: String!
   first: Int = 20
   after: SearchCursor
   objectTypes: [SearchPageObjectType!]
+  contentTypes: [SearchPageContentType!]
 }
 
 type SearchPageSlice {
   items: [SearchPageItem!]! @listCost(argument: "input.first", defaultValue: 20, maximumValue: 20)
   facets: [SearchPageFacet!]! @listCost(argument: "input.first", defaultValue: 20, maximumValue: 20)
   suggestions: [String!]! @listCost(argument: "input.first", defaultValue: 20, maximumValue: 20)
+  matchedTerms: [String!]! @listCost(argument: "input.first", defaultValue: 20, maximumValue: 20)
+  degradeSignals: [SearchPageDegradeSignal!]! @listCost(argument: "input.first", defaultValue: 20, maximumValue: 20)
+  searchRequestId: String!
   nextCursor: SearchCursor
 }
 
 type SearchPageItem {
   objectRef: SearchObjectRef!
   resultType: SearchPageObjectType!
+  contentType: SearchPageContentType
   title: String!
   subtitle: String
   snippet: String
   thumbnailUrl: String
   action: String!
+  rankPosition: Int!
+  rankReason: String
+}
+
+type SearchPageDegradeSignal {
+  code: String!
+  message: String!
+  objectType: String
 }
 
 type SearchPageFacet {
@@ -78,10 +97,12 @@ type ContentPostDetailBase {
   primaryHomepageSnapshot: PostHomepageSnapshot
   status: String!
   visibility: String!
+  gatheringRef: String
   likeCount: Int!
   commentCount: Int!
   shareCount: Int!
   viewCount: Int!
+  viewerLiked: Boolean
   createdAt: String!
   updatedAt: String!
   publishedAt: String
@@ -313,10 +334,12 @@ type ContentPostDetailSlice {
   primaryHomepageSnapshot: PostHomepageSnapshot
   status: String!
   visibility: String!
+  gatheringRef: String
   likeCount: Int!
   commentCount: Int!
   shareCount: Int!
   viewCount: Int!
+  viewerLiked: Boolean
   createdAt: String!
   updatedAt: String!
   publishedAt: String

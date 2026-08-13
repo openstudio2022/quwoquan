@@ -124,6 +124,26 @@ type AuthorImpactProjectionReader interface {
 	ListPageWithTotal(ctx context.Context, authorID, impactID, cursor string, limit int64) ([]AuthorImpactEvidenceRaw, string, bool, int64, error)
 }
 
+// GatheringSocialProofSummary 是四锚点两级诚实社会证明计数的只读投影。
+// Content 只做 App 代理透传，不落计数副本、不本地推断。
+type GatheringSocialProofSummary struct {
+	AnchorKind       string
+	ObjectID         string
+	PublishedCount   int64
+	FormedCount      int64
+	ExperiencedCount int64
+}
+
+// GatheringSocialProofProjectionReader is the only cross-context read port
+// for the Recommendation-owned gathering social proof aggregation.
+type GatheringSocialProofProjectionReader interface {
+	GetGatheringSocialProof(
+		ctx context.Context,
+		anchorKind string,
+		objectID string,
+	) (GatheringSocialProofSummary, error)
+}
+
 type WatermarkStore = intersectionports.Store
 
 // ProjectorEvent 是读模型投影器消费的规范化生命周期事件。

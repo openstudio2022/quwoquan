@@ -27,6 +27,8 @@ api_routes:
   path: /assistant/skill-placements/{surfaceKind}/{surfaceId}
   operation: GetSkillSurfacePlacement
   actor: account
+  request_entity: GetSkillSurfacePlacementQuery
+  request_body_kind: none
   request_bindings: {path: [{name: surfaceKind, field: surfaceKind}, {name: surfaceId, field: surfaceId}]}
   response_entity: SkillSurfacePlacement
   authorization: {principal: account, ownership_policy: surface_member}

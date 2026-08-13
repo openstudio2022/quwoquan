@@ -57,12 +57,33 @@ type entityDef struct {
 	Fields []fieldDef `yaml:"fields"`
 }
 
+// objectLocalEnumDef is the `enums:` block an object declares next to its own
+// fields. It only lists wire values; the Dart member names are derived, unlike
+// the service-level catalog which spells both out.
+//
+// Objects write it either as `Name: [a, b]` or as `Name: {values: [a, b]}`.
+type objectLocalEnumDef struct {
+	Values []string `yaml:"values"`
+}
+
+func (definition *objectLocalEnumDef) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.SequenceNode {
+		return node.Decode(&definition.Values)
+	}
+	type rawObjectLocalEnumDef objectLocalEnumDef
+	return node.Decode((*rawObjectLocalEnumDef)(definition))
+}
+
 type fieldsFile struct {
-	Entity       string               `yaml:"entity"`
-	Entities     map[string]entityDef `yaml:"entities"`
-	Fields       []fieldDef           `yaml:"fields"`
-	Types        map[string]entityDef `yaml:"types"`
-	ValueObjects map[string]entityDef `yaml:"value_objects"`
+	Entity string `yaml:"entity"`
+	// Enums are owned by the object that declares them. The assistant runtime
+	// enum catalog folds them in so an object can bind its own enum without
+	// restating it in _shared/enums.yaml.
+	Enums        map[string]objectLocalEnumDef `yaml:"enums"`
+	Entities     map[string]entityDef          `yaml:"entities"`
+	Fields       []fieldDef                    `yaml:"fields"`
+	Types        map[string]entityDef          `yaml:"types"`
+	ValueObjects map[string]entityDef          `yaml:"value_objects"`
 	// Members 承载 `members:` 下的 owned_entity 声明。它与 `types:` 是同一种「聚合内
 	// 嵌套结构」的两种写法，DTO 生成按名字查找，不关心声明落在哪个键下；漏读会让
 	// 契约里明明存在的成员在生成期表现为"实体缺失"。

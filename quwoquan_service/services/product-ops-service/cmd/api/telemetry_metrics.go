@@ -423,7 +423,9 @@ func boundedLoginOperation(value string) string {
 		"send_otp", "verify_login_otp", "complete_federated_phone_binding",
 		"login_social_wechat", "login_social_qq", "login_social_alipay",
 		"open_account_restriction_support", "confirm_otp_delivery",
-		"confirm_otp_delivery_5s", "confirm_otp_delivery_15s":
+		"confirm_otp_delivery_5s", "confirm_otp_delivery_15s",
+		"get_otp_delivery_readiness", "persist_pending_otp",
+		"restore_pending_otp", "clear_pending_otp":
 		return value
 	default:
 		return "other"
@@ -556,6 +558,12 @@ func (s instrumentedEventLogStore) GetPageExperienceStats(ctx context.Context, q
 	startedAt := time.Now()
 	defer func() { s.observe("query_page_experience", startedAt, err) }()
 	return s.inner.GetPageExperienceStats(ctx, query)
+}
+
+func (s instrumentedEventLogStore) GetEventValueStats(ctx context.Context, query application.EventValueStatsQuery) (out application.EventValueStats, err error) {
+	startedAt := time.Now()
+	defer func() { s.observe("query_value_stats", startedAt, err) }()
+	return s.inner.GetEventValueStats(ctx, query)
 }
 
 var _ application.EventLogStore = instrumentedEventLogStore{}

@@ -1,0 +1,964 @@
+"""stackctl gamma/beta 正式发布环境绑定域: packaged/release 镜像 refs、
+外部 Provider 环境、对象存储绑定与 release evidence 配置物化。
+
+从 stackctl.py 逐字迁出（改写规则与 down_domain 相同）:
+gamma packaged/release 镜像绑定家族、`_inspect_gamma_release_runtime`、
+`_bind_formal_local_release_provider_environment`、beta/local 外部 Provider
+环境绑定、`_bind_package_provider_reference_environment`、
+`_sync_object_storage_binding_aliases`、`_gamma_start_command`、
+`_materialize_release_evidence_configuration`。
+
+测试经 ``mock.patch.object(stackctl, ...)`` patch 本模块符号与协作符号，
+因此函数体内一律经函数内延迟导入 `_stackctl` 属性访问（含本模块符号互调），
+保持 monkeypatch 语义并避免顶层循环 import。
+"""
+
+from __future__ import annotations
+
+import argparse
+import concurrent
+import concurrent.futures
+import json
+import os
+import re
+import subprocess
+
+from pathlib import Path
+from typing import Any
+from typing import Mapping
+
+
+def _bind_gamma_packaged_service_image_refs(
+    env_name: str,
+    environment: dict[str, str],
+    *,
+    candidate_snapshot: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Bind only exact OCI image IDs attested by the immutable package."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+
+    target_name = str(environment.get("QWQ_LOCAL_RELEASE_TARGET") or "").strip()
+    if not target_name:
+        raise ValueError("package-bound runtime target is missing")
+    composition = _stackctl._load_package_bound_local_image_composition(
+        env_name,
+        target_name,
+        candidate_snapshot=candidate_snapshot,
+    )
+    _stackctl._apply_gamma_image_composition(composition, environment)
+    startup_manifest = str(
+        composition.get("startupImageCompositionFile") or ""
+    ).strip()
+    startup_transport_tag = str(
+        composition.get("startupImageTransportTag") or ""
+    ).strip()
+    if (
+        not startup_manifest
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", startup_transport_tag) is None
+    ):
+        raise ValueError("package OCI startup identity is incomplete")
+    environment["QWQ_STARTUP_IMAGE_COMPOSITION_FILE"] = startup_manifest
+    environment["QWQ_STARTUP_IMAGE_TRANSPORT_TAG"] = startup_transport_tag
+    return composition
+
+
+def _bind_gamma_packaged_configuration_digest(
+    env_name: str,
+    environment: dict[str, str],
+    composition: dict[str, Any] | None = None,
+) -> str:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    target_name = str(environment.get("QWQ_LOCAL_RELEASE_TARGET") or "").strip()
+    digest = _stackctl.packaged_configuration_digest(
+        env_name,
+        target=target_name,
+    )
+    environment["LOCAL_GAMMA_CONFIG_VERSION"] = digest
+    if composition is not None:
+        composition["configurationDigest"] = digest
+    return digest
+
+
+def _resolve_gamma_release_image_composition(
+    manifest_path: Path,
+) -> dict[str, Any]:
+    """Resolve one validated candidate manifest without mutating or pulling."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"formal release manifest is unreadable: {error}") from error
+    if not isinstance(manifest, dict):
+        raise ValueError("formal release manifest must be an object")
+    _stackctl.finalize_mainline_release_artifact.validate_manifest(
+        manifest,
+        allowed_statuses={"candidate-ready", "deployable", "released"},
+    )
+    _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
+        manifest_path.parent,
+        manifest,
+    )
+    images = manifest.get("images")
+    if not isinstance(images, dict):
+        raise ValueError("formal release manifest has no images")
+    bound: dict[str, dict[str, str]] = {}
+    for service, _ in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
+        descriptor = images.get(service)
+        if not isinstance(descriptor, dict):
+            raise ValueError(f"formal release image is missing: {service}")
+        digest = str(descriptor.get("digest") or "")
+        ref = str(descriptor.get("ref") or "")
+        repository = str(descriptor.get("repository") or "")
+        if (
+            re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None
+            or ref != f"{repository}@{digest}"
+        ):
+            raise ValueError(f"formal release image is not exact: {service}")
+        bound[service] = {"ref": ref, "digest": digest}
+    composition_version = _stackctl.immutable_image_digest(
+        {service: descriptor["ref"] for service, descriptor in bound.items()}
+    )
+    return {
+        "candidateId": str(manifest["candidateId"]),
+        "artifactDigest": str(manifest["artifactDigest"]),
+        "contractGraphDigest": str(manifest["contractGraphDigest"]),
+        "imageVersion": composition_version,
+        "images": bound,
+    }
+
+
+def _apply_gamma_image_composition(
+    composition: dict[str, Any],
+    environment: dict[str, str],
+) -> None:
+    """Project one already-validated composition into both Compose aliases."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+
+    configuration_digest = str(composition.get("configurationDigest") or "").strip()
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", configuration_digest) is None:
+        raise ValueError("immutable runtime composition has no configuration digest")
+    environment["LOCAL_GAMMA_CONFIG_VERSION"] = configuration_digest
+    images = composition.get("images")
+    if not isinstance(images, dict) or not images:
+        raise ValueError("immutable image composition has no images")
+    refs: dict[str, str] = {}
+    for service, local_key in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
+        descriptor = images.get(service)
+        if not isinstance(descriptor, dict):
+            raise ValueError(f"immutable image composition is missing: {service}")
+        ref = str(descriptor.get("ref") or "")
+        refs[service] = ref
+        environment[local_key] = ref
+        environment[_stackctl.compose_image_environment_key(service)] = ref
+    actual_version = _stackctl.immutable_image_digest(refs)
+    expected_version = str(composition.get("imageVersion") or "")
+    if actual_version != expected_version:
+        raise ValueError("immutable image composition version mismatch")
+    environment["LOCAL_GAMMA_IMAGE_VERSION"] = actual_version
+    environment["QWQ_COMPOSE_IMAGE_VERSION"] = actual_version
+    environment["QWQ_COMPOSE_IMAGE_TAG"] = actual_version.removeprefix("sha256:")
+    candidate_id = str(composition.get("candidateId") or "")
+    artifact_digest = str(composition.get("artifactDigest") or "")
+    if candidate_id:
+        environment["QWQ_RELEASE_CANDIDATE_DIGEST"] = candidate_id
+    if artifact_digest:
+        environment["QWQ_RELEASE_ARTIFACT_DIGEST"] = artifact_digest
+
+
+def _bind_gamma_release_image_refs(
+    manifest_path: Path,
+    environment: dict[str, str],
+    *,
+    release_input_classification: str,
+    contract_graph_digest: str,
+) -> dict[str, Any]:
+    """Pull and bind exact candidate OCI refs for a formal local release."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+
+    composition = _stackctl._resolve_gamma_release_image_composition(manifest_path)
+    if release_input_classification != "commercial_inputs":
+        raise ValueError("formal release requires commercial release inputs")
+    if composition.get("contractGraphDigest") != contract_graph_digest:
+        raise ValueError("formal release ContractGraph differs from the package")
+    planned: list[tuple[str, str, str, str]] = []
+    for service, environment_key in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
+        descriptor = composition["images"][service]
+        digest = descriptor["digest"]
+        ref = descriptor["ref"]
+        planned.append((service, environment_key, ref, digest))
+
+    def pull_exact_image(
+        item: tuple[str, str, str, str],
+    ) -> tuple[tuple[str, str, str, str], subprocess.CompletedProcess[str]]:
+        return item, _stackctl.run(["docker", "pull", "--platform", "linux/amd64", item[2]])
+
+    failures: list[str] = []
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(8, len(planned))
+    ) as executor:
+        futures = [executor.submit(pull_exact_image, item) for item in planned]
+        for future in concurrent.futures.as_completed(futures):
+            item, pull = future.result()
+            if pull.returncode != 0:
+                failures.append(
+                    f"{item[0]}: "
+                    + (pull.stderr.strip() or pull.stdout.strip() or "pull failed")
+                )
+    if failures:
+        raise ValueError(
+            "formal release exact OCI pull failed: " + "; ".join(sorted(failures))
+        )
+
+    _stackctl._bind_gamma_packaged_configuration_digest(
+        str(environment.get("QWQ_LOCAL_RELEASE_ENV") or ""),
+        environment,
+        composition,
+    )
+    _stackctl._apply_gamma_image_composition(composition, environment)
+    return composition
+
+
+def _bind_gamma_release_teardown_image_refs(
+    manifest_path: Path,
+    environment: dict[str, str],
+) -> dict[str, Any]:
+    """Bind the exact candidate identity for teardown without pulling images."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+
+    composition = _stackctl._resolve_gamma_release_image_composition(manifest_path)
+    _stackctl._bind_gamma_packaged_configuration_digest(
+        str(environment.get("QWQ_LOCAL_RELEASE_ENV") or ""),
+        environment,
+        composition,
+    )
+    _stackctl._apply_gamma_image_composition(composition, environment)
+    return composition
+
+
+def _inspect_gamma_release_runtime(
+    release_composition: dict[str, Any],
+    environment: dict[str, str],
+) -> dict[str, dict[str, str]]:
+    """Prove that local containers actually run every exact candidate ref."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+
+    images = release_composition.get("images")
+    if not isinstance(images, dict) or not images:
+        raise ValueError("formal release composition has no images")
+    project = str(
+        environment.get("LOCAL_GAMMA_COMPOSE_PROJECT_NAME") or "quwoquan_service"
+    ).strip()
+    def inspect_service(item: tuple[str, Any]) -> tuple[str, dict[str, str]]:
+        service, descriptor = item
+        if not isinstance(descriptor, dict):
+            raise ValueError(f"formal image descriptor is invalid: {service}")
+        expected_ref = str(descriptor.get("ref") or "")
+        expected_digest = str(descriptor.get("digest") or "")
+        container_lookup = _stackctl.run(
+            [
+                "docker",
+                "ps",
+                "-aq",
+                "--filter",
+                f"label=com.docker.compose.project={project}",
+                "--filter",
+                f"label=com.docker.compose.service={service}",
+            ],
+            env=environment,
+        )
+        container_ids = [
+            line.strip()
+            for line in container_lookup.stdout.splitlines()
+            if line.strip()
+        ]
+        if container_lookup.returncode != 0 or len(container_ids) != 1:
+            raise ValueError(
+                f"formal runtime must have exactly one {service} container; "
+                f"found {len(container_ids)}"
+            )
+        container_id = container_ids[0]
+        inspect_result = _stackctl.run(["docker", "inspect", container_id], env=environment)
+        if inspect_result.returncode != 0:
+            raise ValueError(f"formal runtime inspect failed: {service}")
+        try:
+            inspected = json.loads(inspect_result.stdout)
+            container = inspected[0]
+            actual_ref = str(container["Config"]["Image"])
+            runtime_image_id = str(container["Image"])
+            state = container["State"]
+            status = str(state["Status"])
+            health = str((state.get("Health") or {}).get("Status") or "not-declared")
+        except (IndexError, KeyError, TypeError, json.JSONDecodeError) as error:
+            raise ValueError(
+                f"formal runtime inspect is not canonical: {service}"
+            ) from error
+        if actual_ref != expected_ref:
+            raise ValueError(
+                f"formal runtime image differs from candidate: {service}"
+            )
+        if status != "running" or health not in {"healthy", "not-declared"}:
+            raise ValueError(
+                f"formal runtime is not ready: {service} status={status} health={health}"
+            )
+        image_result = _stackctl.run(["docker", "image", "inspect", expected_ref], env=environment)
+        if image_result.returncode != 0:
+            raise ValueError(f"formal local image inspect failed: {service}")
+        try:
+            local_images = json.loads(image_result.stdout)
+            repo_digests = local_images[0].get("RepoDigests") or []
+        except (IndexError, TypeError, json.JSONDecodeError) as error:
+            raise ValueError(
+                f"formal local image inspect is not canonical: {service}"
+            ) from error
+        if expected_ref not in repo_digests:
+            raise ValueError(
+                f"formal local image has no exact pulled digest: {service}"
+            )
+        return service, {
+            "ref": expected_ref,
+            "digest": expected_digest,
+            "containerId": container_id,
+            "runtimeImageId": runtime_image_id,
+            "status": status,
+            "health": health,
+        }
+
+    items = sorted(images.items())
+    runtime_images: dict[str, dict[str, str]] = {}
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=min(8, len(items))
+    ) as executor:
+        futures = [executor.submit(inspect_service, item) for item in items]
+        for future in concurrent.futures.as_completed(futures):
+            service, runtime = future.result()
+            runtime_images[service] = runtime
+    return dict(sorted(runtime_images.items()))
+
+
+def _bind_gamma_external_provider_environment(
+    environment: dict[str, str],
+) -> str | None:
+    """Bind Gamma Providers from the active immutable runtime composition."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    storage_error = _stackctl._bind_gamma_object_storage_environment(environment)
+    if storage_error is not None:
+        return storage_error
+    try:
+        runtime = _stackctl._active_provider_runtime("gamma", "gamma-local")
+    except (OSError, TypeError, ValueError) as exc:
+        return f"gamma-local Provider runtime preflight failed: {exc}"
+    return _stackctl._bind_local_external_provider_environment(
+        environment,
+        environment_name="gamma",
+        target_name="gamma-local",
+        storage_prefix="LOCAL_GAMMA",
+        runtime_composition=runtime["composition"],
+    )
+
+
+def _bind_gamma_object_storage_environment(
+    environment: dict[str, str],
+) -> str | None:
+    """Materialize only the platform-owned Gamma object-storage binding."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    try:
+        storage = _stackctl.prepare_local_gamma_object_storage(
+            edge_port=_stackctl.profile_ports(
+                _stackctl.load_port_manifest(),
+                "gamma-local",
+            )["object-storage-edge"],
+        )
+    except (RuntimeError, ValueError) as exc:
+        return f"gamma-local object storage materialization failed: {exc}"
+    environment.update(storage.environment)
+    environment.setdefault(
+        "LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL",
+        storage.host_endpoint,
+    )
+    public_bases = (
+        _stackctl.get_target(_stackctl.load_environment_topology(), "gamma-local").get("publicBases")
+        or {}
+    )
+    media_delivery_origin = _stackctl._public_url_origin(str(public_bases["mediaImage"]))
+    environment.setdefault(
+        "CONTENT_MEDIA_DELIVERY_BASE_URL",
+        media_delivery_origin,
+    )
+    environment.setdefault(
+        "CONTENT_MEDIA_UPLOAD_BASE_URL",
+        str(public_bases["mediaUpload"]),
+    )
+    environment.setdefault(
+        "QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL",
+        media_delivery_origin,
+    )
+    environment.setdefault(
+        "QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL",
+        str(public_bases["mediaUpload"]),
+    )
+    _stackctl._sync_object_storage_binding_aliases(environment, prefix="LOCAL_GAMMA")
+    return None
+
+
+def _bind_formal_local_release_provider_environment(
+    environment: dict[str, str],
+    *,
+    environment_name: str,
+    target_name: str,
+    workload: str = "full",
+    runtime_composition: Mapping[str, Any] | None = None,
+) -> str | None:
+    """Bind target-isolated infrastructure and protected nonprod Providers."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+
+    try:
+        auth = _stackctl.prepare_local_environment_auth(environment_name, target_name)
+        storage = _stackctl.prepare_local_environment_object_storage(
+            environment=environment_name,
+            target_name=target_name,
+            edge_port=_stackctl.profile_ports(
+                _stackctl.load_port_manifest(),
+                str(_stackctl.get_target(_stackctl.load_environment_topology(), target_name)["portProfile"]),
+            )["object-storage-edge"],
+            # The shared infrastructure Compose retains this private adapter
+            # prefix. Service workloads consume only QWQ_COMPOSE_* aliases.
+            environment_prefix="LOCAL_GAMMA",
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return f"{target_name} infrastructure materialization failed: {exc}"
+    environment.update(auth.environment)
+    environment.update(storage.environment)
+    if runtime_composition is None:
+        return f"{target_name} Provider runtime composition is missing"
+    try:
+        validated_provider_runtime = _stackctl.validate_provider_runtime_composition(
+            dict(runtime_composition),
+            expected_environment=environment_name,
+            expected_target=target_name,
+        )
+    except (TypeError, ValueError) as exc:
+        return f"{target_name} Provider runtime composition is invalid: {exc}"
+    public_bases = _stackctl.get_target(_stackctl.load_environment_topology(), target_name).get(
+        "publicBases"
+    ) or {}
+    media_delivery_origin = _stackctl._public_url_origin(str(public_bases["mediaImage"]))
+    environment.setdefault("LOCAL_GAMMA_MEDIA_UPLOAD_BASE_URL", storage.host_endpoint)
+    environment.setdefault("CONTENT_MEDIA_DELIVERY_BASE_URL", media_delivery_origin)
+    environment.setdefault(
+        "CONTENT_MEDIA_UPLOAD_BASE_URL", str(public_bases["mediaUpload"])
+    )
+    environment.setdefault(
+        "QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL", media_delivery_origin
+    )
+    environment.setdefault(
+        "QWQ_COMPOSE_MEDIA_UPLOAD_BASE_URL", str(public_bases["mediaUpload"])
+    )
+    _stackctl._sync_object_storage_binding_aliases(environment, prefix="LOCAL_GAMMA")
+    try:
+        integration_mtls = _stackctl.prepare_local_integration_service_mtls(
+            environment_name,
+            target_name,
+        )
+    except (OSError, _stackctl.PublicDomainTlsError, RuntimeError, ValueError) as exc:
+        return (
+            f"{target_name} integration-service mTLS materialization failed: "
+            f"{exc}"
+        )
+    environment.update(integration_mtls.environment)
+    # Nonprod mesh OTP client requires the canonical internal HTTP URL; the
+    # schema default remains HTTPS for packaged/prod-shaped configs.
+    environment["INTEGRATION_EXTERNAL_INTERACTION_BASE_URL"] = (
+        "http://integration-service:18086"
+    )
+    if workload == "full":
+        try:
+            skill_keys = _stackctl.prepare_local_assistant_skill_package_keys(
+                environment_name,
+                target_name,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            return (
+                f"{target_name} assistant Skill package key materialization "
+                f"failed: {exc}"
+            )
+        environment.update(skill_keys.environment)
+    if workload in {"content-release", "content-commercial"}:
+        # Bounded content workloads own release import/public read and the
+        # optional Product Ops premium command. External
+        # login, embedding, assistant, integration and RTC capabilities are
+        # not started by this workload; validating their protected material
+        # here would incorrectly turn unrelated full-workload prerequisites
+        # into a content activation or premium-command blocker.
+        # user-service still mounts integration mTLS PEMs on every local up,
+        # so empty /dev/null mounts must never reach Compose interpolation.
+        return None
+    provider_roles = {
+        str(item["role"])
+        for item in validated_provider_runtime["workloads"]
+    }
+    if not provider_roles:
+        return f"{target_name} full runtime Provider workload closure is empty"
+    unsupported_roles = provider_roles - {
+        "sms-provider-substitute",
+        "provider-protocol-substitute",
+    }
+    if unsupported_roles:
+        return (
+            f"{target_name} Provider runtime has unsupported materializers: "
+            + ",".join(sorted(unsupported_roles))
+        )
+    if "sms-provider-substitute" in provider_roles:
+        try:
+            sms_substitute = _stackctl.prepare_local_sms_provider_substitute(
+                environment_name,
+                target_name,
+                port=_stackctl.profile_ports(
+                    _stackctl.load_port_manifest(),
+                    str(
+                        _stackctl.get_target(_stackctl.load_environment_topology(), target_name)[
+                            "portProfile"
+                        ]
+                    ),
+                )["sms-provider-substitute"],
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            return f"{target_name} SMS substitute materialization failed: {exc}"
+        environment.update(sms_substitute.environment)
+    if "provider-protocol-substitute" in provider_roles:
+        try:
+            provider_substitute = _stackctl.prepare_local_provider_protocol_substitute(
+                environment_name,
+                target_name,
+                port=_stackctl.profile_ports(
+                    _stackctl.load_port_manifest(),
+                    str(
+                        _stackctl.get_target(_stackctl.load_environment_topology(), target_name)[
+                            "portProfile"
+                        ]
+                    ),
+                )["provider-protocol-substitute"],
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            return (
+                f"{target_name} Provider protocol substitute materialization "
+                f"failed: {exc}"
+            )
+        environment.update(provider_substitute.environment)
+    provider_error = _stackctl._bind_local_external_provider_environment(
+        environment,
+        environment_name=environment_name,
+        target_name=target_name,
+        storage_prefix="LOCAL_GAMMA",
+        runtime_composition=validated_provider_runtime,
+    )
+    if provider_error is not None:
+        return provider_error
+    try:
+        provider_config = _stackctl._provider_config()
+        provider_config.project_provider_secret_bundles(
+            environment=environment_name,
+            target=target_name,
+            source=environment,
+            runtime_composition=validated_provider_runtime,
+        )
+        provider_config_result = provider_config.compile_provider_config(
+            action="render",
+            environment=environment_name,
+            target=target_name,
+            runtime_composition=validated_provider_runtime,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        return f"{target_name} Provider configuration materialization failed: {exc}"
+    if int(provider_config_result.get("exitCode", 2)) != 0:
+        details = "; ".join(
+            str(detail)
+            for detail in provider_config_result.get("details", [])
+            if str(detail).strip()
+        )
+        return (
+            f"{target_name} Provider configuration materialization failed: "
+            f"{details or 'required material is incomplete'}"
+        )
+    return None
+
+
+def _bind_gamma_down_parse_environment(environment: dict[str, str]) -> None:
+    """Satisfy non-identity Compose interpolation used only while tearing down."""
+
+    storage_placeholders = {
+        "ENDPOINT": "https://unused.invalid",
+        "BUCKET": "unused",
+        "REGION": "unused",
+        "ACCESS_KEY_ID": "unused",
+        "ACCESS_KEY_SECRET": "unused",
+        "CDN_SIGN_KEY": "unused",
+        "TLS_DIR": "/tmp",
+        "CA_FILE": "/tmp/unused-local-managed-ca.crt",
+    }
+    for suffix, value in storage_placeholders.items():
+        source_key = f"LOCAL_GAMMA_OBJECT_STORAGE_{suffix}"
+        compose_key = f"QWQ_COMPOSE_OBJECT_STORAGE_{suffix}"
+        environment.setdefault(source_key, value)
+        environment.setdefault(compose_key, environment[source_key])
+    environment.update(
+        {
+            "AUTH_JWT_SECRET": "down-not-used",
+            "AUTH_JWT_ISSUER": "down-not-used",
+            "AUTH_JWT_AUDIENCE": "down-not-used",
+            "AUTH_JWT_TOKEN_VERSION": "down-not-used",
+            "AUTH_DEVICE_TICKET_SECRET": "down-not-used",
+            "AUTH_DEVICE_TICKET_ISSUER": "down-not-used",
+            "AUTH_DEVICE_TICKET_AUDIENCE": "down-not-used",
+            "AUTH_DEVICE_TICKET_TOKEN_VERSION": "down-not-used",
+            "OTP_CODE_REF_ACTIVE_KEY_VERSION": "down-not-used",
+            "OTP_CODE_REF_KEYS_JSON": '{"down-not-used":"down-not-used"}',
+            "ASSISTANT_SKILL_PACKAGE_TRUSTED_PUBLIC_KEYS_JSON": (
+                '{"down-not-used":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}'
+            ),
+            "QWQ_PUSH_TOKEN_ENCRYPTION_KEY": "down-not-used",
+            "CONTENT_ACCOUNT_CLOSURE_SUBJECT_HMAC_SECRET": "down-not-used",
+            # Build/down only need deterministic Compose interpolation.  A
+            # running local environment receives the real shared User/Content
+            # key from prepare_local_environment_auth's target-scoped 0600
+            # secret file.
+            "CONTENT_RESEARCH_IDENTITY_ATTESTATION_KEY_BASE64": (
+                "ZG93bi1ub3QtdXNlZC1yZXNlYXJjaC1pZGVudGl0eS1rZXk="
+            ),
+            "RTC_MEDIA_API_KEY": "down-not-used",
+            "RTC_MEDIA_API_SECRET": "down-not-used",
+            "INTEGRATION_SERVICE_MTLS_CA_FILE": "/tmp/down-not-used",
+            "INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE": "/tmp/down-not-used",
+            "INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE": "/tmp/down-not-used",
+            "INTEGRATION_PUSH_APNS_KEY_FILE": "/tmp/down-not-used",
+            "INTEGRATION_PUSH_FCM_SERVICE_ACCOUNT_FILE": "/tmp/down-not-used",
+            "SMS_SUBSTITUTE_PROVIDER_TOKEN": "down-not-used",
+            "SMS_SUBSTITUTE_OPERATOR_TOKEN": "down-not-used",
+            "SMS_SUBSTITUTE_CAPTURE_KEY_B64": "down-not-used",
+            "PROVIDER_SUBSTITUTE_OPERATOR_TOKEN": "down-not-used",
+            "QWQ_COMPOSE_SMS_SUBSTITUTE_CA_FILE": "/tmp/down-not-used",
+            "QWQ_COMPOSE_SMS_SUBSTITUTE_TLS_CERT_FILE": "/tmp/down-not-used",
+            "QWQ_COMPOSE_SMS_SUBSTITUTE_TLS_KEY_FILE": "/tmp/down-not-used",
+            "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_CA_FILE": "/tmp/down-not-used",
+            "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_CERT_FILE": "/tmp/down-not-used",
+            "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_KEY_FILE": "/tmp/down-not-used",
+        }
+    )
+    if environment.get("LOCAL_GAMMA_SMS_SUBSTITUTE_PORT"):
+        environment["QWQ_COMPOSE_SMS_SUBSTITUTE_PORT"] = environment[
+            "LOCAL_GAMMA_SMS_SUBSTITUTE_PORT"
+        ]
+
+
+def _load_gamma_runtime_image_composition(
+    target_name: str,
+) -> tuple[dict[str, Any], str] | None:
+    """Read the canonical current runtime binding; absence permits package derivation."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+
+    try:
+        receipt = _stackctl.load_startup_attempt(target_name)
+    except ValueError as exc:
+        raise ValueError(f"runtime image composition receipt is unreadable: {exc}") from exc
+    if receipt is None or receipt.get("status") == "stopped":
+        return None
+    if receipt.get("status") not in {"prepared", "partial", "running"}:
+        raise ValueError("runtime startup attempt has no resources to tear down")
+    expected_environment = target_name.removesuffix("-local")
+    if receipt.get("target") != target_name:
+        raise ValueError("runtime image composition receipt target mismatch")
+    receipt_environment = str(receipt.get("env") or "").strip()
+    if receipt_environment != expected_environment:
+        raise ValueError("runtime image composition receipt environment mismatch")
+    compose_project = str(receipt.get("composeProject") or "").strip()
+    if not compose_project:
+        raise ValueError("runtime image composition receipt has no Compose project")
+    expected_project_prefix = f"quwoquan_{expected_environment}_release"
+    if (
+        re.fullmatch(
+            re.escape(expected_project_prefix) + r"(?:_[a-zA-Z0-9_-]+)?",
+            compose_project,
+        )
+        is None
+    ):
+        raise ValueError("runtime image composition receipt Compose project mismatch")
+    composition = receipt.get("imageComposition")
+    if not isinstance(composition, dict):
+        raise ValueError("runtime image composition receipt has no image composition")
+    images = composition.get("images")
+    if not isinstance(images, dict):
+        raise ValueError("runtime image composition receipt has invalid images")
+    refs: dict[str, str] = {}
+    for service, _ in _stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS:
+        descriptor = images.get(service)
+        if not isinstance(descriptor, dict):
+            raise ValueError(f"runtime image composition is missing: {service}")
+        refs[service] = str(descriptor.get("ref") or "")
+    first_party_version = _stackctl.immutable_image_digest(refs)
+    configuration_digest = str(receipt.get("configurationDigest") or "").strip()
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", configuration_digest) is None:
+        raise ValueError("runtime image composition receipt has no configuration digest")
+    teardown_composition = {
+        "imageVersion": first_party_version,
+        "images": {
+            service: {"ref": image_digest, "digest": image_digest}
+            for service, image_digest in sorted(refs.items())
+        },
+        "configurationDigest": configuration_digest,
+    }
+    return teardown_composition, compose_project
+
+
+def _bind_beta_external_provider_environment(
+    environment: dict[str, str],
+) -> str | None:
+    """Bind Beta Providers from the active immutable runtime composition."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+
+    try:
+        runtime = _stackctl._active_provider_runtime("beta", "beta-local")
+    except (OSError, TypeError, ValueError) as exc:
+        return f"beta-local Provider runtime preflight failed: {exc}"
+    return _stackctl._bind_local_external_provider_environment(
+        environment,
+        environment_name="beta",
+        target_name="beta-local",
+        storage_prefix="BETA",
+        runtime_composition=runtime["composition"],
+    )
+
+
+def _bind_local_external_provider_environment(
+    environment: dict[str, str],
+    *,
+    environment_name: str,
+    target_name: str,
+    storage_prefix: str,
+    runtime_composition: Mapping[str, Any],
+) -> str | None:
+    """Bind the canonical non-production Provider substitute topology."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+
+    try:
+        values = _stackctl.load_nonprod_provider_environment(
+            environment=environment_name,
+            target_name=target_name,
+            source=environment,
+            debug_local=True,
+            runtime_composition=runtime_composition,
+        )
+    except (RuntimeError, ValueError) as exc:
+        return f"{target_name} external Provider preflight failed: {exc}"
+    environment.update(values)
+    _stackctl._sync_object_storage_binding_aliases(environment, prefix=storage_prefix)
+    if values.get("CONTENT_EMBEDDING_ENDPOINT"):
+        environment.setdefault(
+            "QWQ_COMPOSE_EMBEDDING_ENDPOINT",
+            values["CONTENT_EMBEDDING_ENDPOINT"],
+        )
+    if values.get("CONTENT_EMBEDDING_API_KEY"):
+        environment.setdefault(
+            "QWQ_COMPOSE_EMBEDDING_API_KEY",
+            values["CONTENT_EMBEDDING_API_KEY"],
+        )
+    return None
+
+
+def _bind_package_provider_reference_environment(
+    environment: dict[str, str],
+    *,
+    environment_name: str,
+    runtime_composition: Mapping[str, Any],
+) -> None:
+    """Bind non-runtime interpolation values for an OCI-only build.
+
+    The build-only script exits before any container starts.  These values are
+    never Provider credentials, never validated as Provider readiness and may
+    not be copied into a package or image.  Their sole purpose is to let the
+    canonical Compose definition parse while building source-digest images.
+    """
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+
+    validated = _stackctl.validate_provider_runtime_composition(
+        dict(runtime_composition),
+        expected_environment=environment_name,
+        expected_target=f"{environment_name}-local",
+    )
+    endpoint_keys = set(validated["materialKeys"]["endpoint"])
+    secret_keys = set(validated["materialKeys"]["secret"])
+    # user-service Compose always mounts integration mTLS host files; package
+    # interpolation must satisfy the required-file contract without runtime PEMs.
+    package_keys = set(endpoint_keys) | set(secret_keys) | {
+        "INTEGRATION_SERVICE_MTLS_CA_FILE",
+        "INTEGRATION_SERVICE_MTLS_CLIENT_CERT_FILE",
+        "INTEGRATION_SERVICE_MTLS_CLIENT_KEY_FILE",
+        "SMS_SUBSTITUTE_PROVIDER_TOKEN",
+        "SMS_SUBSTITUTE_OPERATOR_TOKEN",
+        "SMS_SUBSTITUTE_CAPTURE_KEY_B64",
+        "PROVIDER_SUBSTITUTE_OPERATOR_TOKEN",
+        "QWQ_COMPOSE_SMS_SUBSTITUTE_CA_FILE",
+        "QWQ_COMPOSE_SMS_SUBSTITUTE_TLS_CERT_FILE",
+        "QWQ_COMPOSE_SMS_SUBSTITUTE_TLS_KEY_FILE",
+        "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_CA_FILE",
+        "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_CERT_FILE",
+        "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_KEY_FILE",
+    }
+    for key in sorted(package_keys):
+        if key.endswith("_FILE"):
+            value = "/tmp/qwq-package-build-not-runtime"
+        elif key.endswith("_JSON"):
+            value = '{"package-build-not-runtime":"package-build-not-runtime"}'
+        elif key.endswith("_URL") or key.endswith("_ENDPOINT"):
+            value = "https://127.0.0.1"
+        else:
+            value = "package-build-not-runtime"
+        environment[key] = value
+    environment["QWQ_COMPOSE_SMS_SUBSTITUTE_PORT"] = environment[
+        "LOCAL_GAMMA_SMS_SUBSTITUTE_PORT"
+    ]
+
+
+def _sync_object_storage_binding_aliases(
+    environment: dict[str, str],
+    *,
+    prefix: str,
+) -> None:
+    """Align CONTENT_OSS_* / QWQ_COMPOSE_OBJECT_STORAGE_* with MinIO materializer."""
+
+    storage_to_content = {
+        f"{prefix}_OBJECT_STORAGE_ENDPOINT": "CONTENT_OSS_ENDPOINT",
+        f"{prefix}_OBJECT_STORAGE_BUCKET": "CONTENT_OSS_BUCKET",
+        f"{prefix}_OBJECT_STORAGE_REGION": "CONTENT_OSS_REGION",
+        f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_ID": "CONTENT_OSS_ACCESS_KEY_ID",
+        f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_SECRET": "CONTENT_OSS_ACCESS_KEY_SECRET",
+        f"{prefix}_OBJECT_STORAGE_CDN_SIGN_KEY": "CONTENT_CDN_SIGN_KEY",
+    }
+    storage_to_compose = {
+        f"{prefix}_OBJECT_STORAGE_ENDPOINT": "QWQ_COMPOSE_OBJECT_STORAGE_ENDPOINT",
+        f"{prefix}_OBJECT_STORAGE_BUCKET": "QWQ_COMPOSE_OBJECT_STORAGE_BUCKET",
+        f"{prefix}_OBJECT_STORAGE_REGION": "QWQ_COMPOSE_OBJECT_STORAGE_REGION",
+        f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_ID": "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_ID",
+        f"{prefix}_OBJECT_STORAGE_ACCESS_KEY_SECRET": "QWQ_COMPOSE_OBJECT_STORAGE_ACCESS_KEY_SECRET",
+        f"{prefix}_OBJECT_STORAGE_CDN_SIGN_KEY": "QWQ_COMPOSE_OBJECT_STORAGE_CDN_SIGN_KEY",
+    }
+    for storage_key, content_key in storage_to_content.items():
+        value = environment.get(storage_key)
+        if value:
+            environment[content_key] = value
+    for storage_key, compose_key in storage_to_compose.items():
+        value = environment.get(storage_key)
+        if value:
+            environment[compose_key] = value
+
+
+def _gamma_start_command(args: argparse.Namespace) -> list[str]:
+    command = ["bash", "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"]
+    if getattr(args, "skip_build", False):
+        command.append("--skip-build")
+    if getattr(args, "formal_release", False):
+        command.append("--formal-release")
+    if getattr(args, "build_only", False):
+        command.append("--build-only")
+        build_services = str(getattr(args, "build_services", "")).strip()
+        if build_services:
+            command.extend(["--build-services", build_services])
+    return command
+
+
+def _materialize_release_evidence_configuration(
+    env_name: str,
+    *,
+    target: str = "",
+) -> dict[str, str]:
+    """校验 CI release evidence 与环境自治服务包一致，并记录供应链证据。
+
+    Release evidence 是可删除的回读副本，不再成为第二份运行配置。运行时始终只消费
+    服务包中的 config/config.yaml，其 CONFIG_VERSION 为内容摘要。
+    """
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    artifact_root_value = os.environ.get("QWQ_PROD_RELEASE_ARTIFACT_ROOT", "").strip()
+    if not artifact_root_value:
+        return {}
+    artifact_root = Path(artifact_root_value).expanduser()
+    if not artifact_root.is_absolute():
+        artifact_root = _stackctl.ROOT / artifact_root
+    manifest_path = artifact_root / "manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"prod release artifact manifest missing: {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError(f"invalid release evidence manifest: {manifest_path}")
+    allowed_statuses = (
+        {"deployable", "released"}
+        if env_name == "prod"
+        else {"candidate-ready", "deployable", "released"}
+    )
+    _stackctl.finalize_mainline_release_artifact.validate_manifest(
+        manifest, allowed_statuses=allowed_statuses
+    )
+    _stackctl.finalize_mainline_release_artifact.validate_manifest_files(
+        artifact_root,
+        manifest,
+    )
+    candidate_id = str(manifest["candidateId"])
+    configuration_packages = manifest["configurationPackages"][env_name]
+    package_root = _stackctl.deployment_target_path(
+        _stackctl.deployment_target_for_env(env_name, target=target),
+        "packages",
+        "services",
+    )
+    archive_digest = _stackctl._sha256_file(manifest_path)
+    for service, descriptor in configuration_packages.items():
+        relative_path = str(descriptor["path"])
+        source = artifact_root / relative_path
+        if not source.is_file():
+            raise FileNotFoundError(
+                f"{env_name} release evidence file missing: {source}"
+            )
+        destination_dir = package_root / str(service)
+        report_path = destination_dir / "provenance.json"
+        effective_config = destination_dir / "config/config.yaml"
+        if not report_path.is_file() or not effective_config.is_file():
+            raise FileNotFoundError(f"prod service package missing: {destination_dir}")
+        source_digest = _stackctl._sha256_file(source)
+        effective_digest = _stackctl._sha256_file(effective_config)
+        if source_digest != effective_digest:
+            raise ValueError(
+                "release evidence config differs from autonomous package: "
+                f"{env_name}/{service}"
+            )
+        provenance = json.loads(report_path.read_text(encoding="utf-8"))
+        if not isinstance(provenance, dict):
+            raise ValueError(f"service package provenance missing: {report_path}")
+        if (provenance.get("digests") or {}).get("config") != effective_digest:
+            raise ValueError(f"service package config provenance invalid: {report_path}")
+        provenance["releaseEvidence"] = {
+            "manifest": _stackctl.relpath(manifest_path),
+            "evidenceFileDigest": archive_digest,
+            "artifactDigest": manifest["artifactDigest"],
+            "candidateId": candidate_id,
+            "verifiedConfigDigest": effective_digest,
+        }
+        _stackctl.write_json(report_path, provenance)
+    source = manifest["source"]
+    return {
+        "candidateId": candidate_id,
+        "artifactDigest": str(manifest["artifactDigest"]),
+        "sourceGitSha": str(source["gitSha"]),
+        "sourceTreeDigest": str(source["treeDigest"]),
+    }

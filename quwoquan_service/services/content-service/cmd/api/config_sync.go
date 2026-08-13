@@ -1,6 +1,8 @@
-package main
+package bootstrap
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -15,20 +17,21 @@ import (
 // 覆盖是 fail-safe 的：控制面不可达、未下发 key、值为空串时一律回落
 // registry codegen 基线，交集文案不会因配置面故障而消失。
 func startConfigSyncLoop(
+	workers *workerRegistry,
 	serviceName string,
 	appEnv string,
 	configRoot string,
 	configVersion string,
 	imageVersion string,
-) {
+) error {
 	hotStore := controlplane.NewHotConfigStore()
 	intersectionapp.SetTextResolver(controlplane.NewIntersectionTextResolver(hotStore))
 
-	instanceID := strings.TrimSpace(getenvOrDefault("SERVICE_INSTANCE_ID", ""))
+	instanceID := contentModuleEnvironmentValue("SERVICE_INSTANCE_ID", "")
 	if instanceID == "" {
 		hostname, err := os.Hostname()
 		if err != nil {
-			log.Fatalf("content-service config sync instance identity: %v", err)
+			return fmt.Errorf("content-service config sync instance identity: %w", err)
 		}
 		instanceID = strings.TrimSpace(hostname)
 	}
@@ -36,17 +39,17 @@ func startConfigSyncLoop(
 	baseURL := strings.TrimSpace(getenvOrDefault("PLATFORM_OPS_BASE_URL", ""))
 	if baseURL == "" {
 		if strings.EqualFold(strings.TrimSpace(appEnv), "prod") {
-			panic("content-service PLATFORM_OPS_BASE_URL is required in prod (config sync/ACK loop)")
+			return fmt.Errorf("content-service PLATFORM_OPS_BASE_URL is required in prod")
 		}
 		log.Printf(
 			"WARN: content-service config sync disabled: PLATFORM_OPS_BASE_URL is empty (service=%s env=%s)",
 			serviceName,
 			appEnv,
 		)
-		return
+		return nil
 	}
 
-	go controlplane.RunConfigSyncLoop(controlplane.ConfigSyncLoopOptions{
+	options := controlplane.ConfigSyncLoopOptions{
 		BaseURL:               baseURL,
 		ServiceName:           serviceName,
 		AppEnv:                appEnv,
@@ -57,5 +60,9 @@ func startConfigSyncLoop(
 		ReleaseManifestDigest: strings.TrimSpace(getenvOrDefault("RELEASE_MANIFEST_DIGEST", "")),
 		InstanceID:            instanceID,
 		HotStore:              hotStore,
+	}
+	workers.Add(func(ctx context.Context) {
+		controlplane.RunConfigSyncLoopContext(ctx, options)
 	})
+	return nil
 }

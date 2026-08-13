@@ -1,5 +1,5 @@
 {
-  "schema": "entity.static-contract-examples.v1",
+  "schema": "entity.static-contract-examples",
   "examples": {
     "entity_homepage_core": {
       "homepages": [

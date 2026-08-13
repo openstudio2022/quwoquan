@@ -449,7 +449,20 @@ pages:
     typed_presentation: [ChatMessageViewData, RelationshipCapabilityViewData]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.chat.conversation, lifecycle: [enter, exit, message_send, failure] }
+    telemetry_descriptor:
+      event_namespace: page.chat.conversation
+      lifecycle: [enter, exit, message_send, failure]
+      product_actions:
+        - journey: chat_conversation
+          telemetry_page_name: chat_conversation
+          object_ids: [chat.message]
+          actions: [mention_clicked]
+          instrumentation_evidence:
+            - lib/service/chat_service/chat/conversation/presentation/chat_conversation_page_actions.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-action-longtail-failure-rate-high
     entry_widget: ChatConversationPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_chat_routes.dart]
 
@@ -474,7 +487,31 @@ pages:
     typed_presentation: [MessageHomeRow, ContactHomeRow, AppMessage, GreetingRequestViewData]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.chat.home, lifecycle: [enter, exit, refresh, failure] }
+    telemetry_descriptor:
+      event_namespace: page.chat.home
+      lifecycle: [enter, exit, refresh, failure]
+      product_actions:
+        - journey: relationship
+          telemetry_page_name: ChatPage
+          object_ids: [user.user_account]
+          actions: [view_contact_filter, open_contact]
+          instrumentation_evidence:
+            - lib/service/chat_service/chat/chat_inbox_view/presentation/chat_page_visit_recorder.dart
+            - lib/service/chat_service/chat/chat_inbox_view/presentation/chat_page_state.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-relationship-action-failure-rate-high
+        - journey: notification_inbox
+          telemetry_page_name: chat_list
+          object_ids: [notification.notification]
+          actions: [notification_row_tap]
+          instrumentation_evidence:
+            - lib/service/chat_service/chat/chat_inbox_view/presentation/chat_page_state.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-action-longtail-failure-rate-high
     entry_widget: ChatPage
     route_registration_evidence:
       - lib/runtime/di/navigation/app_router.dart
@@ -772,6 +809,23 @@ pages:
     entry_widget: ArticleTypographyPage
     mount_evidence: [lib/service/content_service/content/post/presentation/create_page_state_media_helpers.dart]
 
+  - page_id: content.create_entry
+    source_path: lib/service/content_service/content/post/presentation/create_entry_page.dart
+    page_kind: routed
+    route_id: createEntry
+    surface_ids: [createEntry]
+    experience_owner: content
+    data_owners: [content]
+    object_ids: [content.post]
+    query_slices: none
+    typed_presentation: none
+    data_contract_reason: 全局创作入口动作面板，不加载业务数据；发内容/发起聚集/发起群聊动作由 runtime composition 注入并各自续接。
+    auth_requirement: optional
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.content.create_entry, lifecycle: [enter, exit] }
+    entry_widget: CreateEntryRouteHost
+    route_registration_evidence: [lib/runtime/di/navigation/app_router.dart]
+
   - page_id: content.create
     source_path: lib/service/content_service/content/post/presentation/create_page.dart
     page_kind: routed
@@ -852,6 +906,24 @@ pages:
     entry_widget: PublishLocationSelectorPage
     mount_evidence: [lib/service/content_service/content/post/presentation/create_publish_confirm_sheet.dart]
 
+  - page_id: content.publish_tag_chip_select
+    source_path: lib/service/content_service/content/post/presentation/publish_tag_chip_picker_page.dart
+    page_kind: embedded
+    parent_page_id: content.create
+    surface_ids: [createWorkspace]
+    experience_owner: content
+    data_owners: [tag, content]
+    object_ids: [tag.tag_node_view, content.post]
+    query_slices:
+      - tag.tag_node_view
+      - content.post
+    typed_presentation: [TagChildView, PublishSettings]
+    auth_requirement: inherited
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { inherit_from: content.create }
+    entry_widget: PublishTagChipPickerPage
+    mount_evidence: [lib/service/content_service/content/post/presentation/create_publish_confirm_sheet.dart]
+
   - page_id: content.video_editor
     source_path: lib/service/content_service/media/media_upload_session/presentation/video_editor_page.dart
     page_kind: embedded
@@ -867,6 +939,27 @@ pages:
     telemetry_descriptor: { inherit_from: content.create }
     entry_widget: VideoEditorPage
     mount_evidence: [lib/runtime/di/presentation/content_media_creation_composition.dart]
+
+  - page_id: content.home_featured_immersive
+    source_path: lib/service/content_service/content/post/presentation/home_featured_immersive_page.dart
+    page_kind: embedded
+    parent_page_id: app.main_shell
+    surface_ids: [homeFeed]
+    experience_owner: content
+    data_owners: [content, recommendation]
+    object_ids:
+      - content.post
+      - content.content_behavior_fact
+      - recommendation.recommendation_feature_profile_view
+    query_slices:
+      - content.post.projection.discovery_feed
+      - content.post.projection.post_read_presentation
+    typed_presentation: [ContentPostViewData]
+    auth_requirement: optional
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.content.home_featured_immersive, lifecycle: [enter, exit, failure] }
+    entry_widget: HomeFeaturedImmersivePage
+    mount_evidence: [lib/runtime/di/main_app_shell_dependencies.dart]
 
   - page_id: content.home
     source_path: lib/service/content_service/content/post/presentation/home_page.dart
@@ -981,6 +1074,16 @@ pages:
           aggregate_row_kind: product_action_funnel
           alerts:
             - product-content-report-action-failure-rate-high
+        - journey: content_more_actions
+          telemetry_page_name: works_immersive_viewer
+          object_ids: [content.post]
+          actions: [open, invoke]
+          instrumentation_evidence:
+            - lib/service/content_service/media/media_asset/presentation/works_immersive_viewer_engagement_actions.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-content-more-actions-failure-rate-high
     entry_widget: UnifiedMediaViewerPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router.dart]
 
@@ -1088,9 +1191,11 @@ pages:
             - open_related_circle
             - open_introduction
             - create_content
+            - review_delete
           instrumentation_evidence:
             - lib/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_page.dart
             - lib/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_shell.dart
+            - lib/service/entity_service/entity_homepage/homepage/presentation/homepage_review_section.dart
             - lib/service/entity_service/entity_homepage/homepage/domain/homepage_action_observability.dart
           required_dimensions:
             - surfaceId
@@ -1409,6 +1514,22 @@ pages:
     entry_widget: GatheringDetailPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_gathering_routes.dart]
 
+  - page_id: circle.my_gatherings
+    source_path: lib/service/circle_service/circle_management/gathering/presentation/my_gatherings_page.dart
+    page_kind: routed
+    route_id: myGatherings
+    surface_ids: [myGatherings]
+    experience_owner: user
+    data_owners: [circle]
+    object_ids: [circle.gathering]
+    query_slices: [circle.gathering]
+    typed_presentation: [GatheringPublicCardSlice]
+    auth_requirement: required
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.circle.my_gatherings, lifecycle: [enter, exit, refresh, failure] }
+    entry_widget: MyGatheringsPage
+    route_registration_evidence: [lib/runtime/di/navigation/app_router.dart]
+
   - page_id: chat.gathering_board
     source_path: lib/service/chat_service/chat/conversation/presentation/gathering_board_page.dart
     page_kind: routed
@@ -1560,7 +1681,20 @@ pages:
     typed_presentation: [MyReportItemSlice]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.settings.my_reports, lifecycle: [enter, exit, load_more, failure] }
+    telemetry_descriptor:
+      event_namespace: page.settings.my_reports
+      lifecycle: [enter, exit, load_more, failure]
+      product_actions:
+        - journey: content_report
+          telemetry_page_name: MyReportsPage
+          object_ids: [content.report]
+          actions: [list_my_reports]
+          instrumentation_evidence:
+            - lib/service/content_service/trust_safety/report/presentation/my_reports_page.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-content-report-action-failure-rate-high
     entry_widget: MyReportsPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router.dart]
 
@@ -1609,7 +1743,20 @@ pages:
     typed_presentation: [BlockedListItemView]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.user.blocked_users, lifecycle: [enter, exit, paginate, unblock, failure] }
+    telemetry_descriptor:
+      event_namespace: page.user.blocked_users
+      lifecycle: [enter, exit, paginate, unblock, failure]
+      product_actions:
+        - journey: relationship
+          telemetry_page_name: BlockedUsersPage
+          object_ids: [user.persona_relationship]
+          actions: [unblock_user]
+          instrumentation_evidence:
+            - lib/service/user_service/relationship/persona_relationship/presentation/blocked_users_page.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-relationship-action-failure-rate-high
     entry_widget: BlockedUsersPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router.dart]
 
@@ -1626,7 +1773,20 @@ pages:
     typed_presentation: [ProfileQrCardData, ContactDiscoveryResultView]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.user.add_contact, lifecycle: [enter, exit, entry_click, failure] }
+    telemetry_descriptor:
+      event_namespace: page.user.add_contact
+      lifecycle: [enter, exit, entry_click, failure]
+      product_actions:
+        - journey: contact_discovery
+          telemetry_page_name: AddContactPage
+          object_ids: [user.contact_discovery_record]
+          actions: [dismiss_latest]
+          instrumentation_evidence:
+            - lib/service/user_service/account/user_account/presentation/add_contact_page.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-contact-discovery-action-failure-rate-high
     entry_widget: AddContactPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_contact_routes.dart]
 
@@ -1685,7 +1845,20 @@ pages:
     typed_presentation: [PersonaProfileViewData, RelationshipCapabilityViewData]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.user.contact_confirm, lifecycle: [enter, exit, follow, failure] }
+    telemetry_descriptor:
+      event_namespace: page.user.contact_confirm
+      lifecycle: [enter, exit, follow, failure]
+      product_actions:
+        - journey: relationship
+          telemetry_page_name: ContactConfirmPage
+          object_ids: [user.persona_relationship]
+          actions: [follow_contact_confirmed]
+          instrumentation_evidence:
+            - lib/service/user_service/relationship/persona_relationship/presentation/contact_confirm_page.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-relationship-action-failure-rate-high
     entry_widget: ContactConfirmPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_contact_routes.dart]
 
@@ -1703,7 +1876,30 @@ pages:
     typed_presentation: [SocialRelationSearchItemViewData, RelationshipCapabilityViewData]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.user.contact_search, lifecycle: [enter, exit, search, follow, failure] }
+    telemetry_descriptor:
+      event_namespace: page.user.contact_search
+      lifecycle: [enter, exit, search, follow, failure]
+      product_actions:
+        - journey: contact_discovery
+          telemetry_page_name: ContactSearchResultPage
+          object_ids: [user.user_account]
+          actions: [search_contact]
+          instrumentation_evidence:
+            - lib/service/user_service/relationship/persona_relationship/presentation/contact_search_result_page.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-contact-discovery-action-failure-rate-high
+        - journey: relationship
+          telemetry_page_name: ContactSearchResultPage
+          object_ids: [user.persona_relationship]
+          actions: [follow_contact_from_search]
+          instrumentation_evidence:
+            - lib/service/user_service/relationship/persona_relationship/presentation/contact_search_result_page.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-relationship-action-failure-rate-high
     entry_widget: ContactSearchResultPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_contact_routes.dart]
 
@@ -1881,7 +2077,20 @@ pages:
     typed_presentation: [ProfileQrCardData]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.user.my_qr_code, lifecycle: [enter, exit, share, failure] }
+    telemetry_descriptor:
+      event_namespace: page.user.my_qr_code
+      lifecycle: [enter, exit, share, failure]
+      product_actions:
+        - journey: contact_add
+          telemetry_page_name: MyQrCodePage
+          object_ids: [user.user_account]
+          actions: [open_scanner_from_my_qr]
+          instrumentation_evidence:
+            - lib/service/user_service/account/user_account/presentation/my_qr_code_page.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-action-longtail-failure-rate-high
     entry_widget: MyQrCodePage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_contact_routes.dart]
 
@@ -1906,7 +2115,40 @@ pages:
     typed_presentation: [UserHomepageBundleViewData, ContentPostViewData, PersonaCircleSlice]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.user.other_profile, lifecycle: [enter, exit, interaction, failure] }
+    telemetry_descriptor:
+      event_namespace: page.user.other_profile
+      lifecycle: [enter, exit, interaction, failure]
+      product_actions:
+        - journey: relationship
+          telemetry_page_name: user_profile_shell
+          object_ids: [user.persona]
+          actions: [block_user]
+          instrumentation_evidence:
+            - lib/service/user_service/persona_management/persona/presentation/profile_shell_builders_more.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-relationship-action-failure-rate-high
+        - journey: profile_share
+          telemetry_page_name: user_profile_shell
+          object_ids: [user.persona]
+          actions: [share_homepage]
+          instrumentation_evidence:
+            - lib/service/user_service/persona_management/persona/presentation/profile_shell_builders_more.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-profile-share-action-failure-rate-high
+        - journey: greeting
+          telemetry_page_name: ProfilePage
+          object_ids: [user.persona]
+          actions: [send_greeting]
+          instrumentation_evidence:
+            - lib/service/user_service/persona_management/persona/presentation/profile_state_provider.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-action-longtail-failure-rate-high
     entry_widget: OtherProfilePage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_profile_routes.dart]
 
@@ -1960,7 +2202,30 @@ pages:
     typed_presentation: [ContactDiscoveryMatchView, RelationshipCapabilityViewData]
     auth_requirement: required
     capability_requirements: { all_of: [contacts], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.user.phone_contacts, lifecycle: [enter, exit, discovery, follow, failure] }
+    telemetry_descriptor:
+      event_namespace: page.user.phone_contacts
+      lifecycle: [enter, exit, discovery, follow, failure]
+      product_actions:
+        - journey: contact_discovery
+          telemetry_page_name: PhoneContactsPage
+          object_ids: [user.contact_discovery_record]
+          actions: [match_phone_contacts]
+          instrumentation_evidence:
+            - lib/service/user_service/relationship/contact_discovery_record/presentation/phone_contacts_page.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-contact-discovery-action-failure-rate-high
+        - journey: relationship
+          telemetry_page_name: PhoneContactsPage
+          object_ids: [user.persona_relationship]
+          actions: [follow_contact_from_phone]
+          instrumentation_evidence:
+            - lib/service/user_service/relationship/contact_discovery_record/presentation/phone_contacts_page.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-relationship-action-failure-rate-high
     entry_widget: PhoneContactsPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_contact_routes.dart]
 
@@ -1996,7 +2261,20 @@ pages:
     typed_presentation: [ProfileQrResolveWire]
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [camera, mediaLibrary] }
-    telemetry_descriptor: { event_namespace: page.user.scan_contact_qr, lifecycle: [enter, exit, resolve, failure] }
+    telemetry_descriptor:
+      event_namespace: page.user.scan_contact_qr
+      lifecycle: [enter, exit, resolve, failure]
+      product_actions:
+        - journey: contact_discovery
+          telemetry_page_name: ScanContactQrPage
+          object_ids: [user.user_account]
+          actions: [resolve_profile_qr]
+          instrumentation_evidence:
+            - lib/service/user_service/account/user_account/presentation/scan_contact_qr_page.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-contact-discovery-action-failure-rate-high
     entry_widget: ScanContactQrPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_contact_routes.dart]
 

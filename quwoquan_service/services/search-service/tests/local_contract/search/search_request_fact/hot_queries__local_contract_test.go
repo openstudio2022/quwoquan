@@ -75,6 +75,55 @@ func TestListHotQueriesEmitsObjectOwnedErrors(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-003
+func TestHotQueriesErrorPathUsesCompleteRuntimeErrorEnvelope(t *testing.T) {
+	handler := httpadapter.NewHandler(readinessTermHeatReader{}).Routes()
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/search/hot-queries?limit=21",
+		nil,
+	)
+	request.Header.Set("X-Request-Id", "req-envelope-search")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	assertCompleteRuntimeErrorEnvelope(
+		t,
+		response.Body.Bytes(),
+		"SEARCH.USER.hot_query_invalid_argument",
+		"req-envelope-search",
+	)
+}
+
+// 完整 RuntimeErrorResponse 信封形状断言：不允许退化为裸 {"code": ...}。
+func assertCompleteRuntimeErrorEnvelope(
+	t *testing.T,
+	body []byte,
+	wantCode string,
+	wantRequestID string,
+) {
+	t.Helper()
+	var envelope map[string]any
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		t.Fatalf("decode error envelope: %v body=%s", err, body)
+	}
+	if envelope["code"] != wantCode {
+		t.Fatalf("code=%v want=%s", envelope["code"], wantCode)
+	}
+	if envelope["requestId"] != wantRequestID {
+		t.Fatalf("requestId=%v want=%s", envelope["requestId"], wantRequestID)
+	}
+	for _, field := range []string{"userMessage", "kind", "origin", "nature"} {
+		value, _ := envelope[field].(string)
+		if value == "" {
+			t.Fatalf("%s missing in envelope: %s", field, body)
+		}
+	}
+}
+
 type readinessTermHeatReader struct{}
 
 type failingTermHeatReader struct{}

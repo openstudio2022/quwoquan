@@ -1,0 +1,12 @@
+{
+  "schema": "assistant_stream_event",
+  "eventId": "evt_min_001",
+  "sessionId": "asn_01HWZX2A7Z9G6S7Y6B3C4D5E6F",
+  "turnId": "atn_01HWZX2B7Z9G6S7Y6B3C4D5E6F",
+  "seq": 1,
+  "eventType": "answer_delta",
+  "payload": {
+    "text": "我先帮你整理上午安排。"
+  },
+  "createdAt": "2026-04-29T02:00:08Z"
+}

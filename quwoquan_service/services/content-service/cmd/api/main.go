@@ -1,19 +1,19 @@
-package main
+package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
-	"os"
-	"os/signal"
+	"net"
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtmongo "quwoquan_service/internal/platform/mongodb"
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeconfig "quwoquan_service/runtime/config"
 	rthealth "quwoquan_service/runtime/health"
-	rthttp "quwoquan_service/runtime/http"
 	rtotel "quwoquan_service/runtime/otel"
 	rtrecpolicy "quwoquan_service/runtime/recpolicy"
+	"quwoquan_service/runtime/servicehost"
 	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commentmessaging "quwoquan_service/services/content-service/internal/content/comment/infrastructure/messaging"
 	commentpersistence "quwoquan_service/services/content-service/internal/content/comment/infrastructure/persistence"
@@ -63,38 +63,57 @@ import (
 	moderationmessaging "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/infrastructure/messaging"
 	moderationpersistence "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/infrastructure/persistence"
 	reportpersistence "quwoquan_service/services/content-service/internal/trust_safety/report/infrastructure/persistence"
-	"syscall"
 	"time"
 )
 
-func main() {
+// NewModule assembles content-service without binding a listener, starting
+// workers, admitting traffic, or owning process signals.
+func NewModule() (_ *Module, resultErr error) {
+	cleanup := func() {}
+	initialized := false
+	defer func() {
+		if !initialized {
+			cleanup()
+		}
+	}()
+
 	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
 	if err != nil {
-		log.Fatalf("content-service runtime identity invalid: %v", err)
+		return nil, fmt.Errorf("content-service runtime identity invalid: %w", err)
 	}
 
 	cfg, err := loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion)
 	if err != nil {
-		log.Fatalf("content-service config load failed: %v", err)
+		return nil, fmt.Errorf("content-service config load failed: %w", err)
 	}
 	applyEnvOverrides(&cfg)
 	if err := validateRuntimeConfigurationIdentity(cfg, configVersion); err != nil {
-		log.Fatalf("content-service config identity failed: %v", err)
+		return nil, fmt.Errorf("content-service config identity failed: %w", err)
 	}
 	if err := preflightConfig(cfg, appEnv); err != nil {
-		log.Fatalf("content-service config preflight failed: %v", err)
+		return nil, fmt.Errorf("content-service config preflight failed: %w", err)
 	}
 	logFeedQuotaPolicies(cfg.Feed)
-	startConfigSyncLoop(serviceName, appEnv, configRoot, configVersion, imageVersion)
+	workers := &workerRegistry{}
+	if err := startConfigSyncLoop(
+		workers,
+		serviceName,
+		appEnv,
+		configRoot,
+		configVersion,
+		imageVersion,
+	); err != nil {
+		return nil, err
+	}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
 	if err != nil {
-		log.Fatalf("content-service access token config invalid: %v", err)
+		return nil, fmt.Errorf("content-service access token config invalid: %w", err)
 	}
 	feedCursorCodec, err := feedapp.NewFeedCursorCodec(accessTokenConfig.Secret)
 	if err != nil {
-		log.Fatalf("content-service feed cursor codec init failed: %v", err)
+		return nil, fmt.Errorf("content-service feed cursor codec init failed: %w", err)
 	}
 	accountSecurityAuthority, err := accountsecurity.NewAuthority(
 		accessTokenConfig,
@@ -104,25 +123,26 @@ func main() {
 		},
 	)
 	if err != nil {
-		log.Fatalf("content-service account security authority config invalid: %v", err)
+		return nil, fmt.Errorf("content-service account security authority config invalid: %w", err)
 	}
 	onboardingTaxonomy, err := buildOnboardingInterestTaxonomyValidator(cfg)
 	if err != nil {
-		log.Fatalf("content-service onboarding taxonomy validation config failed: %v", err)
+		return nil, fmt.Errorf("content-service onboarding taxonomy validation config failed: %w", err)
 	}
 	accountClosureSubjectDigestor, err := resolveAccountClosureSubjectDigestor(
 		appEnv,
 		serviceName,
 	)
 	if err != nil {
-		log.Fatalf("content-service account-closure privacy config failed: %v", err)
+		return nil, fmt.Errorf("content-service account-closure privacy config failed: %w", err)
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	ctx := context.Background()
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "content-service", SamplingRatio: 0.1})
-	defer otelShutdown()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		otelShutdown()
+	})
 
 	addr := getenvOrDefault("CONTENT_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if addr == "" {
@@ -130,13 +150,20 @@ func main() {
 	}
 
 	logger := slog.Default()
-	instanceID := getenvOrDefault("SERVICE_INSTANCE_ID", hostname())
+	instanceID := contentModuleEnvironmentValue("SERVICE_INSTANCE_ID", hostname())
 
-	runtimeLogging := mustBuildContentRuntimeLogging()
-	defer runtimeLogging.Close()
+	runtimeLogging, err := buildContentRuntimeLogging()
+	if err != nil {
+		return nil, err
+	}
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		runtimeLogging.Close()
+	})
 
 	router := buildRedisRouter(cfg)
-	defer router.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		_ = router.Close()
+	})
 	if err := router.PingAll(ctx); err != nil {
 		log.Printf("WARN: content-service redis ping: %v", err)
 	}
@@ -150,7 +177,7 @@ func main() {
 		},
 	)
 	if err != nil {
-		log.Fatalf("content-service message transport preflight failed: %v", err)
+		return nil, fmt.Errorf("content-service message transport preflight failed: %w", err)
 	}
 	subjectClosureGuard := newDeferredSubjectClosureGuard()
 	eventPub := postmessaging.NewRedisEventPublisherWithTransport(messageTransport, "content-service", logger)
@@ -159,7 +186,9 @@ func main() {
 		subjectClosureGuard,
 		logger,
 	)
-	defer bufferedWriter.Stop()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		bufferedWriter.Stop()
+	})
 
 	// SIT6 商用装配：Mongo/PostgreSQL/OSS 均为启动必需依赖，不存在内存降级。
 	var store *persistence.MongoPostStore
@@ -205,6 +234,14 @@ func main() {
 			postgovernance.NewManualReviewPublicationSafetyGate(),
 		),
 	)
+	gatheringParticipationReader, err := buildGatheringParticipationReader(cfg)
+	if err != nil {
+		return nil, err
+	}
+	postServiceOpts = append(
+		postServiceOpts,
+		postapp.WithGatheringParticipationReader(gatheringParticipationReader),
+	)
 
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register(
@@ -221,11 +258,11 @@ func main() {
 		healthChecker.Register("mongodb", func(hctx context.Context) error {
 			return mongoClient.Ping(hctx, nil)
 		})
-		defer func() {
+		cleanup = servicehost.ChainCleanup(cleanup, func() {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			_ = mongoClient.Disconnect(shutdownCtx)
-		}()
+		})
 		dbName := cfg.Mongo.Database
 		if dbName == "" {
 			dbName = "quwoquan_content"
@@ -237,11 +274,11 @@ func main() {
 		db := mongoClient.Database(dbName)
 		mediaReferenceFence, err := mediareferencefence.New(db)
 		if err != nil {
-			log.Fatalf("content-service MediaAsset reference fence init failed: %v", err)
+			return nil, fmt.Errorf("content-service MediaAsset reference fence init failed: %w", err)
 		}
 		filterCatalogStore := filtercatalogpersistence.NewMongoStore(db)
 		if err := filterCatalogStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service FilterCatalogRelease indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service FilterCatalogRelease indexes init failed: %w", err)
 		}
 		filterCatalogReader := filtercatalogcache.NewActiveReader(
 			filterCatalogStore,
@@ -255,7 +292,7 @@ func main() {
 			filtercatalogapp.WithActiveFilterCatalogInvalidator(filterCatalogReader),
 		)
 		if err != nil {
-			log.Fatalf("content-service FilterCatalogRelease composition failed: %v", err)
+			return nil, fmt.Errorf("content-service FilterCatalogRelease composition failed: %w", err)
 		}
 		filterCatalogFacades = filtercatalogapp.BindFacades(filterCatalogService)
 		mongoStore := persistence.NewMongoPostStore(
@@ -264,7 +301,7 @@ func main() {
 			mediaReferenceFence,
 		)
 		if err := mongoStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service post indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service post indexes init failed: %w", err)
 		}
 		store = mongoStore
 		postQueryReader = persistence.NewMongoPostQueryReader(db.Collection(collName))
@@ -282,11 +319,11 @@ func main() {
 			persistence.NewMongoResearchReleaseBindingReader(mongoActiveSupplyReader),
 		)
 		if err != nil {
-			log.Fatalf("content-service research release readback composition failed: %v", err)
+			return nil, fmt.Errorf("content-service research release readback composition failed: %w", err)
 		}
 		outboundShareSink := outboundshareinfra.NewMongoAppendSink(db)
 		if err := outboundShareSink.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service OutboundShareFact indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service OutboundShareFact indexes init failed: %w", err)
 		}
 		outboundShareFacades = outboundshareapp.BindFacades(outboundshareapp.NewService(
 			outboundShareSink,
@@ -294,11 +331,11 @@ func main() {
 		))
 		profileActivityStore := profileinteractioninfra.NewMongoActivityStore(db)
 		if err := profileActivityStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service ProfileInteractionActivity indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service ProfileInteractionActivity indexes init failed: %w", err)
 		}
 		profileReadFactStore := profilereadfactinfra.NewMongoReadFactStore(db)
 		if err := profileReadFactStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service ProfileInteractionReadFact indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service ProfileInteractionReadFact indexes init failed: %w", err)
 		}
 		profileProjector := profileinteractionapp.NewProfileInteractionActivityViewProjector(
 			profileinteractioninfra.NewMongoProjectionSourceReader(db),
@@ -312,35 +349,35 @@ func main() {
 			),
 		)
 		startOutboundShareOutboxRelay(
-			ctx, outboundShareSink, outboundShareSink,
+			ctx, workers, outboundShareSink, outboundShareSink,
 			outboundsharemessaging.NewOutboundShareOutboxPublisher(eventPub),
 			"content-outbound-share-runtime-events",
 			"content_outbound_share_outbox_events",
 			healthChecker, logger,
 		)
 		startOutboundShareOutboxRelay(
-			ctx, outboundShareSink, outboundShareSink,
+			ctx, workers, outboundShareSink, outboundShareSink,
 			profileinteractionapp.NewOutboundShareProjector(profileProjector),
 			"content-outbound-share-profile-interaction",
 			"content_outbound_share_profile_interaction",
 			healthChecker, logger,
 		)
 		startOutboundShareOutboxRelay(
-			ctx, outboundShareSink, outboundShareSink,
+			ctx, workers, outboundShareSink, outboundShareSink,
 			outboundshareapp.NewShareCountProjector(outboundShareSink, mongoStore),
 			"content-outbound-share-post-count",
 			"content_outbound_share_post_count",
 			healthChecker, logger,
 		)
 		startProfileInteractionReadFactRelay(
-			ctx, profileReadFactStore, profileReadFactStore,
+			ctx, workers, profileReadFactStore, profileReadFactStore,
 			profileinteractionapp.NewReadFactProjector(profileProjector),
 			"content-profile-interaction-read-projection",
 			"content_profile_interaction_read_projection",
 			healthChecker, logger,
 		)
 		startPostOutboxRelay(
-			ctx, store, store,
+			ctx, workers, store, store,
 			profileinteractionapp.NewPostTargetProjector(profileProjector),
 			"content-post-profile-interaction-target",
 			"content_post_profile_interaction_target",
@@ -348,58 +385,60 @@ func main() {
 		)
 		mediaStore = mediaassetpersistence.NewMongoMediaStore(db)
 		if err := mediaStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service media runtime indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service media runtime indexes init failed: %w", err)
 		}
 		if err := startMediaAssetOutboxRelay(
 			ctx,
+			workers,
 			mediaStore,
 			mediaStore,
 			messageTransport,
 			healthChecker,
 			logger,
 		); err != nil {
-			log.Fatalf("content-service MediaAsset outbox relay init failed: %v", err)
+			return nil, fmt.Errorf("content-service MediaAsset outbox relay init failed: %w", err)
 		}
 		mediaOriginalAccessStore = originalaccesspersistence.NewMongoStore(db)
 		if err := mediaOriginalAccessStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service MediaOriginalAccessFact indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service MediaOriginalAccessFact indexes init failed: %w", err)
 		}
 		originalAccessQuotaStore = originalaccessquotapersistence.NewMongoStore(db)
 		if err := originalAccessQuotaStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service OriginalAccessQuota indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service OriginalAccessQuota indexes init failed: %w", err)
 		}
 		mediaImageReprocessStore = mediareprocesspersistence.NewMongoStore(db)
 		if err := mediaImageReprocessStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service MediaImageReprocessRun indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service MediaImageReprocessRun indexes init failed: %w", err)
 		}
 		mediaUploadSessionStore = uploadsessionpersistence.NewMongoStore(
 			db.Collection("media_upload_sessions"),
 			mediaStore,
 		)
 		if err := mediaUploadSessionStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service MediaUploadSession indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service MediaUploadSession indexes init failed: %w", err)
 		}
 		if err := startMediaUploadSessionOutboxRelay(
 			ctx,
+			workers,
 			mediaUploadSessionStore,
 			messageTransport,
 			healthChecker,
 			logger,
 		); err != nil {
-			log.Fatalf("content-service MediaUploadSession outbox relay init failed: %v", err)
+			return nil, fmt.Errorf("content-service MediaUploadSession outbox relay init failed: %w", err)
 		}
 		commentDataAdapter = commentpersistence.NewMongoCommentDataAdapter(
 			db,
 			mediaReferenceFence,
 		)
 		if err := commentDataAdapter.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service Comment indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service Comment indexes init failed: %w", err)
 		}
 		commentViewerRelationships =
 			commentpersistence.NewCommentViewerRelationshipMongoProjection(db)
 		if err := commentViewerRelationships.EnsureIndexes(ctx); err != nil {
-			log.Fatalf(
-				"content-service Comment viewer relationship projection indexes init failed: %v",
+			return nil, fmt.Errorf(
+				"content-service Comment viewer relationship projection indexes init failed: %w",
 				err,
 			)
 		}
@@ -413,27 +452,29 @@ func main() {
 				logger,
 			)
 		if err := commentViewerRelationshipConsumer.EnsureGroup(ctx); err != nil {
-			log.Fatalf(
-				"content-service Comment viewer relationship consumer startup failed: %v",
+			return nil, fmt.Errorf(
+				"content-service Comment viewer relationship consumer startup failed: %w",
 				err,
 			)
 		}
-		go commentViewerRelationshipConsumer.Run(ctx, 500*time.Millisecond)
+		workers.Add(func(workerCtx context.Context) {
+			commentViewerRelationshipConsumer.Run(workerCtx, 500*time.Millisecond)
+		})
 		postServiceOpts = append(postServiceOpts, postapp.WithCommentReaders(commentDataAdapter))
 		startCommentOutboxRelay(
-			ctx, commentDataAdapter, commentDataAdapter,
+			ctx, workers, commentDataAdapter, commentDataAdapter,
 			commentmessaging.NewCommentOutboxPublisher(eventPub),
 			"content-comment-runtime-events", "content_comment_outbox_events",
 			healthChecker, logger,
 		)
 		startCommentOutboxRelay(
-			ctx, commentDataAdapter, commentDataAdapter,
+			ctx, workers, commentDataAdapter, commentDataAdapter,
 			commentmessaging.NewCommentLifecycleStreamPublisher(router.Scene("general")),
 			"content-comment-lifecycle-stream", "content_comment_lifecycle_stream",
 			healthChecker, logger,
 		)
 		startCommentOutboxRelay(
-			ctx, commentDataAdapter, commentDataAdapter,
+			ctx, workers, commentDataAdapter, commentDataAdapter,
 			postapp.NewCommentCountProjectionPublisher(
 				postapp.NewCommentCountProjectionHandler(commentDataAdapter, mongoStore),
 			),
@@ -441,7 +482,7 @@ func main() {
 			healthChecker, logger,
 		)
 		startCommentOutboxRelay(
-			ctx, commentDataAdapter, commentDataAdapter,
+			ctx, workers, commentDataAdapter, commentDataAdapter,
 			profileinteractionapp.NewCommentProjector(profileProjector),
 			"content-comment-profile-interaction",
 			"content_comment_profile_interaction",
@@ -451,7 +492,7 @@ func main() {
 			db.Collection("post_moderation_cases"),
 		)
 		if err := moderationStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service PostModerationCase indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service PostModerationCase indexes init failed: %w", err)
 		}
 		moderationFacades = moderationapp.BindFacades(moderationapp.NewModerationService(
 			moderationapp.DataPorts{
@@ -461,13 +502,14 @@ func main() {
 			},
 		))
 		startModerationOutboxRelay(
-			ctx, moderationStore, moderationStore,
+			ctx, workers, moderationStore, moderationStore,
 			moderationmessaging.NewModerationOutboxPublisher(eventPub),
 			"content-moderation-runtime-events", "content_moderation_outbox_events",
 			healthChecker, logger,
 		)
 		startPostOutboxRelay(
 			ctx,
+			workers,
 			store,
 			store,
 			moderationapp.NewPostSubmissionModerationHandler(moderationFacades),
@@ -478,7 +520,7 @@ func main() {
 		)
 		reactionStore = reactionpersistence.NewMongoContentReactionStore(db)
 		if err := reactionStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service ContentReaction indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service ContentReaction indexes init failed: %w", err)
 		}
 		reactionServiceCore = reactionapp.NewService(
 			reactionapp.BindDataPorts(
@@ -488,6 +530,7 @@ func main() {
 		)
 		startPostOutboxRelay(
 			ctx,
+			workers,
 			store,
 			store,
 			reactionapp.NewPostDeletionConsumer(reactionServiceCore, reactionStore),
@@ -498,6 +541,7 @@ func main() {
 		)
 		startReactionOutboxRelay(
 			ctx,
+			workers,
 			reactionStore,
 			reactionStore,
 			reactionmessaging.NewContentReactionOutboxPublisher(eventPub),
@@ -508,6 +552,7 @@ func main() {
 		)
 		startReactionOutboxRelay(
 			ctx,
+			workers,
 			reactionStore,
 			reactionStore,
 			profileinteractionapp.NewReactionProjector(profileProjector),
@@ -518,6 +563,7 @@ func main() {
 		)
 		startReactionOutboxRelay(
 			ctx,
+			workers,
 			reactionStore,
 			reactionStore,
 			reactionmessaging.NewReactionLifecycleStreamPublisher(router.Scene("general")),
@@ -528,6 +574,7 @@ func main() {
 		)
 		startReactionOutboxRelay(
 			ctx,
+			workers,
 			reactionStore,
 			reactionStore,
 			reactionapp.NewActiveReactionCountProjector(reactionStore, mongoStore),
@@ -543,13 +590,14 @@ func main() {
 			commentDataAdapter,
 		)
 		startCommentOutboxRelay(
-			ctx, commentDataAdapter, commentDataAdapter,
+			ctx, workers, commentDataAdapter, commentDataAdapter,
 			commentHotScoreProjector,
 			"content-comment-hot-score", "content_comment_hot_score",
 			healthChecker, logger,
 		)
 		startReactionOutboxRelay(
 			ctx,
+			workers,
 			reactionStore,
 			reactionStore,
 			commentapp.NewReactionHotScorePublisher(commentHotScoreProjector),
@@ -560,7 +608,7 @@ func main() {
 		)
 		// PostDeleted 级联：宿主内容删除后全部评论批量 tombstoned。
 		startPostOutboxRelay(
-			ctx, store, store,
+			ctx, workers, store, store,
 			commentapp.NewCommentTombstoneProjector(commentDataAdapter),
 			"content-post-comment-tombstone",
 			"content_post_comment_tombstone",
@@ -572,28 +620,30 @@ func main() {
 
 		personaAccessProjection := accessinfra.NewPersonaAccessProjection(db)
 		if err := personaAccessProjection.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service persona access projection startup failed: %v", err)
+			return nil, fmt.Errorf("content-service persona access projection startup failed: %w", err)
 		}
 		personaAccessProjectionConsumer := accessinfra.NewPersonaAccessProjectionConsumer(
 			router.Scene("general"), personaAccessProjection, instanceID, logger,
 		)
 		if err := personaAccessProjectionConsumer.EnsureGroup(ctx); err != nil {
-			log.Fatalf(
-				"content-service persona access projection consumer startup failed: %v",
+			return nil, fmt.Errorf(
+				"content-service persona access projection consumer startup failed: %w",
 				err,
 			)
 		}
-		go personaAccessProjectionConsumer.Run(ctx, 500*time.Millisecond)
+		workers.Add(func(workerCtx context.Context) {
+			personaAccessProjectionConsumer.Run(workerCtx, 500*time.Millisecond)
+		})
 		viewerBlockReader = accessinfra.NewPersonaBlockReader(db)
 		behaviorStreamRelay := behaviorstream.NewStreamRelay(
 			db,
 			router.Scene("general"),
 		).WithConsumer("recommendation-behavior-facts")
-		go func() {
-			if err := behaviorStreamRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+		workers.Add(func(workerCtx context.Context) {
+			if err := behaviorStreamRelay.Run(workerCtx, time.Second); err != nil && workerCtx.Err() == nil {
 				log.Printf("WARN: content-service behavior stream relay stopped: %v", err)
 			}
-		}()
+		})
 		healthChecker.Register("behavior-fact-stream-relay", func(hctx context.Context) error {
 			return behaviorStreamRelay.Healthy(30 * time.Second)
 		})
@@ -604,7 +654,7 @@ func main() {
 		// up front so increments have somewhere to land, and register a liveness ping.
 		searchBuilt, searchErr := searchindex.Build(cfg.ES, store, searchindex.WithLogger(logger))
 		if searchErr != nil {
-			log.Fatalf("content-service search index assembly failed: %v", searchErr)
+			return nil, fmt.Errorf("content-service search index assembly failed: %w", searchErr)
 		}
 		// First-party place projector (R-S05e): location.place objects reuse the
 		// SAME ES indexer (one geo mechanism, one client) and a derived
@@ -614,7 +664,7 @@ func main() {
 		if searchBuilt.Client != nil {
 			healthChecker.Register("elasticsearch", searchBuilt.HealthPing())
 			if err := searchBuilt.EnsureIndex(ctx); err != nil {
-				log.Fatalf("content-service ensure ES search index failed: %v", err)
+				return nil, fmt.Errorf("content-service ensure ES search index failed: %w", err)
 			}
 			placeStore := placeindex.NewMongoPlaceStore(db.Collection(placeindex.PlaceSnapshotCollection), logger)
 			placeProjector = placeindex.NewProjector(searchBuilt.Indexer, store, placeStore, placeindex.WithLogger(logger))
@@ -622,7 +672,7 @@ func main() {
 		}
 		accountClosureObjectFences, err := mediaobjectfence.New(db)
 		if err != nil {
-			log.Fatalf("content-service media object deletion fence assembly failed: %v", err)
+			return nil, fmt.Errorf("content-service media object deletion fence assembly failed: %w", err)
 		}
 		accountClosureStore, err = accountclosure.NewMongoStore(
 			db,
@@ -630,64 +680,69 @@ func main() {
 			accountClosureObjectFences,
 		)
 		if err != nil {
-			log.Fatalf("content-service UserAccountClosed store assembly failed: %v", err)
+			return nil, fmt.Errorf("content-service UserAccountClosed store assembly failed: %w", err)
 		}
 		if err := accountClosureStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service UserAccountClosed indexes init failed: %v", err)
+			return nil, fmt.Errorf("content-service UserAccountClosed indexes init failed: %w", err)
 		}
 		accountRestrictionProjection, err = newContentAccountRestrictionProjection(
 			db,
 			accountClosureStore,
 		)
 		if err != nil {
-			log.Fatalf("content-service account restriction projection assembly failed: %v", err)
+			return nil, fmt.Errorf("content-service account restriction projection assembly failed: %w", err)
 		}
 		if err := accountRestrictionProjection.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("content-service account restriction projection indexes failed: %v", err)
+			return nil, fmt.Errorf("content-service account restriction projection indexes failed: %w", err)
 		}
 		accountClosureSearch, err = accountclosure.NewSearchIndexerDeleter(
 			searchBuilt.Indexer,
 			cfg.ES.Enabled,
 		)
 		if err != nil {
-			log.Fatalf("content-service UserAccountClosed search assembly failed: %v", err)
+			return nil, fmt.Errorf("content-service UserAccountClosed search assembly failed: %w", err)
 		}
 		accountClosureCache, err = accountclosure.NewRedisPersonalDataCacheCleaner(
 			router,
 			accountClosureSubjectDigestor,
 		)
 		if err != nil {
-			log.Fatalf("content-service UserAccountClosed cache assembly failed: %v", err)
+			return nil, fmt.Errorf("content-service UserAccountClosed cache assembly failed: %w", err)
 		}
 		guard, err := accountclosure.NewSubjectClosureGuard(
 			accountClosureStore,
 			accountClosureCache,
 		)
 		if err != nil {
-			log.Fatalf("content-service subject-closure guard assembly failed: %v", err)
+			return nil, fmt.Errorf("content-service subject-closure guard assembly failed: %w", err)
 		}
 		if err := subjectClosureGuard.Bind(guard); err != nil {
-			log.Fatalf("content-service subject-closure guard binding failed: %v", err)
+			return nil, fmt.Errorf("content-service subject-closure guard binding failed: %w", err)
 		}
 		// Each derived read model and the external event bus owns an independent
 		// durable checkpoint. A late sink outage therefore cannot replay sinks
 		// that already converged, and a failed sink never gets acknowledged by a
 		// shared fan-out watermark.
-		startPostOutboxRelay(ctx, store, store,
+		startPostOutboxRelay(ctx, workers, store, store,
 			postmessaging.NewPostOutboxPublisher(eventPub),
 			"content-runtime-events", "post_outbox_events", healthChecker, logger)
-		startPostOutboxRelay(ctx, store, store,
+		startPostOutboxRelay(ctx, workers, store, store,
 			postmessaging.NewPostLifecycleStreamPublisher(router.Scene("general")),
 			"content-post-lifecycle-stream", "post_outbox_lifecycle_stream", healthChecker, logger)
+		startPostOutboxRelay(ctx, workers, store, store,
+			postmessaging.NewPostOutboxPublisher(postmessaging.NewInProcessProjectorPublisher(
+				recinfra.NewDiscoveryFeedProjector(db),
+			)),
+			"content-discovery-feed-projection", "post_outbox_discovery_feed", healthChecker, logger)
 		if searchBuilt.Projector != nil {
-			startPostOutboxRelay(ctx, store, store,
+			startPostOutboxRelay(ctx, workers, store, store,
 				postmessaging.NewPostOutboxPublisher(postmessaging.NewInProcessProjectorPublisher(
 					&projectorAdapter{search: searchBuilt.Projector},
 				)),
 				"content-search-projection", "post_outbox_search", healthChecker, logger)
 		}
 		if placeProjector != nil {
-			startPostOutboxRelay(ctx, store, store,
+			startPostOutboxRelay(ctx, workers, store, store,
 				postmessaging.NewPostOutboxPublisher(postmessaging.NewInProcessProjectorPublisher(
 					&projectorAdapter{place: placeProjector},
 				)),
@@ -704,12 +759,12 @@ func main() {
 		if cfg.Embedding.Enabled && !contentSliceWorkload() {
 			embedder, err := resolveContentEmbeddingGateway(appEnv)
 			if err != nil {
-				log.Fatalf("content-service embedding binding invalid: %v", err)
+				return nil, fmt.Errorf("content-service embedding binding invalid: %w", err)
 			}
 			embeddingProjector := recinfra.NewEmbeddingProjector(
 				db, embedder, router.Scene("rec"), logger,
 			)
-			startPostOutboxRelay(ctx, store, store,
+			startPostOutboxRelay(ctx, workers, store, store,
 				postmessaging.NewPostOutboxPublisher(postmessaging.NewInProcessProjectorPublisher(
 					&projectorAdapter{embedding: embeddingProjector},
 				)),
@@ -722,7 +777,10 @@ func main() {
 		// candidate and supply projection used to explain intersections. Content
 		// only consumes its typed Reader and performs current Post hydration.
 		intersectionPolicy := rtrecpolicy.Baseline().Intersection
-		intersectionReader := buildIntersectionProjectionReader(cfg)
+		intersectionReader, err := buildIntersectionProjectionReader(cfg)
+		if err != nil {
+			return nil, err
+		}
 		intersectionOpts := []intersectionapp.IntersectionServiceOption{
 			intersectionapp.WithIntersectionSource(intersectionReader),
 			intersectionapp.WithIntersectionSupplyProbe(intersectionReader),
@@ -761,6 +819,7 @@ func main() {
 		if reactionStore != nil {
 			startReactionOutboxRelay(
 				ctx,
+				workers,
 				reactionStore,
 				reactionStore,
 				recinfra.NewReactionSignalProjector(authoritativeSignalSink),
@@ -772,7 +831,7 @@ func main() {
 		}
 		if commentDataAdapter != nil {
 			startCommentOutboxRelay(
-				ctx, commentDataAdapter, commentDataAdapter,
+				ctx, workers, commentDataAdapter, commentDataAdapter,
 				recinfra.NewCommentSignalProjector(authoritativeSignalSink),
 				"content-comment-recommend-signal", "content_comment_recommend_signal",
 				healthChecker, logger,
@@ -780,16 +839,22 @@ func main() {
 		}
 	}
 
-	reportStore, closeReportStore = buildReportRuntime(
-		ctx, cfg, router, eventPub, healthChecker, logger,
+	reportStore, closeReportStore, err = buildReportRuntime(
+		ctx, workers, cfg, router, eventPub, healthChecker, logger,
 		moderationFacades, postQueryReader, authoritativeSignalSink,
 	)
+	if err != nil {
+		return nil, err
+	}
 	if closeReportStore != nil {
-		defer closeReportStore()
+		cleanup = servicehost.ChainCleanup(cleanup, func() {
+			closeReportStore()
+		})
 	}
 
-	mediaRuntime, closeMediaRuntime := buildMediaRuntime(
+	mediaRuntime, closeMediaRuntime, err := buildMediaRuntime(
 		ctx,
+		workers,
 		cfg,
 		appEnv,
 		instanceID,
@@ -806,11 +871,17 @@ func main() {
 		viewerBlockReader,
 		commentViewerRelationships,
 	)
-	defer closeMediaRuntime()
+	if err != nil {
+		return nil, err
+	}
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		closeMediaRuntime()
+	})
 	commentServiceCore = mediaRuntime.commentServiceCore
 
 	accountClosureConsumer, err := startAccountClosureRuntime(
 		ctx,
+		workers,
 		router.Scene("general"),
 		logger,
 		healthChecker,
@@ -822,17 +893,28 @@ func main() {
 		accountRestrictionProjection,
 	)
 	if err != nil {
-		log.Fatalf("content-service UserAccountClosed runtime assembly failed: %v", err)
+		return nil, fmt.Errorf("content-service UserAccountClosed runtime assembly failed: %w", err)
 	}
 
-	rankedRecommendation := buildRankedRecommendationGateway(cfg)
-	authorImpactProjectionReader := buildAuthorImpactProjectionReader(cfg)
+	rankedRecommendation, err := buildRankedRecommendationGateway(cfg)
+	if err != nil {
+		return nil, err
+	}
+	authorImpactProjectionReader, err := buildAuthorImpactProjectionReader(cfg)
+	if err != nil {
+		return nil, err
+	}
+	gatheringSocialProofReader, err := buildGatheringSocialProofProjectionReader(cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	// 推荐策略 Store 的具体实现仍在 composition root 显式选择。
 	policyStore := rtrecpolicy.NewStoreFromBaseline()
-	startRecommendationPolicyHotReload(ctx, policyStore, logger)
-	handlers := buildContentHTTPHandler(contentHTTPHandlerInput{
+	startRecommendationPolicyHotReload(workers, policyStore, logger)
+	handlers, err := buildContentHTTPHandler(contentHTTPHandlerInput{
 		ctx:                          ctx,
+		workers:                      workers,
 		logger:                       logger,
 		healthChecker:                healthChecker,
 		router:                       router,
@@ -863,32 +945,37 @@ func main() {
 		wishlistStateReader:          wishlistStateReader,
 		dailyMetricsStore:            dailyMetricsStore,
 		authorImpactProjectionReader: authorImpactProjectionReader,
+		gatheringSocialProofReader:   gatheringSocialProofReader,
 		intersectionService:          intersectionService,
 		outboundShareFacades:         outboundShareFacades,
 		profileInteractionFacades:    profileInteractionFacades,
 		filterCatalogFacades:         filterCatalogFacades,
 		contractGraphSHA256:          operationsecurity.ContractGraphSHA256,
 	})
+	if err != nil {
+		return nil, err
+	}
 	handler := handlers.business
 	accountClosureRecoveryCommands, err := closureapp.NewContentAccountClosureRecoveryCommandFacet(
 		accountClosureConsumer,
 	)
 	if err != nil {
-		log.Fatalf("content-service account-closure recovery commands failed: %v", err)
+		return nil, fmt.Errorf("content-service account-closure recovery commands failed: %w", err)
 	}
 	accountClosureRecoveryHandler, err := closurehttp.NewHandler(accountClosureRecoveryCommands)
 	if err != nil {
-		log.Fatalf("content-service account-closure recovery handler failed: %v", err)
+		return nil, fmt.Errorf("content-service account-closure recovery handler failed: %w", err)
 	}
 	handler, err = accountClosureRecoveryHandler.Mount(handler)
 	if err != nil {
-		log.Fatalf("content-service account-closure recovery route failed: %v", err)
+		return nil, fmt.Errorf("content-service account-closure recovery route failed: %w", err)
 	}
-	server := buildContentHTTPServer(
+	server, err := buildContentHTTPServer(
 		addr,
 		instanceID,
 		handler,
 		handlers.internalGraphQL,
+		handlers.publicWeb,
 		cfg.Feed,
 		healthChecker,
 		accessTokenConfig,
@@ -897,14 +984,34 @@ func main() {
 		runtimeLogging.processLogger,
 		runtimeLogging.exceptionLogger,
 	)
+	if err != nil {
+		return nil, err
+	}
 	log.Printf(
-		"content-service listening on %s (feed_owner_max_inflight=%d recall_sources_maximum=%d recall_unterminated_per_source=%d)",
+		"content-service prepared for admission on %s (feed_owner_max_inflight=%d recall_sources_maximum=%d recall_unterminated_per_source=%d)",
 		addr,
 		cfg.Feed.MaxInflight,
 		cfg.Feed.MaximumRecallSources,
 		cfg.Feed.MaximumUnterminatedCallsPerSource,
 	)
-	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
-		log.Fatalf("content-service: %v", err)
+	module := &Module{
+		configDigest: configVersion,
+		server:       server,
+		health:       healthChecker,
+		serveError:   make(chan error, 1),
+		workerStarts: workers.starts,
+		cleanup:      cleanup,
 	}
+	if module.configDigest == "" {
+		module.configDigest = fmt.Sprintf("%s:%s", appEnv, serviceName)
+	}
+	server.Handler = module.admissionHandler(server.Handler)
+	server.BaseContext = func(net.Listener) context.Context {
+		if module.runContext != nil {
+			return module.runContext
+		}
+		return context.Background()
+	}
+	initialized = true
+	return module, nil
 }

@@ -26,6 +26,10 @@ from ..models.request_response import (
     RecommendationAuthorImpactSummary,
     RecommendationAuthorImpactEvidence,
     RecommendationAuthorImpactEvidencePage,
+    GetRecommendationGatheringSocialProofQuery,
+    RecommendationGatheringSocialProofSummary,
+    GetRecommendationFlywheelFunnelQuery,
+    RecommendationFlywheelFunnelSnapshot,
 )
 
 __all__ = [
@@ -52,4 +56,8 @@ __all__ = [
     "RecommendationAuthorImpactSummary",
     "RecommendationAuthorImpactEvidence",
     "RecommendationAuthorImpactEvidencePage",
+    "GetRecommendationGatheringSocialProofQuery",
+    "RecommendationGatheringSocialProofSummary",
+    "GetRecommendationFlywheelFunnelQuery",
+    "RecommendationFlywheelFunnelSnapshot",
 ]

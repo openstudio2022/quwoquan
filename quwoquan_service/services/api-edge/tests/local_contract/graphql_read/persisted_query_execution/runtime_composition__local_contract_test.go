@@ -112,6 +112,7 @@ func TestRuntimeExecutesSignedGetPostAfterSharedAdmission(t *testing.T) {
 		Config:          config,
 		RegistryLoader:  registryLoader,
 		OwnerExecutor:   ownerExecutor,
+		EntryValidator:  ownerinfra.ValidateExecutableEntry,
 		Admission:       admission,
 		Rollout:         rollout,
 		RolloutObserver: observer,
@@ -194,6 +195,7 @@ func TestRuntimeAuthorizesGatewayOwnedPersistedSearchOperation(t *testing.T) {
 		},
 		RegistryLoader:  newGraphQLRegistryLoader(t, publicKeys),
 		OwnerExecutor:   graphQLExecutorStub{},
+		EntryValidator:  ownerinfra.ValidateExecutableEntry,
 		Admission:       admission,
 		Rollout:         rollout,
 		RolloutObserver: &graphQLRolloutObserver{},
@@ -295,6 +297,16 @@ func TestRuntimeFailsClosedWhenCompositionPortsAreMissing(t *testing.T) {
 		t.Fatalf("missing owner executor was not rejected: %v", err)
 	}
 
+	_, err = graphread.NewRuntime(context.Background(), graphread.Options{
+		Environment:    "beta",
+		Config:         config,
+		RegistryLoader: newGraphQLRegistryLoader(t, publicKeys),
+		OwnerExecutor:  graphQLExecutorStub{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "entry validator is required") {
+		t.Fatalf("missing entry validator was not rejected: %v", err)
+	}
+
 	unsignedRegistry, err := graphdomain.NewRegistry([]graphdomain.Entry{
 		validGraphQLRuntimeEntry(),
 	})
@@ -306,6 +318,7 @@ func TestRuntimeFailsClosedWhenCompositionPortsAreMissing(t *testing.T) {
 		Config:         config,
 		RegistryLoader: graphQLRegistryLoaderStub{registry: unsignedRegistry},
 		OwnerExecutor:  graphQLExecutorStub{},
+		EntryValidator: ownerinfra.ValidateExecutableEntry,
 	})
 	if err == nil || !strings.Contains(err.Error(), "unverified release") {
 		t.Fatalf("unsigned registry port result was not rejected: %v", err)
@@ -396,7 +409,7 @@ func validGraphQLRuntimeEntry() graphdomain.Entry {
 		panic(err)
 	}
 	return graphdomain.Entry{
-		SHA256Hash:           "3c1481366f84401aa2d89280925d5943bf040f7c94cf757fb5cc219f00a7f71b",
+		SHA256Hash:           "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110",
 		OperationName:        "ContentPostDetailBase",
 		OperationType:        graphdomain.OperationTypeQuery,
 		CanonicalOperationID: "content.post.GetPost",
@@ -419,7 +432,7 @@ func validGraphQLRuntimeEntry() graphdomain.Entry {
 
 func validSearchPageRuntimeEntry() graphdomain.Entry {
 	entry := validGraphQLRuntimeEntry()
-	entry.SHA256Hash = "894a7b1541100c4ffa20e446d7969aa6bb1c6aa385d025cc2a8c7b625ba50d58"
+	entry.SHA256Hash = "111b715594655786eba342c5cbebe7ea1338a9cf016ed0f35f54096802583478"
 	entry.OperationName = "SearchPage"
 	entry.CanonicalOperationID = "gateway.persisted_query_execution.SearchPage"
 	entry.ObjectIDs = []string{"gateway.persisted_query_execution"}

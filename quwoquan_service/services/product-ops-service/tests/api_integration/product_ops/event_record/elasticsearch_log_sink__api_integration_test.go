@@ -247,6 +247,69 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 
 	from := now.Add(-time.Hour)
 	to := now.Add(time.Hour)
+
+	// rollups.yaml 是聚合写侧唯一真相源：同一批事件按 rowKind 产出多份聚合行，
+	// 告警评估器 reader 必须能对真实 ES 按 rowKind 读回。
+	rtcRows, err := store.ListAggregateAlertRows(ctx, "rtc_qoe", from, to)
+	if err != nil {
+		t.Fatalf("ListAggregateAlertRows(rtc_qoe) error = %v", err)
+	}
+	if len(rtcRows) == 0 {
+		t.Fatal("rtc_qoe aggregate rows missing from real Elasticsearch")
+	}
+	rtcTotal := 0.0
+	sawConnectHistogram := false
+	for _, row := range rtcRows {
+		if row["rowKind"] != "rtc_qoe" {
+			t.Fatalf("rtc_qoe read-back returned foreign rowKind: %v", row["rowKind"])
+		}
+		if count, ok := row["count"].(float64); ok {
+			rtcTotal += count
+		}
+		if histogram, ok := row["connectTimeHistogram"].(map[string]any); ok {
+			if _, hasCounts := histogram["counts"]; hasCounts {
+				sawConnectHistogram = true
+			}
+		}
+	}
+	if rtcTotal != 4 {
+		t.Fatalf("rtc_qoe aggregate count = %v; want 4", rtcTotal)
+	}
+	if !sawConnectHistogram {
+		t.Fatal("rtc_qoe aggregate rows miss connectTimeHistogram measure")
+	}
+	eventDimensionRows, err := store.ListAggregateAlertRows(
+		ctx, "event_dimensions", from, to,
+	)
+	if err != nil {
+		t.Fatalf("ListAggregateAlertRows(event_dimensions) error = %v", err)
+	}
+	if len(eventDimensionRows) == 0 {
+		t.Fatal("event_dimensions aggregate rows missing from real Elasticsearch")
+	}
+	runtimeRows, err := store.ListAggregateAlertRows(
+		ctx, "runtime_diagnostics", from, to,
+	)
+	if err != nil {
+		t.Fatalf("ListAggregateAlertRows(runtime_diagnostics) error = %v", err)
+	}
+	if len(runtimeRows) == 0 {
+		t.Fatal("runtime_diagnostics aggregate rows missing from real Elasticsearch")
+	}
+	generatedThrough, hasSamples, err := store.AggregateGeneratedThrough(ctx)
+	if err != nil || !hasSamples {
+		t.Fatalf(
+			"AggregateGeneratedThrough() = %v, %v, %v; want water line with samples",
+			generatedThrough, hasSamples, err,
+		)
+	}
+	rawRetentionDays, err := store.RawRetentionDays(ctx)
+	if err != nil || rawRetentionDays != 3 {
+		t.Fatalf(
+			"RawRetentionDays() = %d, %v; want contract 3d from real ILM",
+			rawRetentionDays, err,
+		)
+	}
 	eventSummary, err := store.GetEventSummary(
 		ctx,
 		application.EventSummaryQuery{From: from, To: to},
@@ -332,12 +395,31 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 		t.Fatalf("GetPageExperienceStats() = %+v", pageStats)
 	}
 
-	sessions, totalEvents, err := store.ListDistinctSessions(ctx, from, to, 100)
+	// 黄金指标 percentile/sum_ratio 形态的原始样本统计门面：真实 ES
+	// percentiles/sum 聚合读回（单样本 durationMs=500 → P95=500）。
+	valueStats, err := store.GetEventValueStats(ctx, application.EventValueStatsQuery{
+		EventType:  "page_return",
+		ValueField: "durationMs",
+		From:       from,
+		To:         to,
+	})
+	if err != nil {
+		t.Fatalf("GetEventValueStats() error = %v", err)
+	}
+	if valueStats.SampleCount != 1 || valueStats.P95 != 500 {
+		t.Fatalf("GetEventValueStats() = %+v; want one 500ms sample", valueStats)
+	}
+
+	// PV 唯一口径 = page_open 事件数（本批只有一条 page_open）。
+	sessions, pageViews, err := store.ListDistinctSessions(ctx, from, to, 100)
 	if err != nil {
 		t.Fatalf("ListDistinctSessions() error = %v", err)
 	}
-	if len(sessions) != 5 || totalEvents != int64(len(records)) {
-		t.Fatalf("ListDistinctSessions() = %v, %d", sessions, totalEvents)
+	if len(sessions) != 5 || pageViews != 1 {
+		t.Fatalf(
+			"ListDistinctSessions() = %v, %d; want five sessions and one page view",
+			sessions, pageViews,
+		)
 	}
 
 	rtcSummary, err := store.ReadRtcMediaQoeSummary(

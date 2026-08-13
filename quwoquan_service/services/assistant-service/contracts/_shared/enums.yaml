@@ -51,8 +51,6 @@ enums:
         wire: checkpoint_committed
       - name: presentationSnapshot
         wire: presentation_snapshot
-      - name: presentationPatch
-        wire: presentation_patch
       - name: presentationCommit
         wire: presentation_commit
       - name: waitingInput
@@ -1139,3 +1137,36 @@ enums:
         wire: stream
       - name: unknown
         wire: ''
+
+  # system_context_envelope 契约的上下文披露粒度。
+  - name: ContextGranularity
+    values:
+      - name: hidden
+        wire: hidden
+      - name: coarse
+        wire: coarse
+      - name: precise
+        wire: precise
+
+  # understanding_result 契约：本轮理解后的对话推进方式。
+  - name: NextTurnMode
+    values:
+      - name: answer
+        wire: answer
+      - name: continueExecution
+        wire: continue_execution
+      - name: askUser
+        wire: ask_user
+      - name: blocked
+        wire: blocked
+
+  - name: LocationGranularity
+    values:
+      - name: none
+        wire: none
+      - name: city
+        wire: city
+      - name: region
+        wire: region
+      - name: precise
+        wire: precise

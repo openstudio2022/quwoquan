@@ -67,6 +67,8 @@ func (handler *Handler) sendMessage(writer http.ResponseWriter, request *http.Re
 		Type                      string                         `json:"type"`
 		Content                   string                         `json:"content"`
 		MediaAssetID              string                         `json:"mediaAssetId"`
+		AudioDurationMs           int64                          `json:"audioDurationMs"`
+		AudioWaveform             []float64                      `json:"audioWaveform"`
 		Card                      *messageapp.MessageCardCommand `json:"card"`
 		ReplyToMessageID          string                         `json:"replyToMessageId"`
 		Mentions                  []string                       `json:"mentions"`
@@ -89,6 +91,8 @@ func (handler *Handler) sendMessage(writer http.ResponseWriter, request *http.Re
 		Type:                      body.Type,
 		Content:                   body.Content,
 		MediaAssetID:              body.MediaAssetID,
+		AudioDurationMs:           body.AudioDurationMs,
+		AudioWaveform:             body.AudioWaveform,
 		Card:                      body.Card,
 		ReplyToMessageId:          body.ReplyToMessageID,
 		Mentions:                  body.Mentions,
@@ -216,6 +220,12 @@ func messageToWire(slice messageapp.MessageSlice) map[string]any {
 		"content": message.Content, "mediaAssetId": message.MediaAssetID,
 		"card": message.Card, "replyToMessageId": message.ReplyToMessageID,
 		"mentions": message.Mentions, "status": message.Status, "timestamp": message.Timestamp,
+	}
+	if message.AudioDurationMs > 0 {
+		wire["audioDurationMs"] = message.AudioDurationMs
+	}
+	if len(message.AudioWaveform) > 0 {
+		wire["audioWaveform"] = message.AudioWaveform
 	}
 	if slice.Media != nil {
 		wire["mediaDeliveryUrl"] = slice.Media.DeliveryURL

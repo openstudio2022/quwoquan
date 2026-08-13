@@ -13,6 +13,8 @@ class FeatureProfileStore(Protocol):
 
     def apply_tag_feedback_if_absent(self, mutation: "TagFeedbackMutation") -> bool: ...
 
+    def apply_search_signal_if_absent(self, mutation: "SearchSignalMutation") -> bool: ...
+
 
 @dataclass(frozen=True, slots=True)
 class ExposureFeatureMutation:
@@ -51,6 +53,21 @@ class TagFeedbackMutation:
     tag_ref: str
     action: str
     recorded_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class SearchSignalMutation:
+    """搜推联动短期意图（search.RecommendationSignalFact 归并结果）。
+
+    terms 是 normalizedQuery 与 relatedTerms 的合并去重集合；隐私约束要求
+    这些词只进入特征投影，绝不进入日志、DLQ 或错误信息。
+    """
+
+    signal_id: str
+    subject_id: str
+    signal_type: str
+    terms: tuple[str, ...]
+    created_at: datetime
 
 
 class Projector:
@@ -177,6 +194,40 @@ class Projector:
                 collaborative_signal=collaborative_signal,
                 intersection_increments=intersection,
                 occurred_at=occurred_at,
+            )
+        )
+
+    def project_search_signal(
+        self,
+        *,
+        signal_id: str,
+        subject_id: str,
+        signal_type: str,
+        terms: tuple[str, ...],
+        created_at: datetime,
+    ) -> bool:
+        normalized_signal = signal_id.strip()
+        normalized_subject = subject_id.strip()
+        normalized_type = signal_type.strip()
+        normalized_terms = tuple(
+            dict.fromkeys(term.strip() for term in terms if term.strip())
+        )
+        if (
+            not normalized_signal
+            or not normalized_subject
+            or normalized_type not in {"query", "click"}
+            or created_at.tzinfo is None
+        ):
+            raise ValueError("search signal feature projection input is invalid")
+        if normalized_type == "query" and not normalized_terms:
+            raise ValueError("search query signal requires at least one term")
+        return self._store.apply_search_signal_if_absent(
+            SearchSignalMutation(
+                signal_id=normalized_signal,
+                subject_id=normalized_subject,
+                signal_type=normalized_type,
+                terms=normalized_terms,
+                created_at=created_at,
             )
         )
 

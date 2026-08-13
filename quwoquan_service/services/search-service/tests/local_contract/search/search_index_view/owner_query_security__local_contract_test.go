@@ -144,7 +144,7 @@ func TestOwnerQueryCursorIsOpaqueAndBoundToAllExecutionIdentity(t *testing.T) {
 	}
 	first, err := service.ExecuteOwnerQuery(
 		t.Context(),
-		application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"article"}, Limit: 1},
+		application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"content.post"}, ContentTypes: []string{"article"}, Limit: 1},
 		rtsearch.Viewer{},
 		caller,
 		identity,
@@ -161,7 +161,7 @@ func TestOwnerQueryCursorIsOpaqueAndBoundToAllExecutionIdentity(t *testing.T) {
 
 	second, err := service.ExecuteOwnerQuery(
 		t.Context(),
-		application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"article"}, Limit: 1, Cursor: first.NextCursor},
+		application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"content.post"}, ContentTypes: []string{"article"}, Limit: 1, Cursor: first.NextCursor},
 		rtsearch.Viewer{},
 		caller,
 		identity,
@@ -172,11 +172,14 @@ func TestOwnerQueryCursorIsOpaqueAndBoundToAllExecutionIdentity(t *testing.T) {
 	if len(second.Hits) != 1 || second.Hits[0].ObjectRef == first.Hits[0].ObjectRef {
 		t.Fatalf("second page did not advance exactly once: first=%#v second=%#v", first.Hits, second.Hits)
 	}
-	tamperedCursorSuffix := "A"
-	if strings.HasSuffix(first.NextCursor, tamperedCursorSuffix) {
-		tamperedCursorSuffix = "B"
+	// 篡改中间字符而非末字符：base64 RawURLEncoding 非严格解码会忽略末字符的
+	// trailing bits，改末字符可能解出相同字节导致 AEAD 照常通过（flaky）。
+	middle := len(first.NextCursor) / 2
+	tamperedByte := "A"
+	if first.NextCursor[middle] == 'A' {
+		tamperedByte = "B"
 	}
-	tamperedCursor := first.NextCursor[:len(first.NextCursor)-1] + tamperedCursorSuffix
+	tamperedCursor := first.NextCursor[:middle] + tamperedByte + first.NextCursor[middle+1:]
 
 	mutations := []struct {
 		name     string
@@ -184,13 +187,13 @@ func TestOwnerQueryCursorIsOpaqueAndBoundToAllExecutionIdentity(t *testing.T) {
 		caller   application.QueryCaller
 		identity application.QueryExecutionIdentity
 	}{
-		{"query", application.QueryInput{Query: "鼓浪屿", Mode: "result", ObjectTypes: []string{"article"}, Limit: 1, Cursor: first.NextCursor}, caller, identity},
-		{"scope", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"video"}, Limit: 1, Cursor: first.NextCursor}, caller, identity},
-		{"principal", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"article"}, Limit: 1, Cursor: first.NextCursor}, apiEdgeOwnerCaller("session:other|service:api-edge"), identity},
-		{"candidate", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"article"}, Limit: 1, Cursor: first.NextCursor}, caller, application.QueryExecutionIdentity{CandidateDigest: "sha256:" + strings.Repeat("1", 64), PolicyDigest: identity.PolicyDigest}},
-		{"policy", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"article"}, Limit: 1, Cursor: first.NextCursor}, caller, application.QueryExecutionIdentity{CandidateDigest: identity.CandidateDigest, PolicyDigest: "sha256:" + strings.Repeat("2", 64)}},
-		{"tamper", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"article"}, Limit: 1, Cursor: tamperedCursor}, caller, identity},
-		{"raw-offset", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"article"}, Limit: 1, Cursor: "1"}, caller, identity},
+		{"query", application.QueryInput{Query: "鼓浪屿", Mode: "result", ObjectTypes: []string{"content.post"}, ContentTypes: []string{"article"}, Limit: 1, Cursor: first.NextCursor}, caller, identity},
+		{"scope", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"content.post"}, ContentTypes: []string{"video"}, Limit: 1, Cursor: first.NextCursor}, caller, identity},
+		{"principal", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"content.post"}, ContentTypes: []string{"article"}, Limit: 1, Cursor: first.NextCursor}, apiEdgeOwnerCaller("session:other|service:api-edge"), identity},
+		{"candidate", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"content.post"}, ContentTypes: []string{"article"}, Limit: 1, Cursor: first.NextCursor}, caller, application.QueryExecutionIdentity{CandidateDigest: "sha256:" + strings.Repeat("1", 64), PolicyDigest: identity.PolicyDigest}},
+		{"policy", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"content.post"}, ContentTypes: []string{"article"}, Limit: 1, Cursor: first.NextCursor}, caller, application.QueryExecutionIdentity{CandidateDigest: identity.CandidateDigest, PolicyDigest: "sha256:" + strings.Repeat("2", 64)}},
+		{"tamper", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"content.post"}, ContentTypes: []string{"article"}, Limit: 1, Cursor: tamperedCursor}, caller, identity},
+		{"raw-offset", application.QueryInput{Query: "西湖", Mode: "result", ObjectTypes: []string{"content.post"}, ContentTypes: []string{"article"}, Limit: 1, Cursor: "1"}, caller, identity},
 	}
 	for _, mutation := range mutations {
 		t.Run(mutation.name, func(t *testing.T) {

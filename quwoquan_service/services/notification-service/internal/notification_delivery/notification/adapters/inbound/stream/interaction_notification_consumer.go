@@ -57,10 +57,17 @@ type GatheringInvitationEventHandler interface {
 	Handle(context.Context, application.InteractionStreamEvent) error
 }
 
+// ChatOfflinePushEventHandler 处理 chat MessageSent durable 扇出：
+// 不落 AppMessage inbox，只投影离线收件人的 push 投递作业。
+type ChatOfflinePushEventHandler interface {
+	Handle(context.Context, application.InteractionStreamEvent) error
+}
+
 type InteractionNotificationConsumer struct {
 	transport            DurableMessageTransport
 	facade               *application.AppMessageCommandFacade
 	gatheringInvitations GatheringInvitationEventHandler
+	chatOfflinePush      ChatOfflinePushEventHandler
 	failures             InteractionFailureStore
 	consumer             string
 	streams              []string
@@ -107,6 +114,19 @@ func NewInteractionNotificationConsumer(
 		result.gatheringInvitations = gatheringInvitations[0]
 	}
 	return result, nil
+}
+
+// WithChatOfflinePush 注入 chat 离线推送投影并把 events.chat.messages 纳入
+// 消费列表；未注入时不消费该 stream（kill-switch 语义由装配层决定）。
+func (c *InteractionNotificationConsumer) WithChatOfflinePush(
+	handler ChatOfflinePushEventHandler,
+) *InteractionNotificationConsumer {
+	if handler == nil {
+		return c
+	}
+	c.chatOfflinePush = handler
+	c.streams = append(c.streams, application.ChatOfflinePushStream)
+	return c
 }
 
 func (c *InteractionNotificationConsumer) EnsureGroups(ctx context.Context) error {
@@ -246,7 +266,13 @@ func (c *InteractionNotificationConsumer) processMessage(
 	errorClass := "invalid_event"
 	if err == nil {
 		errorClass = "projection_failed"
-		if event.EventType == "GatheringInvitationChanged" ||
+		if stream == application.ChatOfflinePushStream {
+			if c.chatOfflinePush == nil {
+				err = fmt.Errorf("chat offline push projection is not configured")
+			} else {
+				err = c.chatOfflinePush.Handle(ctx, event)
+			}
+		} else if event.EventType == "GatheringInvitationChanged" ||
 			event.EventType == "GatheringCancelled" {
 			if c.gatheringInvitations == nil {
 				err = fmt.Errorf("Gathering invitation projection is not configured")

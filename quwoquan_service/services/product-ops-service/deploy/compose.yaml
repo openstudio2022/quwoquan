@@ -52,6 +52,11 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # 启动期 EnsureIndices 对 telemetry 索引/ILM 做 fail-fast 初始化，
+      # 功能上强依赖 Elasticsearch；不声明该依赖时，冷启动调度里 ES 尚未
+      # 就绪（或未创建）会让本服务在 DNS 解析处直接退出。
+      elasticsearch:
+        condition: service_healthy
       # /healthz 对公开 AccountSecurityAuthority 做 fail-closed 探测；若不把
       # 真实 owner 纳入启动依赖，首次全栈 up 会在 Product Ops unhealthy 上
       # 等待，而 user-service 尚未创建，形成确定的启动顺序死锁。
@@ -61,6 +66,9 @@ services:
       - "${QWQ_COMPOSE_PRODUCT_OPS_SERVICE_PORT:-19250}:18086"
     volumes:
       - ${QWQ_COMPOSE_CONFIG_ROOT:?QWQ_COMPOSE_CONFIG_ROOT is required}:/etc/qwq-config:ro
+      # ES 告警评估循环的执行策略（真相源在 quwoquan_ops）；是否启用由
+      # telemetry_alerts.policy_path / alertmanager_url 配置决定。
+      - ../../../../quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml:/etc/qwq/observability/product_telemetry_alerts.yaml:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18086/healthz >/dev/null 2>&1"]
       interval: 10s

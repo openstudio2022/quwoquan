@@ -1,0 +1,44 @@
+schema: quwoquan.service_core_manifest.v1
+profile: service-core
+modules:
+  - name: user-service
+    host: user-service
+    port: 18081
+    addressEnvironment: USER_SERVICE_ADDR
+    internalAddress: 127.0.0.1:28081
+  - name: integration-service
+    host: integration-service
+    port: 18086
+  - name: notification-service
+    host: notification-service
+    port: 18087
+    addressEnvironment: NOTIFICATION_SERVICE_ADDR
+    internalAddress: 127.0.0.1:28088
+  - name: entity-service
+    host: entity-service
+    port: 18084
+  - name: tag-service
+    host: tag-service
+    port: 18092
+  - name: search-service
+    host: search-service
+    port: 18095
+  - name: content-service
+    host: content-service
+    port: 18080
+  - name: circle-service
+    host: circle-service
+    port: 18082
+  - name: chat-service
+    host: chat-service
+    port: 18081
+    addressEnvironment: CHAT_SERVICE_ADDR
+    internalAddress: 127.0.0.1:28082
+  - name: assistant-service
+    host: assistant-service
+    port: 18087
+    addressEnvironment: ASSISTANT_SERVICE_ADDR
+    internalAddress: 127.0.0.1:28087
+  - name: api-edge
+    host: api-edge
+    port: 18079

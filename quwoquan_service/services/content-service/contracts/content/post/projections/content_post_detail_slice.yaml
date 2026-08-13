@@ -47,12 +47,17 @@ fields:
   - {name: canonicalEntityId, type: string, nullable: true}
   - {name: primaryHomepageType, type: string, nullable: true}
   - {name: primaryHomepageSnapshot, type: PostHomepageSnapshot, nullable: true}
+  # 共同经历回流引用：沉浸详情态溯源标「他们从这条内容出发一起去了」的锚点。
+  - {name: gatheringRef, type: string, nullable: true}
   - {name: status, type: string, nullable: false}
   - {name: visibility, type: string, nullable: false}
   - {name: likeCount, type: int, nullable: false}
   - {name: commentCount, type: int, nullable: false}
   - {name: shareCount, type: int, nullable: false}
   - {name: viewCount, type: int, nullable: false}
+  # viewer 维度点赞态：true/false 为服务端权威值；null 表示本次响应未附着
+  # viewer 态（匿名请求），端侧不得据 null 回滚本地状态。
+  - {name: viewerLiked, type: bool, nullable: true}
   - {name: createdAt, type: timestamp, nullable: false}
   - {name: updatedAt, type: timestamp, nullable: false}
   - {name: publishedAt, type: timestamp, nullable: true}

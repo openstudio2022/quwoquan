@@ -497,6 +497,14 @@ types:
       - {name: content, type: string, constraints: [NOT_BLANK]}
       - {name: updatedBy, type: string, constraints: [NOT_BLANK]}
       - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
+  ContactIntersectionFact:
+    description: 联系首页与 1v1 会话头的真实交集点（云侧 IntersectionReason 只读快照，最多两条）。primaryText 只透传云侧结论句，Chat 不拼句、不改写、不按 kind 分支；服务端按当前 viewer/contact 重解析不成立时整条不下发（fail-closed，不伪造依据）。kind/dimension/intersectionClass 与 recommendation 交集注册表同轨，端侧图标/色调按 kind 查 generated 展示元数据表。
+    fields:
+      - {name: intersectionId, type: string, constraints: [NOT_BLANK]}
+      - {name: kind, type: string, constraints: [NOT_BLANK]}
+      - {name: dimension, type: string, constraints: [NOT_BLANK]}
+      - {name: intersectionClass, type: string, constraints: [NOT_BLANK]}
+      - {name: primaryText, type: string, constraints: [NOT_BLANK]}
   GatheringAssetIndexItem:
     description: Message/MediaAsset owner 事实的只读索引行；不复制文件或媒体生命周期。
     fields:

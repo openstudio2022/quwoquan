@@ -1,32 +1,38 @@
-package main
+package bootstrap
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
 	"quwoquan_service/runtime/controlplane"
 	circleconfig "quwoquan_service/services/circle-service/internal/circle_management/circle/infrastructure/runtimeconfig"
 )
 
-func startConfigSyncLoop(
+func registerConfigSyncWorker(
+	workers *workerRegistry,
 	serviceName string,
 	appEnv string,
 	configRoot string,
 	configVersion string,
 	imageVersion string,
 	instanceID string,
-	hotStore *controlplane.HotConfigStore,
-) {
+) error {
+	if workers == nil {
+		return fmt.Errorf("circle-service config sync worker registry is required")
+	}
 	baseURL := strings.TrimSpace(getenvOrDefault("PLATFORM_OPS_BASE_URL", ""))
 	if baseURL == "" {
 		baseURL = strings.TrimSpace(getenvOrDefault("VITE_PLATFORM_OPS_BASE_URL", ""))
 	}
 	if baseURL == "" {
 		if strings.EqualFold(strings.TrimSpace(appEnv), "prod") {
-			panic("circle-service PLATFORM_OPS_BASE_URL is required in prod (config sync/ACK loop)")
+			return fmt.Errorf("circle-service PLATFORM_OPS_BASE_URL is required in prod (config sync/ACK loop)")
 		}
-		return
+		return nil
 	}
-	controlplane.RunConfigSyncLoop(controlplane.ConfigSyncLoopOptions{
+	hotStore := controlplane.NewHotConfigStore()
+	options := controlplane.ConfigSyncLoopOptions{
 		BaseURL:               baseURL,
 		ServiceName:           serviceName,
 		AppEnv:                appEnv,
@@ -37,5 +43,9 @@ func startConfigSyncLoop(
 		ReleaseManifestDigest: strings.TrimSpace(getenvOrDefault("RELEASE_MANIFEST_DIGEST", "")),
 		InstanceID:            instanceID,
 		HotStore:              hotStore,
+	}
+	workers.Add(func(ctx context.Context) {
+		controlplane.RunConfigSyncLoopContext(ctx, options)
 	})
+	return nil
 }

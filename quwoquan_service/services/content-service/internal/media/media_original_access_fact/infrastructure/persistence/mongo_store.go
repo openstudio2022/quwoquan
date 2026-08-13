@@ -105,6 +105,28 @@ func (s *MongoStore) Append(
 	return result, nil
 }
 
+// FindFact reads one immutable audit fact by its audit identity. It never
+// widens the lookup beyond the primary key; ownership checks belong to the
+// consuming query facade.
+func (s *MongoStore) FindFact(
+	ctx context.Context,
+	auditID string,
+) (originalaccessmodel.Fact, bool, error) {
+	auditID = strings.TrimSpace(auditID)
+	if auditID == "" {
+		return originalaccessmodel.Fact{}, false, nil
+	}
+	var document mediaOriginalAccessFactDocument
+	err := s.facts.FindOne(ctx, bson.D{{Key: "_id", Value: auditID}}).Decode(&document)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return originalaccessmodel.Fact{}, false, nil
+	}
+	if err != nil {
+		return originalaccessmodel.Fact{}, false, err
+	}
+	return mediaOriginalAccessFactFromDocument(document), true, nil
+}
+
 func (s *MongoStore) findMediaOriginalAccessReceipt(
 	ctx context.Context,
 	idempotencyKey string,

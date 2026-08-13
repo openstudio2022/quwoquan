@@ -1,0 +1,75 @@
+package main
+
+import (
+	"path/filepath"
+	"testing"
+)
+
+func TestAssistantContractSchemaFieldGovernance(t *testing.T) {
+	metadataDir := initializeTestContractGraph(t)
+	cases := []struct {
+		domain string
+		name   string
+	}{
+		{domain: "assistant", name: "runtime_failure"},
+		{domain: "assistant", name: "assistant_session"},
+		{domain: "assistant", name: "assistant_run"},
+		{domain: "assistant", name: "skill_subscription"},
+		{domain: "assistant", name: "device_context"},
+		{domain: "assistant", name: "tool_use"},
+		{domain: "assistant", name: "assistant_stream_event"},
+	}
+	allowedMapFields := map[string]bool{
+		"runtime_failure.context":                            true,
+		"device_context.device_context_facts.coarseLocation": true,
+		"tool_use.input":                                     true,
+		"tool_use.result":                                    true,
+		"assistant_stream_event.payload":                     true,
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.domain+"/"+tc.name, func(t *testing.T) {
+			schemaPath := filepath.Join(metadataDir, tc.domain, tc.name, "schema.yaml")
+			if tc.name == "assistant_session" ||
+				tc.name == "skill_subscription" ||
+				tc.name == "assistant_run" {
+				schemaPath = filepath.Join(
+					metadataDir,
+					tc.domain,
+					"assistant",
+					tc.name,
+					"schema.yaml",
+				)
+			}
+			schema, err := readAssistantContractSchema(schemaPath)
+			if err != nil {
+				t.Fatalf("read schema: %v", err)
+			}
+			assertAssistantContractFieldGovernance(t, tc.name, tc.name, schema.Fields, allowedMapFields)
+			for subName, sub := range schema.Subcontracts {
+				assertAssistantContractFieldGovernance(t, tc.name, tc.name+"."+subName, sub.Fields, allowedMapFields)
+			}
+		})
+	}
+}
+
+func assertAssistantContractFieldGovernance(t *testing.T, schemaName, owner string, fields []assistantContractField, allowedMapFields map[string]bool) {
+	t.Helper()
+	for _, field := range fields {
+		key := owner + "." + field.Name
+		if field.Name == "errorMessage" || field.Name == "debugMessage" {
+			t.Fatalf("%s uses naked error message field %q", schemaName, field.Name)
+		}
+		if field.Name == "failure" || field.Name == "runtimeFailure" {
+			if field.Ref != "RuntimeFailureWire" {
+				t.Fatalf("%s.%s must ref RuntimeFailureWire, got %q", schemaName, field.Name, field.Ref)
+			}
+		}
+		switch field.Type {
+		case "map", "any", "list<map>":
+			if !allowedMapFields[key] {
+				t.Fatalf("%s has weak boundary field %s of type %s", schemaName, key, field.Type)
+			}
+		}
+	}
+}

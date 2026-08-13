@@ -38,7 +38,12 @@ type searchCursorEnvelope struct {
 	CandidateDigest string `json:"candidateDigest"`
 	PolicyDigest    string `json:"policyDigest"`
 	Offset          int    `json:"offset"`
-	ExpiresAt       int64  `json:"expiresAt"`
+	// PITID pins every follow-up page to the point-in-time snapshot the
+	// pagination started on (lazy: opened on the first follow-up page). An
+	// expired snapshot fails the whole cursor closed — pagination never
+	// silently degrades to an unsnapshotted query.
+	PITID     string `json:"pitId,omitempty"`
+	ExpiresAt int64  `json:"expiresAt"`
 }
 
 type objectReferenceEnvelope struct {
@@ -69,6 +74,7 @@ func (codec *SearchCursorCodec) encodeCursor(
 	caller QueryCaller,
 	identity QueryExecutionIdentity,
 	offset int,
+	pitID string,
 ) (string, error) {
 	if codec == nil || codec.aead == nil || offset <= 0 {
 		return "", ErrSearchCursor
@@ -81,7 +87,8 @@ func (codec *SearchCursorCodec) encodeCursor(
 		Version: searchCursorVersion, QueryDigest: queryDigest,
 		ScopeDigest: scopeDigest, PrincipalDigest: principalDigest,
 		CandidateDigest: identity.CandidateDigest, PolicyDigest: identity.PolicyDigest,
-		Offset: offset, ExpiresAt: codec.now().UTC().Add(searchCursorTTL).Unix(),
+		Offset: offset, PITID: strings.TrimSpace(pitID),
+		ExpiresAt: codec.now().UTC().Add(searchCursorTTL).Unix(),
 	})
 	if err != nil {
 		return "", fmt.Errorf("encode search cursor: %w", err)
@@ -94,21 +101,21 @@ func (codec *SearchCursorCodec) decodeCursor(
 	in QueryInput,
 	caller QueryCaller,
 	identity QueryExecutionIdentity,
-) (int, error) {
+) (int, string, error) {
 	if codec == nil || codec.aead == nil || strings.TrimSpace(token) == "" || len(token) > maxSearchCursorSize {
-		return 0, ErrSearchCursor
+		return 0, "", ErrSearchCursor
 	}
 	payload, err := codec.open("search-cursor", token)
 	if err != nil {
-		return 0, ErrSearchCursor
+		return 0, "", ErrSearchCursor
 	}
 	var envelope searchCursorEnvelope
 	if err := json.Unmarshal(payload, &envelope); err != nil {
-		return 0, ErrSearchCursor
+		return 0, "", ErrSearchCursor
 	}
 	queryDigest, scopeDigest, principalDigest, err := cursorBindingDigests(in, caller, identity)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if envelope.Version != searchCursorVersion || envelope.Offset <= 0 ||
 		envelope.ExpiresAt <= codec.now().UTC().Unix() ||
@@ -116,9 +123,9 @@ func (codec *SearchCursorCodec) decodeCursor(
 		envelope.PrincipalDigest != principalDigest ||
 		envelope.CandidateDigest != identity.CandidateDigest ||
 		envelope.PolicyDigest != identity.PolicyDigest {
-		return 0, ErrSearchCursor
+		return 0, "", ErrSearchCursor
 	}
-	return envelope.Offset, nil
+	return envelope.Offset, envelope.PITID, nil
 }
 
 func (codec *SearchCursorCodec) encodeObjectReference(objectType, objectID string) (string, error) {
@@ -167,19 +174,22 @@ func cursorBindingDigests(
 	normalizedQuery := rtsearch.Analyze(in.Query, in.ObjectTypes).Normalized
 	queryDigest := digestJSON(normalizedQuery)
 	objectTypes := normalizedSorted(in.ObjectTypes)
+	contentTypes := normalizedSorted(in.ContentTypes)
 	ids := normalizedSorted(in.IDs)
 	tags := normalizedSorted(in.Tags)
 	scopeDigest := digestJSON(struct {
-		Mode        string   `json:"mode"`
-		ObjectTypes []string `json:"objectTypes"`
-		IDs         []string `json:"ids"`
-		Tags        []string `json:"tags"`
-		TimeRange   any      `json:"timeRange,omitempty"`
-		Near        any      `json:"near,omitempty"`
-		Limit       int      `json:"limit"`
+		Mode         string   `json:"mode"`
+		ObjectTypes  []string `json:"objectTypes"`
+		ContentTypes []string `json:"contentTypes"`
+		IDs          []string `json:"ids"`
+		Tags         []string `json:"tags"`
+		TimeRange    any      `json:"timeRange,omitempty"`
+		Near         any      `json:"near,omitempty"`
+		Limit        int      `json:"limit"`
 	}{
 		Mode: strings.ToLower(strings.TrimSpace(in.Mode)), ObjectTypes: objectTypes,
-		IDs: ids, Tags: tags, TimeRange: in.TimeRange, Near: in.Near, Limit: in.Limit,
+		ContentTypes: contentTypes,
+		IDs:          ids, Tags: tags, TimeRange: in.TimeRange, Near: in.Near, Limit: in.Limit,
 	})
 	return queryDigest, scopeDigest, digestJSON(principal), nil
 }

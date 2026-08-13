@@ -41,3 +41,12 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/feed_delivery_page/real_redis_delivery_port__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: redis, digest_binding: candidate}
+- case_id: feed_delivery_page_edge_recovery_app_uat
+  spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-009
+  producer: app
+  layer: user_acceptance
+  target: {kind: page, id: content.home}
+  runner_source_path: quwoquan_app/test/user_acceptance/service/content_service/content/feed_delivery_page/feed_controlled_edge_recovery__user_acceptance_test.dart
+  executions:
+    - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+    - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

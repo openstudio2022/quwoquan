@@ -57,8 +57,14 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      # 只要求进程已启动，不等 healthy：recommendation-service 的 healthy 前提是
+      # active 实验策略，而策略经 product-ops 公开 command 激活，product-ops 又
+      # 依赖 user-service（service-core，含本服务）healthy——若这里等 rec healthy，
+      # 首次全栈冷启动构成 content→rec→policy→product-ops→service-core→content
+      # 的确定性死锁。运行期对 rec 的调用已有请求级 fail-closed 错误链路兜底，
+      # 不需要进程级 ready 顺序。
       recommendation-service:
-        condition: service_healthy
+        condition: service_started
     ports:
       - "${QWQ_COMPOSE_CONTENT_PORT:-19220}:18080"
     volumes:

@@ -357,14 +357,18 @@ func (s *ElasticsearchEventLogStore) HasEventBatch(
 	if err != nil || !complete {
 		return complete, err
 	}
-	records, err := eventRecordsFromElasticsearchDocuments(rawDocuments)
+	// 直接消费 raw 文档全字段重建聚合行：经结构体的读回会丢扩展字段，
+	// 导致 repair 生成第二套维度为空的聚合文档。
+	rows, err := rollupRowsFromElasticsearchDocuments(rawDocuments)
 	if err != nil {
 		return false, err
 	}
-	rollups, err := buildEventRollupDocuments(
+	rollups, err := buildContractRollupDocuments(
 		s.config.AggregateIndex,
 		batchKey,
-		records,
+		"raw_records",
+		"event",
+		rows,
 	)
 	if err != nil {
 		return false, err

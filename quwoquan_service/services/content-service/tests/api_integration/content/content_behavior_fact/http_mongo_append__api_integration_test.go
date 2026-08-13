@@ -75,6 +75,8 @@ func TestReportBehaviorsUsesTrustedActorAndIdempotentlyAppendsRealMongoFact(t *t
 	perform := func(payload string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 		request.Header.Set("Content-Type", "application/json")
+		// 契约声明 idempotency: required；真实调用形态始终携带稳定请求键。
+		request.Header.Set("Idempotency-Key", "behavior-batch-idempotency")
 		request = request.WithContext(operation.WithContext(request.Context(), operation.Context{
 			OperationID:  "content.content_behavior_fact.ReportBehaviors",
 			RequestID:    "request-behavior",

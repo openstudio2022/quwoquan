@@ -1,6 +1,7 @@
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008.t1
 // readiness_case: initiate-call-local
 // readiness_case: answer-call-local
 // readiness_case: reject-call-local

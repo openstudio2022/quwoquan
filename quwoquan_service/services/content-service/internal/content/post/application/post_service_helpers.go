@@ -126,7 +126,11 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"primaryHomepageId":         strings.TrimSpace(post.PrimaryHomepageId),
 		"primaryHomepageSnapshot":   postHomepageSnapshotForEvent(post),
 		"visitedAt":                 formatTimePtr(post.VisitedAt),
-		"captureDisclosure":         asStringSlice(post.CaptureDisclosure),
+		// 共同经历回流引用：只在作者 Participation 校验通过后落库（fail-closed，
+		// 见 validateGatheringReference），下游 recommendation 据此生产
+		// coExperiencedGathering 交集事实与社会证明计数。
+		"gatheringRef":      strings.TrimSpace(post.GatheringRef),
+		"captureDisclosure": asStringSlice(post.CaptureDisclosure),
 	}
 }
 

@@ -7,9 +7,18 @@ import json
 import threading
 from typing import Any
 
+from prometheus_client import Counter
+
 from internal.recommendation.recommendation_exposure_fact.application.appender import (
     Appender,
     ExposureFact,
+)
+
+# 契约 runtime_entrypoints[].telemetry.metric 同名计数器（outcome=ok|error）。
+_INGEST_OUTCOMES = Counter(
+    "recommendation_exposure_ingest",
+    "Contract runtime entrypoint outcome counter (FeedPageDelivered ingest).",
+    ["outcome"],
 )
 
 
@@ -298,6 +307,15 @@ class FeedPageDeliveredConsumer:
         self._store.clear_failure(stream_id)
 
     def process_once(self) -> int:
+        try:
+            processed = self._process_once_inner()
+        except Exception:
+            _INGEST_OUTCOMES.labels(outcome="error").inc()
+            raise
+        _INGEST_OUTCOMES.labels(outcome="ok").inc()
+        return processed
+
+    def _process_once_inner(self) -> int:
         self.ensure_group()
         seen: set[str] = set()
         messages: list[tuple[str, dict[str, str]]] = []

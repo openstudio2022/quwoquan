@@ -952,3 +952,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/api_integration/service/user_service/relationship/persona_relationship/persona_block_remote__api_integration_test.dart
     executions:
       - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: persona_relationship_blocked_users_app_uat
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: user.blocked_users}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/user_service/relationship/persona_relationship/blocked_users_remote__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

@@ -134,7 +134,8 @@ func (*rtcCallLogMessageStoreStub) AppendMessageOutboxEvent(
 }
 
 type rtcCallLogProjectionStub struct {
-	message messagemodel.Message
+	message     messagemodel.Message
+	projections int
 }
 
 func (s *rtcCallLogProjectionStub) ProjectCommittedMessage(
@@ -142,6 +143,7 @@ func (s *rtcCallLogProjectionStub) ProjectCommittedMessage(
 	message messagemodel.Message,
 ) error {
 	s.message = message
+	s.projections++
 	return nil
 }
 

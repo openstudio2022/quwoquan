@@ -158,11 +158,21 @@ func run(options options, output io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// 构建管线在轨迹回放评测门禁(TestAgentReplayEvaluationGate)通过后运行;
+	// receipt 把该评测结论绑定到本次构建的 exact package/corpus digest。
+	receipt, err := packagemodel.PassedEvaluationReceiptFor(
+		built.Release,
+		options.BuiltAt,
+	)
+	if err != nil {
+		return err
+	}
 	publication := packageartifact.PublicationArtifact{
-		CommandID:        options.CommandID,
-		ExpectedRevision: options.ExpectedRevision,
-		ActivatedBy:      options.ActivatedBy,
-		Release:          built.Release,
+		CommandID:         options.CommandID,
+		ExpectedRevision:  options.ExpectedRevision,
+		ActivatedBy:       options.ActivatedBy,
+		Release:           built.Release,
+		EvaluationReceipt: receipt,
 	}
 	publicationRef, err := writePackage(options.OutputRoot, options.BuildID, built, publication)
 	if err != nil {

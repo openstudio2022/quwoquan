@@ -33,7 +33,9 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: 1
+  # 跨服务 durable 事实流的发布/消费方必须共用同一 db（运行时事实为 db0）；
+  # 共享单实例时 scene 隔离靠 key 前缀而非 db。
+  default: 0
 - key: sys.tag-service.redis.general.mode
   type: string
   scope: workload

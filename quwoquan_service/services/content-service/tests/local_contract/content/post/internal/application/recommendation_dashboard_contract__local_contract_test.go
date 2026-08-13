@@ -9,25 +9,25 @@ import (
 	"testing"
 )
 
+// grafanaDashboardEnvelope 对应 Grafana file provisioning 消费的 bare
+// dashboard model（顶层即 dashboard，不带 API 响应包装）。
 type grafanaDashboardEnvelope struct {
-	Dashboard struct {
-		Title       string   `json:"title"`
-		UID         string   `json:"uid"`
-		Description string   `json:"description"`
-		Tags        []string `json:"tags"`
-		Templating  struct {
-			List []struct {
-				Name  string `json:"name"`
-				Query string `json:"query"`
-			} `json:"list"`
-		} `json:"templating"`
-		Panels []struct {
-			Title   string `json:"title"`
-			Targets []struct {
-				Expr string `json:"expr"`
-			} `json:"targets"`
-		} `json:"panels"`
-	} `json:"dashboard"`
+	Title       string   `json:"title"`
+	UID         string   `json:"uid"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	Templating  struct {
+		List []struct {
+			Name  string `json:"name"`
+			Query string `json:"query"`
+		} `json:"list"`
+	} `json:"templating"`
+	Panels []struct {
+		Title   string `json:"title"`
+		Targets []struct {
+			Expr string `json:"expr"`
+		} `json:"targets"`
+	} `json:"panels"`
 }
 
 type recommendationDashboardSLO struct {
@@ -64,16 +64,16 @@ func TestRecommendationCommercialDashboardLocalContract(t *testing.T) {
 	var slo recommendationDashboardSLO
 	mustLoadYAML(t, sloPath, &slo)
 
-	if dashboard.Dashboard.UID != "qwq-l2-recommendation-commercial" {
-		t.Fatalf("dashboard uid drifted: %q", dashboard.Dashboard.UID)
+	if dashboard.UID != "qwq-l2-recommendation-commercial" {
+		t.Fatalf("dashboard uid drifted: %q", dashboard.UID)
 	}
 	for _, tag := range []string{"recommendation", "commercial-maturity", "attribution"} {
-		if !slices.Contains(dashboard.Dashboard.Tags, tag) {
-			t.Fatalf("dashboard tags missing %q: %#v", tag, dashboard.Dashboard.Tags)
+		if !slices.Contains(dashboard.Tags, tag) {
+			t.Fatalf("dashboard tags missing %q: %#v", tag, dashboard.Tags)
 		}
 	}
-	if len(dashboard.Dashboard.Panels) < 8 {
-		t.Fatalf("dashboard must expose commercial review panels, got %d", len(dashboard.Dashboard.Panels))
+	if len(dashboard.Panels) < 8 {
+		t.Fatalf("dashboard must expose commercial review panels, got %d", len(dashboard.Panels))
 	}
 
 	expressions := strings.Join(appendDashboardExpressions(dashboard), "\n")
@@ -148,11 +148,11 @@ func mustLoadGrafanaDashboard(t *testing.T, path string) grafanaDashboardEnvelop
 }
 
 func appendDashboardExpressions(dashboard grafanaDashboardEnvelope) []string {
-	expressions := make([]string, 0, len(dashboard.Dashboard.Panels))
-	for _, item := range dashboard.Dashboard.Templating.List {
+	expressions := make([]string, 0, len(dashboard.Panels))
+	for _, item := range dashboard.Templating.List {
 		expressions = append(expressions, item.Query)
 	}
-	for _, panel := range dashboard.Dashboard.Panels {
+	for _, panel := range dashboard.Panels {
 		for _, target := range panel.Targets {
 			expressions = append(expressions, target.Expr)
 		}

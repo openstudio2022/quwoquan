@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import (
 	"errors"
@@ -64,6 +64,9 @@ type runtimeConfig struct {
 		Session   policyConfig `yaml:"session"`
 		Operation struct {
 			ContentPostGetFeed policyConfig `yaml:"content_post_get_feed"`
+			// 匿名恢复异常上报的权威来源准入（OPEN-008 上收）：
+			// 匿名操作的 admission subject 是可信连接层 IP（network kind）。
+			OpsRecoveryFailureReport policyConfig `yaml:"ops_recovery_failure_report"`
 		} `yaml:"operation"`
 	} `yaml:"rate_limit"`
 	UserService struct {
@@ -245,6 +248,7 @@ func (config runtimeConfig) policySet() application.PolicySet {
 		},
 		ByOperationID: map[string]domain.Policy{
 			"content.post.GetFeed": config.RateLimit.Operation.ContentPostGetFeed.policy(),
+			"ops.recovery_failure.ReportRecoveryFailure": config.RateLimit.Operation.OpsRecoveryFailureReport.policy(),
 		},
 	}
 }

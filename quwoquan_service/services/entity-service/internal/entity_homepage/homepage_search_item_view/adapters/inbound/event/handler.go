@@ -5,8 +5,12 @@ import (
 	"strings"
 	"time"
 
+	rtobs "quwoquan_service/runtime/observability"
 	searchitemapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_search_item_view/application"
 )
+
+// 契约 runtime_entrypoints[].telemetry.metric 同名计数器（outcome=ok|error）。
+var projectionOutcomes = rtobs.NewEntrypointOutcomeCounter("entity_homepage_search_item_projection")
 
 type HomepagePublicEvent struct {
 	EventType     string
@@ -35,7 +39,14 @@ func NewHandler(projector *searchitemapp.Projector) *HomepageSearchItemViewProje
 	return &HomepageSearchItemViewProjector{projector: projector}
 }
 
-func (h *HomepageSearchItemViewProjector) Apply(ctx context.Context, event HomepagePublicEvent) (bool, error) {
+func (h *HomepageSearchItemViewProjector) Apply(ctx context.Context, event HomepagePublicEvent) (applied bool, err error) {
+	defer func() {
+		outcome := "ok"
+		if err != nil {
+			outcome = "error"
+		}
+		projectionOutcomes.WithLabelValues(outcome).Inc()
+	}()
 	switch strings.TrimSpace(event.EventType) {
 	case "HomepageRetired", "HomepageDeleted":
 		return h.projector.Delete(ctx, event.HomepageID, event.SourceVersion)

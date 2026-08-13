@@ -34,17 +34,18 @@ type StoryRuntimeConfig struct {
 }
 
 type PostService struct {
-	store                 postDataAccess
-	mediaAssetBindings    MediaAssetBindingReader
-	signaler              rtrec.SignalProcessor
-	publisher             messaging.EventPublisher
-	logger                *slog.Logger
-	mu                    sync.RWMutex
-	tombstoneReader       postports.TombstoneReader
-	commentCounts         commentports.CountReader
-	publicationRateGate   postports.PublicationRateGate
-	publicationSafetyGate postports.PublicationSafetyGate
-	storyRuntime          StoryRuntimeConfig
+	store                        postDataAccess
+	mediaAssetBindings           MediaAssetBindingReader
+	signaler                     rtrec.SignalProcessor
+	publisher                    messaging.EventPublisher
+	logger                       *slog.Logger
+	mu                           sync.RWMutex
+	tombstoneReader              postports.TombstoneReader
+	commentCounts                commentports.CountReader
+	publicationRateGate          postports.PublicationRateGate
+	publicationSafetyGate        postports.PublicationSafetyGate
+	gatheringParticipationReader postports.GatheringParticipationReader
+	storyRuntime                 StoryRuntimeConfig
 }
 
 func NewPostService(dataPorts DataPorts, opts ...PostServiceOption) *PostService {
@@ -100,6 +101,14 @@ func WithPublicationAdmission(
 		s.publicationRateGate = rateGate
 		s.publicationSafetyGate = safetyGate
 	}
+}
+
+// WithGatheringParticipationReader 注入共同经历回流引用（post.gatheringRef）的
+// Circle Participation 校验端口。未装配时携带 gatheringRef 的发布 fail-closed。
+func WithGatheringParticipationReader(
+	reader postports.GatheringParticipationReader,
+) PostServiceOption {
+	return func(s *PostService) { s.gatheringParticipationReader = reader }
 }
 
 // WithLogger sets a structured logger.

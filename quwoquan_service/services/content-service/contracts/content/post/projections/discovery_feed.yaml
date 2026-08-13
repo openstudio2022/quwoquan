@@ -1,10 +1,17 @@
 collection: rm_discovery_feed
 consumers:
-- app (feed)
-- recommendation-engine
-description: '发现流 ReadModel。聚合 Post + 用户行为 + 推荐特征，
+- none (write-only; feed 读路径已单轨迁移至 recommendation-service 排序窗口)
+description: '发现流 ReadModel（content 库侧，当前只写不读）。
 
-  供 App 信息流消费。由 Projector 从 Post 和行为事件投影构建。
+  由 canonical release importer 与在线 DiscoveryFeedProjector 双写维护；
+
+  在线读侧真相是 recommendation-service 的候选投影（rec 库 rm_discovery_feed，
+
+  经 events.content.post_lifecycle 构建）与 RankedRecommendationWindow。
+
+  收敛裁决：删除本侧双写、单轨归 recommendation（见
+
+  specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#open-001）。
 
   '
 read_contract:

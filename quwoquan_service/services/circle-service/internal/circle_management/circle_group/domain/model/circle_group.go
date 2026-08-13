@@ -68,22 +68,25 @@ const (
 
 // CircleGroup domain model.
 type CircleGroup struct {
-	ID                   string                `json:"id" bson:"_id"`
-	Version              int64                 `json:"version" bson:"version"`
-	CircleID             string                `json:"circleId" bson:"circleId"`
-	ParentGroupID        string                `json:"parentGroupId" bson:"parentGroupId"`
-	GroupType            CircleGroupType       `json:"groupType" bson:"groupType"`
-	NodeType             OrganizationNodeType  `json:"nodeType" bson:"nodeType"`
-	Name                 string                `json:"name" bson:"name"`
-	Description          string                `json:"description" bson:"description"`
-	Visibility           CircleGroupVisibility `json:"visibility" bson:"visibility"`
-	JoinPolicy           CircleGroupJoinPolicy `json:"joinPolicy" bson:"joinPolicy"`
-	CreatedByPersonaID   string                `json:"createdByPersonaId" bson:"createdByPersonaId"`
-	ConversationID       string                `json:"conversationId" bson:"conversationId"`
-	StorageEnabled       bool                  `json:"storageEnabled" bson:"storageEnabled"`
-	NoticeEnabled        bool                  `json:"noticeEnabled" bson:"noticeEnabled"`
-	IsDefaultPublicGroup bool                  `json:"isDefaultPublicGroup" bson:"isDefaultPublicGroup"`
-	Status               CircleGroupStatus     `json:"status" bson:"status"`
-	CreatedAt            time.Time             `json:"createdAt" bson:"createdAt"`
-	UpdatedAt            time.Time             `json:"updatedAt" bson:"updatedAt"`
+	ID                 string                `json:"id" bson:"_id"`
+	Version            int64                 `json:"version" bson:"version"`
+	CircleID           string                `json:"circleId" bson:"circleId"`
+	ParentGroupID      string                `json:"parentGroupId" bson:"parentGroupId"`
+	GroupType          CircleGroupType       `json:"groupType" bson:"groupType"`
+	NodeType           OrganizationNodeType  `json:"nodeType" bson:"nodeType"`
+	Name               string                `json:"name" bson:"name"`
+	Description        string                `json:"description" bson:"description"`
+	Visibility         CircleGroupVisibility `json:"visibility" bson:"visibility"`
+	JoinPolicy         CircleGroupJoinPolicy `json:"joinPolicy" bson:"joinPolicy"`
+	CreatedByPersonaID string                `json:"createdByPersonaId" bson:"createdByPersonaId"`
+	// omitempty 是 uq_circle_group_conversation sparse 唯一索引的前置：未绑定
+	// 会话的组不得落 `conversationId: ""`，否则同圈第二个待绑定组会被空串
+	// duplicate key 误判为冲突（曾表现为连续建两群 409 group_default_conflict）。
+	ConversationID       string            `json:"conversationId" bson:"conversationId,omitempty"`
+	StorageEnabled       bool              `json:"storageEnabled" bson:"storageEnabled"`
+	NoticeEnabled        bool              `json:"noticeEnabled" bson:"noticeEnabled"`
+	IsDefaultPublicGroup bool              `json:"isDefaultPublicGroup" bson:"isDefaultPublicGroup"`
+	Status               CircleGroupStatus `json:"status" bson:"status"`
+	CreatedAt            time.Time         `json:"createdAt" bson:"createdAt"`
+	UpdatedAt            time.Time         `json:"updatedAt" bson:"updatedAt"`
 }

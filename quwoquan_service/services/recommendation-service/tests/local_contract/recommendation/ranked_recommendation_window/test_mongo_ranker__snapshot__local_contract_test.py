@@ -8,6 +8,9 @@ from generated.recommendation.recommendation_model_release.models.request_respon
     CandidateScore,
     ModelScoreResponse,
 )
+from internal.recommendation.ranked_recommendation_window.domain.discovery_tuning import (
+    DiscoveryRankingTuning,
+)
 from internal.recommendation.ranked_recommendation_window.infrastructure.mongo_ranker import (
     MongoCandidateRanker,
 )
@@ -65,6 +68,11 @@ class _Candidates:
                 "sourceSequence": 3,
             },
         ]
+
+    def list_for_ranking_by_content_ids(
+        self, *, scenario: str, content_ids: tuple, limit: int
+    ):
+        return []
 
     def list_object_card_candidates(self, *, limit: int):
         assert limit == 400
@@ -124,6 +132,7 @@ def _ranker(
     *,
     candidates: _Candidates | None = None,
     features: _Features | None = None,
+    tuning: DiscoveryRankingTuning | None = None,
 ) -> MongoCandidateRanker:
     experiment_publisher = _AssignmentPublisher()
     experiments = ExperimentAssignments(experiment_publisher)
@@ -156,6 +165,7 @@ def _ranker(
                 sort_keys=True,
             ).encode("utf-8")
         ).hexdigest(),
+        tuning=tuning or DiscoveryRankingTuning.neutral(),
         now=lambda: datetime(2026, 7, 31, 12, tzinfo=timezone.utc),
     )
 

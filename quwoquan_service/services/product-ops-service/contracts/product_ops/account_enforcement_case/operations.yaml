@@ -272,7 +272,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: OpenAccountModerationCase}
-  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/account_enforcement_case/account_enforcement_case_postgres_http__api_integration_test.go
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/account_enforcement_case/account_enforcement_case_postgres_http__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
 - case_id: open-account-appeal-case-local
@@ -288,7 +288,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: OpenAccountAppealCase}
-  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/account_enforcement_case/account_enforcement_case_postgres_http__api_integration_test.go
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/account_enforcement_case/account_enforcement_case_postgres_http__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
 - case_id: review-account-enforcement-case-local
@@ -304,7 +304,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: ReviewAccountEnforcementCase}
-  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/account_enforcement_case/account_enforcement_case_postgres_http__api_integration_test.go
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/account_enforcement_case/account_enforcement_case_postgres_http__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
 - case_id: retry-account-enforcement-delivery-local
@@ -320,7 +320,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: RetryAccountEnforcementDelivery}
-  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/account_enforcement_case/account_enforcement_case_postgres_http__api_integration_test.go
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/account_enforcement_case/account_enforcement_case_postgres_http__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
 - case_id: get-account-enforcement-case-local
@@ -336,6 +336,14 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: GetAccountEnforcementCase}
-  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/account_enforcement_case/account_enforcement_case_postgres_http__api_integration_test.go
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/account_enforcement_case/account_enforcement_case_postgres_http__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+- case_id: account_enforcement_gamma_uat_ops_env
+  spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/account-moderation-and-appeal-enforcement/spec.md#gwt-001
+  producer: ops
+  layer: environment_acceptance
+  target: {kind: object, id: ops.account_enforcement_case}
+  runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/product-ops-service/gamma/account_enforcement_gamma_uat.py
+  executions:
+    - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}

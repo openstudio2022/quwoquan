@@ -297,10 +297,11 @@ func TestActiveReleaseUsesDigestCacheAndRollbackReusesVerifiedRelease(
 		context.Background(),
 		"activate-1",
 		application.ActivateInput{
-			PackageID:        testPackageID,
-			ReleaseDigest:    releaseOne.ReleaseDigest,
-			ExpectedRevision: 0,
-			ActivatedBy:      "service:skill-publisher",
+			PackageID:         testPackageID,
+			ReleaseDigest:     releaseOne.ReleaseDigest,
+			ExpectedRevision:  0,
+			ActivatedBy:       "service:skill-publisher",
+			EvaluationReceipt: passedEvaluationReceipt(t, releaseOne),
 		},
 	)
 	if err != nil {
@@ -343,10 +344,11 @@ func TestActiveReleaseUsesDigestCacheAndRollbackReusesVerifiedRelease(
 		context.Background(),
 		"activate-2",
 		application.ActivateInput{
-			PackageID:        testPackageID,
-			ReleaseDigest:    releaseTwo.ReleaseDigest,
-			ExpectedRevision: 1,
-			ActivatedBy:      "service:skill-publisher",
+			PackageID:         testPackageID,
+			ReleaseDigest:     releaseTwo.ReleaseDigest,
+			ExpectedRevision:  1,
+			ActivatedBy:       "service:skill-publisher",
+			EvaluationReceipt: passedEvaluationReceipt(t, releaseTwo),
 		},
 	); err != nil {
 		t.Fatal(err)
@@ -387,6 +389,153 @@ func TestActiveReleaseUsesDigestCacheAndRollbackReusesVerifiedRelease(
 	}
 	assertSingleReleaseRead(t, repository, releaseOne)
 	assertSingleAssetRead(t, repository, releaseOne)
+}
+
+// passedEvaluationReceipt 构造与该 release 精确绑定的评测通过凭据:
+// package digest 与 replay corpus asset 的 assetId/digest 全部逐字一致。
+func passedEvaluationReceipt(
+	t *testing.T,
+	release model.Release,
+) model.EvaluationReceipt {
+	t.Helper()
+	for _, asset := range release.Assets {
+		if asset.Kind != model.AssetReplay {
+			continue
+		}
+		return model.EvaluationReceipt{
+			CorpusAssetID:        asset.AssetID,
+			PackageReleaseDigest: release.ReleaseDigest,
+			ReplayAssetDigest:    asset.AssetDigest,
+			EvaluatedAt:          time.Date(2026, 8, 1, 8, 0, 0, 0, time.UTC),
+			Conclusion:           model.EvaluationConclusionPassed,
+		}
+	}
+	t.Fatalf("release %s has no replay asset", release.PackageVersion)
+	return model.EvaluationReceipt{}
+}
+
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/trajectory-replay-evaluation-gate/spec.md#gwt-003
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/trajectory-replay-evaluation-gate/spec.md#gwt-003.t1
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/trajectory-replay-evaluation-gate/spec.md#gwt-003.t2
+func TestSkillPackageActivateRequiresExactEvaluationReceipt(t *testing.T) {
+	t.Parallel()
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 2, 9, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name    string
+		mutate  func(*model.EvaluationReceipt, model.Release)
+		wantErr error
+	}{
+		{name: "exact receipt activates"},
+		{
+			name:    "missing receipt fails closed",
+			mutate:  func(receipt *model.EvaluationReceipt, _ model.Release) { *receipt = model.EvaluationReceipt{} },
+			wantErr: model.ErrEvaluationReceiptInvalid,
+		},
+		{
+			name: "package digest mismatch fails closed",
+			mutate: func(receipt *model.EvaluationReceipt, _ model.Release) {
+				receipt.PackageReleaseDigest = "sha256:" + strings.Repeat("1", 64)
+			},
+			wantErr: model.ErrEvaluationReceiptInvalid,
+		},
+		{
+			name: "replay corpus digest mismatch fails closed",
+			mutate: func(receipt *model.EvaluationReceipt, _ model.Release) {
+				receipt.ReplayAssetDigest = "sha256:" + strings.Repeat("2", 64)
+			},
+			wantErr: model.ErrEvaluationReceiptInvalid,
+		},
+		{
+			name: "corpus asset id mismatch fails closed",
+			mutate: func(receipt *model.EvaluationReceipt, _ model.Release) {
+				receipt.CorpusAssetID = "another.replay.asset"
+			},
+			wantErr: model.ErrEvaluationReceiptInvalid,
+		},
+		{
+			name: "failed conclusion cannot activate",
+			mutate: func(receipt *model.EvaluationReceipt, _ model.Release) {
+				receipt.Conclusion = "failed"
+			},
+			wantErr: model.ErrEvaluationReceiptInvalid,
+		},
+		{
+			name: "missing evaluation time fails closed",
+			mutate: func(receipt *model.EvaluationReceipt, _ model.Release) {
+				receipt.EvaluatedAt = time.Time{}
+			},
+			wantErr: model.ErrEvaluationReceiptInvalid,
+		},
+		{
+			name: "receipt for another release digest fails closed",
+			mutate: func(receipt *model.EvaluationReceipt, release model.Release) {
+				// 用「另一 release 的评测结论」冒充:package digest 改成他人 digest。
+				receipt.PackageReleaseDigest = "sha256:" + strings.Repeat("a", 64)
+				_ = release
+			},
+			wantErr: model.ErrEvaluationReceiptInvalid,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			repository := newMemoryRepository()
+			release := signedRelease(t, repository, "1.0.0", privateKey)
+			service := application.NewService(
+				repository,
+				repository,
+				repository,
+				application.NewEd25519Verifier(
+					map[string]ed25519.PublicKey{testKeyID: publicKey},
+				),
+				application.RuntimeIdentity{
+					APIVersion: "assistant-skill/v1",
+					Version:    "1.4.0",
+				},
+				func() time.Time { return now },
+			)
+			if _, err := service.Stage(context.Background(), "stage", release); err != nil {
+				t.Fatal(err)
+			}
+			receipt := passedEvaluationReceipt(t, release)
+			if test.mutate != nil {
+				test.mutate(&receipt, release)
+			}
+			result, err := service.Activate(
+				context.Background(),
+				"activate-"+test.name,
+				application.ActivateInput{
+					PackageID:         testPackageID,
+					ReleaseDigest:     release.ReleaseDigest,
+					ExpectedRevision:  0,
+					ActivatedBy:       "service:skill-publisher",
+					EvaluationReceipt: receipt,
+				},
+			)
+			if test.wantErr != nil {
+				if !errors.Is(err, test.wantErr) {
+					t.Fatalf("Activate() error = %v, want %v", err, test.wantErr)
+				}
+				if repository.activation.ActiveReleaseDigest != "" {
+					t.Fatalf(
+						"invalid receipt switched the active pointer: %#v",
+						repository.activation,
+					)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Activate() error = %v", err)
+			}
+			if result.Activation.ActiveReleaseDigest != release.ReleaseDigest ||
+				result.Activation.Revision != 1 {
+				t.Fatalf("activation=%#v", result.Activation)
+			}
+		})
+	}
 }
 
 func signedRelease(

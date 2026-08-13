@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -111,8 +112,7 @@ func assistantRuntimeArtifactOutputPath(appDir, outputPath string) string {
 
 func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 	baseDir := filepath.Join(metadataDir, "assistant")
-	enumsPath := filepath.Join(baseDir, "_shared", "enums.yaml")
-	enumCatalog, err := readAssistantEnumCatalog(enumsPath)
+	enumCatalog, err := loadAssistantEnumCatalog(metadataDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -170,6 +170,26 @@ func generateAssistantRuntimeArtifacts(metadataDir, appDir string) error {
 		writeFile(
 			assistantRuntimeArtifactOutputPath(appDir, aggregationStateSchema.OutputPath),
 			renderAssistantSchemaDrivenContract(aggregationStateSchema, contractIndex, "assistant/aggregation_state/schema.yaml"),
+		)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	systemContextEnvelopeSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "system_context_envelope", "schema.yaml"))
+	if err == nil {
+		writeFile(
+			assistantRuntimeArtifactOutputPath(appDir, systemContextEnvelopeSchema.OutputPath),
+			renderAssistantSchemaDrivenContract(systemContextEnvelopeSchema, contractIndex, "assistant/system_context_envelope/schema.yaml"),
+		)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	understandingResultSchema, err := readAssistantContractSchema(filepath.Join(baseDir, "understanding_result", "schema.yaml"))
+	if err == nil {
+		writeFile(
+			assistantRuntimeArtifactOutputPath(appDir, understandingResultSchema.OutputPath),
+			renderAssistantSchemaDrivenContract(understandingResultSchema, contractIndex, "assistant/understanding_result/schema.yaml"),
 		)
 	} else if !os.IsNotExist(err) {
 		return err
@@ -328,9 +348,7 @@ func generateAssistantRuntimeEnumsGo(
 	outputPath string,
 	check bool,
 ) error {
-	enumCatalog, err := readAssistantEnumCatalog(
-		filepath.Join(metadataDir, "assistant", "_shared", "enums.yaml"),
-	)
+	enumCatalog, err := loadAssistantEnumCatalog(metadataDir)
 	if err != nil {
 		return err
 	}
@@ -365,6 +383,107 @@ func generateAssistantRuntimeEnumsGo(
 func readAssistantEnumCatalog(path string) (*assistantEnumCatalog, error) {
 	var parsed assistantEnumCatalog
 	return &parsed, decodeMetadataDocument(path, &parsed)
+}
+
+// loadAssistantEnumCatalog returns the service-level catalog folded together
+// with every enum an assistant object declares in its own fields.yaml.
+//
+// Both are canonical: `_shared/enums.yaml` owns enums shared across objects and
+// spells out the Dart member for each wire value, while an object owning a
+// single-use enum declares it locally as a plain wire value list. Before this
+// merge, only the shared catalog reached the Dart and Go renderers, so a field
+// declared `type: enum` with an object-local `enum_ref` silently degraded to a
+// bare `String` in the App: the enum existed on paper and did nothing.
+//
+// Every reader of the catalog has to go through here. A renderer that saw only
+// the shared half would emit `parseXStrict` calls against an enum that the
+// runtime enums file never declares.
+// assistantEnumCatalogCache keeps one merged catalog per metadata source.
+// Folding in the object-local enums means reading every assistant fields.yaml,
+// and the catalog is read once per renderer, so without this the generator
+// re-walks the whole assistant contract tree several times per run.
+var assistantEnumCatalogCache = struct {
+	metadataDir string
+	source      any
+	catalog     *assistantEnumCatalog
+}{}
+
+func loadAssistantEnumCatalog(metadataDir string) (*assistantEnumCatalog, error) {
+	if assistantEnumCatalogCache.catalog != nil &&
+		assistantEnumCatalogCache.metadataDir == metadataDir &&
+		assistantEnumCatalogCache.source == any(activeMetadataSource) {
+		return assistantEnumCatalogCache.catalog, nil
+	}
+	catalog, err := readAssistantEnumCatalog(filepath.Join(
+		metadataDir,
+		"assistant",
+		"_shared",
+		"enums.yaml",
+	))
+	if err != nil {
+		return nil, err
+	}
+	declared := map[string]string{}
+	for _, enumDef := range catalog.Enums {
+		declared[enumDef.Name] = "assistant/_shared/enums.yaml"
+	}
+
+	fieldPaths, err := assistantObjectDocumentPaths("fields.yaml")
+	if err != nil {
+		return nil, fmt.Errorf("discover Assistant object enums: %w", err)
+	}
+	sort.Strings(fieldPaths)
+	local := make([]assistantEnumDef, 0)
+	for _, path := range fieldPaths {
+		document, readErr := readFields(path)
+		if readErr != nil {
+			return nil, readErr
+		}
+		relative, relErr := metadataDocumentPath(path)
+		if relErr != nil {
+			relative = path
+		}
+		relative = filepath.ToSlash(relative)
+		names := make([]string, 0, len(document.Enums))
+		for name := range document.Enums {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			if owner, exists := declared[name]; exists {
+				return nil, fmt.Errorf(
+					"assistant enum %q is declared twice: %s and %s; an enum has a "+
+						"single owning contract",
+					name,
+					owner,
+					relative,
+				)
+			}
+			values := document.Enums[name].Values
+			if len(values) == 0 {
+				return nil, fmt.Errorf(
+					"assistant enum %q in %s declares no values",
+					name,
+					relative,
+				)
+			}
+			members := make([]assistantEnumValueDef, 0, len(values))
+			for _, wire := range values {
+				members = append(members, assistantEnumValueDef{
+					Name: toDartValueName(wire),
+					Wire: wire,
+				})
+			}
+			declared[name] = relative
+			local = append(local, assistantEnumDef{Name: name, Values: members})
+		}
+	}
+	sort.Slice(local, func(i, j int) bool { return local[i].Name < local[j].Name })
+	catalog.Enums = append(catalog.Enums, local...)
+	assistantEnumCatalogCache.metadataDir = metadataDir
+	assistantEnumCatalogCache.source = any(activeMetadataSource)
+	assistantEnumCatalogCache.catalog = catalog
+	return catalog, nil
 }
 
 func readAssistantSubagentPlanSchema(path string) (*assistantSubagentPlanSchema, error) {
@@ -932,6 +1051,8 @@ func assistantEnumDefault(name string) string {
 		return "balanced"
 	case "FinalAnswerMode":
 		return "blocked"
+	case "NextTurnMode":
+		return "answer"
 	case "AnswerEligibility":
 		return "unknown"
 	case "ProblemShape":

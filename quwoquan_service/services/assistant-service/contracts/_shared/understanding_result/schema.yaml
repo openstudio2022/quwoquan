@@ -1,0 +1,41 @@
+# 理解结果契约：LLM 每轮输出的意图分解与对话推进决定。
+# Dto 由本 schema 单轨生成（strict 解码）；LLM 直出的宽容归一化（未知键投影、
+# 脏 intent 过滤、枚举回退）保留在手写 wrapper `UnderstandingResult`，
+# assistant_turn 契约经 ref_imports 继续引用 wrapper。
+dart_class: UnderstandingResultDto
+library_path: service/assistant_service/assistant/assistant_run/domain/understanding_result_contract.dart
+output_path: service/assistant_service/assistant/assistant_run/domain/generated/understanding_result.g.dart
+contract: understanding_result
+kind: output_contract
+fields:
+  - { name: contractId, type: string, default: 'understanding_result' }
+  - { name: intents, type: list<object>, ref: intent_node, default: [] }
+  - { name: dialogueTransitionDecision, type: object, ref: dialogue_transition_decision, default: {} }
+subcontracts:
+  intent_node:
+    class_name: IntentNodeDto
+    fields:
+      - { name: intentId, type: string, default: '' }
+      - { name: intentType, type: string, default: '' }
+      - { name: goal, type: string, default: '' }
+      - { name: entityRefs, type: list<object>, ref: intent_entity_ref, default: [] }
+      - { name: constraints, type: list<object>, ref: intent_constraint, default: [] }
+      - { name: requiresEvidence, type: bool, default: false }
+  intent_entity_ref:
+    class_name: IntentEntityRefDto
+    fields:
+      - { name: entityType, type: string, default: '' }
+      - { name: canonicalKey, type: string, default: '' }
+      - { name: displayText, type: string, default: '' }
+  intent_constraint:
+    class_name: IntentConstraintDto
+    fields:
+      - { name: key, type: string, default: '' }
+      - { name: value, type: string, default: '' }
+  dialogue_transition_decision:
+    class_name: DialogueTransitionDecisionDto
+    fields:
+      - { name: nextTurnMode, type: enum, enum_ref: NextTurnMode, default: answer }
+      - { name: needsClarification, type: bool, default: false }
+      - { name: clarificationTargetIntentId, type: string, default: '' }
+      - { name: canAnswerPartially, type: bool, default: false }

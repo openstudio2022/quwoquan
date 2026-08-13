@@ -224,15 +224,15 @@ func TestAssistantWorkerCompositionPreflightsStartsAndJoinsSingleTrack(
 	}
 	workerCloseIndex := strings.Index(
 		mainSource,
-		"errors.Join(resultErr, workers.Close())",
+		"module.workers.Close()",
 	)
 	infrastructureCloseIndex := strings.Index(
 		mainSource,
-		"defer infrastructure.Close()",
+		"module.infrastructure.Close()",
 	)
 	if workerCloseIndex < 0 || infrastructureCloseIndex < 0 ||
-		workerCloseIndex < infrastructureCloseIndex {
-		t.Fatal("worker join defer must be registered after dependency close defer")
+		workerCloseIndex > infrastructureCloseIndex {
+		t.Fatal("servicehost module must join workers before closing dependencies")
 	}
 }
 

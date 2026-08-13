@@ -17,6 +17,10 @@ import (
 	ownerinfra "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/owner"
 )
 
+// testGraphContractDigest is the opaque ContractGraph binding shared by the
+// executor fixtures in this package; sha256("test-graph").
+const testGraphContractDigest = "sha256:3d6824ed51d9e52976552b6b912b43adaeb8dcc6abc4fc24ea915db5f2df5635"
+
 func TestContentPostExecutorRejectsEntryAndVariableDriftBeforeOwnerCall(t *testing.T) {
 	calls := 0
 	ownerServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
@@ -58,7 +62,7 @@ func TestContentPostExecutorForwardsOnlyAnExactGraphQLSelection(t *testing.T) {
 		if request.Method != http.MethodPost || request.URL.EscapedPath() != "/internal/graphql" {
 			t.Errorf("owner request=%s %s", request.Method, request.URL.EscapedPath())
 		}
-		if got := request.Header.Get("X-Contract-Graph-SHA256"); got != "sha256:test-graph" {
+		if got := request.Header.Get("X-Contract-Graph-SHA256"); got != testGraphContractDigest {
 			t.Errorf("contract graph header=%q", got)
 		}
 		if got := request.Header.Get("Authorization"); got != "Bearer test-service-token" {
@@ -85,8 +89,11 @@ func TestContentPostExecutorForwardsOnlyAnExactGraphQLSelection(t *testing.T) {
 		data.ContentPostDetailBase["title"] != "canonical title" {
 		t.Fatalf("projected data=%v", data.ContentPostDetailBase)
 	}
-	if len(data.ContentPostDetailBase) != 29 {
+	if len(data.ContentPostDetailBase) != 30 {
 		t.Fatalf("GraphQL projection keys=%v", data.ContentPostDetailBase)
+	}
+	if liked, exists := data.ContentPostDetailBase["viewerLiked"]; !exists || liked != nil {
+		t.Fatalf("public persisted read must project viewerLiked=null, got %v", liked)
 	}
 }
 
@@ -204,7 +211,7 @@ func TestContentPostExecutorRejectsInvalidOwnerResponses(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			ownerServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 				response.Header().Set("Content-Type", testCase.contentType)
-				response.Header().Set("X-Contract-Graph-SHA256", "sha256:test-graph")
+				response.Header().Set("X-Contract-Graph-SHA256", testGraphContractDigest)
 				response.WriteHeader(testCase.status)
 				_, _ = response.Write([]byte(testCase.body))
 			}))
@@ -228,7 +235,7 @@ func TestContentPostExecutorRequiresTrustedServiceCredentials(t *testing.T) {
 		stable,
 		nil,
 		http.DefaultClient,
-		"sha256:test-graph",
+		testGraphContractDigest,
 		nil,
 	); err == nil {
 		t.Fatal("production owner executor without service credentials must fail closed")
@@ -247,7 +254,7 @@ func TestContentPostExecutorRequiresTrustedServiceCredentials(t *testing.T) {
 		origin,
 		nil,
 		http.DefaultClient,
-		"sha256:test-graph",
+		testGraphContractDigest,
 		staticServiceCredentials{header: "not-a-bearer"},
 	)
 	if err != nil {
@@ -306,7 +313,7 @@ func newContentPostExecutor(
 		}
 	}
 	executor, err := ownerinfra.NewContentPostQueryExecutor(
-		stable, candidate, http.DefaultClient, "sha256:test-graph",
+		stable, candidate, http.DefaultClient, testGraphContractDigest,
 		staticServiceCredentials{header: "Bearer test-service-token"},
 	)
 	if err != nil {
@@ -317,7 +324,7 @@ func newContentPostExecutor(
 
 func writeOwnerPost(response http.ResponseWriter, rootField string, payload map[string]any) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
-	response.Header().Set("X-Contract-Graph-SHA256", "sha256:test-graph")
+	response.Header().Set("X-Contract-Graph-SHA256", testGraphContractDigest)
 	_ = json.NewEncoder(response).Encode(map[string]any{
 		"data": map[string]any{rootField: payload},
 	})
@@ -354,7 +361,7 @@ func assertInternalOwnerRequest(t *testing.T, request *http.Request) {
 
 func contentPostBaseEntry() domain.Entry {
 	entry := validRegistryEntry()
-	entry.SHA256Hash = "3c1481366f84401aa2d89280925d5943bf040f7c94cf757fb5cc219f00a7f71b"
+	entry.SHA256Hash = "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110"
 	entry.OperationName = "ContentPostDetailBase"
 	entry.Cost.Depth = 3
 	entry.Cost.Complexity = 56
@@ -389,7 +396,7 @@ func baseOwnerPost(postID, title string) map[string]any {
 		"locationName": nil, "geoTagRef": nil, "visitedAt": nil,
 		"primaryHomepageId": nil, "canonicalEntityId": nil, "primaryHomepageType": nil,
 		"primaryHomepageSnapshot": nil, "status": "published", "visibility": "public",
-		"likeCount": 1, "commentCount": 2, "shareCount": 3, "viewCount": 4,
+		"likeCount": 1, "commentCount": 2, "shareCount": 3, "viewCount": 4, "viewerLiked": nil,
 		"createdAt": "2026-08-11T00:00:00Z", "updatedAt": "2026-08-11T00:01:00Z",
 		"publishedAt": nil,
 	}

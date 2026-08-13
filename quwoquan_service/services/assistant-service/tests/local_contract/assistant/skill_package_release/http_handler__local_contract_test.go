@@ -39,8 +39,21 @@ func TestSkillPackageHTTPUsesTrustedPublisherAndOneCommandIdentity(t *testing.T)
 	if stage.Code != http.StatusCreated {
 		t.Fatalf("stage status=%d body=%s", stage.Code, stage.Body.String())
 	}
+	// 缺评测 receipt 的激活必须 fail-closed,并返回专属结构化错误码。
+	missingReceipt := packageRequest(t, mux, "/internal/assistant/skill-package-releases:activate", "activate-0", map[string]any{
+		"packageId": testPackageID, "releaseDigest": release.ReleaseDigest, "expectedRevision": 0,
+	})
+	if missingReceipt.Code != http.StatusBadRequest ||
+		!bytes.Contains(missingReceipt.Body.Bytes(), []byte("skill_package_evaluation_receipt_invalid")) {
+		t.Fatalf(
+			"activate without receipt status=%d body=%s",
+			missingReceipt.Code,
+			missingReceipt.Body.String(),
+		)
+	}
 	activate := packageRequest(t, mux, "/internal/assistant/skill-package-releases:activate", "activate-1", map[string]any{
 		"packageId": testPackageID, "releaseDigest": release.ReleaseDigest, "expectedRevision": 0,
+		"evaluationReceipt": passedEvaluationReceipt(t, release),
 	})
 	if activate.Code != http.StatusOK {
 		t.Fatalf("activate status=%d body=%s", activate.Code, activate.Body.String())

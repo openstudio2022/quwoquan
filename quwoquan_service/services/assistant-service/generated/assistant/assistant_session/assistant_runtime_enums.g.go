@@ -84,7 +84,6 @@ const (
 	AssistantStreamEventTypeTaskGraphPatch AssistantStreamEventType = "task_graph_patch"
 	AssistantStreamEventTypeCheckpointCommitted AssistantStreamEventType = "checkpoint_committed"
 	AssistantStreamEventTypePresentationSnapshot AssistantStreamEventType = "presentation_snapshot"
-	AssistantStreamEventTypePresentationPatch AssistantStreamEventType = "presentation_patch"
 	AssistantStreamEventTypePresentationCommit AssistantStreamEventType = "presentation_commit"
 	AssistantStreamEventTypeWaitingInput AssistantStreamEventType = "waiting_input"
 	AssistantStreamEventTypeWaitingApproval AssistantStreamEventType = "waiting_approval"
@@ -115,8 +114,6 @@ func ParseAssistantStreamEventType(raw string) (AssistantStreamEventType, error)
 		return AssistantStreamEventTypeCheckpointCommitted, nil
 	case "presentation_snapshot":
 		return AssistantStreamEventTypePresentationSnapshot, nil
-	case "presentation_patch":
-		return AssistantStreamEventTypePresentationPatch, nil
 	case "presentation_commit":
 		return AssistantStreamEventTypePresentationCommit, nil
 	case "waiting_input":
@@ -2400,3 +2397,286 @@ func ParseAssistantResponseType(raw string) (AssistantResponseType, error) {
 }
 
 func (value AssistantResponseType) WireName() string { return string(value) }
+
+type ContextGranularity string
+
+const (
+	ContextGranularityHidden ContextGranularity = "hidden"
+	ContextGranularityCoarse ContextGranularity = "coarse"
+	ContextGranularityPrecise ContextGranularity = "precise"
+)
+
+func ParseContextGranularity(raw string) (ContextGranularity, error) {
+	switch strings.TrimSpace(raw) {
+	case "hidden":
+		return ContextGranularityHidden, nil
+	case "coarse":
+		return ContextGranularityCoarse, nil
+	case "precise":
+		return ContextGranularityPrecise, nil
+	default:
+		return "", fmt.Errorf("unknown ContextGranularity wire value %q", raw)
+	}
+}
+
+func (value ContextGranularity) WireName() string { return string(value) }
+
+type NextTurnMode string
+
+const (
+	NextTurnModeAnswer NextTurnMode = "answer"
+	NextTurnModeContinueExecution NextTurnMode = "continue_execution"
+	NextTurnModeAskUser NextTurnMode = "ask_user"
+	NextTurnModeBlocked NextTurnMode = "blocked"
+)
+
+func ParseNextTurnMode(raw string) (NextTurnMode, error) {
+	switch strings.TrimSpace(raw) {
+	case "answer":
+		return NextTurnModeAnswer, nil
+	case "continue_execution":
+		return NextTurnModeContinueExecution, nil
+	case "ask_user":
+		return NextTurnModeAskUser, nil
+	case "blocked":
+		return NextTurnModeBlocked, nil
+	default:
+		return "", fmt.Errorf("unknown NextTurnMode wire value %q", raw)
+	}
+}
+
+func (value NextTurnMode) WireName() string { return string(value) }
+
+type LocationGranularity string
+
+const (
+	LocationGranularityNone LocationGranularity = "none"
+	LocationGranularityCity LocationGranularity = "city"
+	LocationGranularityRegion LocationGranularity = "region"
+	LocationGranularityPrecise LocationGranularity = "precise"
+)
+
+func ParseLocationGranularity(raw string) (LocationGranularity, error) {
+	switch strings.TrimSpace(raw) {
+	case "none":
+		return LocationGranularityNone, nil
+	case "city":
+		return LocationGranularityCity, nil
+	case "region":
+		return LocationGranularityRegion, nil
+	case "precise":
+		return LocationGranularityPrecise, nil
+	default:
+		return "", fmt.Errorf("unknown LocationGranularity wire value %q", raw)
+	}
+}
+
+func (value LocationGranularity) WireName() string { return string(value) }
+
+type AssistantPolicyRolloutStatus string
+
+const (
+	AssistantPolicyRolloutStatusActive AssistantPolicyRolloutStatus = "active"
+)
+
+func ParseAssistantPolicyRolloutStatus(raw string) (AssistantPolicyRolloutStatus, error) {
+	switch strings.TrimSpace(raw) {
+	case "active":
+		return AssistantPolicyRolloutStatusActive, nil
+	default:
+		return "", fmt.Errorf("unknown AssistantPolicyRolloutStatus wire value %q", raw)
+	}
+}
+
+func (value AssistantPolicyRolloutStatus) WireName() string { return string(value) }
+
+type AssistantSessionState string
+
+const (
+	AssistantSessionStateActive AssistantSessionState = "active"
+	AssistantSessionStateArchived AssistantSessionState = "archived"
+)
+
+func ParseAssistantSessionState(raw string) (AssistantSessionState, error) {
+	switch strings.TrimSpace(raw) {
+	case "active":
+		return AssistantSessionStateActive, nil
+	case "archived":
+		return AssistantSessionStateArchived, nil
+	default:
+		return "", fmt.Errorf("unknown AssistantSessionState wire value %q", raw)
+	}
+}
+
+func (value AssistantSessionState) WireName() string { return string(value) }
+
+type DomainReaderArtifactPolicy string
+
+const (
+	DomainReaderArtifactPolicyInlineBounded DomainReaderArtifactPolicy = "inline_bounded"
+	DomainReaderArtifactPolicyInlineOrArtifact DomainReaderArtifactPolicy = "inline_or_artifact"
+	DomainReaderArtifactPolicyArtifactRequired DomainReaderArtifactPolicy = "artifact_required"
+)
+
+func ParseDomainReaderArtifactPolicy(raw string) (DomainReaderArtifactPolicy, error) {
+	switch strings.TrimSpace(raw) {
+	case "inline_bounded":
+		return DomainReaderArtifactPolicyInlineBounded, nil
+	case "inline_or_artifact":
+		return DomainReaderArtifactPolicyInlineOrArtifact, nil
+	case "artifact_required":
+		return DomainReaderArtifactPolicyArtifactRequired, nil
+	default:
+		return "", fmt.Errorf("unknown DomainReaderArtifactPolicy wire value %q", raw)
+	}
+}
+
+func (value DomainReaderArtifactPolicy) WireName() string { return string(value) }
+
+type DomainReaderCitationPolicy string
+
+const (
+	DomainReaderCitationPolicyNone DomainReaderCitationPolicy = "none"
+	DomainReaderCitationPolicySourceReference DomainReaderCitationPolicy = "source_reference"
+	DomainReaderCitationPolicyEntityReference DomainReaderCitationPolicy = "entity_reference"
+)
+
+func ParseDomainReaderCitationPolicy(raw string) (DomainReaderCitationPolicy, error) {
+	switch strings.TrimSpace(raw) {
+	case "none":
+		return DomainReaderCitationPolicyNone, nil
+	case "source_reference":
+		return DomainReaderCitationPolicySourceReference, nil
+	case "entity_reference":
+		return DomainReaderCitationPolicyEntityReference, nil
+	default:
+		return "", fmt.Errorf("unknown DomainReaderCitationPolicy wire value %q", raw)
+	}
+}
+
+func (value DomainReaderCitationPolicy) WireName() string { return string(value) }
+
+type SkillActivationMode string
+
+const (
+	SkillActivationModeReactive SkillActivationMode = "reactive"
+	SkillActivationModeProactive SkillActivationMode = "proactive"
+	SkillActivationModeHybrid SkillActivationMode = "hybrid"
+)
+
+func ParseSkillActivationMode(raw string) (SkillActivationMode, error) {
+	switch strings.TrimSpace(raw) {
+	case "reactive":
+		return SkillActivationModeReactive, nil
+	case "proactive":
+		return SkillActivationModeProactive, nil
+	case "hybrid":
+		return SkillActivationModeHybrid, nil
+	default:
+		return "", fmt.Errorf("unknown SkillActivationMode wire value %q", raw)
+	}
+}
+
+func (value SkillActivationMode) WireName() string { return string(value) }
+
+type SkillPackageAssetKind string
+
+const (
+	SkillPackageAssetKindManifest SkillPackageAssetKind = "manifest"
+	SkillPackageAssetKindCatalog SkillPackageAssetKind = "catalog"
+	SkillPackageAssetKindActivation SkillPackageAssetKind = "activation"
+	SkillPackageAssetKindInput SkillPackageAssetKind = "input"
+	SkillPackageAssetKindInputSchema SkillPackageAssetKind = "input_schema"
+	SkillPackageAssetKindContext SkillPackageAssetKind = "context"
+	SkillPackageAssetKindCapability SkillPackageAssetKind = "capability"
+	SkillPackageAssetKindOrchestration SkillPackageAssetKind = "orchestration"
+	SkillPackageAssetKindTrigger SkillPackageAssetKind = "trigger"
+	SkillPackageAssetKindMemory SkillPackageAssetKind = "memory"
+	SkillPackageAssetKindPresentation SkillPackageAssetKind = "presentation"
+	SkillPackageAssetKindPresentationTemplate SkillPackageAssetKind = "presentation_template"
+	SkillPackageAssetKindEvaluation SkillPackageAssetKind = "evaluation"
+	SkillPackageAssetKindPrompt SkillPackageAssetKind = "prompt"
+	SkillPackageAssetKindReplay SkillPackageAssetKind = "replay"
+)
+
+func ParseSkillPackageAssetKind(raw string) (SkillPackageAssetKind, error) {
+	switch strings.TrimSpace(raw) {
+	case "manifest":
+		return SkillPackageAssetKindManifest, nil
+	case "catalog":
+		return SkillPackageAssetKindCatalog, nil
+	case "activation":
+		return SkillPackageAssetKindActivation, nil
+	case "input":
+		return SkillPackageAssetKindInput, nil
+	case "input_schema":
+		return SkillPackageAssetKindInputSchema, nil
+	case "context":
+		return SkillPackageAssetKindContext, nil
+	case "capability":
+		return SkillPackageAssetKindCapability, nil
+	case "orchestration":
+		return SkillPackageAssetKindOrchestration, nil
+	case "trigger":
+		return SkillPackageAssetKindTrigger, nil
+	case "memory":
+		return SkillPackageAssetKindMemory, nil
+	case "presentation":
+		return SkillPackageAssetKindPresentation, nil
+	case "presentation_template":
+		return SkillPackageAssetKindPresentationTemplate, nil
+	case "evaluation":
+		return SkillPackageAssetKindEvaluation, nil
+	case "prompt":
+		return SkillPackageAssetKindPrompt, nil
+	case "replay":
+		return SkillPackageAssetKindReplay, nil
+	default:
+		return "", fmt.Errorf("unknown SkillPackageAssetKind wire value %q", raw)
+	}
+}
+
+func (value SkillPackageAssetKind) WireName() string { return string(value) }
+
+type SkillPackageEvaluationConclusion string
+
+const (
+	SkillPackageEvaluationConclusionPassed SkillPackageEvaluationConclusion = "passed"
+	SkillPackageEvaluationConclusionFailed SkillPackageEvaluationConclusion = "failed"
+)
+
+func ParseSkillPackageEvaluationConclusion(raw string) (SkillPackageEvaluationConclusion, error) {
+	switch strings.TrimSpace(raw) {
+	case "passed":
+		return SkillPackageEvaluationConclusionPassed, nil
+	case "failed":
+		return SkillPackageEvaluationConclusionFailed, nil
+	default:
+		return "", fmt.Errorf("unknown SkillPackageEvaluationConclusion wire value %q", raw)
+	}
+}
+
+func (value SkillPackageEvaluationConclusion) WireName() string { return string(value) }
+
+type SkillPackageReleaseStatus string
+
+const (
+	SkillPackageReleaseStatusStaged SkillPackageReleaseStatus = "staged"
+	SkillPackageReleaseStatusActive SkillPackageReleaseStatus = "active"
+	SkillPackageReleaseStatusRetired SkillPackageReleaseStatus = "retired"
+)
+
+func ParseSkillPackageReleaseStatus(raw string) (SkillPackageReleaseStatus, error) {
+	switch strings.TrimSpace(raw) {
+	case "staged":
+		return SkillPackageReleaseStatusStaged, nil
+	case "active":
+		return SkillPackageReleaseStatusActive, nil
+	case "retired":
+		return SkillPackageReleaseStatusRetired, nil
+	default:
+		return "", fmt.Errorf("unknown SkillPackageReleaseStatus wire value %q", raw)
+	}
+}
+
+func (value SkillPackageReleaseStatus) WireName() string { return string(value) }

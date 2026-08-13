@@ -5,6 +5,7 @@ package tag_taxonomy_release_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -47,6 +48,47 @@ func TestTaxonomyReleaseCommandsOwnTheHTTPBoundary(t *testing.T) {
 	}
 	if got := store.releases["release-readiness"]; got.Status != releasemodel.StatusActive {
 		t.Fatalf("release status = %q, want active", got.Status)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-003
+func TestTaxonomyReleaseErrorPathUsesCompleteRuntimeErrorEnvelope(t *testing.T) {
+	store := &readinessReleaseStore{releases: map[string]releasemodel.Release{}}
+	facade, err := taxonomyrelease.NewFacade(store, readinessSnapshotReader{})
+	if err != nil {
+		t.Fatalf("NewFacade() error = %v", err)
+	}
+	mux := http.NewServeMux()
+	releasehttp.NewTaxonomyReleaseHandler(facade).Register(mux)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/internal/tag/taxonomy-releases",
+		strings.NewReader(`{not json`),
+	)
+	request.Header.Set("X-Request-Id", "req-envelope-tag")
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	// 完整 RuntimeErrorResponse 信封形状：不允许退化为裸 {"code": ...}。
+	var envelope map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if envelope["code"] != "TAG.USER.release_invalid_argument" {
+		t.Fatalf("code=%v", envelope["code"])
+	}
+	if envelope["requestId"] != "req-envelope-tag" {
+		t.Fatalf("requestId=%v", envelope["requestId"])
+	}
+	for _, field := range []string{"userMessage", "kind", "origin", "nature"} {
+		value, _ := envelope[field].(string)
+		if value == "" {
+			t.Fatalf("%s missing in envelope: %s", field, response.Body.String())
+		}
 	}
 }
 

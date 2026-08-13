@@ -152,6 +152,25 @@ type localEnumDocument struct {
 	Values []string `yaml:"values"`
 }
 
+// UnmarshalYAML accepts both declaration shapes used by object fields.yaml:
+// a bare sequence (`Name: [a, b]`) and a mapping (`Name: {values: [a, b]}`).
+func (document *localEnumDocument) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var sequence []string
+	if err := unmarshal(&sequence); err == nil {
+		document.Values = sequence
+		return nil
+	}
+	type mappingForm struct {
+		Values []string `yaml:"values"`
+	}
+	var mapping mappingForm
+	if err := unmarshal(&mapping); err != nil {
+		return err
+	}
+	document.Values = mapping.Values
+	return nil
+}
+
 type domainEntityDocument struct {
 	Fields []domainField `yaml:"fields"`
 }
@@ -259,7 +278,7 @@ func (generator *DomainGenerator) buildObjectTemplateData(
 	for name, member := range fields.Members {
 		fields.Entities[name] = member
 	}
-	sharedTypes, err := generator.sharedValueTypes()
+	sharedTypes, err := generator.sharedValueTypes(objectDir)
 	if err != nil {
 		return domainTemplateData{}, err
 	}
@@ -297,7 +316,7 @@ func (generator *DomainGenerator) buildObjectTemplateData(
 	}
 
 	if generator.config.typedEnums {
-		data.EnumTypes, err = generator.collectEnumTypes(fields, entityNames)
+		data.EnumTypes, err = generator.collectEnumTypes(fields, entityNames, objectDir)
 		if err != nil {
 			return domainTemplateData{}, err
 		}
@@ -419,22 +438,45 @@ func includeReferencedOwnedTypes(
 }
 
 // sharedValueTypes returns the `types:` roster from _shared/types.yaml, the
-// single wire owner for cross-service value objects.
-func (generator *DomainGenerator) sharedValueTypes() (
+// single wire owner for cross-service value objects. When the repository-wide
+// graph is loaded, service-local `<domain>/_shared/types.yaml` participates
+// with priority over the cross-service roster.
+func (generator *DomainGenerator) sharedValueTypes(objectDir string) (
 	map[string]domainEntityDocument,
 	error,
 ) {
 	if generator.source == nil {
 		return nil, nil
 	}
-	if !generator.source.Has("_shared/types.yaml") {
+	merged := map[string]domainEntityDocument{}
+	for _, sharedPath := range sharedTypesPaths(objectDir) {
+		if !generator.source.Has(sharedPath) {
+			continue
+		}
+		var shared sharedTypesDocument
+		if err := generator.source.Decode(sharedPath, &shared); err != nil {
+			return nil, fmt.Errorf("decode %s: %w", sharedPath, err)
+		}
+		for name, document := range shared.Types {
+			if _, exists := merged[name]; !exists {
+				merged[name] = document
+			}
+		}
+	}
+	if len(merged) == 0 {
 		return nil, nil
 	}
-	var shared sharedTypesDocument
-	if err := generator.source.Decode("_shared/types.yaml", &shared); err != nil {
-		return nil, fmt.Errorf("decode _shared/types.yaml: %w", err)
+	return merged, nil
+}
+
+// sharedTypesPaths lists candidate shared type documents, service-local first.
+func sharedTypesPaths(objectDir string) []string {
+	paths := []string{}
+	if domain := strings.TrimSpace(strings.Split(path.Clean(objectDir), "/")[0]); domain != "" &&
+		domain != "." && domain != "_shared" {
+		paths = append(paths, path.Join(domain, "_shared/types.yaml"))
 	}
-	return shared.Types, nil
+	return append(paths, "_shared/types.yaml")
 }
 
 func (generator *DomainGenerator) registeredBusinessEntities(object ast.Object, fieldsPath string) (map[string]struct{}, error) {
@@ -492,6 +534,7 @@ func (generator *DomainGenerator) findObjectByID(objectID string) (ast.Object, e
 func (generator *DomainGenerator) collectEnumTypes(
 	fields fieldsDocument,
 	entityNames []string,
+	objectDir string,
 ) ([]domainEnumTypeData, error) {
 	references := map[string]struct{}{}
 	for _, entityName := range entityNames {
@@ -506,7 +549,7 @@ func (generator *DomainGenerator) collectEnumTypes(
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	var shared sharedTypesDocument
+	shared := sharedTypesDocument{Enums: map[string][]string{}}
 	for _, name := range names {
 		if _, local := fields.Enums[name]; local {
 			continue
@@ -514,8 +557,19 @@ func (generator *DomainGenerator) collectEnumTypes(
 		if generator.source == nil {
 			return nil, fmt.Errorf("enum %q requires a metadata source for shared type resolution", name)
 		}
-		if err := generator.source.Decode("_shared/types.yaml", &shared); err != nil {
-			return nil, err
+		for _, sharedPath := range sharedTypesPaths(objectDir) {
+			if !generator.source.Has(sharedPath) {
+				continue
+			}
+			var document sharedTypesDocument
+			if err := generator.source.Decode(sharedPath, &document); err != nil {
+				return nil, err
+			}
+			for enumName, values := range document.Enums {
+				if _, exists := shared.Enums[enumName]; !exists {
+					shared.Enums[enumName] = values
+				}
+			}
 		}
 		break
 	}
@@ -602,14 +656,18 @@ func metadataTypeToGo(value string) (string, error) {
 		return "int64", nil
 	case "int32":
 		return "int32", nil
-	case "float", "float64", "double":
+	case "float", "float64", "double", "decimal":
 		return "float64", nil
 	case "float32":
 		return "float32", nil
 	case "bool", "boolean":
 		return "bool", nil
-	case "date", "datetime", "timestamp":
+	case "date", "datetime", "timestamp", "time":
 		return "time.Time", nil
+	case "duration":
+		return "time.Duration", nil
+	case "tag_ref":
+		return "string", nil
 	case "enum":
 		return "string", nil
 	case "json", "jsonb", "map", "object":

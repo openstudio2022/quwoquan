@@ -23,11 +23,18 @@ type ReplayCorpusAsset struct {
 	Cases                 []ReplayCorpusCase `json:"cases"`
 }
 
+// ReplayTriggerTypeProactive 声明该 Case 以订阅触发形状执行；执行时必须携带
+// 与生产 Trigger→AssistantRun 相同形状的受信 trigger identity。
+const ReplayTriggerTypeProactive = "proactive"
+
 type ReplayCorpusCase struct {
 	CaseID              string `json:"caseId"`
 	Input               string `json:"input"`
 	Scenario            string `json:"scenario"`
 	ClarificationSlotID string `json:"clarificationSlotId,omitempty"`
+	// TriggerType 为空表示 reactive（必须经 production routing）；
+	// "proactive" 表示订阅触发。proactive-only Skill 的全部 Case 必须显式声明。
+	TriggerType string `json:"triggerType,omitempty"`
 }
 
 func DecodeReplayCorpus(raw []byte) (ReplayCorpus, error) {
@@ -121,6 +128,10 @@ func (asset ReplayCorpusAsset) Validate(manifest Manifest) error {
 		"citation_boundary": false,
 		"prompt_injection":  false,
 		"failure_recovery":  false,
+		"recovery":          false,
+		"approval":          false,
+		"timeout":           false,
+		"retry":             false,
 	}
 	if manifest.SlotSchema.HasRequiredSlots() {
 		requiredScenarios["slot_clarification"] = false
@@ -143,6 +154,33 @@ func (asset ReplayCorpusAsset) Validate(manifest Manifest) error {
 		}
 		seenCaseIDs[caseID] = true
 		seenInputs[input] = true
+		// 触发形状必须与 Skill activation 一致：proactive-only Skill 的 Case
+		// 全部显式声明 proactive；reactive-only Skill 不得声明 proactive。
+		switch strings.TrimSpace(replayCase.TriggerType) {
+		case "":
+			if !manifest.IsReactive() {
+				return fmt.Errorf(
+					"skill %q replay case %q must declare proactive trigger type",
+					manifest.SkillID,
+					caseID,
+				)
+			}
+		case ReplayTriggerTypeProactive:
+			if !manifest.IsProactive() {
+				return fmt.Errorf(
+					"skill %q replay case %q declares proactive trigger on a reactive skill",
+					manifest.SkillID,
+					caseID,
+				)
+			}
+		default:
+			return fmt.Errorf(
+				"skill %q replay case %q has invalid trigger type %q",
+				manifest.SkillID,
+				caseID,
+				replayCase.TriggerType,
+			)
+		}
 		if _, required := requiredScenarios[scenario]; required {
 			requiredScenarios[scenario] = true
 		}

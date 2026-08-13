@@ -1,10 +1,10 @@
-schema: qwq.object-owned-internal-persisted-graphql.v1
+schema: qwq.object-owned-internal-persisted-graphql
 canonicalOperationId: content.post.GetPost
 objectId: content.post
 document: content_post_detail.graphql
 operationName: ContentPostDetailBase
 operationType: query
-sha256Hash: 3c1481366f84401aa2d89280925d5943bf040f7c94cf757fb5cc219f00a7f71b
+sha256Hash: 3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110
 assemblyProjectionId: content.post.ContentPostDetailSlice
 appClientBundle:
   bundleId: content.post.ContentPostDetail

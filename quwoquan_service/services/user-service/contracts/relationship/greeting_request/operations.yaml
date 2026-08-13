@@ -614,3 +614,12 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/user-service/tests/api_integration/relationship/greeting_request/postgres_packet__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
+  - case_id: greeting_request_inbox_app_uat
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-004
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: chat.greeting_inbox}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/user_service/relationship/greeting_request/greeting_request_remote__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

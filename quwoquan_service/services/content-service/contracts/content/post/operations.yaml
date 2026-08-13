@@ -273,6 +273,7 @@ api_routes:
     error_codes:
       - CONTENT.USER.unauthorized
       - CONTENT.USER.forbidden_edit
+      - CONTENT.USER.gathering_participation_required
       - CONTENT.USER.invalid_argument
       - CONTENT.USER.invalid_content_type
       - CONTENT.USER.content_too_long
@@ -389,6 +390,121 @@ api_routes:
       anonymous_policy: allow
       visibility: public
     request_entity: ContentAuthorPostsQuery
+    request_body_kind: none
+  - method: GET
+    path: /content/gatherings/{gatheringId}/posts
+    operation: ListPostsByGathering
+    pagination: {default_items: 20, maximum_items: 100}
+    request_bindings:
+      path:
+        - name: gatheringId
+          field: gatheringId
+      query:
+        - name: cursor
+          field: cursor
+          required: false
+        - name: limit
+          field: limit
+    actor: none
+    application:
+      kind: query
+      facet: PostQueryFacet
+      method: listPostsByGathering
+      reader: GatheringPostReader
+      slice: GatheringPostPageSlice
+    authorization:
+      principal: public
+      ownership_policy: visibility_filtered
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.invalid_argument
+      - CONTENT.SYSTEM.storage_read_failed
+      - CONTENT.SYSTEM.internal_error
+    privacy:
+      request_classification: PUBLIC
+      response_classification: INTERNAL
+      log_policy: metadata_only
+    telemetry:
+      metric: content_gathering_posts_list
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 关联某次 Gathering 的公开回顾内容列表（行动详情共同经历聚合区）；只返回 public + published + 审核通过且作者主动写入 gatheringRef 的内容，作者删除或转私密即从聚合区消失
+    response_entity: GatheringPostPageSlice
+    response_body: GatheringPostPageSlice
+    response_body_kind: page
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+    request_entity: ContentGatheringPostsQuery
+    request_body_kind: none
+  - method: GET
+    path: /content/social-proof/{anchorKind}/{objectId}
+    operation: GetGatheringSocialProof
+    request_bindings:
+      path:
+        - name: anchorKind
+          field: anchorKind
+        - name: objectId
+          field: objectId
+    actor: none
+    application:
+      kind: query
+      facet: PostQueryFacet
+      method: getGatheringSocialProof
+      reader: GatheringSocialProofReader
+      slice: GatheringSocialProofSummary
+    authorization:
+      principal: public
+      ownership_policy: visibility_filtered
+    commercial:
+      status: ready
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CONTENT.USER.invalid_argument
+      - CONTENT.SYSTEM.storage_read_failed
+      - CONTENT.SYSTEM.internal_error
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: content_gathering_social_proof_read
+      trace: true
+      attributes:
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    description: 四锚点（organizer/entity/content/creator）两级诚实社会证明计数的 App 代理读面；计数由 recommendation 聚合投影派生，Content 只透传不落副本。发起级仅 organizer 锚点具有产品语义；时间已过无内容的行动永远不进经历级。
+    response_entity: GatheringSocialProofSummary
+    response_body: GatheringSocialProofSummary
+    response_body_kind: object
+    security:
+      auth_mode: optional
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+    request_entity: GetGatheringSocialProofQuery
     request_body_kind: none
   - method: GET
     path: /content/posts/{postId}
@@ -1156,7 +1272,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: GetFeed}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_feed_contract__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_feed_contract__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
   - case_id: submit-post-publication-local
@@ -1423,6 +1539,14 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/post/content_post_remote__api_integration_test.dart
     executions:
       - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: post_get_feed_recommend_channel_app_api
+    spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#sit-001
+    producer: app
+    layer: api_integration
+    target: {kind: operation, id: GetFeed}
+    runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/post/recommend_channel_feed_roundtrip__api_integration_test.dart
+    executions:
+      - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
   - case_id: post_get_author_impact_app_api
     spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
     producer: app
@@ -1511,3 +1635,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/post/content_post_remote__api_integration_test.dart
     executions:
       - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: post_interest_onboarding_app_uat
+    spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/interest-onboarding-prior/spec.md#gwt-001
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: content.home}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/content_service/content/post/interest_onboarding__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

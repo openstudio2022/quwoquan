@@ -36,19 +36,38 @@ var (
 
 type CheckFunc func(ctx context.Context) error
 
+const defaultCheckTimeout = 2 * time.Second
+
+type checkDefinition struct {
+	fn      CheckFunc
+	timeout time.Duration
+}
+
 type Checker struct {
 	mu     sync.RWMutex
-	checks map[string]CheckFunc
+	checks map[string]checkDefinition
 }
 
 func NewChecker() *Checker {
-	return &Checker{checks: make(map[string]CheckFunc)}
+	return &Checker{checks: make(map[string]checkDefinition)}
 }
 
 func (c *Checker) Register(name string, fn CheckFunc) {
+	c.RegisterWithTimeout(name, defaultCheckTimeout, fn)
+}
+
+// RegisterWithTimeout keeps dependency-specific readiness budgets explicit.
+// The caller must align this timeout with the dependency client's own bounded
+// selection/connect policy so the checker does not cancel a valid recovery
+// attempt before that policy can complete.
+func (c *Checker) RegisterWithTimeout(
+	name string,
+	timeout time.Duration,
+	fn CheckFunc,
+) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.checks[name] = fn
+	c.checks[name] = checkDefinition{fn: fn, timeout: timeout}
 }
 
 type Result struct {
@@ -59,7 +78,7 @@ type Result struct {
 
 func (c *Checker) Check(ctx context.Context) Result {
 	c.mu.RLock()
-	checks := make(map[string]CheckFunc, len(c.checks))
+	checks := make(map[string]checkDefinition, len(c.checks))
 	for k, v := range c.checks {
 		checks[k] = v
 	}
@@ -76,18 +95,18 @@ func (c *Checker) Check(ctx context.Context) Result {
 	}
 
 	ch := make(chan checkResult, len(checks))
-	for name, fn := range checks {
-		go func(n string, f CheckFunc) {
+	for name, definition := range checks {
+		go func(n string, check checkDefinition) {
 			startedAt := time.Now()
-			checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+			checkCtx, cancel := context.WithTimeout(ctx, check.timeout)
 			defer cancel()
-			err := f(checkCtx)
+			err := check.fn(checkCtx)
 			ch <- checkResult{
 				name:     n,
 				duration: time.Since(startedAt),
 				err:      err,
 			}
-		}(name, fn)
+		}(name, definition)
 	}
 
 	for range checks {

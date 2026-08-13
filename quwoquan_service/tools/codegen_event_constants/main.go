@@ -25,10 +25,7 @@ import (
 	"quwoquan_service/internal/metadata/validate"
 )
 
-const (
-	generatorIdentity = "tools/codegen_event_constants"
-	manifestVersion   = 1
-)
+const generatorIdentity = "tools/codegen_event_constants"
 
 type stringList []string
 
@@ -56,7 +53,7 @@ func main() {
 	)
 	pythonOutput := flag.String(
 		"python-output",
-		"services/recommendation-service/generated/event_constants.py",
+		"generated/event_constants.py",
 		"single generated Python event-constant surface",
 	)
 	manifestOutput := flag.String(
@@ -131,7 +128,6 @@ type manifestOutput struct {
 }
 
 type ownershipManifest struct {
-	SchemaVersion   int              `json:"schemaVersion"`
 	Generator       string           `json:"generator"`
 	SourceDigest    string           `json:"sourceDigest"`
 	ExcludedObjects []excludedObject `json:"excludedObjects"`
@@ -597,6 +593,7 @@ func writeGeneration(
 				source,
 				objectRoot,
 				contractcodegen.WithObjectFirstRoot(),
+				contractcodegen.WithSliceEntityRefs(),
 			)
 			if err := generator.GenerateObjectEvents(output.Object.ID); err != nil {
 				return fmt.Errorf("generate %s: %w", output.Object.ID, err)
@@ -640,7 +637,6 @@ func writeGeneration(
 	))
 	sort.Slice(outputs, func(i, j int) bool { return outputs[i].Path < outputs[j].Path })
 	manifest := ownershipManifest{
-		SchemaVersion:   manifestVersion,
 		Generator:       generatorIdentity,
 		SourceDigest:    plan.SourceDigest,
 		ExcludedObjects: plan.ExcludedObjects,
@@ -720,13 +716,6 @@ func retireStaleOwnedOutputs(
 	var previous ownershipManifest
 	if err := json.Unmarshal(raw, &previous); err != nil {
 		return fmt.Errorf("decode prior event constants manifest: %w", err)
-	}
-	if previous.SchemaVersion != manifestVersion {
-		return fmt.Errorf(
-			"event constants manifest schemaVersion is %d, want %d",
-			previous.SchemaVersion,
-			manifestVersion,
-		)
 	}
 	if previous.Generator != generatorIdentity {
 		return fmt.Errorf(

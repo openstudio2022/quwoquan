@@ -44,7 +44,6 @@ import (
 	statushttp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/adapters/inbound/http"
 	statusapp "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/application"
 	statuspersistence "quwoquan_service/services/entity-service/internal/entity_homepage/homepage_status_report/infrastructure/persistence"
-	testsupport "quwoquan_service/services/entity-service/tests/support/homepagefixture"
 )
 
 // trustedPersonaHandler 模拟 generated operation guard 验证通过后的可信上下文注入；
@@ -130,6 +129,77 @@ func newMongoGovernanceHomepageService(
 		t.Fatalf("new status report facade: %v", err)
 	}
 	return service, claimFacade, statusFacade, statusStore
+}
+
+// newRealMongoHomepageService 按同目录先例启动真实 Mongo 副本集容器并组装
+// Homepage service；依赖不可用时测试失败关闭。
+func newRealMongoHomepageService(
+	t *testing.T,
+	databaseName string,
+	options ...application.HomepageServiceOption,
+) *application.HomepageService {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	container, err := tryRunReviewMongoContainer(ctx)
+	if err != nil {
+		cancel()
+		t.Fatalf("mongo testcontainer unavailable: %v", err)
+	}
+	uri, err := container.ConnectionString(ctx)
+	if err != nil {
+		cancel()
+		_ = container.Terminate(context.Background())
+		t.Fatalf("mongo connection string: %v", err)
+	}
+	client, err := mongo.Connect(mongoopts.Client().ApplyURI(uri).SetDirect(true))
+	if err != nil {
+		cancel()
+		_ = container.Terminate(context.Background())
+		t.Fatalf("mongo connect: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = client.Disconnect(context.Background())
+		_ = container.Terminate(context.Background())
+		cancel()
+	})
+	store := homepagepersistence.NewMongoHomepageStore(client.Database(databaseName))
+	if err := store.EnsureIndexes(ctx); err != nil {
+		t.Fatalf("ensure homepage indexes: %v", err)
+	}
+	return application.NewHomepageServiceWithStore(ctx, store, options...)
+}
+
+// seedPublishedHomepage 经公开 intake/publish application command 构造最小
+// 前置状态；example 数据集内容经真实存储路径写入，禁止内存替身回归。
+func seedPublishedHomepage(
+	t *testing.T,
+	service *application.HomepageService,
+	input application.HomepageInput,
+) *application.Homepage {
+	t.Helper()
+	ctx := context.Background()
+	candidate, err := service.IntakeHomepageCandidate(ctx, input, "official_seed")
+	if err != nil {
+		t.Fatalf("intake homepage candidate %q: %v", input.Title, err)
+	}
+	published, err := service.PublishHomepageCandidate(ctx, candidate.ID)
+	if err != nil {
+		t.Fatalf("publish homepage candidate %q: %v", input.Title, err)
+	}
+	return published
+}
+
+// westLakeHomepageInput 复用 contract example 数据集中西湖景区的对象内容。
+func westLakeHomepageInput() application.HomepageInput {
+	return application.HomepageInput{
+		Title:             "西湖景区",
+		Subtitle:          "杭州西湖核心游览区",
+		HomepageType:      "sight",
+		CanonicalEntityID: "entity:sight:west_lake",
+		CategoryTags:      []string{"景点", "城市地标", "赏景"},
+		City:              "杭州",
+		Address:           "浙江省杭州市西湖区",
+	}
 }
 
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/spec.md#sit-001
@@ -364,59 +434,90 @@ func TestHomepageCandidatePublishAndShell(t *testing.T) {
 }
 
 func TestHomepageTypeSupportsCampusAndTravelPhoto(t *testing.T) {
-	server := httptest.NewServer(
-		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
+	service := newRealMongoHomepageService(t, "entity_homepage_type_templates_it")
+	report, err := service.ReconcileImportedHomepages(
+		context.Background(),
+		application.HomepageImportRequest{
+			Mode:            application.HomepageImportModeSync,
+			SourceOwner:     "contract_fixture",
+			SourceReleaseID: "entity-homepage-type-templates",
+			RunID:           "type-template-import-001",
+			Inputs: []application.ImportedHomepageInput{
+				{
+					EntityRef:    "fixture_homepage_university_pku",
+					Title:        "北京大学",
+					HomepageType: "university",
+					City:         "北京",
+					CategoryTags: []string{"校园", "大学", "北京"},
+				},
+				{
+					EntityRef:    "fixture_homepage_travel_photo_west_lake",
+					Title:        "西湖旅行摄影机位",
+					HomepageType: "travel_photo",
+					City:         "杭州",
+					CategoryTags: []string{"旅行摄影", "机位", "杭州"},
+				},
+			},
+		},
 	)
+	if err != nil {
+		t.Fatalf("import homepage type templates: %v", err)
+	}
+	server := httptest.NewServer(httpadapter.NewHandler(service).Routes())
 	defer server.Close()
 
 	for _, item := range []struct {
-		id               string
+		entityRef        string
 		expectedType     string
 		expectedTemplate string
 	}{
 		{
-			id:               "fixture_homepage_university_pku",
+			entityRef:        "fixture_homepage_university_pku",
 			expectedType:     "university",
 			expectedTemplate: "campus",
 		},
 		{
-			id:               "fixture_homepage_travel_photo_west_lake",
+			entityRef:        "fixture_homepage_travel_photo_west_lake",
 			expectedType:     "travel_photo",
 			expectedTemplate: "travel_photo",
 		},
 	} {
+		homepageID := report.EntityRefToHomepageID[item.entityRef]
+		if homepageID == "" {
+			t.Fatalf("expected imported homepage id for %s", item.entityRef)
+		}
 		bundle := requestJSON(
 			t,
 			server.Client(),
 			http.MethodGet,
-			server.URL+"/homepages/"+item.id+"/object-page-bundle",
+			server.URL+"/homepages/"+homepageID+"/object-page-bundle",
 			nil,
 			http.StatusOK,
 		)
 		if got := stringField(t, bundle, "objectPageTemplate"); got != item.expectedTemplate {
-			t.Fatalf("expected template %q for %s, got %q", item.expectedTemplate, item.id, got)
+			t.Fatalf("expected template %q for %s, got %q", item.expectedTemplate, item.entityRef, got)
 		}
 		if got := stringField(t, bundle, "canonicalEntityId"); got == "" {
-			t.Fatalf("expected canonicalEntityId for %s", item.id)
+			t.Fatalf("expected canonicalEntityId for %s", item.entityRef)
 		}
 		detail := requestJSON(
 			t,
 			server.Client(),
 			http.MethodGet,
-			server.URL+"/homepages/"+item.id,
+			server.URL+"/homepages/"+homepageID,
 			nil,
 			http.StatusOK,
 		)
 		if got := stringField(t, detail, "homepageType"); got != item.expectedType {
-			t.Fatalf("expected homepageType %q for %s, got %q", item.expectedType, item.id, got)
+			t.Fatalf("expected homepageType %q for %s, got %q", item.expectedType, item.entityRef, got)
 		}
 	}
 }
 
 func TestHomepageDetailSupportsSemanticCanonicalLookup(t *testing.T) {
-	server := httptest.NewServer(
-		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
-	)
+	service := newRealMongoHomepageService(t, "entity_homepage_canonical_lookup_it")
+	seeded := seedPublishedHomepage(t, service, westLakeHomepageInput())
+	server := httptest.NewServer(httpadapter.NewHandler(service).Routes())
 	defer server.Close()
 
 	const canonicalID = "entity:sight:west_lake"
@@ -429,8 +530,8 @@ func TestHomepageDetailSupportsSemanticCanonicalLookup(t *testing.T) {
 		nil,
 		http.StatusOK,
 	)
-	if got := stringField(t, detail, "homepageId"); got != "homepage_sight_west_lake" {
-		t.Fatalf("expected semantic canonical detail to resolve west lake, got %q", got)
+	if got := stringField(t, detail, "homepageId"); got != seeded.ID {
+		t.Fatalf("expected semantic canonical detail to resolve %q, got %q", seeded.ID, got)
 	}
 
 	introduction := requestJSON(
@@ -441,8 +542,8 @@ func TestHomepageDetailSupportsSemanticCanonicalLookup(t *testing.T) {
 		nil,
 		http.StatusOK,
 	)
-	if got := stringField(t, introduction, "homepageId"); got != "homepage_sight_west_lake" {
-		t.Fatalf("expected semantic canonical introduction to resolve west lake, got %q", got)
+	if got := stringField(t, introduction, "homepageId"); got != seeded.ID {
+		t.Fatalf("expected semantic canonical introduction to resolve %q, got %q", seeded.ID, got)
 	}
 
 	bundle := requestJSON(
@@ -453,85 +554,40 @@ func TestHomepageDetailSupportsSemanticCanonicalLookup(t *testing.T) {
 		nil,
 		http.StatusOK,
 	)
-	if got := stringField(t, bundle, "objectId"); got != "homepage_sight_west_lake" {
-		t.Fatalf("expected semantic canonical bundle to resolve west lake, got %q", got)
+	if got := stringField(t, bundle, "objectId"); got != seeded.ID {
+		t.Fatalf("expected semantic canonical bundle to resolve %q, got %q", seeded.ID, got)
 	}
 	if got := stringField(t, bundle, "canonicalEntityId"); got != "entity:sight:west_lake" {
 		t.Fatalf("expected semantic canonical bundle id entity:sight:west_lake, got %q", got)
 	}
 }
 
-func TestHomepageImpactReturnsStructuredSummary(t *testing.T) {
-	server := httptest.NewServer(
-		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
-	)
+// 真实链路中 RelatedGroups 读投影目前没有事实消费者写入口（DetailProjectionStore
+// 写端仅 UpsertReviewSummary），api_integration 在真实存储上只能证明 impact 端点
+// 的诚实空态；非空 impact statement 的结构化组装由 local_contract 的
+// homepage_impact_projection 测试基于对象级 fixture 覆盖。
+func TestHomepageImpactWithoutRelationFactsIsHonestlyEmpty(t *testing.T) {
+	service := newRealMongoHomepageService(t, "entity_homepage_impact_it")
+	seeded := seedPublishedHomepage(t, service, westLakeHomepageInput())
+	server := httptest.NewServer(httpadapter.NewHandler(service).Routes())
 	defer server.Close()
 
 	impact := requestJSON(
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/homepages/homepage_sight_west_lake/impact",
+		server.URL+"/homepages/"+seeded.ID+"/impact",
 		nil,
 		http.StatusOK,
 	)
-	if got := stringField(t, impact, "homepageId"); got != "homepage_sight_west_lake" {
-		t.Fatalf("expected homepageId homepage_sight_west_lake, got %q", got)
+	if got := stringField(t, impact, "homepageId"); got != seeded.ID {
+		t.Fatalf("expected homepageId %q, got %q", seeded.ID, got)
 	}
-	if got := intField(t, impact, "total"); got <= 0 {
-		t.Fatalf("expected positive total, got %d", got)
+	if got := intField(t, impact, "total"); got != 0 {
+		t.Fatalf("homepage without relation facts must report zero total, got %d", got)
 	}
-	items := sliceField(t, impact, "items")
-	if len(items) == 0 {
-		t.Fatalf("expected impact items")
-	}
-	first, ok := items[0].(map[string]any)
-	if !ok {
-		t.Fatalf("expected first impact item map, got %T", items[0])
-	}
-	primaryText := stringField(t, first, "primaryText")
-	if primaryText == "" {
-		t.Fatalf("expected non-empty primaryText")
-	}
-	spans := sliceField(t, first, "primarySpans")
-	joined := ""
-	hasCircleObjectSpan := false
-	for _, raw := range spans {
-		span, ok := raw.(map[string]any)
-		if !ok {
-			t.Fatalf("expected primary span map, got %T", raw)
-		}
-		joined += stringField(t, span, "text")
-		if stringField(t, span, "role") == "object" {
-			target, _ := span["target"].(map[string]any)
-			hasCircleObjectSpan = target != nil && stringField(t, target, "objectType") == "circle" && stringField(t, target, "objectId") == "fixture_circle_photo"
-		}
-	}
-	if joined != primaryText || !hasCircleObjectSpan {
-		t.Fatalf("invalid primarySpans: joined=%q primary=%q spans=%+v", joined, primaryText, spans)
-	}
-	representative, ok := first["representativeActor"].(map[string]any)
-	if !ok || stringField(t, representative, "displayName") != "契约摄影社主理人" || stringField(t, representative, "relationLabel") != "圈子主理人" {
-		t.Fatalf("expected relationship-qualified representative actor, got %+v", first["representativeActor"])
-	}
-	actorTarget, _ := representative["target"].(map[string]any)
-	if actorTarget == nil || stringField(t, actorTarget, "objectType") != "user" || stringField(t, actorTarget, "objectId") != "fixture_user_owner" {
-		t.Fatalf("expected routable user actor target, got %+v", representative["target"])
-	}
-	actionHints := sliceField(t, first, "actionHints")
-	if len(actionHints) == 0 {
-		t.Fatalf("expected actionHints")
-	}
-	actionHint, ok := actionHints[0].(map[string]any)
-	if !ok {
-		t.Fatalf("expected action hint map, got %T", actionHints[0])
-	}
-	target, ok := actionHint["target"].(map[string]any)
-	if !ok {
-		t.Fatalf("expected action hint target map, got %T", actionHint["target"])
-	}
-	if got := stringField(t, target, "objectId"); got != "fixture_circle_photo" {
-		t.Fatalf("expected action target fixture_circle_photo, got %q", got)
+	if items := sliceField(t, impact, "items"); len(items) != 0 {
+		t.Fatalf("homepage without relation facts must not synthesize impact items: %#v", items)
 	}
 }
 
@@ -632,17 +688,21 @@ func TestHomepageObjectPageBundleRequestsCanonicalEntityScopedIntersections(t *t
 		t.Fatalf("new content intersection reader: %v", err)
 	}
 
+	service := newRealMongoHomepageService(
+		t,
+		"entity_homepage_bundle_intersections_it",
+		application.WithIntersectionReader(intersectionReader),
+	)
+	seeded := seedPublishedHomepage(t, service, westLakeHomepageInput())
 	server := httptest.NewServer(trustedPersonaHandler(
-		httpadapter.NewHandler(testsupport.NewFixtureHomepageServiceWithOptions(
-			application.WithIntersectionReader(intersectionReader),
-		)).Routes(),
+		httpadapter.NewHandler(service).Routes(),
 		"fixture_user_current",
 	))
 	defer server.Close()
 
 	req, err := http.NewRequest(
 		http.MethodGet,
-		server.URL+"/homepages/homepage_sight_west_lake/object-page-bundle",
+		server.URL+"/homepages/"+seeded.ID+"/object-page-bundle",
 		nil,
 	)
 	if err != nil {
@@ -700,16 +760,16 @@ func entityDelegatedTokenConfig() rtauth.TokenConfig {
 }
 
 func TestHomepageObjectPageBundleWithoutIntersectionDataIsHonestlyEmpty(t *testing.T) {
-	server := httptest.NewServer(
-		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
-	)
+	service := newRealMongoHomepageService(t, "entity_homepage_bundle_empty_it")
+	seeded := seedPublishedHomepage(t, service, westLakeHomepageInput())
+	server := httptest.NewServer(httpadapter.NewHandler(service).Routes())
 	defer server.Close()
 
 	bundle := requestJSON(
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/homepages/homepage_sight_west_lake/object-page-bundle",
+		server.URL+"/homepages/"+seeded.ID+"/object-page-bundle",
 		nil,
 		http.StatusOK,
 	)
@@ -720,21 +780,21 @@ func TestHomepageObjectPageBundleWithoutIntersectionDataIsHonestlyEmpty(t *testi
 }
 
 func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
-	server := httptest.NewServer(
-		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
-	)
+	service := newRealMongoHomepageService(t, "entity_homepage_introduction_it")
+	seeded := seedPublishedHomepage(t, service, westLakeHomepageInput())
+	server := httptest.NewServer(httpadapter.NewHandler(service).Routes())
 	defer server.Close()
 
 	introduction := requestJSON(
 		t,
 		server.Client(),
 		http.MethodGet,
-		server.URL+"/homepages/homepage_sight_west_lake/introduction",
+		server.URL+"/homepages/"+seeded.ID+"/introduction",
 		nil,
 		http.StatusOK,
 	)
-	if got := stringField(t, introduction, "homepageId"); got != "homepage_sight_west_lake" {
-		t.Fatalf("expected west lake introduction, got %q", got)
+	if got := stringField(t, introduction, "homepageId"); got != seeded.ID {
+		t.Fatalf("expected west lake introduction %q, got %q", seeded.ID, got)
 	}
 	if got := stringField(t, introduction, "displayName"); got != "西湖景区" {
 		t.Fatalf("expected displayName 西湖景区, got %q", got)
@@ -771,16 +831,18 @@ func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
 			t.Fatalf("introduction must not synthesize %s", forbidden)
 		}
 	}
+	// RelatedGroups 读投影在真实链路尚无事实消费者写入口，introduction 的
+	// relatedObjects 在真实存储上必须保持诚实空态；非空投影的组装由
+	// local_contract 的 homepage_impact_projection 测试覆盖。
 	related := sliceField(t, introduction, "relatedObjects")
-	if len(related) == 0 {
-		t.Fatalf("expected relatedObjects")
+	if len(related) != 0 {
+		t.Fatalf("introduction without relation facts must not synthesize relatedObjects: %#v", related)
 	}
 }
 
 func TestHomepageIntroductionProjectsIntakenPageMarkdown(t *testing.T) {
-	server := httptest.NewServer(
-		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
-	)
+	service := newRealMongoHomepageService(t, "entity_homepage_intro_markdown_it")
+	server := httptest.NewServer(httpadapter.NewHandler(service).Routes())
 	defer server.Close()
 
 	pageMarkdown := "---\ntitle: 都江堰\ncoverImage: asset://cover_asset\n---\n" +
@@ -859,9 +921,8 @@ func TestHomepageIntroductionProjectsIntakenPageMarkdown(t *testing.T) {
 }
 
 func TestHomepageIntroductionReturnsNotFoundForUnknownHomepage(t *testing.T) {
-	server := httptest.NewServer(
-		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
-	)
+	service := newRealMongoHomepageService(t, "entity_homepage_intro_notfound_it")
+	server := httptest.NewServer(httpadapter.NewHandler(service).Routes())
 	defer server.Close()
 
 	resp, err := server.Client().Get(server.URL + "/homepages/missing-homepage/introduction")
@@ -1146,9 +1207,8 @@ func isAllowedIntroductionKind(kind string) bool {
 }
 
 func TestHomepageInvalidJSONUsesRuntimeErrorResponse(t *testing.T) {
-	server := httptest.NewServer(
-		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
-	)
+	service := newRealMongoHomepageService(t, "entity_homepage_invalid_json_it")
+	server := httptest.NewServer(httpadapter.NewHandler(service).Routes())
 	defer server.Close()
 
 	req, err := http.NewRequest(
@@ -1192,9 +1252,8 @@ func TestHomepageInvalidJSONUsesRuntimeErrorResponse(t *testing.T) {
 }
 
 func TestHomepageRouteNotFoundUsesRuntimeNotFound(t *testing.T) {
-	server := httptest.NewServer(
-		httpadapter.NewHandler(testsupport.NewFixtureHomepageService()).Routes(),
-	)
+	service := newRealMongoHomepageService(t, "entity_homepage_route_notfound_it")
+	server := httptest.NewServer(httpadapter.NewHandler(service).Routes())
 	defer server.Close()
 
 	req, err := http.NewRequest(

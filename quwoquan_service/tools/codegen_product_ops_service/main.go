@@ -6,7 +6,9 @@ import (
 	"go/format"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
@@ -70,6 +72,68 @@ type appPagesFile struct {
 
 type appPageEntry struct {
 	PageName string `yaml:"page_name"`
+}
+
+type goldenMetricCatalogFile struct {
+	Metrics []goldenMetricEntry `yaml:"metrics"`
+}
+
+type rollupCatalogFile struct {
+	Jobs        []rollupJobEntry `yaml:"jobs"`
+	LateArrival struct {
+		AcceptedWindowHours int    `yaml:"accepted_window_hours"`
+		Policy              string `yaml:"policy"`
+	} `yaml:"late_arrival"`
+}
+
+type rollupJobEntry struct {
+	RowKind    string               `yaml:"row_kind"`
+	Source     string               `yaml:"source"`
+	Filter     string               `yaml:"filter"`
+	Dimensions []string             `yaml:"dimensions"`
+	Measures   []rollupMeasureEntry `yaml:"measures"`
+}
+
+type rollupMeasureEntry struct {
+	Name      string `yaml:"name"`
+	Algebra   string `yaml:"algebra"`
+	BucketsMS []int  `yaml:"buckets_ms"`
+}
+
+type goldenMetricEntry struct {
+	MetricID string `yaml:"metric_id"`
+	Business string `yaml:"business"`
+	Tier     string `yaml:"tier"`
+	Owner    string `yaml:"owner"`
+	Source   struct {
+		Track                 string            `yaml:"track"`
+		EventType             string            `yaml:"event_type"`
+		NumeratorEventType    string            `yaml:"numerator_event_type"`
+		DenominatorEventType  string            `yaml:"denominator_event_type"`
+		NumeratorFilters      map[string]string `yaml:"numerator_filters"`
+		DenominatorFilters    map[string]string `yaml:"denominator_filters"`
+		NumeratorValueField   string            `yaml:"numerator_value_field"`
+		DenominatorValueField string            `yaml:"denominator_value_field"`
+		ValueField            string            `yaml:"value_field"`
+		NumeratorSeries       string            `yaml:"numerator_series"`
+		NumeratorSeriesLabels map[string]string `yaml:"numerator_series_labels"`
+		DenominatorSeries     string            `yaml:"denominator_series"`
+		Aggregation           string            `yaml:"aggregation"`
+	} `yaml:"source"`
+	Target struct {
+		Operator string  `yaml:"operator"`
+		Value    float64 `yaml:"value"`
+	} `yaml:"target"`
+	Alerting *struct {
+		Policy    string  `yaml:"policy"`
+		AlertName string  `yaml:"alert_name"`
+		Threshold float64 `yaml:"threshold"`
+	} `yaml:"alerting"`
+	Display *struct {
+		PortalLevel string `yaml:"portal_level"`
+		Label       string `yaml:"label"`
+	} `yaml:"display"`
+	FreshnessSeconds int `yaml:"freshness_seconds"`
 }
 
 func main() {
@@ -148,7 +212,275 @@ func main() {
 	if err := os.WriteFile(catalogOutPath, catalogFormatted, 0o644); err != nil {
 		exitErr(err)
 	}
-	fmt.Printf("codegen_product_ops_service: wrote %d errors and %d telemetry events\n", totalErrors, len(catalog.Events))
+
+	var goldenCatalog goldenMetricCatalogFile
+	const goldenCatalogPath = "ops/product_ops/event_record/golden_metric_catalog.yaml"
+	if err := source.Decode(goldenCatalogPath, &goldenCatalog); err != nil {
+		exitErr(fmt.Errorf("load %s: %w", goldenCatalogPath, err))
+	}
+	if err := validateGoldenMetricCatalog(goldenCatalog, catalog); err != nil {
+		exitErr(err)
+	}
+	goldenRendered := renderGoldenMetricCatalogGo(goldenCatalog)
+	goldenFormatted, err := format.Source([]byte(goldenRendered))
+	if err != nil {
+		exitErr(fmt.Errorf("gofmt generated golden metric catalog: %w", err))
+	}
+	goldenOutPath := filepath.Join(outputDir, "product_ops", "event_record", "golden_metric_catalog.go")
+	if err := os.WriteFile(goldenOutPath, goldenFormatted, 0o644); err != nil {
+		exitErr(err)
+	}
+
+	var rollupCatalog rollupCatalogFile
+	const rollupCatalogPath = "ops/product_ops/event_record/rollups.yaml"
+	if err := source.Decode(rollupCatalogPath, &rollupCatalog); err != nil {
+		exitErr(fmt.Errorf("load %s: %w", rollupCatalogPath, err))
+	}
+	if err := validateRollupCatalog(rollupCatalog); err != nil {
+		exitErr(err)
+	}
+	rollupRendered := renderRollupCatalogGo(rollupCatalog)
+	rollupFormatted, err := format.Source([]byte(rollupRendered))
+	if err != nil {
+		exitErr(fmt.Errorf("gofmt generated rollup catalog: %w", err))
+	}
+	rollupOutPath := filepath.Join(outputDir, "product_ops", "event_record", "rollup_catalog.go")
+	if err := os.WriteFile(rollupOutPath, rollupFormatted, 0o644); err != nil {
+		exitErr(err)
+	}
+	fmt.Printf(
+		"codegen_product_ops_service: wrote %d errors, %d telemetry events, %d golden metrics and %d rollup jobs\n",
+		totalErrors, len(catalog.Events), len(goldenCatalog.Metrics), len(rollupCatalog.Jobs),
+	)
+}
+
+// rollupAlgebraPattern 解析 `name(args)` 形态：fixed_histogram(durationMs)、
+// count_distinct_where(requestId, eventType = search_query_submit)、
+// count_distinct_row_identity_where(hasError = true) 等。
+var rollupAlgebraPattern = regexp.MustCompile(`^([a-z_]+)(?:\((.*)\))?$`)
+
+func splitRollupAlgebra(raw string) (kind, field, where string, err error) {
+	matches := rollupAlgebraPattern.FindStringSubmatch(strings.TrimSpace(raw))
+	if matches == nil {
+		return "", "", "", fmt.Errorf("unparseable rollup algebra %q", raw)
+	}
+	kind = matches[1]
+	arguments := strings.TrimSpace(matches[2])
+	switch kind {
+	case "count_distinct_row_identity":
+		if arguments != "" {
+			return "", "", "", fmt.Errorf("%s takes no arguments: %q", kind, raw)
+		}
+	case "count_distinct_row_identity_where":
+		where = arguments
+	case "mergeable_hll", "sum", "fixed_histogram":
+		field = arguments
+	case "count_distinct_where", "fixed_histogram_where":
+		separator := strings.Index(arguments, ",")
+		if separator < 0 {
+			return "", "", "", fmt.Errorf("%s requires field and condition: %q", kind, raw)
+		}
+		field = strings.TrimSpace(arguments[:separator])
+		where = strings.TrimSpace(arguments[separator+1:])
+	default:
+		return "", "", "", fmt.Errorf("unsupported rollup algebra %q", raw)
+	}
+	if kind != "count_distinct_row_identity" &&
+		kind != "count_distinct_row_identity_where" &&
+		field == "" {
+		return "", "", "", fmt.Errorf("rollup algebra %q misses its field", raw)
+	}
+	return kind, field, where, nil
+}
+
+func validateRollupCatalog(catalog rollupCatalogFile) error {
+	if len(catalog.Jobs) == 0 {
+		return fmt.Errorf("rollup catalog must declare at least one job")
+	}
+	if catalog.LateArrival.AcceptedWindowHours <= 0 ||
+		catalog.LateArrival.Policy != "emit_increment_for_business_hour" {
+		return fmt.Errorf("rollup catalog late arrival contract drifted")
+	}
+	seen := map[string]bool{}
+	for _, job := range catalog.Jobs {
+		if job.RowKind == "" || seen[job.RowKind] {
+			return fmt.Errorf("rollup row_kind must be non-empty and unique: %q", job.RowKind)
+		}
+		seen[job.RowKind] = true
+		if job.Source != "raw_records" && job.Source != "runtime_records" {
+			return fmt.Errorf("rollup %s has unsupported source %q", job.RowKind, job.Source)
+		}
+		if len(job.Measures) == 0 {
+			return fmt.Errorf("rollup %s declares no measures", job.RowKind)
+		}
+		for _, measure := range job.Measures {
+			kind, _, _, err := splitRollupAlgebra(measure.Algebra)
+			if err != nil {
+				return fmt.Errorf("rollup %s measure %s: %w", job.RowKind, measure.Name, err)
+			}
+			needsBuckets := kind == "fixed_histogram" || kind == "fixed_histogram_where"
+			if needsBuckets && len(measure.BucketsMS) < 2 {
+				return fmt.Errorf(
+					"rollup %s measure %s requires at least two histogram buckets",
+					job.RowKind, measure.Name,
+				)
+			}
+		}
+	}
+	return nil
+}
+
+func renderRollupCatalogGo(catalog rollupCatalogFile) string {
+	var b strings.Builder
+	b.WriteString("// Code generated by tools/codegen_product_ops_service from ops/product_ops/event_record/rollups.yaml. DO NOT EDIT.\n")
+	b.WriteString("package generated\n\n")
+	b.WriteString("type RollupMeasure struct { Name string; Kind string; Field string; Where string; BucketsMS []int }\n")
+	b.WriteString("type RollupJob struct { RowKind string; Source string; Filter string; Dimensions []string; Measures []RollupMeasure }\n\n")
+	b.WriteString(fmt.Sprintf("const RollupLateArrivalWindowHours = %d\n\n", catalog.LateArrival.AcceptedWindowHours))
+	b.WriteString("// RollupCatalog 保持契约声明顺序；写侧聚合执行器按此遍历，禁止手写第二份聚合定义。\n")
+	b.WriteString("var RollupCatalog = []RollupJob{\n")
+	for _, job := range catalog.Jobs {
+		b.WriteString(fmt.Sprintf(
+			"{RowKind:%q,Source:%q,Filter:%q,Dimensions:[]string{",
+			job.RowKind, job.Source, job.Filter,
+		))
+		for _, dimension := range job.Dimensions {
+			b.WriteString(fmt.Sprintf("%q,", dimension))
+		}
+		b.WriteString("},Measures:[]RollupMeasure{\n")
+		for _, measure := range job.Measures {
+			kind, field, where, err := splitRollupAlgebra(measure.Algebra)
+			if err != nil {
+				exitErr(err)
+			}
+			b.WriteString(fmt.Sprintf(
+				"{Name:%q,Kind:%q,Field:%q,Where:%q,BucketsMS:[]int{",
+				measure.Name, kind, field, where,
+			))
+			for _, bucket := range measure.BucketsMS {
+				b.WriteString(fmt.Sprintf("%d,", bucket))
+			}
+			b.WriteString("}},\n")
+		}
+		b.WriteString("}},\n")
+	}
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func validateGoldenMetricCatalog(golden goldenMetricCatalogFile, catalog eventCatalogFile) error {
+	if len(golden.Metrics) == 0 {
+		return fmt.Errorf("golden metric catalog must register at least one metric")
+	}
+	knownEvents := map[string]bool{}
+	for _, event := range catalog.Events {
+		knownEvents[event.EventType] = true
+	}
+	seen := map[string]bool{}
+	for _, metric := range golden.Metrics {
+		if metric.MetricID == "" || seen[metric.MetricID] {
+			return fmt.Errorf("golden metric_id must be non-empty and unique: %q", metric.MetricID)
+		}
+		seen[metric.MetricID] = true
+		if metric.Source.Track == "product_telemetry" {
+			for _, eventType := range []string{
+				metric.Source.EventType,
+				metric.Source.NumeratorEventType,
+				metric.Source.DenominatorEventType,
+			} {
+				if eventType != "" && !knownEvents[eventType] {
+					return fmt.Errorf(
+						"golden metric %s references unknown event %s",
+						metric.MetricID, eventType,
+					)
+				}
+			}
+		}
+		if metric.Display != nil {
+			if metric.Display.PortalLevel != "L1" && metric.Display.PortalLevel != "L2" {
+				return fmt.Errorf(
+					"golden metric %s display.portal_level must be L1 or L2",
+					metric.MetricID,
+				)
+			}
+			if strings.TrimSpace(metric.Display.Label) == "" {
+				return fmt.Errorf(
+					"golden metric %s display.label must be non-empty",
+					metric.MetricID,
+				)
+			}
+		}
+	}
+	return nil
+}
+
+func renderGoldenMetricCatalogGo(golden goldenMetricCatalogFile) string {
+	var b strings.Builder
+	b.WriteString("// Code generated by tools/codegen_product_ops_service from ops/product_ops/event_record/golden_metric_catalog.yaml. DO NOT EDIT.\n")
+	b.WriteString("package generated\n\n")
+	b.WriteString("type GoldenMetricSource struct { Track string; EventType string; NumeratorEventType string; DenominatorEventType string; NumeratorFilters map[string]string; DenominatorFilters map[string]string; NumeratorValueField string; DenominatorValueField string; ValueField string; NumeratorSeries string; NumeratorSeriesLabels map[string]string; DenominatorSeries string; Aggregation string }\n")
+	b.WriteString("type GoldenMetricAlerting struct { Policy string; AlertName string; Threshold float64 }\n")
+	b.WriteString("type GoldenMetricDefinition struct { MetricID string; Business string; Tier string; Owner string; Source GoldenMetricSource; TargetOperator string; TargetValue float64; Alerting *GoldenMetricAlerting; PortalLevel string; PortalLabel string; FreshnessSeconds int }\n\n")
+	b.WriteString("// GoldenMetricCatalog 保持契约声明顺序；PortalLevel 非空的条目构成\n")
+	b.WriteString("// Portal L1/L2 指标成员的唯一真相源。\n")
+	b.WriteString("var GoldenMetricCatalog = []GoldenMetricDefinition{\n")
+	for _, metric := range golden.Metrics {
+		b.WriteString(fmt.Sprintf(
+			"{MetricID:%q,Business:%q,Tier:%q,Owner:%q,Source:GoldenMetricSource{Track:%q,EventType:%q,NumeratorEventType:%q,DenominatorEventType:%q,NumeratorFilters:%s,DenominatorFilters:%s,NumeratorValueField:%q,DenominatorValueField:%q,ValueField:%q,NumeratorSeries:%q,NumeratorSeriesLabels:%s,DenominatorSeries:%q,Aggregation:%q},TargetOperator:%q,TargetValue:%s,",
+			metric.MetricID, metric.Business, metric.Tier, metric.Owner,
+			metric.Source.Track, metric.Source.EventType,
+			metric.Source.NumeratorEventType, metric.Source.DenominatorEventType,
+			goStringMap(metric.Source.NumeratorFilters),
+			goStringMap(metric.Source.DenominatorFilters),
+			metric.Source.NumeratorValueField, metric.Source.DenominatorValueField,
+			metric.Source.ValueField, metric.Source.NumeratorSeries,
+			goStringMap(metric.Source.NumeratorSeriesLabels),
+			metric.Source.DenominatorSeries, metric.Source.Aggregation,
+			metric.Target.Operator, goFloatLiteral(metric.Target.Value),
+		))
+		if metric.Alerting != nil {
+			b.WriteString(fmt.Sprintf(
+				"Alerting:&GoldenMetricAlerting{Policy:%q,AlertName:%q,Threshold:%s},",
+				metric.Alerting.Policy, metric.Alerting.AlertName,
+				goFloatLiteral(metric.Alerting.Threshold),
+			))
+		} else {
+			b.WriteString("Alerting:nil,")
+		}
+		portalLevel, portalLabel := "", ""
+		if metric.Display != nil {
+			portalLevel = metric.Display.PortalLevel
+			portalLabel = metric.Display.Label
+		}
+		b.WriteString(fmt.Sprintf(
+			"PortalLevel:%q,PortalLabel:%q,FreshnessSeconds:%d},\n",
+			portalLevel, portalLabel, metric.FreshnessSeconds,
+		))
+	}
+	b.WriteString("}\n")
+	return b.String()
+}
+
+func goStringMap(values map[string]string) string {
+	if len(values) == 0 {
+		return "nil"
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	b.WriteString("map[string]string{")
+	for _, key := range keys {
+		b.WriteString(fmt.Sprintf("%q:%q,", key, values[key]))
+	}
+	b.WriteString("}")
+	return b.String()
+}
+
+func goFloatLiteral(value float64) string {
+	return strconv.FormatFloat(value, 'g', -1, 64)
 }
 
 func productOpsObjectErrorPaths(paths []string) ([]string, error) {

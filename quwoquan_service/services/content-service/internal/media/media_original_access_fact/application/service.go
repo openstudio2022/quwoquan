@@ -86,6 +86,53 @@ func (service *Service) AppendAudit(ctx context.Context, decision Decision) (Rec
 	}, nil
 }
 
+// FactView is the typed readback of one already-appended audit fact for the
+// object-level query port. It never exposes the idempotency key.
+type FactView struct {
+	AuditID   string
+	AssetID   string
+	ViewerID  string
+	Purpose   string
+	Outcome   string
+	DecidedAt time.Time
+	ExpiresAt time.Time
+}
+
+// QueryService serves immutable audit fact readbacks. It holds no mutable
+// state and cannot affect quota decisions.
+type QueryService struct {
+	reader originalaccessports.FactReader
+}
+
+func NewQueryService(reader originalaccessports.FactReader) *QueryService {
+	if reader == nil {
+		panic("MediaOriginalAccessFact query service requires fact reader")
+	}
+	return &QueryService{reader: reader}
+}
+
+func (service *QueryService) FindAudit(
+	ctx context.Context,
+	auditID string,
+) (FactView, bool, error) {
+	fact, found, err := service.reader.FindFact(ctx, strings.TrimSpace(auditID))
+	if err != nil {
+		return FactView{}, false, Unavailable(err)
+	}
+	if !found {
+		return FactView{}, false, nil
+	}
+	return FactView{
+		AuditID:   fact.AuditID,
+		AssetID:   fact.AssetID,
+		ViewerID:  fact.ViewerID,
+		Purpose:   fact.Purpose,
+		Outcome:   fact.Outcome,
+		DecidedAt: fact.GrantedAt,
+		ExpiresAt: fact.ExpiresAt,
+	}, true, nil
+}
+
 func auditID(decision Decision) string {
 	digest := sha256.Sum256([]byte(strings.Join([]string{
 		strings.TrimSpace(decision.IdempotencyKey),

@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import (
 	"context"
@@ -101,6 +101,7 @@ func resolveAccountClosureSubjectDigestor(
 
 func startAccountClosureRuntime(
 	ctx context.Context,
+	workers *workerRegistry,
 	redis rtredis.Client,
 	logger *slog.Logger,
 	healthChecker *rthealth.Checker,
@@ -135,7 +136,7 @@ func startAccountClosureRuntime(
 	if err := consumer.EnsureGroup(ctx); err != nil {
 		return nil, err
 	}
-	go consumer.Run(ctx)
+	workers.Add(consumer.Run)
 	healthChecker.Register("user-account-closed-consumer", func(context.Context) error {
 		return consumer.Healthy(15 * time.Second)
 	})

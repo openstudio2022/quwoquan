@@ -661,3 +661,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/user_service/persona_management/persona/persona_generated_remote_readiness__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: persona_career_interest_app_uat
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-001
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: user.career_interest}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/user_service/persona_management/persona/career_interest_tag_catalog_journey__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

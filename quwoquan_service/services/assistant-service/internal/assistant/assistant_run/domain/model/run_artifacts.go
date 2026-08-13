@@ -108,13 +108,19 @@ type ReplayExpectations struct {
 }
 
 type ReplayRequest struct {
-	SessionID     string         `json:"sessionId"`
-	TurnID        string         `json:"turnId"`
-	UserID        string         `json:"userId,omitempty"`
-	InputText     string         `json:"inputText,omitempty"`
-	SkillID       string         `json:"skillId"`
-	DomainID      string         `json:"domainId"`
-	ClientContext map[string]any `json:"clientContext,omitempty"`
+	SessionID string `json:"sessionId"`
+	TurnID    string `json:"turnId"`
+	UserID    string `json:"userId,omitempty"`
+	InputText string `json:"inputText,omitempty"`
+	SkillID   string `json:"skillId"`
+	DomainID  string `json:"domainId"`
+	// TriggerType 声明该 Case 的执行形状：空值表示 reactive（必须经 production
+	// routing），"proactive" 表示订阅触发（必须携带受信 trigger identity）。
+	TriggerType string `json:"triggerType,omitempty"`
+	// TrustedTriggerIdentity 复用生产 Trigger→AssistantRun 的持久化 Envelope 形状；
+	// 它是回放里的受信服务态输入，不是用户可写的公开 wire 字段。
+	TrustedTriggerIdentity *AssistantTriggerEnvelope `json:"trustedTriggerIdentity,omitempty"`
+	ClientContext          map[string]any            `json:"clientContext,omitempty"`
 }
 
 type ReplayModelStep struct {
@@ -130,4 +136,7 @@ type ReplayToolStep struct {
 	Input    map[string]any `json:"input,omitempty"`
 	Result   map[string]any `json:"result,omitempty"`
 	Failure  map[string]any `json:"failure,omitempty"`
+	// Status 为空表示 completed；"waiting_confirmation" 模拟需要用户审批的
+	// 工具提案（waiting_approval 语义），Result 必须携带 proposal。
+	Status string `json:"status,omitempty"`
 }

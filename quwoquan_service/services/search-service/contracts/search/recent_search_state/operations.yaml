@@ -379,3 +379,12 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/api_integration/service/search_service/search/recent_search_state/recent_search_state_remote__api_integration_test.dart
   executions:
   - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: recent_search_lifecycle_app_uat
+  spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
+  producer: app
+  layer: user_acceptance
+  target: {kind: page, id: search.global}
+  runner_source_path: quwoquan_app/test/user_acceptance/service/search_service/search/recent_search_state/recent_search_ui_lifecycle__user_acceptance_test.dart
+  executions:
+    - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+    - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

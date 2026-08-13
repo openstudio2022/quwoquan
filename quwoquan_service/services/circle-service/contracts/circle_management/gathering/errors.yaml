@@ -2,7 +2,7 @@ description: Gathering 对象专属稳定错误；保留 RuntimeFailure 所需 r
 errors:
 - code: CIRCLE.USER.gathering_not_found
   reason: gathering_not_found
-  emitted_by: [{surface: http, operations: [PublishGathering, UpdateGathering, GetGathering, GetPublicGathering, ListGatheringApplications, ListGatheringRoster, JoinOpenGathering, ApplyToGathering, WithdrawGatheringApplication, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, DeclineGatheringInvitation, RevokeGatheringInvitation, LeaveGathering, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, ChangeGatheringCapacity, AssignGatheringCoHost, RevokeGatheringCoHost, TransferGatheringOrganizer, AcknowledgeGatheringRevision, CancelGathering, DeclareGatheringArrival, DeclareGatheringLeaveEarly, CompleteGatheringSelf, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering, WatchGatheringAvailability, UnwatchGatheringAvailability]}]
+  emitted_by: [{surface: http, operations: [PublishGathering, UpdateGathering, GetGathering, GetPublicGathering, GetGatheringParticipationStatus, ListGatheringApplications, ListGatheringRoster, JoinOpenGathering, ApplyToGathering, WithdrawGatheringApplication, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, DeclineGatheringInvitation, RevokeGatheringInvitation, LeaveGathering, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, ChangeGatheringCapacity, AssignGatheringCoHost, RevokeGatheringCoHost, TransferGatheringOrganizer, AcknowledgeGatheringRevision, CancelGathering, DeclareGatheringArrival, DeclareGatheringLeaveEarly, CompleteGatheringSelf, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering, WatchGatheringAvailability, UnwatchGatheringAvailability]}]
   http_status: 404
   recovery_action: surface
   disruption_level: inlineCard
@@ -11,7 +11,7 @@ errors:
   user_message: {zh: 活动不存在或已不可访问, en: Gathering was not found or is no longer available}
 - code: CIRCLE.USER.gathering_permission_denied
   reason: gathering_permission_denied
-  emitted_by: [{surface: http, operations: [PublishGathering, UpdateGathering, ListGatheringApplications, ReviewGatheringApplication, InviteToGathering, RevokeGatheringInvitation, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, ChangeGatheringCapacity, AssignGatheringCoHost, RevokeGatheringCoHost, TransferGatheringOrganizer, CancelGathering, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering]}]
+  emitted_by: [{surface: http, operations: [PublishGathering, UpdateGathering, GetGatheringParticipationStatus, ListGatheringApplications, ReviewGatheringApplication, InviteToGathering, RevokeGatheringInvitation, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, ChangeGatheringCapacity, AssignGatheringCoHost, RevokeGatheringCoHost, TransferGatheringOrganizer, CancelGathering, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering]}]
   http_status: 403
   recovery_action: surface
   disruption_level: inlineCard
@@ -331,7 +331,7 @@ errors:
   user_message: {zh: 重复请求与原活动操作不一致, en: The idempotency key was reused for a different Gathering action}
 - code: CIRCLE.SYSTEM.gathering_storage_failed
   reason: gathering_storage_failed
-  emitted_by: [{surface: http, operations: [CreateGatheringDraft, PublishGathering, UpdateGathering, GetGathering, GetPublicGathering, ListGatheringsByHost, ListGatheringsBySource, ListGatheringApplications, ListGatheringRoster, JoinOpenGathering, ApplyToGathering, WithdrawGatheringApplication, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, DeclineGatheringInvitation, RevokeGatheringInvitation, LeaveGathering, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, ChangeGatheringCapacity, AssignGatheringCoHost, RevokeGatheringCoHost, TransferGatheringOrganizer, AcknowledgeGatheringRevision, CancelGathering, DeclareGatheringArrival, DeclareGatheringLeaveEarly, CompleteGatheringSelf, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering, WatchGatheringAvailability, UnwatchGatheringAvailability]}]
+  emitted_by: [{surface: http, operations: [CreateGatheringDraft, PublishGathering, UpdateGathering, GetGathering, GetPublicGathering, GetGatheringParticipationStatus, ListMyHostedGatherings, ListGatheringsByHost, ListGatheringsBySource, ListGatheringApplications, ListGatheringRoster, JoinOpenGathering, ApplyToGathering, WithdrawGatheringApplication, ReviewGatheringApplication, InviteToGathering, AcceptGatheringInvitation, DeclineGatheringInvitation, RevokeGatheringInvitation, LeaveGathering, RemoveGatheringParticipant, ReinstateGatheringParticipant, PauseGatheringAdmission, ResumeGatheringAdmission, ChangeGatheringCapacity, AssignGatheringCoHost, RevokeGatheringCoHost, TransferGatheringOrganizer, AcknowledgeGatheringRevision, CancelGathering, DeclareGatheringArrival, DeclareGatheringLeaveEarly, CompleteGatheringSelf, CompleteGathering, EndGatheringEarly, SafetyTerminateGathering, WatchGatheringAvailability, UnwatchGatheringAvailability]}]
   http_status: 500
   recovery_action: retry
   disruption_level: snackbar

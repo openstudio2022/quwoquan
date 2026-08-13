@@ -3685,6 +3685,44 @@ paths:
             security:
                 - bearerAuth: []
                 - {}
+    /gatherings/mine:
+        get:
+            operationId: ListMyHostedGatherings
+            x-contract-operation-id: circle.gathering.ListMyHostedGatherings
+            x-object-id: circle.gathering
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: GatheringQueryFacet
+                method: listMyHostedGatherings
+                reader: GatheringReader
+                slice: GatheringByHostPageSlice
+            parameters:
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringByHostPageSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/circle/account-closure/dead-letters:recover:
         post:
             operationId: RecoverCircleAccountClosureDeadLetter
@@ -3755,6 +3793,44 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/CircleGatheringHostAuthorityEvidence'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /internal/circle/gatherings/{gatheringId}/participations/{personaId}:
+        get:
+            operationId: GetGatheringParticipationStatus
+            x-contract-operation-id: circle.gathering.GetGatheringParticipationStatus
+            x-object-id: circle.gathering
+            x-actor: none
+            x-application:
+                kind: query
+                facet: GatheringQueryFacade
+                method: getParticipationStatus
+                reader: GatheringQueryReader
+                slice: GatheringParticipationStatusSlice
+            parameters:
+                - name: gatheringId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: personaId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringParticipationStatusSlice'
                 default:
                     description: Runtime failure
                     content:
@@ -4075,6 +4151,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GatheringCommandResult
+            x-contract-placeholder: true
+        GatheringParticipationStatusSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GatheringParticipationStatusSlice
             x-contract-placeholder: true
         GatheringParticipationVersionCommand:
             type: object

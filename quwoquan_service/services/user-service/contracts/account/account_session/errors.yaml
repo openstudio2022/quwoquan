@@ -421,11 +421,26 @@ errors:
   user_message:
     zh: 登录凭据已失效，请重新登录
     en: This session is no longer valid. Please sign in again
+- code: USER.USER.research_identity_invalid
+  reason: forbidden
+  emitted_by:
+  - surface: http
+    operations:
+    - GetResearchSessionAttestation
+  http_status: 403
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: researchIdentityInvalid
+  go_const: ErrResearchIdentityInvalid
+  user_message:
+    zh: 当前研究态身份无效或已过期
+    en: The research identity is invalid or expired
 - code: USER.AUTH.account_security_unavailable
   reason: account_security_unavailable
   emitted_by:
   - surface: http
     operations:
+    - GetResearchSessionAttestation
     - IssueWhitelistedResearchSession
     - Logout
     - user.contact_discovery_record.DismissContactDiscovery

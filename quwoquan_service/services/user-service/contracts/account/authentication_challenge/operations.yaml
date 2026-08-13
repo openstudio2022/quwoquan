@@ -327,3 +327,20 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/authentication_challenge/authentication_challenge_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: authentication_challenge_sms_otp_app_uat
+    spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-002
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: user.login}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/user_service/account/authentication_challenge/sms_otp_provider__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}
+  - case_id: authentication_challenge_carrier_conformance_ops_env
+    spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-002
+    producer: ops
+    layer: environment_acceptance
+    target: {kind: object, id: user.authentication_challenge}
+    runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/user-service/ci/ext_auth_carrier_one_tap_provider_conformance.py
+    executions:
+      - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}

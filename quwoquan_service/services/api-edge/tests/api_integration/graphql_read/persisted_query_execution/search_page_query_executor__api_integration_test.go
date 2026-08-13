@@ -17,6 +17,10 @@ import (
 	ownerinfra "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/owner"
 )
 
+// searchContractGraphDigest is the opaque ContractGraph binding for the
+// search owner fixture; sha256("search-api-integration").
+const searchContractGraphDigest = "sha256:24e5164dc0eabc29741ac9fdab438de1029d451a5ed7af1ebb9eacbb115970c6"
+
 func TestSearchPagePersistedGraphQLExecutesTypedOwnerProjectionOverHTTP(t *testing.T) {
 	ownerCalls := 0
 	ownerServer := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
@@ -38,8 +42,9 @@ func TestSearchPagePersistedGraphQLExecutesTypedOwnerProjectionOverHTTP(t *testi
 			t.Fatalf("owner body=%+v", body)
 		}
 		response.Header().Set("Content-Type", "application/json")
-		response.Header().Set("X-Contract-Graph-SHA256", "sha256:search-api-integration")
+		response.Header().Set("X-Contract-Graph-SHA256", searchContractGraphDigest)
 		_ = json.NewEncoder(response).Encode(map[string]any{
+			"searchRequestId": "search.req.api-1",
 			"interpretedQuery": map[string]any{
 				"normalized": "大理", "tokens": []string{"大理"}, "variants": []string{"洱海"},
 				"detectedEntities": []string{}, "detectedTags": []string{}, "selectedObjectTypes": []string{"content.post"},
@@ -49,6 +54,10 @@ func TestSearchPagePersistedGraphQLExecutesTypedOwnerProjectionOverHTTP(t *testi
 				"title": "大理古城", "snippet": "日落路线",
 				"thumbnailUrl": "https://cdn.example/post-1.webp",
 				"action":       "quwoquan://content/posts/post-1",
+				"rankPosition": 1,
+				"matchedTerms": []string{"大理"},
+				"rankReasons":  []any{map[string]any{"code": "term", "label": "标题命中", "weight": 3.0}},
+				"evidence":     []any{map[string]any{"field": "title", "snippet": "大理古城"}},
 			}},
 			"citations": []any{}, "facets": []any{}, "degradeSignals": []any{},
 			"provenance": map[string]any{"source": "search_index_view", "generatedAt": "2026-08-11T00:00:00Z"},
@@ -65,7 +74,7 @@ func TestSearchPagePersistedGraphQLExecutesTypedOwnerProjectionOverHTTP(t *testi
 		origin,
 		nil,
 		http.DefaultClient,
-		"sha256:search-api-integration",
+		searchContractGraphDigest,
 		searchAPIServiceCredential{},
 		searchAPIAccountCredential{},
 	)
@@ -108,10 +117,15 @@ func TestSearchPagePersistedGraphQLExecutesTypedOwnerProjectionOverHTTP(t *testi
 		Data struct {
 			SearchPage struct {
 				Items []struct {
-					ObjectRef  string `json:"objectRef"`
-					ResultType string `json:"resultType"`
-					Action     string `json:"action"`
+					ObjectRef    string  `json:"objectRef"`
+					ResultType   string  `json:"resultType"`
+					ContentType  *string `json:"contentType"`
+					Action       string  `json:"action"`
+					RankPosition int     `json:"rankPosition"`
+					RankReason   *string `json:"rankReason"`
 				} `json:"items"`
+				MatchedTerms    []string `json:"matchedTerms"`
+				SearchRequestID string   `json:"searchRequestId"`
 			} `json:"searchPage"`
 		} `json:"data"`
 	}
@@ -121,7 +135,13 @@ func TestSearchPagePersistedGraphQLExecutesTypedOwnerProjectionOverHTTP(t *testi
 	if len(envelope.Data.SearchPage.Items) != 1 ||
 		envelope.Data.SearchPage.Items[0].ObjectRef != "opaque-post-1" ||
 		envelope.Data.SearchPage.Items[0].ResultType != "CONTENT_POST" ||
-		envelope.Data.SearchPage.Items[0].Action != "quwoquan://content/posts/post-1" {
+		envelope.Data.SearchPage.Items[0].ContentType == nil ||
+		*envelope.Data.SearchPage.Items[0].ContentType != "ARTICLE" ||
+		envelope.Data.SearchPage.Items[0].Action != "quwoquan://content/posts/post-1" ||
+		envelope.Data.SearchPage.Items[0].RankPosition != 1 ||
+		envelope.Data.SearchPage.Items[0].RankReason == nil ||
+		envelope.Data.SearchPage.SearchRequestID != "search.req.api-1" ||
+		len(envelope.Data.SearchPage.MatchedTerms) != 1 {
 		t.Fatalf("typed SearchPage projection drifted: %s", body)
 	}
 }
@@ -139,7 +159,7 @@ func searchAPIRegistryEntry() domain.Entry {
 		panic(err)
 	}
 	return domain.Entry{
-		SHA256Hash:    "894a7b1541100c4ffa20e446d7969aa6bb1c6aa385d025cc2a8c7b625ba50d58",
+		SHA256Hash:    "111b715594655786eba342c5cbebe7ea1338a9cf016ed0f35f54096802583478",
 		OperationName: "SearchPage", OperationType: domain.OperationTypeQuery,
 		CanonicalOperationID: "gateway.persisted_query_execution.SearchPage",
 		ObjectIDs:            []string{"gateway.persisted_query_execution"},
@@ -178,7 +198,7 @@ func (searchAPIAuthorizer) Authorize(_ context.Context, entry domain.Entry) erro
 
 func searchAPISessionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		ctx := ownerinfra.WithSearchSessionID(request.Context(), "search-session-1")
+		ctx := application.WithSearchSessionID(request.Context(), "search-session-1")
 		next.ServeHTTP(response, request.WithContext(ctx))
 	})
 }

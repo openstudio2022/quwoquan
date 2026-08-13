@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-002
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-002.t2
 // readiness_case: append-rtc-call-log-api
 package api_integration
 

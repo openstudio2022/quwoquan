@@ -157,11 +157,119 @@ func loadReceipt(ctx context.Context, tx pgx.Tx, command relmodel.Command) (relm
 	if operation != string(command.Kind) || target != command.TargetPersonaID {
 		return relmodel.MutationResult{}, false, errors.New("idempotency key already belongs to a different persona relationship command")
 	}
-	var result relmodel.MutationResult
-	if err := json.Unmarshal(payload, &result); err != nil {
+	result, err := decodePersonaRelationshipReceipt(payload)
+	if err != nil {
 		return relmodel.MutationResult{}, false, fmt.Errorf("decode persona relationship receipt: %w", err)
 	}
 	return result, true, nil
+}
+
+// personaRelationshipReceiptDTO 是 receipt 存储边界的唯一 JSON 合同。
+// RelationshipState 在 API 面上刻意不可序列化（json:"-"），直接 Marshal
+// 领域 MutationResult 会把 state 存成空对象，回放时 Version/IsFollowing
+// 等字段全部漂移为零值；显式 DTO 保证回放响应与原响应逐字段一致。
+type personaRelationshipReceiptDTO struct {
+	State            personaRelationshipReceiptStateDTO       `json:"state"`
+	ClearedFollowing []personaRelationshipReceiptDirectionDTO `json:"clearedFollowing,omitempty"`
+	Changed          bool                                     `json:"changed"`
+	EventName        string                                   `json:"eventName,omitempty"`
+	OccurredAt       time.Time                                `json:"occurredAt"`
+}
+
+type personaRelationshipReceiptStateDTO struct {
+	PairID       string    `json:"pairId"`
+	Version      int64     `json:"version"`
+	IsFollowing  bool      `json:"isFollowing"`
+	IsFollowedBy bool      `json:"isFollowedBy"`
+	IsMutual     bool      `json:"isMutual"`
+	IsBlocked    bool      `json:"isBlocked"`
+	IsBlockedBy  bool      `json:"isBlockedBy"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+}
+
+type personaRelationshipReceiptDirectionDTO struct {
+	PairID          string     `json:"pairId"`
+	SourcePersonaID string     `json:"sourcePersonaId"`
+	TargetPersonaID string     `json:"targetPersonaId"`
+	Following       bool       `json:"following"`
+	Blocked         bool       `json:"blocked"`
+	FollowSource    string     `json:"followSource,omitempty"`
+	FollowedAt      *time.Time `json:"followedAt,omitempty"`
+	BlockedAt       *time.Time `json:"blockedAt,omitempty"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
+}
+
+func encodePersonaRelationshipReceipt(result relmodel.MutationResult) ([]byte, error) {
+	cleared := make([]personaRelationshipReceiptDirectionDTO, 0, len(result.ClearedFollowing))
+	for _, direction := range result.ClearedFollowing {
+		cleared = append(cleared, personaRelationshipReceiptDirectionDTO{
+			PairID:          direction.PairID,
+			SourcePersonaID: direction.SourcePersonaID,
+			TargetPersonaID: direction.TargetPersonaID,
+			Following:       direction.Following,
+			Blocked:         direction.Blocked,
+			FollowSource:    direction.FollowSource,
+			FollowedAt:      direction.FollowedAt,
+			BlockedAt:       direction.BlockedAt,
+			UpdatedAt:       direction.UpdatedAt,
+		})
+	}
+	return json.Marshal(personaRelationshipReceiptDTO{
+		State: personaRelationshipReceiptStateDTO{
+			PairID:       result.State.PairID,
+			Version:      result.State.Version,
+			IsFollowing:  result.State.IsFollowing,
+			IsFollowedBy: result.State.IsFollowedBy,
+			IsMutual:     result.State.IsMutual,
+			IsBlocked:    result.State.IsBlocked,
+			IsBlockedBy:  result.State.IsBlockedBy,
+			UpdatedAt:    result.State.UpdatedAt,
+		},
+		ClearedFollowing: cleared,
+		Changed:          result.Changed,
+		EventName:        result.EventName,
+		OccurredAt:       result.OccurredAt,
+	})
+}
+
+func decodePersonaRelationshipReceipt(payload []byte) (relmodel.MutationResult, error) {
+	var receipt personaRelationshipReceiptDTO
+	if err := json.Unmarshal(payload, &receipt); err != nil {
+		return relmodel.MutationResult{}, err
+	}
+	cleared := make([]relmodel.Direction, 0, len(receipt.ClearedFollowing))
+	for _, direction := range receipt.ClearedFollowing {
+		cleared = append(cleared, relmodel.Direction{
+			PairID:          direction.PairID,
+			SourcePersonaID: direction.SourcePersonaID,
+			TargetPersonaID: direction.TargetPersonaID,
+			Following:       direction.Following,
+			Blocked:         direction.Blocked,
+			FollowSource:    direction.FollowSource,
+			FollowedAt:      direction.FollowedAt,
+			BlockedAt:       direction.BlockedAt,
+			UpdatedAt:       direction.UpdatedAt,
+		})
+	}
+	if len(cleared) == 0 {
+		cleared = nil
+	}
+	return relmodel.MutationResult{
+		State: relmodel.RelationshipState{
+			PairID:       receipt.State.PairID,
+			Version:      receipt.State.Version,
+			IsFollowing:  receipt.State.IsFollowing,
+			IsFollowedBy: receipt.State.IsFollowedBy,
+			IsMutual:     receipt.State.IsMutual,
+			IsBlocked:    receipt.State.IsBlocked,
+			IsBlockedBy:  receipt.State.IsBlockedBy,
+			UpdatedAt:    receipt.State.UpdatedAt,
+		},
+		ClearedFollowing: cleared,
+		Changed:          receipt.Changed,
+		EventName:        receipt.EventName,
+		OccurredAt:       receipt.OccurredAt,
+	}, nil
 }
 
 func lockPair(ctx context.Context, tx pgx.Tx, pair relmodel.Pair, kind relmodel.CommandKind) (int64, bool, error) {
@@ -525,7 +633,7 @@ func saveReceipt(
 	if command.IdempotencyKey == "" {
 		return nil
 	}
-	payload, err := json.Marshal(result)
+	payload, err := encodePersonaRelationshipReceipt(result)
 	if err != nil {
 		return fmt.Errorf("marshal persona relationship receipt: %w", err)
 	}

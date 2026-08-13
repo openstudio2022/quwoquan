@@ -73,7 +73,7 @@ func normalizeImportedContentPoolRecord(m *postManifest, postRef string) error {
 	if !fieldsPresent {
 		// Pre-pool immutable releases remain research-only while the versioned
 		// canonical pool is migrated. New writers always emit the full record.
-		m.ContentID = "qwq_data_" + LegacyRuntimePostID(postRef)
+		m.ContentID = "qwq_data_" + RuntimePostIDFromPostRef(postRef)
 		m.Version = 1
 		m.PoolSourceType = "data"
 		m.VariantPurpose = "original"

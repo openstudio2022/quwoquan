@@ -335,3 +335,50 @@ class RecommendationAuthorImpactEvidencePage(BaseModel):
     hasMore: bool
 
     model_config = ConfigDict(extra="forbid")
+
+
+class GetRecommendationGatheringSocialProofQuery(BaseModel):
+    """四锚点社会证明内部查询；anchorKind 只接受 organizer/entity/content/creator。"""
+    anchorKind: str
+    objectId: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class RecommendationGatheringSocialProofSummary(BaseModel):
+    """四锚点两级诚实社会证明计数；publishedCount 仅 organizer 锚点具有产品语义，formed=已发布且 ≥2 名 active 参与者，experienced=formed 且 ≥2 名参与者各自持有 active 公开回顾。无内容的行动永远不进 experienced。"""
+    anchorKind: str
+    objectId: str
+    publishedCount: int
+    formedCount: int
+    experiencedCount: int
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class GetRecommendationFlywheelFunnelQuery(BaseModel):
+    """北极星漏斗多维查询；时间窗必填，维度过滤全部可选，capacityTier 只接受 duo/group 闭集。"""
+    windowFrom: datetime
+    windowTo: datetime
+    sourceObjectKind: str | None = None
+    sourceObjectId: str | None = None
+    capacityTier: str | None = None
+    tagRef: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class RecommendationFlywheelFunnelSnapshot(BaseModel):
+    """北极星漏斗诚实快照；只给分子分母不下发百分比，越界以 truncated 标注，比例①=wishlistToJoined/wishlisted，②=experienced/formed，③=creatorRepublished/facilitationNotified。"""
+    windowFrom: datetime
+    windowTo: datetime
+    wishlistedPersonaCount: int
+    wishlistToJoinedCount: int
+    publishedCount: int
+    formedCount: int
+    experiencedCount: int
+    facilitationNotifiedCount: int
+    creatorRepublishedCount: int
+    truncated: bool
+
+    model_config = ConfigDict(extra="forbid")

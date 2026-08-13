@@ -23,7 +23,7 @@ var appGeneratedOutputRoots = []string{
 	"lib/service/content_service/content/post/presentation/generated",
 	"lib/service/content_service/media/media_asset/application/generated",
 	"lib/service/content_service/media/media_upload_session/application/generated",
-	"lib/service/entity_service/entity_homepage/homepage/presentation/generated",
+	"lib/service/entity_service/entity_homepage/homepage/application/public/generated",
 	"lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/generated",
 	"lib/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/generated",
 	"lib/runtime/errors/generated",
@@ -48,6 +48,7 @@ var appGeneratedExactOutputs = []string{
 // are deliberately not legal destinations for newly emitted files.
 var appRetiredGeneratedOutputRoots = []string{
 	"lib/app/navigation/generated",
+	"lib/service/entity_service/entity_homepage/homepage/presentation/generated",
 	"lib/application/content/media/generated",
 	"lib/assistant",
 	"lib/cloud/assistant/generated",
@@ -176,6 +177,7 @@ func beginGeneratedManifest(appDir, graphSHA256 string) {
 	generatedManifestAppRoot = filepath.Clean(root)
 	generatedManifestGraph = graphSHA256
 	generatedManifestOutputs = map[string]generatedOutput{}
+	resetEnumFieldBindings()
 }
 
 func recordGeneratedFile(path string, content []byte) {

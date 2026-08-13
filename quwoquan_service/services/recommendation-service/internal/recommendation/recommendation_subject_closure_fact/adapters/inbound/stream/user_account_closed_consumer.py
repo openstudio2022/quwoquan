@@ -12,6 +12,15 @@ from internal.recommendation.recommendation_subject_closure_fact.application.app
     SubjectClosureFact,
 )
 
+from prometheus_client import Counter
+
+# 契约 runtime_entrypoints[].telemetry.metric 同名计数器（outcome=ok|error）。
+_INGEST_OUTCOMES = Counter(
+    "recommendation_subject_closure_ingest",
+    "Contract runtime entrypoint outcome counter (UserAccountClosed ingest).",
+    ["outcome"],
+)
+
 
 USER_ACCOUNT_STREAM = "events.user.account"
 USER_ACCOUNT_DLQ = "events.user.account.recommendation-service.dlq"
@@ -254,6 +263,15 @@ class UserAccountClosedConsumer:
         self._store.clear_failure(stream_id)
 
     def process_once(self) -> int:
+        try:
+            processed = self._process_once_inner()
+        except Exception:
+            _INGEST_OUTCOMES.labels(outcome="error").inc()
+            raise
+        _INGEST_OUTCOMES.labels(outcome="ok").inc()
+        return processed
+
+    def _process_once_inner(self) -> int:
         self.ensure_group()
         seen: set[str] = set()
         messages = []

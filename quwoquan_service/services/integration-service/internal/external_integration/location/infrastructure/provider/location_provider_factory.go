@@ -76,7 +76,8 @@ func NewPOISearchProvider(
 	binding providerbinding.ResolvedLocationBinding,
 	client *http.Client,
 ) (ports.POISearchProvider, error) {
-	if binding.AdapterID != LocationAdapterNominatimID {
+	if binding.AdapterID != LocationAdapterNominatimID &&
+		binding.AdapterID != LocationAdapterNominatimProtocolSubstituteID {
 		return nil, fmt.Errorf(
 			"POI search adapter %q is not registered in this composition root",
 			binding.AdapterID,
@@ -96,7 +97,8 @@ func NewPOISearchProvider(
 	if err != nil {
 		return nil, err
 	}
-	return NewNominatimClient(
+	return newNominatimClient(
+		binding.AdapterID,
 		endpoint,
 		client,
 		RatePolicy{RequestsPerSecond: binding.RateLimitPerSecond},
@@ -107,7 +109,8 @@ func NewRouteReadProvider(
 	binding providerbinding.ResolvedLocationBinding,
 	client *http.Client,
 ) (ports.RouteReadProvider, error) {
-	if binding.AdapterID != LocationAdapterOSRMID {
+	if binding.AdapterID != LocationAdapterOSRMID &&
+		binding.AdapterID != LocationAdapterOSRMProtocolSubstituteID {
 		return nil, fmt.Errorf(
 			"route read adapter %q is not registered in this composition root",
 			binding.AdapterID,
@@ -127,7 +130,8 @@ func NewRouteReadProvider(
 	if err != nil {
 		return nil, err
 	}
-	return NewOSRMClient(
+	return newOSRMClient(
+		binding.AdapterID,
 		endpoint,
 		client,
 		RatePolicy{RequestsPerSecond: binding.RateLimitPerSecond},

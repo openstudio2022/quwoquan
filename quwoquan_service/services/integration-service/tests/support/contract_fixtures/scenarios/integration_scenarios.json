@@ -1,5 +1,5 @@
 {
-  "schema": "integration.static-contract-examples.v1",
+  "schema": "integration.static-contract-examples",
   "examples": {
     "location_poi_core": {
       "pois": [

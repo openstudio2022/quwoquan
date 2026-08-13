@@ -125,6 +125,22 @@ assistant_access:
     mode: public
     scopes:
     - assistant.content.post.read
+    reader:
+      descriptor_id: content.post_context
+      resolver_ref: content.current_context
+      owner_service: content-service
+      owner_operation_ref: content.post.GetPost
+      input_schema_ref: content.ContentPostDetailQuery
+      output_schema_ref: assistant.ContextSegment
+      object_type_ref: content.Post
+      authority: domain_canonical
+      sensitivity: public
+      accepted_source_kinds: [domain]
+      surface_kinds: [personal, shared, public]
+      max_freshness_seconds: 300
+      cache_ttl_seconds: 30
+      artifact_policy: inline_bounded
+      citation_policy: entity_reference
   cite:
     mode: public_citation
     scopes:

@@ -16,12 +16,21 @@ from redis.cluster import RedisCluster
 from api.capacity import refresh_capacity_metrics
 from api.metrics import refresh_rec_model_loaded_gauges
 from runtime_contract import bootstrap_runtime_contract_or_die
+from api.runtime_log_exporter import (
+    RuntimeLogHandler,
+    build_runtime_log_exporter_from_env,
+)
 from stream_redis import StreamConsumerRedis
 
 
 runtime_config = bootstrap_runtime_contract_or_die()
 
-EXPERIMENT_POLICY_STARTUP_TIMEOUT_SECONDS = 45.0
+# 冷启动排序：active rec_model_vs_rule 策略由 product-ops 的公开 command 激活，
+# 首次启动时其依赖链（mongo/postgres/redis + 服务自身 healthcheck）就绪需要
+# 数十秒；45s 会让本服务在 product-ops 可接受激活请求之前 fail-fast，令
+# release full 栈冷启动死锁。窗口放宽到 240s 只影响等待时长，等不到策略
+# 仍然 fail-closed（不改变 recommendation-platform REQ-001 的语义）。
+EXPERIMENT_POLICY_STARTUP_TIMEOUT_SECONDS = 240.0
 _LOGGER = logging.getLogger(__name__)
 
 from api.metrics import observe_score_duration, record_rec_request  # noqa: E402
@@ -72,6 +81,9 @@ from internal.recommendation.recommendation_feature_profile_view.application.pro
 from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.fact_projector import (  # noqa: E402
     FactProjectionAdapter,
 )
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.search_signal_consumer import (  # noqa: E402
+    SearchSignalConsumer,
+)
 from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.tag_feedback_consumer import (  # noqa: E402
     TagFeedbackConsumer,
 )
@@ -80,6 +92,15 @@ from internal.recommendation.recommendation_feature_profile_view.adapters.inboun
 )
 from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.circle_membership_consumer import (  # noqa: E402
     CircleMembershipConsumer as FeatureCircleMembershipConsumer,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.gathering_participation_consumer import (  # noqa: E402
+    GatheringParticipationConsumer as FeatureGatheringParticipationConsumer,
+)
+from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.gathering_publication_consumer import (  # noqa: E402
+    GatheringPublicationConsumer as FeatureGatheringPublicationConsumer,
+)
+from internal.recommendation.recommendation_feature_profile_view.infrastructure.facilitation_event_publisher import (  # noqa: E402
+    RedisIntersectionFacilitationEventPublisher,
 )
 from internal.recommendation.recommendation_feature_profile_view.adapters.inbound.stream.content_behavior_consumer import (  # noqa: E402
     ContentBehaviorConsumer as FeatureContentBehaviorConsumer,
@@ -154,6 +175,9 @@ from internal.recommendation.ranked_recommendation_window.infrastructure.experim
 from internal.recommendation.ranked_recommendation_window.infrastructure.mongo_experiment_policy_store import (  # noqa: E402
     MongoExperimentPolicyStore,
 )
+from internal.recommendation.ranked_recommendation_window.domain.discovery_tuning import (  # noqa: E402
+    DiscoveryRankingTuning,
+)
 from internal.recommendation.ranked_recommendation_window.infrastructure.mongo_ranker import (  # noqa: E402
     MongoCandidateRanker,
 )
@@ -166,17 +190,23 @@ from internal.recommendation.ranked_recommendation_window.infrastructure.redis_e
 from security.service_authorization import ServiceTokenVerifier  # noqa: E402
 
 
-http_requests_total = Counter(
-    "http_requests_total",
-    "Total HTTP requests served by recommendation-service.",
-    ["handler", "method", "status"],
+# Canonical HTTP server metrics, aligned with quwoquan_service/runtime/observability
+# http_middleware.go so that ContractGraph-derived recording rules
+# (quwoquan_ops/observability/monitoring/alerts/recommendation_contract/*.yaml)
+# and stackctl readback resolve against real series.
+_HTTP_METRICS_SERVICE = "recommendation-service"
+
+http_server_requests_total = Counter(
+    "http_server_requests_total",
+    "Total HTTP requests by service, route, method, and status code.",
+    ["service", "route", "method", "status"],
 )
 
-http_request_duration_highr_seconds = Histogram(
-    "http_request_duration_highr_seconds",
-    "HTTP request latency with high-resolution buckets.",
-    ["handler", "method", "status"],
-    buckets=[0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
+http_server_duration_seconds = Histogram(
+    "http_server_duration_seconds",
+    "HTTP request duration in seconds.",
+    ["service", "route", "method"],
+    buckets=[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
 )
 
 
@@ -285,6 +315,18 @@ def _reload_model_runtime() -> None:
 async def lifespan(app: FastAPI):
     refresh_rec_model_loaded_gauges()
     refresh_capacity_metrics()
+    # 结构化 runtime log 上云（与 Go 舰队同轨）：WARN/ERROR 经有界持久
+    # spool 送 product-ops /ops/runtime-logs；本地/alpha 全空配置禁用。
+    runtime_log_exporter = build_runtime_log_exporter_from_env()
+    if runtime_log_exporter.enabled:
+        runtime_log_exporter.start()
+        logging.getLogger().addHandler(
+            RuntimeLogHandler(
+                runtime_log_exporter,
+                environment=os.getenv("APP_RUNTIME_ENV", ""),
+            )
+        )
+    app.state.runtime_log_exporter = runtime_log_exporter
     mongodb_database = os.getenv("MONGODB_DATABASE", "quwoquan_recommendation").strip()
     if mongodb_database != "quwoquan_recommendation":
         raise RuntimeError(
@@ -306,9 +348,12 @@ async def lifespan(app: FastAPI):
     content_behavior_consumer = None
     feature_persona_relationship_consumer = None
     feature_circle_membership_consumer = None
+    feature_gathering_participation_consumer = None
+    feature_gathering_publication_consumer = None
     feature_content_behavior_consumer = None
     feature_post_lifecycle_consumer = None
     tag_feedback_consumer = None
+    search_signal_consumer = None
     feed_page_delivered_consumer = None
     experiment_policy_consumer = None
     model_release_outbox_relay = None
@@ -339,6 +384,9 @@ async def lifespan(app: FastAPI):
             store=feature_store,
             materializer=intersection_materializer,
             subject_closures=subject_closure_store,
+            facilitation_publisher=RedisIntersectionFacilitationEventPublisher(
+                general_redis_client
+            ),
         )
         app.state.author_impact_reader = AuthorImpactReader(feature_store)
         app.state.intersection_reader = IntersectionReader(
@@ -422,8 +470,10 @@ async def lifespan(app: FastAPI):
                     scoring=get_scoring_facade(),
                     experiments=experiment_assignments,
                     snapshot_digester=canonical_snapshot_digest,
+                    tuning=DiscoveryRankingTuning.from_runtime_config(runtime_config),
                 ),
                 subject_closures=subject_closure_store,
+                exclusion_profiles=feature_store,
             )
         post_lifecycle_consumer = CandidatePostLifecycleConsumer(
             redis_client=general_redis_client,
@@ -541,6 +591,30 @@ async def lifespan(app: FastAPI):
         )
         feature_circle_membership_consumer.start()
         app.state.feature_circle_membership_consumer = feature_circle_membership_consumer
+        feature_gathering_participation_consumer = FeatureGatheringParticipationConsumer(
+            redis_client=general_redis_client,
+            feature_store=feature_store,
+            projector=intersection_event_projector,
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID", "recommendation-feature-gathering-participation"
+            ),
+        )
+        feature_gathering_participation_consumer.start()
+        app.state.feature_gathering_participation_consumer = (
+            feature_gathering_participation_consumer
+        )
+        feature_gathering_publication_consumer = FeatureGatheringPublicationConsumer(
+            redis_client=general_redis_client,
+            feature_store=feature_store,
+            projector=intersection_event_projector,
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID", "recommendation-feature-gathering-publication"
+            ),
+        )
+        feature_gathering_publication_consumer.start()
+        app.state.feature_gathering_publication_consumer = (
+            feature_gathering_publication_consumer
+        )
         feature_content_behavior_consumer = FeatureContentBehaviorConsumer(
             redis_client=general_redis_client,
             feature_store=feature_store,
@@ -572,6 +646,17 @@ async def lifespan(app: FastAPI):
         )
         tag_feedback_consumer.start()
         app.state.tag_feedback_consumer = tag_feedback_consumer
+        search_signal_consumer = SearchSignalConsumer(
+            redis_client=general_redis_client,
+            feature_store=feature_store,
+            feature_projector=feature_projector,
+            subject_closures=subject_closure_store,
+            consumer=os.getenv(
+                "SERVICE_INSTANCE_ID", "recommendation-feature-search-signal"
+            ),
+        )
+        search_signal_consumer.start()
+        app.state.search_signal_consumer = search_signal_consumer
         yield
     finally:
         general_redis_client.interrupt_stream_waits()
@@ -584,6 +669,10 @@ async def lifespan(app: FastAPI):
             feature_post_lifecycle_consumer.stop()
         if feature_content_behavior_consumer is not None:
             feature_content_behavior_consumer.stop()
+        if feature_gathering_participation_consumer is not None:
+            feature_gathering_participation_consumer.stop()
+        if feature_gathering_publication_consumer is not None:
+            feature_gathering_publication_consumer.stop()
         if feature_circle_membership_consumer is not None:
             feature_circle_membership_consumer.stop()
         if feature_persona_relationship_consumer is not None:
@@ -598,6 +687,8 @@ async def lifespan(app: FastAPI):
             content_behavior_consumer.stop()
         if tag_feedback_consumer is not None:
             tag_feedback_consumer.stop()
+        if search_signal_consumer is not None:
+            search_signal_consumer.stop()
         if feed_page_delivered_consumer is not None:
             feed_page_delivered_consumer.stop()
         if user_account_closed_consumer is not None:
@@ -611,6 +702,7 @@ async def lifespan(app: FastAPI):
         recommendation_redis_client.close()
         general_redis_client.close()
         mongo_client.close()
+        runtime_log_exporter.close()
 
 
 app = FastAPI(
@@ -650,7 +742,10 @@ def _intersection_reader(request: Request) -> IntersectionReader:
     return reader
 
 
-def _handler_label(request: Request) -> str:
+def _route_label(request: Request) -> str:
+    # Route template (e.g. "/internal/recommendation/ranked-pages/{windowId}")
+    # keeps cardinality bounded and still matches the ContractGraph-generated
+    # route selectors, which use "[^/]+" for path parameters.
     route = request.scope.get("route")
     route_path = getattr(route, "path", None)
     if route_path:
@@ -664,32 +759,33 @@ async def observe_http(request: Request, call_next):
     try:
         response = await call_next(request)
     except Exception:
-        handler = _handler_label(request)
+        route = _route_label(request)
         elapsed = time.perf_counter() - started
-        http_requests_total.labels(
-            handler=handler,
+        http_server_requests_total.labels(
+            service=_HTTP_METRICS_SERVICE,
+            route=route,
             method=request.method,
-            status="5xx",
+            status="500",
         ).inc()
-        http_request_duration_highr_seconds.labels(
-            handler=handler,
+        http_server_duration_seconds.labels(
+            service=_HTTP_METRICS_SERVICE,
+            route=route,
             method=request.method,
-            status="5xx",
         ).observe(elapsed)
         raise
 
-    handler = _handler_label(request)
-    status_group = f"{response.status_code // 100}xx"
+    route = _route_label(request)
     elapsed = time.perf_counter() - started
-    http_requests_total.labels(
-        handler=handler,
+    http_server_requests_total.labels(
+        service=_HTTP_METRICS_SERVICE,
+        route=route,
         method=request.method,
-        status=status_group,
+        status=str(response.status_code),
     ).inc()
-    http_request_duration_highr_seconds.labels(
-        handler=handler,
+    http_server_duration_seconds.labels(
+        service=_HTTP_METRICS_SERVICE,
+        route=route,
         method=request.method,
-        status=status_group,
     ).observe(elapsed)
     return response
 

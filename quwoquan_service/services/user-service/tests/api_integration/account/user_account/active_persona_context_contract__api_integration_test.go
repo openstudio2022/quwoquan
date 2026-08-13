@@ -3,7 +3,6 @@
 package api_integration
 
 import (
-	"context"
 	"net/http"
 	"testing"
 )
@@ -12,15 +11,12 @@ func TestActivePersonaContext_CarriesAvatarVersionedUrl(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "owner_active_context", "owner_active_context")
 	createTestPersonaFull(t, "persona_active_context", "owner_active_context", "sa_active_context", "当前分身", "open", true, true)
-	if _, err := pgPool.Exec(
-		context.Background(),
-		`UPDATE personas SET avatar_url = $1, avatar_version = $2 WHERE persona_id = $3`,
+	seedPersonaAvatarVersion(
+		t,
+		"sa_active_context",
 		"https://cdn.example.com/active-context-avatar.png",
 		11,
-		"sa_active_context",
-	); err != nil {
-		t.Fatalf("seed active context avatar version: %v", err)
-	}
+	)
 
 	rec := doRequest(
 		t,

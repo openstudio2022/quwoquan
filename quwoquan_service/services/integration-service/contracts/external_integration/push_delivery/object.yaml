@@ -1,9 +1,17 @@
 kind: external_reference
-description: 'ExternalInteraction 的强类型来电 push delivery 引用。它不拥有独立 transport
+description: 'ExternalInteraction 的强类型 push delivery 引用，承载两类消息：
+
+  来电信令（action=ring/cancel，callId/callType 等来电字段必填）与通用可见
+
+  alert（action=alert，title/body/targetType/targetId 语义锚点，供离线消息
+
+  等场景在设备通知栏可见展示，无 callId）。它不拥有独立 transport
 
   operation 或 token 生命周期；worker 只在调用 user-service secret reader 后，
 
-  将一次内存 token 交给 APNs VoIP/FCM provider。
+  将一次内存 token 交给 APNs VoIP/FCM provider。alert 类别当前仅 FCM 承接；
+
+  APNs VoIP 通道按平台约束拒绝 alert 并返回结构化不可用。
 
   '
 identity:

@@ -142,11 +142,23 @@ types:
     - {name: activatedAt, type: timestamp, constraints: [NOT_NULL]}
     - {name: activatedBy, type: string, constraints: [NOT_NULL]}
   ActivateSkillPackageCommand:
-    description: 校验目标 release 后以 expectedRevision 原子切换 active 指针。
+    description: 校验目标 release 与评测 receipt 后以 expectedRevision 原子切换 active 指针。
     fields:
     - {name: packageId, type: string, constraints: [NOT_NULL]}
     - {name: releaseDigest, type: string, constraints: [NOT_NULL]}
     - {name: expectedRevision, type: int, constraints: [NOT_NULL]}
+    - {name: evaluationReceipt, type: SkillPackageEvaluationReceipt, constraints: [NOT_NULL]}
+  SkillPackageEvaluationReceipt:
+    description: >-
+      轨迹回放评测通过凭据：激活必须携带对 exact package digest 与 exact
+      replay corpus asset digest 的评测结论；任一 digest 与待激活 release
+      不一致时激活 fail-closed。
+    fields:
+    - {name: corpusAssetId, type: string, constraints: [NOT_NULL]}
+    - {name: packageReleaseDigest, type: string, constraints: [NOT_NULL]}
+    - {name: replayAssetDigest, type: string, constraints: [NOT_NULL]}
+    - {name: evaluatedAt, type: timestamp, constraints: [NOT_NULL]}
+    - {name: conclusion, type: enum, enum_ref: SkillPackageEvaluationConclusion, constraints: [NOT_NULL]}
   RollbackSkillPackageCommand:
     description: 以 expectedRevision 将 active 指针精确切回 previousReleaseDigest。
     fields:
@@ -169,5 +181,7 @@ types:
 enums:
   SkillPackageReleaseStatus:
     values: [staged, active, retired]
+  SkillPackageEvaluationConclusion:
+    values: [passed, failed]
   SkillPackageAssetKind:
     values: [manifest, catalog, activation, input, input_schema, context, capability, orchestration, trigger, memory, presentation, presentation_template, evaluation, prompt, replay]

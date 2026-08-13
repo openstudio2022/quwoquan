@@ -342,3 +342,12 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/assistant_preference/assistant_preference_remote__api_integration_test.dart
   executions:
   - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: assistant_preference_management_app_uat
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-003
+  producer: app
+  layer: user_acceptance
+  target: {kind: page, id: assistant.management}
+  runner_source_path: quwoquan_app/test/user_acceptance/service/assistant_service/assistant/assistant_preference/assistant_preference_remote__user_acceptance_test.dart
+  executions:
+    - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+    - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

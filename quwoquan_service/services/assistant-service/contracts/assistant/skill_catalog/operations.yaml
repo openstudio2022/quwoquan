@@ -161,3 +161,12 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/skill_catalog/assistant_skill_catalog_remote__local_contract_test.dart
   executions:
   - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: skill_catalog_disclosure_app_uat
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md#gwt-003
+  producer: app
+  layer: user_acceptance
+  target: {kind: page, id: assistant.skill_center}
+  runner_source_path: quwoquan_app/test/user_acceptance/service/assistant_service/assistant/skill_catalog/skill_catalog_remote__user_acceptance_test.dart
+  executions:
+    - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+    - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

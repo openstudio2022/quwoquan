@@ -149,7 +149,7 @@ enums:
   # user owns endpoint registration and integration owns provider delivery;
   # the endpoint kind crossing that boundary therefore has one shared owner.
   DevicePushEndpointKind: [apns_voip, fcm]
-  PushDeliveryAction: [ring, cancel]
+  PushDeliveryAction: [ring, cancel, alert]
   SearchScope: [all, content, social_relation, messages, circles]
   SearchFeedbackEventType: [impression, click, dwell, refine, zero_result, degrade]
   ProfileVisibility: [public, friends, private]
@@ -171,7 +171,7 @@ enums:
   GreetingRequestSource: [profile, recommendation, group_member, invite]
   ConversationOriginType: [direct_init, greeting_reply, ad_hoc_group, circle_group, gathering]
   ConversationStatus: [active, dissolved]
-  MessageCardKind: [profile_qr, content_post, user_profile, entity_profile, circle, gathering, rtc_call_log]
+  MessageCardKind: [profile_qr, content_post, user_profile, entity_profile, circle, gathering, rtc_call_log, intersection_icebreaker]
   RelationshipState: [self, not_following, following, followed_by, mutual]
   ProfileOwnerKind: [account, persona, creator]
   # 关注频道读模型（FollowingSubject / FollowedSubjectVisitState）的并集值域：

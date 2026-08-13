@@ -56,18 +56,21 @@ func TestSearchRankingAndTermHeatUseApplicationPorts(t *testing.T) {
 		5,
 		nil,
 	)
-	result, err := decorator.Decorate(context.Background(), rtsearch.RetrieveResponse{
-		Hits: []rtsearch.RetrieveHit{
-			{Target: rtsearch.TargetArticle, ObjectID: "a", Title: "成都美食指南", Score: 2, RankPosition: 1},
-			{Target: rtsearch.TargetArticle, ObjectID: "b", Title: "成都火锅攻略", Score: 1, RankPosition: 2},
-		},
-	}, "成都", "persona-1")
+	preparation, err := decorator.Prepare(context.Background(), "成都", "persona-1")
 	if err != nil {
-		t.Fatalf("Decorate() error = %v", err)
+		t.Fatalf("Prepare() error = %v", err)
 	}
-	if result.ExperimentBucket != application.BucketTermHeat ||
-		result.Hits[0].ObjectID != "b" || result.Hits[0].RankPosition != 1 {
-		t.Fatalf("ranked result = %#v", result)
+	// term_heat 以查询时 BoostTerm 注入召回引擎（排序真相单源在引擎），
+	// 不再做召回后重排。
+	if preparation.ExperimentBucket != application.BucketTermHeat ||
+		len(preparation.BoostTerms) != 1 ||
+		preparation.BoostTerms[0].Term != "火锅" ||
+		preparation.BoostTerms[0].Weight != 5 ||
+		!preparation.TermHeatApplied() {
+		t.Fatalf("prepared result = %#v", preparation)
+	}
+	if len(preparation.RelatedTerms) != 1 || preparation.RelatedTerms[0] != "火锅" {
+		t.Fatalf("related terms = %#v", preparation.RelatedTerms)
 	}
 	if len(publisher.observations) != 1 || publisher.observations[0].ExperimentRevision != 3 {
 		t.Fatalf("assignment observations = %#v", publisher.observations)
@@ -110,14 +113,12 @@ func TestSearchRankingExperimentAssignmentDegradesToControl(t *testing.T) {
 		t.Fatalf("NewExperiments() error = %v", err)
 	}
 	decorator := application.NewRankingDecorator(nil, disabled, 1, nil)
-	result, err := decorator.Decorate(context.Background(), rtsearch.RetrieveResponse{
-		Hits: []rtsearch.RetrieveHit{{Target: rtsearch.TargetArticle, ObjectID: "a", Title: "x", Score: 1}},
-	}, "成都", "persona-1")
+	preparation, err := decorator.Prepare(context.Background(), "成都", "persona-1")
 	if err != nil {
-		t.Fatalf("Decorate() error = %v, want degrade without hard failure", err)
+		t.Fatalf("Prepare() error = %v, want degrade without hard failure", err)
 	}
-	if result.ExperimentBucket != application.BucketControl {
-		t.Fatalf("bucket = %q, want control", result.ExperimentBucket)
+	if preparation.ExperimentBucket != application.BucketControl {
+		t.Fatalf("bucket = %q, want control", preparation.ExperimentBucket)
 	}
 	if decorator.PolicyDigest() != application.ControlFallbackPolicyDigest {
 		t.Fatalf("control policy digest = %q", decorator.PolicyDigest())
@@ -178,13 +179,11 @@ func TestSearchExperimentAssignmentPublishFailureIsBestEffort(t *testing.T) {
 		t.Fatalf("bucket = %q, want a valid ranking variant", bucket)
 	}
 	decorator := application.NewRankingDecorator(nil, experiments, 1, nil)
-	result, err := decorator.Decorate(context.Background(), rtsearch.RetrieveResponse{
-		Hits: []rtsearch.RetrieveHit{{Target: rtsearch.TargetArticle, ObjectID: "a", Title: "x", Score: 1}},
-	}, "成都", "persona-publish-degrade")
+	preparation, err := decorator.Prepare(context.Background(), "成都", "persona-publish-degrade")
 	if err != nil {
-		t.Fatalf("Decorate() error = %v, want search to succeed when assignment publish fails", err)
+		t.Fatalf("Prepare() error = %v, want search to succeed when assignment publish fails", err)
 	}
-	if result.ExperimentBucket != bucket {
-		t.Fatalf("Decorate bucket = %q, want Assign bucket %q", result.ExperimentBucket, bucket)
+	if preparation.ExperimentBucket != bucket {
+		t.Fatalf("Prepare bucket = %q, want Assign bucket %q", preparation.ExperimentBucket, bucket)
 	}
 }

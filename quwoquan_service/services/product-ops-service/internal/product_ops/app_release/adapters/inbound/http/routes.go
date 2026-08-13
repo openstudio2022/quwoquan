@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	rterr "quwoquan_service/runtime/errors"
+	releasegenerated "quwoquan_service/services/product-ops-service/generated/product_ops/app_release"
 	apprelease "quwoquan_service/services/product-ops-service/internal/product_ops/app_release/application"
 )
 
@@ -29,22 +31,28 @@ func (h *Handler) Register(mux *http.ServeMux) {
 
 func (h *Handler) version(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		h.notFound(w)
+		h.notFound(w, r)
 		return
 	}
 	if h.service == nil {
-		h.unavailable(w)
+		h.unavailable(w, r)
 		return
 	}
 	result, err := h.service.Version(apprelease.VersionQuery{
 		Platform: r.URL.Query().Get("platform"), AppVersion: r.URL.Query().Get("appVersion"), BuildNumber: r.URL.Query().Get("buildNumber"),
 	})
 	if errors.Is(err, apprelease.ErrInvalidVersionQuery) {
-		h.writeJSON(w, http.StatusBadRequest, map[string]string{"code": "OPS.USER.app_release_query_invalid"})
+		rterr.WriteHTTPError(
+			w,
+			releasegenerated.AppErrorFromAppReleaseQueryInvalid(
+				"app release version query rejected",
+			),
+			rterr.HTTPWriteOptionsFromRequest(r),
+		)
 		return
 	}
 	if err != nil {
-		h.unavailable(w)
+		h.unavailable(w, r)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -53,7 +61,7 @@ func (h *Handler) version(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) downloadLanding(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		h.notFound(w)
+		h.notFound(w, r)
 		return
 	}
 	h.renderLanding(w, h.detectPlatform(r))
@@ -61,7 +69,7 @@ func (h *Handler) downloadLanding(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		h.notFound(w)
+		h.notFound(w, r)
 		return
 	}
 	switch strings.TrimSuffix(r.URL.Path, "/") {
@@ -74,7 +82,7 @@ func (h *Handler) download(w http.ResponseWriter, r *http.Request) {
 	case "/download/android":
 		h.redirectAndroid(w, r)
 	default:
-		h.notFound(w)
+		h.notFound(w, r)
 	}
 }
 
@@ -92,12 +100,12 @@ func (h *Handler) detectPlatform(r *http.Request) string {
 
 func (h *Handler) redirectAndroid(w http.ResponseWriter, r *http.Request) {
 	if h.service == nil {
-		h.unavailable(w)
+		h.unavailable(w, r)
 		return
 	}
 	release, ok := h.service.Release(apprelease.PlatformAndroid)
 	if !ok {
-		h.unavailable(w)
+		h.unavailable(w, r)
 		return
 	}
 	w.Header().Set("X-App-Package-SHA256", strings.ToLower(release.APKSHA256))
@@ -109,12 +117,12 @@ func (h *Handler) redirectAndroid(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) androidLatest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet || h.service == nil {
-		h.notFound(w)
+		h.notFound(w, r)
 		return
 	}
 	release, ok := h.service.Release(apprelease.PlatformAndroid)
 	if !ok {
-		h.unavailable(w)
+		h.unavailable(w, r)
 		return
 	}
 	h.writeJSON(w, http.StatusOK, map[string]any{
@@ -147,12 +155,26 @@ func (h *Handler) writeHTMLHeaders(w http.ResponseWriter) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 }
 
-func (h *Handler) unavailable(w http.ResponseWriter) {
-	h.writeJSON(w, http.StatusServiceUnavailable, map[string]string{"code": "OPS.SYSTEM.app_release_unavailable"})
+func (h *Handler) unavailable(w http.ResponseWriter, r *http.Request) {
+	rterr.WriteHTTPError(
+		w,
+		releasegenerated.AppErrorFromAppReleaseUnavailable(
+			"app release catalog unavailable",
+		),
+		rterr.HTTPWriteOptionsFromRequest(r),
+	)
 }
 
-func (h *Handler) notFound(w http.ResponseWriter) {
-	h.writeJSON(w, http.StatusNotFound, map[string]string{"code": "GATEWAY.USER.route_not_found"})
+func (h *Handler) notFound(w http.ResponseWriter, r *http.Request) {
+	rterr.WriteHTTPError(
+		w,
+		rterr.NewAppError(
+			rterr.NewCode(rterr.ModuleGateway, rterr.KindUser, "route_not_found"),
+			"接口不存在或已下线",
+			"app release route not found",
+		),
+		rterr.HTTPWriteOptionsFromRequest(r),
+	)
 }
 
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, value any) {

@@ -1,74 +1,166 @@
-package main
+package bootstrap
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
+	"net"
 	"net/http"
-	"os"
+	"sync/atomic"
 	"time"
 
 	rtauth "quwoquan_service/runtime/auth"
 	rthealth "quwoquan_service/runtime/health"
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/runtime/servicehost"
 )
 
-func main() {
-	if err := run(); err != nil {
-		logStartupFailure(err)
-		os.Exit(1)
-	}
+// Module is assistant-service's service-owned servicehost adapter.
+type Module struct {
+	runtime        *assistantAPIRuntime
+	infrastructure *assistantInfrastructure
+	assistant      *assistantComponents
+	workers        *assistantBackgroundWorkers
+	server         *http.Server
+	listener       net.Listener
+	admissionOpen  atomic.Bool
+	serveError     chan error
 }
 
-func run() (resultErr error) {
+var _ servicehost.Module = (*Module)(nil)
+
+// NewModule performs service-owned configuration and dependency assembly. The
+// host subsequently controls listener binding, worker start, admission and
+// shutdown without reaching into assistant private implementation.
+func NewModule() (*Module, error) {
 	runtime, err := bootstrapAssistantAPIRuntime()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer runtime.Close()
 
 	infrastructure, err := bootstrapAssistantInfrastructure(runtime)
 	if err != nil {
-		return err
+		runtime.Close()
+		return nil, err
 	}
-	defer infrastructure.Close()
 
 	assistant, err := wireAssistantRuntime(runtime, infrastructure)
 	if err != nil {
-		return err
+		infrastructure.Close()
+		runtime.Close()
+		return nil, err
 	}
 
+	server := buildAssistantHTTPServer(runtime, infrastructure, assistant)
+	module := &Module{
+		runtime:        runtime,
+		infrastructure: infrastructure,
+		assistant:      assistant,
+		server:         server,
+		serveError:     make(chan error, 1),
+	}
+	server.Handler = module.admissionHandler(server.Handler)
+	return module, nil
+}
+
+func (module *Module) Name() string { return "assistant-service" }
+
+func (module *Module) ConfigDigest() string {
+	if module == nil || module.runtime == nil {
+		return ""
+	}
+	return module.runtime.configDigest
+}
+
+func (module *Module) ValidateConfig(context.Context) error {
+	if module == nil || module.runtime == nil || module.infrastructure == nil || module.assistant == nil {
+		return errors.New("assistant-service module is incomplete")
+	}
+	return nil
+}
+
+func (module *Module) PrepareMigration(context.Context) error {
+	return nil
+}
+
+func (module *Module) Bind(context.Context) error {
+	if module == nil || module.server == nil {
+		return errors.New("assistant-service HTTP server is unavailable")
+	}
+	listener, err := net.Listen("tcp", module.server.Addr)
+	if err != nil {
+		return fmt.Errorf("assistant-service listener bind: %w", err)
+	}
+	module.listener = listener
+	return nil
+}
+
+func (module *Module) Start(context.Context) error {
 	workers, err := startAssistantBackgroundWorkers(
-		runtime,
-		infrastructure,
-		assistant,
+		module.runtime,
+		module.infrastructure,
+		module.assistant,
 	)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		resultErr = errors.Join(resultErr, workers.Close())
+	module.workers = workers
+	go func() {
+		if err := module.server.Serve(module.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			module.serveError <- err
+		}
 	}()
-
-	return serveAssistantHTTP(runtime, infrastructure, assistant)
+	return nil
 }
 
-func logStartupFailure(err error) {
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
-	attributes := []any{
-		"service", "assistant-service",
-		"error", err.Error(),
+func (module *Module) Ready(ctx context.Context) error {
+	if result := module.infrastructure.healthChecker.Check(ctx); result.Status != "ok" {
+		return fmt.Errorf("assistant-service readiness failed: %v", result.FailedChecks)
 	}
-	var dependencyFailure *startupDependencyError
-	if errors.As(err, &dependencyFailure) {
-		attributes = append(
-			attributes,
-			"dependency", dependencyFailure.Dependency,
-			"stage", dependencyFailure.Stage,
-		)
+	select {
+	case err := <-module.serveError:
+		return fmt.Errorf("assistant-service listener failed: %w", err)
+	default:
+		return nil
 	}
-	logger.Error("assistant-service startup failed", attributes...)
+}
+
+func (module *Module) OpenAdmission(context.Context) error {
+	module.admissionOpen.Store(true)
+	return nil
+}
+
+func (module *Module) Shutdown(ctx context.Context) error {
+	module.admissionOpen.Store(false)
+	var result error
+	if module.server != nil {
+		result = errors.Join(result, module.server.Shutdown(ctx))
+	}
+	if module.workers != nil {
+		result = errors.Join(result, module.workers.Close())
+	}
+	if module.infrastructure != nil {
+		module.infrastructure.Close()
+	}
+	if module.runtime != nil {
+		module.runtime.Close()
+	}
+	return result
+}
+
+func (module *Module) admissionHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/healthz", "/readyz", "/metrics":
+			next.ServeHTTP(writer, request)
+			return
+		}
+		if !module.admissionOpen.Load() {
+			http.Error(writer, `{"status":"unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
 }
 
 func buildAccountSecurityAuthority(

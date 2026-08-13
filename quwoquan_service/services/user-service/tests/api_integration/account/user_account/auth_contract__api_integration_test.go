@@ -161,17 +161,7 @@ func TestAuth_AnonymousLogin_BackfillsDeviceBindingFromExistingCredential(t *tes
 	ownerID := "uo_01_ad_3338_01j00000000000000000000002"
 	personaID := "us_01_3338_01j00000000000000000000003"
 	createTestProfile(t, ownerID, "anon-owner")
-	if _, err := pgPool.Exec(
-		context.Background(),
-		`UPDATE user_profiles
-		    SET account_state = 'anonymous',
-		        identity_origin = 'anonymous_device',
-		        anonymous_retention_policy = 'preserve'
-		  WHERE user_id = $1`,
-		ownerID,
-	); err != nil {
-		t.Fatalf("update anonymous profile: %v", err)
-	}
+	seedAnonymousAccountState(t, ownerID)
 	createTestPersonaFull(t, "", ownerID, personaID, "AnonProfile", "open", true, true)
 	createTestCredential(t, "cred_anonymous", ownerID, "anonymous_device", "fp_anonymous_device")
 

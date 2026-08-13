@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/spec.md#gwt-001
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003
+// spec_ref: specs/feature-tree/circle-community/circle-collaboration-tools/circle-group-chat-binding-sync/spec.md#gwt-002.t4
 package api_integration
 
 import (

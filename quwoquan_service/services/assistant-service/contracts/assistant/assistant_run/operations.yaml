@@ -641,3 +641,20 @@ readiness_cases:
   runner_source_path: quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_remote__local_contract_test.dart
   executions:
   - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+- case_id: assistant_run_adaptive_presentation_app_uat
+  spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/adaptive-presentation-runtime/spec.md#gwt-001
+  producer: app
+  layer: user_acceptance
+  target: {kind: page, id: assistant.personal_session}
+  runner_source_path: quwoquan_app/test/user_acceptance/service/assistant_service/assistant/assistant_run/adaptive_presentation__user_acceptance_test.dart
+  executions:
+    - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+    - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}
+- case_id: assistant_run_llm_provider_conformance_ops_env
+  spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-002
+  producer: ops
+  layer: environment_acceptance
+  target: {kind: object, id: assistant.assistant_run}
+  runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/ci/ext_llm_xiaomi_mimo_provider_conformance.py
+  executions:
+    - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}

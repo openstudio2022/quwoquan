@@ -109,6 +109,11 @@ type config struct {
 		AggregateIndex         string `yaml:"aggregate_index"`
 		TimeoutMS              int    `yaml:"timeout_ms"`
 	} `yaml:"elasticsearch"`
+	TelemetryAlerts struct {
+		PolicyPath      string `yaml:"policy_path"`
+		AlertmanagerURL string `yaml:"alertmanager_url"`
+		IntervalMS      int    `yaml:"interval_ms"`
+	} `yaml:"telemetry_alerts"`
 	Redis struct {
 		Rec     redisSceneCfg `yaml:"rec"`
 		General redisSceneCfg `yaml:"general"`
@@ -266,6 +271,17 @@ func applyEnvOverrides(cfg *config) {
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_ELASTICSEARCH_TIMEOUT_MS")); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
 			cfg.Elasticsearch.TimeoutMS = parsed
+		}
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_TELEMETRY_ALERTS_POLICY_PATH")); v != "" {
+		cfg.TelemetryAlerts.PolicyPath = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_TELEMETRY_ALERTS_ALERTMANAGER_URL")); v != "" {
+		cfg.TelemetryAlerts.AlertmanagerURL = v
+	}
+	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_TELEMETRY_ALERTS_INTERVAL_MS")); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			cfg.TelemetryAlerts.IntervalMS = parsed
 		}
 	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_REDIS_GENERAL_ADDR")); v != "" {

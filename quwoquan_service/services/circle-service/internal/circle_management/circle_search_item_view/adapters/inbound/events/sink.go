@@ -6,8 +6,12 @@ import (
 	"fmt"
 	"strings"
 
+	rtobs "quwoquan_service/runtime/observability"
 	viewapp "quwoquan_service/services/circle-service/internal/circle_management/circle_search_item_view/application"
 )
+
+// 契约 runtime_entrypoints[].telemetry.metric 同名计数器（outcome=ok|error）。
+var projectionOutcomes = rtobs.NewEntrypointOutcomeCounter("circle_search_item_projection")
 
 // CircleSearchItemViewProjector is the object-owned lifecycle adapter.  It
 // resolves the current authoritative snapshot before applying an idempotent
@@ -25,7 +29,14 @@ func NewSink(projector *viewapp.Projector, snapshots viewapp.SnapshotReader) *Ci
 	return &CircleSearchItemViewProjector{projector: projector, snapshots: snapshots}
 }
 
-func (sink *CircleSearchItemViewProjector) Apply(ctx context.Context, event viewapp.LifecycleEvent) error {
+func (sink *CircleSearchItemViewProjector) Apply(ctx context.Context, event viewapp.LifecycleEvent) (err error) {
+	defer func() {
+		outcome := "ok"
+		if err != nil {
+			outcome = "error"
+		}
+		projectionOutcomes.WithLabelValues(outcome).Inc()
+	}()
 	circleID := strings.TrimSpace(event.CircleID)
 	version := event.SourceVersion
 	if circleID == "" || version <= 0 {

@@ -1,0 +1,23 @@
+description: 曝光事实 stream consumer 的对象级错误语义（无 HTTP 面）。
+errors:
+- code: RECOMMENDATION.SYSTEM.exposure_fact_source_event_invalid
+  reason: exposure_fact_source_event_invalid
+  emitted_by:
+  - {surface: consumer}
+  recovery_action: absorb
+  disruption_level: silent
+  description: >-
+    FeedPageDelivered 事件解码、身份或归因校验失败。重试穷尽后进入
+    events.content.feed_page_delivered.recommendation-exposure.dlq。
+  user_message: {zh: 推荐曝光事件无效, en: Invalid recommendation exposure source event}
+- code: RECOMMENDATION.SYSTEM.exposure_fact_append_unavailable
+  reason: exposure_fact_append_unavailable
+  emitted_by:
+  - {surface: consumer}
+  recovery_action: retry
+  recovery_after_seconds: 5
+  disruption_level: silent
+  description: >-
+    曝光事实 Mongo 追加或特征投影暂时不可用；consumer 按有界重试推进，
+    超过 MAX_ATTEMPTS 进入 DLQ。
+  user_message: {zh: 推荐曝光记录暂时不可用, en: Recommendation exposure append is temporarily unavailable}

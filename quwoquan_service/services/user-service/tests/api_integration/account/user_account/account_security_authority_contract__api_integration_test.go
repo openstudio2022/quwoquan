@@ -114,6 +114,9 @@ func TestReadAccountSecurity_RejectsUnscopedOrNonServiceCallers(t *testing.T) {
 			"service:untrusted-service",
 			"user.account.security.read",
 		),
+		// 退役守卫：travel-service 已彻底日落，此负例断言其身份不会被
+		// 重新受信（allowlist 见 account_lifecycle_handler.go）。刻意保留
+		// 退役服务名，请勿当作历史残留清理。
 		"retired travel service": serviceHeadersFor(
 			"service:travel-service",
 			"user.account.security.read",
@@ -159,6 +162,8 @@ func TestCheckAccountSecurityAuthority_RejectsUntrustedScopedService(t *testing.
 	}
 }
 
+// 退役守卫：断言已日落的 travel-service 身份不得重新获得账号安全读权限；
+// 刻意引用退役服务名，请勿当作历史残留清理。
 func TestCheckAccountSecurityAuthority_RejectsRetiredTravelService(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	response := doRequest(

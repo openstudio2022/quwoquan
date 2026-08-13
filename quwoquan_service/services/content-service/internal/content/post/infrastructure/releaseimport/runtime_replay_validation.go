@@ -119,10 +119,10 @@ func ValidateImportedPostReplayBindings(
 		if _, duplicate := seenIDs[binding.PostID]; duplicate {
 			return fmt.Errorf("GATE_BLOCK: duplicate replay postId %q", binding.PostID)
 		}
-		legacyID := LegacyRuntimePostID(post.PostRef)
+		postRefDerivedID := RuntimePostIDFromPostRef(post.PostRef)
 		currentID := RuntimePostID(post.ContentID, post.PostRef)
 		if strings.TrimSpace(binding.PostID) == "" ||
-			(binding.PostID != legacyID && binding.PostID != currentID) ||
+			(binding.PostID != postRefDerivedID && binding.PostID != currentID) ||
 			binding.ContentID != post.ContentID ||
 			binding.ContentVersion != post.ContentVersion ||
 			binding.UsageScope != post.Admission.UsageScope ||

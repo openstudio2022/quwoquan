@@ -3,17 +3,27 @@ query SearchPage($input: SearchPageInput!) {
     items {
       objectRef
       resultType
+      contentType
       title
       subtitle
       snippet
       thumbnailUrl
       action
+      rankPosition
+      rankReason
     }
     facets {
       key
       count
     }
     suggestions
+    matchedTerms
+    degradeSignals {
+      code
+      message
+      objectType
+    }
+    searchRequestId
     nextCursor
   }
 }

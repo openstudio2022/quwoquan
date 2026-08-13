@@ -1,7 +1,6 @@
 package api_integration
 
 import (
-	"context"
 	"net/http"
 	"net/url"
 	"testing"
@@ -30,14 +29,7 @@ func TestSocialRelationSearch_SemiPersonaOnlyUsesKnownHandlePath(t *testing.T) {
 		"semi",
 		true,
 	)
-	if _, err := pgPool.Exec(
-		context.Background(),
-		`UPDATE personas SET user_handle = $1 WHERE persona_id = $2`,
-		"known-semi-handle",
-		"sa_search_semi",
-	); err != nil {
-		t.Fatalf("set semi persona handle: %v", err)
-	}
+	seedPersonaUserHandle(t, "sa_search_semi", "known-semi-handle")
 
 	fuzzy := doRequest(
 		t,

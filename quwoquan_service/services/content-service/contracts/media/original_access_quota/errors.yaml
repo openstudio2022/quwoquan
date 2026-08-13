@@ -11,7 +11,7 @@ errors:
   http_status: 403
   emitted_by:
   - surface: http
-    operations: [ReserveOriginalImageAccessGrant]
+    operations: [GetOriginalImageAccessAudit, ReserveOriginalImageAccessGrant]
   recovery_action: surface
   disruption_level: inlineCard
   dart_const: originalAccessDenied

@@ -11,6 +11,10 @@ from internal.recommendation.recommendation_candidate_index_view.application.pro
     Projector,
 )
 
+from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.projection_metrics import (
+    record_projection_outcome,
+)
+
 
 PREMIUM_POOL_STREAM = "events.ops.premium_pool_entry"
 PREMIUM_POOL_DLQ = "events.ops.premium_pool_entry.recommendation_candidate.dlq"
@@ -220,6 +224,15 @@ class PremiumPoolConsumer:
         self._store.clear_source_failure(stream_id)
 
     def process_once(self) -> int:
+        try:
+            processed = self._process_once_inner()
+        except Exception:
+            record_projection_outcome("premium_pool", "error")
+            raise
+        record_projection_outcome("premium_pool", "ok")
+        return processed
+
+    def _process_once_inner(self) -> int:
         self.ensure_group()
         seen: set[str] = set()
         messages = []

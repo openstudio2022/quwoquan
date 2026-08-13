@@ -133,6 +133,62 @@ func TestExactOperationPolicyOverridesGenericKindPolicy(t *testing.T) {
 	}
 }
 
+// 匿名恢复异常上报的来源准入由 edge 共享 admission 权威裁决
+// （event-ingestion OPEN-008 上收）：network subject（可信连接层 IP）
+// 命中 ops.recovery_failure.ReportRecoveryFailure 的独立策略，而不是
+// 落回 command kind 缺省——product-ops 侧进程内窗口已退役。
+func TestAnonymousRecoveryFailureAdmissionUsesTheDedicatedOperationPolicy(t *testing.T) {
+	store := &stubStore{}
+	policies := application.PolicySet{
+		ByOperationKind: map[string]domain.Policy{
+			"command": {Limit: 10, Window: time.Minute, StateFailure: domain.FailurePolicyFailClosed},
+			"query":   {Limit: 20, Window: time.Minute, StateFailure: domain.FailurePolicyFailClosed},
+			"session": {Limit: 30, Window: time.Minute, StateFailure: domain.FailurePolicyFailClosed},
+		},
+		ByOperationID: map[string]domain.Policy{
+			"ops.recovery_failure.ReportRecoveryFailure": {
+				Limit:        30,
+				Window:       time.Minute,
+				StateFailure: domain.FailurePolicyFailClosed,
+			},
+		},
+	}
+	service, err := application.NewService("prod", store, policies, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor := testDescriptor()
+	descriptor.CanonicalOperationID = "ops.recovery_failure.ReportRecoveryFailure"
+	descriptor.OperationKind = "command"
+	if _, err := service.Admit(
+		context.Background(),
+		domain.Subject{Kind: "network", ID: "192.0.2.10"},
+		descriptor,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.limits) != 1 || store.limits[0] != 30 || store.windows[0] != time.Minute {
+		t.Fatalf(
+			"anonymous recovery admission must use the dedicated policy: limits=%v windows=%v",
+			store.limits, store.windows,
+		)
+	}
+	sameSourceKey, err := domain.BucketKey(
+		"prod",
+		domain.Subject{Kind: "network", ID: "192.0.2.10"},
+		"ops.recovery_failure.ReportRecoveryFailure",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.keys) != 1 || store.keys[0] != sameSourceKey {
+		t.Fatalf(
+			"same network source must share one cross-replica bucket: keys=%v want=%q",
+			store.keys, sameSourceKey,
+		)
+	}
+}
+
 func TestAdmissionStateFailureExecutesTheDeclaredPolicyWithoutLocalFallback(t *testing.T) {
 	descriptor := testDescriptor()
 	stateFailure := errors.New("redis unavailable")
@@ -284,17 +340,19 @@ type stubStore struct {
 	results []application.QuotaResult
 	err     error
 	calls   int
+	keys    []string
 	limits  []int64
 	windows []time.Duration
 }
 
 func (store *stubStore) Consume(
 	_ context.Context,
-	_ string,
+	key string,
 	limit int64,
 	window time.Duration,
 ) (application.QuotaResult, error) {
 	store.calls++
+	store.keys = append(store.keys, key)
 	store.limits = append(store.limits, limit)
 	store.windows = append(store.windows, window)
 	if store.err != nil {

@@ -8,6 +8,16 @@
     "turnId": "atn_replay_tool",
     "userId": "u_replay",
     "inputText": "Summarize the latest AI chip news.",
+    "triggerType": "proactive",
+    "trustedTriggerIdentity": {
+      "kind": "schedule",
+      "triggerId": "trg_replay_tool",
+      "occurredAt": "2026-04-29T00:00:00Z",
+      "subscriptionRef": "sks_replay_tool",
+      "reason": "subscription_due",
+      "dedupeKey": "trg_replay_tool",
+      "deliveryPolicyRef": "delivery.quiet_hours.default"
+    },
     "clientContext": {
       "surfaceId": "assistant.personal"
     }

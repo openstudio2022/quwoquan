@@ -1,0 +1,484 @@
+"""诊断域共享报告 helper（health / inspect / doctor / status 共用）。
+
+从 stackctl.py 逐字迁出健康检查矩阵与候选工作区报告：
+
+- `_health_checks_for_target` 及其角色矩阵子函数：被 `command_health`
+  与 `command_inspect`（经 `_metrics_report`）消费；
+- `_script_probe_plan_for_target`：同上两域共用的脚本探针计划；
+- `_candidate_workspace_report`：被 `command_inspect`（含 `_data_report`）
+  与 `command_status` 消费。
+
+端口/拓扑/候选包等基础设施符号（`load_port_manifest` /
+`_expected_local_roles` / `_active_provider_runtime` /
+`active_deployment_candidate` 等）仍由 stackctl 命名空间拥有（up /
+verify / deploy 等留守域共用，且测试经 ``mock.patch.object(stackctl,
+...)`` patch 它们），因此函数体内一律经函数内延迟导入 `_stackctl`
+属性访问，保持 monkeypatch 语义并避免顶层循环 import。
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+
+def _script_probe_plan_for_target(
+    topology: dict[str, Any],
+    target_name: str,
+) -> list[dict[str, Any]]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    target = _stackctl.get_target(topology, target_name)
+    if target_name == "alpha-local":
+        return [{"name": "integration-readonly", "kind": "readonly-http"}]
+    if target_name == "beta-local":
+        return [{"name": "integration-readonly", "kind": "readonly-http"}]
+    if target_name == "prod-sim":
+        return [{"name": "integration-readonly", "kind": "readonly-http"}]
+    if target_name == "prod-hosted":
+        return [
+            {"name": "integration-readonly", "kind": "readonly-http"},
+            {"name": "release-state", "kind": "rollout-state"},
+        ]
+    if str(target.get("env")) == "gamma" and target_name == "gamma-local":
+        return [{"name": "integration-readonly", "kind": "readonly-http"}]
+    return []
+
+
+def _media_edge_health_url(public_bases: dict[str, Any]) -> str:
+    """Probe media-edge root /healthz; never append carrier pathBase (/media/image)."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    return f"{_stackctl._public_url_origin(str(public_bases['mediaImage'])).rstrip('/')}/healthz"
+
+
+def _health_checks_for_target(
+    topology: dict[str, Any],
+    target_name: str,
+    scope: str,
+    *,
+    workload: str | None = None,
+) -> list[dict[str, Any]]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    target = _stackctl.get_target(topology, target_name)
+    env_name = str(target["env"])
+    env_cfg = topology["environments"][env_name]
+    public_bases = target.get("publicBases") or {}
+    checks: list[dict[str, Any]] = []
+    if scope in {
+        "edge",
+        "full",
+        "content-import",
+        "content-consumer",
+        "content-commercial",
+    }:
+        checks.append(
+            {
+                "name": "api-health",
+                "scope": "edge",
+                "url": f"{str(public_bases['api']).rstrip('/')}/healthz",
+            }
+        )
+    if scope in {"edge", "full", "content-commercial"}:
+        checks.append(
+            {
+                "name": "product-ops-health",
+                "scope": "edge",
+                "url": f"{str(public_bases['productOps']).rstrip('/')}/healthz",
+            }
+        )
+    if scope in {
+        "media",
+        "full",
+        "content-import",
+        "content-consumer",
+        "content-commercial",
+    } and "mediaImage" in public_bases:
+        checks.append(
+            {
+                "name": "media-edge-health",
+                "scope": "media",
+                "url": _stackctl._media_edge_health_url(public_bases),
+            }
+        )
+    if scope in {"service", "full"}:
+        checks.extend(_stackctl._service_health_checks_for_target(target_name))
+    if scope in {"content-import", "content-consumer", "content-commercial", "full"}:
+        plane_workload = (
+            "full"
+            if scope == "full"
+            else (workload or _stackctl._current_runtime_workload(target_name))
+        )
+        checks.extend(
+            _stackctl._content_data_plane_health_checks(
+                target_name,
+                workload=plane_workload,
+            )
+        )
+    if scope in {"content-consumer", "content-commercial", "full"}:
+        checks.extend(_stackctl._content_consumer_health_checks(target_name, public_bases))
+    if scope == "content-commercial":
+        checks.extend(_stackctl._content_commercial_health_checks(target_name))
+    if scope == "full":
+        checks.extend(_stackctl._full_scope_health_checks(target_name, public_bases, env_cfg))
+    return checks
+
+
+_CONTENT_DATA_PLANE_ROLES = frozenset(
+    {"content-service", "entity-service", "tag-service", "search-service"}
+)
+
+
+def _content_data_plane_health_checks(
+    target_name: str,
+    *,
+    workload: str = "full",
+) -> list[dict[str, Any]]:
+    """Only probes required by immutable content import and API consumption."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    topology = _stackctl.load_environment_topology()
+    target = _stackctl.get_target(topology, target_name)
+    profile_name = target.get("portProfile")
+    if not profile_name:
+        if target_name == "prod-hosted":
+            api_base = str((target.get("publicBases") or {}).get("api") or "").rstrip("/")
+            if not api_base:
+                return []
+            # prod edge /healthz is routed directly to content-service.  This is
+            # the hosted data-plane liveness proof; local-only loopback ports
+            # and SSH management addresses must never become App/public config.
+            return [
+                {
+                    "name": "content-service-public",
+                    "scope": "content-import",
+                    "url": f"{api_base}/healthz",
+                }
+            ]
+        return []
+    manifest = _stackctl.load_port_manifest()
+    role_names = [
+        role_name
+        for role_name in _stackctl._expected_local_roles(target_name, workload=workload)
+        if role_name in _stackctl._CONTENT_DATA_PLANE_ROLES
+    ]
+    checks: list[dict[str, Any]] = []
+    for role_name in role_names:
+        port = _stackctl.canonical_port(manifest, str(profile_name), role_name)
+        checks.append(
+            {
+                "name": role_name,
+                "scope": "content-import",
+                "url": f"http://127.0.0.1:{port}/healthz",
+            }
+        )
+    return checks
+
+
+def _content_consumer_health_checks(
+    target_name: str,
+    public_bases: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if target_name not in {"alpha-local", "beta-local", "gamma-local", "prod-hosted"}:
+        return []
+    api_base = str(public_bases.get("api") or "").rstrip("/")
+    if not api_base:
+        return []
+    # Probe the exact default homepage channel route.  An identity=work query is
+    # a discovery-browser read, while a bare feed query leaves the App route
+    # ambiguous; neither proves that the visible Recommend tab can assemble a
+    # ranked page.
+    feed_url = (
+        f"{api_base}/content/feed?sort=recommend&channelId=recommend&limit=1"
+        "&sessionId=stackctl-content-consumer-health"
+    )
+    return [
+        {"name": "app-config", "scope": "content-consumer", "url": f"{api_base}/config/app"},
+        {"name": "content-feed", "scope": "content-consumer", "url": feed_url},
+    ]
+
+
+def _content_commercial_health_checks(target_name: str) -> list[dict[str, Any]]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    if target_name not in {"alpha-local", "beta-local", "gamma-local"}:
+        return []
+    target = _stackctl.get_target(_stackctl.load_environment_topology(), target_name)
+    profile_name = str(target.get("portProfile") or "")
+    if not profile_name:
+        return []
+    port = _stackctl.canonical_port(
+        _stackctl.load_port_manifest(), profile_name, "product-ops-service"
+    )
+    return [
+        {
+            "name": "product-ops-service",
+            "scope": "content-commercial",
+            "url": f"http://127.0.0.1:{port}/healthz",
+        }
+    ]
+
+
+def _service_health_checks_for_target(target_name: str) -> list[dict[str, Any]]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    topology = _stackctl.load_environment_topology()
+    target = _stackctl.get_target(topology, target_name)
+    env_name = str(target["env"])
+    mock_flags = (topology["environments"][env_name].get("mockBoundaryFlags") or {})
+    if mock_flags.get("servicePlane"):
+        return [
+            {
+                "name": "service-plane-mocked",
+                "scope": "service",
+                "url": "",
+                "skip": True,
+                "reason": "service plane is mocked in this target",
+            }
+        ]
+    profile_name = target.get("portProfile")
+    if not profile_name:
+        return []
+    manifest = _stackctl.load_port_manifest()
+    checks: list[dict[str, Any]] = []
+    provider_roles: set[str] = set()
+    if target_name in {"alpha-local", "beta-local", "gamma-local"}:
+        provider_runtime = _stackctl._active_provider_runtime(env_name, target_name)
+        provider_roles = {
+            str(workload["role"])
+            for workload in provider_runtime["composition"]["workloads"]
+        }
+    non_service_paths = {
+        "realtime-gateway": "/healthz",
+        "livekit-http": "/",
+        "livekit-metrics": "/metrics",
+    }
+    for role_name in _stackctl._expected_local_roles(target_name):
+        if (
+            not role_name.endswith("-service")
+            and role_name not in non_service_paths
+            and role_name not in provider_roles
+        ):
+            continue
+        port = _stackctl.canonical_port(manifest, str(profile_name), role_name)
+        path = non_service_paths.get(role_name, "/healthz")
+        if role_name == "recommendation-service":
+            path = "/health"
+        check = {
+            "name": role_name,
+            "scope": "service",
+            "url": f"http://127.0.0.1:{port}{path}",
+        }
+        if role_name in provider_roles:
+            check["url"] = f"https://127.0.0.1:{port}{path}"
+            try:
+                check["caFile"] = str(_stackctl.root_certificate_path(target_name))
+            except _stackctl.PublicDomainTlsError:
+                check["caFile"] = ""
+        checks.append(check)
+    return checks
+
+
+def _full_scope_health_checks(
+    target_name: str,
+    public_bases: dict[str, Any],
+    env_cfg: dict[str, Any],
+) -> list[dict[str, Any]]:
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    checks: list[dict[str, Any]] = []
+    env_name = str(env_cfg.get("artifactPolicy", {}).get("app", {}).get("runtimeEnv", ""))
+    if target_name == "beta-local":
+        notification_port = _stackctl.canonical_port(
+            _stackctl.load_port_manifest(),
+            "beta-local",
+            "notification-service",
+        )
+        checks.append(
+            {
+                "name": "app-config",
+                "scope": "full",
+                "url": f"{str(public_bases['api']).rstrip('/')}/config/app",
+            }
+        )
+        checks.extend(
+            [
+                {
+                    "name": "content-feed",
+                    "scope": "full",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/content/feed",
+                },
+                {
+                    "name": "chat-contacts",
+                    "scope": "full",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/chat/contacts",
+                },
+                {
+                    "name": "notification-service-health",
+                    "scope": "full",
+                    "url": f"http://127.0.0.1:{notification_port}/healthz",
+                },
+                {
+                    "name": "feed-intersections",
+                    "scope": "full",
+                    "url": (
+                        f"{str(public_bases['api']).rstrip('/')}"
+                        "/content/feed/intersections?limit=4&channel=recommend"
+                    ),
+                },
+            ]
+        )
+    elif target_name == "gamma-local":
+        # Ranked feeds require sessionId; bare ?limit=1 is CONTENT.USER.invalid_argument.
+        gamma_feed_smoke = (
+            f"{str(public_bases['api']).rstrip('/')}/content/feed?limit=1"
+            "&sessionId=stackctl-gamma-route-smoke"
+        )
+        checks.extend(
+            [
+                {
+                    "name": "app-config",
+                    "scope": "full",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/config/app",
+                },
+                {
+                    "name": "gamma-route-smoke",
+                    "scope": "full",
+                    "url": gamma_feed_smoke,
+                },
+                {
+                    "name": "tag-public-catalog-smoke",
+                    "scope": "full",
+                    "url": (
+                        f"{str(public_bases['api']).rstrip('/')}"
+                        "/tag/resolve?tagRef=Topic%2F%E6%97%85%E8%A1%8C"
+                    ),
+                },
+            ]
+        )
+    elif target_name == "prod-sim":
+        # Keep sessionId parity with content-consumer / gamma full probes.
+        prod_sim_feed_smoke = (
+            f"{str(public_bases['api']).rstrip('/')}/content/feed?limit=1"
+            "&sessionId=stackctl-prod-sim-route-smoke"
+        )
+        checks.extend(
+            [
+                {
+                    "name": "app-config",
+                    "scope": "full",
+                    "url": f"{str(public_bases['api']).rstrip('/')}/config/app",
+                },
+                {
+                    "name": "prod-sim-route-smoke",
+                    "scope": "full",
+                    "url": prod_sim_feed_smoke,
+                },
+            ]
+        )
+    return checks
+
+
+def _candidate_workspace_report(
+    target_name: str,
+    *,
+    purpose: str = "self_verify",
+) -> dict[str, Any]:
+    """Self-verify candidate bytes; current source comparison is explicit."""
+    import quwoquan_ops.cli.stackctl as _stackctl
+
+    report: dict[str, Any] = {
+        "status": "unavailable",
+        "purpose": purpose,
+        "selfVerified": False,
+        "currentSourceClaim": "not_evaluated",
+        "nonPromotable": None,
+        "drifted": None,
+        "candidate": None,
+        "current": None,
+        "mismatchedFields": [],
+        "issues": [],
+        "warnings": [],
+    }
+    if purpose not in {"self_verify", "currentness"}:
+        report["issues"] = ["candidate validation purpose is invalid"]
+        return report
+    try:
+        topology = _stackctl.load_environment_topology()
+        environment = str(_stackctl.get_target(topology, target_name).get("env") or "")
+        active = _stackctl.active_deployment_candidate(target_name)
+        if active is None:
+            report.update(
+                {
+                    "status": "no_active_candidate",
+                    "drifted": True,
+                    "issues": [f"no active immutable candidate for {target_name}"],
+                }
+            )
+            return report
+        candidate_root = Path(str(active["candidateDir"]))
+        self_verified, self_verify_detail = _stackctl.can_reuse_package(
+            environment,
+            target_name,
+            include_services=True,
+            purpose="self_verify",
+            candidate_root=candidate_root,
+        )
+        if not self_verified:
+            raise ValueError(self_verify_detail)
+        candidate = _stackctl.load_candidate_manifest(
+            environment,
+            target_name,
+            str(active["baselineId"]),
+            require_full=True,
+            purpose="self_verify",
+        )
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+        report["issues"] = ["candidate self-verify is unavailable: " + str(exc)]
+        return report
+
+    candidate_identity = {
+        "baselineId": candidate.get("baselineId"),
+        "sourceRevision": candidate.get("sourceRevision"),
+        "workspaceStatusDigest": candidate.get("workspaceStatusDigest"),
+        "deploymentInputDigest": candidate.get("workspaceDigest"),
+    }
+    status = "self_verified"
+    current_source_claim = "not_evaluated"
+    non_promotable: bool | None = None
+    drifted: bool | None = None
+    current_identity: dict[str, Any] | None = None
+    mismatched: list[str] = []
+    warnings: list[str] = []
+    if purpose == "currentness":
+        current, detail = _stackctl.can_reuse_package(
+            environment,
+            target_name,
+            include_services=True,
+            purpose="currentness",
+            candidate_root=candidate_root,
+        )
+        status = "current" if current else "drifted"
+        current_source_claim = status
+        non_promotable = not current
+        drifted = not current
+        current_identity = {"detail": detail}
+        if not current:
+            mismatched = ["deploymentInputClosure"]
+            warnings.append(detail)
+    report.update(
+        {
+            "status": status,
+            "selfVerified": True,
+            "currentSourceClaim": current_source_claim,
+            "nonPromotable": non_promotable,
+            "drifted": drifted,
+            "candidate": candidate_identity,
+            "current": current_identity,
+            "mismatchedFields": mismatched,
+            "warnings": warnings,
+        }
+    )
+    return report

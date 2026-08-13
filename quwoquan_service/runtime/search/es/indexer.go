@@ -186,6 +186,10 @@ func IndexToCandidate(src map[string]any, score float64) rtsearch.RecallCandidat
 		Document:  IndexToDocument(src),
 		BaseScore: score,
 		Source:    "elasticsearch",
+		// The ES query embeds the full commercial ranking (function_score covers
+		// freshness/quality/geo on top of text relevance), so the engine order is
+		// final; the shared ranker must not derive a second score.
+		ServerRanked: true,
 	}
 }
 

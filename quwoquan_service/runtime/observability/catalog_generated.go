@@ -138,6 +138,7 @@ func init() {
 		{ObjectID: "content.post", Field: "entityMentions", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "entityRefs", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "experienceClaimMode", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
+		{ObjectID: "content.post", Field: "gatheringRef", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "geoTagRef", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "height", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "helperReadSummary", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},

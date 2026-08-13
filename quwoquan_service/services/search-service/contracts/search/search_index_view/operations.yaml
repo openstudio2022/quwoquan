@@ -27,7 +27,10 @@ api_routes:
       principal: public
       ownership_policy: public_search_discovery
     reliability:
-      timeout_ms: 6000
+      # 预算级联由外向内递减：App e2e SLO 1500ms > api-edge GraphQL 入口 3000ms >
+      # SearchPage executor 2000ms > 本操作 1500ms > ES client 800ms；
+      # 禁止倒挂（外层放弃后内层继续计算是纯容量泄漏）。
+      timeout_ms: 1500
       cancellation: supported
       retry_mode: idempotent
       max_attempts: 2
@@ -104,6 +107,30 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/search_index_view/search_contract__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: elasticsearch-http-contract-substitute, digest_binding: candidate}
+  - case_id: search-golden-query-relevance-api
+    spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: Search}
+    runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/search_index_view/golden_query_relevance__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: elasticsearch, digest_binding: candidate}
+  - case_id: search-pit-pagination-api
+    spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#gwt-003
+    producer: service
+    layer: api_integration
+    target: {kind: operation, id: Search}
+    runner_source_path: quwoquan_service/services/search-service/tests/api_integration/search/search_index_view/pit_pagination__api_integration_test.go
+    executions:
+      - {env: beta, platform: service, device: runner, provider: elasticsearch, digest_binding: candidate}
+  - case_id: search_fullstack_smoke_probe_ops_env
+    spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-003
+    producer: ops
+    layer: environment_acceptance
+    target: {kind: object, id: search.search_index_view}
+    runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/search-service/smoke/run_search_fullstack_smoke_probe.py
+    executions:
+      - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}
   - case_id: apply-search-experiment-policy-local
     spec_ref: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md#sit-001
     producer: service
@@ -152,3 +179,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_remote_api_path__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: search_content_projection_app_uat
+    spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md#gwt-005
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: search.global}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/search_service/search/search_index_view/search_content_projection_remote__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

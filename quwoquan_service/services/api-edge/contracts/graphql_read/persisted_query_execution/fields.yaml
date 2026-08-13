@@ -41,24 +41,36 @@ types:
     - {name: first, source: input.first, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
     - {name: after, source: input.after, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: none}
     - {name: objectTypes, source: input.objectTypes, type: '[]string', constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: contentTypes, source: input.contentTypes, type: '[]string', constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none, description: content.post 命中的内容形态过滤（ARTICLE/IMAGE/VIDEO），转发为 owner canonical contentTypes（article/image/video）。}
   SearchPageItem:
     fields:
     - {name: objectRef, source: searchOwner.objectRef, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: resultType, source: searchOwner.objectType, type: enum, enum_ref: SearchPageObjectType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: contentType, source: searchOwner.contentType, type: enum, enum_ref: SearchPageContentType, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, description: 仅 content.post 命中携带；owner canonical article/image/video 映射为 GraphQL 枚举。}
     - {name: title, source: searchOwner.title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: none, api_exposure: read, ops_exposure: none}
     - {name: subtitle, source: gatewayProjection.subtitle, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: none, api_exposure: read, ops_exposure: none, description: 当前 owner flat-card 未声明独立 subtitle 时保持 null，禁止从 contentType 或 snippet 伪造。}
     - {name: snippet, source: searchOwner.snippet, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: none, api_exposure: read, ops_exposure: none}
     - {name: thumbnailUrl, source: searchOwner.thumbnailUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: action, source: searchOwner.action, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read, description: 只接受 owner canonical DeepLink；缺失时整个 Query Slice fail-closed。}
+    - {name: rankPosition, source: searchOwner.rankPosition, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, description: 服务端最终排序位置（0 起）；端侧只读消费，不得客户端重排。}
+    - {name: rankReason, source: searchOwner.rankReasons, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, description: owner rankReasons 的首要理由 label；结构化列表保留在 owner wire，GraphQL cost 治理禁止 list 内嵌套 list。}
   SearchPageFacet:
     fields:
     - {name: key, source: searchOwner.facets.key, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: count, source: searchOwner.facets.count, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+  SearchPageDegradeSignal:
+    fields:
+    - {name: code, source: searchOwner.degradeSignals.code, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: message, source: searchOwner.degradeSignals.message, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: objectType, source: searchOwner.degradeSignals.objectType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   SearchPageSlice:
     fields:
     - {name: items, source: searchOwner.hits, type: '[]SearchPageItem', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
     - {name: facets, source: searchOwner.facets, type: '[]SearchPageFacet', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
     - {name: suggestions, source: searchOwner.interpretedQuery.variants, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: none, api_exposure: read, ops_exposure: none}
+    - {name: matchedTerms, source: searchOwner.interpretedQuery.tokens, type: '[]string', constraints: [NOT_NULL], classification: SENSITIVE, log_policy: none, api_exposure: read, ops_exposure: none, description: 归一化命中词，查询级别对全部 items 一致，用于端侧高亮。}
+    - {name: degradeSignals, source: searchOwner.degradeSignals, type: '[]SearchPageDegradeSignal', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read}
+    - {name: searchRequestId, source: searchOwner.searchRequestId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, description: 本次检索稳定归因 id；反馈与漏斗埋点按它去重。}
     - {name: nextCursor, source: searchOwner.nextCursor, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
   PersistedQueryAuthorizationBinding:
     fields:
@@ -103,3 +115,5 @@ types:
 enums:
   SearchPageObjectType:
     values: [CIRCLE, CIRCLE_GROUP, CONTENT_POST, ENTITY_HOMEPAGE, LOCATION_PLACE, USER_PROFILE]
+  SearchPageContentType:
+    values: [ARTICLE, IMAGE, VIDEO]

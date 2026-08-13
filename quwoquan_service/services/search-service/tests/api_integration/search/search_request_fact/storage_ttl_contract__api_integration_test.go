@@ -35,6 +35,24 @@ type redisKeyspaceMeta struct {
 	} `yaml:"key_patterns"`
 }
 
+func searchServiceRoot(t *testing.T) string {
+	t.Helper()
+	directory, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	for {
+		if _, statErr := os.Stat(filepath.Join(directory, "contracts", "domain.yaml")); statErr == nil {
+			return directory
+		}
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			t.Fatal("search-service contracts/domain.yaml not found above test directory")
+		}
+		directory = parent
+	}
+}
+
 func loadStorageMeta(t *testing.T, object string) storageMeta {
 	t.Helper()
 	path := filepath.Join(searchServiceRoot(t), "contracts", "search", object, "storage.yaml")

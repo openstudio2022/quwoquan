@@ -374,6 +374,44 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/recommendation/social-proof/{anchorKind}/{objectId}:
+        get:
+            operationId: GetRecommendationGatheringSocialProof
+            x-contract-operation-id: recommendation.recommendation_feature_profile_view.GetRecommendationGatheringSocialProof
+            x-object-id: recommendation.recommendation_feature_profile_view
+            x-actor: none
+            x-application:
+                kind: query
+                facet: RecommendationFeatureProfileViewQueryFacade
+                method: getGatheringSocialProof
+                reader: RecommendationGatheringSocialProofReader
+                slice: RecommendationGatheringSocialProofSummary
+            parameters:
+                - name: anchorKind
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: objectId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecommendationGatheringSocialProofSummary'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/recommendation/subjects/{subjectId}/intersections:
         get:
             operationId: ListRecommendationSubjectIntersections
@@ -514,6 +552,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RecommendationAuthorImpactSummary
+            x-contract-placeholder: true
+        RecommendationGatheringSocialProofSummary:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RecommendationGatheringSocialProofSummary
             x-contract-placeholder: true
         RecommendationIntersectionReasonSlice:
             type: object

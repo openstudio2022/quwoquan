@@ -33,6 +33,17 @@ errors:
   dart_const: skillPackageRevisionConflict
   go_const: ErrSkillPackageRevisionConflict
   user_message: {zh: 技能包激活状态已更新，请刷新后重试, en: Skill package activation changed; refresh and retry}
+- code: ASSISTANT.USER.skill_package_evaluation_receipt_invalid
+  reason: skill_package_evaluation_receipt_invalid
+  http_status: 400
+  emitted_by:
+  - surface: http
+    operations: [ActivateAssistantSkillPackageRelease]
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: skillPackageEvaluationReceiptInvalid
+  go_const: ErrSkillPackageEvaluationReceiptInvalid
+  user_message: {zh: 技能包评测凭据与待激活版本不一致, en: Skill package evaluation receipt does not match the release}
 - code: ASSISTANT.USER.skill_package_capability_denied
   reason: skill_package_capability_denied
   http_status: 403

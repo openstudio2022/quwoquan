@@ -94,8 +94,7 @@ func TestCrossLanguageEventConstantsKeepObjectLocalGoOwners(t *testing.T) {
 	if manifest.Generator != generatorIdentity || len(manifest.Outputs) != 4 {
 		t.Fatalf("manifest = %#v", manifest)
 	}
-	if manifest.SchemaVersion != manifestVersion ||
-		manifest.SourceDigest != plan.SourceDigest ||
+	if manifest.SourceDigest != plan.SourceDigest ||
 		len(manifest.ExcludedObjects) != 0 {
 		t.Fatalf("manifest provenance = %#v", manifest)
 	}

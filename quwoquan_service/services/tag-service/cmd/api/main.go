@@ -1,13 +1,16 @@
-package main
+package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -22,6 +25,7 @@ import (
 	rtmetrics "quwoquan_service/runtime/metrics"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
+	"quwoquan_service/runtime/servicehost"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	signalstream "quwoquan_service/services/tag-service/internal/tag/object_tag_index_view/adapters/inbound/stream"
@@ -63,19 +67,41 @@ type config struct {
 	} `yaml:"redis"`
 }
 
-func main() {
+type Module struct {
+	configDigest string
+	server       *http.Server
+	health       *rthealth.Checker
+	listener     net.Listener
+	admission    atomic.Bool
+	serveError   chan error
+	workerCancel context.CancelFunc
+	workerGroup  sync.WaitGroup
+	workerStart  []func(context.Context)
+	cleanup      func()
+}
+
+var _ servicehost.Module = (*Module)(nil)
+
+func NewModule() (_ *Module, resultErr error) {
+	cleanup := func() {}
+	initialized := false
+	defer func() {
+		if !initialized {
+			cleanup()
+		}
+	}()
 	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
 	if err != nil {
-		log.Fatalf("tag-service runtime identity invalid: %v", err)
+		return nil, fmt.Errorf("tag-service runtime identity invalid: %w", err)
 	}
 
 	cfg, err := loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion)
 	if err != nil {
-		log.Fatalf("tag-service config load failed: %v", err)
+		return nil, fmt.Errorf("tag-service config load failed: %w", err)
 	}
 	applyEnvOverrides(&cfg)
 	if err := validateRuntimeConfigurationIdentity(cfg, configVersion); err != nil {
-		log.Fatalf("tag-service config identity failed: %v", err)
+		return nil, fmt.Errorf("tag-service config identity failed: %w", err)
 	}
 	controlplane.StartReleaseConfigAttestation(
 		serviceName, appEnv, configRoot, configVersion, imageVersion,
@@ -84,7 +110,7 @@ func main() {
 	configProvider := runtimeconfig.EnvRuntimeConfigProvider{}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(configProvider)
 	if err != nil {
-		log.Fatalf("tag-service access token config invalid: %v", err)
+		return nil, fmt.Errorf("tag-service access token config invalid: %w", err)
 	}
 	accountSecurityAuthorityCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig,
@@ -92,10 +118,7 @@ func main() {
 		[]string{"user.account.security.read"},
 	)
 	if err != nil {
-		log.Fatalf(
-			"tag-service account security authority credential init failed: %v",
-			err,
-		)
+		return nil, fmt.Errorf("tag-service account security authority credential init failed: %w", err)
 	}
 	accountSecurityAuthorityTimeout := time.Duration(
 		cfg.UserAccountSecurityAuthority.TimeoutMs,
@@ -111,19 +134,19 @@ func main() {
 		},
 	)
 	if err != nil {
-		log.Fatalf("tag-service account security authority config invalid: %v", err)
+		return nil, fmt.Errorf("tag-service account security authority config invalid: %w", err)
 	}
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
-		log.Fatalf("tag-service access token verifier invalid: %v", err)
+		return nil, fmt.Errorf("tag-service access token verifier invalid: %w", err)
 	}
 	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(configProvider)
 	if err != nil {
-		log.Fatalf("tag-service device ticket config invalid: %v", err)
+		return nil, fmt.Errorf("tag-service device ticket config invalid: %w", err)
 	}
 	deviceTicketVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
 	if err != nil {
-		log.Fatalf("tag-service device ticket verifier invalid: %v", err)
+		return nil, fmt.Errorf("tag-service device ticket verifier invalid: %w", err)
 	}
 
 	addr := getenvOrDefault("TAG_SERVICE_ADDR", cfg.Service.HTTP.Addr)
@@ -134,7 +157,9 @@ func main() {
 	ctx := context.Background()
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "tag-service", SamplingRatio: 0.1})
-	defer otelShutdown()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		otelShutdown()
+	})
 
 	mongoURI := getenvOrDefault("TAG_MONGO_URI", cfg.Mongo.URI)
 	if mongoURI == "" {
@@ -146,38 +171,42 @@ func main() {
 	}
 
 	mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: mongoURI}, "tag-service")
-	defer mongoClient.Disconnect(ctx)
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		_ = mongoClient.Disconnect(context.Background())
+	})
 
 	db := mongoClient.Database(mongoDBName)
 	tagNodeStore := persistence.NewMongoTagNodeStore(db.Collection("tag_nodes"))
 	objectTagStore := indexpersistence.NewMongoObjectTagIndexStore(db.Collection("object_tag_index"))
 	if err := tagNodeStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("tag-service ensure tag_nodes indexes: %v", err)
+		return nil, fmt.Errorf("tag-service ensure tag_nodes indexes: %w", err)
 	}
 	if err := objectTagStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("tag-service ensure object_tag_index indexes: %v", err)
+		return nil, fmt.Errorf("tag-service ensure object_tag_index indexes: %w", err)
 	}
 
 	releaseStore := taxonomyreleasestore.NewStore(db)
 	if err := releaseStore.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("tag-service ensure tag_taxonomy_releases indexes: %v", err)
+		return nil, fmt.Errorf("tag-service ensure tag_taxonomy_releases indexes: %w", err)
 	}
 	tagService := application.NewTagService(tagNodeStore, objectTagStore, releaseStore)
 	releaseFacade, err := taxonomyrelease.NewFacade(releaseStore, tagNodeStore)
 	if err != nil {
-		log.Fatalf("tag-service taxonomy release facade init failed: %v", err)
+		return nil, fmt.Errorf("tag-service taxonomy release facade init failed: %w", err)
 	}
 	feedbackSink := tagfeedbackstore.NewSink(db)
 	if err := feedbackSink.EnsureIndexes(ctx); err != nil {
-		log.Fatalf("tag-service ensure tag_feedback_fact indexes: %v", err)
+		return nil, fmt.Errorf("tag-service ensure tag_feedback_fact indexes: %w", err)
 	}
 	feedbackFacade, err := tagfeedback.NewFacade(feedbackSink, tagService)
 	if err != nil {
-		log.Fatalf("tag-service tag feedback facade init failed: %v", err)
+		return nil, fmt.Errorf("tag-service tag feedback facade init failed: %w", err)
 	}
 
 	redisRouter, redisSceneModes := buildTagRedisRouter(cfg)
-	defer redisRouter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		_ = redisRouter.Close()
+	})
 	messageTransport, err := requireTagAPIMessageTransport(
 		ctx,
 		appEnv,
@@ -185,7 +214,7 @@ func main() {
 		redisSceneModes,
 	)
 	if err != nil {
-		log.Fatalf("tag-service message transport init failed: %v", err)
+		return nil, fmt.Errorf("tag-service message transport init failed: %w", err)
 	}
 	profileTagConsumer, err := signalstream.NewUserProfileTagConsumer(
 		messageTransport,
@@ -194,14 +223,13 @@ func main() {
 		slog.Default(),
 	)
 	if err != nil {
-		log.Fatalf("tag-service user profile tag consumer init failed: %v", err)
+		return nil, fmt.Errorf("tag-service user profile tag consumer init failed: %w", err)
 	}
-	go profileTagConsumer.Run(ctx)
 	feedbackEventPublisher, err := tagfeedbackstore.NewStreamEventPublisher(
 		messageTransport,
 	)
 	if err != nil {
-		log.Fatalf("tag-service feedback event publisher init failed: %v", err)
+		return nil, fmt.Errorf("tag-service feedback event publisher init failed: %w", err)
 	}
 	feedbackEventRelay, err := tagfeedbackstore.NewEventRelay(
 		feedbackSink,
@@ -209,9 +237,8 @@ func main() {
 		slog.Default(),
 	)
 	if err != nil {
-		log.Fatalf("tag-service feedback event relay init failed: %v", err)
+		return nil, fmt.Errorf("tag-service feedback event relay init failed: %w", err)
 	}
-	go feedbackEventRelay.Run(ctx)
 
 	routesMux := http.NewServeMux()
 	nodehttp.NewTagHandler(tagService).Register(routesMux)
@@ -234,7 +261,12 @@ func main() {
 			return err
 		}
 		if !found {
-			return fmt.Errorf("active taxonomy release is missing")
+			// 冷启动的空库尚无任何 taxonomy release：canonical taxonomy 由
+			// Data CLI ship apply 在全栈就绪之后导入，若此处 fail 会构成
+			// 「readiness 等导入、导入等 readiness」的环境死锁。空 taxonomy
+			// 是合法初始状态（查询按空集服务）；只有「存在 active release
+			// 但节点投影与其不一致」才是必须 fail-closed 的损坏状态。
+			return nil
 		}
 		return tagNodeStore.ValidateReleaseProjection(
 			hctx,
@@ -264,21 +296,25 @@ func main() {
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
 	)
 	if err != nil {
-		log.Fatalf("tag-service runtime log exporter init failed: %v", err)
+		return nil, fmt.Errorf("tag-service runtime log exporter init failed: %w", err)
 	}
-	defer runtimeLogExporter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		runtimeLogExporter.Close()
+	})
 	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
 	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
-	defer standardLogWriter.Close()
-	defer errorLogWriter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		errorLogWriter.Close()
+		standardLogWriter.Close()
+	})
 	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
 	processLogger, err := robs.NewProcessTraceLogger(standardLogWriter, errorLogWriter, "info", nil)
 	if err != nil {
-		log.Fatalf("tag-service process logger init failed: %v", err)
+		return nil, fmt.Errorf("tag-service process logger init failed: %w", err)
 	}
 	exceptionLogger, err := robs.NewExceptionLogger(standardLogWriter, errorLogWriter, nil)
 	if err != nil {
-		log.Fatalf("tag-service exception logger init failed: %v", err)
+		return nil, fmt.Errorf("tag-service exception logger init failed: %w", err)
 	}
 	observed := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "tag-service",
@@ -301,17 +337,144 @@ func main() {
 		WriteTimeout:      timeouts.Write,
 		IdleTimeout:       timeouts.Idle,
 	}
-	log.Printf("tag-service listening on %s (env=%s)", addr, appEnv)
-	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
-		log.Fatalf("tag-service: %v", err)
+	module := &Module{
+		configDigest: configVersion,
+		server:       server,
+		health:       healthChecker,
+		serveError:   make(chan error, 1),
+		workerStart: []func(context.Context){
+			profileTagConsumer.Run,
+			feedbackEventRelay.Run,
+		},
+		cleanup: cleanup,
+	}
+	if module.configDigest == "" {
+		module.configDigest = cfg.Config.Version
+	}
+	if module.configDigest == "" {
+		module.configDigest = operationsecurity.ContractGraphSHA256
+	}
+	server.Handler = module.admissionHandler(server.Handler)
+	initialized = true
+	return module, nil
+}
+
+func (module *Module) Name() string { return "tag-service" }
+
+func (module *Module) ConfigDigest() string {
+	if module == nil {
+		return ""
+	}
+	return module.configDigest
+}
+
+func (module *Module) ValidateConfig(context.Context) error {
+	if module == nil || module.server == nil || module.health == nil || len(module.workerStart) != 2 {
+		return errors.New("tag-service module is incomplete")
+	}
+	return nil
+}
+
+func (module *Module) PrepareMigration(context.Context) error {
+	return nil
+}
+
+func (module *Module) Bind(context.Context) error {
+	listener, err := net.Listen("tcp", module.server.Addr)
+	if err != nil {
+		return fmt.Errorf("tag-service listener bind: %w", err)
+	}
+	module.listener = listener
+	return nil
+}
+
+func (module *Module) Start(context.Context) error {
+	if module.listener == nil {
+		return errors.New("tag-service listener is not bound")
+	}
+	workerContext, workerCancel := context.WithCancel(context.Background())
+	module.workerCancel = workerCancel
+	for _, start := range module.workerStart {
+		module.workerGroup.Add(1)
+		module.startWorker(workerContext, start)
+	}
+	go func() {
+		if err := module.server.Serve(module.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			module.serveError <- err
+		}
+	}()
+	return nil
+}
+
+func (module *Module) Ready(ctx context.Context) error {
+	if result := module.health.Check(ctx); result.Status != "ok" {
+		return fmt.Errorf("tag-service readiness failed: %v", result.FailedChecks)
+	}
+	select {
+	case err := <-module.serveError:
+		return fmt.Errorf("tag-service listener failed: %w", err)
+	default:
+		return nil
 	}
 }
 
+func (module *Module) OpenAdmission(context.Context) error {
+	module.admission.Store(true)
+	return nil
+}
+
+func (module *Module) Shutdown(ctx context.Context) error {
+	module.admission.Store(false)
+	var result error
+	if module.server != nil {
+		result = errors.Join(result, module.server.Shutdown(ctx))
+	}
+	if module.workerCancel != nil {
+		module.workerCancel()
+		module.workerGroup.Wait()
+	}
+	if module.cleanup != nil {
+		module.cleanup()
+		module.cleanup = nil
+	}
+	return result
+}
+
+func (module *Module) startWorker(ctx context.Context, start func(context.Context)) {
+	go func() {
+		defer module.workerGroup.Done()
+		start(ctx)
+	}()
+}
+
+func (module *Module) admissionHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/healthz", "/metrics":
+			next.ServeHTTP(writer, request)
+			return
+		}
+		if !module.admission.Load() {
+			http.Error(writer, `{"status":"unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
+}
+
 func resolveRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string, err error) {
-	serviceName = getenvOrDefault("SERVICE_NAME", "tag-service")
+	serviceName = strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("tag-service", "SERVICE_NAME"),
+	)
+	if serviceName == "" {
+		serviceName = "tag-service"
+	}
 	appEnv = getenvOrDefault("APP_ENV", "alpha")
 	configRoot = os.Getenv("CONFIG_ROOT")
-	configVersion = os.Getenv("CONFIG_VERSION")
+	configVersion = servicehost.ModuleEnvironmentValue(
+		"tag-service",
+		"CONFIG_VERSION",
+	)
 	imageVersion = os.Getenv("IMAGE_VERSION")
 
 	if !isValidAppEnv(appEnv) {

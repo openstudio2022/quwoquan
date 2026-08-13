@@ -15,6 +15,11 @@ unique_constraints:
 - columns: [surfaceKind, surfaceId]
   description: 每个 Conversation/Circle 只有一个小趣共享 Skill Placement
 types:
+  GetSkillSurfacePlacementQuery:
+    description: 读取指定 surface 共享 Skill 策略的 path query。
+    fields:
+    - {name: surfaceKind, source: path.surfaceKind, type: enum, enum_ref: SkillSurfaceKind, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
+    - {name: surfaceId, source: path.surfaceId, type: string, constraints: [NOT_BLANK], classification: SENSITIVE, log_policy: hash, api_exposure: write, ops_exposure: none}
   PutSkillSurfacePlacementRequest:
     description: surface 管理员保存共享 Skill 策略；expectedRevision=0 仅允许创建。
     fields:

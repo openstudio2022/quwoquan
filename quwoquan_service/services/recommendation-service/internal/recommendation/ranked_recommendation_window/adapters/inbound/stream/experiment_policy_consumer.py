@@ -97,6 +97,7 @@ class ExperimentPolicyConsumer:
             )
 
         deadline = time.monotonic() + float(timeout_seconds)
+        replayed = False
         while True:
             try:
                 self.process_once()
@@ -104,10 +105,39 @@ class ExperimentPolicyConsumer:
                 self._last_failure = error
             if self._assignments.healthy():
                 return True
+            if not replayed:
+                # 投影卷可能被重建而 stream 中的 ExperimentPolicyActivated 已被
+                # 本 consumer group ack（xreadgroup 不再投递）。用只读 XRANGE 从
+                # 同一 authored stream 重建投影，避免旧 Redis 卷 + 新投影卷的
+                # 冷启动死等；全新双卷场景重放为空，继续等待 owner 激活。
+                try:
+                    self._replay_acknowledged_policies()
+                    replayed = True
+                except ExperimentPolicyDependencyUnavailable as error:
+                    self._last_failure = error
+                if self._assignments.healthy():
+                    return True
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 return False
             self._stop.wait(min(float(poll_interval_seconds), remaining))
+
+    def _replay_acknowledged_policies(self) -> None:
+        """Rebuild the projection from retained stream history, read-only.
+
+        Replay never acknowledges and never dead-letters: undecodable records
+        were already dead-lettered by the consuming path that acknowledged
+        them, and consumer-group state must stay untouched.
+        """
+
+        for record in self._stream.replay():
+            try:
+                policy = decode_policy(dict(record.values))
+            except ValueError:
+                continue
+            if policy is not None:
+                effective = self._store.apply(policy)
+                self._assignments.apply_policy(effective)
 
     def healthy(self, *, max_staleness_seconds: float = 10.0) -> bool:
         if self._last_success is None or self._last_failure is not None:

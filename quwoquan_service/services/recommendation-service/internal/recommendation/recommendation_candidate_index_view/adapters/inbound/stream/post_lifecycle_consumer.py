@@ -12,6 +12,10 @@ from internal.recommendation.recommendation_candidate_index_view.application.pro
     RecommendationObjectCardCandidate,
 )
 
+from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.projection_metrics import (
+    record_projection_outcome,
+)
+
 
 POST_LIFECYCLE_STREAM = "events.content.post_lifecycle"
 POST_LIFECYCLE_DLQ = "events.content.post_lifecycle.recommendation_candidate.dlq"
@@ -298,6 +302,15 @@ class PostLifecycleConsumer:
         self._projection.clear_source_failure(stream_id)
 
     def process_once(self) -> int:
+        try:
+            processed = self._process_once_inner()
+        except Exception:
+            record_projection_outcome("post_lifecycle", "error")
+            raise
+        record_projection_outcome("post_lifecycle", "ok")
+        return processed
+
+    def _process_once_inner(self) -> int:
         self.ensure_group()
         seen: set[str] = set()
         messages = []

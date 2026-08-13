@@ -71,3 +71,11 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/ranked_recommendation_window/test_ranked_window_runtime__api_integration_test.py
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
+- case_id: ranked_window_feed_journey_probe_ops_env
+  spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#sit-001
+  producer: ops
+  layer: environment_acceptance
+  target: {kind: object, id: recommendation.ranked_recommendation_window}
+  runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/recommendation-service/smoke/run_ranked_window_feed_journey_probe.py
+  executions:
+  - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}

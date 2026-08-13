@@ -672,6 +672,10 @@ var featureProfileTransportOrder = []string{
 	"RecommendationAuthorImpactSummary",
 	"RecommendationAuthorImpactEvidence",
 	"RecommendationAuthorImpactEvidencePage",
+	"GetRecommendationGatheringSocialProofQuery",
+	"RecommendationGatheringSocialProofSummary",
+	"GetRecommendationFlywheelFunnelQuery",
+	"RecommendationFlywheelFunnelSnapshot",
 }
 
 func generateRequestResponsePy(f *fieldsFile) string {

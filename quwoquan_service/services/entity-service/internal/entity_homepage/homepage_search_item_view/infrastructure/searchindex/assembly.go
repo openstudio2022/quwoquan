@@ -52,7 +52,7 @@ func Build(cfg ESConfig) (Built, error) {
 	if err != nil {
 		return Built{}, err
 	}
-	return Built{Client: client, Indexer: es.NewIndexer(client, client.IndexName())}, nil
+	return Built{Client: client, Indexer: es.NewIndexer(client, client.WriteIndexName())}, nil
 }
 
 func (b Built) EnsureIndex(ctx context.Context) error {

@@ -458,7 +458,7 @@ func authorizeGeneratedOperation(
 			w,
 			r,
 			"forbidden",
-			"legacy delegated persona credentials are read-only",
+			"service-delegated persona credentials are read-only",
 		)
 		return
 	}
@@ -680,6 +680,9 @@ func principalRequirementSatisfied(principal string, current Principal) bool {
 		return strings.TrimSpace(current.Actor.PersonaID) != ""
 	case "device":
 		return strings.TrimSpace(current.Actor.DeviceActorID) != ""
+	case "persona_or_device":
+		return strings.TrimSpace(current.Actor.PersonaID) != "" ||
+			strings.TrimSpace(current.Actor.DeviceActorID) != ""
 	case "operator_or_service":
 		return containsAny(current.Roles, []string{"operator", "service"})
 	case "service", "admin", "operator":

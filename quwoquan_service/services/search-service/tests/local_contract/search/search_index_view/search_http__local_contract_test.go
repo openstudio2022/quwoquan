@@ -37,7 +37,7 @@ func TestSearchHTTPRunsCanonicalQueryFacade(t *testing.T) {
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/search",
-		bytes.NewBufferString(`{"query":"大理","objectTypes":["article"]}`),
+		bytes.NewBufferString(`{"query":"大理","objectTypes":["content.post"],"contentTypes":["article"]}`),
 	)
 	request.Header.Set(searchhttp.SearchSessionIDHeader, "search-local-session")
 	response := httptest.NewRecorder()

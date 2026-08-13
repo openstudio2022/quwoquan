@@ -11,6 +11,7 @@ import (
 )
 
 var generatedRouteTable = []generatedRouteDef{
+	{method: "GET", pathTemplate: "/content/media/original-access-audits/{auditId}", operation: "GetOriginalImageAccessAudit"},
 	{method: "POST", pathTemplate: "/content/media/{mediaId}/original:access", operation: "ReserveOriginalImageAccessGrant"},
 }
 

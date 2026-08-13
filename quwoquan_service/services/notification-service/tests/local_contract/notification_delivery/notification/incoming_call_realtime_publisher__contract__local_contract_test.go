@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-005
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-005.t6
 package local_contract
 
 import (

@@ -45,6 +45,12 @@ fields:
 - name: mediaFileSizeBytes
   type: int64
   nullable: true
+- name: audioDurationMs
+  type: int64
+  nullable: true
+- name: audioWaveform
+  type: '[]double'
+  nullable: true
 - name: card
   type: MessageCard
   nullable: true

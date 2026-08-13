@@ -18,9 +18,10 @@ const maxRequestBodyBytes = 4 << 20
 type Handler struct{ service *packageapplication.Service }
 
 type activateCommand struct {
-	PackageID        string `json:"packageId"`
-	ReleaseDigest    string `json:"releaseDigest"`
-	ExpectedRevision int    `json:"expectedRevision"`
+	PackageID         string                         `json:"packageId"`
+	ReleaseDigest     string                         `json:"releaseDigest"`
+	ExpectedRevision  int                            `json:"expectedRevision"`
+	EvaluationReceipt packagemodel.EvaluationReceipt `json:"evaluationReceipt"`
 }
 
 type rollbackCommand struct {
@@ -71,6 +72,7 @@ func (h *Handler) activate(w http.ResponseWriter, r *http.Request) {
 	result, err := h.service.Activate(r.Context(), commandID, packageapplication.ActivateInput{
 		PackageID: input.PackageID, ReleaseDigest: input.ReleaseDigest,
 		ExpectedRevision: input.ExpectedRevision, ActivatedBy: publisherID,
+		EvaluationReceipt: input.EvaluationReceipt,
 	})
 	if err != nil {
 		writeError(w, r, mapError(err))
@@ -121,6 +123,8 @@ func decode(w http.ResponseWriter, r *http.Request, value any) error {
 
 func mapError(err error) error {
 	switch {
+	case errors.Is(err, packagemodel.ErrEvaluationReceiptInvalid):
+		return packageerrors.AppErrorFromSkillPackageEvaluationReceiptInvalid(err.Error())
 	case errors.Is(err, packagemodel.ErrDigestMismatch),
 		errors.Is(err, packagemodel.ErrAssetMismatch):
 		return packageerrors.AppErrorFromSkillPackageDigestMismatch(err.Error())

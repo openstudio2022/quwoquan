@@ -1402,7 +1402,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: RecoverChatAccountClosureDeadLetter}
-    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/user_account_closed_projection__security__api_integration_test.go
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/user_account_closed_projection__security__data_consistency__api_integration_test.go
     executions: [{env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}]
   - case_id: project-gathering-conversation-api
     spec_ref: specs/feature-tree/chat-conversation/spec.md#dom-003
@@ -1431,7 +1431,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: object, id: chat.conversation}
-    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/circle_group_chat_binding__api_integration_test.go
+    runner_source_path: quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/circle_group_chat_binding__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: consume-user-avatar-updated-local
@@ -1674,6 +1674,23 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/api_integration/service/chat_service/chat/conversation/conversation_remote__api_integration_test.dart
     executions:
       - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: conversation_ime_input_app_uat
+    spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/spec.md#sit-001
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: chat.detail}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/chat_service/chat/conversation/chat_ime_input__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}
+  - case_id: conversation_group_lifecycle_probe_ops_env
+    spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/spec.md#sit-001
+    producer: ops
+    layer: environment_acceptance
+    target: {kind: object, id: chat.conversation}
+    runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/run_chat_group_lifecycle_probe.py
+    executions:
+      - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}
 contract_test:
   test_strategy:
     service_side:

@@ -6,15 +6,72 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 var processSnapshot struct {
 	sync.Once
 	path string
 	err  error
+}
+
+// 缓存视图的保留窗口。
+//
+// 每个测试进程都在 cache 下留一个 process-<pid> 快照，而只有 go-test-* 工作目录挂了
+// t.Cleanup。进程被 kill、超时或 panic 时连那个也不跑，于是目录永久留下：实测积压到
+// 119 个、69GB，而 .qwq_output 按 AGENTS.md 只应存放可删除、可重建的运行输出。
+//
+// 按时间窗而不是按「pid 是否还活着」回收：PID 会被系统复用，进程存活并不能证明它就是
+// 当初写下这个目录的那次测试。个数与时间两个条件必须同时满足才删，这样并行跑的其他
+// 测试包不会被删掉脚下正在读的快照。
+const (
+	retainedViews     = 4
+	viewRetention     = time.Hour
+	processViewPrefix = "process-"
+	workingViewPrefix = "go-test-"
+)
+
+// pruneStaleViews 回收 parent 下陈旧的契约视图快照。
+func pruneStaleViews(parent string) {
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		return
+	}
+	type agedView struct {
+		path     string
+		modified time.Time
+	}
+	views := make([]agedView, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if !strings.HasPrefix(name, processViewPrefix) &&
+			!strings.HasPrefix(name, workingViewPrefix) {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		views = append(views, agedView{filepath.Join(parent, name), info.ModTime()})
+	}
+	sort.Slice(views, func(i, j int) bool {
+		return views[i].modified.After(views[j].modified)
+	})
+	cutoff := time.Now().Add(-viewRetention)
+	for index, view := range views {
+		if index < retainedViews || view.modified.After(cutoff) {
+			continue
+		}
+		os.RemoveAll(view.path)
+	}
 }
 
 // Build materializes the service-owned contracts into a disposable compiler
@@ -37,9 +94,10 @@ func Build(t testing.TB) string {
 		t.Fatalf("create contract view parent: %v", err)
 	}
 	processSnapshot.Do(func() {
+		pruneStaleViews(viewParent)
 		processRoot := filepath.Join(
 			viewParent,
-			"process-"+strconv.Itoa(os.Getpid()),
+			processViewPrefix+strconv.Itoa(os.Getpid()),
 		)
 		processSnapshot.path = filepath.Join(processRoot, "metadata")
 		script := filepath.Join(

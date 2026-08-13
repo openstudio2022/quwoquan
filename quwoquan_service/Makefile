@@ -1,4 +1,4 @@
-.PHONY: gate build test test-all-services test-unit test-contract test-contract-local test-integration test-runtime-api-integration test-chat-ready-index-alpha-beta lint service-contract-view verify-metadata verify-actor-persona-vocabulary verify-openapi verify-contract-graph verify-contract-graph-commercial verify-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors verify-assistant-runtime-enums verify-shared-contract-enums verify-storage-keyset-single-track verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission verify-content-architecture verify-redis-routes codegen-redis-routes codegen codegen-openapi codegen-contract-graph codegen-observability-catalog codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop verify-operation-privacy-redaction codegen-operation-privacy
+.PHONY: gate build test test-all-services test-unit test-contract test-contract-local test-integration test-runtime-api-integration test-chat-ready-index-alpha-beta lint service-contract-view verify-metadata verify-actor-persona-vocabulary verify-openapi verify-contract-graph verify-contract-graph-commercial verify-contract-graph-single-track verify-observability-catalog verify-assistant-service-errors verify-assistant-runtime-enums verify-shared-contract-enums verify-storage-keyset-single-track verify-circle-service-errors verify-content-service-codegen verify-entity-service-codegen verify-integration-service-codegen verify-external-provider-bindings verify-external-provider-governance verify-ddd-cqrs-baseline verify-codegen-contract-graph-source verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission verify-content-architecture verify-redis-routes codegen-redis-routes codegen codegen-openapi codegen-contract-graph codegen-observability-catalog codegen-app codegen-ops-portal codegen-control-plane-runtime codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-reader-descriptors codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-rec-model-python codegen-rec-policy codegen-storage dev dev-down dev-redis dev-redis-down dev-reliable-task-local dev-reliable-task-local-down clean verify-ml-features verify-ml-model-quality verify-ml-e2e verify-ml-e2e-live verify-ml-guardrail verify-ml-drift verify-ml-tests verify-rec-policy-advisor verify-content-flywheel-tests verify-content-flywheel-loop verify-operation-privacy-redaction codegen-operation-privacy
 .PHONY: verify-assistant-citation-destinations codegen-assistant-citation-destinations
 .PHONY: verify-storage-index-governance
 .PHONY: verify-graphql-read-rest-command-single-track verify-graphql-read-rest-command-zero
@@ -277,7 +277,7 @@ verify-redis-routes:
 codegen-redis-routes:
 	python3 scripts/codegen/gen_redis_router_config.py
 
-codegen: codegen-redis-routes codegen-contract-graph codegen-observability-catalog codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-tool-catalog codegen-assistant-citation-destinations codegen-link-templates-go codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-event-constants codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
+codegen: codegen-redis-routes codegen-contract-graph codegen-observability-catalog codegen-api-edge-errors codegen-assistant-service-errors codegen-assistant-runtime-enums codegen-assistant-reader-descriptors codegen-assistant-tool-catalog codegen-assistant-citation-destinations codegen-link-templates-go codegen-external-provider-bindings codegen-content-service codegen-circle-service codegen-entity-service codegen-notification-service codegen-rtc-service codegen-realtime-gateway codegen-integration-service codegen-product-ops-service codegen-platform-ops-service codegen-user-service codegen-chat-service codegen-chat-domain-events codegen-storage codegen-event-constants codegen-rec-model-python codegen-rec-policy codegen-rec-intersection codegen-impact codegen-control-plane-runtime codegen-ops-portal
 
 codegen-openapi: service-contract-view
 	go run ./tools/qwq_contract generate-openapi --metadata-dir "$(CONTRACT_VIEW)" --repo-root "$(REPO_ROOT)"
@@ -339,6 +339,9 @@ codegen-assistant-service-errors:
 codegen-assistant-runtime-enums:
 	go run ./tools/codegen_app_metadata --metadata-dir "$(CONTRACT_VIEW)" --assistant-runtime-enums-go-output services/assistant-service/generated/assistant/assistant_session/assistant_runtime_enums.g.go
 
+codegen-assistant-reader-descriptors: service-contract-view
+	go run ./tools/codegen_assistant_reader_descriptors --metadata-dir "$(CONTRACT_VIEW)" --output services/assistant-service/generated/assistant/domain_reader_descriptor/reader_descriptors.g.go
+
 codegen-assistant-tool-catalog:
 	go run ./tools/codegen_assistant_tool_catalog --metadata-dir "$(CONTRACT_VIEW)" --output services/assistant-service/generated/assistant/assistant_session/assistant_tool_catalog.g.go --search-access-output services/assistant-service/generated/assistant/assistant_session/assistant_search_access.g.go
 
@@ -386,7 +389,7 @@ codegen-chat-domain-events:
 	go run ./tools/codegen_chat_domain_events --metadata-dir "$(CONTRACT_VIEW)" --output-dir services/chat-service/generated/chat
 
 codegen-event-constants: codegen-content-service codegen-circle-service codegen-chat-domain-events codegen-storage
-	go run ./tools/codegen_event_constants --metadata-dir "$(CONTRACT_VIEW)" --service-root . --python-output services/recommendation-service/generated/event_constants.py --manifest-output generated/event_constants_manifest.json
+	go run ./tools/codegen_event_constants --metadata-dir "$(CONTRACT_VIEW)" --service-root . --python-output generated/event_constants.py --manifest-output generated/event_constants_manifest.json
 
 codegen-rec-model-python:
 	go run ./tools/codegen_rec_model_python --metadata-dir "$(CONTRACT_VIEW)" --service-dir recommendation/recommendation/recommendation_model_release --output-dir services/recommendation-service/generated/recommendation/recommendation_model_release --content-feature-profile-go-output services/content-service/generated/content/post/recommendation_feature_profile.g.go
@@ -436,10 +439,10 @@ verify-ml-tests:
 	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release -q
 
 verify-rec-policy-advisor:
-	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) ../quwoquan_ops/tests/local_contract/test_rec_policy_advisor__product_ops_tool__local_contract_test.py -q
+	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) ../quwoquan_ops/tests/local_contract/observability/test_rec_policy_advisor__product_ops_tool__local_contract_test.py -q
 
 verify-content-flywheel-tests:
-	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) ../quwoquan_ops/tests/local_contract/test_eval_content_flywheel_loop__product_ops_tool__local_contract_test.py -q
+	$(ML_PYTHON) -m pytest $(PYTEST_FLAGS) ../quwoquan_ops/tests/local_contract/observability/test_eval_content_flywheel_loop__product_ops_tool__local_contract_test.py -q
 
 verify-content-flywheel-loop:
 	$(ML_PYTHON) scripts/product-ops-service/tools/eval_content_flywheel_loop.py --mongodb-uri "$(MONGODB_URI)" $(if $(filter 1 true yes,$(FLYWHEEL_REQUIRE_CLOSED)),--require-closed-loop,) $(if $(strip $(FLYWHEEL_OUT)),--output "$(FLYWHEEL_OUT)",)

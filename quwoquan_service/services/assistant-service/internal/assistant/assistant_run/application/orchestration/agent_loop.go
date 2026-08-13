@@ -886,6 +886,26 @@ func emitReactObservation(projector *assistantstreaming.StreamProjector, appendE
 		)); err != nil {
 			return nil, err
 		}
+		// 该工具的 metadata 恢复合同是 skip_tool 时（step.Replan），运行会继续
+		// 后续迭代：失败只进入过程可观测，不得宣告 run 终态失败。
+		if step.Replan {
+			if err := appendEvent(projector.Event(
+				assistantstreaming.AssistantStreamEventProcessAppend,
+				userProcessPayload(assistant.AssistantRunVisibleProcess{
+					ProcessID:  userProcessID(assistantUserProcessPhasePlanning, step.Iteration+1),
+					Scope:      assistantUserProcessScopeSkill,
+					Stage:      assistantUserProcessPhasePlanning.WireName(),
+					ActionCode: assistantgenerated.PlannerActionCodeRecoverRetrieval.WireName(),
+					Status:     assistantUserProcessStatusActive,
+					Order:      (step.Iteration+1)*10 + 2,
+					SkillID:    skill.SkillID,
+					DomainID:   skill.DomainID,
+				}),
+			)); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		}
 		if err := appendEvent(projector.Failure(assistantstreaming.AssistantStreamEventFailed, map[string]any{
 			"status": "failed",
 		}, *step.Tool.Failure)); err != nil {

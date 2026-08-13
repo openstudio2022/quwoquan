@@ -16,6 +16,9 @@ abstract class _ChatConversationPageActionsState
   final Set<String> _selectedIds = <String>{};
   ChatMessageDisplayItem? _actionMenuMessage;
   Offset? _actionMenuPosition;
+
+  /// 引用回复目标：contracts `replyToMessageId` 的输入态载体。
+  ChatMessageDisplayItem? _replyToTarget;
   ModalRoute<dynamic>? _subscribedRoute;
   bool _realtimeAttached = false;
   RealtimeConversationLifecycle? _realtimeNotifier;
@@ -304,6 +307,21 @@ abstract class _ChatConversationPageActionsState
     }
   }
 
+  /// 失败气泡的手动重发：经持久化 outbox 以原 clientMsgId 幂等重放；
+  /// 仍失败时气泡回落 failed 态并 toast 提示。
+  Future<void> _retryFailedMessage(ChatMessageDisplayItem message) async {
+    final notifier = ref.read(
+      chatMessageTimelineControllerProvider(widget.conversationId),
+    );
+    try {
+      await notifier.retrySendMessage(message.clientMsgId);
+    } catch (_) {
+      if (mounted) {
+        AppToast.show(context, ChatText.chatRetrySendFailed);
+      }
+    }
+  }
+
   Future<void> _sendMessage({String? draftText, List<String>? mentions}) async {
     if (_shouldDisableComposer) {
       return;
@@ -314,9 +332,20 @@ abstract class _ChatConversationPageActionsState
     if (text.isEmpty) return;
     if (draftText == null) _inputController.clear();
     final resolvedMentions = _resolveMentions(mentions);
+    final replyToMessageId = _replyToTarget?.id.trim();
     final sent = await ref
         .read(chatMessageTimelineControllerProvider(widget.conversationId))
-        .sendMessage('text', text, mentions: resolvedMentions);
+        .sendMessage(
+          'text',
+          text,
+          mentions: resolvedMentions,
+          replyToMessageId: (replyToMessageId?.isEmpty ?? true)
+              ? null
+              : replyToMessageId,
+        );
+    if (mounted && _replyToTarget != null) {
+      setState(() => _replyToTarget = null);
+    }
     if (resolvedMentions != null) {
       unawaited(
         ref
@@ -392,6 +421,90 @@ abstract class _ChatConversationPageActionsState
       );
     }
     return items;
+  }
+
+  /// 文件消息点击：经系统能力打开交付 URL（有本地文件系统的平台交给
+  /// 外部应用，Web 等平台走平台默认处理）；失败给结构化提示。
+  Future<void> _openFileMessage(ChatMessageDisplayItem message) async {
+    final rawUrl = message.mediaUrl.trim();
+    if (rawUrl.isEmpty) {
+      AppToast.show(context, ChatText.chatMediaUnavailable);
+      return;
+    }
+    try {
+      final uri = Uri.parse(rawUrl);
+      final launched = await launchUrl(
+        uri,
+        mode: ref.read(platformCapabilitiesProvider).hasLocalFileSystem
+            ? LaunchMode.externalApplication
+            : LaunchMode.platformDefault,
+      );
+      if (!launched) {
+        throw StateError('platform rejected the file delivery URL');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.show(context, ChatText.chatFileOpenFailed);
+    }
+  }
+
+  /// 视频消息点击：resolve 公开交付引用后进入全屏播放（复用 content 域
+  /// VideoPlayerWidget 基建）；引用非法时给结构化提示。
+  void _openVideoMessage(ChatMessageDisplayItem message) {
+    final rawUrl = message.mediaUrl.trim();
+    final endpointConfig = ref.read(mediaEndpointConfigProvider);
+    if (rawUrl.isEmpty || endpointConfig == null) {
+      AppToast.show(context, ChatText.chatMediaUnavailable);
+      return;
+    }
+    final MediaDeliveryReference reference;
+    try {
+      reference = MediaDeliveryResolver(endpointConfig).resolve(
+        rawUrl,
+        kind: MediaDeliveryKind.video,
+      );
+    } on MediaDeliveryResolutionException {
+      AppToast.show(context, ChatText.chatMediaUnavailable);
+      return;
+    }
+    unawaited(
+      showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: AppColors.black,
+        pageBuilder: (dialogContext, _, _) {
+          return ColoredBox(
+            key: const ValueKey<String>('chat_video_playback_surface'),
+            color: AppColors.black,
+            child: SafeArea(
+              child: Stack(
+                children: [
+                  Center(
+                    child: buildChatVideoMessagePlayerSlot(
+                      deliveryReference: reference,
+                      onExit: () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ),
+                  Positioned(
+                    top: AppSpacing.intraGroupSm,
+                    left: AppSpacing.intraGroupSm,
+                    child: CupertinoButton(
+                      key: const ValueKey<String>('chat_video_playback_close'),
+                      padding: EdgeInsets.all(AppSpacing.intraGroupXs),
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: Icon(
+                        CupertinoIcons.xmark,
+                        color: AppColors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   RtcCallEntryMediaType _callTypeFromLog(ChatMessageDisplayItem message) {
@@ -622,6 +735,10 @@ abstract class _ChatConversationPageActionsState
           ),
     );
     switch (action) {
+      case 'reply':
+        setState(() => _replyToTarget = msg);
+        _inputFocusNode.requestFocus();
+        break;
       case 'forward':
         _shareMessages(<ChatMessageDisplayItem>[msg]);
         break;
@@ -718,6 +835,8 @@ abstract class _ChatConversationPageActionsState
     }
   }
 
+  /// 消息转发主路径是 App 内转发（选联系人/群直达会话）；外部系统分享
+  /// 由 ForwardShareSheet 内的分享区承载为次级动作。
   Future<void> _shareMessages(List<ChatMessageDisplayItem> messages) async {
     final lines = messages
         .map((item) => item.content.trim())
@@ -725,6 +844,16 @@ abstract class _ChatConversationPageActionsState
         .toList(growable: false);
     if (lines.isEmpty) return;
     final text = lines.join('\n\n');
-    await SharePlus.instance.share(ShareParams(text: text));
+    final title = lines.first.length > 30
+        ? lines.first.substring(0, 30)
+        : lines.first;
+    await ForwardShareSheet.show(
+      context,
+      payload: AppForwardPayload(
+        kind: AppForwardSubjectKind.chatMessage,
+        title: title,
+        shareText: text,
+      ),
+    );
   }
 }

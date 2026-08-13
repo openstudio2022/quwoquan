@@ -237,7 +237,7 @@ func TestConnectorAuthorizationMongoAtomicallyPersistsVerifiedGrantAndReplay(t *
 			"connectorId":           "system_calendar",
 			"requestedCapabilities": []string{"calendar.event.create"},
 		},
-		true,
+		accountPrincipal(),
 		"start-http-calendar",
 	)
 	if status != http.StatusOK {
@@ -249,7 +249,7 @@ func TestConnectorAuthorizationMongoAtomicallyPersistsVerifiedGrantAndReplay(t *
 		http.MethodGet,
 		"/integrations/connector-authorizations/authorization-http-1",
 		nil,
-		true,
+		accountPrincipal(),
 		"",
 	)
 	if status != http.StatusOK || getBody["authorizationId"] != "authorization-http-1" ||
@@ -265,7 +265,7 @@ func TestConnectorAuthorizationMongoAtomicallyPersistsVerifiedGrantAndReplay(t *
 			"expectedRevision":    1,
 			"nativeGrantProofRef": "protected-native-proof-ref",
 		},
-		true,
+		accountPrincipal(),
 		"complete-http-calendar",
 	)
 	completedAuthorization, _ := completeBody["authorization"].(map[string]any)
@@ -298,10 +298,12 @@ func TestConnectorAuthorizationMongoAtomicallyPersistsVerifiedGrantAndReplay(t *
 			"connectorId":           "oauth_calendar",
 			"requestedCapabilities": []string{"calendar.event.create"},
 		},
-		true,
+		accountPrincipal(),
 		"start-http-oauth-calendar",
 	)
-	if status != http.StatusOK || oauthStartBody["authorizationId"] != "authorization-oauth-http-1" {
+	oauthStartAuthorization, _ := oauthStartBody["authorization"].(map[string]any)
+	if status != http.StatusOK ||
+		oauthStartAuthorization["authorizationId"] != "authorization-oauth-http-1" {
 		t.Fatalf("start OAuth route status=%d body=%#v", status, oauthStartBody)
 	}
 	status, attackBody := performConnectorAuthorizationRequest(
@@ -314,7 +316,7 @@ func TestConnectorAuthorizationMongoAtomicallyPersistsVerifiedGrantAndReplay(t *
 			"expectedRevision": 1,
 			"oauthCallbackRef": "protected-oauth-callback-ref",
 		},
-		false,
+		oauthCallbackServicePrincipal(),
 		"complete-http-oauth-account-injection",
 	)
 	if status != http.StatusBadRequest {
@@ -329,7 +331,7 @@ func TestConnectorAuthorizationMongoAtomicallyPersistsVerifiedGrantAndReplay(t *
 			"expectedRevision": 1,
 			"oauthCallbackRef": "protected-oauth-callback-ref",
 		},
-		false,
+		oauthCallbackServicePrincipal(),
 		"complete-http-oauth-calendar",
 	)
 	oauthAuthorization, _ := oauthCompleteBody["authorization"].(map[string]any)
@@ -341,13 +343,33 @@ func TestConnectorAuthorizationMongoAtomicallyPersistsVerifiedGrantAndReplay(t *
 	}
 }
 
+func accountPrincipal() *rtauth.Principal {
+	return &rtauth.Principal{
+		Actor: operation.ActorContext{AccountID: "account-1"},
+	}
+}
+
+// oauthCallbackServicePrincipal 匹配契约 authorization 段：complete-oauth 内部
+// 路由要求 service principal 且携带 integration.connector_oauth_callback.write。
+func oauthCallbackServicePrincipal() *rtauth.Principal {
+	return &rtauth.Principal{
+		Claims: rtauth.Claims{
+			Scope: "integration.connector_oauth_callback.write",
+			Roles: []string{"service"},
+		},
+		Actor: operation.ActorContext{
+			AccountID: "service:integration-oauth-callback",
+		},
+	}
+}
+
 func performConnectorAuthorizationRequest(
 	t *testing.T,
 	handler http.Handler,
 	method string,
 	path string,
 	body any,
-	authenticated bool,
+	principal *rtauth.Principal,
 	idempotencyKey string,
 ) (int, map[string]any) {
 	t.Helper()
@@ -364,10 +386,10 @@ func performConnectorAuthorizationRequest(
 	if idempotencyKey != "" {
 		request.Header.Set("Idempotency-Key", idempotencyKey)
 	}
-	if authenticated {
-		request = request.WithContext(rtauth.WithPrincipal(request.Context(), rtauth.Principal{
-			Actor: operation.ActorContext{AccountID: "account-1"},
-		}))
+	if principal != nil {
+		request = request.WithContext(
+			rtauth.WithPrincipal(request.Context(), *principal),
+		)
 	}
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)

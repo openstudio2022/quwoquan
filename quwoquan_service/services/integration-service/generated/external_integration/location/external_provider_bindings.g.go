@@ -30,13 +30,15 @@ var ExternalProviderBindings = map[string]map[string]ExternalProviderBinding{
 			RequiredRedisScenes:   []string{},
 		},
 		"location.poi.search": {
-			State:                   "not_required",
-			AdapterID:               "",
-			EndpointRef:             "",
-			EndpointEnvironmentKeys: map[string]string{},
-			SecretEnvironmentKeys:   []string{},
-			TimeoutMilliseconds:     0,
-			RequiredRedisScenes:     []string{},
+			State:       "enabled",
+			AdapterID:   "ext.map.nominatim.protocol_substitute",
+			EndpointRef: "local_topology:provider-protocol-substitute",
+			EndpointEnvironmentKeys: map[string]string{
+				"base": "INTEGRATION_LOCATION_NOMINATIM_BASE_URL",
+			},
+			SecretEnvironmentKeys: []string{},
+			TimeoutMilliseconds:   5000,
+			RequiredRedisScenes:   []string{},
 		},
 		"location.route.read": {
 			State:                   "not_required",

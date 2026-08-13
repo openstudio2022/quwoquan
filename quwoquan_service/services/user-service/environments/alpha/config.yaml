@@ -1,6 +1,5 @@
 overrides:
   sys.user-service.research_identity.enabled: true
-  sys.user-service.research_identity.ttl_seconds: 300
   sys.user-service.es.enabled: true
   sys.user-service.redis.general.addr: redis:6379
   sys.user-service.integration.external_interaction_base_url: http://integration-service:18086

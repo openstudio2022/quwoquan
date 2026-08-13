@@ -211,6 +211,73 @@ func appendUserProfileTagProjection(
 	return nil
 }
 
+// EnqueueUserProfileSearchBackfill re-enqueues one profile's public snapshot
+// into the search projection outbox (cold-start / index-rebuild reconcile for
+// user.profile documents). It reuses the exact write-path projection shape and
+// outbox relay, so Search consumes the same single-track
+// UserProfileSearchProjectionRequested event either way and User never writes
+// the search provider directly.
+func (s *PgProfileStore) EnqueueUserProfileSearchBackfill(
+	ctx context.Context,
+	profile model.UserProfile,
+	occurredAt time.Time,
+) error {
+	if strings.TrimSpace(profile.UserID) == "" || int64(profile.ProfileVersion) <= 0 {
+		return errors.New("user profile search backfill requires a versioned profile")
+	}
+	operation := "upsert"
+	if !strings.EqualFold(strings.TrimSpace(profile.AccountState), "active") {
+		// Non-active accounts must not resurface via backfill; lifecycle events
+		// own suspension/closure, the reconcile only guarantees absence.
+		operation = "delete"
+	}
+	projection := repository.UserProfileSearchProjection{
+		UserID:         profile.UserID,
+		ProfileVersion: int64(profile.ProfileVersion),
+		EventType:      userevent.UserProfileUpdated,
+		OccurredAt:     occurredAt,
+		Payload: repository.UserProfileSearchProjectionPayload{
+			Operation:     operation,
+			Nickname:      profile.Nickname,
+			AvatarURL:     profile.AvatarURL,
+			Bio:           profile.Bio,
+			IdentityTags:  parsePgTextArray(profile.IdentityTags),
+			FollowerCount: profile.FollowerCount,
+			PostCount:     profile.PostCount,
+			UpdatedAt:     occurredAt,
+		},
+	}
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin user profile search backfill: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := appendUserProfileSearchProjections(ctx, tx, []repository.UserProfileSearchProjection{projection}); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// parsePgTextArray decodes the profile identity_tags column, which is stored
+// as the text form of a PostgreSQL text[] literal ({tag1,tag2}).
+func parsePgTextArray(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "{")
+	raw = strings.TrimSuffix(raw, "}")
+	if raw == "" {
+		return []string{}
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.Trim(strings.TrimSpace(part), `"`)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
 func appendUserProfileSearchProjections(
 	ctx context.Context,
 	tx pgx.Tx,

@@ -1,0 +1,17 @@
+{
+  "_governance": {
+    "expires_when": "replaced atomically by a re-captured higher baseline",
+    "measure": "verify_quality_axis_coverage.py counts tests carrying each axis tag across the local_contract / api_integration / user_acceptance trees; a total below minimumAxisTotals blocks.",
+    "owner": "runtime-test-pyramid",
+    "reason": "quality axis tagged-test coverage ratchet (totals may only grow)"
+  },
+  "minimumAxisTotals": {
+    "a11y": 4,
+    "observability": 16,
+    "performance": 8,
+    "reliability": 83,
+    "visual": 5
+  },
+  "policy": "totals may only grow; regressions block",
+  "schema": "quality-axis-ratchet-baseline"
+}

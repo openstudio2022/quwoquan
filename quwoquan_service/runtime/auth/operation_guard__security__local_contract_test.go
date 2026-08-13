@@ -179,6 +179,78 @@ func TestGeneratedOperationGuardRequiresVerifiedActorAndScopes(t *testing.T) {
 	}
 }
 
+func TestGeneratedOperationGuardPersonaOrDevicePrincipalAcceptsEitherActor(t *testing.T) {
+	t.Parallel()
+
+	guard := RequireGeneratedOperationAuthorization(
+		[]OperationSecurityDescriptor{{
+			CanonicalOperationID: "content.content_behavior_fact.ReportBehaviors",
+			ContractGraphSHA256:  testContractGraphSHA256,
+			Method:               http.MethodPost,
+			PathTemplate:         "/content/behaviors",
+			OperationKind:        "command",
+			MutationTarget:       "ContentBehaviorFact",
+			InvariantTarget:      "ContentBehaviorFact",
+			AuthMode:             "required",
+			ActorRequirement:     "persona_or_device",
+			Principal:            "persona_or_device",
+			OwnershipPolicy:      "authenticated_persona_or_derived_device_actor",
+			Idempotency:          "required",
+			CommercialStatus:     "ready",
+		}},
+	)
+	handler := guard(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	for _, testCase := range []struct {
+		name       string
+		principal  *Principal
+		wantStatus int
+	}{
+		{name: "missing principal", wantStatus: http.StatusUnauthorized},
+		{
+			name:       "account without persona or device",
+			principal:  &Principal{Actor: operation.ActorContext{AccountID: "account-1"}},
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name: "persona actor",
+			principal: &Principal{Actor: operation.ActorContext{
+				AccountID: "account-1",
+				PersonaID: "persona-1",
+			}},
+			wantStatus: http.StatusNoContent,
+		},
+		{
+			name: "guest device actor",
+			principal: &Principal{Actor: operation.ActorContext{
+				DeviceActorID: "device-1",
+			}},
+			wantStatus: http.StatusNoContent,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			request := httptest.NewRequest(
+				http.MethodPost,
+				"/content/behaviors",
+				nil,
+			)
+			request.Header.Set("Idempotency-Key", "behavior-batch-1")
+			if testCase.principal != nil {
+				request = request.WithContext(
+					WithPrincipal(request.Context(), *testCase.principal),
+				)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("status = %d, want %d", response.Code, testCase.wantStatus)
+			}
+		})
+	}
+}
+
 func TestGeneratedOperationGuardOptionalActorStillFailsClosed(t *testing.T) {
 	t.Parallel()
 

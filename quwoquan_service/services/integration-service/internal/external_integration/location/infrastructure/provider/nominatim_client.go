@@ -17,18 +17,34 @@ import (
 )
 
 const (
-	LocationAdapterNominatimID = "ext.map.nominatim"
-	poiSearchCapabilityID      = "location.poi.search"
-	maxProviderResponseBytes   = 256 * 1024
+	LocationAdapterNominatimID                   = "ext.map.nominatim"
+	LocationAdapterNominatimProtocolSubstituteID = "ext.map.nominatim.protocol_substitute"
+	poiSearchCapabilityID                        = "location.poi.search"
+	maxProviderResponseBytes                     = 256 * 1024
 )
 
 type NominatimClient struct {
 	baseURL string
 	client  *http.Client
 	rate    *fixedWindowRateGate
+	adapter string
 }
 
 func NewNominatimClient(
+	baseURL string,
+	client *http.Client,
+	ratePolicy RatePolicy,
+) (*NominatimClient, error) {
+	return newNominatimClient(
+		LocationAdapterNominatimID,
+		baseURL,
+		client,
+		ratePolicy,
+	)
+}
+
+func newNominatimClient(
+	adapterID string,
 	baseURL string,
 	client *http.Client,
 	ratePolicy RatePolicy,
@@ -46,6 +62,7 @@ func NewNominatimClient(
 		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		client:  client,
 		rate:    newFixedWindowRateGate(ratePolicy),
+		adapter: adapterID,
 	}, nil
 }
 
@@ -58,7 +75,7 @@ func (c *NominatimClient) Search(
 		err = normalizeLocationProviderError(ctx, err)
 		observePublicProvider(
 			poiSearchCapabilityID,
-			LocationAdapterNominatimID,
+			c.adapter,
 			startedAt,
 			err,
 		)

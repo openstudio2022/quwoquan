@@ -225,3 +225,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/profile_interaction_activity_view/profile_interaction_activity_remote__api_integration_test.dart
     executions:
       - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: profile_interaction_projection_app_uat
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-persona-homepage-unification/spec.md#gwt-001
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: user.my_profile}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/content_service/content/profile_interaction_activity_view/profile_interaction_projection__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

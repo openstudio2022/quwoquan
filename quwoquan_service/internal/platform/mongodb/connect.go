@@ -26,6 +26,9 @@ const (
 	defaultMinPoolSize            = 5
 	defaultConnectTimeoutSeconds  = 5
 	defaultServerSelectionSeconds = 5
+	// DefaultReadinessTimeout lets one server-selection cycle finish while
+	// retaining a bounded margin for the ping command itself.
+	DefaultReadinessTimeout = 6 * time.Second
 )
 
 func applyDefaults(cfg *ConnectConfig) {

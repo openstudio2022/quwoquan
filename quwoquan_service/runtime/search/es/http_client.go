@@ -54,10 +54,11 @@ type Config struct {
 // both the es.Searcher and es.Writer interfaces, and additionally manages index
 // creation, bulk writes, and liveness probing.
 type Client struct {
-	cfg   Config
-	http  *http.Client
-	index string
-	next  uint32 // round-robin cursor across endpoints
+	cfg        Config
+	http       *http.Client
+	index      string
+	writeIndex string
+	next       uint32 // round-robin cursor across endpoints
 }
 
 // Compile-time guarantees the client satisfies the transport interfaces.
@@ -86,16 +87,31 @@ func NewClient(cfg Config) (*Client, error) {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	transport := &http.Transport{}
+	// The default Transport keeps only 2 idle connections per host; under the
+	// SLO load model (result peak 120 RPS, spike 300 RPS against one ES origin)
+	// that forces a connection-setup storm and queueing collapse. Size the pool
+	// to the per-instance in-flight bound instead.
+	transport := &http.Transport{
+		MaxIdleConns:        256,
+		MaxIdleConnsPerHost: 256,
+		IdleConnTimeout:     90 * time.Second,
+	}
 	if cfg.InsecureTLS {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // dev/self-signed only, gated by config
 	}
 	return &Client{
-		cfg:   cfg,
-		http:  &http.Client{Timeout: timeout, Transport: transport},
-		index: cfg.Index,
+		cfg:        cfg,
+		http:       &http.Client{Timeout: timeout, Transport: transport},
+		index:      cfg.Index,
+		writeIndex: cfg.Index + writeAliasSuffix,
 	}, nil
 }
+
+// WriteIndexName returns the write alias every indexer must target. Read and
+// write aliases stay split so a rebuild can move writes to the new physical
+// index first (no lost incremental window) and promote reads only after the
+// backfill verifies (search-storage-topology REQ-006).
+func (c *Client) WriteIndexName() string { return c.writeIndex }
 
 // IndexName returns the configured unified index name.
 func (c *Client) IndexName() string { return c.index }
@@ -106,11 +122,25 @@ func (c *Client) Search(ctx context.Context, index string, body map[string]any) 
 	if strings.TrimSpace(index) == "" {
 		index = c.index
 	}
-	status, data, err := c.send(ctx, http.MethodPost, "/"+index+"/_search", body, "application/json")
+	var path string
+	if _, hasPIT := body["pit"]; hasPIT {
+		// A PIT search must not carry an index path or preference: the snapshot
+		// already pins the exact shard copies it was opened against.
+		path = "/_search"
+	} else {
+		path = "/" + index + "/_search"
+		if preference := ReplicaPreferenceFromContext(ctx); preference != "" {
+			path += "?preference=" + url.QueryEscape(preference)
+		}
+	}
+	status, data, err := c.send(ctx, http.MethodPost, path, body, "application/json")
 	if err != nil {
 		return nil, err
 	}
 	if status < 200 || status >= 300 {
+		if pitSearchInvalid(status, data) {
+			return nil, fmt.Errorf("%w: search status %d", ErrPITInvalid, status)
+		}
 		return nil, fmt.Errorf("es: search status %d: %s", status, truncateBytes(data, 300))
 	}
 	var parsed searchResponse
@@ -119,7 +149,17 @@ func (c *Client) Search(ctx context.Context, index string, body map[string]any) 
 	}
 	out := make([]rtsearch.RecallCandidate, 0, len(parsed.Hits.Hits))
 	for _, h := range parsed.Hits.Hits {
-		out = append(out, IndexToCandidate(h.Source, h.Score))
+		candidate := IndexToCandidate(h.Source, h.Score)
+		if len(h.Highlight) > 0 {
+			highlights := make(map[string]string, len(h.Highlight))
+			for field, fragments := range h.Highlight {
+				if len(fragments) > 0 && strings.TrimSpace(fragments[0]) != "" {
+					highlights[field] = fragments[0]
+				}
+			}
+			candidate.Highlights = highlights
+		}
+		out = append(out, candidate)
 	}
 	return out, nil
 }
@@ -198,60 +238,47 @@ func (c *Client) Bulk(ctx context.Context, index string, events []ChangeEvent) e
 	return nil
 }
 
-// EnsureIndex creates the unified index with the configured analyzer/mappings if
-// it does not already exist. Safe to call on every boot (idempotent).
+// EnsureIndex guarantees the aliased unified index exists (idempotent, safe on
+// every boot). `{index}` and `{index}-write` are read/write aliases over a
+// versioned physical index `{index}-vN`; analyzer/mapping breaking changes go
+// through BeginRebuild/PromoteRebuild instead of in-place mutation
+// (search-storage-topology REQ-006).
 func (c *Client) EnsureIndex(ctx context.Context) error {
+	physical, err := c.physicalIndexFor(ctx, c.index)
+	if err != nil {
+		return err
+	}
+	if physical != "" {
+		return c.ensureCompatibleMapping(ctx, physical)
+	}
+	// No alias yet. A pre-alias deployment may still hold the alias name as a
+	// plain physical index; aliasing cannot proceed until it is rebuilt away.
 	status, _, err := c.send(ctx, http.MethodHead, "/"+c.index, nil, "application/json")
 	if err != nil {
 		return err
 	}
-	if status == http.StatusOK {
-		mappingStatus, mappingData, mappingErr := c.send(
-			ctx,
-			http.MethodPut,
-			"/"+c.index+"/_mapping",
-			buildIndexMappings(c.cfg.Schema),
-			"application/json",
-		)
-		if mappingErr != nil {
-			return mappingErr
-		}
-		if mappingStatus >= 200 && mappingStatus < 300 {
-			return nil
-		}
-		if mappingStatus == http.StatusBadRequest {
-			return fmt.Errorf(
-				"%w: update mapping status %d: %s",
-				ErrIndexSchemaIncompatible,
-				mappingStatus,
-				truncateBytes(mappingData, 300),
-			)
-		}
-		if retryableDependencyStatus(mappingStatus) {
-			return fmt.Errorf(
-				"%w: es update mapping status %d: %s",
-				ErrDependencyUnavailable,
-				mappingStatus,
-				truncateBytes(mappingData, 300),
-			)
-		}
+	switch status {
+	case http.StatusOK:
 		return fmt.Errorf(
-			"es: update mapping status %d: %s",
-			mappingStatus,
-			truncateBytes(mappingData, 300),
+			"%w: pre-alias physical index %q occupies the read-alias name; "+
+				"delete it (recoverable via owner backfill) or reindex before startup",
+			ErrIndexSchemaIncompatible, c.index,
 		)
-	}
-	if status != http.StatusNotFound {
+	case http.StatusNotFound:
+		// fall through to bootstrap
+	default:
 		if retryableDependencyStatus(status) {
-			return fmt.Errorf(
-				"%w: es head index status %d",
-				ErrDependencyUnavailable,
-				status,
-			)
+			return fmt.Errorf("%w: es head index status %d", ErrDependencyUnavailable, status)
 		}
 		return fmt.Errorf("es: head index status %d", status)
 	}
-	createStatus, createData, createErr := c.send(ctx, http.MethodPut, "/"+c.index, BuildCreateIndexBody(c.cfg.Schema), "application/json")
+	body := BuildCreateIndexBody(c.cfg.Schema)
+	body["aliases"] = map[string]any{
+		c.index:            map[string]any{},
+		c.WriteIndexName(): map[string]any{"is_write_index": true},
+	}
+	firstVersion := c.index + "-v1"
+	createStatus, createData, createErr := c.send(ctx, http.MethodPut, "/"+firstVersion, body, "application/json")
 	if createErr != nil {
 		return createErr
 	}
@@ -269,6 +296,59 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 			)
 		}
 		return fmt.Errorf("es: create index status %d: %s", createStatus, truncateBytes(createData, 300))
+	}
+	return nil
+}
+
+// ensureCompatibleMapping applies additive mapping updates to the physical
+// index behind the alias; breaking changes fail closed toward the rebuild flow.
+func (c *Client) ensureCompatibleMapping(ctx context.Context, physical string) error {
+	mappingStatus, mappingData, mappingErr := c.send(
+		ctx,
+		http.MethodPut,
+		"/"+physical+"/_mapping",
+		buildIndexMappings(c.cfg.Schema),
+		"application/json",
+	)
+	if mappingErr != nil {
+		return mappingErr
+	}
+	if mappingStatus >= 200 && mappingStatus < 300 {
+		return nil
+	}
+	if mappingStatus == http.StatusBadRequest {
+		return fmt.Errorf(
+			"%w: update mapping status %d: %s",
+			ErrIndexSchemaIncompatible,
+			mappingStatus,
+			truncateBytes(mappingData, 300),
+		)
+	}
+	if retryableDependencyStatus(mappingStatus) {
+		return fmt.Errorf(
+			"%w: es update mapping status %d: %s",
+			ErrDependencyUnavailable,
+			mappingStatus,
+			truncateBytes(mappingData, 300),
+		)
+	}
+	return fmt.Errorf(
+		"es: update mapping status %d: %s",
+		mappingStatus,
+		truncateBytes(mappingData, 300),
+	)
+}
+
+// Refresh forces a segment refresh on the read alias so freshly indexed
+// documents become searchable immediately (rebuild verification and tests
+// only; the serving path relies on the configured refresh_interval).
+func (c *Client) Refresh(ctx context.Context) error {
+	status, data, err := c.send(ctx, http.MethodPost, "/"+c.index+"/_refresh", nil, "application/json")
+	if err != nil {
+		return err
+	}
+	if status < 200 || status >= 300 {
+		return fmt.Errorf("es: refresh status %d: %s", status, truncateBytes(data, 300))
 	}
 	return nil
 }
@@ -362,9 +442,10 @@ func (c *Client) applyAuth(req *http.Request) {
 type searchResponse struct {
 	Hits struct {
 		Hits []struct {
-			ID     string         `json:"_id"`
-			Score  float64        `json:"_score"`
-			Source map[string]any `json:"_source"`
+			ID        string              `json:"_id"`
+			Score     float64             `json:"_score"`
+			Source    map[string]any      `json:"_source"`
+			Highlight map[string][]string `json:"highlight"`
 		} `json:"hits"`
 	} `json:"hits"`
 }

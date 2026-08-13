@@ -12,13 +12,28 @@ import (
 	quotaapp "quwoquan_service/services/content-service/internal/media/original_access_quota/application"
 )
 
-type Handler struct{ service *quotaapp.Service }
+type Handler struct {
+	service    *quotaapp.Service
+	auditQuery *quotaapp.AuditQueryFacade
+}
 
-func NewHandler(service *quotaapp.Service) *Handler {
+type HandlerOption func(*Handler)
+
+// WithAuditQuery wires the owner-scoped audit readback facade
+// (GetOriginalImageAccessAudit).
+func WithAuditQuery(auditQuery *quotaapp.AuditQueryFacade) HandlerOption {
+	return func(handler *Handler) { handler.auditQuery = auditQuery }
+}
+
+func NewHandler(service *quotaapp.Service, options ...HandlerOption) *Handler {
 	if service == nil {
 		panic("OriginalAccessQuota HTTP handler requires service")
 	}
-	return &Handler{service: service}
+	handler := &Handler{service: service}
+	for _, option := range options {
+		option(handler)
+	}
+	return handler
 }
 
 func (handler *Handler) Reserve(writer http.ResponseWriter, request *http.Request) {
@@ -57,6 +72,40 @@ func (handler *Handler) Reserve(writer http.ResponseWriter, request *http.Reques
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(writer).Encode(result)
+}
+
+func (handler *Handler) GetAudit(writer http.ResponseWriter, request *http.Request) {
+	if handler.auditQuery == nil {
+		writeError(writer, request, contentgenerated.AppErrorFromStorageReadFailed(
+			"OriginalAccessQuota audit readback is not configured",
+		))
+		return
+	}
+	auditID := strings.TrimSpace(request.PathValue("auditId"))
+	if auditID == "" {
+		writeError(writer, request, rterr.NewInvalidArgument(rterr.ModuleContent, "auditId 不能为空", "missing auditId"))
+		return
+	}
+	principal, ok := rtauth.PrincipalFromContext(request.Context())
+	if !ok {
+		writeError(writer, request, contentgenerated.AppErrorFromUnauthorized("trusted principal is required"))
+		return
+	}
+	viewerID, ok := principal.Actor.BusinessActorID()
+	if !ok {
+		writeError(writer, request, contentgenerated.AppErrorFromUnauthorized("business actor is required"))
+		return
+	}
+	view, err := handler.auditQuery.GetOriginalImageAccessAudit(
+		request.Context(), viewerID, auditID,
+	)
+	if err != nil {
+		writeError(writer, request, err)
+		return
+	}
+	writer.Header().Set("Content-Type", "application/json")
+	writer.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(writer).Encode(view)
 }
 
 func writeError(writer http.ResponseWriter, request *http.Request, err error) {

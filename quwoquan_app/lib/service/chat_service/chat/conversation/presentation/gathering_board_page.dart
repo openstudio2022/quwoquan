@@ -5,9 +5,11 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/application/
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
+import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
@@ -101,14 +103,9 @@ class _GatheringBoardPageState extends State<GatheringBoardPage> {
             width: AppSpacing.hairline,
           ),
         ),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          minimumSize: const Size(
-            AppSpacing.minInteractiveSize,
-            AppSpacing.minInteractiveSize,
-          ),
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.chevron_back,
           onPressed: widget.onBack,
-          child: const Icon(CupertinoIcons.chevron_back),
         ),
         middle: Text(ChatText.groupCapabilityActivity),
       ),
@@ -274,6 +271,25 @@ class _GatheringBoardPageState extends State<GatheringBoardPage> {
                 ),
               ],
             ),
+            if (widget.navigation.openRecapComposer != null) ...[
+              SizedBox(height: AppSpacing.interGroupMd),
+              _GatheringBoardSectionCard(
+                sectionKey: const ValueKey<String>('gathering-board-recap'),
+                title: GatheringText.detailSharedExperienceTitle,
+                icon: CupertinoIcons.square_pencil,
+                isDark: isDark,
+                onOpen: () => widget.navigation.openRecapComposer!(
+                  snapshot.activity.gatheringId,
+                  snapshot.activity.title,
+                ),
+                children: [
+                  Text(
+                    GatheringText.detailRecapAction,
+                    style: _boardBodyStyle(isDark),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

@@ -426,6 +426,12 @@ type GatheringListBySourceQuery struct {
 	Limit               int64  `json:"limit"`
 }
 
+// GatheringMineListQuery is generated from Gathering fields.yaml.
+type GatheringMineListQuery struct {
+	Cursor string `json:"cursor,omitempty"`
+	Limit  int64  `json:"limit"`
+}
+
 // GatheringOutcome is generated from Gathering fields.yaml.
 type GatheringOutcome struct {
 	Status                   GatheringOutcomeStatus `json:"status"`
@@ -440,6 +446,20 @@ type GatheringPageQuery struct {
 	GatheringID string `json:"gatheringId"`
 	Cursor      string `json:"cursor,omitempty"`
 	Limit       int64  `json:"limit"`
+}
+
+// GatheringParticipationStatusQuery is generated from Gathering fields.yaml.
+type GatheringParticipationStatusQuery struct {
+	GatheringID string `json:"gatheringId"`
+	PersonaID   string `json:"personaId"`
+}
+
+// GatheringParticipationStatusSlice is generated from Gathering fields.yaml.
+type GatheringParticipationStatusSlice struct {
+	GatheringID        string                      `json:"gatheringId"`
+	PersonaID          string                      `json:"personaId"`
+	LifecycleStatus    GatheringLifecycleStatus    `json:"lifecycleStatus"`
+	ParticipationState GatheringParticipationState `json:"participationState,omitempty"`
 }
 
 // GatheringParticipationVersionCommand is generated from Gathering fields.yaml.
@@ -1366,6 +1386,39 @@ func DecodeGetGatheringResponse(packet ResponsePacket) (GatheringPrivateDetailSl
 	return response, nil
 }
 
+func EncodeGetGatheringParticipationStatus(request GatheringParticipationStatusQuery) (RequestPacket, error) {
+	operation, err := operationMetadata(serviceclients.CircleGatheringGetGatheringParticipationStatusOperationID)
+	if err != nil {
+		return RequestPacket{}, err
+	}
+	canonicalRequest, err := json.Marshal(request)
+	if err != nil {
+		return RequestPacket{}, fmt.Errorf("encode circle.gathering.GetGatheringParticipationStatus canonical request: %w", err)
+	}
+	requestPath := serviceclients.CircleGatheringGetGatheringParticipationStatusPath(request.GatheringID, request.PersonaID)
+	query := make(url.Values)
+	var body []byte
+	return RequestPacket{
+		Operation:        operation,
+		Path:             requestPath,
+		Query:            query,
+		Body:             body,
+		CanonicalRequest: canonicalRequest,
+	}, nil
+}
+
+func DecodeGetGatheringParticipationStatusResponse(packet ResponsePacket) (GatheringParticipationStatusSlice, error) {
+	operation, err := operationMetadata(serviceclients.CircleGatheringGetGatheringParticipationStatusOperationID)
+	if err != nil {
+		return GatheringParticipationStatusSlice{}, err
+	}
+	var response GatheringParticipationStatusSlice
+	if err := decodeResponse(operation, packet, &response); err != nil {
+		return GatheringParticipationStatusSlice{}, err
+	}
+	return response, nil
+}
+
 func EncodeGetPublicGathering(request GatheringIDQuery) (RequestPacket, error) {
 	operation, err := operationMetadata(serviceclients.CircleGatheringGetPublicGatheringOperationID)
 	if err != nil {
@@ -1680,6 +1733,43 @@ func DecodeListGatheringsBySourceResponse(packet ResponsePacket) (GatheringBySou
 	var response GatheringBySourcePageSlice
 	if err := decodeResponse(operation, packet, &response); err != nil {
 		return GatheringBySourcePageSlice{}, err
+	}
+	return response, nil
+}
+
+func EncodeListMyHostedGatherings(request GatheringMineListQuery) (RequestPacket, error) {
+	operation, err := operationMetadata(serviceclients.CircleGatheringListMyHostedGatheringsOperationID)
+	if err != nil {
+		return RequestPacket{}, err
+	}
+	canonicalRequest, err := json.Marshal(request)
+	if err != nil {
+		return RequestPacket{}, fmt.Errorf("encode circle.gathering.ListMyHostedGatherings canonical request: %w", err)
+	}
+	requestPath := serviceclients.CircleGatheringListMyHostedGatheringsPath()
+	query := make(url.Values)
+	if request.Cursor != "" {
+		query.Set("cursor", request.Cursor)
+	}
+	query.Set("limit", strconv.FormatInt(int64(request.Limit), 10))
+	var body []byte
+	return RequestPacket{
+		Operation:        operation,
+		Path:             requestPath,
+		Query:            query,
+		Body:             body,
+		CanonicalRequest: canonicalRequest,
+	}, nil
+}
+
+func DecodeListMyHostedGatheringsResponse(packet ResponsePacket) (GatheringByHostPageSlice, error) {
+	operation, err := operationMetadata(serviceclients.CircleGatheringListMyHostedGatheringsOperationID)
+	if err != nil {
+		return GatheringByHostPageSlice{}, err
+	}
+	var response GatheringByHostPageSlice
+	if err := decodeResponse(operation, packet, &response); err != nil {
+		return GatheringByHostPageSlice{}, err
 	}
 	return response, nil
 }

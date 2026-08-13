@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
@@ -45,5 +46,27 @@ func TestCheckerPublishesNamedHealthMetrics(t *testing.T) {
 		healthCheckLastSuccess.WithLabelValues("content_projection_contract_test_ok"),
 	); got <= 0 {
 		t.Fatalf("last success timestamp=%v want >0", got)
+	}
+}
+
+func TestCheckerHonorsDependencySpecificTimeout(t *testing.T) {
+	checker := NewChecker()
+	checker.RegisterWithTimeout(
+		"mongodb",
+		20*time.Millisecond,
+		func(ctx context.Context) error {
+			select {
+			case <-time.After(5 * time.Millisecond):
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		},
+	)
+
+	result := checker.Check(context.Background())
+
+	if result.Status != "ok" {
+		t.Fatalf("status=%q checks=%v want ok", result.Status, result.Checks)
 	}
 }

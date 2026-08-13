@@ -21,7 +21,7 @@ COPY . .
 RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=10 GOMEMLIMIT=1024MiB \
-    go build ${GO_BUILD_FLAGS} -o /assistant-service ./services/assistant-service/cmd/api
+    go build ${GO_BUILD_FLAGS} -o /assistant-service ./services/assistant-service/cmd/standalone-api
 RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=10 GOMEMLIMIT=1024MiB \

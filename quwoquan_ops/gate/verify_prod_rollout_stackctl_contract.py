@@ -25,12 +25,28 @@ OCI_SUPPLY_CHAIN = (
 HOSTED_LEDGER = (
     ROOT / "quwoquan_ops" / "cli" / "prod" / "hosted_release_ledger.py"
 )
+# hosted_release_ledger 已拆分为「双栖薄入口 + hosted_release_ledger_lib 包」；
+# token 扫描覆盖入口与包内全部子模块。
+HOSTED_LEDGER_LIB = (
+    ROOT / "quwoquan_ops" / "cli" / "prod" / "hosted_release_ledger_lib"
+)
+
+
+def _hosted_ledger_text() -> str:
+    return "\n".join(
+        [HOSTED_LEDGER.read_text(encoding="utf-8")]
+        + [
+            path.read_text(encoding="utf-8")
+            for path in sorted(HOSTED_LEDGER_LIB.glob("*.py"))
+        ]
+    )
+# environment_stability_final_acceptance 已由单文件拆分为同名包；token 扫描覆盖包内全部子模块。
 FINAL_ACCEPTANCE = (
     ROOT
     / "quwoquan_ops"
     / "cli"
     / "lib"
-    / "environment_stability_final_acceptance.py"
+    / "environment_stability_final_acceptance"
 )
 SOAK_COLLECTOR = ROOT / "quwoquan_ops" / "ci" / "collect_prod_soak_observations.py"
 REQUIRED_ROLLOUT_TOKENS = (
@@ -132,8 +148,19 @@ def workflow_rollout_issues(path: Path) -> list[str]:
 
 def candidate_identity_issues() -> list[str]:
     issues: list[str] = []
-    ledger_text = HOSTED_LEDGER.read_text(encoding="utf-8")
-    stackctl_text = STACKCTL.read_text(encoding="utf-8")
+    ledger_text = _hosted_ledger_text()
+    # stackctl.py 已按域拆分；candidate transition guard 位于 deploy 域模块。
+    stackctl_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            STACKCTL,
+            ROOT / "quwoquan_ops" / "cli" / "commands" / "deploy_release_state.py",
+            ROOT / "quwoquan_ops" / "cli" / "commands" / "deploy_rollout.py",
+            ROOT / "quwoquan_ops" / "cli" / "commands" / "deploy_prod_finalize.py",
+            ROOT / "quwoquan_ops" / "cli" / "commands" / "deploy_domain.py",
+            ROOT / "quwoquan_ops" / "cli" / "commands" / "deploy_release_inputs.py",
+        )
+    )
     for token in (
         '"fromCandidateDigest"',
         '"toCandidateDigest"',
@@ -189,8 +216,11 @@ def candidate_identity_issues() -> list[str]:
 def hosted_soak_authority_issues() -> list[str]:
     issues: list[str] = []
     workflow_text = WORKFLOWS[0].read_text(encoding="utf-8")
-    ledger_text = HOSTED_LEDGER.read_text(encoding="utf-8")
-    verifier_text = FINAL_ACCEPTANCE.read_text(encoding="utf-8")
+    ledger_text = _hosted_ledger_text()
+    verifier_text = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(FINAL_ACCEPTANCE.glob("*.py"))
+    )
     collector_text = SOAK_COLLECTOR.read_text(encoding="utf-8")
     for token in (
         "prod_soak_acceptance:",

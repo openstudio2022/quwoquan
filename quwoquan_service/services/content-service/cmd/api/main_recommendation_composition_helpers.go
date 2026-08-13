@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 // startRecommendationPolicyHotReload 启动策略文件热加载；
 // policyStore 的具体实现仍由 main 显式选择。
 func startRecommendationPolicyHotReload(
-	ctx context.Context,
+	workers *workerRegistry,
 	policyStore *rtrecpolicy.Store,
 	logger *slog.Logger,
 ) {
@@ -22,9 +22,11 @@ func startRecommendationPolicyHotReload(
 		policyPath = "services/content-service/resources/policies/content/post/recommendation_policy.yaml"
 	}
 	if _, statErr := os.Stat(policyPath); statErr == nil {
-		go rtrecpolicy.StartSyncLoop(ctx, policyStore, logger, rtrecpolicy.SyncConfig{
-			Path:     policyPath,
-			OnReload: rtrec.RecordPolicyReload,
+		workers.Add(func(ctx context.Context) {
+			rtrecpolicy.StartSyncLoop(ctx, policyStore, logger, rtrecpolicy.SyncConfig{
+				Path:     policyPath,
+				OnReload: rtrec.RecordPolicyReload,
+			})
 		})
 		log.Printf(
 			"content-service rec policy hot-reload enabled path=%s baselineDigest=%s",

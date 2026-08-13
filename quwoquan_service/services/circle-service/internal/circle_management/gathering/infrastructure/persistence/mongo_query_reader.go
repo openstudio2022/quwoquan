@@ -61,6 +61,22 @@ func (reader *MongoGatheringQueryReader) ListByHost(
 	return reader.findPublicPage(ctx, filter, gatheringHostPageIndex, limit)
 }
 
+// ListMineByHost 返回 persona host 名下全部行动（含 draft 与非公开
+// audiencePolicy）；授权边界在 application facade（viewer 即 host 本人）。
+func (reader *MongoGatheringQueryReader) ListMineByHost(
+	ctx context.Context,
+	personaID string,
+	after gatheringapp.PublicListPosition,
+	limit int,
+) ([]gatheringapp.GatheringReadModel, error) {
+	filter := bson.M{
+		"hostBinding.hostSubjectKind": "persona",
+		"hostBinding.hostSubjectId":   personaID,
+	}
+	addPublicPageKeyset(filter, after)
+	return reader.findPublicPage(ctx, filter, gatheringHostPageIndex, limit)
+}
+
 func (reader *MongoGatheringQueryReader) ListBySource(
 	ctx context.Context,
 	source gatheringapp.CanonicalObjectRef,

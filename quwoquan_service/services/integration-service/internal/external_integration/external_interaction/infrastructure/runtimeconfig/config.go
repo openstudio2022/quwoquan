@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"quwoquan_service/runtime/reliabletask"
+	"quwoquan_service/runtime/servicehost"
 	pushapp "quwoquan_service/services/integration-service/internal/external_integration/push_delivery/application"
 )
 
@@ -110,10 +111,20 @@ type RedisSceneConfig struct {
 
 func Load() (Config, error) {
 	cfg := Config{}
-	serviceName := getenvOrDefault("SERVICE_NAME", "integration-service")
+	serviceName := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("integration-service", "SERVICE_NAME"),
+	)
+	if serviceName == "" {
+		serviceName = "integration-service"
+	}
 	appEnv := getenvOrDefault("APP_ENV", "alpha")
 	configRoot := strings.TrimSpace(os.Getenv("CONFIG_ROOT"))
-	configVersion := strings.TrimSpace(os.Getenv("CONFIG_VERSION"))
+	configVersion := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue(
+			"integration-service",
+			"CONFIG_VERSION",
+		),
+	)
 	if !isValidAppEnv(appEnv) {
 		return Config{}, fmt.Errorf("APP_ENV must be one of alpha|beta|gamma|prod, got %q", appEnv)
 	}

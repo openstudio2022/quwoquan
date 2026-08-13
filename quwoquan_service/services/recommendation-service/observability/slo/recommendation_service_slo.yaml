@@ -1,0 +1,37 @@
+# recommendation-service 服务面 SLI/SLO 声明（单一真相源：本文件 + 服务自注册指标）。
+# 注意与 content-service/observability/slo/recommendation_slo.yaml 的边界：
+# 那份声明推荐业务效果 SLO（CTR/完成率，消费 recommendation_feed_* 归因 series）；
+# 本文件只声明本服务进程的服务面健康（延迟/可用性/日志导出可靠性）。
+service: recommendation-service
+domain: recommendation
+
+# 指标真相源（Prometheus，/metrics 暴露）
+# HTTP 服务面指标与 quwoquan_service/runtime/observability/http_middleware.go 的
+# canonical 口径同名同标签，ContractGraph 派生的 recommendation_contract recording
+# rules 与 stackctl readback 直接消费同一 series。
+metrics:
+  requests_total: http_server_requests_total             # labels: service, route, method, status(数字码)
+  latency_histogram: http_server_duration_seconds        # labels: service, route, method
+  runtime_log_batches: runtime_log_export_batches_total   # labels: service, result
+  runtime_log_spool: runtime_log_export_spool_pending     # labels: service
+  runtime_log_dead_letter: runtime_log_export_dead_letter_pending # labels: service
+
+slis:
+  - id: scoring_latency
+    description: HTTP 打分/窗口接口延迟，分位数取自 histogram
+    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="recommendation-service"}[5m])) by (le))
+    objectives:
+      p50_ms: 100
+      p95_ms: 500
+  - id: availability
+    description: 服务可用性 = 1 - 5xx 比率
+    sli: 1 - sum(rate(http_server_requests_total{service="recommendation-service",status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="recommendation-service"}[5m]))
+    objective: 0.999
+  - id: runtime_log_delivery
+    description: runtime log 上云可靠性；死信持续增长说明 product-ops ingest 断链
+    sli: sum(rate(runtime_log_export_batches_total{result="delivered"}[15m])) / sum(rate(runtime_log_export_batches_total{result=~"delivered|dead_letter_permanent|dead_letter_ttl"}[15m]))
+    objective: 0.99
+  - id: runtime_log_spool_backlog
+    description: 待投递 spool 批数（饱和度）；持续高位说明 ingest 端点不可达
+    sli: max(runtime_log_export_spool_pending)
+    objective_max: 500

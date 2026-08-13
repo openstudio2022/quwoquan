@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	generated "quwoquan_service/services/product-ops-service/generated/product_ops/event_record"
 )
 
 type L1L4MetricsScope struct {
@@ -158,7 +160,17 @@ func (s *MetricQueryService) ListL1L4MetricSnapshots(ctx context.Context, scope 
 	out := make([]metricSnapshot, 0, len(definitions))
 	alerts := make([]l1l4MetricAlertState, 0, len(definitions))
 	for _, definition := range definitions {
-		if derived, ok := deriveL1L4MetricState(definition, telemetrySnapshot, prometheusValues); ok {
+		var derived l1l4DerivedMetricState
+		var ok bool
+		if golden, isGolden := goldenMetricByID(definition.Metric); isGolden {
+			derived, ok, err = s.deriveGoldenMetricState(ctx, definition, golden)
+			if err != nil {
+				return l1l4MetricsResponse{}, err
+			}
+		} else {
+			derived, ok = deriveL1L4MetricState(definition, prometheusValues)
+		}
+		if ok {
 			definition.Value = derived.Value
 			if derived.Unit != "" {
 				definition.Unit = derived.Unit
@@ -236,35 +248,33 @@ func (s *MetricQueryService) ListL1L4MetricSnapshots(ctx context.Context, scope 
 }
 
 // canonicalL1L4MetricDefinitions 只描述可查询的权威指标，绝不承载样例数值或
-// 持久化快照。实际数值只能由 telemetry 或 Prometheus 在请求时派生；没有样本时
-// 响应会保留 unavailable coverage 而不是返回零值/成功态。
+// 持久化快照。L1/L2 成员由 golden_metric_catalog（generated）驱动；L3/L4 属于
+// 契约 SLI 轨与基础设施轨，不进入黄金字典，仍在此声明。实际数值只能由
+// telemetry 或 Prometheus 在请求时派生；没有样本时响应会保留 unavailable
+// coverage 而不是返回零值/成功态。
 func canonicalL1L4MetricDefinitions(scope L1L4MetricsScope) []metricSnapshot {
 	environment := strings.TrimSpace(scope.Environment)
 	if environment == "" {
 		environment = "prod"
 	}
-	return []metricSnapshot{
-		{
-			ID:          "L1:" + environment,
-			Level:       "L1",
+	out := make([]metricSnapshot, 0, len(generated.GoldenMetricCatalog)+3)
+	for _, metric := range generated.GoldenMetricCatalog {
+		if metric.PortalLevel == "" {
+			continue
+		}
+		out = append(out, metricSnapshot{
+			ID:          metric.PortalLevel + ":" + environment + ":" + metric.MetricID,
+			Level:       metric.PortalLevel,
 			Environment: environment,
-			Label:       "主旅程完成率",
-			Metric:      "five_tab_journey_completion_rate",
-			Unit:        "%",
+			Label:       metric.PortalLabel,
+			Metric:      metric.MetricID,
+			Unit:        goldenMetricUnit(metric),
 			Trend:       "live",
-			Description: "page_open 到 page_return 的产品旅程完成率。",
-		},
-		{
-			ID:          "L2:" + environment,
-			Level:       "L2",
-			Environment: environment,
-			Label:       "推荐 CTR",
-			Metric:      "core_business_ctr",
-			Unit:        "%",
-			Trend:       "live",
-			Description: "recommendation impression/click 的实时转化率。",
-		},
-		{
+			Description: goldenMetricDescription(metric),
+		})
+	}
+	out = append(out,
+		metricSnapshot{
 			ID:          "L3:" + environment + ":" + scope.Service,
 			Level:       "L3",
 			Environment: environment,
@@ -275,7 +285,7 @@ func canonicalL1L4MetricDefinitions(scope L1L4MetricsScope) []metricSnapshot {
 			Trend:       "live",
 			Description: "HTTP server duration histogram 的 P95。",
 		},
-		{
+		metricSnapshot{
 			ID:          "L3-error:" + environment + ":" + scope.Service,
 			Level:       "L3",
 			Environment: environment,
@@ -286,7 +296,7 @@ func canonicalL1L4MetricDefinitions(scope L1L4MetricsScope) []metricSnapshot {
 			Trend:       "live",
 			Description: "HTTP server request counter 的 5xx 比率。",
 		},
-		{
+		metricSnapshot{
 			ID:          "L4:" + environment,
 			Level:       "L4",
 			Environment: environment,
@@ -296,6 +306,52 @@ func canonicalL1L4MetricDefinitions(scope L1L4MetricsScope) []metricSnapshot {
 			Trend:       "live",
 			Description: "Prometheus up 指标的服务平面可用性。",
 		},
+	)
+	return out
+}
+
+func goldenMetricByID(metricID string) (generated.GoldenMetricDefinition, bool) {
+	for _, metric := range generated.GoldenMetricCatalog {
+		if metric.MetricID == metricID {
+			return metric, true
+		}
+	}
+	return generated.GoldenMetricDefinition{}, false
+}
+
+func goldenMetricUnit(metric generated.GoldenMetricDefinition) string {
+	switch metric.Source.Aggregation {
+	case "percentile_p50", "percentile_p95", "percentile_p99":
+		return "ms"
+	default:
+		return "%"
+	}
+}
+
+func goldenMetricDescription(metric generated.GoldenMetricDefinition) string {
+	switch metric.Source.Aggregation {
+	case "event_ratio":
+		return fmt.Sprintf(
+			"%s / %s 事件计数比值（ES 权威回读）。",
+			metric.Source.NumeratorEventType, metric.Source.DenominatorEventType,
+		)
+	case "unique_session_ratio":
+		return fmt.Sprintf(
+			"%s / %s 去重会话比值（ES 权威回读）。",
+			metric.Source.NumeratorEventType, metric.Source.DenominatorEventType,
+		)
+	case "series_rate_ratio":
+		return fmt.Sprintf(
+			"%s / %s Prometheus rate 比值。",
+			metric.Source.NumeratorSeries, metric.Source.DenominatorSeries,
+		)
+	case "percentile_p50", "percentile_p95", "percentile_p99":
+		return fmt.Sprintf(
+			"%s.%s 原始样本分位数（ES 权威回读）。",
+			metric.Source.EventType, metric.Source.ValueField,
+		)
+	default:
+		return "黄金指标（golden_metric_catalog）。"
 	}
 }
 
@@ -314,8 +370,7 @@ func (s *MetricQueryService) queryL3L4Metrics(
 			serviceMatcher + `[5m])) by (le)) * 1000`,
 		"http_error_rate": `100 * sum(rate(http_server_requests_total` + errorMatcher +
 			`[5m])) / (sum(rate(http_server_requests_total` + serviceMatcher + `[5m])) + 0.001)`,
-		"core_business_ctr": `100 * sum(rate(recommendation_feed_click_total[5m])) / (sum(rate(recommendation_feed_impressed_total[5m])) + 0.001)`,
-		"service_plane_up":  `100 * min(up{job=~"quwoquan-service-plane|recommendation-service"})`,
+		"service_plane_up": `100 * min(up{job=~"quwoquan-service-plane|recommendation-service"})`,
 	}
 	for metric, query := range queries {
 		value, err := s.prometheus.Query(ctx, query)
@@ -338,61 +393,263 @@ func prometheusLabelSelector(service, extra string) string {
 	return "{" + strings.Join(labels, ",") + "}"
 }
 
+// deriveGoldenMetricState 按注册表 source 形态派生黄金指标实时状态。
+// 可实时计算的形态：
+//   - product_telemetry + event_ratio/unique_session_ratio，且过滤器只含
+//     EventSummaryQuery 支持的 result 维度；
+//   - product_telemetry + percentile_p95/sum_ratio（raw 原始样本统计门面）；
+//   - behavior_attribution + series_rate_ratio（需 Prometheus）。
+//
+// 其余形态（扩展字段过滤）在实时卡片上显式 unavailable，绝不合成数值。
+func (s *MetricQueryService) deriveGoldenMetricState(
+	ctx context.Context,
+	snapshot metricSnapshot,
+	golden generated.GoldenMetricDefinition,
+) (l1l4DerivedMetricState, bool, error) {
+	switch {
+	case golden.Source.Track == "product_telemetry" &&
+		(golden.Source.Aggregation == "event_ratio" ||
+			golden.Source.Aggregation == "unique_session_ratio"):
+		return s.deriveEventRatioMetricState(ctx, snapshot, golden)
+	case golden.Source.Track == "product_telemetry" &&
+		(golden.Source.Aggregation == "percentile_p95" ||
+			golden.Source.Aggregation == "sum_ratio"):
+		return s.deriveValueStatsMetricState(ctx, snapshot, golden)
+	case golden.Source.Track == "behavior_attribution" &&
+		golden.Source.Aggregation == "series_rate_ratio":
+		return s.deriveSeriesRatioMetricState(ctx, snapshot, golden)
+	default:
+		return l1l4DerivedMetricState{}, false, nil
+	}
+}
+
+// deriveValueStatsMetricState 承载 percentile_p95 / sum_ratio 形态：
+// 从 raw 原始样本统计门面读取 P95 或分子分母求和；无样本或零分母
+// 显式 unavailable。
+func (s *MetricQueryService) deriveValueStatsMetricState(
+	ctx context.Context,
+	snapshot metricSnapshot,
+	golden generated.GoldenMetricDefinition,
+) (l1l4DerivedMetricState, bool, error) {
+	resultFilter, supported := goldenSingleResultFilter(golden.Source.NumeratorFilters)
+	if !supported {
+		// 扩展字段过滤超出统计门面能力，显式不可算而不是丢过滤伪造口径。
+		return l1l4DerivedMetricState{}, false, nil
+	}
+	query := EventValueStatsQuery{Result: resultFilter}
+	if golden.Source.Aggregation == "percentile_p95" {
+		query.EventType = golden.Source.EventType
+		query.ValueField = golden.Source.ValueField
+	} else {
+		if golden.Source.NumeratorEventType != golden.Source.DenominatorEventType {
+			// sum_ratio 的原始样本口径要求同一事件承载分子分母字段。
+			return l1l4DerivedMetricState{}, false, nil
+		}
+		query.EventType = golden.Source.NumeratorEventType
+		query.NumeratorField = golden.Source.NumeratorValueField
+		query.DenominatorField = golden.Source.DenominatorValueField
+	}
+	stats, err := s.telemetry.GetEventValueStats(ctx, query)
+	if err != nil {
+		return l1l4DerivedMetricState{}, false, fmt.Errorf(
+			"query golden metric %s value stats: %w", golden.MetricID, err,
+		)
+	}
+	if stats.SampleCount == 0 {
+		return l1l4DerivedMetricState{}, false, nil
+	}
+	var value float64
+	if golden.Source.Aggregation == "percentile_p95" {
+		value = stats.P95
+	} else {
+		if stats.DenominatorSum == 0 {
+			return l1l4DerivedMetricState{}, false, nil
+		}
+		value = stats.NumeratorSum / stats.DenominatorSum * 100
+	}
+	return goldenMetricState(snapshot, golden, value, "telemetry", time.Now().UTC()), true, nil
+}
+
+func goldenSingleResultFilter(filters map[string]string) (string, bool) {
+	if len(filters) == 0 {
+		return "", true
+	}
+	if result, only := filters["result"]; only && len(filters) == 1 {
+		return result, true
+	}
+	return "", false
+}
+
+func summaryQueryFromGoldenFilters(
+	eventType string,
+	filters map[string]string,
+) (EventSummaryQuery, bool) {
+	query := EventSummaryQuery{EventType: eventType}
+	for field, value := range filters {
+		if field == "result" {
+			query.Result = value
+			continue
+		}
+		// 扩展字段过滤（如 publicationStage）超出 summary 查询门面能力，
+		// 实时卡片显式 unavailable 而不是丢掉过滤条件伪造口径。
+		return EventSummaryQuery{}, false
+	}
+	return query, true
+}
+
+func (s *MetricQueryService) deriveEventRatioMetricState(
+	ctx context.Context,
+	snapshot metricSnapshot,
+	golden generated.GoldenMetricDefinition,
+) (l1l4DerivedMetricState, bool, error) {
+	numeratorQuery, ok := summaryQueryFromGoldenFilters(
+		golden.Source.NumeratorEventType, golden.Source.NumeratorFilters,
+	)
+	if !ok {
+		return l1l4DerivedMetricState{}, false, nil
+	}
+	denominatorQuery, ok := summaryQueryFromGoldenFilters(
+		golden.Source.DenominatorEventType, golden.Source.DenominatorFilters,
+	)
+	if !ok {
+		return l1l4DerivedMetricState{}, false, nil
+	}
+	numerator, err := s.telemetry.GetEventSummary(ctx, numeratorQuery)
+	if err != nil {
+		return l1l4DerivedMetricState{}, false, fmt.Errorf(
+			"query golden metric %s numerator: %w", golden.MetricID, err,
+		)
+	}
+	denominator, err := s.telemetry.GetEventSummary(ctx, denominatorQuery)
+	if err != nil {
+		return l1l4DerivedMetricState{}, false, fmt.Errorf(
+			"query golden metric %s denominator: %w", golden.MetricID, err,
+		)
+	}
+	var numeratorCount, denominatorCount int64
+	if golden.Source.Aggregation == "unique_session_ratio" {
+		numeratorCount, denominatorCount = numerator.SessionCount, denominator.SessionCount
+	} else {
+		numeratorCount, denominatorCount = numerator.TotalCount, denominator.TotalCount
+	}
+	if denominatorCount == 0 {
+		return l1l4DerivedMetricState{}, false, nil
+	}
+	value := float64(numeratorCount) / float64(denominatorCount) * 100
+	observedAt := parseFlexibleTelemetryTime(numerator.GeneratedThrough)
+	if denominatorObserved := parseFlexibleTelemetryTime(denominator.GeneratedThrough); denominatorObserved.After(observedAt) {
+		observedAt = denominatorObserved
+	}
+	return goldenMetricState(snapshot, golden, value, "telemetry", observedAt), true, nil
+}
+
+func (s *MetricQueryService) deriveSeriesRatioMetricState(
+	ctx context.Context,
+	snapshot metricSnapshot,
+	golden generated.GoldenMetricDefinition,
+) (l1l4DerivedMetricState, bool, error) {
+	if s.prometheus == nil {
+		return l1l4DerivedMetricState{}, false, nil
+	}
+	value, err := s.prometheus.Query(ctx, seriesRateRatioQuery(golden.Source))
+	if err != nil {
+		return l1l4DerivedMetricState{}, false, fmt.Errorf(
+			"query prometheus golden metric %s: %w", golden.MetricID, err,
+		)
+	}
+	return goldenMetricState(snapshot, golden, value, "prometheus", time.Now().UTC()), true, nil
+}
+
+func seriesRateRatioQuery(source generated.GoldenMetricSource) string {
+	selector := ""
+	if len(source.NumeratorSeriesLabels) > 0 {
+		names := make([]string, 0, len(source.NumeratorSeriesLabels))
+		for name := range source.NumeratorSeriesLabels {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		pairs := make([]string, 0, len(names))
+		for _, name := range names {
+			pairs = append(pairs, name+"="+strconv.Quote(source.NumeratorSeriesLabels[name]))
+		}
+		selector = "{" + strings.Join(pairs, ",") + "}"
+	}
+	return "100 * sum(rate(" + source.NumeratorSeries + selector +
+		"[5m])) / (sum(rate(" + source.DenominatorSeries + "[5m])) + 0.001)"
+}
+
+// goldenMetricState 用注册表 target/alerting 阈值派生卡片状态：越过告警绑定
+// 阈值为 firing，仅违反体验目标为 warning。阈值真相源只有注册表一处。
+func goldenMetricState(
+	snapshot metricSnapshot,
+	golden generated.GoldenMetricDefinition,
+	value float64,
+	source string,
+	observedAt time.Time,
+) l1l4DerivedMetricState {
+	scale := 100.0
+	switch golden.Source.Aggregation {
+	case "percentile_p50", "percentile_p95", "percentile_p99":
+		scale = 1.0
+	}
+	targetValue := golden.TargetValue * scale
+	state, severity := "quiet", "info"
+	if golden.Alerting != nil && targetViolated(value, golden.TargetOperator, golden.Alerting.Threshold*scale) {
+		state, severity = "firing", "critical"
+	} else if targetViolated(value, golden.TargetOperator, targetValue) {
+		state, severity = "warning", "warning"
+	}
+	alertID := golden.MetricID + "TargetState"
+	if golden.Alerting != nil {
+		alertID = golden.Alerting.AlertName
+	}
+	return l1l4DerivedMetricState{
+		Metric: snapshot.Metric,
+		Value:  value,
+		Unit:   goldenMetricUnit(golden),
+		Status: mapMetricStatus(state),
+		Trend:  "live",
+		Source: source,
+		Alert: &l1l4MetricAlertState{
+			ID:          golden.MetricID + "TargetState",
+			Level:       snapshot.Level,
+			Metric:      snapshot.Metric,
+			State:       state,
+			Severity:    severity,
+			Summary:     snapshot.Label + " 由 golden_metric_catalog 唯一口径实时计算",
+			Value:       value,
+			Threshold:   targetValue,
+			Source:      source,
+			Owner:       golden.Owner,
+			RepairEntry: "/product/l1-l4/environment",
+			AlertID:     alertID,
+			AuditRoute:  "/audit",
+		},
+		ObservedAt: observedAt,
+	}
+}
+
+// targetViolated 判断取值是否落在 target 健康侧之外。
+func targetViolated(value float64, operator string, bound float64) bool {
+	switch operator {
+	case "less_than":
+		return value >= bound
+	case "less_than_or_equal":
+		return value > bound
+	case "greater_than":
+		return value <= bound
+	case "greater_than_or_equal":
+		return value < bound
+	default:
+		return false
+	}
+}
+
 func deriveL1L4MetricState(
 	snapshot metricSnapshot,
-	telemetrySnapshot EventTelemetrySnapshot,
 	prometheusValues map[string]float64,
 ) (l1l4DerivedMetricState, bool) {
 	switch snapshot.Metric {
-	case "five_tab_journey_completion_rate":
-		openCount := countEventTypes(telemetrySnapshot.Summary, "page_open")
-		returnCount := countEventTypes(telemetrySnapshot.Summary, "page_return")
-		if openCount == 0 {
-			return l1l4DerivedMetricState{}, false
-		}
-		value := float64(returnCount) / float64(openCount) * 100
-		state := "quiet"
-		severity := "info"
-		if value < 80 {
-			state = "firing"
-			severity = "critical"
-		} else if value < 90 {
-			state = "warning"
-			severity = "warning"
-		}
-		return l1l4DerivedMetricState{
-			Metric: snapshot.Metric,
-			Value:  value,
-			Unit:   "%",
-			Status: mapMetricStatus(state),
-			Trend:  "live",
-			Source: "telemetry",
-			Alert: &l1l4MetricAlertState{
-				ID:        "L1JourneyCompletionRateLow",
-				Level:     snapshot.Level,
-				Metric:    snapshot.Metric,
-				State:     state,
-				Severity:  severity,
-				Summary:   "L1 旅程完成率正在由 page_open/page_return 事件实时计算",
-				Value:     value,
-				Threshold: 90,
-				Source:    "telemetry",
-				Owner:     "product-ops",
-
-				RepairEntry: "/product/dashboard",
-				AlertID:     "L1JourneyCompletionRateLow",
-				AuditRoute:  "/audit",
-			},
-			ObservedAt: latestEventTime(telemetrySnapshot.Drilldown.Items),
-		}, true
-	case "core_business_ctr":
-		// 推荐曝光/点击只允许来自 content-service 的 BehaviorSignal 与
-		// recommendation Prometheus 指标，不能再伪装成 Ops event。
-		value, ok := prometheusValues["core_business_ctr"]
-		if !ok {
-			return l1l4DerivedMetricState{}, false
-		}
-		return prometheusMetricState(snapshot, value, "%", 3, "L2 推荐曝光/点击 CTR 由 recommendation Prometheus 计数器计算"), true
 	case "http_request_p95_ms":
 		value, ok := prometheusValues["http_request_p95_ms"]
 		if !ok {
@@ -491,14 +748,6 @@ func prometheusMetricState(
 	state := "quiet"
 	severity := "info"
 	switch snapshot.Metric {
-	case "core_business_ctr":
-		if value < 1 {
-			state = "firing"
-			severity = "critical"
-		} else if value < threshold {
-			state = "warning"
-			severity = "warning"
-		}
 	case "http_request_p95_ms":
 		if value > 1200 {
 			state = "firing"
@@ -551,58 +800,6 @@ func prometheusMetricState(
 	}
 }
 
-func countEventTypes(summary EventSummary, eventType string) int {
-	return countDimensionValue(summary, "eventType", eventType)
-}
-
-func countDimensionValue(summary EventSummary, dimension, value string) int {
-	if summary.DimensionCounters == nil {
-		return 0
-	}
-	if counters, ok := summary.DimensionCounters[dimension]; ok {
-		return counters[value]
-	}
-	return 0
-}
-
-func countDimensionValues(summary EventSummary, dimension string) int {
-	if summary.DimensionCounters == nil {
-		return 0
-	}
-	counters, ok := summary.DimensionCounters[dimension]
-	if !ok {
-		return 0
-	}
-	total := 0
-	for key, count := range counters {
-		if strings.TrimSpace(key) == "" {
-			continue
-		}
-		total += count
-	}
-	return total
-}
-
-func collectLatencySamples(items []EventDrilldownItem) []float64 {
-	samples := make([]float64, 0, len(items))
-	for _, item := range items {
-		if item.DurationMS != nil {
-			samples = append(samples, float64(*item.DurationMS))
-		}
-	}
-	return samples
-}
-
-func latestEventTime(items []EventDrilldownItem) time.Time {
-	var latest time.Time
-	for _, item := range items {
-		if observedAt := parseFlexibleTelemetryTime(item.OccurredAt); !observedAt.IsZero() && observedAt.After(latest) {
-			latest = observedAt
-		}
-	}
-	return latest
-}
-
 func parseFlexibleTelemetryTime(raw string) time.Time {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -615,28 +812,6 @@ func parseFlexibleTelemetryTime(raw string) time.Time {
 		return parsed
 	}
 	return time.Time{}
-}
-
-func percentile(samples []float64, quantile float64) float64 {
-	if len(samples) == 0 {
-		return 0
-	}
-	sorted := append([]float64(nil), samples...)
-	sort.Float64s(sorted)
-	if quantile <= 0 {
-		return sorted[0]
-	}
-	if quantile >= 1 {
-		return sorted[len(sorted)-1]
-	}
-	index := int(float64(len(sorted)-1) * quantile)
-	if index < 0 {
-		index = 0
-	}
-	if index >= len(sorted) {
-		index = len(sorted) - 1
-	}
-	return sorted[index]
 }
 
 func alertSeverityRank(severity string) int {

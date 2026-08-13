@@ -20,7 +20,12 @@ import (
 
 const (
 	testContractGraphDigest = "72046cb9d49a8a0e05e57b9c75261d8f5e153f2fed51b6afd1a43f28ee9d62dc"
-	testPersistedQueryHash  = "3c1481366f84401aa2d89280925d5943bf040f7c94cf757fb5cc219f00a7f71b"
+	testPersistedQueryHash  = "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110"
+
+	testArticleMarkdownDigest = "sha256:bc18f7068971a44e264848ecd54b72b02d38216abb8ce3c3d2148e37e8a12398" // sha256("markdown")
+	testArticleDocumentDigest = "sha256:43cc23fa52b87b4cc1d02b5b114154151d6adddb17c9fddc06b027fa99e24008" // sha256("document")
+	testArticleManifestDigest = "sha256:05b3abf2579a5eb66403cd78be557fd860633a1fe2103c7642030defe32c657f" // sha256("manifest")
+	testArticleVersionDigest  = "sha256:5ca4f3850ccc331aaf8a257d6086e526a3b42a63e18cb11d020847985b31d188" // sha256("version")
 )
 
 func TestInternalPersistedGetPostExecutesExactOwnerReadSlice(t *testing.T) {
@@ -68,8 +73,11 @@ func TestInternalPersistedGetPostExecutesExactOwnerReadSlice(t *testing.T) {
 	if detail["postId"] != "post-1" || detail["authorDisplayName"] != "Creator" {
 		t.Fatalf("GraphQL data=%v", detail)
 	}
-	if len(detail) != 29 {
+	if len(detail) != 31 {
 		t.Fatalf("selected GraphQL fields=%v", detail)
+	}
+	if liked, exists := detail["viewerLiked"]; !exists || liked != nil {
+		t.Fatalf("internal persisted read must carry viewerLiked=null, got %v", detail["viewerLiked"])
 	}
 	if strings.Contains(response.Body.String(), "moderationStatus") {
 		t.Fatalf("owner-only field leaked: %s", response.Body.String())
@@ -176,9 +184,9 @@ func TestInternalPersistedGetPostExecutesEveryTypeAwareBundleSlice(t *testing.T)
 			detail: postports.PostDetailSlice{
 				PostID: "post-1", ContentType: "article", ArticleMarkdown: "# title",
 				ArticleAssetManifest: &postports.PostArticleAssetManifestSlice{
-					Schema: "article-asset-manifest", ArticleMarkdownDigest: "sha256:markdown",
-					DocumentSHA256: "sha256:document", AssetManifestSHA256: "sha256:manifest",
-					DocumentVersionSHA256: "sha256:version",
+					Schema: "article-asset-manifest", ArticleMarkdownDigest: testArticleMarkdownDigest,
+					DocumentSHA256: testArticleDocumentDigest, AssetManifestSHA256: testArticleManifestDigest,
+					DocumentVersionSHA256: testArticleVersionDigest,
 					Assets:                []postports.PostArticleAssetSlice{{AssetID: "asset-1", PublicSliceKey: "public/key"}},
 				},
 				ArticleRenderProfile: &postports.PostArticleRenderProfileSlice{Template: "journal"},

@@ -27,6 +27,15 @@ func renderStandaloneDtoDart(proj clientProjection, sourcePath string) string {
 			dartType += "?"
 		}
 		b.WriteString(fmt.Sprintf("  final %s %s;\n", dartType, f.Name))
+		recordEnumFieldBinding(enumFieldBinding{
+			DartClass:      className,
+			DartField:      f.Name,
+			DartType:       dartType,
+			EnumRef:        f.EnumRef,
+			ContractType:   f.WireType,
+			ContractSource: sourcePath,
+			ClientDartType: f.DartType,
+		})
 	}
 	// 非 const：DateTime / 集合默认值等在 const 构造下非法。
 	b.WriteString("\n  " + className + "({\n")
@@ -401,6 +410,15 @@ func renderTypedPostDtoDart(proj clientProjection, sourceFile string) string {
 		} else {
 			b.WriteString(fmt.Sprintf("  final %s %s;\n", dartType, f.Name))
 		}
+		recordEnumFieldBinding(enumFieldBinding{
+			DartClass:      className,
+			DartField:      f.Name,
+			DartType:       dartType,
+			EnumRef:        f.EnumRef,
+			ContractType:   f.WireType,
+			ContractSource: "content/content/post/projections/" + sourceFile,
+			ClientDartType: f.DartType,
+		})
 	}
 	b.WriteString("\n")
 

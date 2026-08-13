@@ -175,7 +175,9 @@ func BuildPackage(
 			SourceRepository: strings.TrimSpace(options.SourceRepository),
 			SourceRevision:   strings.TrimSpace(options.SourceRevision),
 			BuildID:          strings.TrimSpace(options.BuildID),
-			BuiltAt:          options.BuiltAt.UTC(),
+			// BSON datetime has millisecond precision. Canonicalize before
+			// signing so Stage/GetRelease cannot drift the release digest.
+			BuiltAt: options.BuiltAt.UTC().Truncate(time.Millisecond),
 		},
 		Signature: packagemodel.Signature{
 			Algorithm: "ed25519",

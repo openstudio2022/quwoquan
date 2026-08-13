@@ -215,6 +215,10 @@ types:
       - {name: snippet, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: action, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
       - {name: thumbnailUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: rankPosition, type: int, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, description: 服务端最终排序位置（0 起）；端侧只读消费，不得客户端重排}
+      - {name: matchedTerms, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: read, ops_exposure: read, description: 命中的归一化查询词，用于端侧高亮}
+      - {name: rankReasons, type: '[]CanonicalSearchRankReason', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: evidence, type: '[]CanonicalSearchEvidence', constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read, description: 命中字段与高亮片段；snippet 由服务端 highlighter 产出}
   OwnerSearchCitation:
     description: 与 opaque objectRef 绑定的公开引用；不包含 raw score 或 backend identity。
     fields:
@@ -250,10 +254,19 @@ types:
         client_default: CanonicalSearchMode.result
       - name: objectTypes
         type: '[]string'
+        description: canonical 对象词汇过滤，取值域固定为 content.post/user.profile/entity.homepage/circle.circle/circle.group/location.place；内部召回 target 词汇（article/photo/video 等）不得出现在 wire 上
         client_dart_type: List<String>
         client_parameter_type: Iterable<String>
         client_default: const <String>[]
         client_normalization: trim_drop_empty
+      - name: contentTypes
+        type: '[]string'
+        description: content.post 命中的内容形态过滤，取值域固定为 article/image/video；仅当过滤范围含 content.post 时生效
+        client_dart_type: List<String>
+        client_parameter_type: Iterable<String>
+        client_default: const <String>[]
+        client_normalization: trim_drop_empty
+        client_omit_empty: true
       - name: ids
         type: '[]string'
         client_dart_type: List<String>

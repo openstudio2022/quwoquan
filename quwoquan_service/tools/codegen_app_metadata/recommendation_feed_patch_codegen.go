@@ -332,6 +332,14 @@ func renderRecommendationFeedPatchesDart(sourcePath string, c *recPatchContract)
 		} else {
 			b.WriteString(fmt.Sprintf("  final %s %s;\n", dt, f.Name))
 		}
+		recordEnumFieldBinding(enumFieldBinding{
+			DartClass:      class,
+			DartField:      f.Name,
+			DartType:       dt,
+			EnumRef:        f.EnumRef,
+			ContractType:   f.Type,
+			ContractSource: filepath.ToSlash(sourcePath),
+		})
 	}
 
 	b.WriteString(fmt.Sprintf("\n  factory %s.fromWire(Map<String, dynamic> payload) {\n", class))

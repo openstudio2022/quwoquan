@@ -16,7 +16,7 @@ COPY . .
 
 RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
-    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build ${GO_BUILD_FLAGS} -o /circle-service ./services/circle-service/cmd/api
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build ${GO_BUILD_FLAGS} -o /circle-service ./services/circle-service/cmd/standalone-api
 
 FROM ${ALPINE_BASE_IMAGE}
 

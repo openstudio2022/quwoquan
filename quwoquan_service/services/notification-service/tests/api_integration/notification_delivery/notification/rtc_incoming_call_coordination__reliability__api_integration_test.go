@@ -139,6 +139,7 @@ func TestRTCIncomingCallCoordinationWithRealMongoAndRedis(t *testing.T) {
 			Timeout:     time.Second,
 		},
 		http.DefaultClient,
+		singleEndpointLister{},
 	)
 	if err != nil {
 		t.Fatal(err)

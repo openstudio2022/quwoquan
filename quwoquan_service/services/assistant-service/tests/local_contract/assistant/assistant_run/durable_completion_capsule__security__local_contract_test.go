@@ -146,8 +146,7 @@ func TestDurableCompletionWithoutPresentationCompletesWithoutProjectionEvents(t 
 		t.Fatalf("read journal: %v", err)
 	}
 	for _, event := range events {
-		if event.Kind == "presentation_snapshot" || event.Kind == "presentation_commit" ||
-			event.Kind == "presentation_patch" {
+		if event.Kind == "presentation_snapshot" || event.Kind == "presentation_commit" {
 			t.Fatalf("empty presentation emitted projection event: %#v", event)
 		}
 	}

@@ -31,7 +31,7 @@ description: |
     sampleVisualsRequired 是否要求结构化 sampleVisuals（R1/R2 人级 kind 必填，禁头像冒充非人对象）。
     iconKey          端侧类型图标语义键（§21.5.2 闭集，IntersectionIconResolver 消费，禁端硬编码 switch）：
                      place | placeHere | circle | people | contact | followHere | viewing |
-                     alumni | work | discussion | share | like | interest | attention。
+                     alumni | work | discussion | share | like | interest | attention | experience。
     propagationRole  传播图角色（§21.4）：none(共同型，自身不传播) | bridge(桥接型) | source(影响源)。
     lifecycleApplicable 该交集是否适用 Lifecycle 状态机弱标（§21.3）：
                      静态身份(同校/同司/校友在此)为 false，动态连接/行为/关注为 true。
@@ -158,6 +158,15 @@ factProducerShapes:
     inputRefs: [entity.entity_wishlist]
     outputKinds: [coWishlistedEntity]
     outputObjectKinds: [place]
+    outputTaxonomyRoots: []
+  # 共同经历生产者（交集飞轮回流环）：双方在同一 Gathering 均持有 active Participation，
+  # 且各自主动发布了关联该 Gathering（content.post.gatheringRef）的公开内容后才产出
+  # coExperiencedGathering。时间到达、聊天频率、位置或单方声明均不得触发（诚实红线延伸）。
+  gathering_shared_experience:
+    visibility: intersection
+    inputRefs: [circle.gathering.participation, content.post.gatheringRef]
+    outputKinds: [coExperiencedGathering]
+    outputObjectKinds: [gathering]
     outputTaxonomyRoots: []
 moments:
   # 意图时态闭集。moment 表达交集的「时态意图」，与 lifecycleState（边生命周期强弱）正交：
@@ -391,6 +400,7 @@ iconKeyLegend:
   like: 共同点赞（coLiked，T4 最低权重，§21.9 恢复）
   interest: 共同兴趣标签（sharedTagSample）
   attention: 共同关注对象 / 品牌（sharedEntityAttention）
+  experience: 共同经历（coExperiencedGathering，一起参加过同一 Gathering 并各自主动发布关联回顾）
 
 visualToneByIconKey:
   # §21.5.2 低饱和语义色调。端侧可按 iconKey 查 tone，不得在页面按 kind 硬编码颜色。
@@ -407,6 +417,8 @@ visualToneByIconKey:
   like: clay
   interest: stone
   attention: stone
+  # 共同经历归 relationship 维度族（sage）：它表达的是「我们之间发生过什么」，不是地点事实。
+  experience: sage
 
 iconAssetByIconKey:
   # iconKey → 远程图标资源（alpha 蒙版图）在数据发布 media 根下的相对路径。
@@ -532,6 +544,9 @@ actionKeyMeta:
   start_gathering:    { tier: heavy, requiredGates: [login, realName, minorMode, blocked, rateLimit], dispatch: gathering }
 
 actionHintsByKind:
+  # 共同经历的行动阶梯首位是「再约一次」（交集飞轮的复利环）：经历过一次的双方
+  # 再次发起的信任成本最低；其次回看行动详情（共同经历聚合区），最后私信。
+  coExperiencedGathering: [start_gathering, open_object, message_person]
   sharedFollowees: [follow_person, greet_person, view_shared_people]
   commonFollower: [follow_person, message_person, view_shared_people]
   # sameIndustry 的对象是人本身，没有可打开的组织对象，行动阶梯只到人。
@@ -662,6 +677,14 @@ statementTemplates:
         circleTag:
           l10nKey: intersection.statement.shared_tag_sample.circle_tag
           template: "{subject}在圈子里常看{object}"
+    # 共同经历只说「一起参加过」：occurred 语义由 Gathering Outcome 独立承载，
+    # 本句只断言双方 active Participation + 双方主动发布关联回顾这一可证事实。
+    coExperiencedGathering:
+      l10nKey: intersection.statement.co_experienced_gathering
+      template: "{subject}一起参加过{object}"
+      counted:
+        l10nKey: intersection.statement.co_experienced_gathering.counted
+        template: "{subject}和你一起参加过{count}次行动"
 
 presentationText:
   # §17.2 结论句「谓语」之外的全部用户可见词汇的唯一真相源。
@@ -706,6 +729,7 @@ presentationText:
       sameIndustry: 同行
       sharedCircle: 同圈成员
       coMemberCircle: 同圈成员
+      coExperiencedGathering: 同行过的人
 
   # 无具名代表人时的匿名主语。与 relationLabels 不同表：并非所有有关系称谓的 kind
   # 都能匿名成句（如 sharedFollowees 匿名后是「一位用户」而非「一位你关注的人」）。
@@ -851,6 +875,7 @@ presentationText:
       sharedEntityAttention: "都看过{count}个相同对象"
       coWishlistedEntity: "你和{object}都想去{sample}"
       coVisitedEntity: "你和{object}都去过{sample}"
+      coExperiencedGathering: "你和{object}一起参加过{sample}"
       followeeVisited: "{count}位你关注的人来过{object}"
       followeeViewedObject: "{count}位你关注的人看过"
       followeeInObject: "{count}位你关注的人在这里"
@@ -879,6 +904,7 @@ presentationText:
       sharedEntityAttention: 共同关注的对象
       coWishlistedEntity: 共同想去
       coVisitedEntity: 共同去过
+      coExperiencedGathering: 共同经历
       followeeVisited: 关注的人来过
       followeeViewedObject: 你关注的人看过
       followeeInObject: 你关注的人在这里
@@ -1120,6 +1146,35 @@ kinds:
     iconKey: interest
     propagationRole: none
     lifecycleApplicable: true
+
+  # ---- F. 共同经历：交集飞轮的回流环（强度最高的事实交集） ----
+  - kind: coExperiencedGathering
+    vertical: general
+    entry: F1
+    level: sharedFact
+    intersectionClass: fact
+    dimensions: [relationship]
+    objectKind: gathering
+    countObjectKind: gathering
+    valueTier: T1
+    computability: R2
+    confidenceThreshold: 0.0
+    privacyScope: public
+    dedupeKey: "coExperiencedGathering:{objectId}"
+    moment: retrospective
+    timeWindowDays: 30
+    evidenceRank: 5
+    sampleVisualsRequired: false
+    iconKey: experience
+    propagationRole: none
+    lifecycleApplicable: true
+    source: gathering_shared_experience_events
+    # 事实口径（诚实红线延伸到经历）：双方在同一 Gathering 均持有 active Participation，
+    # 且各自主动发布了关联该 Gathering（content.post.gatheringRef）的公开内容后才产出。
+    # 时间到达、聊天频率、位置或单方声明均不得触发；「成形」与「经历」两级不得互相冒充。
+    # evidenceRank=5 高于一切既有 kind：一起完成过一次行动是最强的可证共同点。
+    # timeWindowDays 对齐 policy relationship 维度 TTL（30 天，指推荐保鲜/冷却窗口，
+    # 不是经历资产的保存期——经历内容与聚合区长期存在于 Content/Circle owner）。
 
   # ---- E. 桥接型交集（第三方桥接） ----
   - kind: followeeInObject

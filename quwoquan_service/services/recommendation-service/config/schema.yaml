@@ -47,7 +47,12 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: 1
+  # 必须与第一方 Go 服务实际发布 durable stream 的 db 一致（运行时事实为 db0：
+  # events.ops.experiment_policy_activated / events.content.* / events.user.* 等
+  # 均由 Go publisher 写入 db0）。此前默认 1 使本服务的全部 stream 消费者
+  # （实验策略/候选生命周期/行为/搜索信号）对着只有自己空消费组的 db1，
+  # 全栈冷启动时表现为「策略已激活但本服务永远等不到」。
+  default: 0
 - key: sys.recommendation-service.redis.general.mode
   type: string
   scope: workload

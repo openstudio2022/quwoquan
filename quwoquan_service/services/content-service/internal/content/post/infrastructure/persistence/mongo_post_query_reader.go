@@ -42,6 +42,42 @@ func (r *MongoPostQueryReader) PostExists(
 	return count == 1, nil
 }
 
+// ListPublicPostIDs 返回最新公开已发布 postId（公开 sitemap 读面专用，
+// 只取 _id 投影，不出全文）。
+func (r *MongoPostQueryReader) ListPublicPostIDs(
+	ctx context.Context,
+	limit int,
+) ([]string, error) {
+	if limit <= 0 || limit > 5000 {
+		limit = 500
+	}
+	cursor, err := r.coll.Find(
+		ctx,
+		bson.M{"visibility": "public", "status": "published"},
+		options.Find().
+			SetProjection(bson.M{"_id": 1}).
+			SetSort(bson.D{{Key: "publishedAt", Value: -1}}).
+			SetLimit(int64(limit)),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+	var rows []struct {
+		ID string `bson:"_id"`
+	}
+	if err := cursor.All(ctx, &rows); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.ID != "" {
+			ids = append(ids, row.ID)
+		}
+	}
+	return ids, nil
+}
+
 func NewMongoPostQueryReader(coll *mongo.Collection) *MongoPostQueryReader {
 	return &MongoPostQueryReader{coll: coll}
 }
@@ -214,6 +250,93 @@ func (r *MongoPostQueryReader) ListAuthorPosts(
 		).Encode()
 	}
 	return page, nil
+}
+
+func (r *MongoPostQueryReader) ListGatheringPosts(
+	ctx context.Context,
+	request postports.GatheringPostReadRequest,
+) (postports.GatheringPostPageSlice, error) {
+	if err := r.ready(); err != nil {
+		return postports.GatheringPostPageSlice{}, err
+	}
+	if strings.TrimSpace(request.GatheringID()) == "" {
+		return postports.GatheringPostPageSlice{}, errors.New(
+			"gathering post query requires gatheringId",
+		)
+	}
+	if request.Limit() <= 0 || request.Limit() > postports.MaxPostQueryPageSize {
+		return postports.GatheringPostPageSlice{}, errors.New(
+			"gathering post query has invalid limit",
+		)
+	}
+
+	filter := GatheringPostFilter(request)
+	sortField := request.SortField()
+	if cursor := request.Cursor(); cursor.IsSet() {
+		filter = bson.D{{Key: "$and", Value: bson.A{
+			filter,
+			bson.D{afterAuthorPostCursor(sortField, cursor)},
+		}}}
+	}
+
+	cursor, err := r.coll.Find(
+		ctx,
+		filter,
+		options.Find().
+			SetProjection(AuthorPostProjection()).
+			SetSort(bson.D{{Key: sortField, Value: -1}, {Key: "_id", Value: -1}}).
+			SetLimit(int64(request.Limit()+1)),
+	)
+	if err != nil {
+		return postports.GatheringPostPageSlice{}, fmt.Errorf(
+			"find gathering post page: %w",
+			err,
+		)
+	}
+	defer func() { _ = cursor.Close(ctx) }()
+
+	items := make([]postports.AuthorPostItemSlice, 0, request.Limit()+1)
+	for cursor.Next(ctx) {
+		var item postports.AuthorPostItemSlice
+		if err := cursor.Decode(&item); err != nil {
+			return postports.GatheringPostPageSlice{}, fmt.Errorf(
+				"decode gathering post slice: %w",
+				err,
+			)
+		}
+		items = append(items, item)
+	}
+	if err := cursor.Err(); err != nil {
+		return postports.GatheringPostPageSlice{}, fmt.Errorf(
+			"iterate gathering post page: %w",
+			err,
+		)
+	}
+
+	page := postports.GatheringPostPageSlice{Items: items}
+	if len(page.Items) > request.Limit() {
+		page.HasMore = true
+		page.Items = page.Items[:request.Limit()]
+		last := page.Items[len(page.Items)-1]
+		page.NextCursor = postports.NewAuthorPostCursor(
+			request.CursorScope(),
+			last.PublishedAt,
+			last.PostID,
+		).Encode()
+	}
+	return page, nil
+}
+
+// GatheringPostFilter 是共同经历聚合区的存储侧过滤：只允许 public +
+// published + approved 且作者主动写入 gatheringRef 的内容进入聚合区。
+func GatheringPostFilter(request postports.GatheringPostReadRequest) bson.D {
+	return bson.D{
+		{Key: "gatheringRef", Value: strings.TrimSpace(request.GatheringID())},
+		{Key: "status", Value: "published"},
+		{Key: "visibility", Value: "public"},
+		{Key: "moderationStatus", Value: "approved"},
+		{Key: "accountRestricted", Value: bson.M{"$ne": true}},
+	}
 }
 
 type postFeedDimensionsDocument struct {
@@ -624,6 +747,7 @@ func PostDetailProjection() bson.D {
 		{Key: "assistantUsePolicy", Value: 1},
 		{Key: "sourcePostId", Value: 1},
 		{Key: "sourceType", Value: 1},
+		{Key: "gatheringRef", Value: 1},
 		{Key: "illustrationAssetId", Value: 1},
 		{Key: "likeCount", Value: 1},
 		{Key: "commentCount", Value: 1},
@@ -715,6 +839,9 @@ func PostFeedProjection() bson.D {
 		{Key: "entityRefs", Value: 1},
 		{Key: "visibility", Value: 1},
 		{Key: "contentVertical", Value: 1},
+		{Key: "primaryHomepageId", Value: 1},
+		{Key: "primaryHomepageType", Value: 1},
+		{Key: "gatheringRef", Value: 1},
 		{Key: "sourceTaskId", Value: 1},
 		{Key: "sourceOwner", Value: 1},
 		{Key: "releaseId", Value: 1},
@@ -736,5 +863,6 @@ var (
 	_ postports.PostRevisionSliceReader = (*MongoPostQueryReader)(nil)
 	_ postports.PostDetailReader        = (*MongoPostQueryReader)(nil)
 	_ postports.AuthorPostReader        = (*MongoPostQueryReader)(nil)
+	_ postports.GatheringPostReader     = (*MongoPostQueryReader)(nil)
 	_ postports.PostFeedReader          = (*MongoPostQueryReader)(nil)
 )

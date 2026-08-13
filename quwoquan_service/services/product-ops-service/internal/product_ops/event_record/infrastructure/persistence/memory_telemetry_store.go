@@ -400,22 +400,90 @@ func (s *MemoryTelemetryStore) GetPageExperienceStats(
 	return out, nil
 }
 
-// ListDistinctSessions 返回窗口内 distinct sessionId 与事件总数（增长聚合用）。
-func (s *MemoryTelemetryStore) ListDistinctSessions(
+// GetEventValueStats 与生产 Elasticsearch reader 相同的原始样本口径：
+// percentile 取最近秩 P95，sum_ratio 逐样本求和；无样本零计数。
+func (s *MemoryTelemetryStore) GetEventValueStats(
 	_ context.Context,
+	query application.EventValueStatsQuery,
+) (application.EventValueStats, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stats := application.EventValueStats{}
+	values := make([]float64, 0)
+	for _, event := range s.events {
+		if !matches(
+			event, "", query.EventType, "", "", "", query.Result, "",
+			query.From, query.To,
+		) {
+			continue
+		}
+		extensions := event.ExtensionValues()
+		numeric := func(field string) (float64, bool) {
+			raw, exists := extensions[field]
+			if !exists {
+				return 0, false
+			}
+			switch typed := raw.(type) {
+			case int:
+				return float64(typed), true
+			case int64:
+				return float64(typed), true
+			case float64:
+				return typed, true
+			default:
+				return 0, false
+			}
+		}
+		if query.ValueField != "" {
+			if value, exists := numeric(query.ValueField); exists {
+				values = append(values, value)
+				stats.SampleCount++
+			}
+			continue
+		}
+		denominator, hasDenominator := numeric(query.DenominatorField)
+		if !hasDenominator {
+			continue
+		}
+		stats.SampleCount++
+		stats.DenominatorSum += denominator
+		if numerator, hasNumerator := numeric(query.NumeratorField); hasNumerator {
+			stats.NumeratorSum += numerator
+		}
+	}
+	if len(values) > 0 {
+		sort.Float64s(values)
+		index := int(float64(len(values))*0.95+0.5) - 1
+		if index < 0 {
+			index = 0
+		}
+		if index >= len(values) {
+			index = len(values) - 1
+		}
+		stats.P95 = values[index]
+	}
+	return stats, nil
+}
+
+// ListDistinctSessionsByEvent 按事件类型列举窗口内 distinct sessionId
+// （跨轨漏斗产品轨段），与生产 Elasticsearch reader 同语义。
+func (s *MemoryTelemetryStore) ListDistinctSessionsByEvent(
+	_ context.Context,
+	eventType string,
 	from, to time.Time,
 	limit int,
-) ([]string, int64, error) {
+) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sessions := map[string]struct{}{}
-	var totalEvents int64
 	for _, event := range s.events {
+		if event.EventType != eventType {
+			continue
+		}
 		occurredAt, err := time.Parse(time.RFC3339Nano, event.OccurredAt)
 		if err != nil || occurredAt.Before(from) || !occurredAt.Before(to) {
 			continue
 		}
-		totalEvents++
 		if len(sessions) < limit {
 			sessions[event.SessionID] = struct{}{}
 		}
@@ -425,7 +493,38 @@ func (s *MemoryTelemetryStore) ListDistinctSessions(
 		out = append(out, sessionID)
 	}
 	sort.Strings(out)
-	return out, totalEvents, nil
+	return out, nil
+}
+
+// ListDistinctSessions 返回窗口内 distinct sessionId 与 page_open 页面浏览量
+// （增长聚合用）；与生产 Elasticsearch reader 的 PV 口径一致。
+func (s *MemoryTelemetryStore) ListDistinctSessions(
+	_ context.Context,
+	from, to time.Time,
+	limit int,
+) ([]string, int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sessions := map[string]struct{}{}
+	var pageViews int64
+	for _, event := range s.events {
+		occurredAt, err := time.Parse(time.RFC3339Nano, event.OccurredAt)
+		if err != nil || occurredAt.Before(from) || !occurredAt.Before(to) {
+			continue
+		}
+		if event.EventType == "page_open" {
+			pageViews++
+		}
+		if len(sessions) < limit {
+			sessions[event.SessionID] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(sessions))
+	for sessionID := range sessions {
+		out = append(out, sessionID)
+	}
+	sort.Strings(out)
+	return out, pageViews, nil
 }
 
 func matches(event application.EventRecord, logType, eventType, pageName, appVersion, networkClass, result, errorCode string, from, to time.Time) bool {

@@ -480,6 +480,68 @@ api_routes:
       injected:
         - name: authenticatedAccountId
           field: accountId
+  - method: GET
+    path: /auth/research/session/attestation
+    operation: GetResearchSessionAttestation
+    actor: account
+    application:
+      kind: query
+      facet: ResearchSessionQueryFacade
+      method: getResearchSessionAttestation
+      reader: ResearchSessionAttestationReader
+      slice: ResearchSessionAttestationView
+    description: 已认证账号回读自身短期研究态签名证明；attestation 缺失、签名漂移、过期或与账号不符一律 fail closed
+    response_fields:
+      - subjectHash
+      - attestationId
+      - expiresAt
+    authorization:
+      principal: account
+      ownership_policy: authenticated_account_research_attestation
+    commercial:
+      status: blocked
+      block_reason: research-only identity attestation readback is never a commercial session surface
+      gap_id: USER_ACCOUNT_SESSION_RESEARCH_ONLY
+      target_story: multi-carrier-release
+    reliability:
+      timeout_ms: 800
+      cancellation: supported
+      retry_mode: none
+      max_attempts: 1
+      idempotency: none
+    error_codes:
+      - USER.USER.unauthorized
+      - USER.USER.research_identity_invalid
+      - USER.AUTH.account_security_unavailable
+      - USER.SYSTEM.internal_error
+    privacy:
+      request_classification: SECRET
+      response_classification: SECRET
+      log_policy: none
+    telemetry:
+      metric: user_research_session_attestation_readback
+      trace: true
+      attributes:
+        - environment
+        - outcome
+        - error_code
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    response_entity: ResearchSessionAttestationView
+    response_body: ResearchSessionAttestationView
+    response_body_kind: object
+    request_entity: ResearchSessionAttestationQuery
+    request_body_kind: none
+    request_bindings:
+      header:
+        - {name: X-Research-Identity-Attestation, field: researchIdentityAttestation, required: true}
   - method: POST
     path: /auth/token/refresh
     operation: RefreshToken
@@ -617,6 +679,20 @@ readiness_cases:
     executions:
       - env: alpha
         platform: app
+        device: runner
+        provider: none
+        digest_binding: candidate
+  - case_id: get-research-session-attestation-local
+    spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
+    producer: service
+    layer: local_contract
+    target:
+      kind: operation
+      id: GetResearchSessionAttestation
+    runner_source_path: quwoquan_service/services/user-service/tests/local_contract/account/account_session/research_session_attestation__security__local_contract_test.go
+    executions:
+      - env: alpha
+        platform: service
         device: runner
         provider: none
         digest_binding: candidate
@@ -828,3 +904,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/user_service/account/account_session/account_identity_facets__contract__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: account_session_token_rotation_app_uat
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/auth-token-lifecycle/spec.md#gwt-002
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: user.login}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/user_service/account/account_session/token_rotation_logout_remote__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

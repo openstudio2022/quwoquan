@@ -1,7 +1,8 @@
-package main
+package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
@@ -10,6 +11,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -29,6 +32,7 @@ import (
 	rtotel "quwoquan_service/runtime/otel"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/runtime/reliabletask"
+	"quwoquan_service/runtime/servicehost"
 	httpadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification/adapters/inbound/http"
 	streamadapter "quwoquan_service/services/notification-service/internal/notification_delivery/notification/adapters/inbound/stream"
 	"quwoquan_service/services/notification-service/internal/notification_delivery/notification/application"
@@ -44,14 +48,42 @@ import (
 	deliverypersistence "quwoquan_service/services/notification-service/internal/notification_delivery/notification_delivery_job/infrastructure/persistence"
 )
 
-func main() {
-	if err := run(); err != nil {
-		log.Fatalf("notification-service: %v", err)
-	}
+// Module is notification-service's service-owned servicehost adapter.
+type Module struct {
+	configDigest string
+	server       *http.Server
+	readiness    *rthealth.Checker
+	listener     net.Listener
+	admission    atomic.Bool
+	serveError   chan error
+
+	workerCancel context.CancelFunc
+	workerGroup  sync.WaitGroup
+	workerStarts []func(context.Context)
+	cleanup      func()
+	runContext   context.Context
 }
 
-func run() error {
-	serviceName := getenvOrDefault("SERVICE_NAME", "notification-service")
+var _ servicehost.Module = (*Module)(nil)
+
+// NewModule assembles notification-service's private dependencies and public
+// HTTP contract. The process host owns listener admission and runtime lifetime.
+func NewModule() (*Module, error) {
+	module := &Module{cleanup: func() {}}
+	if err := module.build(); err != nil {
+		module.cleanup()
+		return nil, err
+	}
+	return module, nil
+}
+
+func (module *Module) build() error {
+	serviceName := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("notification-service", "SERVICE_NAME"),
+	)
+	if serviceName == "" {
+		serviceName = "notification-service"
+	}
 	appEnv := getenvOrDefault("APP_ENV", "alpha")
 	runtimeConfig, err := loadNotificationRuntimeConfig(
 		serviceName,
@@ -68,7 +100,12 @@ func run() error {
 		serviceName,
 		appEnv,
 		strings.TrimSpace(os.Getenv("CONFIG_ROOT")),
-		strings.TrimSpace(os.Getenv("CONFIG_VERSION")),
+		strings.TrimSpace(
+			servicehost.ModuleEnvironmentValue(
+				"notification-service",
+				"CONFIG_VERSION",
+			),
+		),
 		strings.TrimSpace(os.Getenv("IMAGE_VERSION")),
 	)
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
@@ -108,7 +145,7 @@ func run() error {
 		ServiceName:   "notification-service",
 		SamplingRatio: 0.1,
 	})
-	defer otelShutdown()
+	module.addCleanup(otelShutdown)
 
 	mongoURI, err := requiredEnv("NOTIFICATION_MONGO_URI", "MONGO_URI")
 	if err != nil {
@@ -180,13 +217,13 @@ func run() error {
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
 	)
 	if err != nil {
-		log.Fatalf("notification-service runtime log exporter init failed: %v", err)
+		return fmt.Errorf("notification-service runtime log exporter init failed: %w", err)
 	}
-	defer runtimeLogExporter.Close()
+	module.addCleanup(runtimeLogExporter.Close)
 	standardLogWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, runtimeLogExporter.Export)
 	errorLogWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, runtimeLogExporter.Export)
-	defer standardLogWriter.Close()
-	defer errorLogWriter.Close()
+	module.addCleanup(standardLogWriter.Close)
+	module.addCleanup(errorLogWriter.Close)
 	ioLogger := robs.NewIOAccessLogger(standardLogWriter)
 	kvFilter := robs.NewKVMetadataFilter(nil)
 	processLogger, err := robs.NewProcessTraceLogger(
@@ -269,18 +306,6 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("integration service credential init failed: %w", err)
 	}
-	deliveryAdapter, err := integrationclient.NewExternalInteractionDeliveryAdapter(
-		integrationclient.ExternalInteractionDeliveryConfig{
-			BaseURL:     integrationBaseURL,
-			Credentials: integrationCredentials,
-			Environment: getenvOrDefault("APP_ENV", "alpha"),
-			Timeout:     time.Duration(integrationTimeoutMs) * time.Millisecond,
-		},
-		observedClient,
-	)
-	if err != nil {
-		return fmt.Errorf("integration delivery adapter init failed: %w", err)
-	}
 	userCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig,
 		"notification-service",
@@ -299,6 +324,19 @@ func run() error {
 	)
 	if err != nil {
 		return fmt.Errorf("user push destination client init failed: %w", err)
+	}
+	deliveryAdapter, err := integrationclient.NewExternalInteractionDeliveryAdapter(
+		integrationclient.ExternalInteractionDeliveryConfig{
+			BaseURL:     integrationBaseURL,
+			Credentials: integrationCredentials,
+			Environment: getenvOrDefault("APP_ENV", "alpha"),
+			Timeout:     time.Duration(integrationTimeoutMs) * time.Millisecond,
+		},
+		observedClient,
+		pushDestinations,
+	)
+	if err != nil {
+		return fmt.Errorf("integration delivery adapter init failed: %w", err)
 	}
 	realtimeCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
 		accessTokenConfig,
@@ -330,13 +368,13 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("MongoDB connect failed: %w", err)
 	}
-	defer func() {
+	module.addCleanup(func() {
 		disconnectCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := mongoClient.Disconnect(disconnectCtx); err != nil {
 			log.Printf("notification-service MongoDB disconnect failed: %v", err)
 		}
-	}()
+	})
 	notificationDB := mongoClient.Database(mongoDatabase)
 	deliveryLifecycle := deliverypersistence.NewMongoAccountLifecycle(notificationDB)
 	accountRestrictionStore, err :=
@@ -446,7 +484,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("notification redis init failed: %w", err)
 	}
-	defer redisRouter.Close()
+	module.addCleanup(func() {
+		if err := redisRouter.Close(); err != nil {
+			log.Printf("notification-service Redis close failed: %v", err)
+		}
+	})
 	messageTransport, err := requireNotificationAPIMessageTransport(
 		ctx,
 		getenvOrDefault("APP_ENV", "alpha"),
@@ -475,18 +517,13 @@ func run() error {
 		deliveryEventPublisher,
 		fmt.Sprintf(
 			"notification-delivery-job-relay-%s-%d",
-			getenvOrDefault("SERVICE_INSTANCE_ID", "local"),
+			moduleInstanceID("notification-service", "local"),
 			os.Getpid(),
 		),
 	)
 	if err != nil {
 		return fmt.Errorf("NotificationDeliveryJob outbox relay init failed: %w", err)
 	}
-	go func() {
-		if err := deliveryOutboxRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
-			slog.Error("NotificationDeliveryJob outbox relay stopped", "err", err)
-		}
-	}()
 	interactionFailures := persistence.NewMongoInteractionFailureStore(
 		mongoClient.Database(mongoDatabase),
 	)
@@ -513,7 +550,18 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("interaction notification consumer init failed: %w", err)
 	}
-	go interactionConsumer.Run(ctx, 250*time.Millisecond)
+	// chat 离线推送投影：presence 在线抑制 + push 投递作业（不落 inbox）。
+	// kill-switch：关闭后降级为「仅在线接收」（message-reliability design §6）。
+	if getenvOrDefault("NOTIFICATION_CHAT_OFFLINE_PUSH_ENABLED", "true") == "true" {
+		chatOfflinePush, chatPushErr := application.NewChatOfflinePushProjectionHandler(
+			presenceReader,
+			store,
+		)
+		if chatPushErr != nil {
+			return fmt.Errorf("chat offline push projection init failed: %w", chatPushErr)
+		}
+		interactionConsumer = interactionConsumer.WithChatOfflinePush(chatOfflinePush)
+	}
 	externalResultRecorder, err := deliveryapplication.NewExternalInteractionResultRecorder(
 		store,
 	)
@@ -539,11 +587,6 @@ func run() error {
 	if externalResultSetupErr != nil {
 		return fmt.Errorf("external interaction result consumer group setup failed: %w", externalResultSetupErr)
 	}
-	externalResultConsumerDone := make(chan struct{})
-	go func() {
-		defer close(externalResultConsumerDone)
-		externalResultConsumer.Run(ctx)
-	}()
 	accountClosureConsumer, err := streamadapter.NewUserAccountClosedConsumer(
 		messageTransport,
 		accountClosureProjection,
@@ -575,11 +618,6 @@ func run() error {
 			accountClosureSetupErr,
 		)
 	}
-	accountClosureConsumerDone := make(chan struct{})
-	go func() {
-		defer close(accountClosureConsumerDone)
-		accountClosureConsumer.Run(ctx)
-	}()
 	incomingPublisher, err := realtimeclient.NewIncomingCallPublisher(
 		messageTransport,
 	)
@@ -611,7 +649,6 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("rtc incoming call consumer init failed: %w", err)
 	}
-	go rtcConsumer.Run(ctx, 100*time.Millisecond)
 	appMessageQueries, err := application.NewAppMessageQueryFacade(
 		appMessageStore,
 		appMessageStore,
@@ -640,16 +677,6 @@ func run() error {
 		return fmt.Errorf("notification delivery http handler init failed: %w", err)
 	}
 	deliveryHandler.WithIncomingCallCoordinator(incomingCoordinator)
-	workerDone := make(chan struct{})
-	go func() {
-		defer close(workerDone)
-		runWorkerLoop(ctx, service)
-	}()
-	incomingWorkerDone := make(chan struct{})
-	go func() {
-		defer close(incomingWorkerDone)
-		runIncomingCallWorkerLoop(ctx, incomingCoordinator)
-	}()
 
 	rootMux := http.NewServeMux()
 	rootMux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -733,26 +760,178 @@ func run() error {
 			DeviceTicketVerifier:     deviceVerifier,
 			AccountSecurityAuthority: accountSecurityAuthority,
 		})(withObservability),
-		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: timeouts.ReadHeader,
 		WriteTimeout:      timeouts.Write,
 		IdleTimeout:       timeouts.Idle,
 	}
-	log.Printf("notification-service listening on %s", server.Addr)
-	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
-		cancelRuntime()
-		waitForWorkerShutdown(workerDone)
-		waitForWorkerShutdown(incomingWorkerDone)
-		waitForWorkerShutdown(accountClosureConsumerDone)
-		waitForWorkerShutdown(externalResultConsumerDone)
-		return err
+	module.configDigest = strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue("notification-service", "CONFIG_VERSION"),
+	)
+	if module.configDigest == "" {
+		module.configDigest = fmt.Sprintf("%s:%s", appEnv, serviceName)
 	}
-	cancelRuntime()
-	waitForWorkerShutdown(workerDone)
-	waitForWorkerShutdown(incomingWorkerDone)
-	waitForWorkerShutdown(accountClosureConsumerDone)
-	waitForWorkerShutdown(externalResultConsumerDone)
+	module.server = server
+	module.readiness = readiness
+	module.serveError = make(chan error, 1)
+	module.workerStarts = []func(context.Context){
+		func(workerCtx context.Context) {
+			if err := deliveryOutboxRelay.Run(workerCtx, time.Second); err != nil && workerCtx.Err() == nil {
+				slog.Error("NotificationDeliveryJob outbox relay stopped", "err", err)
+			}
+		},
+		func(workerCtx context.Context) {
+			interactionConsumer.Run(workerCtx, 250*time.Millisecond)
+		},
+		externalResultConsumer.Run,
+		accountClosureConsumer.Run,
+		func(workerCtx context.Context) {
+			rtcConsumer.Run(workerCtx, 100*time.Millisecond)
+		},
+		func(workerCtx context.Context) {
+			runWorkerLoop(workerCtx, service)
+		},
+		func(workerCtx context.Context) {
+			runIncomingCallWorkerLoop(workerCtx, incomingCoordinator)
+		},
+	}
+	server.Handler = module.admissionHandler(server.Handler)
+	server.BaseContext = func(net.Listener) context.Context {
+		if module.runContext != nil {
+			return module.runContext
+		}
+		return context.Background()
+	}
 	return nil
+}
+
+func moduleInstanceID(module string, fallback string) string {
+	value := strings.TrimSpace(
+		servicehost.ModuleEnvironmentValue(module, "SERVICE_INSTANCE_ID"),
+	)
+	if value == "" {
+		return fallback
+	}
+	return value
+}
+
+func (module *Module) Name() string { return "notification-service" }
+
+func (module *Module) ConfigDigest() string {
+	if module == nil {
+		return ""
+	}
+	return module.configDigest
+}
+
+func (module *Module) ValidateConfig(context.Context) error {
+	if module == nil || module.server == nil || module.readiness == nil || module.cleanup == nil {
+		return errors.New("notification-service module is incomplete")
+	}
+	return nil
+}
+
+func (module *Module) PrepareMigration(context.Context) error {
+	return nil
+}
+
+func (module *Module) Bind(context.Context) error {
+	if module == nil || module.server == nil {
+		return errors.New("notification-service HTTP server is unavailable")
+	}
+	listener, err := net.Listen("tcp", module.server.Addr)
+	if err != nil {
+		return fmt.Errorf("notification-service listener bind: %w", err)
+	}
+	module.listener = listener
+	return nil
+}
+
+func (module *Module) Start(ctx context.Context) error {
+	if module == nil || module.listener == nil {
+		return errors.New("notification-service listener is not bound")
+	}
+	module.runContext, module.workerCancel = context.WithCancel(ctx)
+	for _, start := range module.workerStarts {
+		module.workerGroup.Add(1)
+		module.startWorker(start)
+	}
+	module.workerGroup.Add(1)
+	go func() {
+		defer module.workerGroup.Done()
+		log.Printf("notification-service listening on %s", module.server.Addr)
+		if err := module.server.Serve(module.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			select {
+			case module.serveError <- err:
+			case <-module.runContext.Done():
+			}
+		}
+	}()
+	return nil
+}
+
+func (module *Module) Ready(ctx context.Context) error {
+	if result := module.readiness.Check(ctx); result.Status != "ok" {
+		return fmt.Errorf("notification-service readiness failed: %v", result.FailedChecks)
+	}
+	select {
+	case err := <-module.serveError:
+		return fmt.Errorf("notification-service listener failed: %w", err)
+	default:
+		return nil
+	}
+}
+
+func (module *Module) OpenAdmission(context.Context) error {
+	module.admission.Store(true)
+	return nil
+}
+
+func (module *Module) Shutdown(ctx context.Context) error {
+	module.admission.Store(false)
+	var result error
+	if module.server != nil {
+		result = errors.Join(result, module.server.Shutdown(ctx))
+	}
+	if module.workerCancel != nil {
+		module.workerCancel()
+		module.workerGroup.Wait()
+		module.workerCancel = nil
+	}
+	if module.cleanup != nil {
+		module.cleanup()
+		module.cleanup = nil
+	}
+	return result
+}
+
+func (module *Module) startWorker(start func(context.Context)) {
+	go func() {
+		defer module.workerGroup.Done()
+		start(module.runContext)
+	}()
+}
+
+func (module *Module) admissionHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/healthz", "/readyz", "/metrics":
+			next.ServeHTTP(writer, request)
+			return
+		}
+		if !module.admission.Load() {
+			http.Error(writer, `{"status":"unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
+}
+
+func (module *Module) addCleanup(cleanup func()) {
+	previousCleanup := module.cleanup
+	module.cleanup = func() {
+		cleanup()
+		previousCleanup()
+	}
 }
 
 func runWorkerLoop(ctx context.Context, service *application.NotificationDeliveryService) {
@@ -802,16 +981,6 @@ func runIncomingCallWorkerLoop(
 				}
 			}
 		}
-	}
-}
-
-func waitForWorkerShutdown(done <-chan struct{}) {
-	timer := time.NewTimer(5 * time.Second)
-	defer timer.Stop()
-	select {
-	case <-done:
-	case <-timer.C:
-		log.Printf("notification-service delivery worker shutdown timed out")
 	}
 }
 

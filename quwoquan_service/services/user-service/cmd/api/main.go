@@ -1,13 +1,16 @@
-package main
+package bootstrap
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,10 +21,10 @@ import (
 	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
 	rthealth "quwoquan_service/runtime/health"
-	rthttp "quwoquan_service/runtime/http"
 	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtotel "quwoquan_service/runtime/otel"
 	"quwoquan_service/runtime/otpseal"
+	"quwoquan_service/runtime/servicehost"
 
 	runtimesync "quwoquan_service/runtime/sync"
 	usercomposition "quwoquan_service/services/user-service/cmd/internal/composition"
@@ -106,27 +109,62 @@ import (
 	subjectfollowpersistence "quwoquan_service/services/user-service/internal/relationship/subject_follow/infrastructure/persistence"
 )
 
-func main() {
+// Module is user-service's service-owned servicehost adapter.
+type Module struct {
+	configDigest string
+	server       *http.Server
+	health       *rthealth.Checker
+	listener     net.Listener
+	admission    atomic.Bool
+	serveError   chan error
+
+	workerCancel context.CancelFunc
+	workerGroup  sync.WaitGroup
+	workerStart  []func(context.Context)
+	cleanup      func()
+}
+
+var _ servicehost.Module = (*Module)(nil)
+
+// NewModule assembles user-service's private dependencies and HTTP contract.
+// The process host owns listener binding, worker lifetime, readiness admission
+// and shutdown.
+func NewModule() (_ *Module, resultErr error) {
+	cleanup := func() {}
+	initialized := false
+	defer func() {
+		if !initialized {
+			cleanup()
+		}
+	}()
+
 	serviceName, appEnv, configRoot, configVersion, imageVersion, err := resolveRuntimeIdentity()
 	if err != nil {
-		log.Fatalf("user-service runtime identity invalid: %v", err)
+		return nil, fmt.Errorf("user-service runtime identity invalid: %v", err)
 	}
 	cfg, err := loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion)
 	if err != nil {
-		log.Fatalf("user-service config load failed: %v", err)
+		return nil, fmt.Errorf("user-service config load failed: %v", err)
 	}
 	applyEnvOverrides(&cfg)
 	if err := validateRuntimeConfigurationIdentity(cfg, configVersion); err != nil {
-		log.Fatalf("user-service config identity failed: %v", err)
+		return nil, fmt.Errorf("user-service config identity failed: %v", err)
 	}
 	controlplane.StartReleaseConfigAttestation(
 		serviceName, appEnv, configRoot, configVersion, imageVersion,
 	)
 
 	ctx := context.Background()
+	workerStarts := []func(context.Context){}
+
+	startWorker := func(start func(context.Context)) {
+		workerStarts = append(workerStarts, start)
+	}
 
 	otelShutdown := rtotel.MustInit(rtotel.Config{ServiceName: "user-service", SamplingRatio: 0.1})
-	defer otelShutdown()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		otelShutdown()
+	})
 
 	addr := getenvOrDefault("USER_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if addr == "" {
@@ -136,7 +174,7 @@ func main() {
 	// 1. PostgreSQL
 	poolCfg, err := pgxpool.ParseConfig(cfg.Postgres.DSN)
 	if err != nil {
-		log.Fatalf("postgres parse config: %v", err)
+		return nil, fmt.Errorf("postgres parse config: %v", err)
 	}
 	if cfg.Postgres.MaxOpenConns > 0 {
 		poolCfg.MaxConns = int32(cfg.Postgres.MaxOpenConns)
@@ -149,17 +187,19 @@ func main() {
 	}
 	pgPool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
-		log.Fatalf("postgres connect: %v", err)
+		return nil, fmt.Errorf("postgres connect: %v", err)
 	}
-	defer pgPool.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		pgPool.Close()
+	})
 	if err := pgPool.Ping(ctx); err != nil {
-		log.Fatalf("postgres ping: %v", err)
+		return nil, fmt.Errorf("postgres ping: %v", err)
 	}
 
 	// 2. Run startup migrations with a persisted ledger so restart/rollout can
 	// safely keep the existing Postgres volume.
 	if err := persistence.RunManagedMigrations(ctx, pgPool); err != nil {
-		log.Fatalf("migration: %v", err)
+		return nil, fmt.Errorf("migration: %v", err)
 	}
 
 	// 3. MongoDB
@@ -173,15 +213,17 @@ func main() {
 		}
 		mongoDB = mongoClient.Database(dbName)
 	}
-	defer func() {
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
 		if mongoClient != nil {
-			_ = mongoClient.Disconnect(ctx)
+			_ = mongoClient.Disconnect(context.Background())
 		}
-	}()
+	})
 
 	// 4. Redis
 	redisRouter := buildRedisRouter(cfg)
-	defer redisRouter.Close()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		_ = redisRouter.Close()
+	})
 	if err := redisRouter.PingAll(ctx); err != nil {
 		log.Printf("WARN: user-service redis ping: %v", err)
 	}
@@ -192,7 +234,7 @@ func main() {
 		cfg,
 	)
 	if err != nil {
-		log.Fatalf("user-service message transport preflight failed: %v", err)
+		return nil, fmt.Errorf("user-service message transport preflight failed: %v", err)
 	}
 	researchAuditTransport, _ := messageTransport.(runtimemessaging.DurableRecordAppender)
 	researchSessionHandler, err := buildResearchSessionHandler(
@@ -201,17 +243,24 @@ func main() {
 		researchAuditTransport,
 	)
 	if err != nil {
-		log.Fatalf("research identity composition failed: %v", err)
+		return nil, fmt.Errorf("research identity composition failed: %v", err)
+	}
+	researchSessionAttestationHandler, err := buildResearchSessionAttestationHandler(
+		appEnv,
+		cfg,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("research identity readback composition failed: %v", err)
 	}
 	managedAcceptanceIdentity, err := loadManagedAcceptanceIdentity()
 	if err != nil && cfg.ResearchIdentity.Enabled {
-		log.Fatalf("managed acceptance identity composition failed: %v", err)
+		return nil, fmt.Errorf("managed acceptance identity composition failed: %v", err)
 	}
 	redisClient := redisRouter.Scene("general")
 
 	shardDirectory, err := application.LoadDefaultShardDirectory()
 	if err != nil {
-		log.Fatalf("load shard directory: %v", err)
+		return nil, fmt.Errorf("load shard directory: %v", err)
 	}
 
 	// 5. Stores
@@ -219,54 +268,54 @@ func main() {
 	personaStore := userpersistence.NewPgPersonaStore(pgPool)
 	invitationStore, err := invitationpersistence.NewPostgresStore(pgPool)
 	if err != nil {
-		log.Fatalf("Invitation store init failed: %v", err)
+		return nil, fmt.Errorf("Invitation store init failed: %v", err)
 	}
 	invitationFacade, err := invitationapp.NewFacade(
 		invitationStore,
 		personapersistence.NewOwnerReader(pgPool),
 	)
 	if err != nil {
-		log.Fatalf("Invitation facade init failed: %v", err)
+		return nil, fmt.Errorf("Invitation facade init failed: %v", err)
 	}
 	invitationHandler, err := invitationhttp.NewHandler(invitationFacade)
 	if err != nil {
-		log.Fatalf("Invitation HTTP composition failed: %v", err)
+		return nil, fmt.Errorf("Invitation HTTP composition failed: %v", err)
 	}
 	userSettingsStore, err := usersettingspersistence.NewPostgresStore(pgPool)
 	if err != nil {
-		log.Fatalf("user-service UserSettings store init failed: %v", err)
+		return nil, fmt.Errorf("user-service UserSettings store init failed: %v", err)
 	}
 	relationshipStore := relationshippersistence.NewPgPersonaRelationshipStore(pgPool)
 	greetingStore := greetingpersistence.NewPgGreetingStore(pgPool)
 	credentialStore, err := credentialpersistence.NewPostgresStore(pgPool)
 	if err != nil {
-		log.Fatalf("CredentialBinding store init failed: %v", err)
+		return nil, fmt.Errorf("CredentialBinding store init failed: %v", err)
 	}
 	credentialAuditTransport, ok := messageTransport.(runtimemessaging.DurableRecordAppender)
 	if !ok {
-		log.Fatal("CredentialBinding audit requires durable retention transport")
+		return nil, errors.New("CredentialBinding audit requires durable retention transport")
 	}
 	credentialAuditPublisher, err := credentialmessaging.NewSecurityAuditPublisher(
 		credentialAuditTransport,
 	)
 	if err != nil {
-		log.Fatalf("CredentialBinding audit publisher init failed: %v", err)
+		return nil, fmt.Errorf("CredentialBinding audit publisher init failed: %v", err)
 	}
 	credentialAuditRelay, err := credentialapp.NewSecurityAuditRelay(
 		credentialStore,
 		credentialAuditPublisher,
 	)
 	if err != nil {
-		log.Fatalf("CredentialBinding audit relay init failed: %v", err)
+		return nil, fmt.Errorf("CredentialBinding audit relay init failed: %v", err)
 	}
 	if _, err := credentialAuditRelay.Drain(ctx, 1); err != nil {
-		log.Fatalf("CredentialBinding audit relay preflight failed: %v", err)
+		return nil, fmt.Errorf("CredentialBinding audit relay preflight failed: %v", err)
 	}
-	go func() {
-		if err := credentialAuditRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+	startWorker(func(workerCtx context.Context) {
+		if err := credentialAuditRelay.Run(workerCtx, time.Second); err != nil && workerCtx.Err() == nil {
 			log.Printf("ERROR: CredentialBinding audit relay stopped: %v", err)
 		}
-	}()
+	})
 	credentialCommands := credentialapp.NewCredentialCommandFacade(
 		credentialStore,
 	)
@@ -275,7 +324,7 @@ func main() {
 	)
 	accountSessionStore, err := accountsessionpersistence.NewAccountSessionPostgresStore(pgPool)
 	if err != nil {
-		log.Fatalf("AccountSession store init failed: %v", err)
+		return nil, fmt.Errorf("AccountSession store init failed: %v", err)
 	}
 	accountSessionCommands :=
 		accountsessionapp.NewAccountSessionCommandFacade(accountSessionStore)
@@ -283,13 +332,13 @@ func main() {
 		pgPool,
 	)
 	if err != nil {
-		log.Fatalf("DeviceRegistration store init failed: %v", err)
+		return nil, fmt.Errorf("DeviceRegistration store init failed: %v", err)
 	}
 	pushTokenCipher, err := registrationpersistence.LoadAESGCMTokenCipher(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
 	if err != nil {
-		log.Fatalf("DeviceRegistration token cipher init failed: %v", err)
+		return nil, fmt.Errorf("DeviceRegistration token cipher init failed: %v", err)
 	}
 	deviceRegistrationCommands := registrationapp.NewCommandFacade(
 		deviceRegistrationStore,
@@ -307,11 +356,11 @@ func main() {
 	contactDiscoveryStore := contactpersistence.NewPgContactDiscoveryStore(pgPool)
 	personaProfileProposalStore, err := personapersistence.NewProfileProposalPostgresStore(pgPool)
 	if err != nil {
-		log.Fatalf("Persona profile proposal Store init failed: %v", err)
+		return nil, fmt.Errorf("Persona profile proposal Store init failed: %v", err)
 	}
 	profileProposalStore, err := proposalpersistence.NewPostgresStore(pgPool)
 	if err != nil {
-		log.Fatalf("ProfileUpdateProposal Store init failed: %v", err)
+		return nil, fmt.Errorf("ProfileUpdateProposal Store init failed: %v", err)
 	}
 
 	// 6. Caches
@@ -347,57 +396,57 @@ func main() {
 	}
 	publicWebBaseURL := strings.TrimSpace(getenvOrDefault("PUBLIC_WEB_BASE_URL", ""))
 	if publicWebBaseURL == "" {
-		log.Fatal("PUBLIC_WEB_BASE_URL must be injected from environment topology")
+		return nil, errors.New("PUBLIC_WEB_BASE_URL must be injected from environment topology")
 	}
 	personaCommandStore, err := personapersistence.NewPersonaCommandPostgresStore(pgPool)
 	if err != nil {
-		log.Fatalf("Persona command store init failed: %v", err)
+		return nil, fmt.Errorf("Persona command store init failed: %v", err)
 	}
 	personaDurableTransport, ok := messageTransport.(runtimemessaging.DurableRecordAppender)
 	if !ok {
-		log.Fatal("Persona publication requires durable retention transport")
+		return nil, errors.New("Persona publication requires durable retention transport")
 	}
 	if err := personaDurableTransport.SetDurableRetention(
 		ctx,
 		personamessaging.PersonaEventStream,
 		personamessaging.PersonaEventStreamRetention,
 	); err != nil {
-		log.Fatalf("Persona event stream retention setup failed: %v", err)
+		return nil, fmt.Errorf("Persona event stream retention setup failed: %v", err)
 	}
 	personaEventPublisher, err := personamessaging.NewEventPublisher(personaDurableTransport)
 	if err != nil {
-		log.Fatalf("Persona event publisher init failed: %v", err)
+		return nil, fmt.Errorf("Persona event publisher init failed: %v", err)
 	}
 	personaOutboxRelay, err := personaapp.NewOutboxRelay(
 		personaCommandStore,
 		personaEventPublisher,
 	)
 	if err != nil {
-		log.Fatalf("Persona outbox relay init failed: %v", err)
+		return nil, fmt.Errorf("Persona outbox relay init failed: %v", err)
 	}
 	if _, err := personaOutboxRelay.Drain(ctx, 1); err != nil {
-		log.Fatalf("Persona outbox relay preflight failed: %v", err)
+		return nil, fmt.Errorf("Persona outbox relay preflight failed: %v", err)
 	}
-	go func() {
-		if err := personaOutboxRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+	startWorker(func(workerCtx context.Context) {
+		if err := personaOutboxRelay.Run(workerCtx, time.Second); err != nil && workerCtx.Err() == nil {
 			log.Printf("ERROR: Persona outbox relay stopped: %v", err)
 		}
-	}()
+	})
 	personaProfileProjectionStore, err := useraccountpersistence.NewPersonaProfileProjector(pgPool)
 	if err != nil {
-		log.Fatalf("Persona profile projector init failed: %v", err)
+		return nil, fmt.Errorf("Persona profile projector init failed: %v", err)
 	}
 	personaProfileProjector, err := application.NewPersonaProfileProjector(
 		personaProfileProjectionStore,
 	)
 	if err != nil {
-		log.Fatalf("Persona profile application facet init failed: %v", err)
+		return nil, fmt.Errorf("Persona profile application facet init failed: %v", err)
 	}
-	go func() {
-		if err := personaProfileProjector.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+	startWorker(func(workerCtx context.Context) {
+		if err := personaProfileProjector.Run(workerCtx, time.Second); err != nil && workerCtx.Err() == nil {
 			log.Printf("ERROR: Persona profile projector stopped: %v", err)
 		}
-	}()
+	})
 	profileService, err := application.NewProfileService(
 		profileStore,
 		personaStore,
@@ -412,7 +461,7 @@ func main() {
 		application.WithProfilePublicBaseURL(publicWebBaseURL),
 	)
 	if err != nil {
-		log.Fatalf("Profile service init failed: %v", err)
+		return nil, fmt.Errorf("Profile service init failed: %v", err)
 	}
 	searchService := application.NewSearchService(profileStore, personaStore)
 	// R-OBJ-001：对象级关系指标经 Prometheus sink 导出到 /metrics。
@@ -428,18 +477,18 @@ func main() {
 		pgPool,
 		profileCache,
 	)
-	go func() {
+	startWorker(func(workerCtx context.Context) {
 		if err := relationshipCounterReconciler.Run(
-			ctx,
+			workerCtx,
 			time.Minute,
 			500,
-		); err != nil && ctx.Err() == nil {
+		); err != nil && workerCtx.Err() == nil {
 			log.Printf(
 				"ERROR: persona relationship counter reconciler stopped: %v",
 				err,
 			)
 		}
-	}()
+	})
 	relationshipService := relationshipapp.NewPersonaRelationshipService(
 		relationshipStore,
 		personaStore,
@@ -448,21 +497,21 @@ func main() {
 	)
 	chatServiceBaseURL := strings.TrimSpace(getenvOrDefault("CHAT_SERVICE_BASE_URL", ""))
 	if chatServiceBaseURL == "" {
-		log.Fatal("user-service startup failed: CHAT_SERVICE_BASE_URL is required")
+		return nil, errors.New("user-service startup failed: CHAT_SERVICE_BASE_URL is required")
 	}
 	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
 	if err != nil {
-		log.Fatalf("access token config invalid: %v", err)
+		return nil, fmt.Errorf("access token config invalid: %v", err)
 	}
 	accessSigner, err := rtauth.NewHS256Signer(accessTokenConfig)
 	if err != nil {
-		log.Fatalf("access token signer invalid: %v", err)
+		return nil, fmt.Errorf("access token signer invalid: %v", err)
 	}
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
-		log.Fatalf("access token verifier invalid: %v", err)
+		return nil, fmt.Errorf("access token verifier invalid: %v", err)
 	}
 	chatCredentials, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
 		accessTokenConfig,
@@ -470,7 +519,7 @@ func main() {
 		[]string{"chat.conversation.internal_direct"},
 	)
 	if err != nil {
-		log.Fatalf("user-service chat credential init failed: %v", err)
+		return nil, fmt.Errorf("user-service chat credential init failed: %v", err)
 	}
 	conversationGateway, err := userintegration.NewAuthorizedChatServiceClient(
 		chatServiceBaseURL,
@@ -478,11 +527,11 @@ func main() {
 		chatCredentials,
 	)
 	if err != nil {
-		log.Fatalf("user-service chat client init failed: %v", err)
+		return nil, fmt.Errorf("user-service chat client init failed: %v", err)
 	}
 	contentServiceBaseURL := strings.TrimSpace(getenvOrDefault("CONTENT_SERVICE_BASE_URL", ""))
 	if contentServiceBaseURL == "" {
-		log.Fatal("user-service startup failed: CONTENT_SERVICE_BASE_URL is required")
+		return nil, errors.New("user-service startup failed: CONTENT_SERVICE_BASE_URL is required")
 	}
 	intersectionCredentials, err := rtauth.NewHS256DelegatedPersonaAuthorizationProvider(
 		accessTokenConfig,
@@ -490,7 +539,7 @@ func main() {
 		[]string{"content.my_intersections.read"},
 	)
 	if err != nil {
-		log.Fatalf("user-service content credential init failed: %v", err)
+		return nil, fmt.Errorf("user-service content credential init failed: %v", err)
 	}
 	intersectionResolver, err := greetingintegration.NewIntersectionResolver(
 		contentServiceBaseURL,
@@ -498,7 +547,7 @@ func main() {
 		intersectionCredentials,
 	)
 	if err != nil {
-		log.Fatalf("user-service greeting intersection resolver init failed: %v", err)
+		return nil, fmt.Errorf("user-service greeting intersection resolver init failed: %v", err)
 	}
 	greetingService := greetingapp.NewGreetingService(
 		greetingStore,
@@ -518,11 +567,11 @@ func main() {
 		userEventPublisher,
 		relationshipEventPublisher,
 	)
-	go func() {
-		if err := greetingOutboxRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+	startWorker(func(workerCtx context.Context) {
+		if err := greetingOutboxRelay.Run(workerCtx, time.Second); err != nil && workerCtx.Err() == nil {
 			log.Printf("ERROR: greeting outbox relay stopped: %v", err)
 		}
-	}()
+	})
 	var creatorRuntimeStore *creatorpersistence.CreatorRuntimeProfileReader
 	if mongoDB != nil {
 		creatorRuntimeStore = creatorpersistence.NewCreatorRuntimeProfileReader(mongoDB)
@@ -551,11 +600,11 @@ func main() {
 	if mongoDB != nil {
 		followingSubjectStore = followingpersistence.NewMongoFollowingSubjectStore(mongoDB)
 		if err := followingSubjectStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("following subject index ensure failed: %v", err)
+			return nil, fmt.Errorf("following subject index ensure failed: %v", err)
 		}
 		followedSubjectVisitStore = visitpersistence.NewMongoFollowedSubjectVisitStore(mongoDB)
 		if err := followedSubjectVisitStore.EnsureIndexes(ctx); err != nil {
-			log.Fatalf("followed subject visit index ensure failed: %v", err)
+			return nil, fmt.Errorf("followed subject visit index ensure failed: %v", err)
 		}
 		followingProjector = followingevent.NewHandler(
 			followingapp.NewFollowingSubjectProjector(followingSubjectStore),
@@ -566,11 +615,11 @@ func main() {
 		projector: followingProjector,
 	}
 	subjectFollowRelay := subjectfollowapp.NewOutboxRelay(subjectFollowStore, subjectFollowPublisher)
-	go func() {
-		if err := subjectFollowRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+	startWorker(func(workerCtx context.Context) {
+		if err := subjectFollowRelay.Run(workerCtx, time.Second); err != nil && workerCtx.Err() == nil {
 			log.Printf("ERROR: subject follow outbox relay stopped: %v", err)
 		}
-	}()
+	})
 	// PersonaFollowStateChanged 同样驱动 following_subjects 投影：relay 的
 	// publisher 组合 Redis 发布与投影 upsert，两者都成功才推进 checkpoint。
 	relationshipOutboxRelay := relationshipapp.NewOutboxRelay(
@@ -581,11 +630,11 @@ func main() {
 			counters:  relationshipCounterProjector,
 		},
 	)
-	go func() {
-		if err := relationshipOutboxRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+	startWorker(func(workerCtx context.Context) {
+		if err := relationshipOutboxRelay.Run(workerCtx, time.Second); err != nil && workerCtx.Err() == nil {
 			log.Printf("ERROR: persona relationship outbox relay stopped: %v", err)
 		}
-	}()
+	})
 	// FollowedSubjectVisitState packet：Mongo 水位 + FollowedSubjectVisited
 	// outbox 同事务提交；relay 是投影的唯一投递主线，命令路径不再在提交后
 	// 尽力 apply 投影。
@@ -595,11 +644,11 @@ func main() {
 			followedSubjectVisitStore,
 			&followedSubjectVisitFanout{projection: followingSubjectStore},
 		)
-		go func() {
-			if err := followedSubjectVisitRelay.Run(ctx, time.Second); err != nil && ctx.Err() == nil {
+		startWorker(func(workerCtx context.Context) {
+			if err := followedSubjectVisitRelay.Run(workerCtx, time.Second); err != nil && workerCtx.Err() == nil {
 				log.Printf("ERROR: followed subject visit outbox relay stopped: %v", err)
 			}
-		}()
+		})
 	}
 	var homepageDisplayResolver followingapp.SubjectDisplayResolver
 	if entityServiceBaseURL := strings.TrimSpace(
@@ -616,7 +665,7 @@ func main() {
 	authenticationChallengeStore, err :=
 		challengepersistence.NewPostgresStore(pgPool)
 	if err != nil {
-		log.Fatalf("AuthenticationChallenge store init failed: %v", err)
+		return nil, fmt.Errorf("AuthenticationChallenge store init failed: %v", err)
 	}
 	authenticationChallenges :=
 		challengeapp.NewAuthenticationChallengeCommandFacade(
@@ -625,7 +674,7 @@ func main() {
 		)
 	challengeDeliveryTransport, ok := messageTransport.(challengestream.DurableMessageTransport)
 	if !ok {
-		log.Fatal("AuthenticationChallenge delivery results require durable message transport")
+		return nil, errors.New("AuthenticationChallenge delivery results require durable message transport")
 	}
 	challengeDeliveryConsumer, err :=
 		challengestream.NewAuthenticationChallengeDeliveryResultConsumer(
@@ -635,15 +684,15 @@ func main() {
 			nil,
 		)
 	if err != nil {
-		log.Fatalf("AuthenticationChallenge delivery consumer init failed: %v", err)
+		return nil, fmt.Errorf("AuthenticationChallenge delivery consumer init failed: %v", err)
 	}
 	if err := challengeDeliveryConsumer.EnsureGroup(ctx); err != nil {
-		log.Fatalf("AuthenticationChallenge delivery consumer preflight failed: %v", err)
+		return nil, fmt.Errorf("AuthenticationChallenge delivery consumer preflight failed: %v", err)
 	}
-	go challengeDeliveryConsumer.Run(ctx)
+	startWorker(func(workerCtx context.Context) { challengeDeliveryConsumer.Run(workerCtx) })
 	accountAppealStore, err := appealpersistence.NewPostgresStore(pgPool)
 	if err != nil {
-		log.Fatalf("AccountAppealIntake store init failed: %v", err)
+		return nil, fmt.Errorf("AccountAppealIntake store init failed: %v", err)
 	}
 	accountAppealFacade := appealapp.NewCommandFacade(
 		accountAppealStore,
@@ -655,25 +704,25 @@ func main() {
 	)
 	accountAppealHandler, err := appealhttp.NewHandler(accountAppealFacade)
 	if err != nil {
-		log.Fatalf("AccountAppealIntake HTTP composition failed: %v", err)
+		return nil, fmt.Errorf("AccountAppealIntake HTTP composition failed: %v", err)
 	}
-	go func() {
+	startWorker(func(workerCtx context.Context) {
 		if purgeErr := accountAppealFacade.RunRetentionPurge(
-			ctx,
+			workerCtx,
 			time.Hour,
 		); purgeErr != nil && !errors.Is(purgeErr, context.Canceled) {
 			log.Printf("ERROR: AccountAppealIntake retention purge stopped: %v", purgeErr)
 		}
-	}()
+	})
 	carrierPhoneResolver, err := newCarrierPhoneResolver()
 	if err != nil &&
 		!errors.Is(err, ErrAuthRuntimeCapabilityBlocked) &&
 		!errors.Is(err, ErrAuthRuntimeCapabilityUnavailable) {
-		log.Fatalf("carrier identity adapter init failed: %v", err)
+		return nil, fmt.Errorf("carrier identity adapter init failed: %v", err)
 	}
 	otpCodeSealer, err := otpseal.LoadFromEnvironment()
 	if err != nil {
-		log.Fatalf("otp code reference sealer invalid: %v", err)
+		return nil, fmt.Errorf("otp code reference sealer invalid: %v", err)
 	}
 	otpCodeGenerator := application.GenerateSecureOTPCode
 	var externalInteractionClient application.ExternalInteractionClient
@@ -685,12 +734,12 @@ func main() {
 			accessSigner,
 		)
 		if err != nil {
-			log.Fatalf("external interaction client init failed: %v", err)
+			return nil, fmt.Errorf("external interaction client init failed: %v", err)
 		}
 	}
 	accountEnforcementStore, err := useraccountpersistence.NewEnforcementStore(pgPool)
 	if err != nil {
-		log.Fatalf("UserAccount enforcement store init failed: %v", err)
+		return nil, fmt.Errorf("UserAccount enforcement store init failed: %v", err)
 	}
 	authService := application.NewAuthService(
 		profileStore,
@@ -727,7 +776,7 @@ func main() {
 	if err != nil &&
 		!errors.Is(err, ErrAuthRuntimeCapabilityBlocked) &&
 		!errors.Is(err, ErrAuthRuntimeCapabilityUnavailable) {
-		log.Fatalf("federated identity adapter init failed: %v", err)
+		return nil, fmt.Errorf("federated identity adapter init failed: %v", err)
 	}
 	personaService := application.NewPersonaService(
 		personaStore,
@@ -738,10 +787,10 @@ func main() {
 		personaOptions...,
 	)
 	contactDiscoveryService := contactapp.NewContactDiscoveryService(contactDiscoveryStore, userEventPublisher)
-	go contactDiscoveryService.RunExpiredCleanup(ctx, time.Hour)
+	startWorker(func(workerCtx context.Context) { contactDiscoveryService.RunExpiredCleanup(workerCtx, time.Hour) })
 	personaProfileProposalFacade, err := personaapp.NewProfileProposalFacade(personaProfileProposalStore)
 	if err != nil {
-		log.Fatalf("Persona profile proposal Facade init failed: %v", err)
+		return nil, fmt.Errorf("Persona profile proposal Facade init failed: %v", err)
 	}
 	profileProposalFacade, err := proposalapp.NewFacade(
 		profileProposalStore,
@@ -750,25 +799,25 @@ func main() {
 		personaProfileProposalStore,
 	)
 	if err != nil {
-		log.Fatalf("ProfileUpdateProposal Facade init failed: %v", err)
+		return nil, fmt.Errorf("ProfileUpdateProposal Facade init failed: %v", err)
 	}
 	profileProposalOutboxRelay, err := proposalapp.NewOutboxRelay(
 		profileProposalStore,
 		proposalmessaging.NewEventPublisher(messageTransport),
 	)
 	if err != nil {
-		log.Fatalf("ProfileUpdateProposal outbox relay init failed: %v", err)
+		return nil, fmt.Errorf("ProfileUpdateProposal outbox relay init failed: %v", err)
 	}
 
 	healthChecker := rthealth.NewChecker()
 	profileSearchOutboxStore, err :=
 		useraccountpersistence.NewUserProfileSearchOutboxStore(pgPool)
 	if err != nil {
-		log.Fatalf("UserProfile search outbox store init failed: %v", err)
+		return nil, fmt.Errorf("UserProfile search outbox store init failed: %v", err)
 	}
 	profileSearchPublisher, err := profileprojection.NewStreamPublisher(messageTransport)
 	if err != nil {
-		log.Fatalf("UserProfile search stream publisher init failed: %v", err)
+		return nil, fmt.Errorf("UserProfile search stream publisher init failed: %v", err)
 	}
 	profileSearchOutboxRelay, err :=
 		useraccountapp.NewUserProfileSearchOutboxRelay(
@@ -780,7 +829,7 @@ func main() {
 			),
 		)
 	if err != nil {
-		log.Fatalf("UserProfile search outbox relay init failed: %v", err)
+		return nil, fmt.Errorf("UserProfile search outbox relay init failed: %v", err)
 	}
 	healthChecker.Register(
 		"user_profile_search_outbox_relay",
@@ -788,7 +837,7 @@ func main() {
 			return profileSearchOutboxRelay.Healthy(hctx, 15*time.Second)
 		},
 	)
-	go profileSearchOutboxRelay.Run(ctx)
+	startWorker(func(workerCtx context.Context) { profileSearchOutboxRelay.Run(workerCtx) })
 	healthChecker.Register("postgres", func(hctx context.Context) error {
 		return pgPool.Ping(hctx)
 	})
@@ -802,9 +851,13 @@ func main() {
 		},
 	)
 	if mongoDB != nil {
-		healthChecker.Register("mongodb", func(hctx context.Context) error {
-			return mongoClient.Ping(hctx, nil)
-		})
+		healthChecker.RegisterWithTimeout(
+			"mongodb",
+			rtmongo.DefaultReadinessTimeout,
+			func(hctx context.Context) error {
+				return mongoClient.Ping(hctx, nil)
+			},
+		)
 	}
 	healthChecker.Register("profile_update_proposal_outbox_relay", func(hctx context.Context) error {
 		return profileProposalOutboxRelay.Healthy(hctx, 15*time.Second)
@@ -815,15 +868,15 @@ func main() {
 	healthChecker.Register("credential_binding_audit_relay", func(context.Context) error {
 		return credentialAuditRelay.Healthy(15 * time.Second)
 	})
-	go func() {
-		if err := profileProposalOutboxRelay.Run(ctx, time.Second); err != nil &&
-			ctx.Err() == nil {
+	startWorker(func(workerCtx context.Context) {
+		if err := profileProposalOutboxRelay.Run(workerCtx, time.Second); err != nil &&
+			workerCtx.Err() == nil {
 			log.Printf(
 				"ERROR: ProfileUpdateProposal outbox relay stopped: %v",
 				err,
 			)
 		}
-	}()
+	})
 	// 8. Handler
 	var interestReader application.InterestProfileReader
 	if mongoDB != nil {
@@ -832,12 +885,12 @@ func main() {
 	interestProfileService := application.NewInterestProfileService(interestReader)
 	accountCloseStore, err := useraccountpersistence.NewCloseStore(pgPool)
 	if err != nil {
-		log.Fatalf("UserAccount close store init failed: %v", err)
+		return nil, fmt.Errorf("UserAccount close store init failed: %v", err)
 	}
 	accountOutboxStore, err :=
 		useraccountpersistence.NewUserAccountOutboxStore(pgPool)
 	if err != nil {
-		log.Fatalf("UserAccount outbox store init failed: %v", err)
+		return nil, fmt.Errorf("UserAccount outbox store init failed: %v", err)
 	}
 	if mongoDB != nil {
 		accountCloseProjections = searchindex.ComposePublisher(
@@ -854,7 +907,7 @@ func main() {
 		accountCloseProjections,
 	)
 	if err != nil {
-		log.Fatalf("UserAccount event fanout init failed: %v", err)
+		return nil, fmt.Errorf("UserAccount event fanout init failed: %v", err)
 	}
 	accountOutboxRelay, err := useraccountapp.NewUserAccountOutboxRelay(
 		accountOutboxStore,
@@ -865,12 +918,12 @@ func main() {
 		),
 	)
 	if err != nil {
-		log.Fatalf("UserAccount outbox relay init failed: %v", err)
+		return nil, fmt.Errorf("UserAccount outbox relay init failed: %v", err)
 	}
 	healthChecker.Register("user_account_outbox_relay", func(hctx context.Context) error {
 		return accountOutboxRelay.Healthy(hctx, 15*time.Second)
 	})
-	go accountOutboxRelay.Run(ctx)
+	startWorker(func(workerCtx context.Context) { accountOutboxRelay.Run(workerCtx) })
 	closeAccountFacade := useraccountapp.NewCloseAccountFacade(
 		accountCloseStore,
 		useraccountcache.NewClosedAccountCache(redisClient),
@@ -884,7 +937,7 @@ func main() {
 		interestProfileService,
 	)
 	if err != nil {
-		log.Fatalf("user-service HTTP composition failed: %v", err)
+		return nil, fmt.Errorf("user-service HTTP composition failed: %v", err)
 	}
 	userHandler.WithUserSettingsRoutes(
 		usersettingshttp.NewHandler(userSettingsCommands, userSettingsQueries),
@@ -899,11 +952,11 @@ func main() {
 	)
 	profileProposalHandler, err := proposalhttp.NewHandler(profileProposalFacade)
 	if err != nil {
-		log.Fatalf("ProfileUpdateProposal HTTP composition failed: %v", err)
+		return nil, fmt.Errorf("ProfileUpdateProposal HTTP composition failed: %v", err)
 	}
 	greetingHandler, err := greetinghttp.NewHandler(greetingService)
 	if err != nil {
-		log.Fatalf("GreetingRequest HTTP composition failed: %v", err)
+		return nil, fmt.Errorf("GreetingRequest HTTP composition failed: %v", err)
 	}
 	contactDiscoveryHandler, err := contacthttp.NewHandler(
 		contactDiscoveryService,
@@ -911,7 +964,7 @@ func main() {
 		greetingService,
 	)
 	if err != nil {
-		log.Fatalf("ContactDiscoveryRecord HTTP composition failed: %v", err)
+		return nil, fmt.Errorf("ContactDiscoveryRecord HTTP composition failed: %v", err)
 	}
 	userHandler.WithAccountLifecycle(closeAccountFacade)
 	userHandler.WithAccountEnforcement(accountEnforcementFacade)
@@ -924,14 +977,14 @@ func main() {
 	federatedPhoneBindingHandler, err :=
 		credentialhttp.NewFederatedPhoneBindingHandler(authService)
 	if err != nil {
-		log.Fatalf("FederatedPhoneBinding HTTP composition failed: %v", err)
+		return nil, fmt.Errorf("FederatedPhoneBinding HTTP composition failed: %v", err)
 	}
 	personaHostAuthorityEvaluator, err := personaapp.NewHostAuthorityEvaluator(
 		personapersistence.NewHostAuthorityReader(pgPool),
 		time.Now,
 	)
 	if err != nil {
-		log.Fatalf("Persona Host authority composition failed: %v", err)
+		return nil, fmt.Errorf("Persona Host authority composition failed: %v", err)
 	}
 	personaHostAuthorityHandler := personahttp.NewHostAuthorityHandler(
 		personaHostAuthorityEvaluator,
@@ -939,6 +992,10 @@ func main() {
 	serviceMux := http.NewServeMux()
 	userHandler.RegisterRoutes(serviceMux)
 	accountsessionhttp.RegisterResearchSessionRoutes(serviceMux, researchSessionHandler)
+	accountsessionhttp.RegisterResearchSessionAttestationRoutes(
+		serviceMux,
+		researchSessionAttestationHandler,
+	)
 	personaHostAuthorityHandler.RegisterRoutes(serviceMux)
 	accountAppealHandler.RegisterRoutes(serviceMux)
 	federatedPhoneBindingHandler.RegisterRoutes(serviceMux)
@@ -953,21 +1010,21 @@ func main() {
 	// 8.1 Observability middleware
 	corsHandler, closeObservedHandler, err := buildObservedUserHandler(outerMux)
 	if err != nil {
-		log.Fatalf("user-service observability middleware init failed: %v", err)
+		return nil, fmt.Errorf("user-service observability middleware init failed: %v", err)
 	}
-	defer closeObservedHandler()
+	cleanup = servicehost.ChainCleanup(cleanup, func() {
+		closeObservedHandler()
+	})
 
 	// 8.2 Interest profile projector: consume content's UserInterestRecomputed
 	// and maintain the user-domain rm_user_profile_view interest read model.
 	if mongoDB != nil {
 		interestProjector := projection.NewInterestProfileProjector(mongoDB, nil)
-		projCtx, projCancel := context.WithCancel(ctx)
-		defer projCancel()
-		go func() {
-			if err := interestProjector.Run(projCtx, redisClient); err != nil && projCtx.Err() == nil {
+		startWorker(func(workerCtx context.Context) {
+			if err := interestProjector.Run(workerCtx, redisClient); err != nil && workerCtx.Err() == nil {
 				log.Printf("WARN: interest profile projector stopped: %v", err)
 			}
-		}()
+		})
 	}
 
 	// 9. Start
@@ -982,8 +1039,128 @@ func main() {
 		WriteTimeout:      timeouts.Write,
 		IdleTimeout:       timeouts.Idle,
 	}
-	log.Printf("user-service listening on %s (env=%s)", addr, appEnv)
-	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
-		log.Fatalf("user-service: %v", err)
+	module := &Module{
+		configDigest: configVersion,
+		server:       server,
+		health:       healthChecker,
+		serveError:   make(chan error, 1),
+		workerStart:  workerStarts,
+		cleanup:      cleanup,
 	}
+	if module.configDigest == "" {
+		module.configDigest = cfg.Config.Version
+	}
+	if module.configDigest == "" {
+		module.configDigest = "user-service-runtime"
+	}
+	server.Handler = module.admissionHandler(server.Handler)
+	initialized = true
+	return module, nil
+}
+
+func (module *Module) Name() string { return "user-service" }
+
+func (module *Module) ConfigDigest() string {
+	if module == nil {
+		return ""
+	}
+	return module.configDigest
+}
+
+func (module *Module) ValidateConfig(context.Context) error {
+	if module == nil || module.server == nil || module.health == nil || module.cleanup == nil {
+		return errors.New("user-service module is incomplete")
+	}
+	return nil
+}
+
+func (module *Module) PrepareMigration(context.Context) error {
+	return nil
+}
+
+func (module *Module) Bind(context.Context) error {
+	listener, err := net.Listen("tcp", module.server.Addr)
+	if err != nil {
+		return fmt.Errorf("user-service listener bind: %w", err)
+	}
+	module.listener = listener
+	return nil
+}
+
+func (module *Module) Start(context.Context) error {
+	if module.listener == nil {
+		return errors.New("user-service listener is not bound")
+	}
+	workerContext, workerCancel := context.WithCancel(context.Background())
+	module.workerCancel = workerCancel
+	for _, start := range module.workerStart {
+		module.workerGroup.Add(1)
+		module.startWorker(workerContext, start)
+	}
+	go func() {
+		if err := module.server.Serve(module.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			module.serveError <- err
+		}
+	}()
+	return nil
+}
+
+func (module *Module) Ready(ctx context.Context) error {
+	if result := module.health.Check(ctx); result.Status != "ok" {
+		return fmt.Errorf("user-service readiness failed: %v", result.FailedChecks)
+	}
+	select {
+	case err := <-module.serveError:
+		return fmt.Errorf("user-service listener failed: %w", err)
+	default:
+		return nil
+	}
+}
+
+func (module *Module) OpenAdmission(context.Context) error {
+	module.admission.Store(true)
+	return nil
+}
+
+func (module *Module) Shutdown(ctx context.Context) error {
+	module.admission.Store(false)
+	var result error
+	if module.server != nil {
+		result = errors.Join(result, module.server.Shutdown(ctx))
+	}
+	if module.workerCancel != nil {
+		module.workerCancel()
+		module.workerGroup.Wait()
+		module.workerCancel = nil
+	}
+	if module.cleanup != nil {
+		module.cleanup()
+		module.cleanup = nil
+	}
+	return result
+}
+
+func (module *Module) startWorker(ctx context.Context, start func(context.Context)) {
+	go func() {
+		defer module.workerGroup.Done()
+		start(ctx)
+	}()
+}
+
+func (module *Module) admissionHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/healthz",
+			"/readyz",
+			"/metrics",
+			"/internal/user/account-security/health":
+			next.ServeHTTP(writer, request)
+			return
+		}
+		if !module.admission.Load() {
+			http.Error(writer, `{"status":"unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		next.ServeHTTP(writer, request)
+	})
 }

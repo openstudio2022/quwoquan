@@ -722,7 +722,7 @@ func projectRunJournalEventType(event runruntime.JournalEvent) string {
 		return string(assistantstreaming.AssistantStreamEventRunStarted)
 	case "completed", "failed", "cancelled",
 		"run_state_changed", "task_graph_patch", "checkpoint_committed",
-		"presentation_snapshot", "presentation_patch", "presentation_commit",
+		"presentation_snapshot", "presentation_commit",
 		"waiting_input", "waiting_approval", "process_replace",
 		"process_append", "process_commit", "answer_delta":
 		return event.Kind

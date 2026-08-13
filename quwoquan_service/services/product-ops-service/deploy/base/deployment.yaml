@@ -53,6 +53,9 @@ spec:
               mountPath: /etc/qwq/config/product-ops-service.yaml
               subPath: product-ops-service.yaml
               readOnly: true
+            - name: telemetry-alert-policy
+              mountPath: /etc/qwq/observability
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /healthz
@@ -82,3 +85,9 @@ spec:
         - name: runtime-config
           configMap:
             name: product-ops-service-runtime-config
+        # 内容来自 quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml；
+        # 环境未投放该 configMap 时评估循环按配置保持关闭。
+        - name: telemetry-alert-policy
+          configMap:
+            name: product-ops-telemetry-alert-policy
+            optional: true

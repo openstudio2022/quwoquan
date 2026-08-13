@@ -1,7 +1,52 @@
 {
   "candidateDigest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-  "schemaDigest": "sha256:47ce15291c4ba56466d18aac4bab795a44eee3c6bb9a49cb7a89b6445e9a4acd",
+  "schemaDigest": "sha256:3f27453d29439add5e71c39d1bdd28549c4c6f69a613836c1654414ac4739b9a",
   "entries": [
+    {
+      "sha256Hash": "111b715594655786eba342c5cbebe7ea1338a9cf016ed0f35f54096802583478",
+      "operationName": "SearchPage",
+      "operationType": "query",
+      "canonicalOperationId": "gateway.persisted_query_execution.SearchPage",
+      "objectIds": [
+        "gateway.persisted_query_execution"
+      ],
+      "authorization": {
+        "principal": "public",
+        "scopes": [],
+        "ownershipPolicy": "public_search_discovery"
+      },
+      "costModelVersion": "graphql-cost-v1",
+      "costPlanDigest": "sha256:30295336331bfab614e83f9f4bf1606c26e655877989166c789f8ecd5d1f0ab8",
+      "cost": {
+        "depth": 3,
+        "topLevelFields": 1,
+        "complexity": 353,
+        "variablesMaxBytes": 4096,
+        "pageSizeMax": 20,
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144,
+        "sloRef": "slo:search.search_index_view.Search"
+      },
+      "costPlan": {
+        "baseComplexity": 353,
+        "listMultipliers": [
+          {
+            "variablePath": "input.first",
+            "coefficient": 17,
+            "defaultValue": 20,
+            "maximumValue": 20
+          }
+        ],
+        "maxOwnerCalls": 1,
+        "maxBatchKeys": 1,
+        "maxResponseBytes": 262144
+      },
+      "paginationVariables": [
+        "input.first"
+      ],
+      "executorKey": "search.searchIndexView.searchPage"
+    },
     {
       "sha256Hash": "119359eb546ba50284ad676377ca69138129ca01d605688310292ca156848b38",
       "operationName": "ContentPostDetailArticleRenderAssets",
@@ -162,7 +207,7 @@
       }
     },
     {
-      "sha256Hash": "3c1481366f84401aa2d89280925d5943bf040f7c94cf757fb5cc219f00a7f71b",
+      "sha256Hash": "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110",
       "operationName": "ContentPostDetailBase",
       "operationType": "query",
       "canonicalOperationId": "content.post.GetPost",
@@ -175,11 +220,11 @@
         "ownershipPolicy": "visibility_filtered"
       },
       "costModelVersion": "graphql-cost-v1",
-      "costPlanDigest": "sha256:b0db9d7b0d7d40c0b53b885cbcd8b1c56a757c8d0f4288f330f62e95f9a1a1f4",
+      "costPlanDigest": "sha256:210167013a58adcbb05fef1d102e3dc4f0f58b33640ce3d940a7f8186724c56d",
       "cost": {
         "depth": 3,
         "topLevelFields": 1,
-        "complexity": 56,
+        "complexity": 58,
         "variablesMaxBytes": 1024,
         "pageSizeMax": 1,
         "maxOwnerCalls": 1,
@@ -188,7 +233,7 @@
         "sloRef": "slo:gateway.graphql_read.detail"
       },
       "costPlan": {
-        "baseComplexity": 56,
+        "baseComplexity": 58,
         "listMultipliers": [],
         "maxOwnerCalls": 1,
         "maxBatchKeys": 1,
@@ -217,6 +262,7 @@
           "contentType",
           "coverUrl",
           "createdAt",
+          "gatheringRef",
           "geoTagRef",
           "likeCount",
           "location",
@@ -233,56 +279,12 @@
           "title",
           "updatedAt",
           "viewCount",
+          "viewerLiked",
           "visibility",
           "visitedAt"
         ],
         "assemblyMappings": []
       }
-    },
-    {
-      "sha256Hash": "894a7b1541100c4ffa20e446d7969aa6bb1c6aa385d025cc2a8c7b625ba50d58",
-      "operationName": "SearchPage",
-      "operationType": "query",
-      "canonicalOperationId": "gateway.persisted_query_execution.SearchPage",
-      "objectIds": [
-        "gateway.persisted_query_execution"
-      ],
-      "authorization": {
-        "principal": "public",
-        "scopes": [],
-        "ownershipPolicy": "public_search_discovery"
-      },
-      "costModelVersion": "graphql-cost-v1",
-      "costPlanDigest": "sha256:8334f410ec252f08e4010d59ffd0976a638b477612690442e74d4108eb134a7b",
-      "cost": {
-        "depth": 3,
-        "topLevelFields": 1,
-        "complexity": 208,
-        "variablesMaxBytes": 4096,
-        "pageSizeMax": 20,
-        "maxOwnerCalls": 1,
-        "maxBatchKeys": 1,
-        "maxResponseBytes": 262144,
-        "sloRef": "slo:search.search_index_view.Search"
-      },
-      "costPlan": {
-        "baseComplexity": 208,
-        "listMultipliers": [
-          {
-            "variablePath": "input.first",
-            "coefficient": 10,
-            "defaultValue": 20,
-            "maximumValue": 20
-          }
-        ],
-        "maxOwnerCalls": 1,
-        "maxBatchKeys": 1,
-        "maxResponseBytes": 262144
-      },
-      "paginationVariables": [
-        "input.first"
-      ],
-      "executorKey": "search.searchIndexView.searchPage"
     },
     {
       "sha256Hash": "b425b396c13494d91b0e970d0e9c2328d07d549c492bd76537dace26ea74aa04",

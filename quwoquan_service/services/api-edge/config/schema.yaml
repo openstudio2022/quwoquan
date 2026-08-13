@@ -268,6 +268,27 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
+# 匿名恢复异常上报的权威来源准入（event-ingestion OPEN-008 上收）：
+# subject 为可信连接层 IP（network kind），共享 Redis admission 跨副本裁决；
+# product-ops 侧 inbound 退回只做载荷校验。
+- key: sys.api-edge.rate_limit.operation.ops_recovery_failure_report.limit
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.api-edge.rate_limit.operation.ops_recovery_failure_report.window_seconds
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+- key: sys.api-edge.rate_limit.operation.ops_recovery_failure_report.state_failure
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
 - key: sys.api-edge.user_service.account_security.base_url
   type: string
   scope: workload

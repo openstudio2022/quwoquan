@@ -65,7 +65,12 @@ func TestReportRecoveryFailureNeedsNoSyntheticDeviceActor(t *testing.T) {
 	}
 }
 
-func TestReportRecoveryFailureRetainsPerSourceIPQuota(t *testing.T) {
+// 匿名来源的权威准入已上收 api-edge 共享 admission
+// （rate_limit.operation.ops_recovery_failure_report，subject=network IP，
+// 跨副本 Redis 裁决）；inbound adapter 退回只做载荷校验。进程内窗口的
+// 每副本配额语义已退役，同一来源连续上报在服务侧不再被本地窗口拒绝——
+// 本用例锁定该职责边界，防止进程内 limiter 回归成伪准入。
+func TestReportRecoveryFailureDelegatesSourceAdmissionToEdge(t *testing.T) {
 	handler := httpadapter.NewHandler(
 		recoveryfailure.NewService(&captureRecoveryReporter{}),
 		writeTestError,
@@ -73,15 +78,14 @@ func TestReportRecoveryFailureRetainsPerSourceIPQuota(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.Register(mux)
 
-	for attempt := 1; attempt <= 20; attempt++ {
+	for attempt := 1; attempt <= 25; attempt++ {
 		response := postRecoveryFailureFrom(t, mux, "192.0.2.10:1234")
 		if response.Code != http.StatusNoContent {
-			t.Fatalf("same-IP attempt %d status=%d body=%s", attempt, response.Code, response.Body.String())
+			t.Fatalf(
+				"same-IP attempt %d must pass payload validation only, status=%d body=%s",
+				attempt, response.Code, response.Body.String(),
+			)
 		}
-	}
-	limited := postRecoveryFailureFrom(t, mux, "192.0.2.10:5678")
-	if limited.Code != http.StatusServiceUnavailable {
-		t.Fatalf("same-IP attempt 21 status=%d body=%s", limited.Code, limited.Body.String())
 	}
 	independent := postRecoveryFailureFrom(t, mux, "198.51.100.20:1234")
 	if independent.Code != http.StatusNoContent {

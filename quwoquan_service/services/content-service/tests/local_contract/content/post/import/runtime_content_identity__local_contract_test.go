@@ -16,14 +16,14 @@ func TestRuntimePostIDPrefersStableContentIDAcrossVersions(t *testing.T) {
 	if first == "" || first != next {
 		t.Fatalf("stable contentId must own runtime identity: first=%q next=%q", first, next)
 	}
-	if first == LegacyRuntimePostID(firstRef) {
+	if first == RuntimePostIDFromPostRef(firstRef) {
 		t.Fatalf("content identity must not remain bound to legacy postRef: %q", first)
 	}
 }
 
 func TestRuntimePostIDKeepsExplicitLegacyFallbackForMigration(t *testing.T) {
 	postRef := "posts/article/攻略/测试景区攻略/3"
-	if got, want := RuntimePostID("", postRef), LegacyRuntimePostID(postRef); got != want {
+	if got, want := RuntimePostID("", postRef), RuntimePostIDFromPostRef(postRef); got != want {
 		t.Fatalf("empty legacy contentId fallback drift: got=%q want=%q", got, want)
 	}
 }

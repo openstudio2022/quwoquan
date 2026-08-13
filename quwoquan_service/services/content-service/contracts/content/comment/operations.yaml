@@ -705,7 +705,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: object, id: content.comment}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb-postgresql, digest_binding: candidate}
   - case_id: create-comment-local
@@ -721,7 +721,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: CreateComment}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: delete-comment-local
@@ -737,7 +737,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: DeleteComment}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: pin-comment-local
@@ -753,7 +753,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: PinComment}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: unpin-comment-local
@@ -769,7 +769,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: UnpinComment}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: bind-media-assets-to-comment-local
@@ -785,7 +785,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: BindMediaAssetsToComment}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: list-comments-local
@@ -801,7 +801,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: ListComments}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: list-comment-replies-local
@@ -817,7 +817,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: ListCommentReplies}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: list-comments-by-author-local
@@ -833,7 +833,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: ListCommentsByAuthor}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: list-comments-for-post-author-local
@@ -849,7 +849,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: ListCommentsForPostAuthor}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: hide-comment-local
@@ -865,7 +865,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: HideComment}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: restore-comment-local
@@ -881,7 +881,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: RestoreComment}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__api_integration_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/comment/http_mongo_transaction__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: comment_create_comment_app_local
@@ -988,3 +988,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/api_integration/service/content_service/content/comment/content_comment_remote__api_integration_test.dart
     executions:
       - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: comment_post_journey_app_uat
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-001
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: content.media_viewer}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/content_service/content/comment/comment_post__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

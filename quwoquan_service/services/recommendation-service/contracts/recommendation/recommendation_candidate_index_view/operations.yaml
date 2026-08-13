@@ -1,5 +1,25 @@
 description: RecommendationCandidateIndexView 仅通过对象 Reader 供排序管线读取。
 api_routes: []
+# 入口绑定 object.yaml lifecycle.event_consumers 的主 handler（PostLifecycleConsumer）；
+# 五个上游流消费者在实现侧共用指标 recommendation_candidate_index_projection，
+# consumer 标签定位具体消费者（object/kind/phase 唯一约束下只声明一条入口）。
+runtime_entrypoints:
+- name: ProjectRecommendationCandidatePostLifecycle
+  kind: projector
+  phase: event_projection
+  application:
+    kind: command
+    facet: PostLifecycleConsumer
+    method: processOnce
+    object_owner: RecommendationCandidateIndexView
+  telemetry:
+    metric: recommendation_candidate_index_projection
+    trace: true
+    attributes: [consumer, outcome]
+  slo:
+    freshness_p95_seconds: 60
+    backlog_max_events: 1000
+    failure_ratio_percent: 1
 consumers:
 - {name: recommendation-ranking, capabilities: [list_candidates, list_premium_candidates, list_entity_tag_candidates]}
 readiness_cases:

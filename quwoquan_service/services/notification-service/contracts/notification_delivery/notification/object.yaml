@@ -75,10 +75,12 @@ lifecycle:
   - circle.gathering.GatheringInvitationChanged
   - circle.gathering.GatheringCancelled
   - entity.homepage_claim_request.HomepageClaimReviewed
+  - recommendation.recommendation_feature_profile_view.IntersectionFacilitationRecorded
   - entity.homepage_status_report.HomepageStatusReportReviewed
   - user.user_account.UserSuspended
   - user.user_account.UserRestored
   - user.user_account.UserAccountClosed
+  - chat.message.MessageSent
   event_consumers:
   - name: CreateInteractionNotifications
     kind: event_handler
@@ -105,3 +107,8 @@ lifecycle:
     facet: UserAccountClosedProjection
     method: applyUserAccountClosed
     idempotency: event_id
+  - name: ProjectChatOfflinePush
+    kind: event_handler
+    facet: ChatOfflinePushProjectionHandler
+    method: handle
+    idempotency: identity_payload_digest

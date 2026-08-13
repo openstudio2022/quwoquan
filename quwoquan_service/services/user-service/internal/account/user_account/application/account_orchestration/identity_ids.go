@@ -31,7 +31,7 @@ const (
 	retentionPolicyPreserve = "preserve"
 )
 
-type identityDescriptor struct {
+type OwnerIdentityDescriptor struct {
 	OwnerID      string
 	RootPrefix   string
 	LogicalShard int
@@ -41,7 +41,7 @@ func init() {
 	_ = runtimeid.DefaultRegistry.Register(identityEntropyPrefix, "UserIdentityEntropy")
 }
 
-func buildOwnerIdentity(credType string) (identityDescriptor, error) {
+func buildOwnerIdentity(credType string) (OwnerIdentityDescriptor, error) {
 	identityOrigin, originCode := identityOriginForCredentialType(credType)
 	return buildOwnerIdentityForOrigin(identityOrigin, originCode)
 }
@@ -49,19 +49,19 @@ func buildOwnerIdentity(credType string) (identityDescriptor, error) {
 func buildOwnerIdentityForOrigin(
 	identityOrigin string,
 	originCode string,
-) (identityDescriptor, error) {
+) (OwnerIdentityDescriptor, error) {
 	if strings.TrimSpace(identityOrigin) == "" || strings.TrimSpace(originCode) == "" {
-		return identityDescriptor{}, fmt.Errorf("identity origin is required")
+		return OwnerIdentityDescriptor{}, fmt.Errorf("identity origin is required")
 	}
 	entropyBody, err := generateIdentityEntropyBody()
 	if err != nil {
-		return identityDescriptor{}, err
+		return OwnerIdentityDescriptor{}, err
 	}
 	ownerID, err := useridentity.NewOwnerID(originCode, entropyBody)
 	if err != nil {
-		return identityDescriptor{}, fmt.Errorf("build owner identity: %w", err)
+		return OwnerIdentityDescriptor{}, fmt.Errorf("build owner identity: %w", err)
 	}
-	return identityDescriptor{
+	return OwnerIdentityDescriptor{
 		OwnerID:      ownerID.String(),
 		RootPrefix:   ownerID.LogicalShardHex(),
 		LogicalShard: ownerID.LogicalShard(),

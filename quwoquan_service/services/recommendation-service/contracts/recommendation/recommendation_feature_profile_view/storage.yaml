@@ -93,6 +93,38 @@ collections:
     description: Post 生命周期 typed 事件中具有作者声明 visitedAt 的地点事实；浏览与想去均不得写入。
     indexes:
     - {name: idx_recommendation_intersection_declared_visit_active, keys: {active: 1, entityId: 1}}
+  recommendation_intersection_gathering_participations:
+    entity: RecommendationIntersectionGatheringParticipationProjection
+    role: projection
+    description: circle.gathering GatheringParticipationChanged typed 事件的对象本地最小参与断言（gatheringId/personaId/state）；供 coExperiencedGathering 经历交集与「成形/经历」两级诚实计数重建，不复制名单、申请答案或私密事实。
+    indexes:
+    - {name: idx_recommendation_intersection_gathering_participation_persona, keys: {personaId: 1, active: 1, gatheringId: 1}}
+    - {name: idx_recommendation_intersection_gathering_participation_gathering, keys: {gatheringId: 1, active: 1, personaId: 1}}
+  recommendation_intersection_gathering_recaps:
+    entity: RecommendationIntersectionGatheringRecapProjection
+    role: projection
+    description: Post 生命周期 typed 事件中作者主动关联 gatheringRef 的公开回顾事实；经历交集只由「双方 active Participation + 双方各自公开回顾」触发，时间到达、聊天频率或单方声明不得写入（诚实红线延伸到经历）。
+    indexes:
+    - {name: idx_recommendation_intersection_gathering_recap_persona, keys: {personaId: 1, active: 1, gatheringId: 1}}
+  recommendation_intersection_gathering_publications:
+    entity: RecommendationIntersectionGatheringPublicationProjection
+    role: projection
+    description: circle.gathering GatheringPublished typed 事件的发起级社会证明证据（gatheringId → organizer + canonical 溯源引用）；四锚点两级计数由本证据与 Participation/公开回顾读时聚合派生，本集合不存任何计数。
+    indexes:
+    - {name: idx_recommendation_intersection_publication_organizer, keys: {organizerId: 1, occurredAt: -1}}
+    - {name: idx_recommendation_intersection_publication_source, keys: {sourceRefs.objectId: 1}}
+  recommendation_intersection_post_authors:
+    entity: RecommendationIntersectionPostAuthorProjection
+    role: projection
+    description: Post 生命周期 typed 事件的最小 postId → authorId 映射（创作者锚点沿 gathering.sourceRefs 溯源链归集促成计数）；删除/隐私撤回回落 inactive，不复制正文或可见性细节。
+    indexes:
+    - {name: idx_recommendation_intersection_post_author, keys: {authorId: 1, active: 1}}
+  recommendation_intersection_facilitations:
+    entity: RecommendationIntersectionFacilitationReceipt
+    role: inbox
+    description: 每个 Gathering 经历级首次达成的促成事件占位收据（_id=gatheringId）；IntersectionFacilitationRecorded 同一 Gathering 只发布一次的幂等真相源，不承载计数。
+    indexes:
+    - {name: idx_recommendation_intersection_facilitation_occurred, keys: {occurredAt: -1}}
   recommendation_feature_projection_checkpoints:
     entity: RecommendationFeatureProjectionCheckpoint
     role: inbox
@@ -106,6 +138,12 @@ collections:
     indexes:
     - {name: idx_recommendation_feature_failure_updated, keys: {updatedAt: -1}}
 streams:
+  events.recommendation.intersections:
+    entity: RecommendationFeatureProfileView
+    role: append_only
+    idempotency_key: eventId
+    retention_seconds: 604800
+    description: 交集派生事实事件出口（IntersectionFacilitationRecorded）；Notification 据此投影创作者促成通知，同一 Gathering 的经历级达成只发布一次。
   events.user.persona_relationship.recommendation-feature.dlq:
     entity: RecommendationFeatureProfileView
     role: dead_letter
@@ -118,6 +156,18 @@ streams:
     idempotency_key: streamId
     retention_seconds: 604800
     description: RecommendationFeatureProfileView 的 CircleMembership typed consumer 终止失败记录。
+  events.circle.gatherings.recommendation-feature.dlq:
+    entity: RecommendationFeatureProfileView
+    role: dead_letter
+    idempotency_key: streamId
+    retention_seconds: 604800
+    description: RecommendationFeatureProfileView 的 GatheringParticipationChanged typed consumer 终止失败记录。
+  events.circle.gatherings.recommendation-social-proof.dlq:
+    entity: RecommendationFeatureProfileView
+    role: dead_letter
+    idempotency_key: streamId
+    retention_seconds: 604800
+    description: RecommendationFeatureProfileView 的 GatheringPublished 发起级社会证明 consumer 终止失败记录。
   events.content.behavior_facts.recommendation-feature.dlq:
     entity: RecommendationFeatureProfileView
     role: dead_letter

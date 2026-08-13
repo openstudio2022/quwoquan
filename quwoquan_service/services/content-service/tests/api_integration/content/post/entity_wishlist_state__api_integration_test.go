@@ -32,9 +32,7 @@ func TestEntityWishlistStateTracksBehaviorProjection(t *testing.T) {
 	report := func(action string) {
 		t.Helper()
 		payload := fmt.Sprintf(
-			`{"userId":%q,"sessionId":%q,"events":[{"clientEventId":%q,"occurredAt":%q,"action":%q,"objectId":%q,"objectKind":"homepage","displayName":"状态读模型测试主页","sourceSurface":"homepageDetail","referralSource":"entity_page"}]}`,
-			userID,
-			"session_"+runID,
+			`{"events":[{"clientEventId":%q,"occurredAt":%q,"action":%q,"objectId":%q,"objectKind":"homepage","displayName":"状态读模型测试主页","sourceSurface":"homepageDetail","referralSource":"entity_page"}]}`,
 			"event_"+action+"_"+runID,
 			time.Now().UTC().Format(time.RFC3339Nano),
 			action,
@@ -48,9 +46,10 @@ func TestEntityWishlistStateTracksBehaviorProjection(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Client-User-Id", userID)
 		req.Header.Set("X-Client-Persona-Id", userID)
+		req.Header.Set("X-Client-Session-Id", "session_"+runID)
 		rec := httptest.NewRecorder()
 		testHandler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusNoContent {
+		if rec.Code != http.StatusOK {
 			t.Fatalf("%s behavior status=%d body=%s", action, rec.Code, rec.Body.String())
 		}
 	}

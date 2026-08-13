@@ -52,7 +52,7 @@ func TestSearchIndexProjectionDeclaresOnlyAssembledProductionSources(t *testing.
 		document.Lifecycle.EventConsumers[1].Idempotency != "event_id" ||
 		document.Lifecycle.EventConsumers[2].Name != "ApplyUserProfileSearchProjection" ||
 		document.Lifecycle.EventConsumers[2].Kind != "projector" ||
-		document.Lifecycle.EventConsumers[2].Facet != "UserProfileSearchProjection" ||
+		document.Lifecycle.EventConsumers[2].Facet != "UserProfileSearchProjectionConsumer" ||
 		document.Lifecycle.EventConsumers[2].Method != "processOnce" ||
 		document.Lifecycle.EventConsumers[2].Idempotency != "event_id" ||
 		!reflect.DeepEqual(document.Lifecycle.SourceEvents, want) {

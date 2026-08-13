@@ -302,6 +302,14 @@ def main() -> int:
         ROOT / "quwoquan_app/scripts/ios/build_prepare_dart_defines.sh"
     ).read_text(encoding="utf-8")
     stackctl_source = STACKCTL.read_text(encoding="utf-8")
+    # stackctl 域拆分后的契约位置：provider-conformance CLI 面与 gamma 包装载
+    # 分别迁至 commands/provider_conformance_domain.py 与 commands/package_shared.py。
+    conformance_domain_source = (
+        ROOT / "quwoquan_ops" / "cli" / "commands" / "provider_conformance_domain.py"
+    ).read_text(encoding="utf-8")
+    package_shared_source = (
+        ROOT / "quwoquan_ops" / "cli" / "commands" / "package_shared.py"
+    ).read_text(encoding="utf-8")
     if (
         "Prepare Alpha HTTPS Local Plane" in ios_project
         or "Bundle Local HTTPS Trust Root" in ios_project
@@ -323,13 +331,13 @@ def main() -> int:
             "-m",
             "unittest",
             (
-                "quwoquan_ops.tests.local_contract."
+                "quwoquan_ops.tests.local_contract.environment."
                 "test_local_runtime_consumer_lease__local_contract_test."
                 "LocalRuntimeConsumerLeaseTest."
                 "test_launcher_warning_policy_reaches_flutter_run_without_runtime_lease"
             ),
             (
-                "quwoquan_ops.tests.local_contract."
+                "quwoquan_ops.tests.local_contract.environment."
                 "test_local_runtime_consumer_lease__local_contract_test."
                 "LocalRuntimeConsumerLeaseTest."
                 "test_launcher_hard_safety_blocker_stops_before_flutter_run"
@@ -353,13 +361,13 @@ def main() -> int:
             "unittest",
             (
                 "quwoquan_app.test.local_contract.runtime."
-                "ios_runtime_dart_defines__local_contract_test."
+                "ios_runtime_dart_defines__direct_debug__local_contract_test."
                 "IosRuntimeDartDefinesContractTest."
                 "test_direct_ios_debug_selects_canonical_nonprod_handoff"
             ),
             (
                 "quwoquan_app.test.local_contract.runtime."
-                "ios_runtime_dart_defines__local_contract_test."
+                "ios_runtime_dart_defines__direct_debug__local_contract_test."
                 "IosRuntimeDartDefinesContractTest."
                 "test_direct_ios_debug_reports_the_first_hard_safety_blocker"
             ),
@@ -378,11 +386,14 @@ def main() -> int:
         issues.append(
             "iOS bare build failure must point to the canonical run.sh launcher"
         )
-    if "PROVIDER_CONFORMANCE_EVIDENCE_ENVIRONMENTS" not in stackctl_source:
+    if (
+        "PROVIDER_CONFORMANCE_EVIDENCE_ENVIRONMENTS"
+        not in stackctl_source + conformance_domain_source
+    ):
         issues.append(
             "stackctl must keep provider-conformance argparse choices local (no eager PyYAML import)"
         )
-    if "def _provider_conformance_runner(" not in stackctl_source:
+    if "def _provider_conformance_runner(" not in conformance_domain_source:
         issues.append(
             "stackctl must lazy-import provider_conformance_runner for Xcode/alpha up"
         )
@@ -530,7 +541,7 @@ def main() -> int:
         'LOCAL_GAMMA_CADDYFILE="${LOCAL_GAMMA_RUNTIME_SHARED_ROOT}/Caddyfile"'
         not in gamma_script
         or '"quwoquan_ops" / "environments" / "gamma" / "local" / "Caddyfile"'
-        not in stackctl_source
+        not in package_shared_source
     ):
         issues.append(
             "gamma launcher must mount the package copy of the single Ops-owned Caddyfile"

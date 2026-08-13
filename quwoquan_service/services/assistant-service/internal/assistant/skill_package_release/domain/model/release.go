@@ -38,17 +38,84 @@ const (
 )
 
 var (
-	ErrInvalidRelease   = errors.New("assistant skill package release is invalid")
-	ErrDigestMismatch   = errors.New("assistant skill package digest mismatch")
-	ErrAssetMismatch    = errors.New("assistant skill package asset digest mismatch")
-	ErrAssetUnavailable = errors.New("assistant skill package asset is unavailable")
-	ErrRuntimeMismatch  = errors.New("assistant skill package runtime is incompatible")
-	ErrSignatureInvalid = errors.New("assistant skill package signature is invalid")
-	ErrCapabilityDenied = errors.New("assistant skill package capability is not granted")
-	ErrReleaseNotFound  = errors.New("assistant skill package release not found")
-	ErrActivationAbsent = errors.New("assistant skill package activation not found")
-	ErrRevisionConflict = errors.New("assistant skill package activation revision conflict")
+	ErrInvalidRelease           = errors.New("assistant skill package release is invalid")
+	ErrDigestMismatch           = errors.New("assistant skill package digest mismatch")
+	ErrAssetMismatch            = errors.New("assistant skill package asset digest mismatch")
+	ErrAssetUnavailable         = errors.New("assistant skill package asset is unavailable")
+	ErrRuntimeMismatch          = errors.New("assistant skill package runtime is incompatible")
+	ErrSignatureInvalid         = errors.New("assistant skill package signature is invalid")
+	ErrCapabilityDenied         = errors.New("assistant skill package capability is not granted")
+	ErrReleaseNotFound          = errors.New("assistant skill package release not found")
+	ErrActivationAbsent         = errors.New("assistant skill package activation not found")
+	ErrRevisionConflict         = errors.New("assistant skill package activation revision conflict")
+	ErrEvaluationReceiptInvalid = errors.New("assistant skill package evaluation receipt does not match the release")
 )
+
+// EvaluationConclusionPassed 是允许激活的唯一评测结论。
+const EvaluationConclusionPassed = "passed"
+
+// EvaluationReceipt 是轨迹回放评测通过凭据。激活必须携带对 exact package
+// digest 与 exact replay corpus asset digest 的评测结论；任一 digest 与待
+// 激活 release 不一致时激活 fail-closed。
+type EvaluationReceipt struct {
+	CorpusAssetID        string    `json:"corpusAssetId" bson:"corpusAssetId"`
+	PackageReleaseDigest string    `json:"packageReleaseDigest" bson:"packageReleaseDigest"`
+	ReplayAssetDigest    string    `json:"replayAssetDigest" bson:"replayAssetDigest"`
+	EvaluatedAt          time.Time `json:"evaluatedAt" bson:"evaluatedAt"`
+	Conclusion           string    `json:"conclusion" bson:"conclusion"`
+}
+
+// PassedEvaluationReceiptFor 为该 release 构造与 exact package/corpus digest
+// 绑定的评测通过凭据。调用方必须先确证轨迹回放评测门禁在该 source 上通过；
+// 该函数只做 digest 绑定，不替代评测本身。
+func PassedEvaluationReceiptFor(
+	release Release,
+	evaluatedAt time.Time,
+) (EvaluationReceipt, error) {
+	for _, asset := range release.Assets {
+		if asset.Kind != AssetReplay {
+			continue
+		}
+		return EvaluationReceipt{
+			CorpusAssetID:        asset.AssetID,
+			PackageReleaseDigest: release.ReleaseDigest,
+			ReplayAssetDigest:    asset.AssetDigest,
+			EvaluatedAt:          evaluatedAt.UTC(),
+			Conclusion:           EvaluationConclusionPassed,
+		}, nil
+	}
+	return EvaluationReceipt{}, ErrEvaluationReceiptInvalid
+}
+
+// ValidateEvaluationReceipt 校验评测 receipt 与待激活 release 完全一致：
+// package digest 精确匹配、replay asset 的 assetId 与 digest 精确匹配、
+// 评测结论为 passed 且带评测时间。任何偏差都返回 ErrEvaluationReceiptInvalid。
+func ValidateEvaluationReceipt(receipt EvaluationReceipt, release Release) error {
+	receipt.CorpusAssetID = strings.TrimSpace(receipt.CorpusAssetID)
+	receipt.PackageReleaseDigest = strings.TrimSpace(receipt.PackageReleaseDigest)
+	receipt.ReplayAssetDigest = strings.TrimSpace(receipt.ReplayAssetDigest)
+	receipt.Conclusion = strings.TrimSpace(receipt.Conclusion)
+	if receipt.CorpusAssetID == "" ||
+		!isDigest(receipt.PackageReleaseDigest) ||
+		!isDigest(receipt.ReplayAssetDigest) ||
+		receipt.EvaluatedAt.IsZero() ||
+		receipt.Conclusion != EvaluationConclusionPassed {
+		return ErrEvaluationReceiptInvalid
+	}
+	if receipt.PackageReleaseDigest != release.ReleaseDigest {
+		return ErrEvaluationReceiptInvalid
+	}
+	for _, asset := range release.Assets {
+		if asset.Kind != AssetReplay {
+			continue
+		}
+		if receipt.CorpusAssetID == asset.AssetID &&
+			receipt.ReplayAssetDigest == asset.AssetDigest {
+			return nil
+		}
+	}
+	return ErrEvaluationReceiptInvalid
+}
 
 type Asset struct {
 	AssetID     string `json:"assetId" bson:"assetId"`

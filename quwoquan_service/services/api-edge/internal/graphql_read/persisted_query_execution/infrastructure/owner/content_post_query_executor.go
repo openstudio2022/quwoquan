@@ -40,7 +40,7 @@ type contentBundleBinding struct {
 
 var contentBundleBindings = map[string]contentBundleBinding{
 	"ContentPostDetailBase": newContentBundleBinding(
-		"ContentPostDetailBase", "content.post.GetPost", "3c1481366f84401aa2d89280925d5943bf040f7c94cf757fb5cc219f00a7f71b",
+		"ContentPostDetailBase", "content.post.GetPost", "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110",
 		"contentPostDetailBase", []string{"article", "image", "micro", "video"}, baseResponseSpec(),
 	),
 	"ContentPostDetailSemantic": newContentBundleBinding(

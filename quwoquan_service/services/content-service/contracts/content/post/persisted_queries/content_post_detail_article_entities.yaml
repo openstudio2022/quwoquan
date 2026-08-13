@@ -1,4 +1,4 @@
-schema: qwq.object-owned-internal-persisted-graphql.v1
+schema: qwq.object-owned-internal-persisted-graphql
 canonicalOperationId: content.post.GetPostArticleEntities
 objectId: content.post
 document: content_post_detail_article_entities.graphql

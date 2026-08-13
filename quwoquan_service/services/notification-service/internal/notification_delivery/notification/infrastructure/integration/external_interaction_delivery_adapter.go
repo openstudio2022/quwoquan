@@ -34,12 +34,21 @@ type ExternalInteractionDeliveryConfig struct {
 	Timeout     time.Duration
 }
 
+// PushDestinationLister 按 persona 解析可推送设备端点（user-service 防腐口）。
+type PushDestinationLister interface {
+	ListPushDestinations(
+		ctx context.Context,
+		personaID string,
+	) ([]deliveryapplication.PushDestinationRef, error)
+}
+
 type ExternalInteractionDeliveryAdapter struct {
-	endpoint    string
-	credentials rtauth.ServiceAuthorizationProvider
-	environment string
-	timeout     time.Duration
-	client      *http.Client
+	endpoint     string
+	credentials  rtauth.ServiceAuthorizationProvider
+	environment  string
+	timeout      time.Duration
+	client       *http.Client
+	destinations PushDestinationLister
 }
 
 type DeliveryError struct {
@@ -84,6 +93,7 @@ func (e *DeliveryError) Unwrap() error {
 func NewExternalInteractionDeliveryAdapter(
 	cfg ExternalInteractionDeliveryConfig,
 	client *http.Client,
+	destinations PushDestinationLister,
 ) (*ExternalInteractionDeliveryAdapter, error) {
 	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
 	parsed, err := url.Parse(baseURL)
@@ -106,12 +116,16 @@ func NewExternalInteractionDeliveryAdapter(
 	if client == nil {
 		return nil, fmt.Errorf("notification integration observed HTTP client is required")
 	}
+	if destinations == nil {
+		return nil, fmt.Errorf("notification push destination lister is required")
+	}
 	return &ExternalInteractionDeliveryAdapter{
-		endpoint:    baseURL + serviceclients.IntegrationExternalRequestsPath,
-		credentials: cfg.Credentials,
-		environment: environment,
-		timeout:     cfg.Timeout,
-		client:      client,
+		endpoint:     baseURL + serviceclients.IntegrationExternalRequestsPath,
+		credentials:  cfg.Credentials,
+		environment:  environment,
+		timeout:      cfg.Timeout,
+		client:       client,
+		destinations: destinations,
 	}, nil
 }
 
@@ -146,31 +160,84 @@ func (a *ExternalInteractionDeliveryAdapter) Deliver(
 		}
 	}
 
-	requestID := externalRequestID(notification.NotificationID, recipientID)
-	payload := map[string]string{
-		"jobId":          notification.NotificationID,
-		"notificationId": notification.SubjectNotificationID,
-		"recipientId":    recipientID,
+	// 契约 push_delivery action=alert 的通用可见推送组装：title/body 通知栏
+	// 文本 + targetType/targetId 路由锚点（App 端按 targetType 分发到既有路由，
+	// conversation → chatDetail，不在服务端拼接路径）。
+	title := strings.TrimSpace(notification.Payload["title"])
+	body := strings.TrimSpace(notification.Payload["summary"])
+	targetType := strings.TrimSpace(notification.Payload["targetType"])
+	targetID := strings.TrimSpace(notification.Payload["targetId"])
+	if title == "" || body == "" || targetType == "" || targetID == "" {
+		return 0, &DeliveryError{
+			Code:           serviceclients.IntegrationExternalInteractionInternalErrorCode,
+			RecoveryAction: failures.RecoveryActionSurface,
+			Cause: errors.New(
+				"push delivery record misses title, summary, targetType or targetId",
+			),
+		}
 	}
-	copyAllowed(payload, notification.Payload, "providerHint")
-	copyAllowed(payload, notification.Payload, "deeplink")
-	bodyPayload := externalInteractionRequest{
-		RequestID:      requestID,
-		Operation:      reliabletask.ExternalInteractionOperationPush,
-		Tenant:         "quwoquan",
-		Environment:    a.environment,
-		IdempotencyKey: requestID,
-		PayloadRef:     "notification-delivery-job:" + notification.NotificationID,
-		PayloadDigest:  notificationDigest(notification, recipientID),
-		Sensitivity:    "private",
-		ExpiresAt:      time.Now().UTC().Add(5 * time.Minute).Format(time.RFC3339),
-		Payload:        payload,
-	}
-	accepted, err := a.submit(ctx, bodyPayload)
+	destinations, err := a.destinations.ListPushDestinations(ctx, recipientID)
 	if err != nil {
-		return 0, err
+		return 0, &DeliveryError{
+			Code:           serviceclients.IntegrationExternalInteractionInternalErrorCode,
+			RecoveryAction: failures.RecoveryActionRetry,
+			Cause:          fmt.Errorf("resolve push destinations: %w", err),
+		}
 	}
-	return acceptedSequence(accepted.RequestID), nil
+	now := time.Now().UTC()
+	expiresAt := now.Add(5 * time.Minute)
+	var lastSequence int64
+	submitted := 0
+	for _, destination := range destinations {
+		endpointRef := strings.TrimSpace(destination.EndpointRef)
+		if endpointRef == "" {
+			continue
+		}
+		requestID := alertExternalRequestID(
+			notification.NotificationID,
+			recipientID,
+			endpointRef,
+		)
+		payload := map[string]string{
+			"action":          "alert",
+			"endpointRef":     endpointRef,
+			"deliveryKey":     notification.DedupeKey,
+			"targetPersonaId": recipientID,
+			"title":           title,
+			"body":            body,
+			"targetType":      targetType,
+			"targetId":        targetID,
+			"expiresAt":       expiresAt.Format(time.RFC3339),
+			"occurredAt":      now.Format(time.RFC3339),
+		}
+		bodyPayload := externalInteractionRequest{
+			RequestID:      requestID,
+			Operation:      reliabletask.ExternalInteractionOperationPush,
+			Tenant:         "quwoquan",
+			Environment:    a.environment,
+			IdempotencyKey: requestID,
+			PayloadRef:     "notification-delivery-job:" + notification.NotificationID,
+			PayloadDigest:  notificationDigest(notification, recipientID),
+			Sensitivity:    "private",
+			ExpiresAt:      expiresAt.Format(time.RFC3339),
+			Payload:        payload,
+		}
+		accepted, submitErr := a.submit(ctx, bodyPayload)
+		if submitErr != nil {
+			// 单端点失败让作业重试；requestID 掺入 endpointRef 幂等，
+			// 已受理端点在重放时由 integration idempotencyKey 收敛。
+			return 0, submitErr
+		}
+		lastSequence = acceptedSequence(accepted.RequestID)
+		submitted++
+	}
+	if submitted == 0 {
+		// 收件人当前无可推送设备端点：作业按无操作完成，不制造无意义重试。
+		return acceptedSequence(
+			externalRequestID(notification.NotificationID, recipientID),
+		), nil
+	}
+	return lastSequence, nil
 }
 
 func (a *ExternalInteractionDeliveryAdapter) SubmitIncomingCall(
@@ -388,6 +455,17 @@ func decodeRemoteFailure(status int, raw []byte, fallbackRequestID string) error
 
 func externalRequestID(notificationID string, recipientID string) string {
 	sum := sha256.Sum256([]byte(notificationID + "\x00" + recipientID))
+	return "notification-" + hex.EncodeToString(sum[:16])
+}
+
+func alertExternalRequestID(
+	notificationID string,
+	recipientID string,
+	endpointRef string,
+) string {
+	sum := sha256.Sum256([]byte(
+		notificationID + "\x00" + recipientID + "\x00" + endpointRef,
+	))
 	return "notification-" + hex.EncodeToString(sum[:16])
 }
 

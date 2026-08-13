@@ -1,10 +1,9 @@
-package main
+package bootstrap
 
 import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -176,26 +175,6 @@ func buildAssistantHTTPServer(
 		WriteTimeout:      timeouts.Write,
 		IdleTimeout:       timeouts.Idle,
 	}
-}
-
-func serveAssistantHTTP(
-	runtime *assistantAPIRuntime,
-	infrastructure *assistantInfrastructure,
-	assistant *assistantComponents,
-) error {
-	server := buildAssistantHTTPServer(
-		runtime,
-		infrastructure,
-		assistant,
-	)
-	log.Printf("assistant-service listening on %s env=%s", runtime.addr, runtime.appEnv)
-	if err := rthttp.ListenAndServeGraceful(
-		server,
-		assistantShutdownTimeout(),
-	); err != nil {
-		return fmt.Errorf("listen failed: %w", err)
-	}
-	return nil
 }
 
 func checkServiceHealth(

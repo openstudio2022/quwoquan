@@ -328,3 +328,20 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/content_service/media/media_upload_session/media_upload_session_remote__contract__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: media_upload_session_publication_app_uat
+    spec_ref: specs/feature-tree/runtime/runtime-media/media-upload-and-storage/spec.md#gwt-001
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: content.create}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/content_service/media/media_upload_session/media_publication_remote__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}
+  - case_id: media_publication_lifecycle_probe_ops_env
+    spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-001
+    producer: ops
+    layer: environment_acceptance
+    target: {kind: object, id: content.media_upload_session}
+    runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/content-service/smoke/run_media_publication_lifecycle_probe.py
+    executions:
+      - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}

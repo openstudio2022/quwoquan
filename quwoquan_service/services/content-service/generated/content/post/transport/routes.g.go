@@ -17,6 +17,7 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "GET", pathTemplate: "/content/entity-wishlist-state", operation: "GetEntityWishlistState"},
 	{method: "GET", pathTemplate: "/content/feed", operation: "GetFeed"},
 	{method: "GET", pathTemplate: "/content/footprint", operation: "GetMyFootprint"},
+	{method: "GET", pathTemplate: "/content/gatherings/{gatheringId}/posts", operation: "ListPostsByGathering"},
 	{method: "GET", pathTemplate: "/content/helper-read/{contentId}", operation: "GetHelperRead"},
 	{method: "GET", pathTemplate: "/content/personas/{personaId}/author-impact", operation: "GetAuthorImpact"},
 	{method: "GET", pathTemplate: "/content/personas/{personaId}/author-impact/evidence", operation: "ListAuthorImpactEvidence"},
@@ -28,6 +29,7 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
 	{method: "POST", pathTemplate: "/content/posts:publish", operation: "SubmitPostPublication"},
 	{method: "GET", pathTemplate: "/content/research/readback", operation: "GetResearchReleaseReadback"},
+	{method: "GET", pathTemplate: "/content/social-proof/{anchorKind}/{objectId}", operation: "GetGatheringSocialProof"},
 }
 
 type generatedRouteDef struct {
@@ -227,6 +229,7 @@ var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
 		"primaryHomepageId":         {},
 		"primaryHomepageType":       {},
 		"primaryHomepageSnapshot":   {},
+		"gatheringRef":              {},
 		"visibility":                {},
 		"assistantUsePolicy":        {},
 		"sourcePostId":              {},

@@ -411,7 +411,7 @@ contract_test:
       assertions:
       - 缺 operation/idempotencyKey/expiresAt 的请求返回 INTEGRATION.USER.invalid_external_request
       - 不在 ExternalInteractionOperation 枚举内的 operation 返回 INTEGRATION.USER.unsupported_operation
-      - push_delivery.send 只接受 PushDeliveryPayload 九个字段且枚举/过期时间严格校验
+      - push_delivery.send 按 action 分类别严格校验字段集：ring/cancel 为来电十一字段，alert 为通用可见推送十字段（title/body/targetType/targetId 语义锚点），未知字段拒绝
       - 同一 idempotencyKey 重放返回同一 requestId 受理结果
     - name: request_state_and_attempt_ledger
       assertions:
@@ -536,6 +536,6 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: object, id: integration.external_interaction}
-  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/user_account_closed_projection__privacy__api_integration_test.go
+  runner_source_path: quwoquan_service/services/integration-service/tests/api_integration/external_integration/external_interaction/user_account_closed_projection__privacy__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}

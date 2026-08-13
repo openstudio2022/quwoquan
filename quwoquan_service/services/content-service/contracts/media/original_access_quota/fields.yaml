@@ -119,3 +119,19 @@ types:
         type: enum
         enum_ref: MediaOriginalAccessPurpose
         client_default: MediaOriginalAccessPurpose.view
+  GetOriginalImageAccessAuditQuery:
+    fields:
+      - name: auditId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+  OriginalImageAccessAuditView:
+    description: Owner-scoped immutable readback of one original-media access audit fact.
+    fields:
+      - {name: auditId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: mediaId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: outcome, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: ttlSeconds, type: int, constraints: [NOT_NULL, MIN_0], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: expiresAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}

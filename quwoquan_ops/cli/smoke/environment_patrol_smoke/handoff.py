@@ -1,0 +1,498 @@
+"""test-live launcher handoff 的 canonical 构建、投影与 provider runtime 身份校验。
+
+正文自 run_environment_patrol_smoke.py 逐字搬入。
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+import sys
+from typing import Any
+
+from quwoquan_ops.cli.lib.environment_topology import (
+    get_target,
+    load_environment_topology,
+)
+from quwoquan_ops.cli.lib.test_live_content_binding import (
+    load_test_live_content_binding,
+)
+# 原入口的历史 import，运行时无调用点；保留在此供测试 patch 断言其不被调用。
+from quwoquan_ops.cli.lib.test_live_startup_attempt_receipt import (  # noqa: F401
+    load_test_live_startup_attempt,
+)
+
+from .constants import (
+    APP_DIR,
+    APP_LAUNCHER_HANDOFF_BUILDER,
+    CANONICAL_DIGEST_PATTERN,
+    CANONICAL_TEST_LIVE_DART_DEFINE_KEYS,
+    PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_COMMON_FIELDS,
+    PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_ENV,
+    PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_IMMUTABLE_FIELDS,
+    PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_MUTABLE_FIELDS,
+    PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_SCHEMA,
+)
+from .session import (
+    _local_target_for_environment_alias,
+    _resolved_media_base_urls,
+    _resolved_owner_id,
+    _runtime_env_for_alias,
+)
+
+
+def _effective_base_urls_for_device(
+    args: argparse.Namespace,
+    device: dict[str, Any],
+) -> dict[str, str]:
+    # 本地 target 也必须保留 topology 投影的 canonical public authority。
+    # Android/iOS 由 DNS-01 公共证书和本地连接投影到运行栈；把 URL 改成
+    # localhost 会破坏证书 hostname 校验，并重新引入已退役的私有 CA 路径。
+    del device
+    gateway_base_url = args.gateway_base_url.strip()
+    product_ops_base_url = args.product_ops_base_url.strip()
+    rtc_media_connection_url = args.rtc_media_connection_url.strip()
+    media_urls = _resolved_media_base_urls(args)
+    target_name = _local_target_for_environment_alias(args.env_name)
+    public_bases = get_target(
+        load_environment_topology(),
+        target_name,
+    )["publicBases"]
+    supplied_by_role = {
+        "api": gateway_base_url,
+        "productOps": product_ops_base_url,
+        "rtc": rtc_media_connection_url,
+        "mediaAvatar": media_urls["mediaAvatarBaseUrl"],
+        "mediaImage": media_urls["mediaImageBaseUrl"],
+        "mediaVideo": media_urls["mediaVideoBaseUrl"],
+        "mediaUpload": media_urls["mediaUploadBaseUrl"],
+    }
+    mismatched = [
+        role
+        for role, supplied in supplied_by_role.items()
+        if supplied.rstrip("/") != str(public_bases[role]).rstrip("/")
+    ]
+    if mismatched:
+        raise ValueError(
+            "runtime URL arguments must equal canonical topology projection: "
+            + ", ".join(sorted(mismatched))
+        )
+    return {
+        "gatewayBaseUrl": gateway_base_url,
+        "legalBaseUrl": str(public_bases["legal"]),
+        "productOpsBaseUrl": product_ops_base_url,
+        "rtcMediaConnectionUrl": rtc_media_connection_url,
+        **media_urls,
+    }
+
+
+def _canonical_handoff_projection(
+    handoff: dict[str, Any],
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Project one already-validated launcher handoff to Dart and native build."""
+
+    if handoff.get("schema") != "app-launcher-handoff":
+        raise ValueError("canonical launcher handoff schema is invalid")
+    effective = handoff.get("effectiveLaunchManifest")
+    if not isinstance(effective, dict) or effective.get("schema") != (
+        "app-effective-launch-manifest"
+    ):
+        raise ValueError("canonical effective launch manifest is invalid")
+    for field, value in effective.items():
+        if field != "schema" and handoff.get(field) != value:
+            raise ValueError(
+                "canonical launcher handoff/effective manifest mismatch: "
+                f"{field}"
+            )
+    for field in (
+        "dartDefinesDigest",
+        "runtimeConfigDigest",
+        "effectiveLaunchManifestDigest",
+    ):
+        if CANONICAL_DIGEST_PATTERN.fullmatch(str(handoff.get(field) or "")) is None:
+            raise ValueError(f"canonical launcher handoff {field} is invalid")
+    defines = handoff.get("dartDefines")
+    if not isinstance(defines, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str)
+        for key, value in defines.items()
+    ):
+        raise ValueError("canonical launcher handoff Dart defines are invalid")
+    missing_defines = sorted(CANONICAL_TEST_LIVE_DART_DEFINE_KEYS - defines.keys())
+    if missing_defines:
+        raise ValueError(
+            "canonical launcher handoff Dart defines are incomplete: "
+            + ", ".join(missing_defines)
+        )
+    expected_define_values = {
+        "APP_RUNTIME_ENV": str(handoff.get("environment") or ""),
+        "QWQ_APP_LAUNCH_MODE": str(handoff.get("launchMode") or ""),
+        "APP_LAUNCH_POLICY": str(handoff.get("launchPolicy") or ""),
+        "CONTENT_BINDING_STATE": str(handoff.get("contentBindingState") or ""),
+        "CLOUD_GATEWAY_BASE_URL": str(handoff.get("recoveryBaseUrl") or ""),
+        "PUBLIC_WEB_BASE_URL": str(handoff.get("publicWebBaseUrl") or ""),
+        "APP_DOWNLOAD_BASE_URL": str(handoff.get("appDownloadBaseUrl") or ""),
+    }
+    mismatched_defines = sorted(
+        key
+        for key, value in expected_define_values.items()
+        if defines.get(key) != value
+    )
+    if mismatched_defines:
+        raise ValueError(
+            "canonical launcher handoff Dart define projection mismatch: "
+            + ", ".join(mismatched_defines)
+        )
+    build_environment = {
+        "QWQ_APP_RUNTIME_ENV": str(handoff["environment"]),
+        "QWQ_LAUNCH_TARGET": str(handoff["target"]),
+        "QWQ_APP_LAUNCH_MODE": str(handoff["launchMode"]),
+        "QWQ_APP_LAUNCH_POLICY": str(handoff["launchPolicy"]),
+        "QWQ_APP_BUILD_CONTEXT": "runtime",
+        "QWQ_DART_DEFINES_DIGEST": str(handoff["dartDefinesDigest"]),
+        "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST": str(
+            handoff["runtimeConfigDigest"]
+        ),
+        "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST": str(
+            handoff["effectiveLaunchManifestDigest"]
+        ),
+        "QWQ_CONTENT_RELEASE_ID": str(handoff.get("contentReleaseId") or ""),
+        "QWQ_CONTENT_MANIFEST_DIGEST": str(
+            handoff.get("contentManifestDigest") or ""
+        ),
+        "QWQ_CONTENT_READINESS_RECEIPT_DIGEST": str(
+            handoff.get("contentReadinessReceiptDigest") or ""
+        ),
+        "QWQ_APP_RECOVERY_BASE_URL": str(handoff["recoveryBaseUrl"]),
+        "QWQ_APP_PUBLIC_WEB_URL": str(handoff["publicWebBaseUrl"]),
+        "QWQ_APP_DOWNLOAD_BASE_URL": str(handoff["appDownloadBaseUrl"]),
+        "QWQ_LAUNCH_HANDOFF_JSON": json.dumps(
+            handoff,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+    }
+    return dict(defines), build_environment
+
+
+def _canonical_test_live_launcher_handoff(
+    args: argparse.Namespace,
+    device: dict[str, Any],
+    command_env: dict[str, str],
+    *,
+    content_binding_mode: str = "current",
+) -> dict[str, Any]:
+    """Render one run-bound canonical handoff for both Patrol and Gradle."""
+
+    runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
+    if runtime_env not in {"alpha", "beta", "gamma"}:
+        raise ValueError("test_live launcher handoff requires alpha, beta, or gamma")
+    target_name = _local_target_for_environment_alias(args.env_name)
+    get_target(load_environment_topology(), target_name)
+    if content_binding_mode == "current":
+        content_binding = load_test_live_content_binding(target_name) or {}
+    elif content_binding_mode == "unbound":
+        content_binding = {}
+    else:
+        raise ValueError("canonical test_live content binding mode is invalid")
+    expected_content = {
+        "contentReleaseId": str(content_binding.get("releaseId") or ""),
+        "contentManifestDigest": str(content_binding.get("manifestDigest") or ""),
+        "contentReadinessReceiptDigest": str(
+            content_binding.get("readinessReceiptDigest") or ""
+        ),
+    }
+    populated_content = [value for value in expected_content.values() if value]
+    if populated_content and len(populated_content) != len(expected_content):
+        raise ValueError("current test_live content binding is partial")
+    base_urls = _effective_base_urls_for_device(args, device)
+    command = [
+        sys.executable,
+        str(APP_LAUNCHER_HANDOFF_BUILDER),
+        "--env",
+        runtime_env,
+        "--target",
+        target_name,
+        "--launch-mode",
+        "canonical_launcher",
+        "--launch-policy",
+        "test_live",
+        "--app-instance-namespace",
+        f"{runtime_env}-test-live",
+        "--gateway-base-url",
+        base_urls["gatewayBaseUrl"],
+        "--legal-base-url",
+        base_urls["legalBaseUrl"],
+        "--media-avatar-base-url",
+        base_urls["mediaAvatarBaseUrl"],
+        "--media-image-base-url",
+        base_urls["mediaImageBaseUrl"],
+        "--media-video-base-url",
+        base_urls["mediaVideoBaseUrl"],
+        "--media-upload-base-url",
+        base_urls["mediaUploadBaseUrl"],
+        "--rtc-media-connection-url",
+        base_urls["rtcMediaConnectionUrl"],
+    ]
+    current_user_id = _resolved_owner_id(args)
+    if current_user_id:
+        command.extend(("--current-user-id", current_user_id))
+    if populated_content:
+        command.extend(
+            (
+                "--content-release-id",
+                expected_content["contentReleaseId"],
+                "--content-manifest-digest",
+                expected_content["contentManifestDigest"],
+                "--content-readiness-receipt-digest",
+                expected_content["contentReadinessReceiptDigest"],
+            )
+        )
+    is_android = str(device.get("targetPlatform") or "").lower().startswith(
+        "android"
+    )
+    if is_android:
+        transport_values = {
+            "reverseExpectedPorts": command_env.get(
+                "QWQ_ANDROID_REVERSE_EXPECTED_PORTS", ""
+            ),
+            "reverseActualPorts": command_env.get(
+                "QWQ_ANDROID_REVERSE_ACTUAL_PORTS", ""
+            ),
+            "reverseReceiptDigest": command_env.get(
+                "QWQ_ANDROID_REVERSE_RECEIPT_DIGEST", ""
+            ),
+            "consumerLeaseId": command_env.get("QWQ_CONSUMER_LEASE_ID", ""),
+        }
+        missing_transport = sorted(
+            key for key, value in transport_values.items() if not value
+        )
+        if missing_transport:
+            raise ValueError(
+                "Android test_live launcher transport is incomplete: "
+                + ", ".join(missing_transport)
+            )
+        command.extend(
+            (
+                "--transport-required",
+                "--reverse-expected-ports",
+                transport_values["reverseExpectedPorts"],
+                "--reverse-actual-ports",
+                transport_values["reverseActualPorts"],
+                "--reverse-receipt-digest",
+                transport_values["reverseReceiptDigest"],
+                "--consumer-lease-id",
+                transport_values["consumerLeaseId"],
+            )
+        )
+    try:
+        result = subprocess.run(
+            command,
+            cwd=APP_DIR,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ValueError(f"canonical test_live launcher handoff failed: {exc}") from exc
+    if result.returncode != 0:
+        raise ValueError(
+            result.stderr.strip()
+            or result.stdout.strip()
+            or "canonical test_live launcher handoff failed"
+        )
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"canonical test_live launcher handoff is not JSON: {exc}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ValueError("canonical test_live launcher handoff must be an object")
+    _canonical_handoff_projection(payload)
+    expected_state = "bound" if populated_content else "unbound"
+    expected_identity = {
+        "environment": runtime_env,
+        "target": target_name,
+        "launchMode": "canonical_launcher",
+        "launchPolicy": "test_live",
+        "contentBindingState": expected_state,
+        **expected_content,
+    }
+    mismatched = sorted(
+        field
+        for field, value in expected_identity.items()
+        if payload.get(field) != value
+    )
+    if mismatched:
+        raise ValueError(
+            "canonical test_live launcher handoff identity mismatch: "
+            + ", ".join(mismatched)
+        )
+    if payload["runtimeConfigDigest"] != payload["dartDefinesDigest"]:
+        raise ValueError(
+            "test_live runtime config digest must equal the Dart defines digest"
+        )
+    expected_runtime_defines = {
+        "APP_LEGAL_BASE_URL": base_urls["legalBaseUrl"],
+        "MEDIA_AVATAR_CDN_BASE_URL": base_urls["mediaAvatarBaseUrl"],
+        "MEDIA_IMAGE_CDN_BASE_URL": base_urls["mediaImageBaseUrl"],
+        "MEDIA_VIDEO_CDN_BASE_URL": base_urls["mediaVideoBaseUrl"],
+        "MEDIA_UPLOAD_BASE_URL": base_urls["mediaUploadBaseUrl"],
+        "RTC_MEDIA_CONNECTION_URL": base_urls["rtcMediaConnectionUrl"],
+    }
+    defines = payload["dartDefines"]
+    mismatched_runtime_defines = sorted(
+        key
+        for key, value in expected_runtime_defines.items()
+        if defines.get(key) != value
+    )
+    if mismatched_runtime_defines:
+        raise ValueError(
+            "canonical test_live launcher handoff topology mismatch: "
+            + ", ".join(mismatched_runtime_defines)
+        )
+    if is_android:
+        transport = payload["effectiveLaunchManifest"].get("transport")
+        if not isinstance(transport, dict) or transport.get("required") is not True:
+            raise ValueError("Android test_live launcher transport is not required")
+        for field, env_key in (
+            ("reverseExpectedPorts", "QWQ_ANDROID_REVERSE_EXPECTED_PORTS"),
+            ("reverseActualPorts", "QWQ_ANDROID_REVERSE_ACTUAL_PORTS"),
+            ("reverseReceiptDigest", "QWQ_ANDROID_REVERSE_RECEIPT_DIGEST"),
+            ("consumerLeaseId", "QWQ_CONSUMER_LEASE_ID"),
+        ):
+            if transport.get(field) != command_env.get(env_key, ""):
+                raise ValueError(
+                    f"Android test_live launcher transport mismatch: {field}"
+                )
+    return payload
+
+
+def _validated_provider_patrol_runtime_identity(
+    args: argparse.Namespace,
+    command_env: dict[str, str],
+) -> dict[str, Any] | None:
+    """Freeze the stackctl-selected Provider rail before runtime side effects.
+
+    Generic environment Patrol has no Provider runtime identity and retains its
+    existing test_live launcher behavior. Provider Patrol must carry both the
+    bounded identity envelope and the same explicit CLI mode.
+    """
+
+    explicit_runtime_mode = str(
+        getattr(args, "runtime_mode", "") or ""
+    ).strip()
+    raw_identity = command_env.get(
+        PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_ENV,
+        "",
+    ).strip()
+    if not raw_identity:
+        if explicit_runtime_mode:
+            raise ValueError(
+                "Provider Patrol runtime identity handoff is required"
+            )
+        return None
+    try:
+        identity = json.loads(raw_identity)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "Provider Patrol runtime identity handoff is invalid"
+        ) from exc
+    if not isinstance(identity, dict):
+        raise ValueError("Provider Patrol runtime identity handoff must be an object")
+    runtime_mode = str(identity.get("runtimeMode") or "").strip()
+    mode_fields = (
+        PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_IMMUTABLE_FIELDS
+        if runtime_mode == "immutable_candidate"
+        else PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_MUTABLE_FIELDS
+        if runtime_mode == "test_live"
+        else frozenset()
+    )
+    runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
+    target_name = _local_target_for_environment_alias(args.env_name)
+    candidate_field = (
+        "candidateDigest"
+        if runtime_mode == "immutable_candidate"
+        else "mutableComposeDigest"
+    )
+    selected_candidate = str(identity.get(candidate_field) or "").strip()
+    expected_candidate = str(
+        getattr(args, "candidate_digest", "") or ""
+    ).strip()
+    digest_fields = {"providerRuntimeDigest", candidate_field}
+    if runtime_mode == "test_live":
+        digest_fields.update(
+            {
+                "mutableConfigurationDigest",
+                "mutableStateDigest",
+                "mutableWorkspaceStatusDigest",
+                "mutableResolverHandoffDigest",
+            }
+        )
+    if (
+        not mode_fields
+        or explicit_runtime_mode != runtime_mode
+        or set(identity)
+        != PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_COMMON_FIELDS | mode_fields
+        or identity.get("schema")
+        != PROVIDER_CONFORMANCE_RUNTIME_IDENTITY_SCHEMA
+        or identity.get("environment") != runtime_env
+        or identity.get("target") != target_name
+        or identity.get("workload") != "full"
+        or identity.get("failureFree") is not True
+        or identity.get("nonPromotable") is not (runtime_mode == "test_live")
+        or not str(identity.get("startupAttemptId") or "").strip()
+        or not expected_candidate
+        or selected_candidate != expected_candidate
+        or any(
+            CANONICAL_DIGEST_PATTERN.fullmatch(
+                str(identity.get(field) or "")
+            )
+            is None
+            for field in digest_fields
+        )
+        or (
+            runtime_mode == "test_live"
+            and re.fullmatch(
+                r"[0-9a-f]{40}",
+                str(identity.get("mutableSourceRevision") or ""),
+            )
+            is None
+        )
+    ):
+        raise ValueError(
+            "Provider Patrol runtime identity handoff does not match execution"
+        )
+    return identity
+
+
+def _provider_patrol_launcher_handoff(
+    args: argparse.Namespace,
+    device: dict[str, Any],
+    command_env: dict[str, str],
+    *,
+    runtime_identity: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Build only the canonical launcher rail frozen before side effects."""
+
+    if runtime_identity is None:
+        return _canonical_test_live_launcher_handoff(args, device, command_env)
+    if runtime_identity["runtimeMode"] == "immutable_candidate":
+        return _canonical_test_live_launcher_handoff(
+            args,
+            device,
+            command_env,
+            content_binding_mode="unbound",
+        )
+    return _canonical_test_live_launcher_handoff(args, device, command_env)
+
+
+def _apply_launcher_handoff_to_command_env(
+    command_env: dict[str, str],
+    handoff: dict[str, Any],
+) -> None:
+    _, projection = _canonical_handoff_projection(handoff)
+    command_env.update(projection)

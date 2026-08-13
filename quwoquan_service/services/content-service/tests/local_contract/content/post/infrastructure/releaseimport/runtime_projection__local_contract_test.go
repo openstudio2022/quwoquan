@@ -106,9 +106,9 @@ func TestReplayRepairUsesSourceImportPostBindingsWithoutMigratingIdentity(
 			UsageScope:    "research",
 		},
 	}
-	legacyID := releaseimport.LegacyRuntimePostID(post.PostRef)
+	postRefDerivedID := releaseimport.RuntimePostIDFromPostRef(post.PostRef)
 	bindings := []releaseimport.ImportedPostBinding{{
-		PostRef: "article/体验/旧发布身份/1", PostID: legacyID,
+		PostRef: "article/体验/旧发布身份/1", PostID: postRefDerivedID,
 		ContentID: post.ContentID, ContentVersion: 1, UsageScope: "research",
 		ContentType: "article", AuthorID: post.AuthorID,
 	}}
@@ -169,7 +169,7 @@ func TestReplaySourceImportReportIsStrictAndCountBound(t *testing.T) {
 	}
 	binding := releaseimport.ImportedPostBinding{
 		PostRef:   "video/体验/legacy-video/1",
-		PostID:    releaseimport.LegacyRuntimePostID(post.PostRef),
+		PostID:    releaseimport.RuntimePostIDFromPostRef(post.PostRef),
 		ContentID: post.ContentID, ContentVersion: 2, UsageScope: "research",
 		ContentType: "video", AuthorID: post.AuthorID,
 	}

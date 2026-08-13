@@ -11,6 +11,7 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/conversation_message_search_sheet.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
@@ -46,6 +47,45 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
   bool _mute = false;
   bool _pin = false;
   bool _membersExpanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 开关初值从 inbox 本地副本水合（真相源是服务端 ConversationUserState，
+    // 下一次 inbox 同步以服务端值收敛）。
+    final entry = ref
+        .read(chatInboxCacheProvider)
+        .readInboxEntry(widget.conversationId);
+    _mute = entry?.muted ?? false;
+    _pin = entry?.pinned ?? false;
+  }
+
+  /// 免打扰/置顶是真实 ConversationUserState 命令：乐观切换，
+  /// 远端失败回滚并提示，禁止只改本地 setState 的假状态。
+  Future<void> _updateUserSetting({bool? muted, bool? pinned}) async {
+    final previousMute = _mute;
+    final previousPin = _pin;
+    setState(() {
+      if (muted != null) _mute = muted;
+      if (pinned != null) _pin = pinned;
+    });
+    try {
+      await ref
+          .read(chatConversationRepositoryProvider)
+          .updateConversationSettings(
+            conversationId: widget.conversationId,
+            muted: muted,
+            pinned: pinned,
+          );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _mute = previousMute;
+        _pin = previousPin;
+      });
+      AppToast.show(context, ChatText.settingUpdateFailed);
+    }
+  }
 
   /// 移出成员模式（owner/admin 经「−」进入；点成员头像确认移出）。
   bool _removeMemberMode = false;
@@ -432,6 +472,14 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                     RtcCallEntryMediaType.video,
                     participantCount: memberCount,
                   ),
+                  // 活动群空间：绑定 Gathering 的会话直达 Board（DEC-002）。
+                  onOpenBoard: (groupHome?.gatheringId.trim().isNotEmpty ?? false)
+                      ? () => context.push(
+                          AppRoutePaths.gatheringBoard(
+                            id: widget.conversationId,
+                          ),
+                        )
+                      : null,
                 ),
               ),
               SizedBox(
@@ -445,11 +493,14 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                   children: [
                     LayoutBuilder(
                       builder: (context, constraints) {
-                        // owner/admin 追加「−」移出成员入口格（对齐微信成员网格治理语义）。
-                        final actionCells = isCircleGroupManaged
+                        // owner/admin 追加「−」移出成员入口格（对齐微信成员网格治理语义）；
+                        // 搜索格对所有群形态可用（含圈群），大群按名检索成员。
+                        final managementCells = isCircleGroupManaged
                             ? 0
                             : (isAdminOrOwner ? 2 : 1);
-                        final totalCells = visibleMemberCount + actionCells;
+                        final searchCellIndex =
+                            visibleMemberCount + managementCells;
+                        final totalCells = searchCellIndex + 1;
                         final gridGap = AppSpacing.sm;
                         final availableWidth = constraints.maxWidth.isFinite
                             ? constraints.maxWidth
@@ -480,7 +531,26 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                               ),
                           itemCount: totalCells,
                           itemBuilder: (context, index) {
-                            if (index == visibleMemberCount) {
+                            if (index == searchCellIndex) {
+                              return Align(
+                                alignment: Alignment.topCenter,
+                                child: _AddMemberPlaceholder(
+                                  key: const ValueKey(
+                                    'chat_settings_member_search_entry',
+                                  ),
+                                  borderColor: borderColor,
+                                  size: AppSpacing.avatarUserLg,
+                                  icon: CupertinoIcons.search,
+                                  onTap: () => context.push(
+                                    AppRoutePaths.chatMemberSearch(
+                                      id: widget.conversationId,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                            if (!isCircleGroupManaged &&
+                                index == visibleMemberCount) {
                               return Align(
                                 alignment: Alignment.topCenter,
                                 child: _AddMemberPlaceholder(
@@ -500,7 +570,9 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                                 ),
                               );
                             }
-                            if (index == visibleMemberCount + 1) {
+                            if (!isCircleGroupManaged &&
+                                isAdminOrOwner &&
+                                index == visibleMemberCount + 1) {
                               return Align(
                                 alignment: Alignment.topCenter,
                                 child: _AddMemberPlaceholder(
@@ -737,7 +809,8 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       trailing: _buildSettingSwitch(
                         isDark: isDark,
                         value: _mute,
-                        onChanged: (v) => setState(() => _mute = v),
+                        onChanged: (v) =>
+                            unawaited(_updateUserSetting(muted: v)),
                       ),
                     ),
                     SettingsInsetFormSectionDivider(isDark: isDark),
@@ -747,7 +820,23 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                       trailing: _buildSettingSwitch(
                         isDark: isDark,
                         value: _pin,
-                        onChanged: (v) => setState(() => _pin = v),
+                        onChanged: (v) =>
+                            unawaited(_updateUserSetting(pinned: v)),
+                      ),
+                    ),
+                    SettingsInsetFormSectionDivider(isDark: isDark),
+                    SettingsInsetFormRow(
+                      key: const ValueKey<String>(
+                        'chat_settings_search_in_conversation',
+                      ),
+                      isDark: isDark,
+                      label: ChatText.searchInConversation,
+                      trailing: const SizedBox.shrink(),
+                      onTap: () => unawaited(
+                        ConversationMessageSearchSheet.show(
+                          context,
+                          conversationId: widget.conversationId,
+                        ),
                       ),
                     ),
                   ],

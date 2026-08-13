@@ -18,17 +18,33 @@ import (
 )
 
 const (
-	LocationAdapterOSRMID = "ext.route.osrm"
-	routeReadCapabilityID = "location.route.read"
+	LocationAdapterOSRMID                   = "ext.route.osrm"
+	LocationAdapterOSRMProtocolSubstituteID = "ext.route.osrm.protocol_substitute"
+	routeReadCapabilityID                   = "location.route.read"
 )
 
 type OSRMClient struct {
 	baseURL string
 	client  *http.Client
 	rate    *fixedWindowRateGate
+	adapter string
 }
 
 func NewOSRMClient(
+	baseURL string,
+	client *http.Client,
+	ratePolicy RatePolicy,
+) (*OSRMClient, error) {
+	return newOSRMClient(
+		LocationAdapterOSRMID,
+		baseURL,
+		client,
+		ratePolicy,
+	)
+}
+
+func newOSRMClient(
+	adapterID string,
 	baseURL string,
 	client *http.Client,
 	ratePolicy RatePolicy,
@@ -46,6 +62,7 @@ func NewOSRMClient(
 		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		client:  client,
 		rate:    newFixedWindowRateGate(ratePolicy),
+		adapter: adapterID,
 	}, nil
 }
 
@@ -58,7 +75,7 @@ func (c *OSRMClient) ReadRoute(
 		err = normalizeLocationProviderError(ctx, err)
 		observePublicProvider(
 			routeReadCapabilityID,
-			LocationAdapterOSRMID,
+			c.adapter,
 			startedAt,
 			err,
 		)

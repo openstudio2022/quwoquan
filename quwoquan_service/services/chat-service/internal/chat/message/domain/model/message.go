@@ -25,6 +25,8 @@ type Message struct {
 	Type                      string       `json:"type" bson:"type"`
 	Content                   string       `json:"content" bson:"content"`
 	MediaAssetID              string       `json:"mediaAssetId,omitempty" bson:"mediaAssetId,omitempty"`
+	AudioDurationMs           int64        `json:"audioDurationMs,omitempty" bson:"audioDurationMs,omitempty"`
+	AudioWaveform             []float64    `json:"audioWaveform,omitempty" bson:"audioWaveform,omitempty"`
 	Card                      *MessageCard `json:"card,omitempty" bson:"card,omitempty"`
 	ReplyToMessageID          string       `json:"replyToMessageId,omitempty" bson:"replyToMessageId,omitempty"`
 	Mentions                  []string     `json:"mentions,omitempty" bson:"mentions,omitempty"`
@@ -61,6 +63,9 @@ const (
 	MessageCardKindCircle        MessageCardKind = "circle"
 	MessageCardKindGathering     MessageCardKind = "gathering"
 	MessageCardKindRTCCallLog    MessageCardKind = "rtc_call_log"
+	// MessageCardKindIntersectionIcebreaker 是活动群成员加入时由投影生成的
+	// 一次性破冰卡；交集主句由 recommendation 读面解析，Chat 不拼句。
+	MessageCardKindIntersectionIcebreaker MessageCardKind = "intersection_icebreaker"
 )
 
 func (kind MessageCardKind) Valid() bool {
@@ -71,7 +76,8 @@ func (kind MessageCardKind) Valid() bool {
 		MessageCardKindEntityProfile,
 		MessageCardKindCircle,
 		MessageCardKindGathering,
-		MessageCardKindRTCCallLog:
+		MessageCardKindRTCCallLog,
+		MessageCardKindIntersectionIcebreaker:
 		return true
 	default:
 		return false

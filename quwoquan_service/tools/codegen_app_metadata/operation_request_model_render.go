@@ -143,6 +143,15 @@ func renderRequestModel(
 			dartType,
 			requestFieldDartName(field),
 		)
+		recordEnumFieldBinding(enumFieldBinding{
+			DartClass:      model.Name,
+			DartField:      requestFieldDartName(field),
+			DartType:       dartType,
+			EnumRef:        field.EnumRef,
+			ContractType:   field.Type,
+			ContractSource: model.DerivedSource,
+			ClientDartType: field.ClientDartType,
+		})
 	}
 	if requestModelSupportsWireDecoder(model) {
 		fmt.Fprintf(

@@ -24,4 +24,8 @@ from .request_response import (
     RecommendationAuthorImpactSummary,
     RecommendationAuthorImpactEvidence,
     RecommendationAuthorImpactEvidencePage,
+    GetRecommendationGatheringSocialProofQuery,
+    RecommendationGatheringSocialProofSummary,
+    GetRecommendationFlywheelFunnelQuery,
+    RecommendationFlywheelFunnelSnapshot,
 )

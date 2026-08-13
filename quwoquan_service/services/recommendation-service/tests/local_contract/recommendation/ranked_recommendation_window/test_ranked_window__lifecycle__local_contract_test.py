@@ -81,6 +81,16 @@ class _Closures:
         return account_id in self.closed
 
 
+class _ExclusionProfiles:
+    """Typed stand-in for the subject's current strong-feedback profile."""
+
+    def __init__(self) -> None:
+        self.profiles: dict[str, dict] = {}
+
+    def read_for_scoring(self, subject_id: str) -> dict:
+        return dict(self.profiles.get(subject_id, {}))
+
+
 def test_ranked_window_has_fixed_expiry_and_stable_ordinals() -> None:
     now = datetime(2026, 7, 31, 12, tzinfo=timezone.utc)
     window = RankedRecommendationWindow.create(
@@ -120,6 +130,7 @@ def test_ranked_window_facade_persists_one_bounded_identity() -> None:
         store=store,
         ranker=ranker,
         subject_closures=_Closures(),
+        exclusion_profiles=_ExclusionProfiles(),
         window_id_factory=lambda _key: "window-fixed",
     )
     page = facade.create_window(
@@ -156,6 +167,41 @@ def test_ranked_window_facade_persists_one_bounded_identity() -> None:
         )
 
 
+def test_ranked_window_future_pages_filter_current_strong_feedback() -> None:
+    store = _Store()
+    profiles = _ExclusionProfiles()
+    facade = Facade(
+        store=store,
+        ranker=_Ranker(),
+        subject_closures=_Closures(),
+        exclusion_profiles=profiles,
+        window_id_factory=lambda _key: "window-fixed",
+    )
+    first = facade.create_window(
+        idempotency_key="request-001",
+        subject_id="persona-001",
+        scenario="content_feed",
+        limit=2,
+    )
+    assert [item.content_id for item in first.items] == ["post-0", "post-1"]
+    assert first.next_ordinal == 2
+
+    # 强负反馈只影响未来窗口：窗口本体不可变，但反馈后的每次页读取都必须
+    # 过滤被 dislike 的内容；ordinal 与 next_ordinal 保持窗口原值。
+    profiles.profiles["persona-001"] = {"negativeContentIds": ["post-2"]}
+    filtered = facade.read_page(
+        subject_id="persona-001",
+        window_id="window-fixed",
+        from_ordinal=2,
+        limit=2,
+    )
+    assert [item.content_id for item in filtered.items] == ["post-3"]
+    assert filtered.next_ordinal == 4
+
+    stored_items, _ = store.window.page(from_ordinal=2, limit=2)
+    assert [item.content_id for item in stored_items] == ["post-2", "post-3"]
+
+
 def test_ranked_window_blocks_closed_subject_creation_and_existing_window_reads() -> None:
     store = _Store()
     ranker = _Ranker()
@@ -164,6 +210,7 @@ def test_ranked_window_blocks_closed_subject_creation_and_existing_window_reads(
         store=store,
         ranker=ranker,
         subject_closures=closures,
+        exclusion_profiles=_ExclusionProfiles(),
         window_id_factory=lambda _key: "window-fixed",
     )
     facade.create_window(

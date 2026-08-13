@@ -93,6 +93,44 @@ api_routes:
   authorization: {principal: service, scopes: [recommendation.feature_profile.read], ownership_policy: recommendation_internal_feature_profile}
   security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
   commercial: {status: ready}
+- method: GET
+  path: /internal/recommendation/flywheel-funnel
+  operation: GetRecommendationFlywheelFunnel
+  description: 交集飞轮北极星漏斗的多维诚实快照（时间窗必填；可按来源对象/活动特征/内容标签切片）。分子分母只从域事实投影读时派生（想去=真实 wishlist 事实、成形=已发布且 ≥2 名 active 参与者、经历=成形且 ≥2 名参与者各自公开回顾、促成=幂等占位收据），空数据为零、有界扫描越界以 truncated 标注、不落预聚合缓存、不下发百分比；旧事件缺维度字段归 unclassified 不回填。
+  actor: none
+  application: {kind: query, facet: RecommendationFeatureProfileViewQueryFacade, method: getFlywheelFunnel, reader: RecommendationFlywheelFunnelReader, slice: RecommendationFlywheelFunnelSnapshot}
+  request_entity: GetRecommendationFlywheelFunnelQuery
+  request_body_kind: none
+  request_bindings:
+    query: [{name: windowFrom, field: windowFrom, required: true}, {name: windowTo, field: windowTo, required: true}, {name: sourceObjectKind, field: sourceObjectKind, required: false}, {name: sourceObjectId, field: sourceObjectId, required: false}, {name: capacityTier, field: capacityTier, required: false}, {name: tagRef, field: tagRef, required: false}]
+  response_entity: RecommendationFlywheelFunnelSnapshot
+  reliability: {timeout_ms: 2000, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [RECOMMENDATION.USER.feature_profile_unauthorized, RECOMMENDATION.USER.feature_profile_forbidden, RECOMMENDATION.USER.feature_profile_invalid_argument, RECOMMENDATION.SYSTEM.feature_profile_read_failed]
+  privacy: {request_classification: INTERNAL, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: recommendation_flywheel_funnel_read, trace: true, attributes: [outcome]}
+  slo: {latency_p95_ms: 1500, availability_percent: 99.9}
+  authorization: {principal: service, scopes: [recommendation.feature_profile.read], ownership_policy: recommendation_internal_feature_profile}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  commercial: {status: ready}
+- method: GET
+  path: /internal/recommendation/social-proof/{anchorKind}/{objectId}
+  operation: GetRecommendationGatheringSocialProof
+  description: 四锚点（organizer/entity/content/creator）× 两级（成形/经历）诚实社会证明计数；发起级仅 organizer 锚点具有产品语义。计数只从 GatheringPublished 发起证据、active Participation 与公开回顾事实读时聚合派生，时间已过无内容的行动永远不进经历级。
+  actor: none
+  application: {kind: query, facet: RecommendationFeatureProfileViewQueryFacade, method: getGatheringSocialProof, reader: RecommendationGatheringSocialProofReader, slice: RecommendationGatheringSocialProofSummary}
+  request_entity: GetRecommendationGatheringSocialProofQuery
+  request_body_kind: none
+  request_bindings:
+    path: [{name: anchorKind, field: anchorKind}, {name: objectId, field: objectId}]
+  response_entity: RecommendationGatheringSocialProofSummary
+  reliability: {timeout_ms: 300, cancellation: supported, retry_mode: idempotent, max_attempts: 2, idempotency: none}
+  error_codes: [RECOMMENDATION.USER.feature_profile_unauthorized, RECOMMENDATION.USER.feature_profile_forbidden, RECOMMENDATION.USER.feature_profile_invalid_argument, RECOMMENDATION.SYSTEM.feature_profile_read_failed]
+  privacy: {request_classification: PUBLIC, response_classification: INTERNAL, log_policy: metadata_only}
+  telemetry: {metric: recommendation_gathering_social_proof_read, trace: true, attributes: [outcome]}
+  slo: {latency_p95_ms: 200, availability_percent: 99.9}
+  authorization: {principal: service, scopes: [recommendation.feature_profile.read], ownership_policy: recommendation_internal_feature_profile}
+  security: {auth_mode: required, principal: service, token_transport: bearer, anonymous_policy: deny, visibility: internal}
+  commercial: {status: ready}
 consumers:
 - {name: recommendation-ranking, capabilities: [read_subject_features, read_candidate_features, read_intersection_features]}
 - {name: recommendation-model-training, capabilities: [read_training_feature_snapshots]}
@@ -257,3 +295,12 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
+- case_id: intersection_projection_app_uat
+  spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-004
+  producer: app
+  layer: user_acceptance
+  target: {kind: page, id: user.my_intersections}
+  runner_source_path: quwoquan_app/test/user_acceptance/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_projection_remote__user_acceptance_test.dart
+  executions:
+    - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+    - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

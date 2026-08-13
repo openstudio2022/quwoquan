@@ -1,6 +1,6 @@
 # Multi-stage build for search-service
 # Build context: quwoquan_service/
-# 服务仍是独立部署二进制，但统一由根 quwoquan_service/go.mod 编译。
+# 服务独立契约保持不变；镜像构建 standalone host 入口。
 
 ARG GO_BASE_IMAGE
 ARG ALPINE_BASE_IMAGE
@@ -22,7 +22,7 @@ COPY . .
 RUN --mount=type=cache,id=quwoquan-go-build,target=/root/.cache/go-build \
     --mount=type=cache,id=quwoquan-go-mod,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-    go build ${GO_BUILD_FLAGS} -o /search-service ./services/search-service/cmd/api/
+    go build ${GO_BUILD_FLAGS} -o /search-service ./services/search-service/cmd/standalone-api/
 
 FROM ${ALPINE_BASE_IMAGE}
 RUN apk add --no-cache ca-certificates tzdata

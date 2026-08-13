@@ -29,6 +29,10 @@ UPSERT_EVENTS = frozenset(
         "GatheringAdmissionControlChanged",
     }
 )
+
+from internal.recommendation.recommendation_candidate_index_view.adapters.inbound.stream.projection_metrics import (
+    record_projection_outcome,
+)
 REMOVAL_EVENTS = frozenset({"GatheringCancelled", "GatheringCompleted"})
 SUPPORTED_EVENTS = UPSERT_EVENTS | REMOVAL_EVENTS
 
@@ -342,6 +346,15 @@ class GatheringLifecycleConsumer:
                 raise
 
     def process_once(self, *, block_ms: int = 0) -> int:
+        try:
+            processed = self._process_once_inner(block_ms=block_ms)
+        except Exception:
+            record_projection_outcome("gathering_lifecycle", "error")
+            raise
+        record_projection_outcome("gathering_lifecycle", "ok")
+        return processed
+
+    def _process_once_inner(self, *, block_ms: int = 0) -> int:
         records = self._redis.xreadgroup(
             CONSUMER_GROUP,
             self._consumer,

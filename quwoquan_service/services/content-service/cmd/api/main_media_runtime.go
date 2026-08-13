@@ -1,7 +1,8 @@
-package main
+package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
 	"strings"
@@ -41,6 +42,7 @@ type mediaRuntimeComposition struct {
 	mediaUploadSessionService  *uploadsession.UseCases
 	mediaImageReprocessService *mediareprocess.Service
 	originalAccessQuotaService *originalaccessquotaapp.Service
+	originalAccessAuditQuery   *originalaccessquotaapp.AuditQueryFacade
 	mediaObjectGateway         *mediainfra.ObjectGateway
 	commentServiceCore         *commentapp.CommentService
 }
@@ -48,6 +50,7 @@ type mediaRuntimeComposition struct {
 // buildMediaRuntime 装配 OSS、媒体对象 Facade、处理 worker 与评论属地依赖。
 func buildMediaRuntime(
 	ctx context.Context,
+	workers *workerRegistry,
 	cfg config,
 	appEnv string,
 	instanceID string,
@@ -63,10 +66,10 @@ func buildMediaRuntime(
 	postMediaReader postports.MediaReferencedPostReader,
 	viewerBlockReader *accessinfra.PersonaBlockReader,
 	commentViewerRelationships *commentpersistence.CommentViewerRelationshipMongoProjection,
-) (mediaRuntimeComposition, func()) {
+) (mediaRuntimeComposition, func(), error) {
 	ossBinding, err := objectstorage.LoadBinding(appEnv, runtimeconfig.EnvRuntimeConfigProvider{})
 	if err != nil {
-		log.Fatalf("content-service object storage binding invalid: %v", err)
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service object storage binding invalid: %w", err)
 	}
 	storageConfig := runtimemedia.ObjectStorageConfig{
 		Endpoint:        contentOSSEndpoint(ossBinding.Endpoint, cfg.OSS.UseSSL),
@@ -97,7 +100,9 @@ func buildMediaRuntime(
 		strings.TrimSpace(storageConfig.AccessKeySecret) == "" || strings.TrimSpace(storageConfig.MediaDeliveryBaseURL) == "" ||
 		strings.TrimSpace(storageConfig.MediaUploadBaseURL) == "" ||
 		strings.TrimSpace(storageConfig.CDNSignKey) == "" {
-		log.Fatal("content-service OSS endpoint, bucket, region, credentials, media delivery/upload bases and signing key are required")
+		return mediaRuntimeComposition{}, nil, fmt.Errorf(
+			"content-service OSS endpoint, bucket, region, credentials, media delivery/upload bases and signing key are required",
+		)
 	}
 	objectClient := runtimemedia.NewS3PresignClient(storageConfig)
 	log.Printf(
@@ -111,28 +116,28 @@ func buildMediaRuntime(
 		Bucket: storageConfig.Bucket, MediaDeliveryBaseURL: storageConfig.MediaDeliveryBaseURL, CDNSignKey: storageConfig.CDNSignKey, DeliveryTTL: storageConfig.CDNTTL,
 	}, objectClient)
 	if err != nil {
-		log.Fatalf("content-service media object gateway invalid: %v", err)
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service media object gateway invalid: %w", err)
 	}
 	if mediaStore == nil {
-		log.Fatal("content-service MediaUploadSession/MediaAsset store is not configured")
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service MediaUploadSession/MediaAsset store is not configured")
 	}
 	if mediaOriginalAccessStore == nil {
-		log.Fatal("content-service MediaOriginalAccessFact store is not configured")
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service MediaOriginalAccessFact store is not configured")
 	}
 	if originalAccessQuotaStore == nil {
-		log.Fatal("content-service OriginalAccessQuota store is not configured")
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service OriginalAccessQuota store is not configured")
 	}
 	if mediaImageReprocessStore == nil {
-		log.Fatal("content-service MediaImageReprocessRun store is not configured")
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service MediaImageReprocessRun store is not configured")
 	}
 	if mediaUploadSessionStore == nil {
-		log.Fatal("content-service MediaUploadSession store is not configured")
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service MediaUploadSession store is not configured")
 	}
 	if postMediaReader == nil || viewerBlockReader == nil {
-		log.Fatal("content-service Post media visibility reader is not configured")
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service Post media visibility reader is not configured")
 	}
 	if commentViewerRelationships == nil {
-		log.Fatal("content-service Comment viewer relationship projection is not configured")
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service Comment viewer relationship projection is not configured")
 	}
 	mediaServiceCore := mediaapp.NewMediaService(
 		mediaapp.BindDataPorts(mediaStore),
@@ -147,6 +152,11 @@ func buildMediaRuntime(
 		postapp.NewMediaAssetVisibilityReader(postMediaReader, viewerBlockReader),
 		mediaObjectGateway,
 	)
+	originalAccessAuditQuery := originalaccessquotaapp.NewAuditQueryFacade(
+		originalaccessaudit.NewReader(
+			originalaccessapp.NewQueryService(mediaOriginalAccessStore),
+		),
+	)
 	mediaService := mediaapp.BindFacades(mediaServiceCore)
 	mediaUploadSessionGateway, err := uploadsessionstorage.NewGateway(
 		uploadsessionstorage.Config{
@@ -156,7 +166,7 @@ func buildMediaRuntime(
 		objectClient,
 	)
 	if err != nil {
-		log.Fatalf("content-service media upload session object gateway invalid: %v", err)
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service media upload session object gateway invalid: %w", err)
 	}
 	mediaUploadSessionService := uploadsession.NewUseCases(
 		mediaUploadSessionStore,
@@ -178,7 +188,7 @@ func buildMediaRuntime(
 		},
 	)
 	if processorErr != nil {
-		log.Fatalf("content-service media processing pipeline unavailable: %v", processorErr)
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service media processing pipeline unavailable: %w", processorErr)
 	}
 	mediaProcessingHandler := mediaprocessing.NewMediaProcessingHandler(
 		mediaStore,
@@ -194,11 +204,11 @@ func buildMediaRuntime(
 	if workerInterval <= 0 {
 		workerInterval = 2 * time.Second
 	}
-	go func() {
-		if err := mediaProcessingHandler.Run(ctx, workerInterval); err != nil && ctx.Err() == nil {
+	workers.Add(func(workerCtx context.Context) {
+		if err := mediaProcessingHandler.Run(workerCtx, workerInterval); err != nil && workerCtx.Err() == nil {
 			logger.Error("content media processing worker stopped", "error", err)
 		}
-	}()
+	})
 	healthChecker.Register("content_media_processing_worker", func(_ context.Context) error {
 		return mediaProcessingHandler.Ready(15 * time.Minute)
 	})
@@ -216,7 +226,7 @@ func buildMediaRuntime(
 		mediaService,
 		"content-media-image-reprocess-"+strings.TrimSpace(instanceID),
 	)
-	go func() {
+	workers.Add(func(ctx context.Context) {
 		ticker := time.NewTicker(workerInterval)
 		defer ticker.Stop()
 		for {
@@ -229,13 +239,13 @@ func buildMediaRuntime(
 			case <-ticker.C:
 			}
 		}
-	}()
+	})
 	log.Printf("content-service media image reprocess worker enabled interval=%s", workerInterval)
 
 	commentIPLocationResolver, closeIPLocationResolver, err :=
 		buildCommentIPLocationResolver(cfg, appEnv, newIP2RegionResolver)
 	if err != nil {
-		log.Fatalf("content-service comment IP location resolver unavailable: %v", err)
+		return mediaRuntimeComposition{}, nil, fmt.Errorf("content-service comment IP location resolver unavailable: %w", err)
 	}
 	commentServiceCore := commentapp.NewCommentService(
 		commentapp.BindDataPorts(
@@ -265,7 +275,8 @@ func buildMediaRuntime(
 		mediaUploadSessionService:  mediaUploadSessionService,
 		mediaImageReprocessService: mediaImageReprocessService,
 		originalAccessQuotaService: originalAccessQuotaService,
+		originalAccessAuditQuery:   originalAccessAuditQuery,
 		mediaObjectGateway:         mediaObjectGateway,
 		commentServiceCore:         commentServiceCore,
-	}, closeIPLocationResolver
+	}, closeIPLocationResolver, nil
 }

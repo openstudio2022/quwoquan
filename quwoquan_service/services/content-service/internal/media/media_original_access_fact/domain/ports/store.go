@@ -26,3 +26,9 @@ type Store interface {
 		AppendRequest,
 	) (AppendResult, error)
 }
+
+// FactReader finds one already-appended immutable fact by its audit identity.
+// A missing fact is (zero, false, nil); errors are storage failures only.
+type FactReader interface {
+	FindFact(context.Context, string) (originalaccessmodel.Fact, bool, error)
+}

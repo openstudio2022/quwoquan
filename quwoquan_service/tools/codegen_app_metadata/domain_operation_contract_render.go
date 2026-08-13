@@ -209,6 +209,14 @@ func renderDomainResponseModel(
 			typeName,
 			responseFieldDartName(field),
 		)
+		recordEnumFieldBinding(enumFieldBinding{
+			DartClass:      model.Name,
+			DartField:      responseFieldDartName(field),
+			DartType:       typeName,
+			EnumRef:        field.EnumRef,
+			ContractType:   field.Type,
+			ClientDartType: field.ClientDartType,
+		})
 	}
 	output.WriteString("\n  factory ")
 	output.WriteString(model.Name)

@@ -143,7 +143,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: GetExperimentAssignment}
-  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/experiment_assignment_fact/immutable_postgres_fact__api_integration_test.go
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/experiment_assignment_fact/immutable_postgres_fact__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}
 - case_id: get-experiment-stats-local
@@ -159,6 +159,6 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: GetExperimentStats}
-  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/experiment_assignment_fact/immutable_postgres_fact__api_integration_test.go
+  runner_source_path: quwoquan_service/services/product-ops-service/tests/api_integration/product_ops/experiment_assignment_fact/immutable_postgres_fact__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: postgresql, digest_binding: candidate}

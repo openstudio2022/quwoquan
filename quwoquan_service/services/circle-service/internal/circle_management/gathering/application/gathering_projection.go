@@ -23,6 +23,7 @@ type ApplicationAnswer = contract.GatheringApplicationAnswer
 type PublicCard = wire.GatheringPublicCardSlice
 type PublicDetail = wire.GatheringPublicDetailSlice
 type PrivateDetail = wire.GatheringPrivateDetailSlice
+type ParticipationStatus = wire.GatheringParticipationStatusSlice
 type Capacity = wire.GatheringCapacitySlice
 type ApplicationInboxItem = wire.GatheringApplicationInboxItemSlice
 type ApplicationInboxPage = wire.GatheringApplicationInboxPageSlice

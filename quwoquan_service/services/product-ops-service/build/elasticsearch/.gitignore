@@ -1,0 +1,2 @@
+# 插件 zip 是可重建构建输入：bash fetch_plugins.sh 重新获取。
+*.zip

@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"errors"
 	"math"
 	"net/url"
 	"sort"
@@ -93,6 +94,24 @@ type RetrieveRequest struct {
 	Terms   []string        `json:"terms,omitempty"`
 	Filters RetrieveFilters `json:"filters,omitempty"`
 	Page    PageRequest     `json:"page,omitempty"`
+	// BoostTerms inject bounded score lifts (e.g. search-term heat under the
+	// term_heat AB arm) at query time, so the recall engine's order stays the
+	// single final ranking truth — no post-recall re-rank.
+	BoostTerms []BoostTerm `json:"boostTerms,omitempty"`
+	// ReplicaPreference pins recall to a deterministic shard replica per
+	// session/principal so repeated identical queries never jitter across
+	// replica segment-merge differences. Must be a non-PII digest.
+	ReplicaPreference string `json:"-"`
+	// PITID pins paginated recall to the point-in-time snapshot the pagination
+	// started on (lazy: opened by the owner on the first follow-up page). A PIT
+	// request must not carry preference — the snapshot already fixes the copies.
+	PITID string `json:"-"`
+}
+
+// BoostTerm is one query-time score lift: documents matching Term gain Weight.
+type BoostTerm struct {
+	Term   string  `json:"term"`
+	Weight float64 `json:"weight"`
 }
 
 // Viewer carries the permission context. It is supplied by the service layer
@@ -118,6 +137,10 @@ type RetrievePlan struct {
 	Limit       int
 	Offset      int
 	Viewer      Viewer
+	BoostTerms  []BoostTerm
+	// ReplicaPreference / PITID: see RetrieveRequest.
+	ReplicaPreference string
+	PITID             string
 }
 
 // WantsAny reports whether the plan targets include any of the given targets.
@@ -139,6 +162,15 @@ type RecallCandidate struct {
 	Document  Document
 	BaseScore float64
 	Source    string
+	// Highlights carries server-side highlighter fragments keyed by field
+	// (plain text, no markup — the App highlights via matchedTerms). Empty for
+	// backends without highlight support.
+	Highlights map[string]string
+	// ServerRanked marks candidates whose BaseScore already embodies the final
+	// cross-type ranking (ES function_score pushdown covers term relevance,
+	// freshness, quality and geo proximity). rankAndMerge preserves that score
+	// as the single ranking truth instead of re-deriving a second one.
+	ServerRanked bool
 }
 
 // RetrieveHit is the standard, caller-agnostic result item.
@@ -309,6 +341,15 @@ func PlanRequest(req RetrieveRequest, viewer Viewer) (RetrievePlan, []DegradeSig
 		offset = 0
 	}
 
+	boostTerms := make([]BoostTerm, 0, len(req.BoostTerms))
+	for _, boost := range req.BoostTerms {
+		term := strings.TrimSpace(boost.Term)
+		if term == "" || boost.Weight <= 0 {
+			continue
+		}
+		boostTerms = append(boostTerms, BoostTerm{Term: term, Weight: boost.Weight})
+	}
+
 	plan := RetrievePlan{
 		Targets:     targets,
 		ObjectTypes: ObjectTypesForTargets(targets),
@@ -323,9 +364,19 @@ func PlanRequest(req RetrieveRequest, viewer Viewer) (RetrievePlan, []DegradeSig
 		Limit:       limit,
 		Offset:      offset,
 		Viewer:      viewer,
+		BoostTerms:  boostTerms,
+
+		ReplicaPreference: strings.TrimSpace(req.ReplicaPreference),
+		PITID:             strings.TrimSpace(req.PITID),
 	}
 	return plan, degrade
 }
+
+// ErrPaginationSnapshotInvalid marks recall that failed because the pagination
+// snapshot (PIT) the cursor is bound to no longer exists. Owners translate it
+// into their fail-closed cursor error; recall never silently degrades to an
+// unsnapshotted query.
+var ErrPaginationSnapshotInvalid = errors.New("pagination snapshot is invalid")
 
 // Retrieve is the unified entrypoint. It runs the backend-agnostic pipeline:
 // plan -> backend recall -> cross-type rank/merge -> permission gate -> envelope.
@@ -428,7 +479,6 @@ func rankAndMerge(plan RetrievePlan, candidates []RecallCandidate) ([]RetrieveHi
 			continue
 		}
 
-		base := cand.BaseScore
 		var matchedField, snippet string
 		var termReasons []Reason
 		var matchedTerms []string
@@ -436,58 +486,111 @@ func rankAndMerge(plan RetrievePlan, candidates []RecallCandidate) ([]RetrieveHi
 		if len(plan.Terms) > 0 {
 			termScore, matchedField, snippet, termReasons = scoreDocument(plan.Interpreted, doc)
 			matchedTerms = matchedTermsFor(plan, doc)
-			if base <= 0 {
-				base = termScore
-			} else {
-				base += termScore
-			}
-		}
-
-		anchored, anchorBoost := anchorMatch(plan, doc)
-		// A candidate must satisfy at least one provided main condition.
-		if hasMainCondition {
-			termMatched := base > 0 && len(plan.Terms) > 0
-			if !termMatched && !anchored {
-				continue
-			}
-		}
-
-		// rankReasons accumulates the transparent ranking explanation in the same
-		// order the score is composed, so the published reasons and the final
-		// score stay a single, consistent truth (no second derivation).
-		rankReasons := make([]Reason, 0, 6)
-		rankReasons = append(rankReasons, termReasons...)
-
-		score := base + anchorBoost
-		if anchorBoost > 0 {
-			rankReasons = append(rankReasons, Reason{Code: "anchor_match", Label: "ID/名称锚定命中", Weight: anchorBoost})
-		}
-		if score <= 0 {
-			// Discovery / anchor-only / no-condition path.
-			score = 0.1 + popularityScore(doc.Popularity)
-			rankReasons = append(rankReasons, Reason{Code: "default_discovery", Label: "默认发现", Weight: score})
 		}
 		matchedTagList := matchedTagsFor(plan.Tags, doc)
-		if len(matchedTagList) > 0 {
-			tagBoost := 0.5 * float64(len(matchedTagList))
-			score += tagBoost
-			rankReasons = append(rankReasons, Reason{Code: "tag_match", Label: "标签匹配：" + strings.Join(matchedTagList, "、"), Weight: tagBoost})
-		}
-		if !doc.Freshness.IsZero() {
-			if fresh := freshnessScore(doc.Freshness); fresh > 0 {
-				score += fresh
-				rankReasons = append(rankReasons, Reason{Code: "freshness", Label: "内容较新", Weight: fresh})
+
+		var score float64
+		var rankReasons []Reason
+		if cand.ServerRanked {
+			// The engine already composed the final commercial score
+			// (function_score: text relevance + freshness + quality + geo). Keep
+			// it as the single ranking truth; the local matcher only explains the
+			// hit (matchedField/terms) and must not veto or re-score engine
+			// matches — IK segmentation legitimately recalls documents the
+			// simplified local matcher cannot re-verify.
+			score = cand.BaseScore
+			rankReasons = make([]Reason, 0, 3)
+			rankReasons = append(rankReasons, Reason{Code: "relevance", Label: "相关性", Weight: score})
+			if len(matchedTagList) > 0 {
+				rankReasons = append(rankReasons, Reason{Code: "tag_match", Label: "标签匹配：" + strings.Join(matchedTagList, "、"), Weight: 0})
+			}
+			if nearBoost > 0 {
+				rankReasons = append(rankReasons, Reason{Code: "geo_proximity", Label: "附近优先", Weight: 0})
+			}
+		} else {
+			base := cand.BaseScore
+			if len(plan.Terms) > 0 {
+				if base <= 0 {
+					base = termScore
+				} else {
+					base += termScore
+				}
+			}
+
+			anchored, anchorBoost := anchorMatch(plan, doc)
+			// A candidate must satisfy at least one provided main condition.
+			if hasMainCondition {
+				termMatched := base > 0 && len(plan.Terms) > 0
+				if !termMatched && !anchored {
+					continue
+				}
+			}
+
+			// rankReasons accumulates the transparent ranking explanation in the same
+			// order the score is composed, so the published reasons and the final
+			// score stay a single, consistent truth (no second derivation).
+			rankReasons = make([]Reason, 0, 6)
+			rankReasons = append(rankReasons, termReasons...)
+
+			score = base + anchorBoost
+			if anchorBoost > 0 {
+				rankReasons = append(rankReasons, Reason{Code: "anchor_match", Label: "ID/名称锚定命中", Weight: anchorBoost})
+			}
+			if score <= 0 {
+				// Discovery / anchor-only / no-condition path.
+				score = 0.1 + popularityScore(doc.Popularity)
+				rankReasons = append(rankReasons, Reason{Code: "default_discovery", Label: "默认发现", Weight: score})
+			}
+			if len(matchedTagList) > 0 {
+				tagBoost := 0.5 * float64(len(matchedTagList))
+				score += tagBoost
+				rankReasons = append(rankReasons, Reason{Code: "tag_match", Label: "标签匹配：" + strings.Join(matchedTagList, "、"), Weight: tagBoost})
+			}
+			if !doc.Freshness.IsZero() {
+				if fresh := freshnessScore(doc.Freshness); fresh > 0 {
+					score += fresh
+					rankReasons = append(rankReasons, Reason{Code: "freshness", Label: "内容较新", Weight: fresh})
+				}
+			}
+			if pop := popularityScore(doc.Popularity); pop > 0 {
+				score += pop
+				rankReasons = append(rankReasons, Reason{Code: "popularity", Label: "热门度加权", Weight: pop})
+			}
+			if nearBoost > 0 {
+				score += nearBoost
+				rankReasons = append(rankReasons, Reason{Code: "geo_proximity", Label: "附近优先", Weight: nearBoost})
+			}
+			// Native analogue of the ES query-time boost injection so both
+			// backends honor the same BoostTerm contract.
+			if len(plan.BoostTerms) > 0 {
+				haystack := normalize(strings.Join([]string{doc.Title, doc.Summary, strings.Join(doc.Tags, " ")}, " "))
+				boostLift := 0.0
+				matchedBoosts := make([]string, 0, len(plan.BoostTerms))
+				for _, boost := range plan.BoostTerms {
+					if strings.Contains(haystack, normalize(boost.Term)) {
+						if boost.Weight > boostLift {
+							boostLift = boost.Weight
+						}
+						matchedBoosts = append(matchedBoosts, boost.Term)
+					}
+				}
+				if boostLift > 0 {
+					score += boostLift
+					rankReasons = append(rankReasons, Reason{Code: "search.term_heat", Label: "热搜词加权：" + strings.Join(matchedBoosts, "、"), Weight: boostLift})
+				}
 			}
 		}
-		if pop := popularityScore(doc.Popularity); pop > 0 {
-			score += pop
-			rankReasons = append(rankReasons, Reason{Code: "popularity", Label: "热门度加权", Weight: pop})
-		}
-		if nearBoost > 0 {
-			score += nearBoost
-			rankReasons = append(rankReasons, Reason{Code: "geo_proximity", Label: "附近优先", Weight: nearBoost})
-		}
 
+		// Server-side highlighter fragments outrank the local matcher snippet:
+		// they reflect the analyzer that actually matched (IK), not the
+		// simplified local tokenizer.
+		for _, field := range [...]string{"title", "summary", "body"} {
+			if fragment := strings.TrimSpace(cand.Highlights[field]); fragment != "" {
+				snippet = fragment
+				matchedField = field
+				break
+			}
+		}
 		if snippet == "" {
 			snippet = firstNonEmpty(doc.Summary, doc.Body, doc.Title)
 		}

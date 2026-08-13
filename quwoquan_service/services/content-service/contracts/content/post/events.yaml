@@ -41,6 +41,7 @@ events:
   - primaryHomepageId
   - primaryHomepageSnapshot
   - visitedAt
+  - gatheringRef
   - assistantUsePolicy
   - title
   - body
@@ -113,6 +114,7 @@ events:
   - primaryHomepageId
   - primaryHomepageSnapshot
   - visitedAt
+  - gatheringRef
   - assistantUsePolicy
   - createdAt
   - publishedAt
@@ -135,6 +137,7 @@ events:
   - primaryHomepageId
   - primaryHomepageSnapshot
   - visitedAt
+  - gatheringRef
   - assistantUsePolicy
   - title
   - body
@@ -191,6 +194,7 @@ events:
   - primaryHomepageId
   - primaryHomepageSnapshot
   - visitedAt
+  - gatheringRef
   - assistantUsePolicy
   - createdAt
   - publishedAt

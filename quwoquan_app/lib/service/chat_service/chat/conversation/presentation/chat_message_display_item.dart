@@ -4,6 +4,8 @@ import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart'
     show ChatMessageView, MessageCard;
+export 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart'
+    show MessageCardKind;
 
 class ChatMessageDisplayItem {
   const ChatMessageDisplayItem({
@@ -29,6 +31,7 @@ class ChatMessageDisplayItem {
     required this.audioWaveform,
     this.mentions = const <String>[],
     this.card,
+    this.replyToMessageId,
   });
 
   final String id;
@@ -53,6 +56,7 @@ class ChatMessageDisplayItem {
   final List<double> audioWaveform;
   final List<String> mentions;
   final MessageCard? card;
+  final String? replyToMessageId;
 }
 
 /// Conversation 物理页的气泡与长按菜单展示模型。
@@ -62,6 +66,7 @@ extension ChatMessageViewDataDisplay on ChatMessageViewData {
   ChatMessageDisplayItem toDisplayItem({
     required String currentUserId,
     MediaEndpointConfig? mediaEndpointConfig,
+    int peerReadSeq = 0,
   }) {
     final isSelf =
         senderId == currentUserId ||
@@ -89,14 +94,19 @@ extension ChatMessageViewDataDisplay on ChatMessageViewData {
       timestampLabel: timeStr,
       sentAtIso: timestamp?.toIso8601String() ?? '',
       isSelf: isSelf,
-      isRead: true,
+      // 自己的消息按对端已读水位判定（1v1 双勾真相源，0 水位=未观测即未读）；
+      // 对方消息的已读态不由本端指示器表达。
+      isRead: isSelf && seq > 0 && seq <= peerReadSeq,
       mediaUrl: deliveryUrl,
       imageUrl: imageUrl,
       thumbnailUrl: imageUrl,
-      audioDurationMs: 0,
-      audioWaveform: const <double>[],
+      audioDurationMs: audioDurationMs ?? 0,
+      audioWaveform: List<double>.unmodifiable(
+        audioWaveform ?? const <double>[],
+      ),
       mentions: List<String>.unmodifiable(mentions ?? const <String>[]),
       card: card,
+      replyToMessageId: replyToMessageId,
     );
   }
 }

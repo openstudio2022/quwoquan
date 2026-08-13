@@ -43,6 +43,7 @@ class ChatMessageBubble extends ConsumerWidget {
     this.messageStatus,
     this.mentionDisplayNames = const <String, String>{},
     this.onMentionTap,
+    this.onRetrySend,
   });
 
   final ChatMessageDisplayItem message;
@@ -74,6 +75,9 @@ class ChatMessageBubble extends ConsumerWidget {
   final String? messageStatus;
   final Map<String, String> mentionDisplayNames;
   final ValueChanged<String>? onMentionTap;
+
+  /// 发送失败气泡的手动重发入口（点击失败指示器触发）。
+  final VoidCallback? onRetrySend;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -214,6 +218,14 @@ class ChatMessageBubble extends ConsumerWidget {
           ),
         ),
       );
+      if (onTap != null) {
+        contentWidget = GestureDetector(
+          key: ValueKey<String>('chat_file_open_${message.id}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: contentWidget,
+        );
+      }
     } else if (type == 'video') {
       final previewUrl = message.thumbnailUrl.isNotEmpty
           ? message.thumbnailUrl
@@ -321,6 +333,89 @@ class ChatMessageBubble extends ConsumerWidget {
                     ],
                   ),
                 ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (onTap != null) {
+        contentWidget = GestureDetector(
+          key: ValueKey<String>('chat_video_open_${message.id}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: contentWidget,
+        );
+      }
+    } else if (type == 'card' &&
+        message.card != null &&
+        message.card!.kind == MessageCardKind.intersectionIcebreaker) {
+      // 活动群一次性破冰卡：交集主句（≤2 条）整体来自云侧，端不拼句、
+      // 无跳转语义（交集本身不是可转发对象）。
+      final card = message.card!;
+      final primaryText = card.title.trim();
+      final secondaryText = card.subtitle?.trim() ?? '';
+      contentWidget = _BubbleWithTail(
+        isRight: isRight,
+        color: bubbleColor.withValues(alpha: 0.94),
+        tailShadowColor: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.dropShadow,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: effectiveMaxWidth * 0.92,
+            minWidth: AppSpacing.twoHundredTwenty,
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(AppSpacing.containerSm),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      CupertinoIcons.sparkles,
+                      color: textColor.withValues(alpha: 0.8),
+                      size: AppSpacing.iconSmall,
+                    ),
+                    SizedBox(width: AppSpacing.intraGroupXs),
+                    Text(
+                      ChatText.chatIcebreakerCardLabel,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosFootnote,
+                        color: textColor.withValues(alpha: 0.64),
+                        height: AppTypography.lineHeightCompact,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: AppSpacing.intraGroupSm),
+                Text(
+                  primaryText,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosBody,
+                    color: textColor,
+                    height: AppTypography.lineHeightCompact,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (secondaryText.isNotEmpty) ...[
+                  SizedBox(height: AppSpacing.xs),
+                  Text(
+                    secondaryText,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: AppTypography.iosFootnote,
+                      color: textColor.withValues(alpha: 0.72),
+                      height: AppTypography.lineHeightCompact,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -556,6 +651,7 @@ class ChatMessageBubble extends ConsumerWidget {
                 memberCount: memberCount,
                 messageStatus: message.status,
                 textColor: textColor,
+                onRetrySend: message.status == 'failed' ? onRetrySend : null,
               ),
             Flexible(fit: FlexFit.loose, child: contentWidget),
           ],
@@ -715,6 +811,7 @@ class _ReceiptStatusIndicator extends StatelessWidget {
     required this.memberCount,
     required this.textColor,
     this.messageStatus,
+    this.onRetrySend,
   });
 
   final bool isRead;
@@ -722,6 +819,9 @@ class _ReceiptStatusIndicator extends StatelessWidget {
   final int memberCount;
   final String? messageStatus;
   final Color textColor;
+
+  /// failed 态的点击重发回调；非空时失败图标成为可点击行动点。
+  final VoidCallback? onRetrySend;
 
   @override
   Widget build(BuildContext context) {
@@ -732,8 +832,8 @@ class _ReceiptStatusIndicator extends StatelessWidget {
       icon = Icons.access_time;
       color = textColor.withValues(alpha: 0.5);
     } else if (messageStatus == 'failed') {
-      icon = Icons.info_outline;
-      color = textColor.withValues(alpha: 0.58);
+      icon = Icons.error_outline;
+      color = AppColors.error;
     } else if (receiptEnabled && memberCount <= 2 && isRead) {
       icon = Icons.done_all;
       color = AppColors.primaryColor;
@@ -742,9 +842,22 @@ class _ReceiptStatusIndicator extends StatelessWidget {
       color = textColor.withValues(alpha: 0.6);
     }
 
-    return Padding(
+    final indicator = Padding(
       padding: EdgeInsets.only(right: AppSpacing.xs),
       child: Icon(icon, size: AppSpacing.iconSmall, color: color),
     );
+    if (messageStatus == 'failed' && onRetrySend != null) {
+      return Semantics(
+        button: true,
+        label: ChatText.chatRetrySendMessage,
+        child: GestureDetector(
+          key: const ValueKey<String>('chat_bubble_retry_send'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onRetrySend,
+          child: indicator,
+        ),
+      );
+    }
+    return indicator;
   }
 }

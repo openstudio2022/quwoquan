@@ -1436,7 +1436,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: GetPersonaManagementSummary}
-    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/operation_queries__api_integration_test.go
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/operation_queries__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
   - case_id: get-active-persona-context-local
@@ -1468,7 +1468,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: GetPersonaLifecycleGuard}
-    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/operation_queries__api_integration_test.go
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/operation_queries__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: postgres, digest_binding: candidate}
   - case_id: get-persona-profile-local
@@ -1628,7 +1628,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: GetUserInterestProfile}
-    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/operation_queries__api_integration_test.go
+    runner_source_path: quwoquan_service/services/user-service/tests/api_integration/account/user_account/operation_queries__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: close-account-local
@@ -1919,3 +1919,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/api_integration/service/user_service/account/user_account/account_closure_remote__api_integration_test.dart
     executions:
       - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+  - case_id: user_account_closure_app_uat
+    spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: settings.account_security}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/user_service/account/user_account/account_closure_remote__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

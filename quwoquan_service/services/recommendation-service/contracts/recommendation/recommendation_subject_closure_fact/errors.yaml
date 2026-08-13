@@ -1,0 +1,23 @@
+description: 账号关闭事实 stream consumer 的对象级错误语义（无 HTTP 面）。
+errors:
+- code: RECOMMENDATION.SYSTEM.subject_closure_source_event_invalid
+  reason: subject_closure_source_event_invalid
+  emitted_by:
+  - {surface: consumer}
+  recovery_action: absorb
+  disruption_level: silent
+  description: >-
+    UserClosed 账号事件解码或身份校验失败。重试穷尽后进入对象 DLQ；
+    关闭栅栏缺失会阻止相关主体的推荐读写，不会伪造成功。
+  user_message: {zh: 推荐主体关闭事件无效, en: Invalid recommendation subject closure source event}
+- code: RECOMMENDATION.SYSTEM.subject_closure_append_unavailable
+  reason: subject_closure_append_unavailable
+  emitted_by:
+  - {surface: consumer}
+  recovery_action: retry
+  recovery_after_seconds: 5
+  disruption_level: silent
+  description: >-
+    关闭事实 Mongo 追加或既有数据硬删除暂时不可用；consumer 按有界重试推进，
+    直至关闭终态可被强制执行。
+  user_message: {zh: 推荐主体关闭处理暂时不可用, en: Recommendation subject closure append is temporarily unavailable}

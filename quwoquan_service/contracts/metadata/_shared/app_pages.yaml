@@ -114,6 +114,8 @@ pages:
 
   - { page_name: my_intersections, route_id: myIntersections, collect_page_access: true }
 
+  - { page_name: my_gatherings, route_id: myGatherings, collect_page_access: true }
+
   - { page_name: object_intersections, route_id: objectIntersections, collect_page_access: true }
 
   - { page_name: my_footprint, route_id: myFootprint, collect_page_access: true }
@@ -179,6 +181,8 @@ internal_pages:
   - { page_name: create_article_typography, internal_id: createPageArticleTypography, location: page_internal_create_article_typography, collect_page_access: true }
 
   - { page_name: create_location_picker, internal_id: createPageLocationPicker, location: page_internal_create_location_picker, collect_page_access: true }
+
+  - { page_name: create_tag_chip_picker, internal_id: createPageTagChipPicker, location: page_internal_create_tag_chip_picker, collect_page_access: true }
 
   - { page_name: create_publish_circle_select, internal_id: createPagePublishCircleSelect, location: page_internal_create_publish_circle_select, collect_page_access: true }
 

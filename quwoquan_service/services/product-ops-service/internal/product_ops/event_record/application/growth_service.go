@@ -35,10 +35,27 @@ type GrowthStore interface {
 	ListActorFirstSeen(ctx context.Context, date string) ([]string, error)
 }
 
-// ActiveSessionLister 由事件仓库实现：返回窗口内 distinct sessionId 与事件总数。
-// Elasticsearch 用聚合查询，memory local_contract 遍历；上限保护防止无界拉取。
+// ActiveSessionLister 由事件仓库实现：返回窗口内 distinct sessionId 与
+// page_open 页面浏览量（PV 唯一口径；全事件条数会计入行为/诊断事件，禁止
+// 作为 PV 分子）。Elasticsearch 用聚合查询，memory local_contract 遍历；
+// 上限保护防止无界拉取。
 type ActiveSessionLister interface {
-	ListDistinctSessions(ctx context.Context, from, to time.Time, limit int) (sessions []string, totalEvents int64, err error)
+	ListDistinctSessions(ctx context.Context, from, to time.Time, limit int) (sessions []string, pageViews int64, err error)
+	// ListDistinctSessionsByEvent 按事件类型列举窗口内 distinct sessionId，
+	// 承载跨轨漏斗产品轨段（DEC-002）的 actor 去重计数。
+	ListDistinctSessionsByEvent(ctx context.Context, eventType string, from, to time.Time, limit int) ([]string, error)
+}
+
+// GrowthFunnel 是跨轨统一漏斗的产品轨段（今日 UTC 窗口，actorHash 去重）。
+// exposed 段属于行为归因轨（recommendation_feed_impressed），按 DEC-002
+// 在归因端点扩展前显式 unavailable，禁止跨轨换算冒充。
+type GrowthFunnel struct {
+	SourceTrack     string `json:"sourceTrack"`
+	ConsumedActors  int    `json:"consumedActors"`
+	PublishedActors int    `json:"publishedActors"`
+	ReturnedActors  int    `json:"returnedActors"`
+	ExposedActors   *int   `json:"exposedActors"`
+	ExposedNote     string `json:"exposedNote,omitempty"`
 }
 
 type GrowthOverview struct {
@@ -49,6 +66,7 @@ type GrowthOverview struct {
 	MAU         int             `json:"mau"`
 	D1Retention float64         `json:"d1RetentionPercent"`
 	D7Retention float64         `json:"d7RetentionPercent"`
+	Funnel      GrowthFunnel    `json:"funnel"`
 	Source      string          `json:"source"`
 	GeneratedAt string          `json:"generatedAt"`
 }
@@ -74,7 +92,7 @@ func (s *GrowthService) AggregateDay(ctx context.Context, day time.Time) error {
 	dayEnd := dayStart.Add(24 * time.Hour)
 	date := dayStart.Format("2006-01-02")
 
-	sessions, totalEvents, err := s.sessions.ListDistinctSessions(ctx, dayStart, dayEnd, maxDailyDistinctSessions)
+	sessions, pageViews, err := s.sessions.ListDistinctSessions(ctx, dayStart, dayEnd, maxDailyDistinctSessions)
 	if err != nil {
 		return fmt.Errorf("list distinct sessions for %s: %w", date, err)
 	}
@@ -105,7 +123,7 @@ func (s *GrowthService) AggregateDay(ctx context.Context, day time.Time) error {
 		Date:         date,
 		ActorHashes:  actorHashes,
 		DAU:          len(actorHashes),
-		PV:           totalEvents,
+		PV:           pageViews,
 		SessionCount: int64(len(sessions)),
 		NewActors:    newActors,
 		UpdatedAt:    s.now().UTC(),
@@ -164,7 +182,39 @@ func (s *GrowthService) Overview(ctx context.Context, days int) (GrowthOverview,
 	out.TodayPV = todayItem.PV
 	out.D1Retention = s.retention(ctx, byDate, today, 1)
 	out.D7Retention = s.retention(ctx, byDate, today, 7)
+	out.Funnel = s.todayFunnel(ctx, today)
 	return out, nil
+}
+
+// todayFunnel 计算今日 UTC 窗口的产品轨漏斗段（actorHash 去重即时回读）。
+// 单段查询失败不让整个 overview 失败：失败段计 0 且已由日志端口承载告警，
+// exposed 段按 DEC-002 保持显式 unavailable。
+func (s *GrowthService) todayFunnel(ctx context.Context, today time.Time) GrowthFunnel {
+	funnel := GrowthFunnel{
+		SourceTrack: "product_telemetry",
+		ExposedNote: "behavior_attribution track pending: recommendation exposure actors are served by the content attribution endpoint",
+	}
+	dayEnd := today.Add(24 * time.Hour)
+	countActors := func(eventType string) int {
+		sessions, err := s.sessions.ListDistinctSessionsByEvent(
+			ctx, eventType, today, dayEnd, maxDailyDistinctSessions,
+		)
+		if err != nil {
+			log.Printf("WARN: growth funnel %s query failed: %v", eventType, err)
+			return 0
+		}
+		actorSet := map[string]struct{}{}
+		for _, sessionID := range sessions {
+			if actorHash, ok := actorHashFromSessionID(sessionID); ok {
+				actorSet[actorHash] = struct{}{}
+			}
+		}
+		return len(actorSet)
+	}
+	funnel.ConsumedActors = countActors("page_open")
+	funnel.PublishedActors = countActors("content_publication")
+	funnel.ReturnedActors = countActors("page_return")
+	return funnel
 }
 
 // retention 计算最近一个可评估 cohort 的 DN 留存：

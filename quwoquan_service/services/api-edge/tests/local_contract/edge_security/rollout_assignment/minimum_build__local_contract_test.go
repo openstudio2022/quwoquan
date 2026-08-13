@@ -1,6 +1,7 @@
 package local_contract
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -31,6 +32,16 @@ func TestMinimumBuildSupportsObserveEnforceAndRecoveryExemption(t *testing.T) {
 	handler.ServeHTTP(blockedResponse, blocked)
 	if blockedResponse.Code != http.StatusUpgradeRequired {
 		t.Fatalf("blocked status=%d body=%s", blockedResponse.Code, blockedResponse.Body.String())
+	}
+	// 错误码契约：低于最低支持版本必须发射声明的稳定升级码。
+	var upgradeBody struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(blockedResponse.Body.Bytes(), &upgradeBody); err != nil {
+		t.Fatalf("decode upgrade required body: %v", err)
+	}
+	if upgradeBody.Code != "GATEWAY.USER.client_upgrade_required" {
+		t.Fatalf("code=%s want GATEWAY.USER.client_upgrade_required", upgradeBody.Code)
 	}
 
 	recovery := httptest.NewRequest(http.MethodGet, "/ops/app-recovery/version", nil)

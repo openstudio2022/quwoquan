@@ -12,7 +12,9 @@ import (
 	"quwoquan_service/runtime/operation"
 	circleerrors "quwoquan_service/services/circle-service/generated/circle_management/circle"
 	gatheringerrors "quwoquan_service/services/circle-service/generated/circle_management/gathering"
+	wire "quwoquan_service/services/circle-service/generated/circle_management/gathering/contract/client"
 	contract "quwoquan_service/services/circle-service/generated/circle_management/gathering/contract/model"
+	model "quwoquan_service/services/circle-service/internal/circle_management/gathering/domain/model"
 )
 
 type GatheringIDQuery struct {
@@ -21,6 +23,13 @@ type GatheringIDQuery struct {
 
 type ListByHostQuery struct {
 	Host   HostRef
+	Cursor string
+	Limit  int
+}
+
+// ListMineQuery 是 host 本人私有列表（不做公开披露裁剪）；host 身份只取受信
+// persona actor，禁止携带任意 host 引用代查他人。
+type ListMineQuery struct {
 	Cursor string
 	Limit  int
 }
@@ -73,6 +82,9 @@ type RosterReadQuery struct {
 type GatheringQueryReader interface {
 	ReadGathering(context.Context, string) (GatheringReadModel, bool, error)
 	ListByHost(context.Context, HostRef, PublicListPosition, int) ([]GatheringReadModel, error)
+	// ListMineByHost 返回 persona host 名下全部行动（含 draft 与非公开
+	// audiencePolicy）；披露边界由 facade 的 viewer 授权保证（host 本人）。
+	ListMineByHost(context.Context, string, PublicListPosition, int) ([]GatheringReadModel, error)
 	ListBySource(context.Context, CanonicalObjectRef, PublicListPosition, int) ([]GatheringReadModel, error)
 	ListApplications(context.Context, ApplicationReadQuery) ([]ParticipationRecord, error)
 	ListRoster(context.Context, RosterReadQuery) ([]ParticipationRecord, error)
@@ -131,6 +143,41 @@ func (facade *GatheringQueryFacade) GetPublicGathering(
 	return ProjectPublicDetail(value, optionalViewerPersonaID(ctx), now), nil
 }
 
+type ParticipationStatusQuery struct {
+	GatheringID string
+	PersonaID   string
+}
+
+// GetParticipationStatus 是服务间最小 Participation 状态断言（INTERNAL，principal=service）。
+// Content 在接受 post.gatheringRef 回流引用前必须由 Circle owner 确认作者当前参与状态
+// （校验不成立 fail-closed）。只回答单人状态，不投影名单、申请答案或私密事实，不转移 owner。
+func (facade *GatheringQueryFacade) GetParticipationStatus(
+	ctx context.Context,
+	query ParticipationStatusQuery,
+) (ParticipationStatus, error) {
+	personaID := strings.TrimSpace(query.PersonaID)
+	if personaID == "" {
+		return ParticipationStatus{}, circleerrors.AppErrorFromInvalidArgument("personaId is required")
+	}
+	value, err := facade.read(ctx, query.GatheringID)
+	if err != nil {
+		return ParticipationStatus{}, err
+	}
+	status := ParticipationStatus{
+		GatheringID: value.ID,
+		PersonaID:   personaID,
+		LifecycleStatus: wire.GatheringLifecycleStatus(
+			value.LifecycleStatus,
+		),
+	}
+	if participation, found := model.FindParticipation(value, personaID); found {
+		status.ParticipationState = wire.GatheringParticipationState(
+			participation.State,
+		)
+	}
+	return status, nil
+}
+
 func (facade *GatheringQueryFacade) ListByHost(
 	ctx context.Context,
 	query ListByHostQuery,
@@ -153,6 +200,49 @@ func (facade *GatheringQueryFacade) ListByHost(
 	}
 	page := facade.publicPage(values, limit, "host")
 	return ByHostPage{Items: page.Items, NextCursor: page.NextCursor, HasMore: page.HasMore}, nil
+}
+
+// ListMyHostedGatherings 是 host 本人的私有全量列表（REQ-008 我的行动私有读面）：
+// 含 draft 与全部 audiencePolicy，不做 publicPage 的公开披露裁剪；卡片投影仍是
+// PublicCard typed 形状（host 本人对自己的行动全知，无 disclosure 冲突）。
+func (facade *GatheringQueryFacade) ListMyHostedGatherings(
+	ctx context.Context,
+	query ListMineQuery,
+) (ByHostPage, error) {
+	viewerPersonaID, err := requiredViewerPersonaID(ctx)
+	if err != nil {
+		return ByHostPage{}, err
+	}
+	if viewerPersonaID == "" {
+		return ByHostPage{}, circleerrors.AppErrorFromInvalidArgument("trusted persona is required")
+	}
+	limit := normalizeLimit(query.Limit, 20, 50)
+	after, err := decodePublicCursor(query.Cursor, "mine")
+	if err != nil {
+		return ByHostPage{}, invalidCursor(err)
+	}
+	values, err := facade.reader.ListMineByHost(ctx, viewerPersonaID, after, limit+1)
+	if err != nil {
+		return ByHostPage{}, gatheringerrors.AppErrorFromGatheringStorageFailed(err.Error())
+	}
+	hasMore := len(values) > limit
+	if hasMore {
+		values = values[:limit]
+	}
+	now := facade.now().UTC()
+	items := make([]PublicCard, 0, len(values))
+	for _, value := range values {
+		items = append(items, ProjectPublicCard(value, now))
+	}
+	var nextCursor string
+	if hasMore && len(values) > 0 {
+		cursor, cursorErr := encodePublicCursor(values[len(values)-1], "mine")
+		if cursorErr != nil {
+			return ByHostPage{}, gatheringerrors.AppErrorFromGatheringStorageFailed(cursorErr.Error())
+		}
+		nextCursor = cursor
+	}
+	return ByHostPage{Items: items, NextCursor: nextCursor, HasMore: hasMore}, nil
 }
 
 func (facade *GatheringQueryFacade) ListBySource(

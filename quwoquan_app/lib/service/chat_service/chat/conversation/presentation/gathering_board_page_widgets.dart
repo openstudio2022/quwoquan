@@ -263,9 +263,9 @@ class _GatheringBoardCapabilityRow extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            capability.isAvailable
-                ? icon
-                : CupertinoIcons.exclamationmark_circle,
+            // 能力暂不可用是信息态而非错误警示：统一低打扰视觉，
+            // 圆形感叹号仅保留给共享 inline error 原语。
+            capability.isAvailable ? icon : CupertinoIcons.info_circle,
             color: color,
             size: AppSpacing.iconMedium,
           ),

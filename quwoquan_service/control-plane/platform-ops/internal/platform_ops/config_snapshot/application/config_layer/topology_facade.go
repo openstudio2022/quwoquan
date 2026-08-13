@@ -134,7 +134,10 @@ func (facade *TopologyFacade) ListServiceCatalogEntries(
 		items = append(items, map[string]any{
 			"id": workloadID, "service": workloadID,
 			"plane": joinSorted(entry.planes), "owner": "environment-topology",
-			"health": "neutral", "summary": joinSorted(entry.deploymentRefs),
+			// 目录来自部署拓扑静态扫描，不承载实时健康；实时健康看
+			// PlatformObservability（Alertmanager/Prometheus）。禁止用
+			// 可被误读为健康结论的值伪装探测结果。
+			"health": "static_topology", "summary": joinSorted(entry.deploymentRefs),
 		})
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i]["service"].(string) < items[j]["service"].(string) })

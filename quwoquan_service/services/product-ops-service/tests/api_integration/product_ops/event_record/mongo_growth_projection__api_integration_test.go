@@ -115,3 +115,13 @@ func (readinessGrowthSessions) ListDistinctSessions(
 ) ([]string, int64, error) {
 	return nil, 0, nil
 }
+
+func (readinessGrowthSessions) ListDistinctSessionsByEvent(
+	context.Context,
+	string,
+	time.Time,
+	time.Time,
+	int,
+) ([]string, error) {
+	return nil, nil
+}

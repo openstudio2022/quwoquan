@@ -411,10 +411,25 @@ func main() {
 				err,
 			)
 		}
-		if err := elasticsearchStore.EnsureIndices(ctx); err != nil {
+		// Docker/Colima 内嵌 DNS 在全栈冷启动最初几秒可能对刚接入网络的容器
+		// 返回瞬时解析失败（"server misbehaving"）。索引初始化对这种基础设施
+		// 抖动必须做有界重试，否则本服务秒退，进而卡死「实验策略激活 →
+		// recommendation-service healthy」的全栈启动链；重试耗尽仍失败则维持
+		// fail-fast 语义退出。
+		ensureErr := elasticsearchStore.EnsureIndices(ctx)
+		for attempt := 1; ensureErr != nil && attempt <= 10; attempt++ {
+			log.Printf(
+				"product-ops-service Elasticsearch telemetry index initialization retry %d/10: %v",
+				attempt,
+				ensureErr,
+			)
+			time.Sleep(3 * time.Second)
+			ensureErr = elasticsearchStore.EnsureIndices(ctx)
+		}
+		if ensureErr != nil {
 			log.Fatalf(
 				"product-ops-service Elasticsearch telemetry index initialization failed: %v",
-				err,
+				ensureErr,
 			)
 		}
 		eventStore = elasticsearchStore
@@ -434,6 +449,7 @@ func main() {
 			cfg.Elasticsearch.AggregateIndex,
 			dbName,
 		)
+		startTelemetryAlertLoop(ctx, cfg, elasticsearchStore)
 	default:
 		log.Fatalf(
 			"product-ops-service runtime.log.sink adapter is unsupported: %s",

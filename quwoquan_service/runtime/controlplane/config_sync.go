@@ -93,6 +93,16 @@ func StartReleaseConfigAttestation(
 }
 
 func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
+	RunConfigSyncLoopContext(context.Background(), opts)
+}
+
+// RunConfigSyncLoopContext keeps the config synchronization worker within the
+// caller-owned lifetime. Existing standalone callers retain the unbounded
+// behavior through RunConfigSyncLoop.
+func RunConfigSyncLoopContext(ctx context.Context, opts ConfigSyncLoopOptions) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if err := ValidateImageIdentity(opts.ImageVersion); err != nil {
 		panic("controlplane config sync release identity: " + err.Error())
 	}
@@ -155,10 +165,10 @@ func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
 			Service:     opts.ServiceName,
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+		requestCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
 		defer cancel()
 
-		response, err := client.Resolve(ctx, scope)
+		response, err := client.Resolve(requestCtx, scope)
 		source := "config-center"
 		if err != nil {
 			if allowDiskFallback() {
@@ -194,7 +204,9 @@ func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
 		if report.ID == "" {
 			report.ID = opts.ServiceName
 		}
-		if reportErr := client.ReportInstance(context.Background(), report); reportErr != nil {
+		reportCtx, cancelReport := context.WithTimeout(ctx, 4*time.Second)
+		defer cancelReport()
+		if reportErr := client.ReportInstance(reportCtx, report); reportErr != nil {
 			log.Printf("WARN: controlplane config report failed: %v", reportErr)
 		}
 	}
@@ -202,9 +214,13 @@ func RunConfigSyncLoop(opts ConfigSyncLoopOptions) {
 	syncOnce()
 	for {
 		timer := time.NewTimer(resolvePollInterval())
-		<-timer.C
-		timer.Stop()
-		syncOnce()
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+			syncOnce()
+		}
 	}
 }
 

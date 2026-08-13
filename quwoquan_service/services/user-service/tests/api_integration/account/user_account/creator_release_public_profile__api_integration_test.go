@@ -1,7 +1,6 @@
 package api_integration
 
 import (
-	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -25,12 +24,7 @@ func TestCreatorReleasePublicProfileUsesCanonicalIdentities(t *testing.T) {
 		ImportedAt:  now,
 		UpdatedAt:   now,
 	}
-	if _, err := mongoDB.Collection("creator_runtime_profiles").InsertOne(
-		context.Background(),
-		profile,
-	); err != nil {
-		t.Fatalf("insert creator runtime profile: %v", err)
-	}
+	seedCreatorRuntimeProfile(t, profile)
 
 	rec := doRequest(
 		t,

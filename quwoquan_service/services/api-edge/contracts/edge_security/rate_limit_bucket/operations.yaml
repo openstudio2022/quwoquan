@@ -13,9 +13,11 @@ runtime_entrypoints:
     method: admit
     object_owner: RateLimitBucket
   telemetry:
-    metric: gateway_rate_limit_shared_admission
+    # 与运行时实际注册的 emitter 同名同标签（infrastructure/observability/metrics.go）；
+    # 契约声明名与实现名漂移会制造既无 emitter 也无消费面的双向缺口。
+    metric: api_edge_admission_decisions_total
     trace: true
-    attributes: [outcome]
+    attributes: [environment, operation, outcome, failurePolicy]
   slo:
     latency_p95_ms: 20
     failure_ratio_percent: 0.1

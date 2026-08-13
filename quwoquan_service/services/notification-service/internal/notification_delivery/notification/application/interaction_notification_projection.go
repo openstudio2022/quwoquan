@@ -44,25 +44,29 @@ var InteractionNotificationStreams = []string{
 	"events.circle.group-memberships",
 	"events.circle.gatherings",
 	"events.entity.homepage_lifecycle",
+	"events.recommendation.intersections",
 }
 
 const (
-	interactionTitleComment       = "新的评论"
-	interactionTitleReply         = "新的回复"
-	interactionTitleMention       = "有人@了你"
-	interactionTitlePinned        = "评论被置顶"
-	interactionTitleLike          = "收到点赞"
-	interactionTitleQuote         = "作品被引用"
-	interactionTitleFollow        = "新的关注者"
-	interactionTitleGreeting      = "收到打招呼"
-	interactionTitleCircleJoin    = "圈子新成员"
-	interactionTitleCircleRequest = "圈子加入申请"
-	interactionTitleCircleResult  = "圈子申请结果"
-	interactionTitleGroupRequest  = "群组加入申请"
-	interactionTitleGroupResult   = "群组申请结果"
-	interactionTitleReportResult  = "举报处理完成"
-	interactionTitleClaimResult   = "主页认领审核完成"
-	interactionTitleStatusResult  = "主页状态上报处理完成"
+	interactionTitleComment        = "新的评论"
+	interactionTitleReply          = "新的回复"
+	interactionTitleMention        = "有人@了你"
+	interactionTitlePinned         = "评论被置顶"
+	interactionTitleLike           = "收到点赞"
+	interactionTitleQuote          = "作品被引用"
+	interactionTitleFollow         = "新的关注者"
+	interactionTitleGreeting       = "收到打招呼"
+	interactionTitleCircleJoin     = "圈子新成员"
+	interactionTitleCircleRequest  = "圈子加入申请"
+	interactionTitleCircleResult   = "圈子申请结果"
+	interactionTitleGroupRequest   = "群组加入申请"
+	interactionTitleGroupResult    = "群组申请结果"
+	interactionTitleReportResult   = "举报处理完成"
+	interactionTitleClaimResult    = "主页认领审核完成"
+	interactionTitleStatusResult   = "主页状态上报处理完成"
+	interactionTitleFacilitation   = "你的内容促成了一次成行"
+	interactionTitleInviteAccepted = "邀约有了回音"
+	interactionTitleInviteDeclined = "邀约已回复"
 )
 
 // InteractionNotificationProjection 是 durable interaction stream 的唯一应用入口。
@@ -103,11 +107,98 @@ func (InteractionNotificationProjection) Project(
 		return single(projectHomepageClaimResult(event))
 	case "HomepageStatusReportReviewed":
 		return single(projectHomepageStatusResult(event))
+	case "IntersectionFacilitationRecorded":
+		return single(projectIntersectionFacilitation(event))
+	case "GatheringInvitationChanged":
+		return single(projectInvitationInviterReceipt(event))
 	default:
 		// 同一 stream 上的其它生命周期事件（删除、退出、清除等）
 		// 不属于触发矩阵，直接确认跳过。
 		return nil, nil
 	}
+}
+
+// projectInvitationInviterReceipt 是邀请回执的发起方侧分支：受邀方对邀约
+// 作出真实应答（accepted/declined）时给邀请方一条回执通知，让 1对1 邀约
+// 不再石沉大海。受邀方自己的邀请卡由 GatheringInvitationProjection 独立
+// upsert，两者互不干扰。pending（无应答事实）、revoked（邀请方自己操作）、
+// expired/cancelled（系统终态）不生成回执；declined 文案克制，不羞辱不催促。
+func projectInvitationInviterReceipt(
+	event InteractionStreamEvent,
+) (*CreateAppMessageCommand, error) {
+	var payload struct {
+		GatheringID        string `json:"gatheringId"`
+		InviterPersonaID   string `json:"inviterPersonaId"`
+		RecipientPersonaID string `json:"recipientPersonaId"`
+		Status             string `json:"status"`
+	}
+	if err := decodeInteractionPayload(event.Payload, &payload); err != nil {
+		return nil, fmt.Errorf("decode gathering invitation receipt payload: %w", err)
+	}
+	status := strings.TrimSpace(payload.Status)
+	if status != "accepted" && status != "declined" {
+		return nil, nil
+	}
+	if strings.TrimSpace(payload.GatheringID) == "" ||
+		strings.TrimSpace(payload.InviterPersonaID) == "" ||
+		strings.TrimSpace(payload.RecipientPersonaID) == "" {
+		return nil, fmt.Errorf("gathering invitation receipt identity is incomplete")
+	}
+	title := interactionTitleInviteAccepted
+	summary := "对方接受了你的邀约，打开看看这次行动"
+	if status == "declined" {
+		title = interactionTitleInviteDeclined
+		summary = "对方这次不方便，名额已释放，可以再邀请其他同好"
+	}
+	return interactionCommand(
+		event,
+		payload.InviterPersonaID,
+		"circle",
+		"gathering_invitation_receipt",
+		payload.GatheringID+":"+status,
+		title,
+		summary,
+		notification.AppMessageTarget{
+			TargetType: "gathering",
+			TargetID:   payload.GatheringID,
+		},
+	), nil
+}
+
+// projectIntersectionFacilitation 把 recommendation 的创作者促成事实映射为
+// 一条内容维度通知：只携带公开经历引用（回链 Gathering 公开详情），
+// 不暴露参与者名单；同一 (gathering, creator, seedPost) 由事件 identity 幂等。
+func projectIntersectionFacilitation(
+	event InteractionStreamEvent,
+) (*CreateAppMessageCommand, error) {
+	var payload struct {
+		FacilitationID   string `json:"facilitationId"`
+		GatheringID      string `json:"gatheringId"`
+		CreatorPersonaID string `json:"creatorPersonaId"`
+		SeedPostID       string `json:"seedPostId"`
+	}
+	if err := decodeInteractionPayload(event.Payload, &payload); err != nil {
+		return nil, fmt.Errorf("decode intersection facilitation payload: %w", err)
+	}
+	if strings.TrimSpace(payload.FacilitationID) == "" ||
+		strings.TrimSpace(payload.GatheringID) == "" ||
+		strings.TrimSpace(payload.CreatorPersonaID) == "" ||
+		strings.TrimSpace(payload.SeedPostID) == "" {
+		return nil, fmt.Errorf("intersection facilitation identity is incomplete")
+	}
+	return interactionCommand(
+		event,
+		payload.CreatorPersonaID,
+		"content",
+		"intersection_facilitation",
+		payload.FacilitationID,
+		interactionTitleFacilitation,
+		"有人从你的内容出发一起去了，点开看这次共同经历",
+		notification.AppMessageTarget{
+			TargetType: "gathering",
+			TargetID:   payload.GatheringID,
+		},
+	), nil
 }
 
 func projectHomepageClaimResult(

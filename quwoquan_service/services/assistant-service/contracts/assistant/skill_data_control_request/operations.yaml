@@ -75,7 +75,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: CreateSkillDataControlRequest}
-  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_data_control_request/skill_data_control_store__api_integration_test.go
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_data_control_request/skill_data_control_store__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: confirm-skill-data-control-request-local
@@ -91,7 +91,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: ConfirmSkillDataControlRequest}
-  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_data_control_request/skill_data_control_store__api_integration_test.go
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_data_control_request/skill_data_control_store__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: get-skill-data-control-request-local
@@ -107,7 +107,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: GetSkillDataControlRequest}
-  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_data_control_request/skill_data_control_store__api_integration_test.go
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_data_control_request/skill_data_control_store__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: skill_data_control_request_create_skill_data_control_request_app_local

@@ -15,6 +15,10 @@ const GetRecommendationAuthorImpactPath = "/internal/recommendation/authors/{aut
 const GetRecommendationAuthorImpactMethod = "GET"
 const ListRecommendationAuthorImpactEvidencePath = "/internal/recommendation/authors/{authorId}/impact/{impactId}/evidence"
 const ListRecommendationAuthorImpactEvidenceMethod = "GET"
+const GetRecommendationFlywheelFunnelPath = "/internal/recommendation/flywheel-funnel"
+const GetRecommendationFlywheelFunnelMethod = "GET"
+const GetRecommendationGatheringSocialProofPath = "/internal/recommendation/social-proof/{anchorKind}/{objectId}"
+const GetRecommendationGatheringSocialProofMethod = "GET"
 
 type IntersectionTarget struct {
 	ObjectType string `json:"objectType"`
@@ -273,4 +277,39 @@ type RecommendationAuthorImpactEvidencePage struct {
 	Items      []RecommendationAuthorImpactEvidence `json:"items"`
 	NextCursor *string                              `json:"nextCursor,omitempty"`
 	HasMore    bool                                 `json:"hasMore"`
+}
+
+type GetRecommendationGatheringSocialProofQuery struct {
+	AnchorKind string `json:"anchorKind"`
+	ObjectId   string `json:"objectId"`
+}
+
+type RecommendationGatheringSocialProofSummary struct {
+	AnchorKind       string `json:"anchorKind"`
+	ObjectId         string `json:"objectId"`
+	PublishedCount   int64  `json:"publishedCount"`
+	FormedCount      int64  `json:"formedCount"`
+	ExperiencedCount int64  `json:"experiencedCount"`
+}
+
+type GetRecommendationFlywheelFunnelQuery struct {
+	WindowFrom       time.Time `json:"windowFrom"`
+	WindowTo         time.Time `json:"windowTo"`
+	SourceObjectKind *string   `json:"sourceObjectKind,omitempty"`
+	SourceObjectId   *string   `json:"sourceObjectId,omitempty"`
+	CapacityTier     *string   `json:"capacityTier,omitempty"`
+	TagRef           *string   `json:"tagRef,omitempty"`
+}
+
+type RecommendationFlywheelFunnelSnapshot struct {
+	WindowFrom                time.Time `json:"windowFrom"`
+	WindowTo                  time.Time `json:"windowTo"`
+	WishlistedPersonaCount    int64     `json:"wishlistedPersonaCount"`
+	WishlistToJoinedCount     int64     `json:"wishlistToJoinedCount"`
+	PublishedCount            int64     `json:"publishedCount"`
+	FormedCount               int64     `json:"formedCount"`
+	ExperiencedCount          int64     `json:"experiencedCount"`
+	FacilitationNotifiedCount int64     `json:"facilitationNotifiedCount"`
+	CreatorRepublishedCount   int64     `json:"creatorRepublishedCount"`
+	Truncated                 bool      `json:"truncated"`
 }

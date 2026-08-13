@@ -569,7 +569,10 @@ api_routes:
   telemetry: {metric: ops_product_growth_overview, trace: true, attributes: [operation, outcome]}
   slo: {latency_p95_ms: 3000, availability_percent: 99.5}
   commercial: {status: ready}
-  response_fields: [days, series, pv, uv, wau, mau, retention, source]
+  # PV 唯一口径 = page_open 页面浏览量；活跃唯一口径 = DAU/WAU/MAU（actorHash
+  # 去重），不使用 uv 混称。funnel 是跨轨统一漏斗的产品轨段（DEC-002：今日
+  # 窗口 actor 去重；exposed 段归行为归因轨，扩展前显式 unavailable）。
+  response_fields: [days, todayPv, todayDau, wau, mau, d1RetentionPercent, d7RetentionPercent, funnel, source, generatedAt]
   application: {kind: query, facet: EventRecordMetricQueryFacade, method: getGrowthOverview, reader: GrowthOverviewReader, slice: GrowthOverview}
 - method: GET
   path: /control-plane/product/experience/pages

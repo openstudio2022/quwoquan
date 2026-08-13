@@ -380,6 +380,50 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /content/gatherings/{gatheringId}/posts:
+        get:
+            operationId: ListPostsByGathering
+            x-contract-operation-id: content.post.ListPostsByGathering
+            x-object-id: content.post
+            x-actor: none
+            x-application:
+                kind: query
+                facet: PostQueryFacet
+                method: listPostsByGathering
+                reader: GatheringPostReader
+                slice: GatheringPostPageSlice
+            parameters:
+                - name: gatheringId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: cursor
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringPostPageSlice'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /content/helper-read/{contentId}:
         get:
             operationId: GetHelperRead
@@ -763,6 +807,39 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/MediaOriginalAccessGrant'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+    /content/media/original-access-audits/{auditId}:
+        get:
+            operationId: GetOriginalImageAccessAudit
+            x-contract-operation-id: content.original_access_quota.GetOriginalImageAccessAudit
+            x-object-id: content.original_access_quota
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: OriginalAccessAuditQueryFacade
+                method: getOriginalImageAccessAudit
+                reader: OriginalAccessAuditReader
+                slice: OriginalImageAccessAuditView
+            parameters:
+                - name: auditId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OriginalImageAccessAuditView'
                 default:
                     description: Runtime failure
                     content:
@@ -2230,6 +2307,45 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /content/social-proof/{anchorKind}/{objectId}:
+        get:
+            operationId: GetGatheringSocialProof
+            x-contract-operation-id: content.post.GetGatheringSocialProof
+            x-object-id: content.post
+            x-actor: none
+            x-application:
+                kind: query
+                facet: PostQueryFacet
+                method: getGatheringSocialProof
+                reader: GatheringSocialProofReader
+                slice: GatheringSocialProofSummary
+            parameters:
+                - name: anchorKind
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: objectId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/GatheringSocialProofSummary'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
+                - {}
     /content/users/me/comments:
         get:
             operationId: ListCommentsByAuthor
@@ -3417,6 +3533,11 @@ components:
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: FilterCatalogSlice
             x-contract-placeholder: true
+        GatheringPostPageSlice:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GatheringPostPageSlice
+            x-contract-placeholder: true
         GatheringSafetyTerminationAuthoritySlice:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
@@ -3426,6 +3547,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: GatheringSafetyTerminationGrantResult
+            x-contract-placeholder: true
+        GatheringSocialProofSummary:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: GatheringSocialProofSummary
             x-contract-placeholder: true
         GenerateArticleSummaryRequest:
             type: object
@@ -3541,6 +3667,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: OpenPostModerationCaseRequest
+            x-contract-placeholder: true
+        OriginalImageAccessAuditView:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: OriginalImageAccessAuditView
             x-contract-placeholder: true
         OutboundShareFactResult:
             type: object

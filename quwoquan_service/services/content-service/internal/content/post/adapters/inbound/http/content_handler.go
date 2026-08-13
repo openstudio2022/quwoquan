@@ -46,6 +46,7 @@ type ContentHandler struct {
 	behaviorHandler              contentBehaviorHTTPHandler
 	intersectionVisitHandler     intersectionVisitStateHTTPHandler
 	authorImpactProjectionReader ports.AuthorImpactProjectionReader
+	viewerReactionReader         feedapp.FeedViewerReactionReader
 	healthChecker                *rthealth.Checker
 }
 
@@ -96,15 +97,20 @@ type postDetailClientWire struct {
 	CanonicalEntityID       string                                   `json:"canonicalEntityId,omitempty"`
 	PrimaryHomepageType     string                                   `json:"primaryHomepageType,omitempty"`
 	PrimaryHomepageSnapshot *postports.PostHomepageSnapshotSlice     `json:"primaryHomepageSnapshot,omitempty"`
-	Status                  postports.PostStatus                     `json:"status"`
+	// GatheringRef 共同经历回流引用：详情态溯源标锚点。
+	GatheringRef string               `json:"gatheringRef,omitempty"`
+	Status       postports.PostStatus `json:"status"`
 	Visibility              postports.PostVisibility                 `json:"visibility"`
 	LikeCount               int64                                    `json:"likeCount"`
 	CommentCount            int64                                    `json:"commentCount"`
 	ShareCount              int64                                    `json:"shareCount"`
 	ViewCount               int64                                    `json:"viewCount"`
-	CreatedAt               time.Time                                `json:"createdAt"`
-	UpdatedAt               time.Time                                `json:"updatedAt"`
-	PublishedAt             time.Time                                `json:"publishedAt,omitempty"`
+	// ViewerLiked viewer 维度点赞态：nil（wire 省略）表示未附着（匿名请求
+	// 或附着降级），端侧不得据此回滚本地状态。
+	ViewerLiked *bool     `json:"viewerLiked,omitempty"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+	PublishedAt time.Time `json:"publishedAt,omitempty"`
 }
 
 func ProjectPostDetailForClient(
@@ -153,6 +159,7 @@ func ProjectPostDetailForClient(
 		CanonicalEntityID:       detail.CanonicalEntityID,
 		PrimaryHomepageType:     detail.PrimaryHomepageType,
 		PrimaryHomepageSnapshot: detail.PrimaryHomepageSnapshot,
+		GatheringRef:            detail.GatheringRef,
 		Status:                  detail.Status,
 		Visibility:              detail.Visibility,
 		LikeCount:               detail.LikeCount,
@@ -269,6 +276,7 @@ type mediaUploadSessionHTTPHandler interface {
 
 type originalAccessQuotaHTTPHandler interface {
 	Reserve(http.ResponseWriter, *http.Request)
+	GetAudit(http.ResponseWriter, *http.Request)
 }
 
 type mediaImageReprocessHTTPHandler interface {
@@ -324,6 +332,13 @@ func WithResearchReleaseReadback(
 
 func WithOutboundShareHandler(service outboundShareHTTPHandler) ContentHandlerOption {
 	return func(handler *ContentHandler) { handler.outboundShareHandler = service }
+}
+
+// WithViewerReactionReader 注入 viewer 点赞事实批量读（详情 viewerLiked 附着）。
+func WithViewerReactionReader(
+	reader feedapp.FeedViewerReactionReader,
+) ContentHandlerOption {
+	return func(handler *ContentHandler) { handler.viewerReactionReader = reader }
 }
 
 func WithContentBehaviorHandler(handler contentBehaviorHTTPHandler) ContentHandlerOption {
@@ -537,18 +552,31 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid post id", "missing postId path segment"))
 		return
 	}
+	viewerPersonaID := ResolvePersonaID(r)
 	detail, err := h.postQueryService.GetPost(
 		r.Context(),
 		postports.NewPostDetailQuery(
 			postports.NewPostID(postID),
-			postports.NewViewerContext(postports.NewPersonaID(ResolvePersonaID(r))),
+			postports.NewViewerContext(postports.NewPersonaID(viewerPersonaID)),
 		),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, ProjectPostDetailForClient(detail))
+	wire := ProjectPostDetailForClient(detail)
+	// viewerLiked 附着与 feed 同一纪律：匿名/未装配保持 null，读失败静默降级。
+	if h.viewerReactionReader != nil && strings.TrimSpace(viewerPersonaID) != "" {
+		if flags, likedErr := h.viewerReactionReader.ReadPostLikedFlags(
+			r.Context(),
+			viewerPersonaID,
+			[]string{postID},
+		); likedErr == nil {
+			liked := flags[postID]
+			wire.ViewerLiked = &liked
+		}
+	}
+	writeJSON(w, http.StatusOK, wire)
 }
 
 // projectPostForClient strips fields that must never be client-visible:
@@ -776,6 +804,65 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 			cursor,
 			limit,
 		),
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func (h *ContentHandler) handleGetGatheringSocialProof(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	anchorKind := ""
+	objectID := ""
+	if raw := strings.TrimPrefix(r.URL.Path, "/content/social-proof/"); raw != r.URL.Path {
+		parts := strings.SplitN(raw, "/", 2)
+		if len(parts) == 2 {
+			anchorKind = strings.TrimSpace(parts[0])
+			objectID = strings.TrimSpace(parts[1])
+		}
+	}
+	summary, err := h.postQueryService.GetGatheringSocialProof(
+		r.Context(),
+		anchorKind,
+		objectID,
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"anchorKind":       summary.AnchorKind,
+		"objectId":         summary.ObjectID,
+		"publishedCount":   summary.PublishedCount,
+		"formedCount":      summary.FormedCount,
+		"experiencedCount": summary.ExperiencedCount,
+	})
+}
+
+func (h *ContentHandler) handleListPostsByGathering(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	gatheringID := ""
+	if raw := strings.TrimPrefix(r.URL.Path, "/content/gatherings/"); raw != r.URL.Path {
+		if idx := strings.Index(raw, "/posts"); idx > 0 {
+			gatheringID = strings.TrimSpace(raw[:idx])
+		}
+	}
+	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
+	limit := 20
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	page, err := h.postQueryService.ListPostsByGathering(
+		r.Context(),
+		postports.NewGatheringPostPageQuery(gatheringID, cursor, limit),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)

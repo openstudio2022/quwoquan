@@ -1,5 +1,5 @@
 {
-  "schema": "assistant.runtime-smoke-corpus.v1",
+  "schema": "assistant.runtime-smoke-corpus",
   "scenarios": [
     {
       "id": "stock_sentinel_basic",

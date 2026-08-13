@@ -519,23 +519,17 @@ func (s *AuthService) newOwnerIdentity(
 	credentialKey string,
 	identityOrigin string,
 	originCode string,
-) (identityDescriptor, error) {
-	if credentialType != credentialmodel.CredentialType(credentialPhone) ||
-		strings.TrimSpace(credentialKey) != s.managedAcceptancePhone ||
-		s.managedAcceptanceOwnerID == "" {
-		return buildOwnerIdentityForOrigin(identityOrigin, originCode)
+) (OwnerIdentityDescriptor, error) {
+	binding := ManagedAcceptanceBinding{
+		Phone:   s.managedAcceptancePhone,
+		OwnerID: s.managedAcceptanceOwnerID,
 	}
-	parsed, err := useridentity.ParseOwnerID(s.managedAcceptanceOwnerID)
-	if err != nil || parsed.OriginCode() != originCode {
-		return identityDescriptor{}, errors.New(
-			"managed acceptance identity is not canonical for the credential origin",
-		)
-	}
-	return identityDescriptor{
-		OwnerID:      parsed.String(),
-		RootPrefix:   parsed.LogicalShardHex(),
-		LogicalShard: parsed.LogicalShard(),
-	}, nil
+	return binding.ResolveOwnerIdentity(
+		credentialType,
+		credentialKey,
+		identityOrigin,
+		originCode,
+	)
 }
 
 func (s *AuthService) resolvePhysicalShard(ownerID string) (string, error) {

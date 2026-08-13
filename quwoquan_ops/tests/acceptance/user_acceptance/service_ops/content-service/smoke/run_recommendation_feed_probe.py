@@ -8,9 +8,9 @@
      travel 垂类路由可用，envelope 契约字段完整（items/feedRequestId）。
   2. premium  —— GET /content/feed?channelId=premium_stream：
      精品沉浸流 fail-closed 路由可用；release readiness 要求至少一条可交付内容。
-  3. objectCards —— GET /content/feed?channelId=recommend（seed viewer 身份）：
-     canonical recommendation policy 开启 objectCards 后，若对象卡 release 已激活
-     （apply_content_object_cards_seed.py），envelope.objectCards 必须出现
+  3. objectCards —— GET /content/feed?channelId=recommend（受管 Actor 身份）：
+     canonical recommendation policy 开启 objectCards 后，若当前 immutable release
+     已声明对象卡覆盖，envelope.objectCards 必须出现
      entity_homepage 卡且 objectId 可路由；--require-object-cards 控制是否阻断。
 
 契约对齐：响应字段以 quwoquan_service/services/content-service/contracts/content/post/operations.yaml 的
@@ -20,7 +20,10 @@ policyDigest/objectCards）。
 用法（gamma-local 完整验证）：
   python3 .../run_recommendation_feed_probe.py \
     --env gamma --base-url https://api.gamma.quwoquan.com:19000 \
-    --viewer-id fixture_user_current \
+    --viewer-id "$QWQ_TEST_DATA_PRIMARY_ACTOR_ID" \
+    --test-data-instance-id "$QWQ_TEST_DATA_INSTANCE_ID" \
+    --actor-lease-digest "$QWQ_TEST_DATA_ACTOR_LEASE_DIGEST" \
+    --candidate-binding-digest "$QWQ_TEST_DATA_CANDIDATE_BINDING_DIGEST" \
     --require-object-cards --report .qwq_output/env/gamma/runs/rec-feed-probe/report.json
 """
 
@@ -28,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -82,8 +86,20 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--viewer-id",
-        default="fixture_user_current",
-        help="objectCards 场景的 seed viewer（与 content_recommendation_object_cards.gamma_seed.json 对齐）",
+        default=os.environ.get("QWQ_TEST_DATA_PRIMARY_ACTOR_ID", ""),
+        help="由当前 CaseResult/ActorLease 投影的 primary Actor ID",
+    )
+    parser.add_argument(
+        "--test-data-instance-id",
+        default=os.environ.get("QWQ_TEST_DATA_INSTANCE_ID", ""),
+    )
+    parser.add_argument(
+        "--actor-lease-digest",
+        default=os.environ.get("QWQ_TEST_DATA_ACTOR_LEASE_DIGEST", ""),
+    )
+    parser.add_argument(
+        "--candidate-binding-digest",
+        default=os.environ.get("QWQ_TEST_DATA_CANDIDATE_BINDING_DIGEST", ""),
     )
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--timeout-seconds", type=int, default=15)
@@ -94,14 +110,32 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--require-release-content",
-        action="store_true",
-        help="发布准出时要求 travel 与 premium 两个内容面都返回至少一条内容。",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "要求 travel 与 premium 两个内容面都返回至少一条内容（默认开启，"
+            "防止空 feed 静默通过；仅在环境显式无内容 release 时用 "
+            "--no-require-release-content 关闭并说明原因）。"
+        ),
     )
     parser.add_argument(
         "--report",
         default=".qwq_output/env/gamma/runs/rec-feed-probe/recommendation-feed-report.json",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    for label, value in (
+        ("--viewer-id", args.viewer_id),
+        ("--test-data-instance-id", args.test_data_instance_id),
+    ):
+        if not str(value).strip():
+            parser.error(f"{label} must come from the active test-data ActorLease")
+    for label, value in (
+        ("--actor-lease-digest", args.actor_lease_digest),
+        ("--candidate-binding-digest", args.candidate_binding_digest),
+    ):
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", str(value).strip()) is None:
+            parser.error(f"{label} must be a canonical test-data receipt digest")
+    return args
 
 
 def fetch_feed(
@@ -170,7 +204,7 @@ def check_object_cards(payload: dict[str, Any], required: bool) -> list[str]:
         if required:
             return [
                 "objectCards absent: canonical recommendation policy may not be active "
-                "(QWQ_REC_POLICY_PATH) or object-card seed missing"
+                "(QWQ_REC_POLICY_PATH) or current immutable release lacks object-card coverage"
             ]
         return []
     if not isinstance(cards, list):
@@ -178,8 +212,8 @@ def check_object_cards(payload: dict[str, Any], required: bool) -> list[str]:
     errors: list[str] = []
     if required and not cards:
         errors.append(
-            "objectCards empty: apply seed via "
-            "quwoquan_service/services/content-service/cmd/jobs/seed-object-cards/main.py"
+            "objectCards empty: current immutable release/readiness must provide "
+            "entity_homepage coverage"
         )
     for index, card in enumerate(cards):
         if not isinstance(card, dict):
@@ -216,7 +250,11 @@ def main() -> int:
             "gatewayBaseUrl": args.base_url.rstrip("/"),
             "requireObjectCards": bool(args.require_object_cards),
             "requireReleaseContent": bool(args.require_release_content),
-            "viewerId": args.viewer_id,
+            "testDataInstanceId": args.test_data_instance_id,
+            "actorLeaseDigest": args.actor_lease_digest,
+            "candidateBindingDigest": args.candidate_binding_digest,
+            "viewerIdDigest": "sha256:"
+            + hashlib.sha256(args.viewer_id.encode("utf-8")).hexdigest(),
         },
         "surfaces": {},
         "failures": [],

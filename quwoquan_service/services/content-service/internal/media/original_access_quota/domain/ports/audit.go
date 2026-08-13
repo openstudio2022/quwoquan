@@ -34,3 +34,23 @@ type AuditRecord struct {
 type OriginalAccessAuditAppender interface {
 	AppendOriginalAccessAudit(context.Context, AuditDecision) (AuditRecord, error)
 }
+
+// AuditFact is the immutable identity of one already-appended audit fact as
+// read back for its owning viewer. It carries the viewer binding so the
+// query facade can fail closed on any cross-persona readback.
+type AuditFact struct {
+	AuditID   string
+	AssetID   string
+	ViewerID  string
+	Purpose   string
+	Outcome   string
+	DecidedAt time.Time
+	ExpiresAt time.Time
+}
+
+// OriginalAccessAuditReader finds one immutable audit fact by its identity.
+// A missing fact is (zero, false, nil); errors are reserved for storage
+// failures.
+type OriginalAccessAuditReader interface {
+	FindOriginalAccessAudit(context.Context, string) (AuditFact, bool, error)
+}

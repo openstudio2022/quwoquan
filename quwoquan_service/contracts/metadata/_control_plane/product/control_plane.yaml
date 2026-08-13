@@ -140,6 +140,32 @@ object_types:
         danger_level: high
         approval_mode: single
 
+  # 账号治理 case：Product Ops 生产处置决定（moderation/appeal → review 双签
+  # → HTTP outbox 送 UserAccount 执行）；review 为高危处置。
+  - object_type: account_enforcement_case
+    view_kind: case
+    label: 账号治理 case
+    source_entity: AccountEnforcementCase
+    view_model: AccountEnforcementCase
+    risk_level: high
+    deployment_profile: latency_sensitive
+    operation_refs:
+      - operation_id: ops.account_enforcement_case.OpenAccountModerationCase
+        danger_level: high
+        approval_mode: single
+      - operation_id: ops.account_enforcement_case.OpenAccountAppealCase
+        danger_level: high
+        approval_mode: single
+      - operation_id: ops.account_enforcement_case.ReviewAccountEnforcementCase
+        danger_level: critical
+        approval_mode: dual
+        idempotency: required
+      - operation_id: ops.account_enforcement_case.RetryAccountEnforcementDelivery
+        danger_level: high
+        approval_mode: single
+        idempotency: required
+      - operation_id: ops.account_enforcement_case.GetAccountEnforcementCase
+
   # 全局精选池：premium-pool 写入经 outbox 事件广播，content-service 投影进
   # rm_premium_pool 供 feed 消费；takedown 为高危处置，双 principal 双签后执行。
   - object_type: premium_pool_entry

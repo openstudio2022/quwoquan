@@ -422,6 +422,9 @@ type PostDetailSlice struct {
 	AssistantUsePolicy      string                         `json:"assistantUsePolicy,omitempty" bson:"assistantUsePolicy,omitempty"`
 	SourcePostID            string                         `json:"sourcePostId,omitempty" bson:"sourcePostId,omitempty"`
 	SourceType              string                         `json:"sourceType,omitempty" bson:"sourceType,omitempty"`
+	// GatheringRef 共同经历回流引用（作者显式关联的 canonical Gathering ID）；
+	// 空值表示普通内容，wire 契约声明 nullable string。
+	GatheringRef            string                         `json:"gatheringRef,omitempty" bson:"gatheringRef,omitempty"`
 	IllustrationAssetID     string                         `json:"illustrationAssetId,omitempty" bson:"illustrationAssetId,omitempty"`
 	LikeCount               int64                          `json:"likeCount" bson:"likeCount"`
 	CommentCount            int64                          `json:"commentCount" bson:"commentCount"`
@@ -506,7 +509,14 @@ type PostFeedItemSlice struct {
 	EntityRefs         []string             `json:"entityRefs,omitempty" bson:"entityRefs,omitempty"`
 	Visibility         PostVisibility       `json:"visibility,omitempty" bson:"visibility,omitempty"`
 	ContentVertical    string               `json:"contentVertical,omitempty" bson:"contentVertical,omitempty"`
-	SourceTaskID       string               `json:"sourceTaskId,omitempty" bson:"sourceTaskId,omitempty"`
+	// 主实体锚点（canonical homepage 引用）：feed 卡想去 CTA 与实体跳转的
+	// 意图信号源；无实体锚点时为空。
+	PrimaryHomepageID   string `json:"primaryHomepageId,omitempty" bson:"primaryHomepageId,omitempty"`
+	PrimaryHomepageType string `json:"primaryHomepageType,omitempty" bson:"primaryHomepageType,omitempty"`
+	// GatheringRef 共同经历回流引用：feed 卡溯源标「他们从这条内容出发」的
+	// 物理载体；作者删除或取消关联即为空。
+	GatheringRef string `json:"gatheringRef,omitempty" bson:"gatheringRef,omitempty"`
+	SourceTaskID string `json:"sourceTaskId,omitempty" bson:"sourceTaskId,omitempty"`
 	SourceOwner        string               `json:"-" bson:"sourceOwner,omitempty"`
 	ReleaseID          string               `json:"-" bson:"releaseId,omitempty"`
 	ManifestDigest     string               `json:"-" bson:"manifestDigest,omitempty"`

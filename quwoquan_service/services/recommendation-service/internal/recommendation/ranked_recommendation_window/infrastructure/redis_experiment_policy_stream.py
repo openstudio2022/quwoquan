@@ -73,6 +73,24 @@ class RedisExperimentPolicyStream:
             )
         return tuple(records)
 
+    def replay(self) -> tuple[ExperimentPolicyStreamRecord, ...]:
+        """Read the retained stream history without consuming or acknowledging.
+
+        A projection volume can be recreated while the Redis stream keeps its
+        already-acknowledged ExperimentPolicyActivated facts. XRANGE rebuilds
+        the projection from the same authored truth source; it never touches
+        consumer-group state.
+        """
+
+        try:
+            entries = self._redis.xrange(STREAM, min="-", max="+")
+        except RedisError as error:
+            raise _unavailable("replay") from error
+        return tuple(
+            ExperimentPolicyStreamRecord(_text(stream_id), _values(fields))
+            for stream_id, fields in entries or []
+        )
+
     def acknowledge(self, stream_id: str) -> None:
         try:
             self._redis.xack(STREAM, CONSUMER_GROUP, stream_id)

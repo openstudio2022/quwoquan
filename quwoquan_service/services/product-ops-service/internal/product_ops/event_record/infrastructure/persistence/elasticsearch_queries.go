@@ -470,6 +470,158 @@ func (s *ElasticsearchEventLogStore) GetPageExperienceStats(
 	return items, nil
 }
 
+// GetEventValueStats 从 raw 权威事实读取数值字段统计（与 RTC QoE 相同的
+// 原始样本口径）：percentile 用 ES percentiles 聚合，sum_ratio 用 sum 聚合；
+// 无样本返回零计数，调用方显式 unavailable。
+func (s *ElasticsearchEventLogStore) GetEventValueStats(
+	ctx context.Context,
+	query application.EventValueStatsQuery,
+) (application.EventValueStats, error) {
+	filters := []any{
+		elasticsearchRangeFilter("occurredAt", query.From, query.To),
+		map[string]any{"term": map[string]any{"eventType": query.EventType}},
+	}
+	if query.Result != "" {
+		filters = append(filters, map[string]any{
+			"term": map[string]any{"result": query.Result},
+		})
+	}
+	countField := query.ValueField
+	if countField == "" {
+		countField = query.DenominatorField
+	}
+	aggregations := map[string]any{
+		"samples": map[string]any{
+			"value_count": map[string]any{"field": countField},
+		},
+	}
+	if query.ValueField != "" {
+		aggregations["p95"] = map[string]any{
+			"percentiles": map[string]any{
+				"field":    query.ValueField,
+				"percents": []float64{95},
+			},
+		}
+	}
+	if query.NumeratorField != "" {
+		aggregations["numeratorSum"] = map[string]any{
+			"sum": map[string]any{"field": query.NumeratorField},
+		}
+	}
+	if query.DenominatorField != "" {
+		aggregations["denominatorSum"] = map[string]any{
+			"sum": map[string]any{"field": query.DenominatorField},
+		}
+	}
+	var response struct {
+		Aggregations struct {
+			Samples struct {
+				Value float64 `json:"value"`
+			} `json:"samples"`
+			P95 struct {
+				Values map[string]*float64 `json:"values"`
+			} `json:"p95"`
+			NumeratorSum struct {
+				Value float64 `json:"value"`
+			} `json:"numeratorSum"`
+			DenominatorSum struct {
+				Value float64 `json:"value"`
+			} `json:"denominatorSum"`
+		} `json:"aggregations"`
+	}
+	if err := s.search(ctx, elasticsearchIndexPattern(s.config.RawIndex), map[string]any{
+		"size":  0,
+		"query": map[string]any{"bool": map[string]any{"filter": filters}},
+		"aggs":  aggregations,
+	}, &response); err != nil {
+		return application.EventValueStats{}, fmt.Errorf(
+			"query Elasticsearch event value stats: %w", err,
+		)
+	}
+	stats := application.EventValueStats{
+		SampleCount:    int64(response.Aggregations.Samples.Value),
+		NumeratorSum:   response.Aggregations.NumeratorSum.Value,
+		DenominatorSum: response.Aggregations.DenominatorSum.Value,
+	}
+	if p95 := response.Aggregations.P95.Values["95.0"]; p95 != nil {
+		stats.P95 = *p95
+	}
+	return stats, nil
+}
+
+// ListDistinctSessionsByEvent 按事件类型列举窗口内 distinct sessionId
+// （跨轨漏斗产品轨段的 actor 去重输入）。
+func (s *ElasticsearchEventLogStore) ListDistinctSessionsByEvent(
+	ctx context.Context,
+	eventType string,
+	from time.Time,
+	to time.Time,
+	limit int,
+) ([]string, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("Elasticsearch distinct session limit must be positive")
+	}
+	sessions := make([]string, 0, min(limit, 1000))
+	var after map[string]any
+	for len(sessions) < limit {
+		pageSize := min(1000, limit-len(sessions))
+		composite := map[string]any{
+			"size": pageSize,
+			"sources": []any{
+				map[string]any{
+					"sessionId": map[string]any{
+						"terms": map[string]any{"field": "sessionId"},
+					},
+				},
+			},
+		}
+		if len(after) > 0 {
+			composite["after"] = after
+		}
+		var response struct {
+			Aggregations struct {
+				Sessions struct {
+					Buckets []struct {
+						Key map[string]any `json:"key"`
+					} `json:"buckets"`
+					AfterKey map[string]any `json:"after_key"`
+				} `json:"sessions"`
+			} `json:"aggregations"`
+		}
+		if err := s.search(ctx, elasticsearchIndexPattern(s.config.RawIndex), map[string]any{
+			"size": 0,
+			"query": map[string]any{
+				"bool": map[string]any{
+					"filter": []any{
+						elasticsearchRangeFilter("occurredAt", from, to),
+						map[string]any{"term": map[string]any{"eventType": eventType}},
+						map[string]any{"exists": map[string]any{"field": "sessionId"}},
+					},
+				},
+			},
+			"aggs": map[string]any{
+				"sessions": map[string]any{"composite": composite},
+			},
+		}, &response); err != nil {
+			return nil, fmt.Errorf(
+				"query Elasticsearch distinct sessions by event: %w", err,
+			)
+		}
+		for _, bucket := range response.Aggregations.Sessions.Buckets {
+			sessionID := fmt.Sprint(bucket.Key["sessionId"])
+			if sessionID != "" {
+				sessions = append(sessions, sessionID)
+			}
+		}
+		if len(response.Aggregations.Sessions.Buckets) < pageSize ||
+			len(response.Aggregations.Sessions.AfterKey) == 0 {
+			return sessions, nil
+		}
+		after = response.Aggregations.Sessions.AfterKey
+	}
+	return sessions, nil
+}
+
 func (s *ElasticsearchEventLogStore) ListDistinctSessions(
 	ctx context.Context,
 	from time.Time,
@@ -481,7 +633,9 @@ func (s *ElasticsearchEventLogStore) ListDistinctSessions(
 	}
 	sessions := make([]string, 0, min(limit, 1000))
 	var after map[string]any
-	var totalEvents int64
+	// PV 口径 = page_open 事件数（页面浏览量），不是窗口内全事件条数；
+	// 全事件数会把行为/诊断类事件也计入，系统性高估 PV。
+	var pageViews int64
 	for len(sessions) < limit {
 		pageSize := min(1000, limit-len(sessions))
 		composite := map[string]any{
@@ -506,6 +660,9 @@ func (s *ElasticsearchEventLogStore) ListDistinctSessions(
 					} `json:"buckets"`
 					AfterKey map[string]any `json:"after_key"`
 				} `json:"sessions"`
+				PageViews struct {
+					DocCount int64 `json:"doc_count"`
+				} `json:"pageViews"`
 			} `json:"aggregations"`
 		}
 		if err := s.search(ctx, elasticsearchIndexPattern(s.config.RawIndex), map[string]any{
@@ -521,6 +678,11 @@ func (s *ElasticsearchEventLogStore) ListDistinctSessions(
 			},
 			"aggs": map[string]any{
 				"sessions": map[string]any{"composite": composite},
+				"pageViews": map[string]any{
+					"filter": map[string]any{
+						"term": map[string]any{"eventType": "page_open"},
+					},
+				},
 			},
 		}, &response); err != nil {
 			return nil, 0, fmt.Errorf(
@@ -528,7 +690,7 @@ func (s *ElasticsearchEventLogStore) ListDistinctSessions(
 				err,
 			)
 		}
-		totalEvents = response.Hits.Total.Value
+		pageViews = response.Aggregations.PageViews.DocCount
 		for _, bucket := range response.Aggregations.Sessions.Buckets {
 			sessionID := fmt.Sprint(bucket.Key["sessionId"])
 			if sessionID != "" {
@@ -537,7 +699,7 @@ func (s *ElasticsearchEventLogStore) ListDistinctSessions(
 		}
 		if len(response.Aggregations.Sessions.Buckets) < pageSize ||
 			len(response.Aggregations.Sessions.AfterKey) == 0 {
-			return sessions, totalEvents, nil
+			return sessions, pageViews, nil
 		}
 		after = response.Aggregations.Sessions.AfterKey
 	}
@@ -551,7 +713,7 @@ func (s *ElasticsearchEventLogStore) ListDistinctSessions(
 			limit,
 		)
 	}
-	return sessions, totalEvents, nil
+	return sessions, pageViews, nil
 }
 
 func (s *ElasticsearchEventLogStore) hasDistinctSessionAfter(

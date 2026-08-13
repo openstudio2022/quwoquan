@@ -132,51 +132,51 @@ func contactHomeUserRowToWire(
 		"title":          displayName,
 		// 用户行的解释只来自服务端 typed intersection summary。个人简介、
 		// metFrom 或最近互动时间都不是可证明的交集，不能作为替代文案。
-		"subtitle":             "",
-		"avatarUrl":            stringFromMap(contact, "avatarUrl"),
-		"relationState":        stringFromMap(contact, "relationState"),
-		"summaryIntersections": application.ContactIntersectionTexts(intersections),
-		"lastActiveAt":         parseOptionalRFC3339(lastInteraction),
-		"sortKey":              lastInteraction,
-		"isStarred":            boolFromMap(contact, "isStarred"),
+		"subtitle":          "",
+		"avatarUrl":         stringFromMap(contact, "avatarUrl"),
+		"relationState":     stringFromMap(contact, "relationState"),
+		"intersectionFacts": application.ContactIntersectionFacts(intersections),
+		"lastActiveAt":      parseOptionalRFC3339(lastInteraction),
+		"sortKey":           lastInteraction,
+		"isStarred":         boolFromMap(contact, "isStarred"),
 	}
 }
 
 func contactHomeCircleRowToWire(hit application.ContactHomeCircleHit) map[string]any {
 	circleID := strings.TrimSpace(hit.CircleID)
 	return map[string]any{
-		"id":                   circleID,
-		"kind":                 "circle",
-		"objectId":             circleID,
-		"userHandle":           "",
-		"circleId":             circleID,
-		"title":                strings.TrimSpace(hit.DisplayName),
-		"subtitle":             strings.TrimSpace(hit.Subtitle),
-		"avatarUrl":            strings.TrimSpace(hit.AvatarURL),
-		"summaryIntersections": []string{},
-		"sortKey":              circleID,
+		"id":                circleID,
+		"kind":              "circle",
+		"objectId":          circleID,
+		"userHandle":        "",
+		"circleId":          circleID,
+		"title":             strings.TrimSpace(hit.DisplayName),
+		"subtitle":          strings.TrimSpace(hit.Subtitle),
+		"avatarUrl":         strings.TrimSpace(hit.AvatarURL),
+		"intersectionFacts": []map[string]any{},
+		"sortKey":           circleID,
 	}
 }
 
 func (h *ChatHandler) contactHomeGroupRowToWire(ctx context.Context, conv model.Conversation) map[string]any {
 	return map[string]any{
-		"id":                   conv.ID,
-		"kind":                 "group",
-		"objectId":             conv.ID,
-		"userHandle":           "",
-		"conversationId":       conv.ID,
-		"circleId":             conv.CircleId,
-		"circleGroupId":        conv.CircleGroupId,
-		"entityId":             conv.EntityId,
-		"title":                conv.Title,
-		"subtitle":             "",
-		"avatarUrl":            h.resolveConversationAvatarURL(ctx, conv),
-		"summaryIntersections": []string{},
-		"sourceEntityTitle":    "",
-		"sourceCircleTitle":    "",
-		"memberCount":          conv.MemberCount,
-		"lastActiveAt":         conv.LastMessageTime,
-		"sortKey":              conv.LastMessageTime.UTC().Format(time.RFC3339),
+		"id":                conv.ID,
+		"kind":              "group",
+		"objectId":          conv.ID,
+		"userHandle":        "",
+		"conversationId":    conv.ID,
+		"circleId":          conv.CircleId,
+		"circleGroupId":     conv.CircleGroupId,
+		"entityId":          conv.EntityId,
+		"title":             conv.Title,
+		"subtitle":          "",
+		"avatarUrl":         h.resolveConversationAvatarURL(ctx, conv),
+		"intersectionFacts": []map[string]any{},
+		"sourceEntityTitle": "",
+		"sourceCircleTitle": "",
+		"memberCount":       conv.MemberCount,
+		"lastActiveAt":      conv.LastMessageTime,
+		"sortKey":           conv.LastMessageTime.UTC().Format(time.RFC3339),
 	}
 }
 
@@ -400,6 +400,12 @@ func messageToWire(slice application.MessageSlice) map[string]any {
 		"mentions":         msg.Mentions,
 		"status":           msg.Status,
 		"timestamp":        msg.Timestamp,
+	}
+	if msg.AudioDurationMs > 0 {
+		wire["audioDurationMs"] = msg.AudioDurationMs
+	}
+	if len(msg.AudioWaveform) > 0 {
+		wire["audioWaveform"] = msg.AudioWaveform
 	}
 	if slice.Media != nil {
 		wire["mediaDeliveryUrl"] = slice.Media.DeliveryURL

@@ -106,10 +106,11 @@ func assistantSessionRegistryRetrieveContractRetrievalContractTestRegistry() Reg
 					"title":      "typed test result",
 				}},
 			}},
-			"citations":          []any{},
-			"emergedTagRefs":     []string{},
-			"provenance":         map[string]any{"operation": "search.search_index_view.Search"},
-			"retrievalPlan":      map[string]any{"digest": "sha256:test_frozen_plan"},
+			"citations":      []any{},
+			"emergedTagRefs": []string{},
+			"provenance":     map[string]any{"operation": "search.search_index_view.Search"},
+			// digest is sha256("test_frozen_plan").
+			"retrievalPlan":      map[string]any{"digest": "sha256:56e63b4c46fac01508f8a3725143212666436c2a600420e4d3f60867c668d0ff"},
 			"evidenceAssessment": acceptedEvidenceAssessment("test_app_search_stub"),
 		}}, nil
 	})

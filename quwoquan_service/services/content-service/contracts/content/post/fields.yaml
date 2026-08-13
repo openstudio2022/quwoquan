@@ -566,7 +566,7 @@ fields:
     role: owned_value
   - name: captureDisclosure
     source: captureDisclosure
-    type: '[]string'
+    type: '[]enum'
     enum_ref: CaptureDisclosureGroup
     constraints:
       - NULLABLE
@@ -600,6 +600,18 @@ fields:
     description: 内容绑定的 canonical 共享主页 ID
     role: authoritative_state
     reference: true
+  - name: gatheringRef
+    source: gatheringRef
+    type: string
+    constraints:
+      - NULLABLE
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read_write
+    ops_exposure: read
+    recommend_feature: true
+    description: 作者主动关联的 canonical Gathering ID（共同经历回流引用）。只在作者创作时显式选择 「发布到这次共同经历」后写入；服务端必须校验作者在该 Gathering 持有有效 Participation 后才接受，校验不成立 fail-closed。与 sourcePostId 方向相反：source 表达内容从哪来，gatheringRef 表达内容回流到哪次共同行动。为空即普通内容；作者删除或取消关联不影响内容本身的所有权与可见性。消费方：行动详情共同经历聚合、个人主页经历资产区、recommendation 的 coExperiencedGathering 交集事实与四锚点社会证明计数（经历级）。Gathering 不因此成为新的 Post 类型。
+    role: authoritative_state
   - name: primaryHomepageType
     source: primaryHomepageType
     type: enum
@@ -1485,6 +1497,21 @@ types:
       - name: researchBadgeVisible
         type: boolean
         constraints: [NOT_NULL]
+      - name: postIds
+        type: '[]string'
+        constraints: [NOT_NULL]
+      - name: entityRefs
+        type: '[]string'
+        constraints: [NOT_NULL]
+      - name: mediaAssetIds
+        type: '[]string'
+        constraints: [NOT_NULL]
+      - name: publicCdnDetected
+        type: boolean
+        constraints: [NOT_NULL]
+      - name: anonymousMediaUrlDetected
+        type: boolean
+        constraints: [NOT_NULL]
   ContentAuthorPostsQuery:
     fields:
       - name: personaId
@@ -1514,6 +1541,44 @@ types:
         type: int
         client_dart_type: int
         client_default: "20"
+  ContentGatheringPostsQuery:
+    description: 行动详情共同经历聚合区查询；gatheringId 来自 canonical path。
+    fields:
+      - name: gatheringId
+        type: string
+        constraints: [NOT_BLANK]
+        client_dart_type: String
+        client_normalization: trim
+      - name: cursor
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "20"
+  GetGatheringSocialProofQuery:
+    description: 四锚点社会证明查询；anchorKind 只接受 organizer/entity/content/creator。
+    fields:
+      - name: anchorKind
+        type: string
+        constraints: [NOT_BLANK]
+        client_dart_type: String
+        client_normalization: trim
+      - name: objectId
+        type: string
+        constraints: [NOT_BLANK]
+        client_dart_type: String
+        client_normalization: trim
+  GatheringSocialProofSummary:
+    description: 四锚点两级诚实社会证明计数（recommendation 聚合派生，Content 只透传）；formed=已发布且 ≥2 名 active 参与者，experienced=formed 且 ≥2 名参与者各自持有 active 公开回顾。
+    fields:
+      - {name: anchorKind, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: objectId, type: string, constraints: [NOT_BLANK], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
+      - {name: publishedCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: formedCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: experiencedCount, type: int64, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   ContentFootprintQuery:
     fields:
       - name: type
@@ -1769,12 +1834,10 @@ types:
           - NULLABLE
         client_dart_type: DateTime?
       - name: captureDisclosure
-        type: '[]string'
+        type: '[]enum'
         enum_ref: CaptureDisclosureGroup
-        client_dart_type: List<String>
-        client_parameter_type: Iterable<String>
-        client_default: const <String>[]
-        client_normalization: trim
+        client_parameter_type: Iterable<CaptureDisclosureGroup>
+        client_default: const <CaptureDisclosureGroup>[]
       - name: primaryHomepageId
         type: string
         constraints:
@@ -1789,6 +1852,11 @@ types:
         type: PostHomepageSnapshot
         constraints:
           - NULLABLE
+      - name: gatheringRef
+        type: string
+        constraints:
+          - NULLABLE
+        client_dart_type: String?
       - name: visibility
         type: enum
         enum_ref: Visibility

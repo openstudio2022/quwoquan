@@ -8,6 +8,7 @@ import (
 )
 
 type OwnerSearchResponse struct {
+	SearchRequestID  string                      `json:"searchRequestId"`
 	InterpretedQuery OwnerSearchInterpretedQuery `json:"interpretedQuery"`
 	Hits             []OwnerSearchHit            `json:"hits"`
 	Citations        []OwnerSearchCitation       `json:"citations"`
@@ -27,13 +28,17 @@ type OwnerSearchInterpretedQuery struct {
 }
 
 type OwnerSearchHit struct {
-	ObjectRef    string `json:"objectRef"`
-	ObjectType   string `json:"objectType"`
-	ContentType  string `json:"contentType,omitempty"`
-	Title        string `json:"title"`
-	Snippet      string `json:"snippet,omitempty"`
-	Action       string `json:"action,omitempty"`
-	ThumbnailURL string `json:"thumbnailUrl,omitempty"`
+	ObjectRef    string              `json:"objectRef"`
+	ObjectType   string              `json:"objectType"`
+	ContentType  string              `json:"contentType,omitempty"`
+	Title        string              `json:"title"`
+	Snippet      string              `json:"snippet,omitempty"`
+	Action       string              `json:"action,omitempty"`
+	ThumbnailURL string              `json:"thumbnailUrl,omitempty"`
+	RankPosition int                 `json:"rankPosition"`
+	MatchedTerms []string            `json:"matchedTerms"`
+	RankReasons  []rtsearch.Reason   `json:"rankReasons"`
+	Evidence     []rtsearch.Evidence `json:"evidence"`
 }
 
 type OwnerSearchCitation struct {
@@ -97,6 +102,10 @@ func projectOwnerSearchResponse(
 			ContentType: contentTypeForOwnerHit(hit), Title: strings.TrimSpace(hit.Title),
 			Snippet: strings.TrimSpace(hit.Snippet), Action: strings.TrimSpace(hit.DeepLink),
 			ThumbnailURL: strings.TrimSpace(hit.ThumbnailURL),
+			RankPosition: hit.RankPosition,
+			MatchedTerms: append([]string{}, hit.MatchedTerms...),
+			RankReasons:  append([]rtsearch.Reason{}, hit.RankReasons...),
+			Evidence:     append([]rtsearch.Evidence{}, hit.Evidence...),
 		})
 	}
 	for _, citation := range response.Citations {

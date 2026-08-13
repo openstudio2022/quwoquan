@@ -1,7 +1,7 @@
-package main
+package bootstrap
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"strings"
 
@@ -17,15 +17,15 @@ type contentRuntimeLogging struct {
 	exceptionLogger *robs.ExceptionLogger
 }
 
-// mustBuildContentRuntimeLogging 装配进程日志出口，不选择任何业务对象实现。
-func mustBuildContentRuntimeLogging() *contentRuntimeLogging {
+// buildContentRuntimeLogging 装配进程日志出口，不选择任何业务对象实现。
+func buildContentRuntimeLogging() (*contentRuntimeLogging, error) {
 	exporter, err := robs.NewHTTPRuntimeLogFieldExporter(
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_URL")),
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_INGEST_TOKEN")),
 		strings.TrimSpace(os.Getenv("RUNTIME_LOG_SPOOL_DIR")),
 	)
 	if err != nil {
-		log.Fatalf("content-service runtime log exporter init failed: %v", err)
+		return nil, fmt.Errorf("content-service runtime log exporter init failed: %w", err)
 	}
 	standardWriter := robs.NewRuntimeLogExportWriter(os.Stdout, 512, exporter.Export)
 	errorWriter := robs.NewRuntimeLogExportWriter(os.Stderr, 512, exporter.Export)
@@ -36,11 +36,17 @@ func mustBuildContentRuntimeLogging() *contentRuntimeLogging {
 		nil,
 	)
 	if err != nil {
-		log.Fatalf("content-service process logger init failed: %v", err)
+		errorWriter.Close()
+		standardWriter.Close()
+		exporter.Close()
+		return nil, fmt.Errorf("content-service process logger init failed: %w", err)
 	}
 	exceptionLogger, err := robs.NewExceptionLogger(standardWriter, errorWriter, nil)
 	if err != nil {
-		log.Fatalf("content-service exception logger init failed: %v", err)
+		errorWriter.Close()
+		standardWriter.Close()
+		exporter.Close()
+		return nil, fmt.Errorf("content-service exception logger init failed: %w", err)
 	}
 	return &contentRuntimeLogging{
 		exporter:        exporter,
@@ -49,7 +55,7 @@ func mustBuildContentRuntimeLogging() *contentRuntimeLogging {
 		ioLogger:        robs.NewIOAccessLogger(standardWriter),
 		processLogger:   processLogger,
 		exceptionLogger: exceptionLogger,
-	}
+	}, nil
 }
 
 func (runtime *contentRuntimeLogging) Close() {

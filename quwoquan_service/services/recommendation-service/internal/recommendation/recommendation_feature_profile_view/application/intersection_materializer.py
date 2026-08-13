@@ -44,6 +44,10 @@ class IntersectionEvidenceStore(Protocol):
 
     def count_intersection_supply(self, supply_key: str) -> int: ...
 
+    def list_wishlisted_entities(self, persona_id: str, limit: int) -> tuple[str, ...]: ...
+
+    def list_experienced_gatherings(self, persona_id: str, limit: int) -> tuple[str, ...]: ...
+
 
 class Materializer:
     """Builds complete explainable snapshots from object-owned event projections."""
@@ -189,6 +193,49 @@ class Materializer:
                         kind="sharedCircle",
                         dimension="relationship",
                         related_ids=tuple(shared_circles),
+                        generated_at=generated_at,
+                    )
+                )
+            # 意图交集（交集飞轮入口环）：双方当前均想去的相同实体。
+            shared_wishlisted = sorted(
+                set(
+                    self._evidence.list_wishlisted_entities(
+                        normalized_subject, MAX_INTERSECTION_ACTORS
+                    )
+                ).intersection(
+                    self._evidence.list_wishlisted_entities(
+                        normalized_object, MAX_INTERSECTION_ACTORS
+                    )
+                )
+            )
+            if shared_wishlisted:
+                reasons.append(
+                    _co_wishlisted_reason(
+                        subject_id=normalized_subject,
+                        object_id=normalized_object,
+                        entity_ids=tuple(shared_wishlisted),
+                        generated_at=generated_at,
+                    )
+                )
+            # 经历交集（交集飞轮回流环）：双方在同一 Gathering 均持有 active
+            # Participation 且各自主动发布了公开回顾。单方发布不成立。
+            shared_experienced = sorted(
+                set(
+                    self._evidence.list_experienced_gatherings(
+                        normalized_subject, MAX_INTERSECTION_ACTORS
+                    )
+                ).intersection(
+                    self._evidence.list_experienced_gatherings(
+                        normalized_object, MAX_INTERSECTION_ACTORS
+                    )
+                )
+            )
+            if shared_experienced:
+                reasons.append(
+                    _co_experienced_gathering_reason(
+                        subject_id=normalized_subject,
+                        object_id=normalized_object,
+                        gathering_ids=tuple(shared_experienced),
                         generated_at=generated_at,
                     )
                 )
@@ -411,6 +458,129 @@ def _actor_set_reason(
             "factPointCount": 1,
             "totalPointCount": 1,
             "actionHints": [_view_action(target)],
+        }
+    )
+    return reason
+
+
+def _co_wishlisted_reason(
+    *,
+    subject_id: str,
+    object_id: str,
+    entity_ids: tuple[str, ...],
+    generated_at: datetime,
+) -> dict[str, object]:
+    """coWishlistedEntity（都想去）：意图交集，行动阶梯首位是发起聚集。
+
+    文案口径对齐 registry counted 模板「{subject}和你都想去{count}个相同的地方」；
+    保鲜窗口对齐 registry timeWindowDays=14。
+    """
+    samples = entity_ids[:MAX_INTERSECTION_SAMPLES]
+    count = len(entity_ids)
+    primary_text = f"你们都想去 {count} 个相同的地方"
+    entity_target = _target(object_type="entity", object_id=samples[0])
+    reason = _base_reason(
+        subject_id=subject_id,
+        intersection_id=f"{subject_id}:user:{object_id}:coWishlistedEntity",
+        intersection_class="fact",
+        kind="coWishlistedEntity",
+        dimension="location",
+        source="entity_wishlist_events",
+        object_kind="person",
+        relation_object_id=object_id,
+        action_target_id=samples[0],
+        primary_text=primary_text,
+        generated_at=generated_at,
+        ttl=timedelta(days=14),
+    )
+    reason.update(
+        {
+            "displayBinding": "host_implicit",
+            "moment": "prospective",
+            "iconKey": "place",
+            "tone": "tea",
+            "intersectionPoints": [
+                _point(
+                    point_id=f"{object_id}:coWishlistedEntity",
+                    point_class="fact",
+                    dimension="location",
+                    label="共同想去",
+                    source_ref="coWishlistedEntity",
+                    count=count,
+                    sample_text="、".join(samples),
+                    visuals=[],
+                )
+            ],
+            "primarySpans": [
+                {"text": primary_text, "role": "plain", "target": None, "visual": None}
+            ],
+            "factPointCount": 1,
+            "totalPointCount": 1,
+            "actionHints": [_start_gathering_action(entity_target)],
+        }
+    )
+    return reason
+
+
+def _co_experienced_gathering_reason(
+    *,
+    subject_id: str,
+    object_id: str,
+    gathering_ids: tuple[str, ...],
+    generated_at: datetime,
+) -> dict[str, object]:
+    """coExperiencedGathering（一起参加过）：经历交集，强度最高的事实交集。
+
+    只由「双方 active Participation + 双方各自公开回顾」触发（诚实红线延伸）；
+    文案口径对齐 registry counted 模板「{subject}和你一起参加过{count}次行动」；
+    保鲜窗口对齐 registry timeWindowDays=30。
+    """
+    samples = gathering_ids[:MAX_INTERSECTION_SAMPLES]
+    count = len(gathering_ids)
+    primary_text = f"你们一起参加过 {count} 次行动"
+    gathering_target = _target(object_type="gathering", object_id=samples[0])
+    reason = _base_reason(
+        subject_id=subject_id,
+        intersection_id=f"{subject_id}:user:{object_id}:coExperiencedGathering",
+        intersection_class="fact",
+        kind="coExperiencedGathering",
+        dimension="relationship",
+        source="gathering_shared_experience_events",
+        object_kind="person",
+        relation_object_id=object_id,
+        action_target_id=samples[0],
+        primary_text=primary_text,
+        generated_at=generated_at,
+        ttl=timedelta(days=30),
+    )
+    reason.update(
+        {
+            "displayBinding": "host_implicit",
+            "moment": "retrospective",
+            "iconKey": "experience",
+            "tone": "sage",
+            "strength": 2.0,
+            "intersectionPoints": [
+                _point(
+                    point_id=f"{object_id}:coExperiencedGathering",
+                    point_class="fact",
+                    dimension="relationship",
+                    label="共同经历",
+                    source_ref="coExperiencedGathering",
+                    count=count,
+                    sample_text="、".join(samples),
+                    visuals=[],
+                )
+            ],
+            "primarySpans": [
+                {"text": primary_text, "role": "plain", "target": None, "visual": None}
+            ],
+            "factPointCount": 1,
+            "totalPointCount": 1,
+            "actionHints": [
+                _start_gathering_action(gathering_target),
+                _open_object_action(gathering_target),
+            ],
         }
     )
     return reason
@@ -658,6 +828,35 @@ def _view_action(target: dict[str, object]) -> dict[str, object]:
     }
 
 
+def _start_gathering_action(target: dict[str, object]) -> dict[str, object]:
+    """canonical `start_gathering`：tier/gates/dispatch/label 与
+    intersection_kind_registry.yaml 的 actionKeyMeta / actionLabelByKey 同轨。"""
+    return {
+        "actionKey": "start_gathering",
+        "label": "发起聚集",
+        "target": target,
+        "isPrimary": True,
+        "priority": 1,
+        "actionTier": "heavy",
+        "requiredGates": ["login", "realName", "minorMode", "blocked", "rateLimit"],
+        "dispatch": "gathering",
+    }
+
+
+def _open_object_action(target: dict[str, object]) -> dict[str, object]:
+    """canonical `open_object`：与 registry actionKeyMeta 同轨的轻查看行动。"""
+    return {
+        "actionKey": "open_object",
+        "label": "查看对象",
+        "target": target,
+        "isPrimary": False,
+        "priority": 2,
+        "actionTier": "light",
+        "requiredGates": [],
+        "dispatch": "navigate",
+    }
+
+
 def _object_kind(object_type: str) -> str:
     return {
         "user": "person",
@@ -669,6 +868,7 @@ def _object_kind(object_type: str) -> str:
         "entity": "place",
         "homepage": "place",
         "place": "place",
+        "gathering": "gathering",
     }.get(object_type.strip(), "content")
 
 
@@ -683,6 +883,7 @@ def _route_id(object_type: str) -> str:
         "entity": "entityHomepage",
         "homepage": "entityHomepage",
         "place": "entityHomepage",
+        "gathering": "gatheringDetail",
     }.get(object_type.strip(), "workBrowser")
 
 

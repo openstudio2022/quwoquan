@@ -54,6 +54,7 @@ func TestAssistantToolCatalogIsGeneratedClosedAndRequiresExplicitMutationConfirm
 			"gathering.read_public",
 			"gathering.search_public",
 			"gathering.watch_availability",
+			"intersection.read_mine",
 			"location_poi_search",
 			"location_route_read",
 			"weather_lookup",

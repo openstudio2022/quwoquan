@@ -279,8 +279,7 @@ types:
         client_dart_type: String?
       - name: sort
         type: enum
-        client_dart_type: String
-        client_default: '''joined_asc'''
+        client_default: MemberListSort.joinedAsc
         enum_ref: MemberListSort
       - name: query
         type: string

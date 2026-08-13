@@ -94,19 +94,21 @@ func TestSkillPackageMongoActivationSurvivesRestartAndRollsBackAtomically(
 		t.Fatal(err)
 	}
 	first, err := service.Activate(t.Context(), "activate-one", application.ActivateInput{
-		PackageID:        integrationSkillPackageID,
-		ReleaseDigest:    releaseOne.ReleaseDigest,
-		ExpectedRevision: 0,
-		ActivatedBy:      "service:integration-publisher",
+		PackageID:         integrationSkillPackageID,
+		ReleaseDigest:     releaseOne.ReleaseDigest,
+		ExpectedRevision:  0,
+		ActivatedBy:       "service:integration-publisher",
+		EvaluationReceipt: integrationEvaluationReceipt(t, releaseOne),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	replayed, err := service.Activate(t.Context(), "activate-one", application.ActivateInput{
-		PackageID:        integrationSkillPackageID,
-		ReleaseDigest:    releaseOne.ReleaseDigest,
-		ExpectedRevision: 0,
-		ActivatedBy:      "service:integration-publisher",
+		PackageID:         integrationSkillPackageID,
+		ReleaseDigest:     releaseOne.ReleaseDigest,
+		ExpectedRevision:  0,
+		ActivatedBy:       "service:integration-publisher",
+		EvaluationReceipt: integrationEvaluationReceipt(t, releaseOne),
 	})
 	if err != nil || !replayed.Replayed ||
 		replayed.Activation != first.Activation {
@@ -121,10 +123,11 @@ func TestSkillPackageMongoActivationSurvivesRestartAndRollsBackAtomically(
 		t.Fatalf("active release after restart=%+v err=%v", activeOne.Release, err)
 	}
 	if _, err := service.Activate(t.Context(), "activate-two", application.ActivateInput{
-		PackageID:        integrationSkillPackageID,
-		ReleaseDigest:    releaseTwo.ReleaseDigest,
-		ExpectedRevision: 1,
-		ActivatedBy:      "service:integration-publisher",
+		PackageID:         integrationSkillPackageID,
+		ReleaseDigest:     releaseTwo.ReleaseDigest,
+		ExpectedRevision:  1,
+		ActivatedBy:       "service:integration-publisher",
+		EvaluationReceipt: integrationEvaluationReceipt(t, releaseTwo),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -252,9 +255,10 @@ func TestSkillPackageMongoActivationSurvivesRestartAndRollsBackAtomically(
 		"service:integration-publisher",
 		"/internal/assistant/skill-package-releases:activate",
 		map[string]any{
-			"packageId":        integrationSkillPackageID,
-			"releaseDigest":    releaseThree.ReleaseDigest,
-			"expectedRevision": 3,
+			"packageId":         integrationSkillPackageID,
+			"releaseDigest":     releaseThree.ReleaseDigest,
+			"expectedRevision":  3,
+			"evaluationReceipt": integrationEvaluationReceipt(t, releaseThree),
 		},
 	)
 	if activatedHTTP.Code != http.StatusOK {
@@ -275,9 +279,10 @@ func TestSkillPackageMongoActivationSurvivesRestartAndRollsBackAtomically(
 		"service:integration-publisher",
 		"/internal/assistant/skill-package-releases:activate",
 		map[string]any{
-			"packageId":        integrationSkillPackageID,
-			"releaseDigest":    releaseFour.ReleaseDigest,
-			"expectedRevision": 4,
+			"packageId":         integrationSkillPackageID,
+			"releaseDigest":     releaseFour.ReleaseDigest,
+			"expectedRevision":  4,
+			"evaluationReceipt": integrationEvaluationReceipt(t, releaseFour),
 		},
 	)
 	if activatedFourthHTTP.Code != http.StatusOK {
@@ -339,6 +344,22 @@ func TestSkillPackageMongoActivationSurvivesRestartAndRollsBackAtomically(
 		bson.M{"packageId": integrationSkillPackageID},
 		6,
 	)
+}
+
+// integrationEvaluationReceipt 构造与该 release 精确绑定的评测通过凭据。
+func integrationEvaluationReceipt(
+	t *testing.T,
+	release model.Release,
+) model.EvaluationReceipt {
+	t.Helper()
+	receipt, err := model.PassedEvaluationReceiptFor(
+		release,
+		time.Date(2026, 7, 31, 19, 30, 0, 0, time.UTC),
+	)
+	if err != nil {
+		t.Fatalf("bind evaluation receipt: %v", err)
+	}
+	return receipt
 }
 
 func integrationRelease(

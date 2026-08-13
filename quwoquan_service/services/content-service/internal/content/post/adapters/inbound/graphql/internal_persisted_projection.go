@@ -36,13 +36,17 @@ type contentPostDetailBase struct {
 	PrimaryHomepageSnapshot *homepageSnapshot  `json:"primaryHomepageSnapshot"`
 	Status                  string             `json:"status"`
 	Visibility              string             `json:"visibility"`
+	GatheringRef            *string            `json:"gatheringRef"`
 	LikeCount               int64              `json:"likeCount"`
 	CommentCount            int64              `json:"commentCount"`
 	ShareCount              int64              `json:"shareCount"`
 	ViewCount               int64              `json:"viewCount"`
-	CreatedAt               string             `json:"createdAt"`
-	UpdatedAt               string             `json:"updatedAt"`
-	PublishedAt             *string            `json:"publishedAt"`
+	// viewerLiked 在 owner 内部 persisted 读链路恒为 null：API Edge 以 service
+	// 身份调用，本传输不承载 viewer 维度；true/false 只能来自认证 REST 读。
+	ViewerLiked *bool   `json:"viewerLiked"`
+	CreatedAt   string  `json:"createdAt"`
+	UpdatedAt   string  `json:"updatedAt"`
+	PublishedAt *string `json:"publishedAt"`
 }
 
 type sourceAttribution struct {
@@ -128,6 +132,7 @@ func projectContentPostDetailBase(detail postports.PostDetailSlice) (any, error)
 		VisitedAt: nullableTime(detail.VisitedAt), PrimaryHomepageID: nullable(detail.PrimaryHomepageID),
 		CanonicalEntityID: nullable(detail.CanonicalEntityID), PrimaryHomepageType: nullable(detail.PrimaryHomepageType),
 		PrimaryHomepageSnapshot: homepage, Status: status, Visibility: visibility,
+		GatheringRef: nullable(detail.GatheringRef),
 		LikeCount: detail.LikeCount, CommentCount: detail.CommentCount,
 		ShareCount: detail.ShareCount, ViewCount: detail.ViewCount,
 		CreatedAt: formatTime(detail.CreatedAt), UpdatedAt: formatTime(detail.UpdatedAt),

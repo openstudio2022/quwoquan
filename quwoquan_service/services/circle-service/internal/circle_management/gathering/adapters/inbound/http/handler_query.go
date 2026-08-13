@@ -7,7 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	gatheringerrors "quwoquan_service/services/circle-service/generated/circle_management/gathering"
 	contract "quwoquan_service/services/circle-service/generated/circle_management/gathering/contract/model"
 	app "quwoquan_service/services/circle-service/internal/circle_management/gathering/application"
 )
@@ -28,12 +30,48 @@ func (handler *QueryHandler) Register(mux *stdhttp.ServeMux) {
 	if mux == nil {
 		panic("Gathering HTTP QueryHandler requires ServeMux")
 	}
+	mux.HandleFunc("GET /gatherings/mine", handler.listMine)
 	mux.HandleFunc("GET /gatherings/by-host", handler.listByHost)
 	mux.HandleFunc("GET /gatherings/by-source", handler.listBySource)
 	mux.HandleFunc("GET /public/gatherings/{gatheringId}", handler.getPublicGathering)
 	mux.HandleFunc("GET /gatherings/{gatheringId}/applications", handler.listApplications)
 	mux.HandleFunc("GET /gatherings/{gatheringId}/roster", handler.listRoster)
 	mux.HandleFunc("GET /gatherings/{gatheringId}", handler.getGathering)
+	mux.HandleFunc(
+		"GET /internal/circle/gatherings/{gatheringId}/participations/{personaId}",
+		handler.getParticipationStatus,
+	)
+}
+
+// getParticipationStatus 只对 service principal 开放（visibility=internal）：
+// Content 在接受 post.gatheringRef 回流引用前经此确认作者当前参与状态，fail-closed。
+func (handler *QueryHandler) getParticipationStatus(
+	writer stdhttp.ResponseWriter,
+	request *stdhttp.Request,
+) {
+	principal, ok := rtauth.PrincipalFromContext(request.Context())
+	if !ok || !strings.HasPrefix(principal.Subject, "service:") {
+		writeQueryError(
+			writer,
+			request,
+			gatheringerrors.AppErrorFromGatheringPermissionDenied(
+				"Gathering participation status is service-internal",
+			),
+		)
+		return
+	}
+	result, err := handler.queries.GetParticipationStatus(
+		request.Context(),
+		app.ParticipationStatusQuery{
+			GatheringID: request.PathValue("gatheringId"),
+			PersonaID:   request.PathValue("personaId"),
+		},
+	)
+	if err != nil {
+		writeQueryError(writer, request, err)
+		return
+	}
+	writeQueryJSON(writer, stdhttp.StatusOK, result)
 }
 
 func (handler *QueryHandler) getGathering(writer stdhttp.ResponseWriter, request *stdhttp.Request) {
@@ -51,6 +89,26 @@ func (handler *QueryHandler) getPublicGathering(writer stdhttp.ResponseWriter, r
 	result, err := handler.queries.GetPublicGathering(request.Context(), app.GatheringIDQuery{
 		GatheringID: request.PathValue("gatheringId"),
 	})
+	if err != nil {
+		writeQueryError(writer, request, err)
+		return
+	}
+	writeQueryJSON(writer, stdhttp.StatusOK, result)
+}
+
+func (handler *QueryHandler) listMine(writer stdhttp.ResponseWriter, request *stdhttp.Request) {
+	limit, err := queryLimit(request)
+	if err != nil {
+		writeQueryError(writer, request, err)
+		return
+	}
+	result, err := handler.queries.ListMyHostedGatherings(
+		request.Context(),
+		app.ListMineQuery{
+			Cursor: request.URL.Query().Get("cursor"),
+			Limit:  limit,
+		},
+	)
 	if err != nil {
 		writeQueryError(writer, request, err)
 		return
@@ -162,7 +220,8 @@ type queryResponse interface {
 		app.ByHostPage |
 		app.BySourcePage |
 		app.ApplicationInboxPage |
-		app.RosterPage
+		app.RosterPage |
+		app.ParticipationStatus
 }
 
 func writeQueryJSON[Response queryResponse](

@@ -41,11 +41,11 @@ func TestCreateReportPersistsPendingAggregateAndOutbox(t *testing.T) {
 	createReq = withReportActor(createReq, "persona-reporter")
 	createRec := httptest.NewRecorder()
 	handler.ServeHTTP(createRec, createReq)
-	if createRec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", createRec.Code, createRec.Body.String())
+	if createRec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", createRec.Code, createRec.Body.String())
 	}
-	if got := createRec.Body.Len(); got != 0 {
-		t.Fatalf("expected empty create response body, got %q", createRec.Body.String())
+	if got := createRec.Body.Len(); got == 0 {
+		t.Fatal("expected canonical report command response body")
 	}
 	var reportID string
 	var reporterAccountID string
@@ -272,11 +272,11 @@ func TestCreateReportPersistsVerifiedPersonaInsteadOfClientHeaders(t *testing.T)
 
 	response := httptest.NewRecorder()
 	protected.ServeHTTP(response, request)
-	if response.Code != http.StatusNoContent {
+	if response.Code != http.StatusOK {
 		t.Fatalf(
 			"trusted report status=%d want=%d body=%s",
 			response.Code,
-			http.StatusNoContent,
+			http.StatusOK,
 			response.Body.String(),
 		)
 	}
@@ -325,12 +325,12 @@ func TestCreateReportIdempotencyReplaysWithoutDuplicatePersistence(t *testing.T)
 		request.Header.Set("Idempotency-Key", "report-replay-key")
 		response := httptest.NewRecorder()
 		protected.ServeHTTP(response, request)
-		if response.Code != http.StatusNoContent {
+		if response.Code != http.StatusOK {
 			t.Fatalf(
 				"attempt=%d status=%d want=%d body=%s",
 				attempt,
 				response.Code,
-				http.StatusNoContent,
+				http.StatusOK,
 				response.Body.String(),
 			)
 		}
@@ -384,7 +384,7 @@ func TestListMyReportsReturnsOnlyVerifiedPersonaReports(t *testing.T) {
 		request.Header.Set("Idempotency-Key", key)
 		response := httptest.NewRecorder()
 		protected.ServeHTTP(response, request)
-		if response.Code != http.StatusNoContent {
+		if response.Code != http.StatusOK {
 			t.Fatalf("create %s status=%d body=%s", targetID, response.Code, response.Body.String())
 		}
 	}

@@ -1,0 +1,9 @@
+read_model: GatheringPostPageSlice
+description: Public recap Post cards linked to one Gathering via author-declared gatheringRef; only public + published + approved posts are eligible.
+source_entities: [Post, MediaAsset]
+source_projections: [ContentPostProjection]
+consumers: [app]
+fields:
+  - {name: items, type: '[]ContentPostProjection', nullable: false}
+  - {name: nextCursor, type: string, nullable: true}
+  - {name: hasMore, type: bool, nullable: false}

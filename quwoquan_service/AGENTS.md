@@ -50,6 +50,7 @@
 - 单个结构化 fixture 不得超过 64 KiB、500 个 scalar leaf 或 100 项单数组，同一 object support 下总量不得超过 256 KiB；超限改为 builder、固定 seed generator、immutable release 或独立 corpus，不得建立 fixture allowlist。
 - 独立 benchmark/eval corpus 必须有 manifest、digest 与 case count，只保存评测输入和期望；不得携带 `seedSets`、`repositoryExpectations`、`requiresSeedReset` 或环境 Repository 选择。执行模式、Actor 与可变状态由 runner/capability 控制面拥有。
 - 对象测试必须位于 `tests/<layer>/<context>/<object>/`；共享启动器只能放 `tests/support`，不得把兄弟对象测试借放到主对象目录。
+- 横切区（`runtime/`、`internal/`、`tools/`、`cmd/`）与各服务装配层（`services/<service>/cmd/**`）允许旁路同包白盒测试，但文件必须以 `__local_contract_test.go` 结尾；api_integration 测试禁止旁路同包，必须进入 canonical `tests/api_integration` 树（runtime 为 `runtime/tests/api_integration/<package>/`）。服务对象实现（`services/<service>/internal/**`）不适用旁路。
 - 服务端 `api_integration` 真实 API 行为必须能回到 App 端 `local_contract` Mock/Provider/Widget 对应断言，避免 Mock 与 Remote 分裂。
 - 错误码链路的 `local_contract` 覆盖 metadata/codegen/硬编码扫描，`api_integration` 覆盖 HTTP 响应、trace/request id、Remote 映射输入；涉及用户恢复体验时补 App `user_acceptance`。
 - 内容 importer、推荐 HotPath、行为事件、特征投影、AB 分桶和运营指标必须保持同一 trace/subject/referral 语义，不得新增双轨标识。

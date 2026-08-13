@@ -75,18 +75,7 @@ func TestPrivacySettings_BlockedKeywordsRoundTrip(t *testing.T) {
 func TestPrivacySettings_PreexistingNullRingtoneRowRemainsCompatible(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	createTestProfile(t, "settings_user_2", "settings_user_2")
-
-	if _, err := pgPool.Exec(
-		context.Background(),
-		`
-			INSERT INTO user_settings (user_id, default_incoming_call_ringtone_id, allow_caller_ringtone_override, blocked_keywords, updated_at)
-			VALUES ($1, NULL, true, $2, NOW())
-		`,
-		"settings_user_2",
-		[]string{"before"},
-	); err != nil {
-		t.Fatalf("seed user_settings with null ringtone: %v", err)
-	}
+	seedUserSettingsRow(t, "settings_user_2", []string{"before"})
 
 	getRec := doRequest(
 		t,

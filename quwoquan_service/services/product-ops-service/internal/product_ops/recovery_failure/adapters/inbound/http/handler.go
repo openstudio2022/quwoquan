@@ -4,11 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
-	"strings"
-	"sync"
-	"time"
 
 	rterr "quwoquan_service/runtime/errors"
 	recoverygenerated "quwoquan_service/services/product-ops-service/generated/product_ops/recovery_failure"
@@ -19,14 +15,17 @@ const maxRecoveryFailureBytes = 40 << 10
 
 type ErrorWriter func(http.ResponseWriter, *http.Request, int, string, string)
 
+// Handler 只做载荷校验与应用调用。匿名来源的权威准入由 api-edge 的共享
+// admission（rate_limit.operation.ops_recovery_failure_report，subject 为
+// 可信连接层 IP）跨副本裁决；进程内窗口限流已退役——它的窗口状态只存在于
+// 单副本内存，多副本下准入上限随副本数放大，不构成准入保证。
 type Handler struct {
 	service    *application.Service
 	writeError ErrorWriter
-	limiter    *sourceLimiter
 }
 
 func NewHandler(service *application.Service, writeError ErrorWriter) *Handler {
-	return &Handler{service: service, writeError: writeError, limiter: newSourceLimiter()}
+	return &Handler{service: service, writeError: writeError}
 }
 
 func (h *Handler) Register(mux *http.ServeMux) {
@@ -40,10 +39,6 @@ func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.service == nil {
 		h.writeAppError(w, r, recoverygenerated.AppErrorFromRecoveryFailureUnavailable("recovery failure service unavailable"))
-		return
-	}
-	if !h.limiter.allow(sourceAddress(r), time.Now()) {
-		h.writeAppError(w, r, recoverygenerated.AppErrorFromRecoveryFailureUnavailable("recovery failure rate limit exceeded"))
 		return
 	}
 	var failure application.Failure
@@ -72,58 +67,4 @@ func (h *Handler) report(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) writeAppError(w http.ResponseWriter, r *http.Request, err *rterr.AppError) {
 	rterr.WriteHTTPError(w, err, rterr.HTTPWriteOptionsFromRequest(r))
-}
-
-type rateWindow struct {
-	startedAt time.Time
-	count     int
-}
-
-type sourceLimiter struct {
-	mu      sync.Mutex
-	windows map[string]rateWindow
-}
-
-func newSourceLimiter() *sourceLimiter {
-	return &sourceLimiter{windows: map[string]rateWindow{}}
-}
-
-func (l *sourceLimiter) allow(key string, now time.Time) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	window := l.windows[key]
-	if window.startedAt.IsZero() || now.Sub(window.startedAt) >= time.Minute {
-		window = rateWindow{startedAt: now}
-	}
-	if window.count >= 20 {
-		return false
-	}
-	window.count++
-	l.windows[key] = window
-	if len(l.windows) > 2048 {
-		var oldestKey string
-		var oldestAt time.Time
-		for existing, candidate := range l.windows {
-			if now.Sub(candidate.startedAt) >= time.Minute {
-				delete(l.windows, existing)
-				continue
-			}
-			if oldestKey == "" || candidate.startedAt.Before(oldestAt) {
-				oldestKey = existing
-				oldestAt = candidate.startedAt
-			}
-		}
-		if len(l.windows) > 2048 && oldestKey != "" {
-			delete(l.windows, oldestKey)
-		}
-	}
-	return true
-}
-
-func sourceAddress(r *http.Request) string {
-	host, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
-	if err == nil && host != "" {
-		return host
-	}
-	return strings.TrimSpace(r.RemoteAddr)
 }

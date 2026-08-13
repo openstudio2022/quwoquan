@@ -284,8 +284,122 @@ api_routes:
     availability_percent: 99.9
   request_body_kind: none
 - method: GET
+  path: /internal/circle/gatherings/{gatheringId}/participations/{personaId}
+  operation: GetGatheringParticipationStatus
+  commercial:
+    status: ready
+  request_bindings:
+    path:
+    - name: gatheringId
+      field: gatheringId
+    - name: personaId
+      field: personaId
+  actor: none
+  security:
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: internal
+  application:
+    kind: query
+    facet: GatheringQueryFacade
+    method: getParticipationStatus
+    reader: GatheringQueryReader
+    slice: GatheringParticipationStatusSlice
+  description: 服务间最小 Participation 状态断言：Content 在接受 post.gatheringRef 回流引用前必须由 Circle owner 确认作者当前参与状态（fail-closed），不复制名单、申请答案或私密事实，不转移 owner。
+  request_entity: GatheringParticipationStatusQuery
+  response_entity: GatheringParticipationStatusSlice
+  authorization:
+    principal: service
+    ownership_policy: gathering_root_owned_participation
+    scopes:
+    - circle.gathering.participation_status.read
+  reliability:
+    timeout_ms: 500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes:
+  - CIRCLE.USER.gathering_not_found
+  - CIRCLE.USER.gathering_permission_denied
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_gathering_participation_status_get
+    trace: true
+    attributes:
+    - outcome
+    - lifecycle_status
+  slo:
+    latency_p95_ms: 200
+    availability_percent: 99.95
+  request_body_kind: none
+- method: GET
+  path: /gatherings/mine
+  operation: ListMyHostedGatherings
+  commercial:
+    status: ready
+  request_bindings:
+    query:
+    - name: cursor
+      field: cursor
+      required: false
+    - name: limit
+      field: limit
+  actor: persona
+  security:
+    auth_mode: required
+    principal: persona
+    token_transport: bearer
+    anonymous_policy: deny
+    visibility: private
+  application:
+    kind: query
+    facet: GatheringQueryFacet
+    method: listMyHostedGatherings
+    reader: GatheringReader
+    slice: GatheringByHostPageSlice
+  description: Host 本人读取自己名下全部行动 typed page（含 draft 与非公开 audiencePolicy，不做公开披露裁剪）；host 身份取自受信 persona actor，禁止代查他人。
+  request_entity: GatheringMineListQuery
+  response_entity: GatheringByHostPageSlice
+  authorization:
+    principal: persona
+    ownership_policy: host_self_gatherings
+  reliability:
+    timeout_ms: 1000
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  pagination:
+    default_items: 20
+    maximum_items: 50
+  error_codes:
+  - CIRCLE.USER.invalid_argument
+  - CIRCLE.SYSTEM.gathering_storage_failed
+  privacy:
+    request_classification: PII
+    response_classification: INTERNAL
+    log_policy: metadata_only
+  telemetry:
+    metric: circle_gathering_list_mine
+    trace: true
+    attributes:
+    - outcome
+  slo:
+    latency_p95_ms: 400
+    availability_percent: 99.9
+  request_body_kind: none
+- method: GET
   path: /gatherings/by-host
   operation: ListGatheringsByHost
+  commercial:
+    status: ready
   request_bindings:
     query:
     - name: hostSubjectKind
@@ -345,6 +459,8 @@ api_routes:
 - method: GET
   path: /gatherings/by-source
   operation: ListGatheringsBySource
+  commercial:
+    status: ready
   request_bindings:
     query:
     - name: sourceObjectTypeRef
@@ -898,6 +1014,8 @@ api_routes:
   description: 仅 authenticated recipient 可用消息 action intent 中的 owner versions 拒绝邀请，并由 Circle 以 closedReason=declined 关闭当前 attempt。
   request_entity: GatheringParticipationVersionCommand
   response_entity: GatheringCommandResult
+  commercial:
+    status: ready
   authorization:
     principal: persona
     ownership_policy: self_invitation
@@ -2041,6 +2159,20 @@ api_routes:
     availability_percent: 99.9
   request_body_kind: object
 readiness_cases:
+- case_id: gathering_flywheel_journey_probe_ops_env
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/spec.md#sit-003
+  producer: ops
+  layer: environment_acceptance
+  target:
+    kind: object
+    id: circle.gathering
+  runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/circle-service/smoke/run_gathering_flywheel_journey_probe.py
+  executions:
+  - env: alpha
+    platform: linux
+    device: ci-runner
+    provider: first-party-https
+    digest_binding: candidate
 - case_id: create-gathering-local
   spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-lifecycle/spec.md#gwt-001
   producer: service
@@ -2477,3 +2609,12 @@ readiness_cases:
     device: runner
     provider: none
     digest_binding: candidate
+- case_id: gathering_availability_watch_app_uat
+  spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-012
+  producer: app
+  layer: user_acceptance
+  target: {kind: page, id: circle.gathering_detail}
+  runner_source_path: quwoquan_app/test/user_acceptance/service/circle_service/circle_management/gathering/gathering_availability_watch_remote__user_acceptance_test.dart
+  executions:
+    - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+    - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

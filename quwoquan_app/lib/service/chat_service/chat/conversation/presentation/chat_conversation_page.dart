@@ -6,13 +6,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_share_models.dart';
+import 'package:quwoquan_app/runtime/shell/share/forward_share_sheet.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_pages.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/public/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/conversation_dto.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_message_display_item.dart';
+import 'package:quwoquan_app/runtime/di/chat_content_presentation_slots.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/media_upload_queue.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/relationship_capability_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/conversation_page_scaffold.dart';
@@ -45,9 +47,12 @@ import 'package:quwoquan_app/runtime/platform/permissions/microphone_permission_
 import 'package:quwoquan_app/runtime/platform/local_file_stat.dart';
 import 'package:quwoquan_app/runtime/platform/local_image_provider.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
+import 'package:quwoquan_app/runtime/observability/trackers/chat_conversation_performance_observability_provider.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
+import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_conversation_lifecycle.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_timeline.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_send_outbox_control.dart';
@@ -105,6 +110,9 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
     _inputController.addListener(_onInputChanged);
     _scrollController.addListener(_onTimelineScroll);
     _realtimeNotifier = ref.read(realtimeConnectionManagerProvider.notifier);
+    ref
+        .read(chatConversationPerformanceObservabilityProvider)
+        .markConversationOpened(widget.conversationId);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_bootstrapConversation(widget.conversationId));
@@ -141,6 +149,17 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
     );
     final telemetryTracker = ref.read(chatInteractionTelemetryTrackerProvider);
     await notifier.loadMessages();
+    if (mounted) {
+      ref
+          .read(chatConversationPerformanceObservabilityProvider)
+          .markFirstTimelineReady(
+            conversationId,
+            messageCount: ref
+                .read(chatMessageTimelineProvider(conversationId))
+                .messages
+                .length,
+          );
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
@@ -282,7 +301,10 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
       isDark,
       ColorType.foregroundPrimary,
     );
-    final chatListBg = isDark ? bgColor : AppColors.chatBackground;
+    final chatListBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.chatListBackground,
+    );
     final messageState = ref.watch(
       chatMessageTimelineProvider(widget.conversationId),
     );
@@ -292,6 +314,7 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
           (dto) => dto.toDisplayItem(
             currentUserId: currentUserId,
             mediaEndpointConfig: mediaEndpointConfig,
+            peerReadSeq: messageState.peerReadSeq,
           ),
         )
         .toList();
@@ -327,6 +350,9 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
       children: [
         if (widget.searchAnchorContext case final anchor?)
           _SearchAnchorBanner(sourceQuery: anchor.sourceQuery, isDark: isDark),
+        // 离线只读来源必须与刷新失败可区分并驱动展示（reliability REQ-003）。
+        if (messageState.source == ChatTimelineContentSource.offlineReadOnly)
+          _OfflineReadOnlyBanner(isDark: isDark),
         Expanded(
           child: messageState.isLoading && displayMessages.isEmpty
               ? AppRequestFeedback.section()
@@ -404,12 +430,24 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
                               ),
                             ),
                           ),
+                        if (msg.replyToMessageId case final quotedId?)
+                          _QuotedMessageBlock(
+                            quoted: _findDisplayMessage(
+                              displayMessages,
+                              quotedId,
+                            ),
+                            isRight: msg.isSelf,
+                            isDark: isDark,
+                          ),
                         ChatMessageBubble(
                           message: msg,
                           isRight: msg.isSelf,
                           bubbleColor: msg.isSelf
                               ? AppColors.chatBubbleOutgoing
-                              : AppColors.chatBubbleIncoming,
+                              : AppColorsFunctional.getColor(
+                                  isDark,
+                                  ColorType.chatBubbleIncoming,
+                                ),
                           textColor: msg.isSelf ? AppColors.white : fgPrimary,
                           isSelectionMode: _isSelectionMode,
                           isSelected: _selectedIds.contains(msg.id),
@@ -421,13 +459,21 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
                               ? () => unawaited(
                                   _initiateCall(_callTypeFromLog(msg)),
                                 )
+                              : msg.type == 'file'
+                              ? () => unawaited(_openFileMessage(msg))
+                              : msg.type == 'video'
+                              ? () => _openVideoMessage(msg)
                               : null,
                           hideAvatarAndName: msg.type == 'system_call_log',
                           useFullWidth: msg.type == 'system_call_log',
-                          receiptEnabled: false,
+                          receiptEnabled:
+                              _conversationDto?.receiptEnabled ?? false,
                           memberCount: _memberCount,
                           mentionDisplayNames: mentionDisplayNames,
                           onMentionTap: _openMentionProfile,
+                          onRetrySend: msg.status == 'failed'
+                              ? () => unawaited(_retryFailedMessage(msg))
+                              : null,
                           onAvatarTap: () {
                             final senderId = msg.senderId;
                             if (msg.isSelf) {
@@ -462,7 +508,10 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
                 ),
         ),
         ColoredBox(
-          color: isDark ? bgColor : AppColors.chatToolbarBackground,
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.chatToolbarBackground,
+          ),
           child: SafeArea(
             top: false,
             child: Padding(
@@ -488,6 +537,12 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
                       _relationshipCapability?.isBlockedBy != true &&
                       _otherParticipantId != null)
                     _buildMutualFollowRtcHintBar(),
+                  if (_replyToTarget case final replyTarget?)
+                    _ReplyComposerPreviewBar(
+                      target: replyTarget,
+                      isDark: isDark,
+                      onCancel: () => setState(() => _replyToTarget = null),
+                    ),
                   _buildVoiceSendStatusBar(voiceSendState),
                   CustomizableChatInputBar(
                     controller: _inputController,
@@ -566,10 +621,11 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
         style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
       );
     }
-    final intersectionText = _conversationDto
-        ?.originIntersectionSnapshot
-        ?.primaryText
-        .trim();
+    // 交集常驻只在 1v1 会话头；群会话头部不得展示交集
+    //（intersection-native-messaging REQ-003 / header REQ-001）。
+    final intersectionText = _isGroupChat
+        ? null
+        : _conversationDto?.originIntersectionSnapshot?.primaryText.trim();
     if (intersectionText == null || intersectionText.isEmpty) {
       return Text(
         _conversationTitle,
@@ -628,6 +684,227 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
   }
 
   static const Duration _timeSeparatorGap = Duration(minutes: 5);
+}
+
+ChatMessageDisplayItem? _findDisplayMessage(
+  List<ChatMessageDisplayItem> messages,
+  String messageId,
+) {
+  for (final message in messages) {
+    if (message.id == messageId) {
+      return message;
+    }
+  }
+  return null;
+}
+
+/// 被引用消息的单行摘要：文本取内容，媒体走既有类型占位文案。
+String _quotedMessageSummary(ChatMessageDisplayItem? quoted) {
+  if (quoted == null) {
+    return ChatText.chatReplyOriginalUnavailable;
+  }
+  if (quoted.status == 'recalled') {
+    return ChatText.chatReplyOriginalUnavailable;
+  }
+  return switch (quoted.type) {
+    'image' => ChatText.chatPreviewImage,
+    'video' => ChatText.chatPreviewVideo,
+    'audio' => ChatText.chatPreviewVoice,
+    _ => quoted.content,
+  };
+}
+
+/// 输入栏上方的引用回复预览条（可取消）。
+class _ReplyComposerPreviewBar extends StatelessWidget {
+  const _ReplyComposerPreviewBar({
+    required this.target,
+    required this.isDark,
+    required this.onCancel,
+  });
+
+  final ChatMessageDisplayItem target;
+  final bool isDark;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final summary = _quotedMessageSummary(target);
+    return Padding(
+      key: const ValueKey<String>('chat-reply-composer-preview'),
+      padding: EdgeInsets.only(bottom: AppSpacing.intraGroupXs),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: fgSecondary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupXs,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                CupertinoIcons.arrowshape_turn_up_left,
+                size: AppSpacing.iconSmall,
+                color: fgSecondary,
+              ),
+              SizedBox(width: AppSpacing.intraGroupXs),
+              Expanded(
+                child: Text(
+                  target.senderName.isEmpty
+                      ? summary
+                      : '${target.senderName}: $summary',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: fgSecondary,
+                  ),
+                ),
+              ),
+              CupertinoButton(
+                key: const ValueKey<String>('chat-reply-composer-cancel'),
+                padding: EdgeInsets.zero,
+                minimumSize: Size.square(AppSpacing.iconMedium),
+                onPressed: onCancel,
+                child: Icon(
+                  CupertinoIcons.xmark_circle_fill,
+                  size: AppSpacing.iconSmall,
+                  color: fgSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 气泡上方的被引用消息块：只展示单行摘要，原消息不可用时诚实占位。
+class _QuotedMessageBlock extends StatelessWidget {
+  const _QuotedMessageBlock({
+    required this.quoted,
+    required this.isRight,
+    required this.isDark,
+  });
+
+  final ChatMessageDisplayItem? quoted;
+  final bool isRight;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final summary = _quotedMessageSummary(quoted);
+    final label = quoted == null || quoted!.senderName.isEmpty
+        ? summary
+        : '${quoted!.senderName}: $summary';
+    return Padding(
+      padding: EdgeInsets.only(
+        left: isRight ? 0 : AppSpacing.xl * 2,
+        right: isRight ? AppSpacing.xl * 2 : 0,
+        bottom: AppSpacing.two,
+      ),
+      child: Row(
+        mainAxisAlignment: isRight
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        children: [
+          Flexible(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: fgSecondary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.smallBorderRadius,
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.intraGroupSm,
+                  vertical: AppSpacing.two,
+                ),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: fgSecondary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 离线只读提示条：时间线内容来自本机副本且本次远端刷新失败时展示。
+class _OfflineReadOnlyBanner extends StatelessWidget {
+  const _OfflineReadOnlyBanner({required this.isDark});
+
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    return Padding(
+      key: const ValueKey<String>('chat-timeline-offline-readonly-banner'),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.containerSm,
+        AppSpacing.containerSm,
+        AppSpacing.containerSm,
+        0,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: fgSecondary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
+        ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: AppSpacing.containerSm,
+            vertical: AppSpacing.intraGroupSm,
+          ),
+          child: Row(
+            children: [
+              Icon(
+                CupertinoIcons.wifi_slash,
+                size: AppSpacing.iconSmall,
+                color: fgSecondary,
+              ),
+              SizedBox(width: AppSpacing.intraGroupXs),
+              Expanded(
+                child: Text(
+                  ChatText.chatTimelineOfflineReadOnlyHint,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: fgSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _SearchAnchorBanner extends StatelessWidget {

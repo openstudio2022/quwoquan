@@ -11,6 +11,7 @@ consumers:
 - api-edge
 - assistant-service
 fields:
+- {name: searchRequestId, type: string, description: 本次检索的稳定归因 id；App 反馈与漏斗埋点按它去重}
 - {name: interpretedQuery, type: OwnerSearchInterpretedQuery}
 - {name: hits, type: '[]OwnerSearchHit'}
 - {name: citations, type: '[]OwnerSearchCitation'}

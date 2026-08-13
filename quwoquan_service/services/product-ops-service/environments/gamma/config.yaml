@@ -1,6 +1,10 @@
 overrides:
   sys.product-ops-service.account_security_authority.base_url: http://user-service:18081
   sys.product-ops-service.account_security_authority.timeout_ms: 1500
+  # ES 告警评估循环：策略文件由 compose/deployment 只读挂载；
+  # gamma-local 的 Alertmanager 运行在宿主机监控栈（9093）。
+  sys.product-ops-service.telemetry_alerts.policy_path: /etc/qwq/observability/product_telemetry_alerts.yaml
+  sys.product-ops-service.telemetry_alerts.alertmanager_url: http://host.docker.internal:9093
 secretRefs:
   sys.product-ops-service.mongodb.uri: MONGODB_URI
   sys.product-ops-service.postgres.dsn: POSTGRES_DSN

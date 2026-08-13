@@ -228,7 +228,7 @@
           },
           "authMode": { "enum": ["deny", "public", "optional", "required"] },
           "principal": {
-            "enum": ["public", "account", "persona", "device", "service", "admin", "operator"]
+            "enum": ["public", "account", "persona", "device", "persona_or_device", "service", "admin", "operator"]
           },
           "scopes": {
             "type": "array",

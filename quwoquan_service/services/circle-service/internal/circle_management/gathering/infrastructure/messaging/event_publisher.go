@@ -67,7 +67,8 @@ func canonicalGatheringPayload(eventType string, payload []byte) ([]byte, error)
 		gatheringevent.GatheringPublished: {
 			"gatheringId", "aggregateVersion", "lifecycleStatus",
 			"actorPersonaId", "revisionId", "revisionNumber",
-			"revisionDigest", "roomBindingStatus", "conversationId", "occurredAt",
+			"revisionDigest", "roomBindingStatus", "conversationId",
+			"sourceRefs", "maxParticipants", "admissionPolicy", "occurredAt",
 		},
 		gatheringevent.GatheringRevisionAppended: {
 			"gatheringId", "aggregateVersion", "lifecycleStatus",
@@ -146,7 +147,8 @@ func optionalGatheringEventField(field string) bool {
 	switch field {
 	case "actorPersonaId", "participantPersonaId", "participationState",
 		"revisionId", "revisionNumber", "revisionDigest", "conversationId",
-		"outcomeStatus", "watchStatus", "expiresAt":
+		"outcomeStatus", "watchStatus", "expiresAt", "sourceRefs",
+		"maxParticipants", "admissionPolicy":
 		return true
 	default:
 		return false

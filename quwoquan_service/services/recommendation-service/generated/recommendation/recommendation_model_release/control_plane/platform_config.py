@@ -5,6 +5,126 @@ import json
 _PLATFORM_CONFIG_JSON = r'''{
   "configs": [
     {
+      "key": "sys.api-edge.candidate_upstreams.assistant",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.chat",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.circle",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.content",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.entity",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.integration",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.notification",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.ops",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.platform_ops",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.realtime",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.recommendation",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.rtc",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.search",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.tag",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.candidate_upstreams.user",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": "X-Edge-Client-IP",
       "key": "sys.api-edge.edge.trusted_network_header",
       "reload": "restart",
@@ -12,6 +132,112 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "string"
+    },
+    {
+      "key": "sys.api-edge.graphql_read.candidate_digest",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": false,
+      "key": "sys.api-edge.graphql_read.enabled",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
+    },
+    {
+      "key": "sys.api-edge.graphql_read.owner_timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.graphql_read.registry_file",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.graphql_read.schema_digest",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.graphql_read.schema_file",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.graphql_read.trusted_public_keys_json",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.minimum_build.android",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.minimum_build.exempt_paths",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "list"
+    },
+    {
+      "key": "sys.api-edge.minimum_build.ios",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": "observe",
+      "key": "sys.api-edge.minimum_build.mode",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.minimum_build.source_digest",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.minimum_build.web",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
     },
     {
       "key": "sys.api-edge.rate_limit.command.limit",
@@ -55,6 +281,30 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "key": "sys.api-edge.rate_limit.operation.content_post_get_feed.window_seconds",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.operation.ops_recovery_failure_report.limit",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.operation.ops_recovery_failure_report.state_failure",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.rate_limit.operation.ops_recovery_failure_report.window_seconds",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -184,6 +434,64 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "int"
+    },
+    {
+      "key": "sys.api-edge.rollout.allocation_key",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "default": false,
+      "key": "sys.api-edge.rollout.enabled",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
+    },
+    {
+      "default": false,
+      "key": "sys.api-edge.rollout.network_attribute_catalog.enabled",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
+    },
+    {
+      "key": "sys.api-edge.rollout.network_attribute_catalog.file",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.rollout.network_attribute_catalog.sha256",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.rollout.policy_file",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "key": "sys.api-edge.rollout.policy_sha256",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
     },
     {
       "default": ":18079",
@@ -1302,6 +1610,24 @@ _PLATFORM_CONFIG_JSON = r'''{
       "type": "int"
     },
     {
+      "default": 500,
+      "key": "sys.content-service.circle_service.timeout_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": "http://circle-service:18082",
+      "key": "sys.content-service.circle_service.url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
       "default": 5,
       "key": "sys.content-service.comment_rate_limit.burst_max",
       "reload": "restart",
@@ -1421,6 +1747,33 @@ _PLATFORM_CONFIG_JSON = r'''{
     {
       "default": 1,
       "key": "sys.content-service.es.shards",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 100,
+      "key": "sys.content-service.es.startupInitialBackoffMs",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 2000,
+      "key": "sys.content-service.es.startupMaxBackoffMs",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": 60000,
+      "key": "sys.content-service.es.startupTimeoutMs",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -2050,6 +2403,14 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "bool"
+    },
+    {
+      "key": "sys.content-service.research_identity.attestation_key_base64",
+      "reload": "restart",
+      "rollout": "replace",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
     },
     {
       "default": ":18080",
@@ -3234,6 +3595,42 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "default": "",
+      "key": "sys.product-ops-service.app_release.android.minimum_supported_build",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.android.minimum_supported_version",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.android.recovery_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.android.update_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
       "key": "sys.product-ops-service.app_release.ios.latest_build",
       "reload": "restart",
       "rollout": "progressive",
@@ -3252,7 +3649,34 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "default": "",
-      "key": "sys.product-ops-service.app_release.ios.pwa_url",
+      "key": "sys.product-ops-service.app_release.ios.minimum_supported_build",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.ios.minimum_supported_version",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.ios.recovery_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.ios.update_url",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -3270,7 +3694,52 @@ _PLATFORM_CONFIG_JSON = r'''{
     },
     {
       "default": "",
-      "key": "sys.product-ops-service.app_release.recovery_url",
+      "key": "sys.product-ops-service.app_release.web.latest_build",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.web.latest_version",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.web.minimum_supported_build",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.web.minimum_supported_version",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.web.recovery_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.app_release.web.update_url",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -3563,6 +4032,33 @@ _PLATFORM_CONFIG_JSON = r'''{
     {
       "default": ":18086",
       "key": "sys.product-ops-service.service.http.addr",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.telemetry_alerts.alertmanager_url",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "string"
+    },
+    {
+      "default": 60000,
+      "key": "sys.product-ops-service.telemetry_alerts.interval_ms",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
+    },
+    {
+      "default": "",
+      "key": "sys.product-ops-service.telemetry_alerts.policy_path",
       "reload": "restart",
       "rollout": "progressive",
       "scope": "workload",
@@ -4799,6 +5295,40 @@ _PLATFORM_CONFIG_JSON = r'''{
       "scope": "workload",
       "sensitive": false,
       "type": "bool"
+    },
+    {
+      "key": "sys.user-service.research_identity.account_id_allowlist_json",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "key": "sys.user-service.research_identity.attestation_key_base64",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": true,
+      "type": "string"
+    },
+    {
+      "default": false,
+      "key": "sys.user-service.research_identity.enabled",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "bool"
+    },
+    {
+      "default": 300,
+      "key": "sys.user-service.research_identity.ttl_seconds",
+      "reload": "restart",
+      "rollout": "progressive",
+      "scope": "workload",
+      "sensitive": false,
+      "type": "int"
     },
     {
       "default": ":18081",

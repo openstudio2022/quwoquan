@@ -52,6 +52,7 @@ errors:
     - SearchSocialRelations
     - SuspendAccount
     - user.account_appeal_intake.ClaimAccountAppealIntake
+    - user.account_session.GetResearchSessionAttestation
     - user.account_session.IssueWhitelistedResearchSession
     - user.account_session.Logout
     - user.contact_discovery_record.DismissContactDiscovery
@@ -262,6 +263,7 @@ errors:
     - user.account_appeal_intake.ClaimAccountAppealIntake
     - user.account_appeal_intake.IssueAccountAppealCredential
     - user.account_appeal_intake.SubmitAccountAppealIntake
+    - user.account_session.GetResearchSessionAttestation
     - user.account_session.IssueWhitelistedResearchSession
     - user.account_session.LoginAnonymous
     - user.account_session.LoginOneTap

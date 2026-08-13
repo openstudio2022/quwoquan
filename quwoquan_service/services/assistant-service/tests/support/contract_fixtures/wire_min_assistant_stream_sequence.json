@@ -1,0 +1,48 @@
+[
+  {
+    "eventId": "evt_min_001",
+    "sessionId": "asn_01HWZX2A7Z9G6S7Y6B3C4D5E6F",
+    "turnId": "atn_01HWZX2B7Z9G6S7Y6B3C4D5E6F",
+    "seq": 1,
+    "eventType": "run_started",
+    "payload": {
+      "status": "running",
+      "restarted": false
+    },
+    "createdAt": "2026-04-29T02:00:08Z"
+  },
+  {
+    "eventId": "evt_min_002",
+    "sessionId": "asn_01HWZX2A7Z9G6S7Y6B3C4D5E6F",
+    "turnId": "atn_01HWZX2B7Z9G6S7Y6B3C4D5E6F",
+    "seq": 2,
+    "eventType": "process_replace",
+    "payload": {
+      "processes": []
+    },
+    "createdAt": "2026-04-29T02:00:09Z"
+  },
+  {
+    "eventId": "evt_min_003",
+    "sessionId": "asn_01HWZX2A7Z9G6S7Y6B3C4D5E6F",
+    "turnId": "atn_01HWZX2B7Z9G6S7Y6B3C4D5E6F",
+    "seq": 3,
+    "eventType": "answer_delta",
+    "payload": {
+      "text": "上午建议先完成会议准备，再处理学习计划。"
+    },
+    "createdAt": "2026-04-29T02:00:10Z"
+  },
+  {
+    "eventId": "evt_min_004",
+    "sessionId": "asn_01HWZX2A7Z9G6S7Y6B3C4D5E6F",
+    "turnId": "atn_01HWZX2B7Z9G6S7Y6B3C4D5E6F",
+    "seq": 4,
+    "eventType": "completed",
+    "payload": {
+      "status": "completed",
+      "finalAnswer": "上午建议先完成会议准备，再处理学习计划。"
+    },
+    "createdAt": "2026-04-29T02:00:11Z"
+  }
+]

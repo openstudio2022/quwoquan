@@ -1,17 +1,22 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-008
 /// user_acceptance Patrol: 用户主页核心旅程（用户主页商用化收口 R-UPROF-004）
 ///
 /// 对应 AppRoot Journey：profile-private-activity-history 与
 /// content-discovery-to-consumption 的 content-detail-profile-handoff。
 /// 本用例在真实设备 + 真实 gamma 后端上守护 flutter_test 无法替代的端到端行为：
-/// 底栏进入我的主页真实 bundle 渲染、编辑资料入口可达、feed 作者头像进入他人
-/// 主页后的真实关注/取关往返。
+/// 底栏进入我的主页真实 bundle 渲染、交集资产面（我的交集/我的行动/共同经历/成行力）
+/// 真实读面渲染与诚实分支、编辑资料入口可达、feed 作者头像进入他人主页后的
+/// 真实关注/取关往返。
 ///
 /// 与 local_contract 的映射（R12 一体性）：
 ///   - 主页壳层骨架/统计行/操作条渲染   <- profile_shell_widget__local_contract_test
 ///   - 关注乐观态与 outbox 对账          <- persona_relationship_block_facets__local_contract_test
 ///   - 编辑资料表单与保存                <- edit_profile 页 local_contract 组
 ///   - 粉丝/关注统计详情                 <- profile_stats_page__local_contract_test
+///   - 交集资产面（REQ-008 四模块）      <- my_gatherings_page/_entry_card、
+///     my_experience_asset_card、creator_flywheel_proof_row、
+///     intersection_actionable_reasons 各 local_contract 组
 ///
 /// 执行方式：由 `run_environment_patrol_smoke.py` 消费 `gamma-local` topology
 /// 投影全部 canonical HTTPS/WSS endpoint，并在 Android 上安装 target 端口的
@@ -27,8 +32,13 @@ import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import '../../../support/runtime/patrol/patrol_test_support.dart';
+import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/my_gatherings_entry_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/author_impact_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/author_impact_evidence.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/creator_flywheel_proof_row.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_experience_asset_card.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_card.dart';
 
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
@@ -76,6 +86,7 @@ void main() {
         reason: '我的主页必须渲染壳层骨架（头像/身份卡，真实 bundle 非空态）',
       );
       await _verifyAuthorImpactEvidence($);
+      await _verifyIntersectionAssetSurfaces($);
 
       // 编辑资料真实保存并回读：入口、字段编辑、远端写入及主页刷新缺一不可。
       final editEntry = find.text(ProfileText.profileEditLabel);
@@ -194,6 +205,89 @@ Future<void> _verifyAuthorImpactEvidence(PatrolIntegrationTester $) async {
   expect(reachedEvidence, isTrue, reason: '证据明细必须回读服务端 evidence，而非样本或空态');
   await $.tester.tap(find.text(FoundationText.confirm));
   await $.pump(const Duration(milliseconds: 300));
+}
+
+/// 交集资产面（REQ-008 / SIT-008 user_acceptance 层）：
+/// 我的交集卡与「我的行动」入口在 mine 模式恒渲染；共同经历/成行力按真实
+/// 数据条件渲染（无数据必须诚实不渲染，禁止占位空态冒充）。「我的行动」
+/// 入口点击进入分组页并回读真实 ByHost 公开读面。
+Future<void> _verifyIntersectionAssetSurfaces(PatrolIntegrationTester $) async {
+  // 我的交集收件箱卡：mine 恒渲染（真实 summary + 事实交集预览或诚实空态）。
+  final inboxCard = find.byKey(MyIntersectionInboxCard.cardKey);
+  final reachedInbox = await _waitForFinderInTree(
+    $,
+    inboxCard,
+    timeout: const Duration(seconds: 20),
+  );
+  expect(reachedInbox, isTrue, reason: '我的主页必须渲染「我的交集」收件箱卡');
+
+  // 「我的行动」单行入口：恒渲染；点击进入分组页回读 ByHost 公开读面。
+  final gatheringsEntry = find.byKey(MyGatheringsEntryCard.cardKey);
+  final reachedEntry = await _waitForFinderInTree(
+    $,
+    gatheringsEntry,
+    timeout: const Duration(seconds: 15),
+  );
+  expect(reachedEntry, isTrue, reason: '我的主页必须渲染「我的行动」单行入口');
+  await $.tester.ensureVisible(gatheringsEntry.first);
+  await $.pump(const Duration(milliseconds: 200));
+  await $.tester.tap(gatheringsEntry.first);
+  await $.pump(const Duration(milliseconds: 400));
+  final reachedSegments = await _waitForFinderInTree(
+    $,
+    find.text(GatheringText.myGatheringsSegmentUpcoming),
+    timeout: const Duration(seconds: 12),
+  );
+  expect(
+    reachedSegments,
+    isTrue,
+    reason: '我的行动分组页必须渲染三分组（即将开始/已结束/已取消）而非错误态',
+  );
+  expect(
+    find.text(GatheringText.myGatheringsSegmentCancelled).evaluate(),
+    isNotEmpty,
+    reason: '分组闭集必须完整（已取消分组可达）',
+  );
+  await patrolGoTo($, AppRoutePaths.profile);
+  final backToProfile = await _waitForAnyKeyInTree(
+    $,
+    _kProfileKeys,
+    timeout: const Duration(seconds: 15),
+  );
+  expect(backToProfile, isTrue, reason: '离开我的行动分组页后必须能回到我的主页');
+
+  // 共同经历资产卡：诚实两分支——渲染则必须带标题与主句行；未渲染时不得
+  // 出现任何「暂无经历」式占位（REQ-008：诚实空态=不渲染）。
+  final experienceCard = find.byKey(MyExperienceAssetCard.cardKey);
+  if (experienceCard.evaluate().isNotEmpty) {
+    expect(
+      find.text(DiscoveryFeedText.myExperienceTitle).evaluate(),
+      isNotEmpty,
+      reason: '共同经历资产卡渲染时必须带标题（云侧经历交集事实直出）',
+    );
+  } else {
+    expect(
+      find.text(DiscoveryFeedText.myExperienceTitle).evaluate(),
+      isEmpty,
+      reason: '无经历交集时不得渲染共同经历占位（诚实空态=不渲染）',
+    );
+  }
+
+  // 成行力行：诚实两分支——零成形或读取失败不渲染，渲染则为事实计数行。
+  final proofRow = find.byKey(CreatorFlywheelProofRow.rowKey);
+  if (proofRow.evaluate().isNotEmpty) {
+    expect(
+      find.textContaining('促成').evaluate(),
+      isNotEmpty,
+      reason: '成行力行渲染时必须是 creator 锚点事实计数（促成 N 次同行）',
+    );
+  } else {
+    expect(
+      find.textContaining('促成').evaluate(),
+      isEmpty,
+      reason: '成行力行未渲染时不得残留事实计数占位（诚实空态=不渲染）',
+    );
+  }
 }
 
 // ───────────────────────── helpers ─────────────────────────

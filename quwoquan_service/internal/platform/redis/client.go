@@ -46,8 +46,12 @@ type client struct {
 	raw goredis.UniversalClient
 
 	consumerGroupMu sync.Mutex
-	consumerGroups  map[string]struct{}
-	streamPolls     *streamPollGovernor
+	// consumerGroups tracks the start position of every consumer group this
+	// client ensured, so a NOGROUP after server-side state loss (failover,
+	// FLUSHDB) can be healed by recreating the group once with the same
+	// semantics instead of failing every subsequent read.
+	consumerGroups map[string]string
+	streamPolls    *streamPollGovernor
 }
 
 const (
@@ -186,6 +190,36 @@ func (c *client) invalidateConsumerGroups(
 	for stream := range streams {
 		delete(c.consumerGroups, streamPollKey(stream, group))
 	}
+}
+
+// recreateTrackedConsumerGroups rebuilds consumer groups this client already
+// ensured after the server lost them. It returns true only when every
+// requested stream had a tracked start position and was recreated, so the
+// caller may retry the failed command exactly once; untracked groups keep
+// surfacing the typed NOGROUP error.
+func (c *client) recreateTrackedConsumerGroups(
+	ctx context.Context,
+	group string,
+	streams map[string]string,
+) bool {
+	starts := make(map[string]string, len(streams))
+	c.consumerGroupMu.Lock()
+	for stream := range streams {
+		start, tracked := c.consumerGroups[streamPollKey(stream, group)]
+		if !tracked {
+			c.consumerGroupMu.Unlock()
+			return false
+		}
+		starts[stream] = start
+	}
+	c.consumerGroupMu.Unlock()
+	for stream, start := range starts {
+		err := c.raw.XGroupCreateMkStream(ctx, stream, group, start).Err()
+		if err != nil && !isBusyGroupError(err) {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *client) pollGovernor() *streamPollGovernor {
@@ -791,9 +825,9 @@ func (c *client) XGroupCreateMkStream(
 		return err
 	}
 	if c.consumerGroups == nil {
-		c.consumerGroups = make(map[string]struct{})
+		c.consumerGroups = make(map[string]string)
 	}
-	c.consumerGroups[key] = struct{}{}
+	c.consumerGroups[key] = start
 	return nil
 }
 
@@ -861,6 +895,11 @@ func (c *client) XReadGroup(
 	result, err := c.raw.XReadGroup(ctx, &goredis.XReadGroupArgs{
 		Group: group, Consumer: consumer, Streams: streamArguments, Count: count, Block: block,
 	}).Result()
+	if isNoGroupError(err) && c.recreateTrackedConsumerGroups(ctx, group, streams) {
+		result, err = c.raw.XReadGroup(ctx, &goredis.XReadGroupArgs{
+			Group: group, Consumer: consumer, Streams: streamArguments, Count: count, Block: block,
+		}).Result()
+	}
 	if errors.Is(err, goredis.Nil) {
 		governor.record(pollKey, 0, nil)
 		return nil, nil
@@ -912,6 +951,15 @@ func (c *client) XAutoClaim(
 	messages, next, err := c.raw.XAutoClaim(ctx, &goredis.XAutoClaimArgs{
 		Stream: stream, Group: group, Consumer: consumer, MinIdle: minIdle, Start: start, Count: count,
 	}).Result()
+	if isNoGroupError(err) && c.recreateTrackedConsumerGroups(
+		ctx,
+		group,
+		map[string]string{stream: ">"},
+	) {
+		messages, next, err = c.raw.XAutoClaim(ctx, &goredis.XAutoClaimArgs{
+			Stream: stream, Group: group, Consumer: consumer, MinIdle: minIdle, Start: start, Count: count,
+		}).Result()
+	}
 	if errors.Is(err, goredis.Nil) {
 		return nil, next, nil
 	}

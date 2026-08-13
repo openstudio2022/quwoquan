@@ -38,11 +38,11 @@ func TestDismissReportRequiresOperatorAndClosesLifecycle(t *testing.T) {
 	create.Header.Set("Idempotency-Key", "create-report-dismiss")
 	createResponse := httptest.NewRecorder()
 	protected.ServeHTTP(createResponse, create)
-	if createResponse.Code != http.StatusNoContent {
+	if createResponse.Code != http.StatusOK {
 		t.Fatalf(
 			"create report status=%d want=%d body=%s",
 			createResponse.Code,
-			http.StatusNoContent,
+			http.StatusOK,
 			createResponse.Body.String(),
 		)
 	}

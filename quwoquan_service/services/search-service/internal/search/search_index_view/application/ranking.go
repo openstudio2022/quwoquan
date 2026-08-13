@@ -28,21 +28,29 @@ type TermHeatProvider interface {
 	RelatedTerms(ctx context.Context, normalizedQuery string, limit int) ([]queryheat.TermHeat, error)
 }
 
-// RankedResult is the enriched, AB-aware ranking output the HTTP layer renders.
-// Hits carry the (possibly re-ranked) order with RankPosition/RankReasons; the
-// envelope fields back the commercial search contract.
-type RankedResult struct {
-	Hits             []rtsearch.RetrieveHit
+// RankedPreparation is the AB-aware pre-query decision: the assigned bucket,
+// the related-term envelope and the query-time BoostTerms the term_heat arm
+// injects into the engine query. Ranking itself stays single-sourced in the
+// recall engine (function_score + boost injection); nothing re-ranks after
+// recall.
+type RankedPreparation struct {
+	ExperimentBucket string
 	RelatedTerms     []string
 	TopObjectIDs     []string
-	ExperimentBucket string
+	BoostTerms       []rtsearch.BoostTerm
 }
 
-// RankingDecorator turns a base RetrieveResponse into a commercial, AB-aware
-// result: it assigns the experiment bucket, attaches relatedTerms, and — under
-// the term_heat arm — folds search-term heat into the score so user search
-// terms genuinely participate in ranking. It is the single place search-term
-// signals enter the search ranking decision.
+// TermHeatApplied reports whether the term_heat treatment actually injected
+// boosts for this query (observability: search_retrieve_term_heat_applied_total).
+func (p RankedPreparation) TermHeatApplied() bool {
+	return p.ExperimentBucket == BucketTermHeat && len(p.BoostTerms) > 0
+}
+
+// RankingDecorator owns the AB-aware pre-query decision: it assigns the
+// experiment bucket, fetches related terms and converts search-term heat into
+// query-time BoostTerms under the term_heat arm. It is the single place
+// search-term signals enter the search ranking decision — as query input, not
+// as a post-recall re-rank (the engine order is the only ranking truth).
 type RankingDecorator struct {
 	termHeat    TermHeatProvider
 	experiments *Experiments
@@ -69,13 +77,13 @@ func (d *RankingDecorator) PolicyDigest() string {
 	return d.experiments.PolicyDigest()
 }
 
-// Decorate assigns the bucket, fetches related terms (best-effort) and, for the
-// term_heat arm, re-ranks hits by blending the base score with the search-term
-// heat boost. RankPosition is renumbered after any re-rank so the published
-// position always matches the returned order.
-func (d *RankingDecorator) Decorate(ctx context.Context, resp rtsearch.RetrieveResponse, normalizedQuery, subjectKey string) (RankedResult, error) {
+// Prepare assigns the bucket, fetches related terms (best-effort) and, for the
+// term_heat arm, converts the heat rows into bounded query-time BoostTerms.
+// The caller injects them into the retrieve request before recall, so the
+// engine's order is the final commercial order — Prepare never re-ranks.
+func (d *RankingDecorator) Prepare(ctx context.Context, normalizedQuery, subjectKey string) (RankedPreparation, error) {
 	if d == nil || d.experiments == nil {
-		return RankedResult{}, errors.New("search ranking experiment policy is unavailable")
+		return RankedPreparation{}, errors.New("search ranking experiment policy is unavailable")
 	}
 	bucket, err := d.experiments.Assign(ctx, subjectKey)
 	if err != nil {
@@ -85,10 +93,7 @@ func (d *RankingDecorator) Decorate(ctx context.Context, resp rtsearch.RetrieveR
 			slog.String("subjectKey", subjectKey), slog.String("err", err.Error()))
 		bucket = BucketControl
 	}
-	out := RankedResult{
-		Hits:             resp.Hits,
-		ExperimentBucket: bucket,
-	}
+	out := RankedPreparation{ExperimentBucket: bucket}
 
 	var heats []queryheat.TermHeat
 	if d.termHeat != nil {
@@ -104,18 +109,16 @@ func (d *RankingDecorator) Decorate(ctx context.Context, resp rtsearch.RetrieveR
 	out.RelatedTerms = termNames(heats)
 	out.TopObjectIDs = topObjectIDs(heats)
 
-	if bucket != BucketTermHeat || len(heats) == 0 || len(resp.Hits) == 0 {
+	if bucket != BucketTermHeat || len(heats) == 0 {
 		return out, nil
 	}
-	out.Hits = d.applyTermHeatBoost(resp.Hits, heats)
+	out.BoostTerms = d.boostTermsFor(heats)
 	return out, nil
 }
 
-// applyTermHeatBoost lifts each hit by the heat of related terms it matches,
-// re-sorts, appends a transparent "search.term_heat" reason, and renumbers
-// RankPosition. The boost is normalized against the hottest related term so it
-// stays bounded by d.boost regardless of absolute relevance magnitudes.
-func (d *RankingDecorator) applyTermHeatBoost(hits []rtsearch.RetrieveHit, heats []queryheat.TermHeat) []rtsearch.RetrieveHit {
+// boostTermsFor normalizes heat relevance against the hottest related term so
+// every lift stays bounded by d.boost, regardless of absolute magnitudes.
+func (d *RankingDecorator) boostTermsFor(heats []queryheat.TermHeat) []rtsearch.BoostTerm {
 	maxRelevance := 0.0
 	for _, h := range heats {
 		if h.Relevance > maxRelevance {
@@ -123,53 +126,20 @@ func (d *RankingDecorator) applyTermHeatBoost(hits []rtsearch.RetrieveHit, heats
 		}
 	}
 	if maxRelevance <= 0 {
-		return hits
+		return nil
 	}
-
-	boosted := make([]rtsearch.RetrieveHit, len(hits))
-	copy(boosted, hits)
-	for i := range boosted {
-		hay := hitHaystack(boosted[i])
-		matched := 0.0
-		var matchedTerms []string
-		for _, h := range heats {
-			term := queryheat.NormalizeForMatch(h.NormalizedTerm)
-			if term == "" || !strings.Contains(hay, term) {
-				continue
-			}
-			if h.Relevance > matched {
-				matched = h.Relevance
-			}
-			matchedTerms = append(matchedTerms, h.NormalizedTerm)
-		}
-		if matched <= 0 {
+	boosts := make([]rtsearch.BoostTerm, 0, len(heats))
+	for _, h := range heats {
+		term := strings.TrimSpace(h.NormalizedTerm)
+		if term == "" || h.Relevance <= 0 {
 			continue
 		}
-		lift := d.boost * (matched / maxRelevance)
-		boosted[i].Score += lift
-		boosted[i].RankReasons = append(boosted[i].RankReasons, rtsearch.Reason{
-			Code:   "search.term_heat",
-			Label:  "热搜词加权：" + strings.Join(matchedTerms, "、"),
-			Weight: lift,
+		boosts = append(boosts, rtsearch.BoostTerm{
+			Term:   term,
+			Weight: d.boost * (h.Relevance / maxRelevance),
 		})
 	}
-
-	// Reuse the single repeatable total order (Score desc -> Title asc ->
-	// Target asc -> ObjectID asc) so the term_heat re-rank produces the same
-	// deterministic page as the base recall merge — no second sort truth.
-	rtsearch.SortHitsStable(boosted)
-	for i := range boosted {
-		boosted[i].RankPosition = i + 1
-	}
-	return boosted
-}
-
-func hitHaystack(hit rtsearch.RetrieveHit) string {
-	parts := make([]string, 0, 4+len(hit.MatchedTerms)+len(hit.MatchedTags))
-	parts = append(parts, hit.Title, hit.Snippet)
-	parts = append(parts, hit.MatchedTerms...)
-	parts = append(parts, hit.MatchedTags...)
-	return queryheat.NormalizeForMatch(strings.Join(parts, " "))
+	return boosts
 }
 
 func termNames(heats []queryheat.TermHeat) []string {

@@ -337,3 +337,124 @@ func seedPersonaNotificationHistory(t *testing.T, personaID string) {
 		t.Fatalf("seed persona notification history: %v", err)
 	}
 }
+
+// ---- 以下为 contract 用例的直插前置状态收口点（DEC-005 形态三）----
+// 一般 contract 用例不得自带直写存储语句；构造前置状态只能调用这里的
+// 命名 seed 函数，或走公开 application command。
+
+// seedAuthEpochAdvance 把账号 auth_epoch 前移一代，构造「已签发 token 变
+// 陈旧」的安全权威前置状态。
+func seedAuthEpochAdvance(t *testing.T, userID string) {
+	t.Helper()
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles SET auth_epoch=auth_epoch+1 WHERE user_id=$1`,
+		userID,
+	); err != nil {
+		t.Fatalf("seed auth epoch advance: %v", err)
+	}
+}
+
+// seedAnonymousAccountState 把账号构造成匿名设备形态（历史注册路径产物）。
+func seedAnonymousAccountState(t *testing.T, userID string) {
+	t.Helper()
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles
+		    SET account_state = 'anonymous',
+		        identity_origin = 'anonymous_device',
+		        anonymous_retention_policy = 'preserve'
+		  WHERE user_id = $1`,
+		userID,
+	); err != nil {
+		t.Fatalf("seed anonymous account state: %v", err)
+	}
+}
+
+// seedPersonaAvatarVersion 直设 persona 头像与版本号前置状态。
+func seedPersonaAvatarVersion(t *testing.T, personaID, avatarURL string, version int) {
+	t.Helper()
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE personas SET avatar_url = $1, avatar_version = $2 WHERE persona_id = $3`,
+		avatarURL,
+		version,
+		personaID,
+	); err != nil {
+		t.Fatalf("seed persona avatar version: %v", err)
+	}
+}
+
+// seedProfilePhone 直设 profile 手机号前置状态（绕过 OTP 绑定流程）。
+func seedProfilePhone(t *testing.T, userID, phone string) {
+	t.Helper()
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE user_profiles SET phone=$2 WHERE user_id=$1`,
+		userID,
+		phone,
+	); err != nil {
+		t.Fatalf("seed profile phone: %v", err)
+	}
+}
+
+// seedUserSettingsRow 构造既有 user_settings 行前置状态。
+func seedUserSettingsRow(t *testing.T, userID string, blockedKeywords []string) {
+	t.Helper()
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`
+			INSERT INTO user_settings (user_id, default_incoming_call_ringtone_id, allow_caller_ringtone_override, blocked_keywords, updated_at)
+			VALUES ($1, NULL, true, $2, NOW())
+		`,
+		userID,
+		blockedKeywords,
+	); err != nil {
+		t.Fatalf("seed user settings row: %v", err)
+	}
+}
+
+// seedPersonaUserHandle 直设 persona handle 前置状态。
+func seedPersonaUserHandle(t *testing.T, personaID, handle string) {
+	t.Helper()
+	if _, err := pgPool.Exec(
+		context.Background(),
+		`UPDATE personas SET user_handle = $1 WHERE persona_id = $2`,
+		handle,
+		personaID,
+	); err != nil {
+		t.Fatalf("seed persona user handle: %v", err)
+	}
+}
+
+// seedSubjectFollowReceipt 直插 subject follow 幂等回执（含非 canonical
+// 历史形态），用于回执拒绝/重放路径的前置状态。
+func seedSubjectFollowReceipt(
+	t *testing.T,
+	receiptID, personaID, idempotencyKey, operation, aggregateID string,
+	aggregateVersion int,
+	responseJSON string,
+) {
+	t.Helper()
+	if _, err := pgPool.Exec(context.Background(), `
+		INSERT INTO subject_follow_command_receipts (
+			receipt_id, persona_id, idempotency_key, operation,
+			aggregate_id, aggregate_version, response_json
+		) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+	`, receiptID, personaID, idempotencyKey, operation, aggregateID,
+		aggregateVersion, responseJSON); err != nil {
+		t.Fatalf("seed subject follow receipt: %v", err)
+	}
+}
+
+// seedCreatorRuntimeProfile 直插 creator 运行时投影文档（canonical 来源为
+// immutable release importer，api_integration 用直插构造该投影形态）。
+func seedCreatorRuntimeProfile(t *testing.T, profile any) {
+	t.Helper()
+	if _, err := mongoDB.Collection("creator_runtime_profiles").InsertOne(
+		context.Background(),
+		profile,
+	); err != nil {
+		t.Fatalf("seed creator runtime profile: %v", err)
+	}
+}

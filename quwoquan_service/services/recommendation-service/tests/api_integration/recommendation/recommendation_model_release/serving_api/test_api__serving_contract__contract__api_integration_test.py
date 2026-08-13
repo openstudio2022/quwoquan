@@ -66,8 +66,15 @@ def test_metrics_exposes_http_series() -> None:
     r = client.get("/metrics")
     assert r.status_code == 200
     body = r.text
-    assert 'http_requests_total{handler="/health",method="GET",status="2xx"}' in body
-    assert "http_request_duration_highr_seconds_bucket" in body
+    # Canonical series names/labels shared with the Go runtime middleware so the
+    # ContractGraph-derived recommendation_contract recording rules resolve.
+    assert (
+        'http_server_requests_total{'
+        'method="GET",route="/health",service="recommendation-service",status="200"}'
+    ) in body
+    assert "http_server_duration_seconds_bucket" in body
+    assert "http_requests_total{" not in body
+    assert "http_request_duration_highr_seconds" not in body
 
 
 def test_score_content_feed_returns_scores() -> None:

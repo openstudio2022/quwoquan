@@ -460,18 +460,16 @@ func TestSubjectFollow_RejectsNonCanonicalReceiptWithoutMutation(t *testing.T) {
 		"IdempotentReplay": false,
 		"OccurredAt":       "2026-07-30T12:00:00Z",
 	})
-	if _, err := pgPool.Exec(context.Background(), `
-		INSERT INTO subject_follow_command_receipts (
-			receipt_id, persona_id, idempotency_key, operation,
-			aggregate_id, aggregate_version, response_json
-		) VALUES (
-			'subject-follow-noncanonical-receipt',
-			'ps_sf_receipt_reject', $1, 'FollowSubject',
-			'sf_noncanonical_receipt', 1, $2::jsonb
-		)
-	`, idempotencyKey, noncanonicalReceipt); err != nil {
-		t.Fatalf("seed non-canonical subject follow receipt: %v", err)
-	}
+	seedSubjectFollowReceipt(
+		t,
+		"subject-follow-noncanonical-receipt",
+		"ps_sf_receipt_reject",
+		idempotencyKey,
+		"FollowSubject",
+		"sf_noncanonical_receipt",
+		1,
+		noncanonicalReceipt,
+	)
 
 	headers := authHeadersForPersona(
 		"sf_receipt_reject_user",

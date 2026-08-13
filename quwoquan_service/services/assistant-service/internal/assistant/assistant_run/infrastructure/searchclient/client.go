@@ -16,6 +16,7 @@ import (
 	"time"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
+	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/retrievalplan"
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 )
@@ -52,6 +53,7 @@ type searchRequest struct {
 }
 
 type ownerSearchResponse struct {
+	SearchRequestID  string                `json:"searchRequestId"`
 	InterpretedQuery ownerInterpretedQuery `json:"interpretedQuery"`
 	Hits             []ownerSearchHit      `json:"hits"`
 	Citations        []ownerSearchCitation `json:"citations"`
@@ -71,11 +73,17 @@ type ownerInterpretedQuery struct {
 }
 
 type ownerSearchHit struct {
-	ObjectRef   string `json:"objectRef"`
-	ObjectType  string `json:"objectType"`
-	ContentType string `json:"contentType,omitempty"`
-	Title       string `json:"title"`
-	Snippet     string `json:"snippet,omitempty"`
+	ObjectRef    string            `json:"objectRef"`
+	ObjectType   string            `json:"objectType"`
+	ContentType  string            `json:"contentType,omitempty"`
+	Title        string            `json:"title"`
+	Snippet      string            `json:"snippet,omitempty"`
+	ThumbnailURL string            `json:"thumbnailUrl,omitempty"`
+	Action       string            `json:"action,omitempty"`
+	RankPosition int               `json:"rankPosition"`
+	MatchedTerms []string          `json:"matchedTerms"`
+	RankReasons  []json.RawMessage `json:"rankReasons"`
+	Evidence     []json.RawMessage `json:"evidence"`
 }
 
 type ownerSearchCitation struct {
@@ -157,7 +165,7 @@ func freezePlan(request toolpkg.Request) (retrievalplan.Plan, error) {
 	}
 	queries := []retrievalplan.Query{{
 		Dimension: "primary", Query: primary,
-		ObjectTypes: AssistantReadableObjectTypes(), Limit: defaultRetrievalQueryLimit,
+		ObjectTypes: SearchIndexEligibleObjectTypes(), Limit: defaultRetrievalQueryLimit,
 	}}
 	secondary, err := decodeSecondaryQueries(request.Input["searchQueries"])
 	if err != nil {
@@ -228,17 +236,44 @@ func decodeSecondaryQueries(value any) ([]retrievalplan.Query, error) {
 	return result, nil
 }
 
+// SearchIndexEligibleObjectTypes intersects the assistant-readable projection
+// with the canonical vocabulary the unified SearchIndexView can serve.
+// web.document is owned by the web_search tool and integration.location_poi by
+// the integration provider; sending either to POST /search would be
+// structurally rejected.
+func SearchIndexEligibleObjectTypes() []string {
+	eligible := map[string]bool{}
+	for _, objectType := range rtsearch.CloudSearchableObjectTypes {
+		eligible[objectType] = true
+	}
+	result := make([]string, 0, len(rtsearch.CloudSearchableObjectTypes))
+	for _, objectType := range AssistantReadableObjectTypes() {
+		if eligible[objectType] {
+			result = append(result, objectType)
+		}
+	}
+	sort.Strings(result)
+	return result
+}
+
 func requestedObjectTypes(value any) ([]string, error) {
 	values, err := decodeStringList(value, "objectTypes")
 	if err != nil {
 		return nil, err
 	}
 	if len(values) == 0 {
-		return AssistantReadableObjectTypes(), nil
+		return SearchIndexEligibleObjectTypes(), nil
+	}
+	eligible := map[string]bool{}
+	for _, objectType := range SearchIndexEligibleObjectTypes() {
+		eligible[objectType] = true
 	}
 	for _, value := range values {
 		if !assistantReadableObjectTypes[value] {
 			return nil, fmt.Errorf("object type %q is not open to Assistant retrieval", value)
+		}
+		if !eligible[value] {
+			return nil, fmt.Errorf("object type %q is not served by the unified search index", value)
 		}
 	}
 	sort.Strings(values)

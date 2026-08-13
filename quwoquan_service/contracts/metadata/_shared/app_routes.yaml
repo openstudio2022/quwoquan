@@ -135,6 +135,9 @@ routes:
   - id: myIntersections
     path: /profile/intersections
     query_params: [dimension, sourceRef, filter, timeBucket, intersectionId]
+  - id: myGatherings
+    path: /profile/gatherings
+    query_params: [segment]
   - id: objectIntersections
     path: /object/intersections
     query_params: [objectId, objectType, title]

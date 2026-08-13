@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/circle-community/spec.md#dom-001
 // spec_ref: specs/feature-tree/circle-community/spec.md#dom-002
+// spec_ref: specs/feature-tree/circle-community/spec.md#dom-002.t10
 // readiness_case: list-circles-local
 // readiness_case: list-circle-discovery-feed-local
 // readiness_case: search-circles-local

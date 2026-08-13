@@ -51,6 +51,11 @@ class MongoCandidateIndexStore:
             [("scenario", ASCENDING), ("updatedAt", DESCENDING), ("contentId", ASCENDING)],
             name="idx_recommendation_candidate_rank_scan",
         )
+        # 热门召回路：按互动量扫描（多路有界召回的 hot lane）。
+        self._candidates.create_index(
+            [("scenario", ASCENDING), ("likeCount", DESCENDING), ("contentId", ASCENDING)],
+            name="idx_recommendation_candidate_hot_scan",
+        )
         self._gathering_candidates.create_index(
             [("sourceKey", ASCENDING)],
             unique=True,
@@ -893,6 +898,7 @@ class MongoCandidateIndexStore:
         limit: int = 500,
     ) -> list[dict[str, Any]]:
         normalized_scenario = scenario.strip()
+        bounded_limit = max(1, min(limit, 500))
         query = self.ranking_query(
             "content_feed" if normalized_scenario == "following" else normalized_scenario
         )
@@ -901,11 +907,80 @@ class MongoCandidateIndexStore:
             if not followed:
                 return []
             query["authorId"] = {"$in": list(followed)}
-        return list(
+            documents = list(
+                self._candidates.find(query)
+                .sort([("updatedAt", DESCENDING), ("contentId", ASCENDING)])
+                .limit(bounded_limit)
+            )
+            for document in documents:
+                document.setdefault("recallPath", "following_recall")
+            return documents
+        if normalized_scenario != "content_feed":
+            # premium_stream / travel_photography 是路由式单路召回：受众由
+            # scenario 过滤器决定，recallPath 归因由 ranker 的既有推导承载。
+            return list(
+                self._candidates.find(query)
+                .sort([("updatedAt", DESCENDING), ("contentId", ASCENDING)])
+                .limit(bounded_limit)
+            )
+        # content_feed 主场景：多路有界召回（fresh + hot），各路独立 limit，
+        # 合并按先出现去重；总量不超过 bounded_limit。协同路由 ranker 按
+        # FeatureProfile.collaborativeFeatures 经 list_for_ranking_by_content_ids
+        # 追加（本层不知道 subject 特征）。
+        fresh_limit = max(1, (bounded_limit * 3) // 5)
+        hot_limit = max(0, bounded_limit // 4)
+        merged: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for lane, sort_spec, lane_limit in (
+            (
+                "explore_recall",
+                [("updatedAt", DESCENDING), ("contentId", ASCENDING)],
+                fresh_limit,
+            ),
+            (
+                "hot_recall",
+                [("likeCount", DESCENDING), ("contentId", ASCENDING)],
+                hot_limit,
+            ),
+        ):
+            if lane_limit <= 0:
+                continue
+            for document in (
+                self._candidates.find(query).sort(sort_spec).limit(lane_limit)
+            ):
+                content_id = str(document.get("contentId") or "").strip()
+                if not content_id or content_id in seen:
+                    continue
+                seen.add(content_id)
+                document.setdefault("recallPath", lane)
+                merged.append(document)
+                if len(merged) >= bounded_limit:
+                    return merged
+        return merged
+
+    def list_for_ranking_by_content_ids(
+        self,
+        *,
+        scenario: str,
+        content_ids: tuple[str, ...],
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """协同召回路：按 contentId 点查候选池（仅返回仍可推荐的候选）。"""
+        normalized_ids = tuple(
+            dict.fromkeys(value.strip() for value in content_ids if value.strip())
+        )
+        if not normalized_ids:
+            return []
+        query = self.ranking_query(scenario)
+        query["contentId"] = {"$in": list(normalized_ids[: max(1, min(limit, 50))])}
+        documents = list(
             self._candidates.find(query).sort(
                 [("updatedAt", DESCENDING), ("contentId", ASCENDING)]
-            ).limit(max(1, min(limit, 500)))
+            )
         )
+        for document in documents:
+            document.setdefault("recallPath", "collaborative_recall")
+        return documents
 
     def list_object_card_candidates(self, *, limit: int = 400) -> list[dict[str, Any]]:
         bounded_limit = max(1, min(limit, 400))

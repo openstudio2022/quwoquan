@@ -3,7 +3,6 @@
 package api_integration
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -71,13 +70,7 @@ func TestAccountSecurityAuthority_RejectsClosedAndStaleTokenAtResourceBoundary(t
 		const accountID = "authority_e2e_stale"
 		createTestProfile(t, accountID, "authority_e2e_stale")
 		token := mustAuthorityE2EAccessToken(t, accountID, 1)
-		if _, err := pgPool.Exec(
-			context.Background(),
-			`UPDATE user_profiles SET auth_epoch=auth_epoch+1 WHERE user_id=$1`,
-			accountID,
-		); err != nil {
-			t.Fatalf("advance auth epoch: %v", err)
-		}
+		seedAuthEpochAdvance(t, accountID)
 		resource, downstreamCalls := authorityE2EResource(t, userServer)
 		request := httptest.NewRequest(http.MethodGet, "/resource", nil)
 		request.Header.Set("Authorization", "Bearer "+token)

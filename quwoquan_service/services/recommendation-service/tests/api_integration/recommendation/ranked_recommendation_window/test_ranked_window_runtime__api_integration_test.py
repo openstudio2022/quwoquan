@@ -2,7 +2,8 @@
 
 Drives CreateRankedRecommendationWindow and GetRankedRecommendationPage through the
 production router, facade, Redis window store, Mongo candidate/feature/closure stores
-and the Redis experiment assignment publisher. No in-memory port substitutes.
+and the Redis experiment assignment publisher over a real uvicorn HTTP server and a
+real network transport (no in-process ASGI substitute, no in-memory port substitutes).
 """
 # spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
 # readiness_case: create-ranked-window-api
@@ -10,9 +11,13 @@ and the Redis experiment assignment publisher. No in-memory port substitutes.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import threading
+import time
 
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
+import httpx
+import pytest
+import uvicorn
 
 from tests.support.service_token import (
     configure_test_auth_environment,
@@ -41,6 +46,9 @@ from internal.recommendation.ranked_recommendation_window.domain.experiment_poli
 from internal.recommendation.ranked_recommendation_window.infrastructure.experiment_assignment_publisher import (  # noqa: E402
     STREAM as EXPERIMENT_ASSIGNMENT_STREAM,
     RedisExperimentAssignmentPublisher,
+)
+from internal.recommendation.ranked_recommendation_window.domain.discovery_tuning import (  # noqa: E402
+    DiscoveryRankingTuning,
 )
 from internal.recommendation.ranked_recommendation_window.infrastructure.mongo_ranker import (  # noqa: E402
     MongoCandidateRanker,
@@ -140,8 +148,10 @@ class _Runtime:
                 scoring=get_scoring_facade(),
                 experiments=self.assignments,
                 snapshot_digester=canonical_snapshot_digest,
+                tuning=DiscoveryRankingTuning.neutral(),
             ),
             subject_closures=self.closures,
+            exclusion_profiles=self.features,
         )
         app = FastAPI()
         app.include_router(
@@ -150,7 +160,35 @@ class _Runtime:
                 token_verifier=ServiceTokenVerifier.from_env(),
             )
         )
-        self.client = TestClient(app)
+        # Real transport: uvicorn binds an ephemeral localhost port and the
+        # client issues genuine HTTP requests over the socket. This is the
+        # dependency-realism bar for api_integration evidence (OPEN-002).
+        self._server = uvicorn.Server(
+            uvicorn.Config(
+                app,
+                host="127.0.0.1",
+                port=0,
+                log_level="warning",
+                lifespan="off",
+            )
+        )
+        self._thread = threading.Thread(target=self._server.run, daemon=True)
+        self._thread.start()
+        deadline = time.monotonic() + 15.0
+        while not self._server.started:
+            if time.monotonic() > deadline:
+                raise RuntimeError("uvicorn test server failed to start in time")
+            time.sleep(0.01)
+        port = self._server.servers[0].sockets[0].getsockname()[1]
+        self.client = httpx.Client(
+            base_url=f"http://127.0.0.1:{port}",
+            timeout=10.0,
+        )
+
+    def close(self) -> None:
+        self.client.close()
+        self._server.should_exit = True
+        self._thread.join(timeout=5.0)
 
     def headers(self, idempotency_key: str | None = None) -> dict[str, str]:
         headers = {
@@ -161,12 +199,20 @@ class _Runtime:
         return headers
 
 
+@pytest.fixture
+def runtime(mongo_database, real_redis) -> _Runtime:
+    instance = _Runtime(mongo_database, real_redis)
+    _seed_candidates(instance.candidates)
+    try:
+        yield instance
+    finally:
+        instance.close()
+
+
 def test_ranked_window_create_and_continue_over_real_redis_and_mongo(
-    mongo_database,
+    runtime: _Runtime,
     real_redis,
 ) -> None:
-    runtime = _Runtime(mongo_database, real_redis)
-    _seed_candidates(runtime.candidates)
     body = {"subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 2}
 
     created = runtime.client.post(
@@ -231,11 +277,8 @@ def test_ranked_window_create_and_continue_over_real_redis_and_mongo(
 
 
 def test_ranked_window_rejects_unauthorized_conflict_and_missing_window(
-    mongo_database,
-    real_redis,
+    runtime: _Runtime,
 ) -> None:
-    runtime = _Runtime(mongo_database, real_redis)
-    _seed_candidates(runtime.candidates)
     body = {"subjectId": SUBJECT_ID, "scenario": "content_feed", "limit": 2}
 
     anonymous = runtime.client.post(CREATE_RANKED_RECOMMENDATION_WINDOW_PATH, json=body)
@@ -294,11 +337,8 @@ def test_ranked_window_rejects_unauthorized_conflict_and_missing_window(
 
 
 def test_ranked_window_closes_and_erases_windows_for_closed_subject(
-    mongo_database,
-    real_redis,
+    runtime: _Runtime,
 ) -> None:
-    runtime = _Runtime(mongo_database, real_redis)
-    _seed_candidates(runtime.candidates)
     body = {"subjectId": CLOSED_SUBJECT_ID, "scenario": "content_feed", "limit": 2}
 
     created = runtime.client.post(

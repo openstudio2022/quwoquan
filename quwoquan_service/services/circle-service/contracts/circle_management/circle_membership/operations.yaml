@@ -534,7 +534,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: JoinCircle}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: list-persona-circles-api
@@ -542,7 +542,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: ListPersonaCircles}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: join-circle-local
@@ -566,7 +566,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: LeaveCircle}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: get-my-circle-membership-local
@@ -582,7 +582,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: GetMyCircleMembership}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: list-circle-memberships-local
@@ -598,7 +598,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: ListCircleMemberships}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: list-pending-circle-memberships-local
@@ -614,7 +614,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: ListPendingCircleMemberships}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: approve-circle-member-local
@@ -630,7 +630,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: ApproveCircleMember}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: reject-circle-member-local
@@ -646,7 +646,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: RejectCircleMember}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: update-circle-membership-role-local
@@ -662,7 +662,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: UpdateCircleMembershipRole}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle_membership/membership_http_mongo__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: circle_membership_approve_circle_member_app_local
@@ -737,3 +737,12 @@ readiness_cases:
     runner_source_path: quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_remote__local_contract_test.dart
     executions:
       - {env: alpha, platform: app, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_membership_approval_app_uat
+    spec_ref: specs/feature-tree/circle-community/activity-member-governance/member-role-permission/spec.md#gwt-004
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: circle.membership_approval}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/circle_service/circle_management/circle_membership/circle_membership_approval_remote__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

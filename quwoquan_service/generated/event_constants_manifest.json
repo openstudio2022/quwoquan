@@ -1,0 +1,303 @@
+{
+  "generator": "tools/codegen_event_constants",
+  "sourceDigest": "85a7fe6d3739b8293ab02701fef67046b6f74c58f5a203d38dbd76ea0448542f",
+  "excludedObjects": null,
+  "outputs": [
+    {
+      "path": "generated/event_constants.py",
+      "language": "python",
+      "owner": "cross-service.event-wire-identity",
+      "emitter": "tools/codegen_event_constants",
+      "sha256": "0e24c059f198d36a37a4d20f6bd376f03b327f9ed12117d124e083e83ec8dceb",
+      "bytes": 20082
+    },
+    {
+      "path": "services/assistant-service/generated/assistant/assistant_run/contract/event/events.go",
+      "language": "go",
+      "owner": "assistant.assistant_run",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "91371c8ddb13f9caaae8a2b6ff6ec2eb724afd1459ae952cbd71e27f21468cc2",
+      "bytes": 518
+    },
+    {
+      "path": "services/chat-service/generated/chat/conversation/contract/event/events.go",
+      "language": "go",
+      "owner": "chat.conversation",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "90eefcf50677f98b31712a54bf6ac1b3e66473f940225996df80f0c1d6bd623f",
+      "bytes": 1004
+    },
+    {
+      "path": "services/chat-service/generated/chat/conversation_membership/contract/event/events.go",
+      "language": "go",
+      "owner": "chat.conversation_membership",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "b30c3ec8afcebfa8b5388459b02b6f74120dc8298b2854e4ddd35fe1d02bc284",
+      "bytes": 695
+    },
+    {
+      "path": "services/chat-service/generated/chat/conversation_user_state/contract/event/events.go",
+      "language": "go",
+      "owner": "chat.conversation_user_state",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "5831e8eee15b8cf770edaac7f5a8b5c21857c156dc0d830a259d4c4edbe268a8",
+      "bytes": 553
+    },
+    {
+      "path": "services/chat-service/generated/chat/message/contract/event/events.go",
+      "language": "go",
+      "owner": "chat.message",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "dc0ddbcf02aa03f027ab386906013a394b26aa2812002429a4fc5a3698c2633f",
+      "bytes": 515
+    },
+    {
+      "path": "services/circle-service/generated/circle_management/circle/contract/event/events.go",
+      "language": "go",
+      "owner": "circle.circle",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "3e250918fdf2f62d55df96f1443bf94e9613df9ddeb5672c7547e126c4b9ca8f",
+      "bytes": 497
+    },
+    {
+      "path": "services/circle-service/generated/circle_management/circle_behavior_fact/contract/event/events.go",
+      "language": "go",
+      "owner": "circle.circle_behavior_fact",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "fb91d9b5a7f98a0d2a616be4e0550fd3f57e5ad24d63fb0c3a27f875976a659c",
+      "bytes": 395
+    },
+    {
+      "path": "services/circle-service/generated/circle_management/circle_group/contract/event/events.go",
+      "language": "go",
+      "owner": "circle.circle_group",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "799b203062c1e989160a4e8cb5ae7c2ab9591843fee7e0592bf850d67dca2c53",
+      "bytes": 462
+    },
+    {
+      "path": "services/circle-service/generated/circle_management/circle_group_membership/contract/event/events.go",
+      "language": "go",
+      "owner": "circle.circle_group_membership",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "08cb65e2eb48c00c45e7f639a0271b520851cc6f323056c2235cc02567500b8c",
+      "bytes": 747
+    },
+    {
+      "path": "services/circle-service/generated/circle_management/circle_membership/contract/event/events.go",
+      "language": "go",
+      "owner": "circle.circle_membership",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "118967f62709509f6258bb78a82c4e44a7a1054f38219ee55b32f0b6a7fa1a7e",
+      "bytes": 680
+    },
+    {
+      "path": "services/circle-service/generated/circle_management/circle_post_placement/contract/event/events.go",
+      "language": "go",
+      "owner": "circle.circle_post_placement",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "cee9f966e992b4a5d27d8f6d2110ec0e6ee553181432f87bd6046619ce638bef",
+      "bytes": 552
+    },
+    {
+      "path": "services/circle-service/generated/circle_management/gathering/contract/event/events.go",
+      "language": "go",
+      "owner": "circle.gathering",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "6b5ed79348667c14a6fe548349049a3acc81d1d3b44a042e7a9d98268974cd08",
+      "bytes": 1164
+    },
+    {
+      "path": "services/content-service/generated/content/comment/contract/event/events.go",
+      "language": "go",
+      "owner": "content.comment",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "27c9adc91deebda0bf78097f4d78c70042f0f6fa06307457d0ac3c954b2a132a",
+      "bytes": 607
+    },
+    {
+      "path": "services/content-service/generated/content/content_reaction/contract/event/events.go",
+      "language": "go",
+      "owner": "content.content_reaction",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "db2e8cfde6f385d15d76c39f0138cbdf8f2d41cdb434c460825863923d070a19",
+      "bytes": 431
+    },
+    {
+      "path": "services/content-service/generated/content/outbound_share_fact/contract/event/events.go",
+      "language": "go",
+      "owner": "content.outbound_share_fact",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "7be0ff0e3da77f06b093e2ed16b0a3d0f5e67c8f544aa9c7881ef8ac31b5e7db",
+      "bytes": 384
+    },
+    {
+      "path": "services/content-service/generated/content/post/contract/event/events.go",
+      "language": "go",
+      "owner": "content.post",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "e6b1ff7fdf9d10fcfe8bba10816bf194dbc44bb49910557cd2b4590ccf5ac864",
+      "bytes": 769
+    },
+    {
+      "path": "services/content-service/generated/content/profile_interaction_read_fact/contract/event/events.go",
+      "language": "go",
+      "owner": "content.profile_interaction_read_fact",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "d0604398751e2e3142af491df0de1d2ba68ad6e478a2acca09c22afd5bd29918",
+      "bytes": 419
+    },
+    {
+      "path": "services/content-service/generated/media/media_asset/contract/event/events.go",
+      "language": "go",
+      "owner": "content.media_asset",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "8321dc47b5690f3c19700aa077aece88c56daa9c808d18a7249374c010d70489",
+      "bytes": 607
+    },
+    {
+      "path": "services/content-service/generated/media/media_upload_session/contract/event/events.go",
+      "language": "go",
+      "owner": "content.media_upload_session",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "0956f547012edd0e405a6942de915dca26059dde9770e4eabc849cfdfae8c159",
+      "bytes": 513
+    },
+    {
+      "path": "services/content-service/generated/trust_safety/post_moderation_case/contract/event/events.go",
+      "language": "go",
+      "owner": "content.post_moderation_case",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "29d1f111d74bc39dd2421f35ce178807d216f446fd7338b409854154282253f8",
+      "bytes": 608
+    },
+    {
+      "path": "services/content-service/generated/trust_safety/report/contract/event/events.go",
+      "language": "go",
+      "owner": "content.report",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "45e55846b3b99f1d39123353e7e3f2fad05966d03846bdc8baa245edb9a638bf",
+      "bytes": 534
+    },
+    {
+      "path": "services/entity-service/generated/entity_homepage/homepage/contract/event/events.go",
+      "language": "go",
+      "owner": "entity.homepage",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "6c9eba4d821249bca2128b942e5dd7b2779a7792de3cb9bbf9bb0933c222ebe2",
+      "bytes": 429
+    },
+    {
+      "path": "services/entity-service/generated/entity_homepage/homepage_claim_request/contract/event/events.go",
+      "language": "go",
+      "owner": "entity.homepage_claim_request",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "f5e066652d2c5bc3e5e17b08afa165911da40900035391a1654bff63a4cc7c69",
+      "bytes": 439
+    },
+    {
+      "path": "services/entity-service/generated/entity_homepage/homepage_review/contract/event/events.go",
+      "language": "go",
+      "owner": "entity.homepage_review",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "1dfea86396fa0388a1256cb92f556db9dd211385ef210dc91ed188cc7cefd9eb",
+      "bytes": 487
+    },
+    {
+      "path": "services/entity-service/generated/entity_homepage/homepage_status_report/contract/event/events.go",
+      "language": "go",
+      "owner": "entity.homepage_status_report",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "9ce0b6b3fbb95881de27dd058e7aec748fd290c1ae64f5b7ad07bfc58a13245c",
+      "bytes": 458
+    },
+    {
+      "path": "services/integration-service/generated/external_integration/external_interaction/contract/event/events.go",
+      "language": "go",
+      "owner": "integration.external_interaction",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "2b7efd5d8dc59cb4b1875fb59d7ffb88eea5d22338bd53aa13f63ab32374986a",
+      "bytes": 410
+    },
+    {
+      "path": "services/product-ops-service/generated/product_ops/experiment/contract/event/events.go",
+      "language": "go",
+      "owner": "ops.experiment",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "1ee2fdfdc4d02391e9ac451b3fcdee07de35b6e44549fe8c4ce48ab1ec5c6cbd",
+      "bytes": 385
+    },
+    {
+      "path": "services/product-ops-service/generated/product_ops/premium_pool_entry/contract/event/events.go",
+      "language": "go",
+      "owner": "ops.premium_pool_entry",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "9c1d9ebcfbea8961f26474941060413b669fe2f2445cbf895473c8cc97b96030",
+      "bytes": 529
+    },
+    {
+      "path": "services/recommendation-service/generated/recommendation/recommendation_model_release/contract/event/events.go",
+      "language": "go",
+      "owner": "recommendation.recommendation_model_release",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "a461a082bc421499a721b49e19f8fdf3242da338509dff7f842e142860dfe011",
+      "bytes": 570
+    },
+    {
+      "path": "services/rtc-service/generated/rtc/call_session/contract/event/events.go",
+      "language": "go",
+      "owner": "rtc.call_session",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "dc65b233e03168bbf64a388b074f8b09264be082ac6adaff8e4976f0a05ed332",
+      "bytes": 1043
+    },
+    {
+      "path": "services/user-service/generated/account/user_account/contract/user/event/events.g.go",
+      "language": "go",
+      "owner": "user.user_account",
+      "emitter": "tools/codegen_storage",
+      "sha256": "9b6b2d6ec28b2c0c30b61a26098aefff0609d0bf82ae22e90123b8984919af26",
+      "bytes": 609
+    },
+    {
+      "path": "services/user-service/generated/persona_management/persona/contract/user/event/events.g.go",
+      "language": "go",
+      "owner": "user.persona",
+      "emitter": "tools/codegen_storage",
+      "sha256": "c01b05be256bee06c076061f414a09d5b7db6c15624ad2d259ec3a47970ec266",
+      "bytes": 262
+    },
+    {
+      "path": "services/user-service/generated/relationship/followed_subject_visit_state/contract/event/events.go",
+      "language": "go",
+      "owner": "user.followed_subject_visit_state",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "1942bb6390b49fac54a1ea2bde20c90d07b5f2e0533abf68cd6b6bbbb32b2d49",
+      "bytes": 394
+    },
+    {
+      "path": "services/user-service/generated/relationship/greeting_request/contract/user/event/events.g.go",
+      "language": "go",
+      "owner": "user.greeting_request",
+      "emitter": "tools/codegen_storage",
+      "sha256": "b029f1887ca14e0828b768a1148d2a38354b897a0ba060cfb38f2bd9efed2d1d",
+      "bytes": 331
+    },
+    {
+      "path": "services/user-service/generated/relationship/persona_relationship/contract/relationship/persona_relationship/event/events.g.go",
+      "language": "go",
+      "owner": "user.persona_relationship",
+      "emitter": "tools/codegen_storage",
+      "sha256": "9dad3b949e4fdae2f1f75b456cef7db5ef7b9eb44c9f433a63d1fe4cb282a56e",
+      "bytes": 291
+    },
+    {
+      "path": "services/user-service/generated/relationship/subject_follow/contract/event/events.go",
+      "language": "go",
+      "owner": "user.subject_follow",
+      "emitter": "internal/metadata/codegen.DomainGenerator",
+      "sha256": "83f47033bee005e0629c4ad69d7c9bfe89a49c2e4fe2da3218dd8fa1b534dabd",
+      "bytes": 388
+    }
+  ]
+}

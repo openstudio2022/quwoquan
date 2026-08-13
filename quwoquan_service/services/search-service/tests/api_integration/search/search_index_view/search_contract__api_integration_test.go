@@ -146,7 +146,7 @@ func TestSearchEndpointESBackedHits(t *testing.T) {
 	defer srv.Close()
 	handler := newServer(t, searchbackend.ESConfig{Enabled: true, Endpoints: []string{srv.URL}}, nil)
 
-	rec, parsed := postSearch(t, handler, `{"query":"大理","objectTypes":["article"]}`)
+	rec, parsed := postSearch(t, handler, `{"query":"大理","objectTypes":["content.post"],"contentTypes":["article"]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -180,7 +180,7 @@ func TestSearchEndpointWithDeterministicContractBackend(t *testing.T) {
 	}})
 	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, native)
 
-	rec, parsed := postSearch(t, handler, `{"query":"大理","objectTypes":["article"]}`)
+	rec, parsed := postSearch(t, handler, `{"query":"大理","objectTypes":["content.post"],"contentTypes":["article"]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -200,7 +200,7 @@ func TestSearchEndpointRecallsUserProfileObject(t *testing.T) {
 	}})
 	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, native)
 
-	rec, parsed := postSearch(t, handler, `{"query":"摄影","objectTypes":["user"]}`)
+	rec, parsed := postSearch(t, handler, `{"query":"摄影","objectTypes":["user.profile"]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -230,7 +230,7 @@ func TestSearchEndpointReadsLocationPlaceByCanonicalID(t *testing.T) {
 	rec, parsed := postSearch(
 		t,
 		handler,
-		`{"query":"place_broken_bridge_lane","ids":["place_broken_bridge_lane"],"objectTypes":["location"]}`,
+		`{"query":"place_broken_bridge_lane","ids":["place_broken_bridge_lane"],"objectTypes":["location.place"]}`,
 	)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
@@ -251,7 +251,7 @@ func TestSearchEndpointESOutageReturns503(t *testing.T) {
 	// masking the outage with a second source of truth.
 	handler := newServer(t, searchbackend.ESConfig{Enabled: true, Endpoints: []string{"http://127.0.0.1:1"}}, nil)
 
-	rec, _ := postSearch(t, handler, `{"query":"大理","objectTypes":["article"]}`)
+	rec, _ := postSearch(t, handler, `{"query":"大理","objectTypes":["content.post"],"contentTypes":["article"]}`)
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("pure ES outage must surface 503, got status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -278,7 +278,7 @@ func TestSearchEndpointNearFilterPushesDownToRadius(t *testing.T) {
 	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, native)
 
 	rec, parsed := postSearch(t, handler,
-		`{"query":"营地","objectTypes":["entity"],"filters":{"near":{"lat":30.25,"lng":120.15,"radiusKm":5}}}`)
+		`{"query":"营地","objectTypes":["entity.homepage"],"filters":{"near":{"lat":30.25,"lng":120.15,"radiusKm":5}}}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -322,7 +322,7 @@ func TestSearchEndpointAppliesTagFilterWithPositiveAndNegativeCases(t *testing.T
 	positive, parsed := postSearch(
 		t,
 		handler,
-		`{"query":"攻略","objectTypes":["article"],"filters":{"tags":["Topic/旅行/露营"]}}`,
+		`{"query":"攻略","objectTypes":["content.post"],"contentTypes":["article"],"filters":{"tags":["Topic/旅行/露营"]}}`,
 	)
 	if positive.Code != http.StatusOK || hitCount(parsed) != 1 {
 		t.Fatalf("tag positive case must return exactly one hit, status=%d body=%s", positive.Code, positive.Body.String())
@@ -336,7 +336,7 @@ func TestSearchEndpointAppliesTagFilterWithPositiveAndNegativeCases(t *testing.T
 	negative, negativeParsed := postSearch(
 		t,
 		handler,
-		`{"query":"攻略","objectTypes":["article"],"filters":{"tags":["Topic/旅行/徒步"]}}`,
+		`{"query":"攻略","objectTypes":["content.post"],"contentTypes":["article"],"filters":{"tags":["Topic/旅行/徒步"]}}`,
 	)
 	if negative.Code != http.StatusOK || hitCount(negativeParsed) != 0 {
 		t.Fatalf("tag negative case must return no hits, status=%d body=%s", negative.Code, negative.Body.String())
@@ -356,7 +356,7 @@ func TestSearchEndpointCarriesCanonicalAttribution(t *testing.T) {
 	}})
 	handler := newServer(t, searchbackend.ESConfig{Enabled: false}, native)
 
-	rec, parsed := postSearch(t, handler, `{"query":"大理","objectTypes":["article"]}`)
+	rec, parsed := postSearch(t, handler, `{"query":"大理","objectTypes":["content.post"],"contentTypes":["article"]}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -415,14 +415,14 @@ func TestSearchEndpointAcceptsIndexedCircleTargets(t *testing.T) {
 		},
 	}))
 
-	for _, target := range []string{"circle", "group"} {
+	for _, objectType := range []string{"circle.circle", "circle.group"} {
 		rec, _ := postSearch(
 			t,
 			handler,
-			`{"query":"旅行","objectTypes":["`+target+`"]}`,
+			`{"query":"旅行","objectTypes":["`+objectType+`"]}`,
 		)
 		if rec.Code != http.StatusOK {
-			t.Fatalf("target %q must be searchable when indexed, got %d body=%s", target, rec.Code, rec.Body.String())
+			t.Fatalf("object type %q must be searchable when indexed, got %d body=%s", objectType, rec.Code, rec.Body.String())
 		}
 	}
 }

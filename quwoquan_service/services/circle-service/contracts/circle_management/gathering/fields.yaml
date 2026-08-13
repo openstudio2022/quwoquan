@@ -367,10 +367,25 @@ types:
   GatheringIDQuery:
     fields:
     - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+  GatheringParticipationStatusQuery:
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: personaId, type: string, constraints: [NOT_BLANK]}
+  GatheringParticipationStatusSlice:
+    description: 服务间最小 Participation 状态断言（INTERNAL）。只回答「该 persona 在该 Gathering 的当前参与状态」，供 Content 回流引用（content.post.gatheringRef）等跨域写入前的 fail-closed 校验；不含名单、申请答案或精确私密事实，不转移 owner。
+    fields:
+    - {name: gatheringId, type: string, constraints: [NOT_BLANK]}
+    - {name: personaId, type: string, constraints: [NOT_BLANK]}
+    - {name: lifecycleStatus, type: enum, enum_ref: GatheringLifecycleStatus, constraints: [NOT_NULL]}
+    - {name: participationState, type: enum, enum_ref: GatheringParticipationState, constraints: [NULLABLE]}
   GatheringListByHostQuery:
     fields:
     - {name: hostSubjectKind, type: enum, enum_ref: GatheringHostSubjectKind, constraints: [NOT_NULL]}
     - {name: hostSubjectId, type: string, constraints: [NOT_BLANK]}
+    - {name: cursor, type: string, constraints: [NULLABLE], semantic_type: cursor}
+    - {name: limit, type: int, constraints: [NOT_NULL]}
+  GatheringMineListQuery:
+    fields:
     - {name: cursor, type: string, constraints: [NULLABLE], semantic_type: cursor}
     - {name: limit, type: int, constraints: [NOT_NULL]}
   GatheringListBySourceQuery:
@@ -522,7 +537,15 @@ types:
     - {name: admissionControlStatus, type: enum, enum_ref: GatheringAdmissionControlStatus, constraints: [NOT_NULL]}
     - {name: outcomeStatus, type: enum, enum_ref: GatheringOutcomeStatus, constraints: [NULLABLE]}
     - {name: watchStatus, type: enum, enum_ref: GatheringAvailabilityWatchStatus, constraints: [NULLABLE]}
+    - {name: sourceRefs, type: '[]GatheringEventSourceRef', constraints: [NULLABLE], description: 发起溯源引用（objectKind + objectId）；仅 GatheringPublished 携带，供 recommendation 社会证明四锚点按实体/内容/创作者归集，禁止携带私密名单或申请事实。}
+    - {name: maxParticipants, type: int, constraints: [NULLABLE], description: 发布时冻结的公开容量政策；仅 GatheringPublished 携带，供漏斗按活动特征（duo/group）诚实切片。}
+    - {name: admissionPolicy, type: enum, enum_ref: GatheringAdmissionPolicy, constraints: [NULLABLE], description: 发布时冻结的公开准入政策；仅 GatheringPublished 携带，与 maxParticipants 共同派生 capacityTier。}
     - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
+  GatheringEventSourceRef:
+    description: 事件载荷内的最小 canonical 溯源引用；只含对象类型与 ID，不复制标题或快照。
+    fields:
+    - {name: objectKind, type: string, constraints: [NOT_NULL]}
+    - {name: objectId, type: string, constraints: [NOT_NULL]}
   GatheringInvitationScheduleSnapshot:
     description: 邀请事件中按未加入 viewer 披露策略裁剪的日程快照；after_join 禁止携带精确时间。
     fields:

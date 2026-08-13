@@ -81,11 +81,17 @@ class _Closures:
         return account_id in self.closed
 
 
+class _ExclusionProfiles:
+    def read_for_scoring(self, subject_id: str) -> dict:
+        return {}
+
+
 def _client(*, closed=()) -> TestClient:
     facade = Facade(
         store=_Store(),
         ranker=_Ranker(),
         subject_closures=_Closures(closed),
+        exclusion_profiles=_ExclusionProfiles(),
         window_id_factory=lambda _key: "window-001",
     )
     app = FastAPI()

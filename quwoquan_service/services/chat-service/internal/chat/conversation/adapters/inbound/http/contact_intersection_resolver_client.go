@@ -90,6 +90,7 @@ func (c *ContactIntersectionResolverClient) ListContactIntersections(
 			IntersectionID         string `json:"intersectionId"`
 			PointSummarySnapshotID string `json:"pointSummarySnapshotId"`
 			Kind                   string `json:"kind"`
+			IntersectionClass      string `json:"intersectionClass"`
 			PrimaryText            string `json:"primaryText"`
 			Dimension              string `json:"dimension"`
 		} `json:"items"`
@@ -104,13 +105,14 @@ func (c *ContactIntersectionResolverClient) ListContactIntersections(
 			continue
 		}
 		items = append(items, application.ContactIntersectionSummary{
-			IntersectionID: strings.TrimSpace(item.IntersectionID),
-			EvidenceID:     strings.TrimSpace(item.PointSummarySnapshotID),
-			SourceRef:      strings.TrimSpace(item.Kind),
-			ObjectTypeRef:  "user",
-			ObjectID:       contactPersonaID,
-			PrimaryText:    strings.TrimSpace(item.PrimaryText),
-			Dimension:      strings.TrimSpace(item.Dimension),
+			IntersectionID:    strings.TrimSpace(item.IntersectionID),
+			EvidenceID:        strings.TrimSpace(item.PointSummarySnapshotID),
+			SourceRef:         strings.TrimSpace(item.Kind),
+			ObjectTypeRef:     "user",
+			ObjectID:          contactPersonaID,
+			PrimaryText:       strings.TrimSpace(item.PrimaryText),
+			Dimension:         strings.TrimSpace(item.Dimension),
+			IntersectionClass: strings.TrimSpace(item.IntersectionClass),
 		})
 		if len(items) == limit {
 			break

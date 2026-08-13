@@ -33,6 +33,8 @@ business_rules:
 - 相同 source eventId 与 subjectId 仅应用一次；不同上游 sequence 不比较大小，成功应用后递增本地主体 revision，并在同一 Mongo 事务写入 profile、协同、交集、影响证据与幂等收据。
 - 作者影响摘要与证据仅由 ContentBehaviorRecorded 的服务端 impactHelpType、权威 authorId/contentId 和归因 tag 投影；Content 只能经 typed Reader 查询并做当前 Post 权限 hydration，不得读取或写入本对象集合。
 - 交集理由只从 PersonaRelationship、CircleMembership、ContentBehaviorFact 与 Post lifecycle 的 typed durable stream 写入对象本地证据投影；全局主体快照可服务任意 channel，精确 channel 快照存在时优先，禁止回读 User、Circle 或 Content 存储。
+- SearchRecommendationSignalPublished 只由本对象消费（搜推联动短期意图）：query 信号把 normalizedQuery 与 relatedTerms 归并进有界衰减的 searchTermAffinities（半衰期 7 天、每主体至多 50 个 term，读取时压平为权重进入打分特征）；click 信号仅推进幂等收据不投影；signalId 幂等；原始查询词只进入特征投影，不得进入日志、DLQ 或错误信息。
+- 四锚点社会证明只从 GatheringPublished 发起证据（organizer + canonical 溯源引用）、active Participation 与公开回顾事实读时聚合派生：formed=已发布且 ≥2 名 active 参与者，experienced=formed 且 ≥2 名参与者各自持有 active 公开回顾；时间已过无内容的行动永远不进 experienced，任何锚点不落计数缓存、不做对人评分。
 - 账号关闭阻断后必须删除可识别特征，并由 closure fact 阻止旧事件重建。
 lifecycle:
   source_events:
@@ -47,6 +49,8 @@ lifecycle:
   - circle.circle_membership.CircleMembershipLeft
   - circle.circle_membership.CircleMembershipRoleChanged
   - circle.circle_membership.CircleMembershipRejected
+  - circle.gathering.GatheringParticipationChanged
+  - circle.gathering.GatheringPublished
   - content.post.PostPublished
   - content.post.PostUpdated
   - content.post.PostSettingsUpdated
@@ -54,6 +58,7 @@ lifecycle:
   - content.post.PostDeleted
   - content.post.PostPrivacyRedacted
   - content.post.PostPurged
+  - search.recommendation_signal_fact.SearchRecommendationSignalPublished
   checkpoint: per_subject_applied_event_revision_with_source_event_receipt
   rebuild: replay_authoritative_facts_and_relationship_events_for_open_subjects
   tombstone: purge_identifying_features_keep_irreversible_closure_checkpoint
@@ -77,6 +82,16 @@ lifecycle:
   - name: ProjectRecommendationCircleMembership
     kind: projector
     facet: CircleMembershipConsumer
+    method: processOnce
+    idempotency: event_id
+  - name: ProjectRecommendationGatheringParticipation
+    kind: projector
+    facet: GatheringParticipationConsumer
+    method: processOnce
+    idempotency: event_id
+  - name: ProjectRecommendationGatheringPublication
+    kind: projector
+    facet: GatheringPublicationConsumer
     method: processOnce
     idempotency: event_id
   - name: ProjectRecommendationPostLifecycle

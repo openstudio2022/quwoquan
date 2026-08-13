@@ -93,7 +93,10 @@ func TestTagOperationSecuritySeparatesPublicUserAndServiceRoutes(
 	serviceRequest = serviceRequest.WithContext(rtauth.WithPrincipal(
 		serviceRequest.Context(),
 		rtauth.Principal{
-			Claims: rtauth.Claims{Roles: []string{"service"}},
+			Claims: rtauth.Claims{
+				Scope: "tag.graph.read",
+				Roles: []string{"service"},
+			},
 			Actor: operation.ActorContext{
 				AccountID: "service:search-service",
 			},

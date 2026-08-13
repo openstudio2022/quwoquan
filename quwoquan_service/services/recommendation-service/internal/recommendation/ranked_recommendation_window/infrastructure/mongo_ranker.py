@@ -6,10 +6,17 @@ import json
 import math
 from typing import Any, Callable, Mapping, Protocol
 
+from prometheus_client import Counter
+
 from generated.recommendation.recommendation_model_release.models.request_response import (
     CandidateInput,
     ModelScoreRequest,
     ModelScoreResponse,
+)
+from internal.recommendation.ranked_recommendation_window.domain.discovery_tuning import (
+    DiscoveryRankingTuning,
+    NEW_CONTENT_BOOST_MAX_AGE_HOURS,
+    WHITELIST_SUPPLY_SOURCE,
 )
 from internal.recommendation.ranked_recommendation_window.domain.model import (
     RecommendationObjectCard,
@@ -23,6 +30,16 @@ from internal.recommendation.recommendation_model_release.application.rule_scori
     rule_score,
 )
 
+# Model-bucket scoring failures degrade to the deterministic rule scorer
+# instead of failing the window request (same semantics as the content-side
+# CascadeScorer, see rec-model-service/go-integration REQ-002). The fallback
+# is observable so AB evaluation can exclude or separately bucket the sample.
+model_score_fallback_total = Counter(
+    "rec_ranked_window_model_score_fallback_total",
+    "Model-bucket scoring failures degraded to the deterministic rule scorer.",
+    ["reason"],
+)
+
 
 class CandidateReader(Protocol):
     def list_for_ranking(
@@ -30,6 +47,14 @@ class CandidateReader(Protocol):
         *,
         subject_id: str,
         scenario: str,
+        limit: int,
+    ) -> list[dict[str, Any]]: ...
+
+    def list_for_ranking_by_content_ids(
+        self,
+        *,
+        scenario: str,
+        content_ids: tuple[str, ...],
         limit: int,
     ) -> list[dict[str, Any]]: ...
 
@@ -55,6 +80,7 @@ class MongoCandidateRanker:
         scoring: ScoringFacade,
         experiments: ExperimentAssignments,
         snapshot_digester: Callable[[Mapping[str, Any], Mapping[str, Any]], str],
+        tuning: DiscoveryRankingTuning,
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self._candidates = candidates
@@ -62,6 +88,7 @@ class MongoCandidateRanker:
         self._scoring = scoring
         self._experiments = experiments
         self._snapshot_digester = snapshot_digester
+        self._tuning = tuning
         self._now = now or (lambda: datetime.now(timezone.utc))
 
     @staticmethod
@@ -75,6 +102,9 @@ class MongoCandidateRanker:
             (now - published_utc).total_seconds() / 3600.0,
             0.0,
         )
+        recall_path = str(document.get("recallPath") or "").strip() or (
+            "premium_pool" if document.get("premiumEligible") else "explore_recall"
+        )
         return CandidateInput(
             contentId=str(document.get("contentId") or "").strip(),
             contentType=str(document.get("contentType") or "").strip(),
@@ -87,7 +117,7 @@ class MongoCandidateRanker:
             likeCount=int(document.get("likeCount") or 0),
             commentCount=int(document.get("commentCount") or 0),
             shareCount=int(document.get("shareCount") or 0),
-            recallPath="premium_pool" if document.get("premiumEligible") else "explore_recall",
+            recallPath=recall_path,
             qualityScore=float(document.get("qualityScore") or 0.0),
             contentVertical=document.get("contentVertical"),
             supplySource=document.get("supplySource"),
@@ -132,6 +162,12 @@ class MongoCandidateRanker:
             scenario=normalized_scenario,
             limit=limit,
         )
+        documents = self._merge_collaborative_lane(
+            documents,
+            profile=profile,
+            scenario=normalized_scenario,
+            limit=limit,
+        )
         negative_content_ids = {
             str(value).strip()
             for value in profile.get("negativeContentIds") or []
@@ -147,6 +183,15 @@ class MongoCandidateRanker:
             for value in profile.get("hiddenContentTypes") or []
             if str(value).strip()
         }
+        if self._tuning.whitelist_enabled:
+            # Ops safety switch: only canonical-release supply stays eligible.
+            # It narrows recall and never bypasses the hard filters below.
+            documents = [
+                document
+                for document in documents
+                if str(document.get("supplySource") or "").strip()
+                == WHITELIST_SUPPLY_SOURCE
+            ]
         documents = [
             document
             for document in documents
@@ -169,6 +214,7 @@ class MongoCandidateRanker:
                 "influenceScore": float(profile.get("influenceScore") or 0.0),
                 "collaborativeFeatures": dict(profile.get("collaborativeFeatures") or {}),
                 "intersectionFeatures": dict(profile.get("intersectionFeatures") or {}),
+                "searchTermAffinities": dict(profile.get("searchTermAffinities") or {}),
             }
         )
         request = ModelScoreRequest(
@@ -194,28 +240,25 @@ class MongoCandidateRanker:
         }
         scores: dict[str, float] = {}
         model_release_id: str | None = None
+        applied_bucket = assignment.bucket
+        model_score_fallback_reason: str | None = None
         if assignment.bucket == "model":
-            response = (
-                self._scoring.score(request)
-                if candidates
-                else ModelScoreResponse(scores=[], modelReleaseId=None)
-            )
-            for item in response.scores:
-                content_id = str(item.contentId or "").strip()
-                if (
-                    not content_id
-                    or item.score is None
-                    or not math.isfinite(float(item.score))
-                    or content_id in scores
-                ):
-                    raise RuntimeError("model scoring returned invalid or duplicate candidate score")
-                scores[content_id] = float(item.score)
-            model_release_id = (
-                str(response.modelReleaseId).strip() if response.modelReleaseId else None
-            )
-            if candidates and not model_release_id:
-                raise RuntimeError("model experiment bucket requires an active model release")
-        else:
+            if not candidates:
+                # No scorer ran; an empty window must not claim a model release
+                # (the window invariant requires model windows to carry one).
+                applied_bucket = "rule"
+            else:
+                try:
+                    scores, model_release_id = self._model_scores(request, candidates)
+                except Exception as error:  # noqa: BLE001 - degrade, observe, never fail the window
+                    model_score_fallback_reason = type(error).__name__
+                    model_score_fallback_total.labels(
+                        reason=model_score_fallback_reason
+                    ).inc()
+                    applied_bucket = "rule"
+                    model_release_id = None
+                    scores = {}
+        if applied_bucket == "rule":
             scores = {
                 str(candidate.contentId): rule_score(
                     candidate.model_dump(mode="python")
@@ -224,8 +267,10 @@ class MongoCandidateRanker:
             }
         if set(scores) != set(candidate_ids):
             raise RuntimeError("model scoring result does not match the candidate snapshot")
+        scores = self._apply_new_content_boost(scores, candidates)
         ranked = sorted(scores.items(), key=lambda item: (-item[1], item[0]))
-        model_bucket = assignment.bucket
+        ranked = self._apply_author_diversity(ranked, candidates)
+        model_bucket = applied_bucket
         model_channel = "champion" if model_release_id else None
         ranked_candidates = tuple(
             RankedCandidate(
@@ -245,10 +290,17 @@ class MongoCandidateRanker:
             ],
             "featureSnapshotAt": now.isoformat(),
             "modelBucket": model_bucket,
+            "assignedBucket": assignment.bucket,
+            "modelScoreFallbackReason": model_score_fallback_reason,
             "modelChannel": model_channel,
             "modelReleaseId": model_release_id,
             "experimentId": assignment.experiment_id,
             "experimentRevision": assignment.experiment_revision,
+            "discoveryTuning": {
+                "newContentBoost": self._tuning.new_content_boost,
+                "authorDiversityWeight": self._tuning.author_diversity_weight,
+                "whitelistEnabled": self._tuning.whitelist_enabled,
+            },
             "profileCheckpoint": int(profile.get("checkpoint") or 0),
             "ranked": [
                 {
@@ -280,6 +332,122 @@ class MongoCandidateRanker:
             candidates=ranked_candidates,
             object_cards=object_cards,
         )
+
+    # 协同召回路的点查上限：collaborativeFeatures 是离线物化的 per-subject
+    # 相似内容分数，取分数最高的前 N 个做候选池点查（全部走 Mongo 索引）。
+    COLLABORATIVE_RECALL_LIMIT = 50
+
+    def _merge_collaborative_lane(
+        self,
+        documents: list[dict[str, Any]],
+        *,
+        profile: Mapping[str, Any],
+        scenario: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        if scenario != "content_feed":
+            return documents
+        collaborative = {
+            str(key).strip(): float(value)
+            for key, value in (profile.get("collaborativeFeatures") or {}).items()
+            if str(key).strip()
+            and isinstance(value, (int, float))
+            and math.isfinite(float(value))
+            and float(value) > 0
+        }
+        if not collaborative:
+            return documents
+        seen = {
+            str(document.get("contentId") or "").strip() for document in documents
+        }
+        wanted = tuple(
+            content_id
+            for content_id, _score in sorted(
+                collaborative.items(), key=lambda item: (-item[1], item[0])
+            )
+            if content_id not in seen
+        )[: self.COLLABORATIVE_RECALL_LIMIT]
+        if not wanted:
+            return documents
+        extra = self._candidates.list_for_ranking_by_content_ids(
+            scenario=scenario,
+            content_ids=wanted,
+            limit=self.COLLABORATIVE_RECALL_LIMIT,
+        )
+        merged = list(documents)
+        for document in extra:
+            content_id = str(document.get("contentId") or "").strip()
+            if not content_id or content_id in seen:
+                continue
+            seen.add(content_id)
+            merged.append(document)
+            if len(merged) >= limit:
+                break
+        return merged
+
+    def _model_scores(
+        self,
+        request: ModelScoreRequest,
+        candidates: list[CandidateInput],
+    ) -> tuple[dict[str, float], str | None]:
+        response = self._scoring.score(request)
+        scores: dict[str, float] = {}
+        for item in response.scores:
+            content_id = str(item.contentId or "").strip()
+            if (
+                not content_id
+                or item.score is None
+                or not math.isfinite(float(item.score))
+                or content_id in scores
+            ):
+                raise RuntimeError("model scoring returned invalid or duplicate candidate score")
+            scores[content_id] = float(item.score)
+        model_release_id = (
+            str(response.modelReleaseId).strip() if response.modelReleaseId else None
+        )
+        if candidates and not model_release_id:
+            raise RuntimeError("model experiment bucket requires an active model release")
+        return scores, model_release_id
+
+    def _apply_new_content_boost(
+        self,
+        scores: dict[str, float],
+        candidates: list[CandidateInput],
+    ) -> dict[str, float]:
+        boost = self._tuning.new_content_boost
+        if boost == 1.0:
+            return scores
+        fresh_ids = {
+            str(candidate.contentId)
+            for candidate in candidates
+            if float(candidate.ageHours or 0.0) <= NEW_CONTENT_BOOST_MAX_AGE_HOURS
+        }
+        return {
+            content_id: score * boost if content_id in fresh_ids else score
+            for content_id, score in scores.items()
+        }
+
+    def _apply_author_diversity(
+        self,
+        ranked: list[tuple[str, float]],
+        candidates: list[CandidateInput],
+    ) -> list[tuple[str, float]]:
+        weight = self._tuning.author_diversity_weight
+        if weight == 1.0:
+            return ranked
+        author_by_content = {
+            str(candidate.contentId): str(candidate.authorId or "").strip()
+            for candidate in candidates
+        }
+        seen_by_author: dict[str, int] = {}
+        adjusted: list[tuple[str, float]] = []
+        for content_id, score in ranked:
+            author = author_by_content.get(content_id, "")
+            occurrence = seen_by_author.get(author, 0) if author else 0
+            if author:
+                seen_by_author[author] = occurrence + 1
+            adjusted.append((content_id, score * (weight**occurrence)))
+        return sorted(adjusted, key=lambda item: (-item[1], item[0]))
 
     def _object_cards(
         self,

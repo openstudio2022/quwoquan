@@ -7,6 +7,7 @@ import (
 
 	rterr "quwoquan_service/runtime/errors"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
+	appports "quwoquan_service/services/content-service/internal/content/post/application/ports"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
@@ -18,15 +19,19 @@ import (
 type PostQueryDependencies struct {
 	Detail       postports.PostDetailReader
 	Author       postports.AuthorPostReader
+	Gathering    postports.GatheringPostReader
+	SocialProof  appports.GatheringSocialProofProjectionReader
 	Tombstones   postports.TombstoneReader
 	ViewerBlocks postports.ViewerBlockReader
 }
 
-// PostQueryFacade 为 GetPost、ListUserPosts 提供强类型查询入口。
-// 它只依赖显式 reader ports，供 handler/composition 直接装配。
+// PostQueryFacade 为 GetPost、ListUserPosts、ListPostsByGathering 提供
+// 强类型查询入口。它只依赖显式 reader ports，供 handler/composition 直接装配。
 type PostQueryFacade struct {
 	detail       postports.PostDetailReader
 	author       postports.AuthorPostReader
+	gathering    postports.GatheringPostReader
+	socialProof  appports.GatheringSocialProofProjectionReader
 	tombstones   postports.TombstoneReader
 	viewerBlocks postports.ViewerBlockReader
 }
@@ -35,6 +40,8 @@ func NewPostQueryFacade(dependencies PostQueryDependencies) *PostQueryFacade {
 	return &PostQueryFacade{
 		detail:       dependencies.Detail,
 		author:       dependencies.Author,
+		gathering:    dependencies.Gathering,
+		socialProof:  dependencies.SocialProof,
 		tombstones:   dependencies.Tombstones,
 		viewerBlocks: dependencies.ViewerBlocks,
 	}
@@ -247,6 +254,99 @@ func (f *PostQueryFacade) ListUserPosts(
 		return postports.AuthorPostPageSlice{}, postQueryReadFailure("ListUserPosts", err)
 	}
 	return page, nil
+}
+
+// ListPostsByGathering 是行动详情共同经历聚合区的公开读入口。
+// 只返回 public + published + approved 且作者主动写入 gatheringRef 的内容；
+// 作者删除或转私密即从聚合区消失，无 viewer 私有分支。
+func (f *PostQueryFacade) ListPostsByGathering(
+	ctx context.Context,
+	query postports.GatheringPostPageQuery,
+) (postports.GatheringPostPageSlice, error) {
+	if query.GatheringID() == "" {
+		return postports.GatheringPostPageSlice{}, invalidPostQueryArgument(
+			"ListPostsByGathering requires gatheringId",
+		)
+	}
+	if f == nil || f.gathering == nil {
+		return postports.GatheringPostPageSlice{}, postQueryReaderUnavailable(
+			"ListPostsByGathering gathering reader is not configured",
+		)
+	}
+	limit, err := normalizePostQueryLimit(query.Limit())
+	if err != nil {
+		return postports.GatheringPostPageSlice{}, invalidPostQueryArgument(err.Error())
+	}
+	cursor, err := postports.ParseAuthorPostCursor(query.Cursor())
+	if err != nil {
+		return postports.GatheringPostPageSlice{}, invalidPostQueryArgument(
+			"ListPostsByGathering cursor is invalid",
+		)
+	}
+	unpagedRequest := postports.NewGatheringPostReadRequest(
+		query.GatheringID(),
+		postports.AuthorPostCursor{},
+		limit,
+	)
+	if cursor.IsSet() && cursor.Scope() != unpagedRequest.CursorScope() {
+		return postports.GatheringPostPageSlice{}, invalidPostQueryArgument(
+			"ListPostsByGathering cursor does not match query",
+		)
+	}
+	request := postports.NewGatheringPostReadRequest(
+		query.GatheringID(),
+		cursor,
+		limit,
+	)
+	page, err := f.gathering.ListGatheringPosts(ctx, request)
+	if err != nil {
+		return postports.GatheringPostPageSlice{}, postQueryReadFailure(
+			"ListPostsByGathering",
+			err,
+		)
+	}
+	return page, nil
+}
+
+var allowedSocialProofAnchors = map[string]struct{}{
+	"organizer": {},
+	"entity":    {},
+	"content":   {},
+	"creator":   {},
+}
+
+// GetGatheringSocialProof 是四锚点两级诚实社会证明的 App 代理读面：
+// 计数由 recommendation 聚合投影派生，Content 只透传不落副本。
+func (f *PostQueryFacade) GetGatheringSocialProof(
+	ctx context.Context,
+	anchorKind string,
+	objectID string,
+) (appports.GatheringSocialProofSummary, error) {
+	normalizedAnchor := strings.TrimSpace(anchorKind)
+	normalizedObject := strings.TrimSpace(objectID)
+	if _, allowed := allowedSocialProofAnchors[normalizedAnchor]; !allowed ||
+		normalizedObject == "" {
+		return appports.GatheringSocialProofSummary{}, invalidPostQueryArgument(
+			"GetGatheringSocialProof anchorKind or objectId is invalid",
+		)
+	}
+	if f == nil || f.socialProof == nil {
+		return appports.GatheringSocialProofSummary{}, postQueryReaderUnavailable(
+			"GetGatheringSocialProof reader is not configured",
+		)
+	}
+	summary, err := f.socialProof.GetGatheringSocialProof(
+		ctx,
+		normalizedAnchor,
+		normalizedObject,
+	)
+	if err != nil {
+		return appports.GatheringSocialProofSummary{}, postQueryReadFailure(
+			"GetGatheringSocialProof",
+			err,
+		)
+	}
+	return summary, nil
 }
 
 func canViewerReadPostDetail(

@@ -7,9 +7,13 @@ import (
 	"strings"
 	"time"
 
+	rtobs "quwoquan_service/runtime/observability"
 	grantapp "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/application"
 	grantmodel "quwoquan_service/services/integration-service/internal/external_integration/capability_grant/domain/model"
 )
+
+// 契约 runtime_entrypoints[].telemetry.metric 同名计数器（outcome=ok|error）。
+var grantResolveOutcomes = rtobs.NewEntrypointOutcomeCounter("integration_capability_grant_resolve")
 
 // CandidateResolver implements the application resolver port by consulting only
 // the typed source selected by BindingPriority. A source failure or authoritative
@@ -41,7 +45,14 @@ func NewCandidateResolver(
 func (resolver *CandidateResolver) ResolveCapabilityGrant(
 	ctx context.Context,
 	requirement grantmodel.Requirement,
-) (grantmodel.ResolvedCapabilityGrant, error) {
+) (grant grantmodel.ResolvedCapabilityGrant, err error) {
+	defer func() {
+		outcome := "ok"
+		if err != nil {
+			outcome = "error"
+		}
+		grantResolveOutcomes.WithLabelValues(outcome).Inc()
+	}()
 	if resolver == nil || resolver.now == nil {
 		return grantmodel.ResolvedCapabilityGrant{}, grantapp.ErrResolverUnavailable
 	}

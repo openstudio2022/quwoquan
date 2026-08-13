@@ -1,4 +1,4 @@
-package main
+package bootstrap
 
 import (
 	"context"
@@ -15,6 +15,7 @@ import (
 
 func startMediaUploadSessionOutboxRelay(
 	ctx context.Context,
+	workers *workerRegistry,
 	outbox uploadports.TransactionalOutbox,
 	transport runtimemessaging.DurableRecordAppender,
 	healthChecker *rthealth.Checker,
@@ -41,7 +42,9 @@ func startMediaUploadSessionOutboxRelay(
 	healthChecker.Register("media-upload-session-outbox-relay", func(hctx context.Context) error {
 		return relay.Healthy(hctx, 3*time.Second)
 	})
-	go relay.Run(ctx, time.Second)
+	workers.Add(func(workerCtx context.Context) {
+		relay.Run(workerCtx, time.Second)
+	})
 	if logger != nil {
 		logger.Info(
 			"MediaUploadSession outbox relay enabled",

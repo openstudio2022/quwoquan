@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from prometheus_client import Counter, Histogram
 
 from generated.recommendation.recommendation_feature_profile_view.api.operations import (
+    GET_RECOMMENDATION_FLYWHEEL_FUNNEL_PATH,
+    GET_RECOMMENDATION_GATHERING_SOCIAL_PROOF_PATH,
     GET_RECOMMENDATION_INTERSECTION_SUPPLY_PATH,
     GET_RECOMMENDATION_AUTHOR_IMPACT_PATH,
     LIST_RECOMMENDATION_OBJECT_INTERSECTIONS_PATH,
@@ -28,6 +30,8 @@ from generated.recommendation.recommendation_feature_profile_view.models.request
     RecommendationAuthorImpactEvidencePage,
     RecommendationAuthorImpactItem,
     RecommendationAuthorImpactSummary,
+    RecommendationGatheringSocialProofSummary,
+    RecommendationFlywheelFunnelSnapshot,
 )
 from internal.recommendation.recommendation_feature_profile_view.application.author_impact_reader import (
     AuthorImpactEvidencePage as DomainEvidencePage,
@@ -74,6 +78,19 @@ def _http_error(status: int, code: str) -> HTTPException:
         status_code=status,
         detail={"code": code, "context": {"attributes": {}}},
     )
+
+
+def _required_query_instant(request: Request, name: str):
+    """必填 ISO-8601 时间参数；缺失或非法即 invalid_argument。"""
+    from datetime import datetime
+
+    raw = (_single_query_value(request, name) or "").strip()
+    if not raw:
+        raise ValueError(f"query {name} is required")
+    parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError(f"query {name} must be timezone-aware")
+    return parsed
 
 
 def _single_query_value(request: Request, name: str) -> str | None:
@@ -262,6 +279,95 @@ def build_router(
             _read_total.labels(operation="object_intersections", outcome=outcome).inc()
             _read_duration_seconds.labels(
                 operation="object_intersections", outcome=outcome
+            ).observe(time.perf_counter() - started)
+
+    @router.get(
+        GET_RECOMMENDATION_FLYWHEEL_FUNNEL_PATH,
+        response_model=RecommendationFlywheelFunnelSnapshot,
+    )
+    def get_flywheel_funnel(
+        request: Request,
+        _principal: dict[str, Any] = Depends(require_feature_profile_reader),
+    ) -> RecommendationFlywheelFunnelSnapshot:
+        started = time.perf_counter()
+        outcome = "failed"
+        try:
+            window_from = _required_query_instant(request, "windowFrom")
+            window_to = _required_query_instant(request, "windowTo")
+            counts = intersection_reader_provider(request).get_flywheel_funnel(
+                window_from=window_from,
+                window_to=window_to,
+                source_object_kind=_single_query_value(request, "sourceObjectKind")
+                or "",
+                source_object_id=_single_query_value(request, "sourceObjectId")
+                or "",
+                capacity_tier=_single_query_value(request, "capacityTier") or "",
+                tag_ref=_single_query_value(request, "tagRef") or "",
+            )
+            outcome = "ok"
+            return RecommendationFlywheelFunnelSnapshot(
+                windowFrom=window_from,
+                windowTo=window_to,
+                wishlistedPersonaCount=int(counts["wishlistedPersonaCount"]),
+                wishlistToJoinedCount=int(counts["wishlistToJoinedCount"]),
+                publishedCount=int(counts["publishedCount"]),
+                formedCount=int(counts["formedCount"]),
+                experiencedCount=int(counts["experiencedCount"]),
+                facilitationNotifiedCount=int(counts["facilitationNotifiedCount"]),
+                creatorRepublishedCount=int(counts["creatorRepublishedCount"]),
+                truncated=bool(counts["truncated"]),
+            )
+        except ValueError:
+            outcome = "invalid_argument"
+            raise _http_error(400, INVALID_ARGUMENT_CODE) from None
+        except HTTPException:
+            raise
+        except Exception:
+            raise _http_error(500, READ_FAILED_CODE) from None
+        finally:
+            _read_total.labels(operation="flywheel_funnel", outcome=outcome).inc()
+            _read_duration_seconds.labels(
+                operation="flywheel_funnel", outcome=outcome
+            ).observe(time.perf_counter() - started)
+
+    @router.get(
+        GET_RECOMMENDATION_GATHERING_SOCIAL_PROOF_PATH,
+        response_model=RecommendationGatheringSocialProofSummary,
+    )
+    def get_gathering_social_proof(
+        request: Request,
+        anchorKind: str,
+        objectId: str,
+        _principal: dict[str, Any] = Depends(require_feature_profile_reader),
+    ) -> RecommendationGatheringSocialProofSummary:
+        started = time.perf_counter()
+        outcome = "failed"
+        try:
+            counts = intersection_reader_provider(request).get_gathering_social_proof(
+                anchor_kind=anchorKind,
+                object_id=objectId,
+            )
+            outcome = "ok"
+            return RecommendationGatheringSocialProofSummary(
+                anchorKind=anchorKind.strip(),
+                objectId=objectId.strip(),
+                publishedCount=int(counts.get("publishedCount", 0)),
+                formedCount=int(counts.get("formedCount", 0)),
+                experiencedCount=int(counts.get("experiencedCount", 0)),
+            )
+        except ValueError:
+            outcome = "invalid_argument"
+            raise _http_error(400, INVALID_ARGUMENT_CODE) from None
+        except HTTPException:
+            raise
+        except Exception:
+            raise _http_error(500, READ_FAILED_CODE) from None
+        finally:
+            _read_total.labels(
+                operation="gathering_social_proof", outcome=outcome
+            ).inc()
+            _read_duration_seconds.labels(
+                operation="gathering_social_proof", outcome=outcome
             ).observe(time.perf_counter() - started)
 
     @router.get(

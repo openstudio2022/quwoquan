@@ -184,6 +184,7 @@ func (gateway *engineRankedGateway) Create(
 		metadata,
 		response.Items,
 		gateway.objectCards,
+		nil,
 	)
 	gateway.mu.Lock()
 	gateway.windows[windowID] = engineWindow{
@@ -216,6 +217,18 @@ func (gateway *engineRankedGateway) GetPage(
 		fromOrdinal >= len(state.items) || limit <= 0 {
 		return transport.RankedRecommendationPage{}, fmt.Errorf("test ranked window continuation is invalid")
 	}
+	// 未来窗口精确过滤（与生产 read_page 同语义）：窗口与 ordinal 不可变，
+	// 但每次续页都按 subject 当前强负反馈投影过滤，页允许变短。
+	exclusions, err := gateway.engine.LoadFeedbackExclusions(
+		ctx,
+		strings.TrimSpace(state.subjectID),
+		"",
+	)
+	if err != nil {
+		return transport.RankedRecommendationPage{}, fmt.Errorf(
+			"test ranked window hard exclusions: %w", err,
+		)
+	}
 	page := testRankedPage(
 		request.WindowId,
 		state.scenario,
@@ -224,6 +237,11 @@ func (gateway *engineRankedGateway) GetPage(
 		state.metadata,
 		state.items,
 		state.objectCards,
+		func(item rtrec.FeedItem) bool {
+			return exclusions.NegativeContentIDs[strings.TrimSpace(item.ContentID)] ||
+				exclusions.HiddenAuthors[strings.TrimSpace(item.AuthorID)] ||
+				exclusions.HiddenContentTypes[strings.TrimSpace(item.ContentType)]
+		},
 	)
 	return page, nil
 }
@@ -236,6 +254,7 @@ func testRankedPage(
 	metadata testWindowMetadata,
 	allItems []rtrec.FeedItem,
 	objectCards []transport.RecommendationObjectCard,
+	excluded func(rtrec.FeedItem) bool,
 ) transport.RankedRecommendationPage {
 	end := fromOrdinal + limit
 	if end > len(allItems) {
@@ -244,6 +263,9 @@ func testRankedPage(
 	pageItems := allItems[fromOrdinal:end]
 	items := make([]transport.RankedRecommendationItem, 0, len(pageItems))
 	for index, item := range pageItems {
+		if excluded != nil && excluded(item) {
+			continue
+		}
 		featureDigest := sha256.Sum256([]byte(item.ContentID))
 		items = append(items, transport.RankedRecommendationItem{
 			Ordinal:               fromOrdinal + index,

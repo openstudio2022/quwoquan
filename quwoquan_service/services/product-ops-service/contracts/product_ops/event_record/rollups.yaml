@@ -40,6 +40,7 @@ jobs:
   - journey
   - action
   - result
+  - errorCode
   measures:
   - name: count
     algebra: count_distinct_row_identity
@@ -295,6 +296,8 @@ jobs:
     algebra: sum(audioUnderrunCount)
   - name: terminalFailureCount
     algebra: count_distinct_row_identity_where(result != success)
+  - name: durationMismatchCount
+    algebra: count_distinct_row_identity_where(durationMismatch = true)
 - row_kind: rtc_qoe
   source: raw_records
   filter: eventType = rtc_media_qoe

@@ -49,6 +49,7 @@ api_routes:
   error_codes:
   - ASSISTANT.USER.skill_package_invalid
   - ASSISTANT.USER.skill_package_digest_mismatch
+  - ASSISTANT.USER.skill_package_evaluation_receipt_invalid
   - ASSISTANT.USER.skill_package_revision_conflict
   - ASSISTANT.USER.skill_package_capability_denied
   - ASSISTANT.DEPENDENCY.skill_package_asset_unavailable

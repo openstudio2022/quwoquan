@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 import shutil
 import sys
+import time
 
 import yaml
 
@@ -28,6 +29,15 @@ from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service
 ENV_OUTPUT_PARTS = (".qwq_output", "env", "repo", "local")
 PROVENANCE_FILENAME = ".contract-view-provenance"
 PROVENANCE_FORMAT = "contract-view-provenance"
+
+#: 同一缓存父目录下保留的历史视图数量，以及不受回收影响的时间窗（分钟）。
+#:
+#: 每个调用方都往同一个 cache 目录写自己命名的视图，却没有任何一方负责回收。
+#: 一次 `make gate` 就能新增十几个约 600MB 的视图，实测一台开发机上积压到 291 个、
+#: 174GB。两个维度必须同时设限：个数保证长期不膨胀，时间窗保证并发运行的其他进程
+#: 不会被删掉脚下正在读的目录。
+RETAINED_VIEWS = 8
+RETENTION_MINUTES = 60
 
 
 def repository_root() -> Path:
@@ -300,6 +310,34 @@ def build_config_views(
         snapshot.write_derived(target, rendered, schema_paths)
 
 
+def prune_sibling_views(output: Path, *, now: float | None = None) -> list[Path]:
+    """回收同级目录下的陈旧契约视图。
+
+    只认带 ``PROVENANCE_FILENAME`` 的目录，调用方放在同一父目录下的其他产物不会被
+    误删；并且只在缓存位于 ``.qwq_output`` 内时动手，``--output`` 指到别处的构建
+    完全不受影响。
+    """
+    parent = output.parent
+    if ENV_OUTPUT_PARTS[0] not in parent.parts:
+        return []
+    cutoff = (time.time() if now is None else now) - RETENTION_MINUTES * 60
+    views: list[tuple[float, Path]] = []
+    for entry in parent.iterdir():
+        if entry == output or entry.is_symlink() or not entry.is_dir():
+            continue
+        if not (entry / PROVENANCE_FILENAME).is_file():
+            continue
+        views.append((entry.stat().st_mtime, entry))
+    views.sort(reverse=True)
+    removed: list[Path] = []
+    for index, (mtime, entry) in enumerate(views):
+        if index < RETAINED_VIEWS or mtime > cutoff:
+            continue
+        shutil.rmtree(entry, ignore_errors=True)
+        removed.append(entry)
+    return removed
+
+
 def build(
     root: Path,
     output: Path,
@@ -366,6 +404,7 @@ def build(
             raise ValueError("no service-owned contracts found")
         build_config_views(root, output, roots, snapshot)
         snapshot.write_provenance()
+        prune_sibling_views(output)
         return output
     except Exception:
         shutil.rmtree(output, ignore_errors=True)

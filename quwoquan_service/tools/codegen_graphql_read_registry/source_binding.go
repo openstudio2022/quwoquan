@@ -12,7 +12,7 @@ import (
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 )
 
-const ownerPersistedQuerySchema = "qwq.object-owned-internal-persisted-graphql.v1"
+const ownerPersistedQuerySchema = "qwq.object-owned-internal-persisted-graphql"
 
 func deriveOperationBinding(
 	source *contractcodegen.Source,

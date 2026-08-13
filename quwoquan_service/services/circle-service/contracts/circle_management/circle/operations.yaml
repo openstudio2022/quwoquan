@@ -848,7 +848,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: object, id: circle.circle}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_post_projection_stream__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/circle_post_projection_stream__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: create-circle-local
@@ -1040,7 +1040,7 @@ readiness_cases:
     producer: service
     layer: api_integration
     target: {kind: operation, id: RecoverCircleAccountClosureDeadLetter}
-    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/user_account_closed__api_integration_test.go
+    runner_source_path: quwoquan_service/services/circle-service/tests/api_integration/circle_management/circle/user_account_closed__data_consistency__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
   - case_id: circle_list_circles_app_local
@@ -1179,3 +1179,12 @@ readiness_cases:
     runner_source_path: quwoquan_service/services/circle-service/tests/local_contract/circle_management/circle/host_authority_evaluator__local_contract_test.go
     executions:
       - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
+  - case_id: circle_commercial_visual_app_uat
+    spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/spec.md#gwt-001
+    producer: app
+    layer: user_acceptance
+    target: {kind: page, id: circle.detail}
+    runner_source_path: quwoquan_app/test/user_acceptance/service/circle_service/circle_management/circle/circle_commercial_visual_journey__user_acceptance_test.dart
+    executions:
+      - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
+      - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}

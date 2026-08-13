@@ -64,10 +64,10 @@ func TestAppSearchAdapterUsesOnlyCanonicalToolInputAndReturnsEvidenceAssessment(
 	// objectTypes is part of the canonical input: app_search may only ask for the
 	// types the object contracts open to 小趣.
 	requested, ok := wire["objectTypes"].([]any)
-	if !ok || len(requested) != len(searchclient.AssistantReadableObjectTypes()) {
+	if !ok || len(requested) != len(searchclient.SearchIndexEligibleObjectTypes()) {
 		t.Fatalf("objectTypes=%#v", wire["objectTypes"])
 	}
-	for index, allowed := range searchclient.AssistantReadableObjectTypes() {
+	for index, allowed := range searchclient.SearchIndexEligibleObjectTypes() {
 		if requested[index] != allowed {
 			t.Fatalf("objectTypes[%d]=%v want %q", index, requested[index], allowed)
 		}

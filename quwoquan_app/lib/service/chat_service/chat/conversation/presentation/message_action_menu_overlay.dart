@@ -38,6 +38,8 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
 
   IconData _iconForAction(String action) {
     switch (action) {
+      case 'reply':
+        return Icons.reply;
       case 'forward':
         return Icons.share;
       case 'select':
@@ -75,6 +77,9 @@ class ConversationMessageActionMenuOverlay extends StatelessWidget {
     final isSelf = message.isSelf;
     final canRecall = isSelf && _isWithinRecallWindow(message);
     final actions = <MapEntry<String, String>>[
+      // 引用回复：契约 replyToMessageId 的唯一 UI 入口（已撤回消息不可回复）。
+      if (message.status != 'recalled')
+        MapEntry('reply', ChatText.messageActionReply),
       MapEntry('forward', ChatText.messageActionForward),
       MapEntry('select', ChatText.messageActionSelect),
       if (type == 'text') MapEntry('copy', ChatText.messageActionCopy),

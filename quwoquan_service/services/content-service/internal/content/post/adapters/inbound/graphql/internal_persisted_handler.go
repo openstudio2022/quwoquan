@@ -48,7 +48,7 @@ var persistedOperations = map[string]persistedOperation{
 	"ContentPostDetailBase": {
 		name:        "ContentPostDetailBase",
 		operationID: "content.post.GetPost",
-		hash:        "3c1481366f84401aa2d89280925d5943bf040f7c94cf757fb5cc219f00a7f71b",
+		hash:        "3525412614f94647191c1fead96cc6da3bdc452bf0bec9edd92af4793aed3110",
 		rootField:   "contentPostDetailBase",
 		project:     projectContentPostDetailBase,
 	},

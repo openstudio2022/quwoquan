@@ -170,10 +170,11 @@ func run(parent context.Context, options options, output io.Writer) error {
 		ctx,
 		publication.CommandID+":activate",
 		packageapplication.ActivateInput{
-			PackageID:        staged.Release.PackageID,
-			ReleaseDigest:    staged.Release.ReleaseDigest,
-			ExpectedRevision: publication.ExpectedRevision,
-			ActivatedBy:      publication.ActivatedBy,
+			PackageID:         staged.Release.PackageID,
+			ReleaseDigest:     staged.Release.ReleaseDigest,
+			ExpectedRevision:  publication.ExpectedRevision,
+			ActivatedBy:       publication.ActivatedBy,
+			EvaluationReceipt: publication.EvaluationReceipt,
 		},
 	)
 	if err != nil {

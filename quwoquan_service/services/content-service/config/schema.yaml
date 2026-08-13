@@ -411,6 +411,20 @@ configs:
   rollout: progressive
   sensitive: false
   default: ''
+- key: sys.content-service.circle_service.url
+  type: string
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: http://circle-service:18082
+- key: sys.content-service.circle_service.timeout_ms
+  type: int
+  scope: workload
+  reload: restart
+  rollout: progressive
+  sensitive: false
+  default: 500
 - key: sys.content-service.tag_service.timeout_ms
   type: int
   scope: workload
@@ -445,7 +459,9 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: 1
+  # 跨服务 durable 事实流（events.content.*）的发布/消费方必须共用同一
+  # db（运行时事实为 db0）；共享单实例时 scene 隔离靠 key 前缀而非 db。
+  default: 0
 - key: sys.content-service.redis.general.mode
   type: string
   scope: workload
@@ -521,7 +537,8 @@ configs:
   reload: restart
   rollout: progressive
   sensitive: false
-  default: 2
+  # realtime 推送流由 realtime-gateway（db0）消费，发布侧必须同 db。
+  default: 0
 - key: sys.content-service.redis.realtime.mode
   type: string
   scope: workload

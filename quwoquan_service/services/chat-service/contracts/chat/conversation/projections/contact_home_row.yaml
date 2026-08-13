@@ -18,7 +18,9 @@ fields:
 - {name: subtitle, type: string}
 - {name: avatarUrl, type: string}
 - {name: relationState, type: string, nullable: true}
-- {name: summaryIntersections, type: '[]string'}
+# 真实交集点（≤2 条，云侧 IntersectionReason 只读快照）。取代弱类型 summaryIntersections
+# 字符串列表：Chat 不拼句、不改写，引用重解析不成立时整条不下发（intersection-native-messaging REQ-001/REQ-004）。
+- {name: intersectionFacts, type: '[]ContactIntersectionFact'}
 - {name: sourceEntityTitle, type: string, nullable: true}
 - {name: sourceCircleTitle, type: string, nullable: true}
 - {name: memberCount, type: int, nullable: true}

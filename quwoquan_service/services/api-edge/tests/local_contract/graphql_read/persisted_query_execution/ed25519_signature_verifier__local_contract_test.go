@@ -24,7 +24,8 @@ func TestEd25519RegistryVerifierAcceptsOnlyConfiguredExactKeyAndSignature(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload := []byte(`{"candidateDigest":"sha256:release-bound"}`)
+	// candidateDigest value is sha256("release-bound").
+	payload := []byte(`{"candidateDigest":"sha256:dbc45d65eca68258b9ab5de200273eb3730784a1694123bd68b6c623748158d6"}`)
 	signature := ed25519.Sign(privateKey, payload)
 	if err := verifier.Verify(
 		context.Background(), "release-signing-2026", payload, signature,

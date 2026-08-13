@@ -7,7 +7,13 @@ domain: recommendation
 capability: feed-orchestration-recommendation
 commercial_maturity:
   status: specified
-  plan: docs/recommendation-commercial-maturity-plan.md
+  # 商用成熟度的推进计划由特性树 OPEN 承载（不建中央 backlog 文档）：
+  # 消费端主线见 feed-orchestration-recommendation 与 exposure-governance，
+  # 平台端主线见 recommendation-platform（排序窗口四环境证据等 block OPEN）。
+  plan_spec_refs:
+    - specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md
+    - specs/feature-tree/discovery-content/exposure-governance/spec.md
+    - specs/feature-tree/recommendation-platform/spec.md
   deep_learning_required_for_maturity: false
   dimensions:
     recall_maturity:
@@ -74,6 +80,69 @@ commercial_maturity:
 routes:
   content_feed: /content/feed
   content_behaviors: /content/behaviors
+
+# 高并发负载模型与容量目标（冻结 target；单一真相源，口径对齐 search_slo.yaml#load_model）。
+# RPS/分位数在可重复压测校准前为 target，压测后由
+# .qwq_output/env/repo/runs/recommendation-load/** 回填 measured，并据此定容量与 NO-GO 阈值。
+# baseline=日常稳态，peak=业务高峰，spike=突发（运营活动/热点）。RPS/并发为单实例可承载目标；
+# 弹性靠水平扩实例（recommendation-service HPA 2..6）+ Redis cluster/Mongo 副本，不靠单实例堆叠。
+# 架构前提：排序开销只发生在首刷/刷新（CreateRankedRecommendationWindow，一次排序固化
+# TTL 600s、每 subject ≤8 窗），续页是纯 Redis 只读（GetRankedRecommendationPage），
+# 因此 feed_pagination 的目标 RPS 显著高于 feed_first_page 而单位成本显著更低。
+load_model:
+  traffic_classes:
+    feed_first_page:
+      description: 首页首刷/刷新（GetFeed sort=recommend 触发窗口创建 + 召回 + 打分）
+      path: GET /content/feed (channelId routed, no cursor)
+      target_rps: { baseline: 40, peak: 150, spike: 400 }
+      max_concurrency_per_instance: 80
+      server_latency_ms: { p50: 150, p95: 500, p99: 900 }   # 含 recommendation CreateWindow p95=500ms 预算
+      timeout_ms: 1500
+      error_rate_max: 0.005
+      degrade_rate_max: 0.05
+      cost_guard:
+        - recall_scan_limit<=500          # 候选召回扫描上限（MongoCandidateIndexStore.list_for_ranking）
+        - window_ttl_600s_no_renewal      # RankedFeedWindow TTL 不续期
+        - windows_per_subject<=8          # 同 subject 窗口配额
+        - window_value_bytes<=2MiB        # 单窗口 wire bytes 预算（超限 fail-closed）
+        - page_limit<=20                  # GetFeed default/max=20
+    feed_pagination:
+      description: 续页/回翻（cursor 续接不可变 RankedFeedWindow / FeedDeliveryPage 回放，只读）
+      path: GET /content/feed (cursor continuation)
+      target_rps: { baseline: 80, peak: 300, spike: 700 }
+      max_concurrency_per_instance: 150
+      server_latency_ms: { p50: 60, p95: 200, p99: 400 }    # 含 recommendation GetPage p95=200ms 预算
+      timeout_ms: 1500
+      error_rate_max: 0.005
+      degrade_rate_max: 0.05
+      cost_guard:
+        - no_live_recompute               # 续页禁止重新召回/打分（契约 fail-closed）
+        - replay_bulk_hydrate_only        # 回翻只按已交付页原序 hydrate
+    model_score:
+      description: 内部打分（content/circle/search → ScoreRecommendationCandidates，含 batch）
+      path: POST /internal/recommendation/model-releases:score
+      target_rps: { baseline: 50, peak: 180, spike: 450 }
+      max_concurrency_per_instance: 100
+      server_latency_ms: { p50: 80, p95: 300, p99: 600 }
+      timeout_ms: 800
+      error_rate_max: 0.005
+      cost_guard:
+        - score_cache_ttl_500ms           # 进程内 score cache（4096 条）
+        - micro_batch_window_2ms          # 打分 micro-batch 合并
+        - cascade_fallback_to_rule        # 模型不可用降级 rule，不失败请求
+    behavior_ingest:
+      description: 行为回流（BehaviorReporter 采样合并后的 batch 上报）
+      path: POST /content/behaviors
+      target_rps: { baseline: 150, peak: 500, spike: 1200 }
+      max_concurrency_per_instance: 200
+      server_latency_ms: { p50: 30, p95: 100, p99: 250 }
+      timeout_ms: 1000
+      error_rate_max: 0.01
+      delivery: committed_fact_then_stream_relay
+      cost_guard:
+        - client_event_id_idempotent      # clientEventId 幂等去重
+        - weak_signal_sampled_batched     # 弱信号采样合并（feedback-ingestion-sampling）
+        - exposure_filter_membership_only # 曝光过滤只用点查/短 Bloom，禁全量 SMembers
 
 dashboards:
   recommendation_commercial_maturity: quwoquan_ops/observability/monitoring/dashboards/l2_recommendation_commercial_maturity.json
@@ -510,9 +579,11 @@ slis:
     measured: true
 
   - id: model_score_cache_hit_rate
-    description: recommendation-service 打分/特征缓存命中率，用于评估容量优化收益（实现前仅冻结指标名）。
-    source: rec_model_score_cache_hit_total / (rec_model_score_cache_hit_total + rec_pipeline_model_hits_total)
-    observe_only: true
+    description: recommendation-service 打分缓存命中率（capacity.py 进程内 score cache），用于评估容量优化收益。
+    # emitter：internal/.../model_runtime/api/metrics.py 的
+    # rec_model_score_cache_hit_total / rec_model_score_cache_miss_total（labels: scenario, scorer_kind）。
+    source: rec_model_score_cache_hit_total / (rec_model_score_cache_hit_total + rec_model_score_cache_miss_total)
+    measured: true
 
 # N1-1 收敛：只登记有真实实现机制的回滚层（mechanism 指向可执行入口），
 # 删除无实现的 disable_resurface_source（复活召回源不存在）与
@@ -536,6 +607,10 @@ rollback_layers:
     mechanism: "policy 热更：objectCards.enabled=false（混合对象卡零成本关闭）"
   - id: disable_recall_fusion
     mechanism: "policy 热更：recallFusion.enabled=false（回退无配额/无 boost 原始合并）"
+  - id: neutralize_discovery_tuning
+    mechanism: "配置：ops.reco.discovery.prerank.new_content_boost=1.0 与 ops.reco.discovery.rank.author_diversity_weight=1.0（recommendation-service runtime config，重启生效；两者由 MongoCandidateRanker 消费并记录进 ranking snapshot discoveryTuning）"
+  - id: enable_recall_whitelist
+    mechanism: "配置：ops.reco.discovery.recall.whitelist_enabled=true（内容安全事故白名单模式：召回只保留 supplySource=data_engineering 的 canonical release 供给，UGC 暂停下发；不绕过 negative/hidden/safety 硬过滤，重启生效）"
 
 ab:
   segmentation_labels:

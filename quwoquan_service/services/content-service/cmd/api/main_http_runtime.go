@@ -1,7 +1,7 @@
-package main
+package bootstrap
 
 import (
-	"log"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -25,6 +25,7 @@ func buildContentHTTPServer(
 	instanceID string,
 	handler http.Handler,
 	internalGraphQLHandler http.Handler,
+	publicWebHandler http.Handler,
 	feedConfig feedRuntimeConfig,
 	healthChecker *rthealth.Checker,
 	accessTokenConfig rtauth.TokenConfig,
@@ -32,23 +33,23 @@ func buildContentHTTPServer(
 	ioLogger *robs.IOAccessLogger,
 	processLogger *robs.ProcessTraceLogger,
 	exceptionLogger *robs.ExceptionLogger,
-) *http.Server {
+) (*http.Server, error) {
 	if internalGraphQLHandler == nil {
-		log.Fatal("content-service internal GraphQL handler is not configured")
+		return nil, fmt.Errorf("content-service internal GraphQL handler is not configured")
 	}
 	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
 	if err != nil {
-		log.Fatalf("access token verifier invalid: %v", err)
+		return nil, fmt.Errorf("access token verifier invalid: %w", err)
 	}
 	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(
 		runtimeconfig.EnvRuntimeConfigProvider{},
 	)
 	if err != nil {
-		log.Fatalf("device ticket config invalid: %v", err)
+		return nil, fmt.Errorf("device ticket config invalid: %w", err)
 	}
 	deviceTicketVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
 	if err != nil {
-		log.Fatalf("device ticket verifier invalid: %v", err)
+		return nil, fmt.Errorf("device ticket verifier invalid: %w", err)
 	}
 
 	contentDescriptors := operationsecurity.ForDomain("content")
@@ -78,6 +79,11 @@ func buildContentHTTPServer(
 	// and its handler requires the exact api-edge service subject, scope,
 	// persisted hash and ContractGraph digest before touching the read port.
 	outerMux.Handle("POST /internal/graphql", internalGraphQLHandler)
+	// 公开 SEO HTML 读面（public-content-web-entry 第一段）：匿名可读、
+	// 只输出公开已发布对象；未配置 CONTENT_PUBLIC_WEB_ORIGIN 时不挂载。
+	if publicWebHandler != nil {
+		outerMux.Handle("/public-web/", publicWebHandler)
+	}
 	outerMux.Handle("/", generatedOperationGuard)
 
 	observedHandler := rthttp.NewHTTPServerMiddleware(
@@ -108,7 +114,7 @@ func buildContentHTTPServer(
 		ReadHeaderTimeout: timeouts.ReadHeader,
 		WriteTimeout:      timeouts.Write,
 		IdleTimeout:       timeouts.Idle,
-	}
+	}, nil
 }
 
 func contentFeedAdmissionPolicy(

@@ -231,6 +231,17 @@ func emitRtcPayloadClass(b *strings.Builder, ev *rtcEventYAML, session []fieldDe
 		} else {
 			b.WriteString(fmt.Sprintf("  final %s %s;\n", dt, dartID))
 		}
+		if f != nil {
+			recordEnumFieldBinding(enumFieldBinding{
+				DartClass:      class,
+				DartField:      dartID,
+				DartType:       dt,
+				EnumRef:        f.EnumRef,
+				ContractType:   f.Type,
+				ContractSource: "rtc/rtc/call_session/fields.yaml",
+				ClientDartType: f.ClientDartType,
+			})
+		}
 	}
 	for _, key := range ev.OptionalClientStringFields {
 		b.WriteString(fmt.Sprintf("  final String? %s;\n", key))

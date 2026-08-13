@@ -32,7 +32,7 @@ readiness_cases:
   producer: service
   layer: api_integration
   target: {kind: operation, id: GetAssistantEntry}
-  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_entry_view/query_projection__api_integration_test.go
+  runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/assistant_entry_view/query_projection__data_consistency__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
 - case_id: assistant_entry_view_get_assistant_entry_app_local

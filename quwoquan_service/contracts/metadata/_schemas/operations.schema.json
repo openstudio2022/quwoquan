@@ -235,7 +235,7 @@
             "required": ["principal", "ownership_policy"],
             "properties": {
               "principal": {
-                "enum": ["public", "account", "persona", "device", "service", "admin", "operator"]
+                "enum": ["public", "account", "persona", "device", "persona_or_device", "service", "admin", "operator"]
               },
               "scopes": {
                 "type": "array",
@@ -773,6 +773,7 @@
                   "account",
                   "persona",
                   "device",
+                  "persona_or_device",
                   "service",
                   "admin",
                   "operator"

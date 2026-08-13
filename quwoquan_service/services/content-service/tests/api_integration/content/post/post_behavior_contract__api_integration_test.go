@@ -128,7 +128,7 @@ func TestFavoriteRouteRetired(t *testing.T) {
 }
 
 // TestBehaviorBatchReport verifies POST /content/behaviors accepts a mixed batch
-// of impression + dwell + click events and returns 204.
+// of impression + dwell + click events and returns a typed receipt.
 // contract.yaml: behavior_batch_report
 func TestBehaviorBatchReport(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
@@ -140,25 +140,23 @@ func TestBehaviorBatchReport(t *testing.T) {
 
 	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	payload := fmt.Sprintf(`{
-		"userId": "user_batch_001",
-		"sessionId": "sess_abc",
 		"events": [
-			{"clientEventId":"evt-batch-impression-001","occurredAt":%q,"contentId": %q, "action": "impression", "state": "impressed", "userId": "user_batch_001"},
-			{"clientEventId":"evt-batch-click-001","occurredAt":%q,"contentId": %q, "action": "click",      "userId": "user_batch_001"},
-			{"clientEventId":"evt-batch-dwell-001","occurredAt":%q,"contentId": %q, "action": "dwell",      "userId": "user_batch_001", "duration": 5.5}
+			{"clientEventId":"evt-batch-impression-001","occurredAt":%q,"contentId": %q, "action": "impression", "state": "impressed"},
+			{"clientEventId":"evt-batch-click-001","occurredAt":%q,"contentId": %q, "action": "click"},
+			{"clientEventId":"evt-batch-dwell-001","occurredAt":%q,"contentId": %q, "action": "dwell", "duration": 5.5}
 		]
 	}`, occurredAt, postID, occurredAt, postID, occurredAt, postID)
 
 	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-User-Id", "user_batch_001")
+	req.Header.Set("X-Client-Persona-Id", "user_batch_001")
+	req.Header.Set("X-Client-Session-Id", "sess_abc")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if body := strings.TrimSpace(rec.Body.String()); body != "" {
-		t.Fatalf("expected empty 204 body, got %q", body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -203,14 +201,13 @@ func TestEffectivePlayRejectsScrubAndAcceptsForegroundEvidence(t *testing.T) {
 	request := func(state string) *httptest.ResponseRecorder {
 		occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 		payload := fmt.Sprintf(`{
-			"userId":"effective_play_user",
-			"sessionId":"video-playback-session-1",
 			"events":[{
 				"clientEventId":%q,
 				"occurredAt":%q,
 				"contentId":%q,
 				"action":"effective_play",
 				"state":%q,
+				"playbackSessionId":"video-playback-session-1",
 				"effectivePlayMs":8000,
 				"consumedRatio":0.064,
 				"totalUnits":125
@@ -222,6 +219,9 @@ func TestEffectivePlayRejectsScrubAndAcceptsForegroundEvidence(t *testing.T) {
 			strings.NewReader(payload),
 		)
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Client-User-Id", "effective_play_user")
+		req.Header.Set("X-Client-Persona-Id", "effective_play_user")
+		req.Header.Set("X-Client-Session-Id", "video-playback-session-1")
 		rec := httptest.NewRecorder()
 		testHandler.ServeHTTP(rec, req)
 		return rec
@@ -230,7 +230,7 @@ func TestEffectivePlayRejectsScrubAndAcceptsForegroundEvidence(t *testing.T) {
 	if rec := request("scrubbing"); rec.Code != http.StatusBadRequest {
 		t.Fatalf("scrub evidence must fail closed, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if rec := request("foreground_visible_playing"); rec.Code != http.StatusNoContent {
+	if rec := request("foreground_visible_playing"); rec.Code != http.StatusOK {
 		t.Fatalf("effective play evidence rejected, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
@@ -245,19 +245,19 @@ func TestGetMyFootprintContract(t *testing.T) {
 	}
 
 	payload := fmt.Sprintf(`{
-		"userId": %q,
 		"events": [
-			{"clientEventId": "evt-footprint-001", "occurredAt": %q, "contentId": %q, "contentType": "image", "action": "click", "userId": %q}
+			{"clientEventId": "evt-footprint-001", "occurredAt": %q, "contentId": %q, "contentType": "image", "action": "click"}
 		]
-	}`, userID, time.Now().UTC().Format(time.RFC3339Nano), postID, userID)
+	}`, time.Now().UTC().Format(time.RFC3339Nano), postID)
 	reportReq := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	reportReq.Header.Set("Content-Type", "application/json")
 	reportReq.Header.Set("X-Client-User-Id", userID)
 	reportReq.Header.Set("X-Client-Persona-Id", userID)
+	reportReq.Header.Set("X-Client-Session-Id", "footprint-session-001")
 	reportRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(reportRec, reportReq)
-	if reportRec.Code != http.StatusNoContent {
-		t.Fatalf("report behavior: expected 204, got %d: %s", reportRec.Code, reportRec.Body.String())
+	if reportRec.Code != http.StatusOK {
+		t.Fatalf("report behavior: expected 200, got %d: %s", reportRec.Code, reportRec.Body.String())
 	}
 
 	footprintReq := httptest.NewRequest(http.MethodGet, "/content/footprint?type=viewed&limit=10", nil)
@@ -288,9 +288,12 @@ func TestGetMyFootprintContract(t *testing.T) {
 // array returns 400 with CONTENT.USER.invalid_argument.
 // contract.yaml: behavior_batch_empty
 func TestBehaviorBatchEmpty(t *testing.T) {
-	payload := `{"userId": "user_empty", "events": []}`
+	payload := `{"events": []}`
 	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-User-Id", "user_empty")
+	req.Header.Set("X-Client-Persona-Id", "user_empty")
+	req.Header.Set("X-Client-Session-Id", "empty-session")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
@@ -321,25 +324,31 @@ func TestBehaviorBatchCanonicalWire(t *testing.T) {
 	}
 
 	canonical := fmt.Sprintf(
-		`{"userId":"user_reporter_001","events":[{"clientEventId":"evt-canonical-wire-001","occurredAt":%q,"contentId":%q,"action":"dwell","duration":12,"userId":"user_reporter_001"}]}`,
+		`{"events":[{"clientEventId":"evt-canonical-wire-001","occurredAt":%q,"contentId":%q,"action":"dwell","duration":12}]}`,
 		time.Now().UTC().Format(time.RFC3339Nano), postID,
 	)
 	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(canonical))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-User-Id", "user_reporter_001")
+	req.Header.Set("X-Client-Persona-Id", "user_reporter_001")
+	req.Header.Set("X-Client-Session-Id", "canonical-wire-session")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("canonical wire expected 204, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("canonical wire expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	// 旧键 payload（postId/type/dwellMs）不再承载对象与动作语义：
 	// contentId/action 缺失必须被拒绝，服务端不得回退双读。
 	noncanonical := fmt.Sprintf(
-		`{"userId":"user_reporter_001","events":[{"clientEventId":"evt-retired-wire-001","occurredAt":%q,"postId":%q,"type":"dwell","dwellMs":12000,"userId":"user_reporter_001"}]}`,
+		`{"events":[{"clientEventId":"evt-retired-wire-001","occurredAt":%q,"postId":%q,"type":"dwell","dwellMs":12000}]}`,
 		time.Now().UTC().Format(time.RFC3339Nano), postID,
 	)
 	noncanonicalReq := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(noncanonical))
 	noncanonicalReq.Header.Set("Content-Type", "application/json")
+	noncanonicalReq.Header.Set("X-Client-User-Id", "user_reporter_001")
+	noncanonicalReq.Header.Set("X-Client-Persona-Id", "user_reporter_001")
+	noncanonicalReq.Header.Set("X-Client-Session-Id", "retired-wire-session")
 	noncanonicalRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(noncanonicalRec, noncanonicalReq)
 	if noncanonicalRec.Code != http.StatusBadRequest {
@@ -454,25 +463,25 @@ func TestBehaviorBatchDeduplicatesClientEventID(t *testing.T) {
 // rejected when contentId/postId are absent.
 func TestBehaviorBatchAssistantInterestAllowsEmptyContentID(t *testing.T) {
 	payload := fmt.Sprintf(`{
-		"userId":"user_assistant_interest_001",
-		"sessionId":"sess_assistant_interest_001",
 		"events":[
 			{
 				"clientEventId":"evt-assistant-interest-http-001",
 				"occurredAt":%q,
 				"action":"assistant_interest",
-				"userId":"user_assistant_interest_001",
 				"tagRefs":["Topic/旅行","Topic/景区"]
 			}
 		]
 	}`, time.Now().UTC().Format(time.RFC3339Nano))
 	req := httptest.NewRequest(http.MethodPost, "/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-User-Id", "user_assistant_interest_001")
+	req.Header.Set("X-Client-Persona-Id", "user_assistant_interest_001")
+	req.Header.Set("X-Client-Session-Id", "sess_assistant_interest_001")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 for assistant_interest without contentId, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for assistant_interest without contentId, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -483,8 +492,6 @@ func TestBehaviorBatchWishlistProjectsEntityWishlistEvent(t *testing.T) {
 		t.Fatalf("clean wishlist events: %v", err)
 	}
 	payload := fmt.Sprintf(`{
-		"userId":"user_wishlist_http_001",
-		"sessionId":"sess_wishlist_http_001",
 		"events":[
 			{
 				"clientEventId":"evt_wishlist_http_001",
@@ -503,10 +510,11 @@ func TestBehaviorBatchWishlistProjectsEntityWishlistEvent(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_wishlist_http_001")
 	req.Header.Set("X-Client-Persona-Id", "user_wishlist_http_001")
+	req.Header.Set("X-Client-Session-Id", "sess_wishlist_http_001")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204 for wishlist_add, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for wishlist_add, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	var got struct {
@@ -541,8 +549,7 @@ func TestBehaviorBatchOnboardingInterestProjectsCanonicalPriorExactlyOnce(t *tes
 	})
 
 	payload := fmt.Sprintf(
-		`{"userId":%q,"events":[{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":["Topic/兴趣/旅行","Audience/用户/兴趣偏好/摄影"]}]}`,
-		userID,
+		`{"events":[{"clientEventId":%q,"occurredAt":%q,"action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":["Topic/兴趣/旅行","Audience/用户/兴趣偏好/摄影"]}]}`,
 		eventID,
 		time.Now().UTC().Format(time.RFC3339Nano),
 	)
@@ -551,9 +558,10 @@ func TestBehaviorBatchOnboardingInterestProjectsCanonicalPriorExactlyOnce(t *tes
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Client-User-Id", userID)
 		req.Header.Set("X-Client-Persona-Id", userID)
+		req.Header.Set("X-Client-Session-Id", "onboarding-feed-session")
 		rec := httptest.NewRecorder()
 		testHandler.ServeHTTP(rec, req)
-		if rec.Code != http.StatusNoContent {
+		if rec.Code != http.StatusOK {
 			t.Fatalf("onboarding_interest attempt=%d status=%d body=%s", attempt, rec.Code, rec.Body.String())
 		}
 	}
@@ -598,11 +606,10 @@ func TestBehaviorBatchInvalidOnboardingCatalogWritesNoFacts(t *testing.T) {
 	})
 
 	payload := fmt.Sprintf(
-		`{"userId":%q,"events":[`+
-			`{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"click","contentId":"post-preflight-must-not-write"},`+
-			`{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-old-release","tagRefs":["Topic/兴趣/旅行"]}`+
+		`{"events":[`+
+			`{"clientEventId":%q,"occurredAt":%q,"action":"click","contentId":"post-preflight-must-not-write"},`+
+			`{"clientEventId":%q,"occurredAt":%q,"action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-old-release","tagRefs":["Topic/兴趣/旅行"]}`+
 			`]}`,
-		userID,
 		eventIDs[0],
 		time.Now().UTC().Format(time.RFC3339Nano),
 		eventIDs[1],
@@ -612,6 +619,7 @@ func TestBehaviorBatchInvalidOnboardingCatalogWritesNoFacts(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userID)
 	req.Header.Set("X-Client-Persona-Id", userID)
+	req.Header.Set("X-Client-Session-Id", "onboarding-feed-session")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -645,11 +653,10 @@ func TestBehaviorBatchOnboardingTaxonomyDependencyFailureWritesNoFacts(t *testin
 	})
 
 	payload := fmt.Sprintf(
-		`{"userId":%q,"events":[`+
-			`{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"click","contentId":"post-preflight-must-not-write"},`+
-			`{"clientEventId":%q,"occurredAt":%q,"sessionId":"onboarding-feed-session","action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":["Topic/dependency-unavailable"]}`+
+		`{"events":[`+
+			`{"clientEventId":%q,"occurredAt":%q,"action":"click","contentId":"post-preflight-must-not-write"},`+
+			`{"clientEventId":%q,"occurredAt":%q,"action":"onboarding_interest","taxonomyReleaseId":"tag-taxonomy-test-001","tagRefs":["Topic/dependency-unavailable"]}`+
 			`]}`,
-		userID,
 		eventIDs[0],
 		time.Now().UTC().Format(time.RFC3339Nano),
 		eventIDs[1],
@@ -659,6 +666,7 @@ func TestBehaviorBatchOnboardingTaxonomyDependencyFailureWritesNoFacts(t *testin
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", userID)
 	req.Header.Set("X-Client-Persona-Id", userID)
+	req.Header.Set("X-Client-Session-Id", "onboarding-feed-session")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusServiceUnavailable {
@@ -700,9 +708,9 @@ func TestBehaviorBatchPersistsCanonicalFunnelStates(t *testing.T) {
 
 	occurredAt := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
-		{ClientEventID: "evt-seven-visible-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: visibleID, Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},
-		{ClientEventID: "evt-seven-impressed-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: impressedID, Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},
-		{ClientEventID: "evt-seven-click-" + runID, OccurredAt: occurredAt, UserID: userID, ContentID: clickID, Action: "click", State: "click", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-visible-" + runID, OccurredAt: occurredAt, UserID: userID, SessionID: "session-seven-state-" + runID, ContentID: visibleID, Action: "impression", State: "visible", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-impressed-" + runID, OccurredAt: occurredAt, UserID: userID, SessionID: "session-seven-state-" + runID, ContentID: impressedID, Action: "impression", State: "impressed", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},
+		{ClientEventID: "evt-seven-click-" + runID, OccurredAt: occurredAt, UserID: userID, SessionID: "session-seven-state-" + runID, ContentID: clickID, Action: "click", State: "click", ContentType: "image", ChannelID: "following", PolicyDigest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", FeedRequestID: "frq_ss"},
 	})
 	if err != nil {
 		t.Fatalf("process seven-state batch: %v", err)

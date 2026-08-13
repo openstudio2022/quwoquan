@@ -212,7 +212,8 @@ func entityHomepagePresentationOutputPath(appDir, fileName string) string {
 		"entity_service",
 		"entity_homepage",
 		"homepage",
-		"presentation",
+		"application",
+		"public",
 		"generated",
 		fileName,
 	)

@@ -1,6 +1,7 @@
 package tool
 
 const locationBindingNotReadyReason = "integration_location_binding_not_ready"
+const intersectionBindingNotReadyReason = "intersection_reader_binding_not_ready"
 
 // RuntimeAvailability is the composition-owned readiness input used to
 // reconcile stable canonical tool identities with executable handlers.
@@ -16,17 +17,21 @@ type RuntimeAvailability struct {
 func UnavailableCanonicalBindings(
 	availability RuntimeAvailability,
 ) map[string]UnavailableBinding {
-	if availability.LocationPublicProviderReady {
-		return nil
-	}
-	return map[string]UnavailableBinding{
-		"location_poi_search": {
-			BindingKind: "public_provider",
-			Reason:      locationBindingNotReadyReason,
-		},
-		"location_route_read": {
-			BindingKind: "public_provider",
-			Reason:      locationBindingNotReadyReason,
+	unavailable := map[string]UnavailableBinding{
+		"intersection.read_mine": {
+			BindingKind: "domain_reader",
+			Reason:      intersectionBindingNotReadyReason,
 		},
 	}
+	if !availability.LocationPublicProviderReady {
+		unavailable["location_poi_search"] = UnavailableBinding{
+			BindingKind: "public_provider",
+			Reason:      locationBindingNotReadyReason,
+		}
+		unavailable["location_route_read"] = UnavailableBinding{
+			BindingKind: "public_provider",
+			Reason:      locationBindingNotReadyReason,
+		}
+	}
+	return unavailable
 }

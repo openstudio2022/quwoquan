@@ -130,6 +130,16 @@ func (p *APNsVoIPProvider) sendPush(
 			Cause:     errors.New("APNs provider is not initialized"),
 		}
 	}
+	// VoIP 通道只允许承载来电信令；通用可见 alert 依赖独立的 APNs alert 端点
+	// 种类（所属 spec OPEN），在此前对 alert 返回结构化不可用而非静默降级。
+	if message.Action == application.PushDeliveryActionAlert {
+		return application.PushSendReceipt{}, &application.PushProviderFailure{
+			Code:      generated.ErrPushDeliveryInvalidRequest.Error(),
+			Provider:  application.PushEndpointKindAPNSVoIP,
+			Retryable: false,
+			Cause:     errors.New("APNs VoIP channel does not carry generic alert push"),
+		}
+	}
 	if !message.ExpiresAt.After(p.now().UTC()) {
 		return application.PushSendReceipt{}, &application.PushProviderFailure{
 			Code:      generated.ErrPushDeliveryInvalidRequest.Error(),

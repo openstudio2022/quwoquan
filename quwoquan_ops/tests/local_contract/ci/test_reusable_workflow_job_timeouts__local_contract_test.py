@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+from pathlib import Path
+import unittest
+
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[4]
+WORKFLOWS = (
+    ".github/workflows/service_pipeline.yml",
+    ".github/workflows/app_pipeline.yml",
+    ".github/workflows/delivery-gate.yml",
+)
+SUMMARY_JOBS = frozenset(
+    {
+        "service_pipeline_summary",
+        "aggregate",
+        "delivery_gate_summary",
+    }
+)
+
+
+class ReusableWorkflowJobTimeoutContractTest(unittest.TestCase):
+    def test_every_runner_job_has_a_bounded_hard_timeout(self) -> None:
+        checked: set[tuple[str, str]] = set()
+        for relative in WORKFLOWS:
+            payload = yaml.safe_load((ROOT / relative).read_text(encoding="utf-8"))
+            self.assertIsInstance(payload, dict, relative)
+            jobs = payload.get("jobs")
+            self.assertIsInstance(jobs, dict, relative)
+            for job_name, job in jobs.items():
+                self.assertIsInstance(job, dict, f"{relative}:{job_name}")
+                if "uses" in job:
+                    continue
+                self.assertIn("runs-on", job, f"{relative}:{job_name}")
+                timeout = job.get("timeout-minutes")
+                self.assertIs(type(timeout), int, f"{relative}:{job_name}")
+                self.assertGreater(timeout, 0, f"{relative}:{job_name}")
+                self.assertLessEqual(timeout, 10, f"{relative}:{job_name}")
+                if job_name in SUMMARY_JOBS:
+                    self.assertLessEqual(timeout, 5, f"{relative}:{job_name}")
+                checked.add((relative, str(job_name)))
+
+        self.assertEqual(len(checked), 21)
+
+
+if __name__ == "__main__":
+    unittest.main()
