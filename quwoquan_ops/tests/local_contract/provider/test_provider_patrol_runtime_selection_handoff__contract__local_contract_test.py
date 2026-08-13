@@ -25,7 +25,7 @@ _RESOLVER_DIGEST = "sha256:" + "7" * 64
 
 def _immutable_handoff() -> dict[str, object]:
     return {
-        "schema": "stackctl.provider_conformance_runtime_identity.v1",
+        "schema": "stackctl.provider_conformance_runtime_identity",
         "runtimeMode": "immutable_candidate",
         "environment": "alpha",
         "target": "alpha-local",
@@ -40,7 +40,7 @@ def _immutable_handoff() -> dict[str, object]:
 
 def _mutable_handoff() -> dict[str, object]:
     return {
-        "schema": "stackctl.provider_conformance_runtime_identity.v1",
+        "schema": "stackctl.provider_conformance_runtime_identity",
         "runtimeMode": "test_live",
         "environment": "alpha",
         "target": "alpha-local",

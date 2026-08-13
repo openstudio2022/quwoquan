@@ -1,0 +1,15 @@
+# Grafana dashboard provisioning：从只读挂载的看板真相源目录加载全部
+# L1-L4 看板（quwoquan_ops/observability/monitoring/dashboards/**）。
+# 看板 JSON 是 bare dashboard model；生成看板由
+# verify_object_alert_coverage.py --write 维护，禁止在 Grafana UI 内编辑。
+apiVersion: 1
+providers:
+  - name: quwoquan
+    folder: quwoquan L1-L4
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

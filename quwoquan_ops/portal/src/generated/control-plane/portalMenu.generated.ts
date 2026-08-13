@@ -177,6 +177,32 @@ export const portalMenu = {
       ]
     },
     {
+      "menu_id": "experiment-operations",
+      "parent_menu_id": "product-ops",
+      "label": "实验运营",
+      "domain": "product-ops",
+      "route_path": "/product/experiments",
+      "icon": "flask-conical",
+      "order": 35,
+      "permission_scope": "ops.experiment.read",
+      "object_types": [
+        "experiment"
+      ]
+    },
+    {
+      "menu_id": "account-enforcement",
+      "parent_menu_id": "product-ops",
+      "label": "账号治理",
+      "domain": "product-ops",
+      "route_path": "/product/account-enforcement",
+      "icon": "shield-alert",
+      "order": 36,
+      "permission_scope": "ops.account.moderation.write",
+      "object_types": [
+        "account_enforcement_case"
+      ]
+    },
+    {
       "menu_id": "product-l1-l4",
       "parent_menu_id": "product-ops",
       "label": "四层指标",

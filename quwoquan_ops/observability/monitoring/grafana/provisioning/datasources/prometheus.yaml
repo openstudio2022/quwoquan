@@ -1,0 +1,13 @@
+# Grafana datasource provisioning：唯一数据源指向同栈 Prometheus。
+# uid 固定为 quwoquan-prometheus，dashboard JSON 不得引用其他 datasource uid。
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: quwoquan-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s

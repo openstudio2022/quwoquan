@@ -186,6 +186,8 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   python3 quwoquan_service/scripts/user-service/verify_login_dependency_config.py
   python3 quwoquan_service/scripts/verify/consistency/verify_relationship_error_code_gate.py
   python3 quwoquan_service/scripts/verify/consistency/verify_error_recovery_alignment.py
+  # 阶段名标识零容忍：稳定可执行路径、schema key 与测试标识禁止 m2/b10/phase0/partN。
+  python3 quwoquan_service/scripts/verify/structure/verify_stage_name_identifiers.py
   python3 quwoquan_ops/tests/local_contract/observability/test_object_alert_coverage__contract_graph_mapping__observability__local_contract_test.py
   python3 quwoquan_service/scripts/verify/observability/verify_object_alert_coverage.py
   # 告警表达式求值回归（promtool test rules）：云侧交付面必须证明关键告警

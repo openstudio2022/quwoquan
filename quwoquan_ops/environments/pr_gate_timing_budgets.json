@@ -1,4 +1,10 @@
 {
+  "_governance": {
+    "owner": "delivery-gate",
+    "reason": "PR 门禁耗时预算只减不增；放宽预算等于无声接受构建变慢",
+    "expires_when": "预算随分片与缓存优化整体下调时重新采样替换",
+    "measure": "按 gate 声明 budgetSeconds / hardFailSeconds 与关键路径构成；实际执行耗时超过 hardFailSeconds 即失败，超过 budgetSeconds 记 over_budget。"
+  },
   "softBudgetSeconds": 600,
   "hardFailSeconds": 1800,
   "promotionCutoffSeconds": 1500,

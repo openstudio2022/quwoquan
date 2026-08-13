@@ -1,0 +1,44 @@
+schema: feature-tree-anchorless-open-ratchet
+governance:
+  owner: feature-tree-governance
+  reason: |
+    完成判定不引用任何验收锚点的 OPEN 结构上不可裁定：没有任何证据能证明它关闭，
+    也不会被双向门禁看见，因此既不推动实现，也不会因为长期悬空而暴露。
+  expires_when: entries 归零时删除本文件，并把 anchorless 检查改为全树零容忍
+  measure: |
+    anchorless_opens_in_text 逐条解析 specs/feature-tree/**/spec.md 的 OPEN 块，
+    完成判定字段（含缩进续行与子 bullet）不出现 UAT/DOM/SIT/GWT-\d{3,} 即计入。
+  superseded_measure: |
+    旧口径只在 `node.rel in changed_specs` 时检查，即只看本次 Git diff 改过的
+    spec，存量 anchorless OPEN 永远不被任何一次提交看见；末尾那行「只减不增」
+    的 RATCHET 只是打印，没有任何机制阻止增长。切换到全树存量硬门当日实测 51。
+  note: |
+    这里记录具体条目而不是总数。纯计数基线挡不住「删掉一条旧的、同时新增一条
+    新的」这种总数不变的漂移；逐条登记后，任何不在册的 anchorless OPEN 都会被
+    直接 BLOCK，而补齐锚点的条目必须同批从这里删除。
+
+entries:
+- spec: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md
+  open_id: OPEN-008
+- spec: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md
+  open_id: OPEN-002
+- spec: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-algorithm-closure/spec.md
+  open_id: OPEN-003
+- spec: specs/feature-tree/object-homepage-network/intersection-unified-experience/intersection-sentence-unification/spec.md
+  open_id: OPEN-002
+- spec: specs/feature-tree/platform-ops-governance/commercial-readiness-risk-closure/spec.md
+  open_id: OPEN-001
+- spec: specs/feature-tree/product-ops-growth/product-control-plane-foundation/spec.md
+  open_id: OPEN-002
+- spec: specs/feature-tree/runtime/runtime-data-engineering/spec.md
+  open_id: OPEN-002
+- spec: specs/feature-tree/runtime/runtime-data-engineering/spec.md
+  open_id: OPEN-003
+- spec: specs/feature-tree/runtime/runtime-external-integration/user-connector-capability-gateway/spec.md
+  open_id: OPEN-002
+- spec: specs/feature-tree/runtime/runtime-governance/spec.md
+  open_id: OPEN-003
+- spec: specs/feature-tree/travel-journey/collaborative-trip-lifecycle/spec.md
+  open_id: OPEN-002
+- spec: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md
+  open_id: OPEN-002

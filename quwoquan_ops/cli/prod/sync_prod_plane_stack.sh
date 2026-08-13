@@ -225,9 +225,11 @@ fi
 ssh_command+=("${account}@${host}")
 
 if [[ "$operation" == release-ledger-* ]]; then
-  helper="$ROOT/quwoquan_ops/cli/prod/hosted_release_ledger.py"
-  if [[ ! -s "$helper" ]]; then
-    echo "FAIL: hosted release ledger helper is missing: $helper" >&2
+  helper_dir="$ROOT/quwoquan_ops/cli/prod"
+  helper="$helper_dir/hosted_release_ledger.py"
+  helper_lib="$helper_dir/hosted_release_ledger_lib"
+  if [[ ! -s "$helper" || ! -d "$helper_lib" ]]; then
+    echo "FAIL: hosted release ledger helper is missing: $helper (+ hosted_release_ledger_lib/)" >&2
     exit 2
   fi
   mkdir -p "$(dirname "$output_path")"
@@ -242,12 +244,16 @@ if [[ "$operation" == release-ledger-* ]]; then
   elif [[ "$operation" == "release-ledger-receipt" || "$operation" == "release-ledger-soak-receipt" ]]; then
     remote_args+=(--receipt-id "$receipt_id")
   fi
-  remote_command="python3 -"
+  # helper 已拆分为「入口 + hosted_release_ledger_lib/ 包」，经 tar 落盘到远端
+  # 临时目录后执行；stdin 承载 tar 流，stdout 仍是 readback JSON。
+  remote_command='tmp="$(mktemp -d)" && tar -xf - -C "$tmp" && python3 "$tmp/hosted_release_ledger.py"'
   for value in "${remote_args[@]}"; do
     printf -v quoted_value '%q' "$value"
     remote_command+=" $quoted_value"
   done
-  "${ssh_command[@]}" "$remote_command" < "$helper" > "$output_path"
+  remote_command+='; rc=$?; rm -rf "$tmp"; exit $rc'
+  tar -C "$helper_dir" -cf - hosted_release_ledger.py hosted_release_ledger_lib \
+    | "${ssh_command[@]}" "$remote_command" > "$output_path"
   [[ -s "$output_path" ]] || {
     echo "FAIL: hosted release ledger returned an empty readback" >&2
     exit 2

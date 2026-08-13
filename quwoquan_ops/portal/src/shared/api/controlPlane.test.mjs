@@ -38,6 +38,11 @@ import {
   publishHomepageCandidate,
   reviewHomepageClaimRequest,
   reviewHomepageStatusReport,
+  fetchExperiments,
+  updateExperimentRollout,
+  fetchAccountEnforcementCase,
+  reviewAccountEnforcementCase,
+  retryAccountEnforcementDelivery,
 } from '../../../.test-dist/shared/api/controlPlane.js';
 
 const originalFetch = globalThis.fetch;
@@ -280,6 +285,66 @@ test('premium pool listing and dual-sign takedown use generated operation paths'
   assert.equal(calls[1].url, 'http://product.test/control-plane/product/recommendation/premium-pool/post-1:takedown');
   assert.equal(calls[1].init?.method, 'POST');
   assert.equal('pending' in pendingResponse && pendingResponse.pending, true);
+  restoreEnvAndFetch();
+});
+
+test('experiment listing and rollout use generated paths with If-Match precondition', async () => {
+  process.env.VITE_PRODUCT_OPS_BASE_URL = 'http://product.test';
+  const calls = stubFetchSequence([
+    { payload: { items: [{ id: 'exp-1', key: 'feed_ranker', status: 'running', experimentRevision: 3, variants: [{ key: 'control', allocationBasisPoints: 5000 }, { key: 'treatment', allocationBasisPoints: 5000 }], variantStats: { control: 10, treatment: 12 }, assignedSubjects: 22 }] } },
+    { payload: { id: 'exp-1', key: 'feed_ranker', status: 'paused', experimentRevision: 4, variants: [{ key: 'control', allocationBasisPoints: 7000 }, { key: 'treatment', allocationBasisPoints: 3000 }], variantStats: {}, assignedSubjects: 22 } },
+  ]);
+
+  const experiments = await fetchExperiments();
+  const updated = await updateExperimentRollout({
+    experimentId: 'exp-1',
+    expectedVersion: 3,
+    status: 'paused',
+    variants: [
+      { key: 'control', allocationBasisPoints: 7000 },
+      { key: 'treatment', allocationBasisPoints: 3000 },
+    ],
+  });
+
+  assert.equal(calls[0].url, 'http://product.test/control-plane/product/experiments');
+  assert.equal(experiments[0].key, 'feed_ranker');
+  assert.equal(calls[1].url, 'http://product.test/control-plane/product/experiments/exp-1:rollout');
+  assert.equal(calls[1].init?.method, 'POST');
+  assert.equal(calls[1].init?.headers['If-Match'], '3');
+  assert.equal(
+    calls[1].init?.headers['Idempotency-Key'],
+    'portal-experiment-rollout-exp-1-3',
+  );
+  assert.equal(JSON.parse(calls[1].init?.body).variants[0].allocationBasisPoints, 7000);
+  assert.equal(updated.status, 'paused');
+  restoreEnvAndFetch();
+});
+
+test('account enforcement case read, dual-sign review and delivery retry hit generated paths', async () => {
+  process.env.VITE_PRODUCT_OPS_BASE_URL = 'http://product.test';
+  const calls = stubFetchSequence([
+    { payload: { caseId: 'case-1', caseKind: 'moderation', status: 'pending_approval', version: 2, approvalCount: 1, updatedAt: '2026-08-13T00:00:00Z' } },
+    { payload: { caseId: 'case-1', caseKind: 'moderation', status: 'approved', version: 3, approvalCount: 2, decisionId: 'dec-1', updatedAt: '2026-08-13T00:01:00Z' } },
+    { payload: { caseId: 'case-1', caseKind: 'moderation', status: 'approved', version: 3, approvalCount: 2, decisionId: 'dec-1', deliveryStatus: 'delivered', updatedAt: '2026-08-13T00:02:00Z' } },
+  ]);
+
+  const view = await fetchAccountEnforcementCase('case-1');
+  const reviewed = await reviewAccountEnforcementCase('case-1', 'approve');
+  const retried = await retryAccountEnforcementDelivery('case-1');
+
+  assert.equal(calls[0].url, 'http://product.test/control-plane/product/account-enforcement-cases/case-1');
+  assert.equal(view.status, 'pending_approval');
+  assert.equal(calls[1].url, 'http://product.test/control-plane/product/account-enforcement-cases/case-1:review');
+  assert.equal(JSON.parse(calls[1].init?.body).verdict, 'approve');
+  assert.equal(
+    calls[1].init?.headers['Idempotency-Key'],
+    'portal-enforcement-review-case-1-approve',
+  );
+  assert.equal(reviewed.approvalCount, 2);
+  assert.equal(calls[2].url, 'http://product.test/control-plane/product/account-enforcement-cases/case-1:retry-delivery');
+  // retry-delivery 契约要求空 body。
+  assert.equal(calls[2].init?.body, undefined);
+  assert.equal(retried.deliveryStatus, 'delivered');
   restoreEnvAndFetch();
 });
 

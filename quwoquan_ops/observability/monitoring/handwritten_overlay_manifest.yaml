@@ -62,6 +62,21 @@ rules:
     justification: "消费 ['ops_login_funnel_events_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
   - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     group: quwoquan_l2_auth_login
+    rule: OtpDeliveryConfirmationUnknownHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_login_operation_events_total']：App 端 OTP 投递确认埋点经 product-ops 回流的客户端遥测 series，15 秒未知率是端侧漏斗口径，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: OtpDeliveryFailureRateHigh
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_login_operation_events_total']：App 端 OTP 发送/确认埋点经 product-ops 回流的客户端遥测 series，投递失败率是端侧漏斗口径，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
+    rule: LoginCompletionRateLow
+    reason: app_client_telemetry_series
+    justification: "消费 ['ops_login_funnel_events_total']：App 端登录漏斗曝光到终态的完成率，客户端遥测 series 口径，不是云侧 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l2_auth_login
     rule: LoginTerminalDuplicateSuppressed
     reason: app_client_telemetry_series
     justification: "消费 ['ops_login_funnel_events_total']：App 端体验埋点经 product-ops 回流的客户端遥测 series，不是云侧 HTTP operation 观测面。"
@@ -221,6 +236,26 @@ rules:
     reason: first_party_series_not_contract_operation
     justification: "消费 ['mq_publish_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
   - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_blackbox_probes
+    rule: PublicEndpointProbeFailed
+    reason: infrastructure_exporter_series
+    justification: "消费 ['probe_success']：blackbox exporter 的黑盒探测 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_blackbox_probes
+    rule: PublicEndpointCertExpiringSoon
+    reason: infrastructure_exporter_series
+    justification: "消费 ['probe_ssl_earliest_cert_expiry']：blackbox exporter 的 TLS 证书探测 series，不属于任何第一方 operation 契约面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_slo_burn_rate
+    rule: GlobalHttpAvailabilityFastBurn
+    reason: service_level_golden_signal
+    justification: "全局跨服务 multi-window burn-rate（1h+5m 双窗 14.4x）；selector 不落到任何 service/operation，契约只声明 per-operation 阈值 SLO，无法表达错误预算燃烧率语义。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_slo_burn_rate
+    rule: GlobalHttpAvailabilitySlowBurn
+    reason: service_level_golden_signal
+    justification: "全局跨服务 multi-window burn-rate（6h+30m 双窗 6x）；selector 不落到任何 service/operation，契约只声明 per-operation 阈值 SLO，无法表达错误预算燃烧率语义。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     group: quwoquan_l3_service
     rule: HighErrorRate
     reason: service_level_golden_signal
@@ -249,7 +284,7 @@ rules:
     group: quwoquan_l3_projector
     rule: ProjectorFailures
     reason: first_party_series_not_contract_operation
-    justification: "消费 ['projector_events_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+    justification: "消费 ['mq_consume_total']：统一 MQ 中间件的第一方消费计数 series（topic/consumer_group/status），不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
   - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     group: quwoquan_l3_projector
     rule: EventStorePublishFailures
@@ -365,16 +400,6 @@ rules:
     rule: RecommendationNegativeFeedbackRateHigh
     reason: first_party_series_not_contract_operation
     justification: "消费 ['recommendation_feed_impressed_total', 'recommendation_feed_negative_feedback_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
-  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
-    group: quwoquan_rec_model
-    rule: TagFeedbackConsumerLagHigh
-    reason: first_party_series_not_contract_operation
-    justification: "消费 ['content_tag_feedback_fact_consumer_lag_seconds_bucket']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
-  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
-    group: quwoquan_rec_model
-    rule: TagFeedbackConsumerFailuresSustained
-    reason: first_party_series_not_contract_operation
-    justification: "消费 ['content_tag_feedback_fact_consumer_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
   - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     group: quwoquan_rec_model
     rule: RecommendationAttributionUnknownRateHigh
@@ -547,9 +572,9 @@ rules:
     justification: "消费 ['redis_memory_max_bytes', 'redis_memory_used_bytes']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
   - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     group: quwoquan_content_flywheel
-    rule: InterestRecomputeErrorRateHigh
+    rule: InterestProjectionErrorRateHigh
     reason: first_party_series_not_contract_operation
-    justification: "消费 ['quwoquan_interest_profile_recompute_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+    justification: "消费 ['quwoquan_interest_projection_total']：user-service 兴趣投影自注册的运行时 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
   - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     group: quwoquan_content_flywheel
     rule: InterestProjectionFailures
@@ -743,8 +768,8 @@ rules:
   - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     group: quwoquan_l2_integration_external
     rule: ExternalInteractionDeadLettersPresent
-    reason: infrastructure_exporter_series
-    justification: "消费 ['reliable_task_dead_letters']：主机/容器/中间件 exporter 注册的 series，不属于任何第一方 operation 契约面。"
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['qwq_reliabletask_records']：reliable task 运行时自定义 collector（kind/status 快照），不属于任何 operation 契约面。"
   - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     group: quwoquan_l2_rtc_call
     rule: RtcCallInitiateErrorRateHigh
@@ -995,3 +1020,28 @@ rules:
     rule: ApiEdgeRateLimitedRatioHigh
     reason: first_party_series_not_contract_operation
     justification: "消费 ['api_edge_admission_decisions_total']：第一方服务自注册的运行时/业务 series，不是 HTTP operation 的 http_server_* 观测面，ContractGraph 未为其声明 telemetry/slo。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_projection_facts
+    rule: ObjectProjectionApplyFailures
+    reason: first_party_series_not_contract_operation
+    justification: "消费投影 apply 入口计数（contracts runtime_entrypoints telemetry 同源，circle/entity/tag/user/recommendation），不是 HTTP operation 的 http_server_* 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_projection_facts
+    rule: ObjectFactAppendFailures
+    reason: first_party_series_not_contract_operation
+    justification: "消费事实 append 入口计数（contracts runtime_entrypoints telemetry 同源，content/search/integration），不是 HTTP operation 的 http_server_* 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_projection_facts
+    rule: RecommendationIngestFailures
+    reason: first_party_series_not_contract_operation
+    justification: "消费推荐订阅 ingest 入口计数（contracts runtime_entrypoints telemetry 同源），不是 HTTP operation 的 http_server_* 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_projection_facts
+    rule: IntegrationEntrypointFailures
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['integration_capability_grant_resolve', 'integration_push_delivery_provider_invoke']：中间件/外部端口入口计数（契约 telemetry 同源），不是 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l3_projection_facts
+    rule: RolloutDecisionInfrastructureFailures
+    reason: first_party_series_not_contract_operation
+    justification: "消费 ['api_edge_rollout_decisions_total']：边缘灰度决策有界标签计数（契约 telemetry 同源），不是 HTTP operation 观测面。"

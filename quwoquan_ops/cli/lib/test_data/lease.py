@@ -28,6 +28,7 @@ class ActorLease:
     state: ActorLeaseState
     acquired_at: datetime
     expires_at: datetime
+    actor_set_digest: str = ""
 
     @property
     def renewal_interval(self) -> timedelta:
@@ -43,6 +44,7 @@ class ActorLeaseManager:
         self._lease: ActorLease | None = None
         self._lock = Lock()
         self._last_generation = self._load_last_generation()
+        self._bound_actor_set_digest = self._load_bound_actor_set_digest()
 
     def acquire(
         self,
@@ -68,6 +70,7 @@ class ActorLeaseManager:
                 state=ActorLeaseState.REQUESTED,
                 acquired_at=now,
                 expires_at=now + ttl,
+                actor_set_digest="",
             )
             self._transition(lease)
             lease = self._replace_state(lease, ActorLeaseState.ACQUIRING)
@@ -77,6 +80,39 @@ class ActorLeaseManager:
             self._lease = lease
             self._last_generation = generation
             return lease
+
+    def bind_actor_set(
+        self,
+        *,
+        generation: int,
+        actor_set_digest: str,
+    ) -> ActorLease:
+        with self._lock:
+            lease = self._require_active(generation)
+            if not actor_set_digest.startswith("sha256:"):
+                raise ValueError("actor set digest must be a canonical sha256")
+            if (
+                self._bound_actor_set_digest
+                and self._bound_actor_set_digest != actor_set_digest
+            ):
+                raise RuntimeError(
+                    "same test-data instance recovered with a different ActorSet"
+                )
+            if lease.actor_set_digest and lease.actor_set_digest != actor_set_digest:
+                raise RuntimeError("actor lease cannot bind multiple ActorSets")
+            bound = ActorLease(
+                lease_id=lease.lease_id,
+                case_run_id=lease.case_run_id,
+                generation=lease.generation,
+                state=lease.state,
+                acquired_at=lease.acquired_at,
+                expires_at=lease.expires_at,
+                actor_set_digest=actor_set_digest,
+            )
+            self._transition(bound, event="actor_set_bound")
+            self._lease = bound
+            self._bound_actor_set_digest = actor_set_digest
+            return bound
 
     def renew(self, *, generation: int) -> ActorLease:
         with self._lock:
@@ -90,6 +126,7 @@ class ActorLeaseManager:
                 state=lease.state,
                 acquired_at=now,
                 expires_at=now + ttl,
+                actor_set_digest=lease.actor_set_digest,
             )
             self._transition(renewed, event="renewed")
             self._lease = renewed
@@ -140,6 +177,7 @@ class ActorLeaseManager:
             state=state,
             acquired_at=lease.acquired_at,
             expires_at=lease.expires_at,
+            actor_set_digest=lease.actor_set_digest,
         )
 
     def _transition(
@@ -159,6 +197,7 @@ class ActorLeaseManager:
                 "state": lease.state.value,
                 "acquiredAt": lease.acquired_at.isoformat(),
                 "expiresAt": lease.expires_at.isoformat(),
+                "actorSetDigest": lease.actor_set_digest,
                 "reason": reason,
             },
         )
@@ -175,3 +214,17 @@ class ActorLeaseManager:
                 continue
             maximum = max(maximum, generation)
         return maximum
+
+    def _load_bound_actor_set_digest(self) -> str:
+        observed: set[str] = set()
+        for path in self._journal.root.glob("*-actor-lease.json"):
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8")).get("payload") or {}
+                digest = str(payload.get("actorSetDigest") or "").strip()
+            except (OSError, AttributeError, json.JSONDecodeError):
+                continue
+            if digest:
+                observed.add(digest)
+        if len(observed) > 1:
+            raise RuntimeError("test-data instance has conflicting ActorSet receipts")
+        return next(iter(observed), "")

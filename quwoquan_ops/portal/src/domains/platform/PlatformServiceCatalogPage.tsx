@@ -80,7 +80,9 @@ export function PlatformServiceCatalogPage() {
                 </p>
                 <p className="item-subtitle">{item.summary}</p>
               </div>
-              <span className={`badge badge--${item.health}`}>{item.health}</span>
+              <span className="badge badge--neutral">
+                {item.health === 'static_topology' ? '静态拓扑（无实时健康）' : item.health}
+              </span>
             </div>
             );
           })}

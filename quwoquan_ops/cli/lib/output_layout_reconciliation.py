@@ -30,7 +30,6 @@ from .output_layout_reconciliation_identity import (
 
 
 PLAN_SCHEMA = "stackctl-output-layout-reconciliation-plan"
-PLAN_VERSION = 1
 PLAN_FILENAME = "output-layout-reconciliation-plan.json"
 PLAN_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 ISSUE_PREFIX_RE = re.compile(r"^(?P<path>.*?)(?::(?P<line>[1-9][0-9]*))?$")
@@ -348,7 +347,6 @@ def build_plan(
     blocking.extend(probe_issues)
     payload: dict[str, Any] = {
         "schema": PLAN_SCHEMA,
-        "schemaVersion": PLAN_VERSION,
         "createdAt": created_at or _now(),
         "status": "blocked" if blocking else "ready",
         "repositoryRoot": str(repository_root),
@@ -371,7 +369,6 @@ def build_plan(
 def validate_plan(payload: Mapping[str, Any]) -> None:
     required = {
         "schema",
-        "schemaVersion",
         "createdAt",
         "status",
         "repositoryRoot",
@@ -390,7 +387,7 @@ def validate_plan(payload: Mapping[str, Any]) -> None:
     }
     if set(payload) != required:
         raise OutputLayoutReconciliationError("output reconciliation plan fields mismatch")
-    if payload.get("schema") != PLAN_SCHEMA or payload.get("schemaVersion") != PLAN_VERSION:
+    if payload.get("schema") != PLAN_SCHEMA:
         raise OutputLayoutReconciliationError("output reconciliation plan schema mismatch")
     plan_digest = str(payload.get("planDigest") or "")
     if not PLAN_DIGEST_RE.fullmatch(plan_digest):

@@ -151,11 +151,11 @@ def _repair_active_content_release_outbox(
                     environment=environment,
                 )
             )
-            legacy_deletion_count = int(source_import["legacyDeletionCount"])
-            if expected_count not in {0, legacy_deletion_count}:
+            posts_removed_count = int(source_import["postsRemovedCount"])
+            if expected_count not in {0, posts_removed_count}:
                 raise ValueError(
                     "expected outbox repair count must be either zero or the "
-                    "source import legacy deletion count"
+                    "source import postsRemoved count"
                 )
             release_binding = (
                 _stackctl.active_content_release_outbox_repair.validate_candidate_release_binding(

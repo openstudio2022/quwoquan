@@ -33,7 +33,8 @@ def require_ops_pytest_prefix(path: Path, failures: Failures) -> None:
 #: command 路径被 conformance readiness digest 绑定，迁出测试树需以真实
 #: Provider 凭据重建全部 receipt，收益不抵成本。数量随 Provider 名册增减
 #: （守恒上限防无名册拷贝），每个 adapterId 必须三层成对声明。
-OPS_CONFORMANCE_DECLARATIONS_PER_LAYER_CEILING = 27
+# 28 = 既有 27 + ext.map.nominatim_protocol_substitute(integration-service 三层声明成对)。
+OPS_CONFORMANCE_DECLARATIONS_PER_LAYER_CEILING = 28
 
 _CONFORMANCE_LAYER_ROOTS = (
     ("local_contract", Path("local_contract")),

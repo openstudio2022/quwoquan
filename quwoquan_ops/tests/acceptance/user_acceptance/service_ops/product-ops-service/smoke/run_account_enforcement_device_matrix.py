@@ -41,7 +41,7 @@ DEFAULT_MANIFEST = (
     / "user_acceptance"
     / "service_ops"
     / "product-ops-service"
-    / "smoke"
+    / "gamma"
     / "account_enforcement_gamma_uat_manifest.json"
 )
 PHASES = ("suspended", "restored")

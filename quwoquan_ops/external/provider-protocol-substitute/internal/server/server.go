@@ -113,6 +113,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /finance/chart/", s.provider("assistant.finance.quote", "quote", s.financeChart))
 	mux.HandleFunc("GET /map/reverse_geocoding/v3/", s.provider("integration.location.lookup", "nearby", s.locationNearby))
 	mux.HandleFunc("GET /map/place/v2/search", s.provider("integration.location.lookup", "search", s.locationSearch))
+	mux.HandleFunc("GET /nominatim/search", s.provider("location.poi.search", "search", s.nominatimSearch))
+	mux.HandleFunc("GET /osrm/route/v1/", s.provider("location.route.read", "route", s.osrmRoute))
 	mux.HandleFunc("POST /carrier/resolve", s.provider("identity.carrier.one_tap", "resolvePhone", s.carrierResolve))
 	mux.HandleFunc("POST /federated/verify", s.federatedDispatch)
 	mux.HandleFunc("POST /push/send", s.provider("integration.push.delivery", "deliver", s.pushSend))
@@ -350,6 +352,72 @@ func (s *Server) locationSearch(writer http.ResponseWriter, request *http.Reques
 			"city_code": 0, "location": map[string]float64{"lat": lat, "lng": lng},
 		}},
 	})
+}
+
+// nominatimSearch mirrors the exact upstream wire the integration-service
+// NominatimClient consumes: a JSON array of POI rows with string lat/lon and
+// stable osm identity, so anti-corruption decoding is exercised for real.
+func (s *Server) nominatimSearch(writer http.ResponseWriter, request *http.Request) {
+	query := strings.TrimSpace(request.URL.Query().Get("q"))
+	if query == "" {
+		http.Error(writer, "q is required", http.StatusBadRequest)
+		return
+	}
+	limit, err := strconv.Atoi(strings.TrimSpace(request.URL.Query().Get("limit")))
+	if err != nil || limit <= 0 {
+		http.Error(writer, "limit is required", http.StatusBadRequest)
+		return
+	}
+	if limit > 3 {
+		limit = 3
+	}
+	rows := make([]map[string]any, 0, limit)
+	for index := 0; index < limit; index++ {
+		suffix := strconv.Itoa(index + 1)
+		rows = append(rows, map[string]any{
+			"place_id":     1000 + index,
+			"osm_type":     "node",
+			"osm_id":       json.Number(stableNumericID(query, index)),
+			"lat":          "30.27" + suffix,
+			"lon":          "120.15" + suffix,
+			"name":         "Nonprod POI " + query + " " + suffix,
+			"display_name": "Nonprod POI " + query + " " + suffix + ", Nonprod City",
+		})
+	}
+	writeJSON(writer, http.StatusOK, rows)
+}
+
+// osrmRoute mirrors the exact upstream OSRM wire the integration-service
+// OSRMClient consumes: /route/v1/{profile}/{lng,lat;lng,lat} with a polyline
+// geometry plus non-negative distance/duration.
+func (s *Server) osrmRoute(writer http.ResponseWriter, request *http.Request) {
+	remainder := strings.TrimPrefix(request.URL.Path, "/osrm/route/v1/")
+	parts := strings.SplitN(remainder, "/", 2)
+	profile := strings.TrimSpace(parts[0])
+	switch profile {
+	case "driving", "cycling", "walking":
+	default:
+		http.Error(writer, "unsupported profile", http.StatusBadRequest)
+		return
+	}
+	if len(parts) != 2 || !strings.Contains(parts[1], ";") {
+		http.Error(writer, "coordinates are required", http.StatusBadRequest)
+		return
+	}
+	writeJSON(writer, http.StatusOK, map[string]any{
+		"code": "Ok",
+		"routes": []map[string]any{{
+			// 固定合法 polyline（杭州附近两点）；客户端只透传不解码。
+			"geometry": "_ibiD_seyToclCoclC",
+			"distance": 1250.5,
+			"duration": 300.0,
+		}},
+	})
+}
+
+func stableNumericID(value string, index int) string {
+	digest := sha256.Sum256([]byte(value + "|" + strconv.Itoa(index)))
+	return strconv.FormatUint(uint64(digest[0])<<16|uint64(digest[1])<<8|uint64(digest[2]), 10)
 }
 
 func (s *Server) carrierResolve(writer http.ResponseWriter, request *http.Request) {

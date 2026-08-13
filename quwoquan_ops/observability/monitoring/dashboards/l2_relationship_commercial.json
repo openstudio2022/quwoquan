@@ -1,130 +1,180 @@
 {
-  "dashboard": {
-    "title": "L2 — 用户主页、联系人和关系商用健康度",
-    "uid": "qwq-l2-relationship-commercial",
-    "tags": ["quwoquan", "l2", "user", "relationship", "contact", "commercial"],
-    "timezone": "browser",
-    "refresh": "30s",
-    "panels": [
-      {
-        "title": "关注 / 拉黑命令结果",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-        "targets": [
-          {
-            "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/user/personas/.*/(follow|block)\"}[5m])) by (route, method, status)",
-            "legendFormat": "{{ method }} {{ route }} {{ status }}"
-          }
-        ]
+  "title": "L2 — 用户主页、联系人和关系商用健康度",
+  "uid": "qwq-l2-relationship-commercial",
+  "tags": [
+    "quwoquan",
+    "l2",
+    "user",
+    "relationship",
+    "contact",
+    "commercial"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "panels": [
+    {
+      "title": "关注 / 拉黑命令结果",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
       },
-      {
-        "title": "关系对象命令 / 列表 / 计数投影 P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_persona_relationship_command_latency_ms_bucket[5m])) by (le))",
-            "legendFormat": "command P95"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_persona_relationship_list_latency_ms_bucket[5m])) by (le))",
-            "legendFormat": "list P95"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_persona_relationship_counter_projection_lag_ms_bucket[5m])) by (le))",
-            "legendFormat": "counter projection lag P95"
-          }
-        ]
-      },
-      {
-        "title": "添加联系人有效成功率（服务代理指标）",
-        "description": "2xx FollowUser / 全部 FollowUser。互关形成率必须由 Elasticsearch product_action + capability relationState 对账，不能从本面板推断。",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-        "targets": [
-          {
-            "expr": "sum(rate(http_server_requests_total{service=\"user-service\",method=\"POST\",route=~\"/user/personas/.*/follow\",status=~\"2..\"}[10m])) / clamp_min(sum(rate(http_server_requests_total{service=\"user-service\",method=\"POST\",route=~\"/user/personas/.*/follow\"}[10m])), 0.001)",
-            "legendFormat": "follow success ratio"
-          }
-        ]
-      },
-      {
-        "title": "打招呼请求与升级结果",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-        "targets": [
-          {
-            "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/user/greeting-request.*\"}[5m])) by (route, method, status)",
-            "legendFormat": "{{ method }} {{ route }} {{ status }}"
-          }
-        ]
-      },
-      {
-        "title": "通讯录发现 / 关注对象读链路",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-        "targets": [
-          {
-            "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/owner/contact-discovery.*|/user/following-subjects|/user/followed-subjects/.*\"}[5m])) by (route, status)",
-            "legendFormat": "{{ route }} {{ status }}"
-          }
-        ]
-      },
-      {
-        "title": "关系域错误码",
-        "type": "table",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-        "targets": [
-          {
-            "expr": "topk(30, sum(increase(http_server_error_codes_total{service=\"user-service\",module=\"USER\",kind=~\"RELATIONSHIP|GREETING|CONTACT|SUBJECT_FOLLOW\"}[1h])) by (error_code, kind))",
-            "format": "table",
-            "instant": true
-          }
-        ]
-      },
-      {
-        "title": "主页公开读取 / 分身切换 P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_profile_subject_public_read_latency_ms_bucket[5m])) by (le))",
-            "legendFormat": "profile read P95"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_persona_switch_latency_ms_bucket[5m])) by (le))",
-            "legendFormat": "persona switch P95"
-          }
-        ]
-      },
-      {
-        "title": "关系 / 主页对象一致性异常",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-        "targets": [
-          {
-            "expr": "sum(increase(quwoquan_persona_relationship_events_total[1h])) by (metric)",
-            "legendFormat": "relationship {{ metric }}"
-          },
-          {
-            "expr": "sum(increase(quwoquan_profile_subject_events_total[1h])) by (metric)",
-            "legendFormat": "profile {{ metric }}"
-          },
-          {
-            "expr": "sum(increase(quwoquan_persona_rollout_events_total[1h])) by (metric)",
-            "legendFormat": "persona {{ metric }}"
-          }
-        ]
-      },
-      {
-        "title": "黄金指标与事实边界",
-        "type": "text",
-        "gridPos": { "h": 7, "w": 24, "x": 0, "y": 32 },
-        "options": {
-          "mode": "markdown",
-          "content": "业务黄金指标以 Elasticsearch `product_action` 为事实源：`follow_contact_*` 有效添加率、follow→mutual 互关形成率、GreetingRequest send→reply 回复率、显式 `summaryIntersections` 展示→`open_contact` 有效行动率。Prometheus 面板只表示服务健康，禁止把请求量或推荐分数冒充关系/交集事实。"
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/user/personas/.*/(follow|block)\"}[5m])) by (route, method, status)",
+          "legendFormat": "{{ method }} {{ route }} {{ status }}"
         }
+      ]
+    },
+    {
+      "title": "关系对象命令 / 列表 / 计数投影 P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_persona_relationship_command_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "command P95"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_persona_relationship_list_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "list P95"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_persona_relationship_counter_projection_lag_ms_bucket[5m])) by (le))",
+          "legendFormat": "counter projection lag P95"
+        }
+      ]
+    },
+    {
+      "title": "添加联系人有效成功率（服务代理指标）",
+      "description": "2xx FollowUser / 全部 FollowUser。互关形成率必须由 Elasticsearch product_action + capability relationState 对账，不能从本面板推断。",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_total{service=\"user-service\",method=\"POST\",route=~\"/user/personas/.*/follow\",status=~\"2..\"}[10m])) / clamp_min(sum(rate(http_server_requests_total{service=\"user-service\",method=\"POST\",route=~\"/user/personas/.*/follow\"}[10m])), 0.001)",
+          "legendFormat": "follow success ratio"
+        }
+      ]
+    },
+    {
+      "title": "打招呼请求与升级结果",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/user/greeting-request.*\"}[5m])) by (route, method, status)",
+          "legendFormat": "{{ method }} {{ route }} {{ status }}"
+        }
+      ]
+    },
+    {
+      "title": "通讯录发现 / 关注对象读链路",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/owner/contact-discovery.*|/user/following-subjects|/user/followed-subjects/.*\"}[5m])) by (route, status)",
+          "legendFormat": "{{ route }} {{ status }}"
+        }
+      ]
+    },
+    {
+      "title": "关系域错误码",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "topk(30, sum(increase(http_server_error_codes_total{service=\"user-service\",module=\"USER\",kind=~\"RELATIONSHIP|GREETING|CONTACT|SUBJECT_FOLLOW\"}[1h])) by (error_code, kind))",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "title": "主页公开读取 / 分身切换 P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_profile_subject_public_read_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "profile read P95"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_persona_switch_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "persona switch P95"
+        }
+      ]
+    },
+    {
+      "title": "关系 / 主页对象一致性异常",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(quwoquan_persona_relationship_events_total[1h])) by (metric)",
+          "legendFormat": "relationship {{ metric }}"
+        },
+        {
+          "expr": "sum(increase(quwoquan_profile_subject_events_total[1h])) by (metric)",
+          "legendFormat": "profile {{ metric }}"
+        },
+        {
+          "expr": "sum(increase(quwoquan_persona_rollout_events_total[1h])) by (metric)",
+          "legendFormat": "persona {{ metric }}"
+        }
+      ]
+    },
+    {
+      "title": "黄金指标与事实边界",
+      "type": "text",
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "业务黄金指标以 Elasticsearch `product_action` 为事实源：`follow_contact_*` 有效添加率、follow→mutual 互关形成率、GreetingRequest send→reply 回复率、显式 `summaryIntersections` 展示→`open_contact` 有效行动率。Prometheus 面板只表示服务健康，禁止把请求量或推荐分数冒充关系/交集事实。"
       }
-    ]
-  }
+    }
+  ]
 }

@@ -1,0 +1,342 @@
+# promtool test rules：跨 group 关键（critical/本轮改口径）告警的表达式求值回归。
+# 运行：make verify-prometheus-rule-tests
+# 注入序列均为恒定速率（错误 6/min vs 成功 54/min ≈ 10% 错误率），
+# 使 {{ $value }} 模板渲染值可精确断言。
+rule_files:
+  - ../alerts/quwoquan_alerts.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # ── L3 服务面：HighErrorRate 10% > 1% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="content-service", route="/feed", method="GET", status="500"}'
+        values: '0+6x30'
+      - series: 'http_server_requests_total{service="content-service", route="/feed", method="GET", status="200"}'
+        values: '0+54x30'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: HighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l3
+              service: content-service
+            exp_annotations:
+              summary: "服务 content-service 5xx 错误率 > 1%"
+              description: "当前错误率 10%，持续 3 分钟。"
+
+  # ── L3 Redis：RedisHighErrorRate 10% > 5% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'redis_operations_total{scene="general", status="error"}'
+        values: '0+6x30'
+      - series: 'redis_operations_total{scene="general", status="ok"}'
+        values: '0+54x30'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: RedisHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l3
+              scene: general
+            exp_annotations:
+              summary: "Redis 场景 general 错误率 > 5%"
+
+  # ── L3 MQ：MQPublishFailureRate 10% > 5% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'mq_publish_total{topic="events.content.PostPublished", status="error"}'
+        values: '0+6x30'
+      - series: 'mq_publish_total{topic="events.content.PostPublished", status="ok"}'
+        values: '0+54x30'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: MQPublishFailureRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l3
+            exp_annotations:
+              summary: "MQ publish error rate > 5%"
+
+  # ── 投影消费失败（本轮改为 mq_consume_total 真实 series）开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'mq_consume_total{topic="events.content.UserInterestRecomputed", consumer_group="user-interest-projector", status="error"}'
+        values: '0+6x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ProjectorFailures
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              layer: l2
+              consumer_group: user-interest-projector
+            exp_annotations:
+              summary: "投影消费者 user-interest-projector 持续失败"
+
+  # ── 投影消费健康（status=ok）保持安静 ──
+  - interval: 1m
+    input_series:
+      - series: 'mq_consume_total{topic="events.content.UserInterestRecomputed", consumer_group="user-interest-projector", status="ok"}'
+        values: '0+60x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: ProjectorFailures
+        exp_alerts: []
+
+  # ── 推荐首刷空 Feed：RecEmptyFeedRateHigh ~10% > 0.1% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'recommendation_feed_terminal_total{request_class="initial_recommend", outcome="empty"}'
+        values: '0+6x30'
+      - series: 'recommendation_feed_terminal_total{request_class="initial_recommend", outcome="delivered"}'
+        values: '0+54x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: RecEmptyFeedRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+            exp_annotations:
+              summary: "推荐首刷成功空 Feed 率 > 0.1%"
+              description: "discovery/recommend 首刷违反“非空或 canonical failure”契约，当前 9.99%；following 与 continuation 合法空态已排除。"
+
+  # ── 搜索可用性：SearchAvailabilityLow ~10% > 0.5% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'search_retrieve_requests_total{status="error"}'
+        values: '0+6x30'
+      - series: 'search_retrieve_requests_total{status="ok"}'
+        values: '0+54x30'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: SearchAvailabilityLow
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+            exp_annotations:
+              summary: "搜索检索错误率 > 0.5%（可用性 < 99.5%）"
+              description: "search-service 检索错误率 9.99%，跌破可用性 SLO（0.995）。"
+
+  # ── L4 主机内存：HostMemoryHigh 95% > 90% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'node_memory_MemAvailable_bytes{instance="prod-host"}'
+        values: '5+0x20'
+      - series: 'node_memory_MemTotal_bytes{instance="prod-host"}'
+        values: '100+0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HostMemoryHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l4
+              instance: prod-host
+            exp_annotations:
+              summary: "主机内存使用率 > 90%"
+
+  # ── 兴趣投影失败率（本轮改为投影真实 series）~10% > 5% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'quwoquan_interest_projection_total{result="parse_error"}'
+        values: '0+6x30'
+      - series: 'quwoquan_interest_projection_total{result="ok"}'
+        values: '0+54x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: InterestProjectionErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              layer: l2
+            exp_annotations:
+              summary: "兴趣画像投影失败率 > 5%"
+              description: "user-service InterestProfileProjector 投影失败 9.99%（parse_error/write_error），画像 CQRS 读模型受损"
+
+  # ── 兴趣投影全部成功保持安静 ──
+  - interval: 1m
+    input_series:
+      - series: 'quwoquan_interest_projection_total{result="ok"}'
+        values: '0+60x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: InterestProjectionErrorRateHigh
+        exp_alerts: []
+
+  # ── chat 发送错误率 ~10% > 2% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="chat-service", route="/chat/conversations/conv-1/messages", method="POST", status="500"}'
+        values: '0+6x30'
+      - series: 'http_server_requests_total{service="chat-service", route="/chat/conversations/conv-1/messages", method="POST", status="200"}'
+        values: '0+54x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ChatMessageSendErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: chat
+            exp_annotations:
+              summary: "chat SendMessage 错误率连续两个窗口 > 2%"
+              description: "metric chat_message_send；发送失败直接打断消息主旅程，检查 Mongo 事务/幂等回执与关系 gate 依赖。"
+
+  # ── 互动通知写入错误率 ~10% > 2% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="notification-service", route="/internal/app-messages", method="POST", status="500"}'
+        values: '0+6x30'
+      - series: 'http_server_requests_total{service="notification-service", route="/internal/app-messages", method="POST", status="200"}'
+        values: '0+54x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AppMessageCreateErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: notification
+            exp_annotations:
+              summary: "CreateAppMessage 错误率连续两个窗口 > 2%"
+              description: "互动通知写入通道退化；检查 app_messages Mongo transaction 与 idempotency 索引（metric notification_app_message_create）。"
+
+  # ── 外部交互受理错误率 ~10% > 2% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="integration-service", route="/integrations/external-requests", method="POST", status="500"}'
+        values: '0+6x30'
+      - series: 'http_server_requests_total{service="integration-service", route="/integrations/external-requests", method="POST", status="200"}'
+        values: '0+54x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: ExternalInteractionSubmitErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: integration
+            exp_annotations:
+              summary: "SubmitExternalInteractionRequest 错误率连续两个窗口 > 2%"
+              description: "外部可靠交互受理退化（metric integration_external_interaction_submit）；检查 typed wire 校验与 reliable task outbox。"
+
+  # ── 外部交互死信（本轮改为 qwq_reliabletask_records 真实 series）开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'qwq_reliabletask_records{service="integration-service", kind="task", status="dead_letter"}'
+        values: '3+0x40'
+    alert_rule_test:
+      - eval_time: 35m
+        alertname: ExternalInteractionDeadLettersPresent
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              layer: l2
+              domain: integration
+            exp_annotations:
+              summary: "外部交互死信 30 分钟未清零"
+              description: "provider 连续失败超过重试预算；operator 经 /integrations/external-requests/dead-letters:recover 补偿并核对 provider 凭据。"
+
+  # ── 死信清零后保持安静 ──
+  - interval: 1m
+    input_series:
+      - series: 'qwq_reliabletask_records{service="integration-service", kind="task", status="completed"}'
+        values: '3+0x40'
+    alert_rule_test:
+      - eval_time: 35m
+        alertname: ExternalInteractionDeadLettersPresent
+        exp_alerts: []
+
+  # ── 发起通话错误率 ~10% > 2% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="rtc-service", route="/rtc/calls", method="POST", status="500"}'
+        values: '0+6x30'
+      - series: 'http_server_requests_total{service="rtc-service", route="/rtc/calls", method="POST", status="200"}'
+        values: '0+54x30'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: RtcCallInitiateErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: rtc
+            exp_annotations:
+              summary: "InitiateCall 错误率连续两个窗口 > 2%"
+              description: "发起通话退化（metric rtc_call_lifecycle_command）；检查关系门禁、活跃通话去重与 LiveKit token 签发。"
+
+  # ── 产品遥测摄入不可用比例 ~10% > 1% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'ops_telemetry_ingest_batches_total{result="unavailable"}'
+        values: '0+6x30'
+      - series: 'ops_telemetry_ingest_batches_total{result="accepted"}'
+        values: '0+54x30'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: ProductTelemetryIngestUnavailableRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l1
+              domain: product-telemetry
+            exp_annotations:
+              summary: "产品遥测不可用批次比例超过 1%"
+              description: "检查四环境 product-ops runtime.log.sink 的 Elasticsearch health、鉴权、网络与写入超时；App 会保留加密 outbox。"
+
+  # ── 投影 apply 失败（契约 runtime_entrypoints 指标）开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'circle_search_item_projection{outcome="error"}'
+        values: '0+6x20'
+      - series: 'tag_object_tag_index_projection{outcome="ok"}'
+        values: '0+60x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ObjectProjectionApplyFailures
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              layer: l3
+              domain: projection
+            exp_annotations:
+              summary: "对象投影 apply 持续失败"
+              description: "任一读模型投影（circle/entity/tag/user/recommendation 候选索引）持续报错；按 qwq-l3-projection-facts 看板定位具体投影与 consumer，读模型正在陈旧化。"
+
+  # ── 投影全部健康保持安静 ──
+  - interval: 1m
+    input_series:
+      - series: 'circle_search_item_projection{outcome="ok"}'
+        values: '0+60x20'
+      - series: 'recommendation_candidate_index_projection{consumer="post_lifecycle", outcome="ok"}'
+        values: '0+60x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ObjectProjectionApplyFailures
+        exp_alerts: []
+
+  # ── 灰度决策基础设施故障开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'api_edge_rollout_decisions_total{stage="canary", target="stable", platform="android", app_version="1.0.0", app_build="100", region="cn", carrier="cmcc", reason="assignment_store_failure"}'
+        values: '0+6x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: RolloutDecisionInfrastructureFailures
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              layer: l2
+              domain: gateway
+              reason: assignment_store_failure
+            exp_annotations:
+              summary: "生产灰度决策基础设施故障（assignment_store_failure）"
+              description: "灰度评估或分配存储持续失败，受影响请求按 fail-safe 落 stable；检查 assignment store 与评估配置。"

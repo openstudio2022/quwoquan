@@ -1,0 +1,40 @@
+# promtool test rules：契约派生链回归——统一中间件样本经 recording rule
+# 派生 contract_metric series，再触发 ContractGraph 生成的覆盖告警。
+# 运行：make verify-prometheus-rule-tests
+rule_files:
+  - ../alerts/ops_contract/event_record.yaml
+  - ../alerts/contract_object_coverage.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # ── 派生链开火：ReportEventBatch 10% 5xx 超出 99.9% 可用性 SLO ──
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="product-ops-service", method="POST", route="/ops/events", status="500"}'
+        values: '0+6x40'
+      - series: 'http_server_requests_total{service="product-ops-service", method="POST", route="/ops/events", status="200"}'
+        values: '0+54x40'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: OpsContractOperationAvailabilityBelow99p9Percent
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: ops
+              operation: "ops.event_record.ReportEventBatch"
+              contract_metric: "ops_event_batch_report"
+            exp_annotations:
+              summary: "ops ready operation 5xx 比率超出可用性 SLO（99.9%）"
+              description: "ops.event_record.ReportEventBatch（ops_event_batch_report）5xx 比率 10% 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+
+  # ── 派生链不开火：零 5xx 时覆盖告警保持安静 ──
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="product-ops-service", method="POST", route="/ops/events", status="200"}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 25m
+        alertname: OpsContractOperationAvailabilityBelow99p9Percent
+        exp_alerts: []

@@ -895,7 +895,9 @@ def test_repo_gate_app_static_executes_architecture_once(
     stub_dir.mkdir()
     log_path = tmp_path / "commands.log"
     stub = '#!/usr/bin/env sh\nprintf "%s %s\\n" "$0" "$*" >>"$GATE_STUB_LOG"\n'
-    for executable in ("python3", "dart", "flutter", "bash"):
+    # verify-performance-budgets 内含 `go test`(feed 延迟预算),static 阶段
+    # 同样只允许被记录不真跑,所以 go 与 dart/flutter 一样进 stub 集合。
+    for executable in ("python3", "dart", "flutter", "bash", "go"):
         path = stub_dir / executable
         path.write_text(stub, encoding="utf-8")
         path.chmod(0o755)

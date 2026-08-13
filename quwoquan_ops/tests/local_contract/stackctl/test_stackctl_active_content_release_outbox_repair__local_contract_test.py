@@ -507,7 +507,7 @@ class ActiveContentReleaseOutboxRepairContractTest(unittest.TestCase):
                     return_value={
                         "releaseId": "release-a",
                         "manifestDigest": baseline,
-                        "legacyDeletionCount": 4,
+                        "postsRemovedCount": 4,
                     },
                 ),
                 mock.patch.object(
@@ -525,7 +525,7 @@ class ActiveContentReleaseOutboxRepairContractTest(unittest.TestCase):
         self.assertEqual(result["exitCode"], 2)
         self.assertTrue(
             any(
-                "source import legacy deletion count" in detail
+                "source import postsRemoved count" in detail
                 for detail in result["details"]
             )
         )
@@ -636,7 +636,7 @@ class ActiveContentReleaseOutboxRepairContractTest(unittest.TestCase):
                     return_value={
                         "releaseId": "r",
                         "manifestDigest": release_digest,
-                        "legacyDeletionCount": 4,
+                        "postsRemovedCount": 4,
                         "postBindingCount": 46,
                         "postBindingsDigest": baseline,
                     }

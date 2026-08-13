@@ -49,8 +49,13 @@ OPS_LOCAL_COMPOSE = ROOT / "quwoquan_ops/environments/compose/docker-compose.gam
 RETIRED_MANUAL_COMPOSE = ROOT / "quwoquan_ops/observability/es/docker-compose.yml"
 LOCAL_STARTUP = ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
 LOG_SINK_RESOLVER = ROOT / "quwoquan_ops/cli/lib/product_telemetry_log_sink.py"
-CANDIDATE_MANIFEST = ROOT / "quwoquan_ops/cli/lib/deployment_candidate_manifest.py"
+CANDIDATE_MANIFEST = ROOT / "quwoquan_ops/cli/lib/deployment_candidate_manifest/log_sink_package.py"
 STACKCTL = ROOT / "quwoquan_ops/cli/stackctl.py"
+# provider runtime binding 子命令域已迁往 commands/ 外挂模块;
+# Compose artifact 传递契约随定义位置迁移,两处合并为同一份 stackctl 运行时文本。
+STACKCTL_PROVIDER_RUNTIME_BINDING = (
+    ROOT / "quwoquan_ops/cli/commands/provider_runtime_binding.py"
+)
 SLS_TOKEN = re.compile(r"(?<![A-Za-z0-9])SLS(?![A-Za-z0-9])", re.IGNORECASE)
 RUNTIME_LOG_STORAGE_KEYS = frozenset(
     {
@@ -103,8 +108,10 @@ def main() -> int:
         ("AppLogService", "AppTraceContextStore"),
         issues,
     )
+    # inspect 域已由 stackctl.py 拆分至 commands/inspect_surface.py；
+    # runtime 日志证据报告的函数存在性契约随定义位置迁移。
     _require_text(
-        STACKCTL,
+        ROOT / "quwoquan_ops/cli/commands/inspect_surface.py",
         ("_runtime_log_evidence_report", "runtimeDiagnostics"),
         issues,
     )
@@ -572,7 +579,12 @@ def _verify_candidate_owned_local_elasticsearch_runtime(
         if candidate_manifest_text is None
         else candidate_manifest_text
     )
-    stackctl = _read(STACKCTL, issues) if stackctl_text is None else stackctl_text
+    stackctl = (
+        _read(STACKCTL, issues)
+        + _read(STACKCTL_PROVIDER_RUNTIME_BINDING, issues)
+        if stackctl_text is None
+        else stackctl_text
+    )
 
     required_startup = (
         "QWQ_OBSERVABILITY_LOG_SINK_COMPOSE_FILE",

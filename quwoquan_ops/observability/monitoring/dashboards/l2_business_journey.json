@@ -1,266 +1,357 @@
 {
-  "dashboard": {
-    "title": "L2 — 业务旅程健康",
-    "uid": "qwq-l2-journey",
-    "tags": ["quwoquan", "l2", "journey"],
-    "timezone": "browser",
-    "refresh": "30s",
-    "panels": [
-      {
-        "title": "Projector 吞吐量",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-        "targets": [
-          {
-            "expr": "sum(rate(projector_events_total[5m])) by (projector, status)",
-            "legendFormat": "{{ projector }} ({{ status }})"
-          }
-        ]
+  "title": "L2 — 业务旅程健康",
+  "uid": "qwq-l2-journey",
+  "tags": [
+    "quwoquan",
+    "l2",
+    "journey"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "panels": [
+    {
+      "title": "投影消费吞吐（consumer_group × status）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
       },
-      {
-        "title": "Projector 延迟 P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(projector_duration_seconds_bucket[5m])) by (le, projector))",
-            "legendFormat": "P95 {{ projector }}"
-          }
-        ]
-      },
-      {
-        "title": "EventStore 追加速率",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-        "targets": [
-          {
-            "expr": "sum(rate(eventstore_append_total[5m])) by (aggregate_type, status)",
-            "legendFormat": "{{ aggregate_type }} ({{ status }})"
-          }
-        ]
-      },
-      {
-        "title": "EventStore Publish 失败",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-        "targets": [
-          {
-            "expr": "sum(rate(eventstore_publish_failures_total[5m])) by (aggregate_type)",
-            "legendFormat": "{{ aggregate_type }}"
-          }
-        ]
-      },
-      {
-        "title": "Feed API QPS（按 HTTP status）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-        "description": "HTTP 层请求速率。推荐「空结果」业务率由 recommendation.RecordPipelineResult 写入 EmptyFeedResults（当前未暴露为 Prometheus counter）；若后续导出 rec_pipeline_empty_feed_total 或等价指标，可另开面板展示 empty/total。",
-        "targets": [
-          {
-            "expr": "sum(rate(http_server_requests_total{route=\"/content/feed\"}[5m])) by (status)",
-            "legendFormat": "{{ status }}"
-          }
-        ]
-      },
-      {
-        "title": "用户行为采集量",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-        "targets": [
-          {
-            "expr": "sum(rate(rec_engagement_impression_total[5m])) by (content_type)",
-            "legendFormat": "曝光 {{ content_type }}"
-          },
-          {
-            "expr": "sum(rate(rec_engagement_click_total[5m])) by (content_type)",
-            "legendFormat": "点击 {{ content_type }}"
-          }
-        ]
-      },
-      {
-        "title": "MQ Throughput（publish / consume）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
-        "targets": [
-          {
-            "expr": "sum(rate(mq_publish_total[5m])) by (topic)",
-            "legendFormat": "publish {{ topic }}"
-          },
-          {
-            "expr": "sum(rate(mq_consume_total[5m])) by (topic, consumer_group)",
-            "legendFormat": "consume {{ topic }} / {{ consumer_group }}"
-          }
-        ]
-      },
-      {
-        "title": "MQ Consume Latency P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(mq_consume_duration_seconds_bucket[5m])) by (le, topic, consumer_group))",
-            "legendFormat": "P95 {{ topic }} / {{ consumer_group }}"
-          }
-        ]
-      },
-      {
-        "title": "MongoDB Command Latency P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(mongo_command_duration_seconds_bucket[5m])) by (le, command))",
-            "legendFormat": "P95 {{ command }}"
-          }
-        ]
-      },
-      {
-        "title": "MongoDB Slow Commands（command_total status=error）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
-        "description": "mongo_command_total{status=\"error\"} 表示 Mongo 驱动 CommandFailed 次数；并非慢查询阈值，仅作失败/异常命令率参考。",
-        "targets": [
-          {
-            "expr": "sum(rate(mongo_command_total{status=\"error\"}[5m])) by (command, database)",
-            "legendFormat": "{{ command }} @ {{ database }}"
-          }
-        ]
-      },
-      {
-        "title": "Business Span Duration P95（按 span_name）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 48 },
-        "description": "依赖 Span Metrics / otel_span_duration_bucket 接入；若集群未启用 span-to-metrics，本面板可能无数据。",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(otel_span_duration_bucket{span_name=~\"content.*|chat.*|circle.*|user.*\"}[5m])) by (le, span_name))",
-            "legendFormat": "P95 {{ span_name }}"
-          }
-        ]
-      },
-      {
-        "title": "群聊创建成功率与 P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 56 },
-        "description": "服务端黄金信号；产品侧来源采用率与完成漏斗仍以 Elasticsearch journey_action 为单一事实源。",
-        "targets": [
-          {
-            "expr": "sum(rate(http_server_requests_total{service=\"chat-service\",route=\"/chat/conversations\",method=\"POST\",status=~\"2..\"}[5m])) / clamp_min(sum(rate(http_server_requests_total{service=\"chat-service\",route=\"/chat/conversations\",method=\"POST\"}[5m])), 1e-9)",
-            "legendFormat": "创建成功率"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"chat-service\",route=\"/chat/conversations\",method=\"POST\"}[5m])) by (le))",
-            "legendFormat": "创建 P95"
-          }
-        ]
-      },
-      {
-        "title": "群聊/圈子候选源成功率与 P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 56 },
-        "targets": [
-          {
-            "expr": "sum(rate(http_server_requests_total{service=\"chat-service\",route=~\"/chat/selectable-group-conversations(/[^/]+/contact-members)?\",method=\"GET\",status=~\"2..\"}[5m])) / clamp_min(sum(rate(http_server_requests_total{service=\"chat-service\",route=~\"/chat/selectable-group-conversations(/[^/]+/contact-members)?\",method=\"GET\"}[5m])), 1e-9)",
-            "legendFormat": "候选源成功率"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"chat-service\",route=~\"/chat/selectable-group-conversations(/[^/]+/contact-members)?\",method=\"GET\"}[5m])) by (le, route))",
-            "legendFormat": "P95 {{ route }}"
-          }
-        ]
-      },
-      {
-        "title": "群聊 Outbox 与 Inbox 投影健康",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 64 },
-        "targets": [
-          {
-            "expr": "runtime_health_check_status{instance=~\"chat-service(:[0-9]+)?\",check=~\"(message|conversation|membership|user_state)_outbox_relay|inbox_projection\"}",
-            "legendFormat": "{{ check }}"
-          }
-        ]
-      },
-      {
-        "title": "群聊 durable sync 实时补拉",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 72 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_runtime_media_sync_hint_to_pull_delay_ms_bucket{instance=~\"chat-service(:[0-9]+)?\"}[10m])) by (le))",
-            "legendFormat": "hint-to-pull P95 (ms)"
-          },
-          {
-            "expr": "sum(rate(quwoquan_runtime_media_sync_patch_fanout_total{instance=~\"chat-service(:[0-9]+)?\",result=\"failure\"}[10m])) / clamp_min(sum(rate(quwoquan_runtime_media_sync_patch_fanout_total{instance=~\"chat-service(:[0-9]+)?\"}[10m])), 1e-9)",
-            "legendFormat": "hint fanout 失败率"
-          },
-          {
-            "expr": "increase(quwoquan_runtime_media_sync_requires_resync_total{instance=~\"chat-service(:[0-9]+)?\"}[10m])",
-            "legendFormat": "requires resync"
-          }
-        ]
-      },
-      {
-        "title": "群聊 Mention / 已读水位命令成功率",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 80 },
-        "description": "服务端事实：仅输出 all/members 和成功/失败等低基数维度；不携带会话、消息或用户标识。",
-        "targets": [
-          {
-            "expr": "sum(rate(chat_mention_command_total{result=\"succeeded\"}[5m])) / clamp_min(sum(rate(chat_mention_command_total[5m])), 1e-9)",
-            "legendFormat": "@消息成功率"
-          },
-          {
-            "expr": "sum(rate(chat_read_watermark_command_total{result=\"succeeded\"}[5m])) / clamp_min(sum(rate(chat_read_watermark_command_total[5m])), 1e-9)",
-            "legendFormat": "已读水位成功率"
-          }
-        ]
-      },
-      {
-        "title": "群聊 Inbox 投影延迟与 drain 失败",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 80 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(chat_inbox_projection_event_lag_seconds_bucket[5m])) by (le))",
-            "legendFormat": "Inbox projection P95 (s)"
-          },
-          {
-            "expr": "sum(increase(chat_inbox_projection_drain_total{result=\"failed\"}[5m]))",
-            "legendFormat": "drain failures"
-          }
-        ]
-      },
-      {
-        "title": "群聊商业漏斗（Elasticsearch 单一事实源）",
-        "type": "text",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 88 },
-        "options": {
-          "mode": "markdown",
-          "content": "群聊产品漏斗来自 Elasticsearch `app-product-telemetry-chat-funnel-hourly`（`rowKind=chat_funnel`）：候选源打开/选择 → 建群或加成员结果 → @选择/发送 → 已读水位 → 群治理。按 `chatAction`、`chatOutcome`、来源与成员/未读分桶聚合；失败下钻使用 `failReasonCode`、`recoveryAction`。原始事件和聚合均禁止 conversationId、messageId、userId；Prometheus 面板只证明服务健康，不替代产品转化事实。"
+      "description": "各领域投影消费者经统一 MQ 中间件的真实消费计数（mq_consume_total）；error 速率即投影故障率。",
+      "targets": [
+        {
+          "expr": "sum(rate(mq_consume_total[5m])) by (consumer_group, status)",
+          "legendFormat": "{{ consumer_group }} ({{ status }})"
         }
+      ]
+    },
+    {
+      "title": "投影消费延迟 P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
       },
-      {
-        "title": "Message Transport Publish P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 96 },
-        "targets": [
-          {
-            "expr": "qwq_message_transport_publish_p95{root=\"chat.conversation.message_transport\"}",
-            "legendFormat": "{{adapter}}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(mq_consume_duration_seconds_bucket[5m])) by (le, consumer_group))",
+          "legendFormat": "P95 {{ consumer_group }}"
+        }
+      ]
+    },
+    {
+      "title": "事件发布速率（topic × status）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
       },
-      {
-        "title": "Message Transport Consume P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 96 },
-        "targets": [
-          {
-            "expr": "qwq_message_transport_consume_p95{root=\"chat.conversation.message_transport\"}",
-            "legendFormat": "{{adapter}}"
-          }
-        ]
+      "description": "领域事件经统一 MQ 中间件的真实发布计数（mq_publish_total）。",
+      "targets": [
+        {
+          "expr": "sum(rate(mq_publish_total[5m])) by (topic, status)",
+          "legendFormat": "{{ topic }} ({{ status }})"
+        }
+      ]
+    },
+    {
+      "title": "事件发布失败与时延 P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(mq_publish_total{status=\"error\"}[5m])) by (topic)",
+          "legendFormat": "失败 {{ topic }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(mq_publish_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "发布 P95 (s)"
+        }
+      ]
+    },
+    {
+      "title": "Feed API QPS（按 HTTP status）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "description": "HTTP 层请求速率。推荐「空结果」业务率由 recommendation.RecordPipelineResult 写入 EmptyFeedResults（当前未暴露为 Prometheus counter）；若后续导出 rec_pipeline_empty_feed_total 或等价指标，可另开面板展示 empty/total。",
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_total{route=\"/content/feed\"}[5m])) by (status)",
+          "legendFormat": "{{ status }}"
+        }
+      ]
+    },
+    {
+      "title": "用户行为采集量",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(recommendation_feed_impressed_total[5m]))",
+          "legendFormat": "曝光"
+        },
+        {
+          "expr": "sum(rate(recommendation_feed_engagement_total[5m])) by (action)",
+          "legendFormat": "互动 {{ action }}"
+        }
+      ]
+    },
+    {
+      "title": "MQ Throughput（publish / consume）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(mq_publish_total[5m])) by (topic)",
+          "legendFormat": "publish {{ topic }}"
+        },
+        {
+          "expr": "sum(rate(mq_consume_total[5m])) by (topic, consumer_group)",
+          "legendFormat": "consume {{ topic }} / {{ consumer_group }}"
+        }
+      ]
+    },
+    {
+      "title": "MQ Consume Latency P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(mq_consume_duration_seconds_bucket[5m])) by (le, topic, consumer_group))",
+          "legendFormat": "P95 {{ topic }} / {{ consumer_group }}"
+        }
+      ]
+    },
+    {
+      "title": "MongoDB Command Latency P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(mongo_command_duration_seconds_bucket[5m])) by (le, command))",
+          "legendFormat": "P95 {{ command }}"
+        }
+      ]
+    },
+    {
+      "title": "MongoDB Slow Commands（command_total status=error）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
+      },
+      "description": "mongo_command_total{status=\"error\"} 表示 Mongo 驱动 CommandFailed 次数；并非慢查询阈值，仅作失败/异常命令率参考。",
+      "targets": [
+        {
+          "expr": "sum(rate(mongo_command_total{status=\"error\"}[5m])) by (command, database)",
+          "legendFormat": "{{ command }} @ {{ database }}"
+        }
+      ]
+    },
+    {
+      "title": "群聊创建成功率与 P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "description": "服务端黄金信号；产品侧来源采用率与完成漏斗仍以 Elasticsearch journey_action 为单一事实源。",
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_total{service=\"chat-service\",route=\"/chat/conversations\",method=\"POST\",status=~\"2..\"}[5m])) / clamp_min(sum(rate(http_server_requests_total{service=\"chat-service\",route=\"/chat/conversations\",method=\"POST\"}[5m])), 1e-9)",
+          "legendFormat": "创建成功率"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"chat-service\",route=\"/chat/conversations\",method=\"POST\"}[5m])) by (le))",
+          "legendFormat": "创建 P95"
+        }
+      ]
+    },
+    {
+      "title": "群聊/圈子候选源成功率与 P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 56
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_total{service=\"chat-service\",route=~\"/chat/selectable-group-conversations(/[^/]+/contact-members)?\",method=\"GET\",status=~\"2..\"}[5m])) / clamp_min(sum(rate(http_server_requests_total{service=\"chat-service\",route=~\"/chat/selectable-group-conversations(/[^/]+/contact-members)?\",method=\"GET\"}[5m])), 1e-9)",
+          "legendFormat": "候选源成功率"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"chat-service\",route=~\"/chat/selectable-group-conversations(/[^/]+/contact-members)?\",method=\"GET\"}[5m])) by (le, route))",
+          "legendFormat": "P95 {{ route }}"
+        }
+      ]
+    },
+    {
+      "title": "群聊 Outbox 与 Inbox 投影健康",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 64
+      },
+      "targets": [
+        {
+          "expr": "runtime_health_check_status{instance=~\"chat-service(:[0-9]+)?\",check=~\"(message|conversation|membership|user_state)_outbox_relay|inbox_projection\"}",
+          "legendFormat": "{{ check }}"
+        }
+      ]
+    },
+    {
+      "title": "群聊 durable sync 实时补拉",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 72
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_runtime_media_sync_hint_to_pull_delay_ms_bucket{instance=~\"chat-service(:[0-9]+)?\"}[10m])) by (le))",
+          "legendFormat": "hint-to-pull P95 (ms)"
+        },
+        {
+          "expr": "sum(rate(quwoquan_runtime_media_sync_patch_fanout_total{instance=~\"chat-service(:[0-9]+)?\",result=\"failure\"}[10m])) / clamp_min(sum(rate(quwoquan_runtime_media_sync_patch_fanout_total{instance=~\"chat-service(:[0-9]+)?\"}[10m])), 1e-9)",
+          "legendFormat": "hint fanout 失败率"
+        },
+        {
+          "expr": "increase(quwoquan_runtime_media_sync_requires_resync_total{instance=~\"chat-service(:[0-9]+)?\"}[10m])",
+          "legendFormat": "requires resync"
+        }
+      ]
+    },
+    {
+      "title": "群聊 Mention / 已读水位命令成功率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 80
+      },
+      "description": "服务端事实：仅输出 all/members 和成功/失败等低基数维度；不携带会话、消息或用户标识。",
+      "targets": [
+        {
+          "expr": "sum(rate(chat_mention_command_total{result=\"succeeded\"}[5m])) / clamp_min(sum(rate(chat_mention_command_total[5m])), 1e-9)",
+          "legendFormat": "@消息成功率"
+        },
+        {
+          "expr": "sum(rate(chat_read_watermark_command_total{result=\"succeeded\"}[5m])) / clamp_min(sum(rate(chat_read_watermark_command_total[5m])), 1e-9)",
+          "legendFormat": "已读水位成功率"
+        }
+      ]
+    },
+    {
+      "title": "群聊 Inbox 投影延迟与 drain 失败",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 80
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(chat_inbox_projection_event_lag_seconds_bucket[5m])) by (le))",
+          "legendFormat": "Inbox projection P95 (s)"
+        },
+        {
+          "expr": "sum(increase(chat_inbox_projection_drain_total{result=\"failed\"}[5m]))",
+          "legendFormat": "drain failures"
+        }
+      ]
+    },
+    {
+      "title": "群聊商业漏斗（Elasticsearch 单一事实源）",
+      "type": "text",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 88
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "群聊产品漏斗来自 Elasticsearch `app-product-telemetry-chat-funnel-hourly`（`rowKind=chat_funnel`）：候选源打开/选择 → 建群或加成员结果 → @选择/发送 → 已读水位 → 群治理。按 `chatAction`、`chatOutcome`、来源与成员/未读分桶聚合；失败下钻使用 `failReasonCode`、`recoveryAction`。原始事件和聚合均禁止 conversationId、messageId、userId；Prometheus 面板只证明服务健康，不替代产品转化事实。"
       }
-    ]
-  }
+    },
+    {
+      "title": "Message Transport Publish P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 96
+      },
+      "targets": [
+        {
+          "expr": "qwq_message_transport_publish_p95{root=\"chat.conversation.message_transport\"}",
+          "legendFormat": "{{adapter}}"
+        }
+      ]
+    },
+    {
+      "title": "Message Transport Consume P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 96
+      },
+      "targets": [
+        {
+          "expr": "qwq_message_transport_consume_p95{root=\"chat.conversation.message_transport\"}",
+          "legendFormat": "{{adapter}}"
+        }
+      ]
+    }
+  ]
 }

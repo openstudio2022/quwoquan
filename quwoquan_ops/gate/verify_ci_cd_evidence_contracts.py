@@ -60,6 +60,9 @@ CHAIN_FILES = (
     "quwoquan_ops/ci/run_mobile_platform_matrix.sh",
     "quwoquan_ops/ci/render_environment_release_receipt.py",
     "quwoquan_ops/ci/render_release_lifecycle_receipts.py",
+    "quwoquan_ops/ci/release_lifecycle_receipts/hosted_readback.py",
+    "quwoquan_ops/ci/release_lifecycle_receipts/rollback_readiness.py",
+    "quwoquan_ops/ci/release_lifecycle_receipts/prod_outcome.py",
     "quwoquan_ops/ci/render_hosted_release_stage_report.py",
     "quwoquan_ops/ci/verify_workflow_release_candidate.py",
     "quwoquan_ops/cli/lib/android_official_release.py",
@@ -75,6 +78,10 @@ CHAIN_FILES = (
     "quwoquan_ops/cli/prod/prevalidate_android_distribution.py",
     "quwoquan_ops/cli/prod/build_portal_release.py",
     "quwoquan_ops/cli/prod/hosted_release_ledger.py",
+    "quwoquan_ops/cli/prod/hosted_release_ledger_lib/contract.py",
+    "quwoquan_ops/cli/prod/hosted_release_ledger_lib/request_validation.py",
+    "quwoquan_ops/cli/prod/hosted_release_ledger_lib/ledger_store.py",
+    "quwoquan_ops/cli/prod/hosted_release_ledger_lib/actions.py",
     "quwoquan_ops/cli/prod/resolve_prod_release_state.py",
     "quwoquan_ops/gate/verify_environment_packaging_contract.py",
     "quwoquan_ops/policies/config-release/slo_thresholds.yaml",
@@ -93,23 +100,32 @@ CHAIN_FILES = (
 )
 EXPLICIT_NEGATIVE_TESTS = frozenset(
     {
-        "quwoquan_ops/tests/local_contract/test_ai_ci_advisory__contract__local_contract_test.py",
-        "quwoquan_ops/tests/local_contract/test_ci_timing_summary__canonical__local_contract_test.py",
-        "quwoquan_ops/tests/local_contract/test_hosted_ci_timing_ledger__local_contract_test.py",
-        "quwoquan_ops/tests/local_contract/test_ci_cd_evidence_contracts__canonical__local_contract_test.py",
-        "quwoquan_ops/tests/local_contract/test_release_evidence_manifest__canonical__local_contract_test.py",
-        "quwoquan_ops/tests/local_contract/test_release_lifecycle_receipts__canonical__local_contract_test.py",
-        "quwoquan_ops/tests/local_contract/test_release_workflow_convergence__contract__local_contract_test.py",
-        "quwoquan_ops/tests/local_contract/test_automate_release_workflows__local_contract_test.py",
-        "quwoquan_ops/tests/local_contract/test_provider_release_evidence__local_contract_test.py",
+        "quwoquan_ops/tests/local_contract/ci/test_ai_ci_advisory__contract__local_contract_test.py",
+        "quwoquan_ops/tests/local_contract/ci/test_ci_timing_summary__canonical__local_contract_test.py",
+        "quwoquan_ops/tests/local_contract/ci/test_hosted_ci_timing_ledger__local_contract_test.py",
+        "quwoquan_ops/tests/local_contract/ci/test_ci_cd_evidence_contracts__canonical__local_contract_test.py",
+        "quwoquan_ops/tests/local_contract/release/test_release_evidence_manifest__canonical__local_contract_test.py",
+        "quwoquan_ops/tests/local_contract/release/test_release_lifecycle_receipts__canonical__local_contract_test.py",
+        "quwoquan_ops/tests/local_contract/release/test_release_workflow_convergence__contract__local_contract_test.py",
+        "quwoquan_ops/tests/local_contract/release/test_automate_release_workflows__local_contract_test.py",
+        "quwoquan_ops/tests/local_contract/provider/test_provider_release_evidence__local_contract_test.py",
     }
 )
 SCOPED_FUNCTIONS = {
-    "quwoquan_ops/cli/stackctl.py": frozenset(
+    # stackctl 的 release evidence 函数已全部迁往 commands/ 外挂模块；
+    # 函数存在性与逐函数 scan 契约随定义位置迁移。
+    "quwoquan_ops/cli/commands/environment_probe.py": frozenset(
         {
-            "_command_package_ops_portal",
             "_sanitized_provider_readiness_report",
+        }
+    ),
+    "quwoquan_ops/cli/commands/gamma_release_binding.py": frozenset(
+        {
             "_materialize_release_evidence_configuration",
+        }
+    ),
+    "quwoquan_ops/cli/commands/deploy_release_state.py": frozenset(
+        {
             "_archive_release_artifact",
             "_fetch_hosted_release_ledger_projection",
             "_sync_release_ledger_projection",
@@ -119,24 +135,47 @@ SCOPED_FUNCTIONS = {
             "_cache_hosted_release_readback",
             "_release_check_receipts",
             "_commit_hosted_release_transition",
-            "_command_package_release_manifest",
+        }
+    ),
+    "quwoquan_ops/cli/commands/deploy_release_inputs.py": frozenset(
+        {
             "_deployable_release_manifest",
             "_materialize_prevalidation_release_manifest",
             "_prevalidation_release_manifest",
             "_verify_release_registry_attestations",
+        }
+    ),
+    "quwoquan_ops/cli/commands/deploy_domain.py": frozenset(
+        {
             "_command_deploy_distribution",
+        }
+    ),
+    # hosted-release-receipt 子命令域已迁往 commands/ 外挂模块；
+    # 函数存在性与逐函数 scan 契约随定义位置迁移。
+    "quwoquan_ops/cli/commands/hosted_release_receipt.py": frozenset(
+        {
             "command_hosted_release_receipt",
         }
-    )
+    ),
+    # package 子 kind 命令已迁往 commands/package_shared.py；
+    # 函数存在性与逐函数 scan 契约随定义位置迁移。
+    "quwoquan_ops/cli/commands/package_shared.py": frozenset(
+        {
+            "_command_package_ops_portal",
+            "_command_package_release_manifest",
+        }
+    ),
 }
 SCOPED_REQUIRED_TOKENS = {
-    "quwoquan_ops/cli/stackctl.py": {
-        "_command_package_ops_portal": ('"schema": "qwq.ops_portal_package"',),
+    "quwoquan_ops/cli/commands/environment_probe.py": {
         "_sanitized_provider_readiness_report": (
             'parsed.get("schema") == "provider-conformance-readiness"',
             'parsed["evidenceCount"] > 0',
         ),
-    }
+    },
+    "quwoquan_ops/cli/commands/package_shared.py": {
+        "_command_package_ops_portal": ('"schema": "qwq.ops_portal_package"',),
+    },
 }
 SCHEMA_REGISTRIES = {
     "quwoquan_ops/cli/prod/collect_release_artifact_descriptors.py": (
@@ -430,11 +469,22 @@ REQUIRED_SOURCE_TOKENS = {
         'set(platforms) != {"android", "ios"}',
         '"candidate-bound-environment-evidence"',
     ),
-    "quwoquan_ops/ci/render_release_lifecycle_receipts.py": (
+    "quwoquan_ops/ci/release_lifecycle_receipts/rollback_readiness.py": (
+        'schema="release-rollback-receipt"',
+        'status="ready"',
+        "_validate_ledger_readback",
+        "_validate_receipt_readback",
+    ),
+    "quwoquan_ops/ci/release_lifecycle_receipts/prod_outcome.py": (
         'schema="release-rollback-receipt"',
         'schema="release-environment-receipt"',
         'schema="release-rollout-receipt"',
-        'status="ready"',
+        '"not_triggered"',
+        '"rolled_back"',
+        '"rollback_failed"',
+        "_validate_receipt_readback",
+    ),
+    "quwoquan_ops/ci/release_lifecycle_receipts/hosted_readback.py": (
         '"not_triggered"',
         '"rolled_back"',
         '"rollback_failed"',
@@ -447,7 +497,8 @@ REQUIRED_SOURCE_TOKENS = {
         'sourceAuthority": HOSTED_AUTHORITY',
         'rollback_evidence["durationMs"] <= ROLLBACK_BUDGET_MS',
     ),
-    "quwoquan_ops/cli/prod/hosted_release_ledger.py": (
+    # hosted_release_ledger 已拆分：回滚证据 token 落在实现包的校验模块内。
+    "quwoquan_ops/cli/prod/hosted_release_ledger_lib/request_validation.py": (
         '"rollbackEvidence"',
         "validate_rollback_evidence",
         "successful rollbackEvidence requires non-empty passed post-checks",

@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 STACKCTL = ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
 PORT_PROFILE = ROOT / "quwoquan_ops" / "cli" / "print_local_port_profile.py"
+MAKEFILE = ROOT / "Makefile"
 TMP = ROOT / ".qwq_output" / "env" / "repo" / "local" / "stackctl-contract" / "process"
 DEPLOY_WORK_ROOT = tempfile.TemporaryDirectory(prefix="qwq-stackctl-contract-")
 
@@ -144,6 +145,22 @@ def main() -> int:
         issues.append(
             "stackctl dev-session must expose canonical target/content-binding/App "
             "inputs and forbid retired attestation or endpoint overrides"
+        )
+    makefile = MAKEFILE.read_text(encoding="utf-8")
+    dev_session_target = makefile.partition("dev-session:\n")[2].partition(
+        "\n\n"
+    )[0]
+    if (
+        not dev_session_target
+        or "stackctl.py dev-session" not in dev_session_target
+        or "--release-attestation" in dev_session_target
+        or "--rollback-release-attestation" in dev_session_target
+        or "RELEASE_ATTESTATION" in dev_session_target
+        or "ROLLBACK_RELEASE_ATTESTATION" in dev_session_target
+    ):
+        issues.append(
+            "Makefile dev-session must thin-wrap canonical stackctl arguments "
+            "without immutable release attestations"
         )
 
     provider_config_help = run(

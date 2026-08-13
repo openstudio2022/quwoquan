@@ -22,11 +22,18 @@ from typing import Any
 
 ROOT = _find_repo_root()
 sys.path.insert(0, str(ROOT))
+CHAT_AVATAR_SUPPORT_DIR = Path(__file__).resolve().parents[1] / "support"
+if str(CHAT_AVATAR_SUPPORT_DIR) not in sys.path:
+    sys.path.insert(0, str(CHAT_AVATAR_SUPPORT_DIR))
 
 from quwoquan_ops.cli.lib.output_paths import env_run_dir  # noqa: E402
 from quwoquan_ops.cli.lib.environment_topology import (  # noqa: E402
     get_target,
     load_environment_topology,
+)
+from managed_chat_avatar_handoff import (  # noqa: E402
+    ManagedChatAvatarHandoff,
+    load_managed_handoff_from_environment,
 )
 
 
@@ -48,7 +55,6 @@ def parse_args() -> argparse.Namespace:
         "--media-avatar-base-url",
         default=public_bases["mediaAvatar"],
     )
-    parser.add_argument("--test-auth-token", default=os.environ.get("LOCAL_GAMMA_TEST_AUTH_TOKEN", "local-gamma-token"))
     parser.add_argument("--platform", choices=("android", "ios", "all"), default="all")
     parser.add_argument("--device-id", action="append", default=[])
     parser.add_argument(
@@ -87,8 +93,76 @@ def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def build_probe_command(
+    args: argparse.Namespace,
+    probe_report_path: Path,
+    handoff: ManagedChatAvatarHandoff,
+) -> list[str]:
+    command = [
+        sys.executable,
+        str(
+            ROOT
+            / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"
+            "chat-service/smoke/run_chat_avatar_e2e_probe.py"
+        ),
+        "--env",
+        "gamma",
+        "--base-url",
+        args.base_url,
+        "--media-avatar-base-url",
+        args.media_avatar_base_url,
+        "--report",
+        str(probe_report_path),
+        "--compose-mongo",
+        *handoff.command_arguments(),
+    ]
+    if args.dry_run:
+        command.append("--dry-run")
+    return command
+
+
+def build_matrix_command(
+    args: argparse.Namespace,
+    matrix_report_path: Path,
+    handoff: ManagedChatAvatarHandoff,
+) -> list[str]:
+    command = [
+        sys.executable,
+        str(
+            ROOT
+            / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"
+            "chat-service/ci/run_chat_avatar_device_matrix.py"
+        ),
+        "--env",
+        "gamma",
+        "--platform",
+        args.platform,
+        "--gateway-base-url",
+        args.base_url,
+        "--media-avatar-base-url",
+        args.media_avatar_base_url,
+        "--report",
+        str(matrix_report_path),
+        *handoff.command_arguments(),
+    ]
+    for device_id in args.device_id:
+        command.extend(["--device-id", device_id])
+    if args.dry_run:
+        command.append("--dry-run")
+    return command
+
+
 def main() -> int:
     args = parse_args()
+    try:
+        handoff = load_managed_handoff_from_environment()
+        if handoff.environment != "gamma":
+            raise ValueError(
+                "local-gamma chat avatar requires a gamma ActorLease handoff"
+            )
+    except ValueError as exc:
+        print(f"GATE_BLOCK: {exc}", file=sys.stderr)
+        return 2
     report_path = ROOT / args.report
     probe_report_path = report_path.parent / "avatar_probe_report.json"
     matrix_report_path = report_path.parent / "avatar_device_matrix_report.json"
@@ -102,52 +176,18 @@ def main() -> int:
         "rerunRecommended": False,
         "startedAt": utc_now(),
         "endedAt": "",
+        "testDataLifecycle": handoff.public_document(),
         "baseUrl": args.base_url,
         "mediaAvatarBaseUrl": args.media_avatar_base_url,
         "probe": {},
         "deviceMatrix": {},
     }
-    probe_cmd = [
-        sys.executable,
-        str(ROOT / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/run_chat_avatar_e2e_probe.py"),
-        "--env",
-        "gamma",
-        "--base-url",
-        args.base_url,
-        "--media-avatar-base-url",
-        args.media_avatar_base_url,
-        "--test-auth-token",
-        args.test_auth_token,
-        "--report",
-        str(probe_report_path),
-        "--compose-mongo",
-    ]
-    if args.dry_run:
-        probe_cmd.append("--dry-run")
+    probe_cmd = build_probe_command(args, probe_report_path, handoff)
     probe_result = run(probe_cmd)
     report["probe"] = {"commandResult": probe_result, "report": read_json(probe_report_path)}
     matrix_result: dict[str, Any] = {"status": "skipped"}
     if not args.skip_device_matrix and (report["probe"].get("report") or {}).get("status") == "passed":
-        matrix_cmd = [
-            sys.executable,
-            str(ROOT / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/ci/run_chat_avatar_device_matrix.py"),
-            "--env",
-            "gamma",
-            "--platform",
-            args.platform,
-            "--gateway-base-url",
-            args.base_url,
-            "--media-avatar-base-url",
-            args.media_avatar_base_url,
-            "--test-auth-token",
-            args.test_auth_token,
-            "--report",
-            str(matrix_report_path),
-        ]
-        for device_id in args.device_id:
-            matrix_cmd.extend(["--device-id", device_id])
-        if args.dry_run:
-            matrix_cmd.append("--dry-run")
+        matrix_cmd = build_matrix_command(args, matrix_report_path, handoff)
         matrix_command_result = run(matrix_cmd)
         matrix_result = {
             "commandResult": matrix_command_result,

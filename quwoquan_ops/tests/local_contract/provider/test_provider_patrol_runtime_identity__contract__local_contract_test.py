@@ -143,7 +143,7 @@ def _mutable_fixture(
     )
     provider_digest = _digest("mutable-provider-runtime")
     receipt: dict[str, object] = {
-        "schema": "stackctl.mutable_test_live_startup_attempt.v1",
+        "schema": "stackctl.mutable_test_live_startup_attempt",
         "launchPolicy": "test_live",
         "nonPromotable": True,
         "contentBindingState": "unbound",
@@ -173,7 +173,7 @@ def _mutable_fixture(
     relative_provider = provider_path.relative_to(subject.ROOT).as_posix()
     relative_sms = sms_path.relative_to(subject.ROOT).as_posix()
     plan = {
-        "schema": "stackctl.mutable_test_live_runtime.v1",
+        "schema": "stackctl.mutable_test_live_runtime",
         "environment": "alpha",
         "target": "alpha-local",
         "composeProject": receipt["composeProject"],

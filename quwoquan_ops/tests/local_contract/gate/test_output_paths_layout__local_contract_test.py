@@ -735,6 +735,58 @@ def test_layout_gate_rejects_deployment_files_and_secret_values(
     assert any("unredacted secret assignment is forbidden" in issue for issue in issues)
 
 
+def test_layout_gate_forbidden_name_heuristic_uses_content_as_the_real_verdict(
+    tmp_path: Path,
+) -> None:
+    """词表类文件名命中只是启发式;真判据是内容里有没有密钥材料。
+
+    stackctl 每次 dev-session 都会把 Caddyfile 物化进 runs/<run>/mutable-runtime,
+    data 采集会写「缺凭据」的 credential-blocker 收据——按文件名一刀切会把这类
+    合法运行产物永久判违禁,门禁永远追不上环境启动。
+    """
+    root = tmp_path / ".qwq_output"
+    run = root / "env/alpha/runs/run-1/alpha-local/mutable-runtime/runtime-shared"
+    run.mkdir(parents=True)
+    # 物化 Caddyfile:引用路径与端口,不含 secret 值 → 放行。
+    (run / "Caddyfile").write_text(
+        "example.local {\n  reverse_proxy 127.0.0.1:18080\n}\n", encoding="utf-8"
+    )
+    blocker = root / "data/local/workspace/source-acquisition/video"
+    blocker.mkdir(parents=True)
+    # 「缺凭据」收据:记录 blocker 状态,不含 secret 值 → 放行。
+    (blocker / "stock-provider-credential-blocker-1.json").write_text(
+        '{"status": "blocked", "reason": "provider credential is not provisioned"}\n',
+        encoding="utf-8",
+    )
+
+    assert output_layout_issues(root) == []
+
+    # 同名文件一旦真的落了 secret 值,照拦。
+    (run / "Caddyfile").write_text(
+        "example.local {\n  basicauth {\n    admin password=hunter2\n  }\n}\n",
+        encoding="utf-8",
+    )
+    assert any(
+        "deployment configuration, TLS or secret material" in issue
+        for issue in output_layout_issues(root)
+    )
+
+
+def test_layout_gate_certificate_suffixes_are_never_content_exempt(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / ".qwq_output"
+    run = root / "env/alpha/runs/run-1"
+    run.mkdir(parents=True)
+    # 即使内容无 secret 赋值,.pem 后缀名字即证据,不做内容豁免。
+    (run / "ca.pem").write_text("just text\n", encoding="utf-8")
+
+    assert any(
+        "deployment configuration, TLS or secret material" in issue
+        for issue in output_layout_issues(root)
+    )
+
+
 def test_layout_gate_allows_only_fixed_schema_runtime_process_records(
     tmp_path: Path,
 ) -> None:

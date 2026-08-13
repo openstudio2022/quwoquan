@@ -27,7 +27,34 @@ def _checksum(value: dict[str, object]) -> str:
     )
 
 
-def test_static_runtime_policy_alone_never_passes_research_isolation() -> None:
+def test_static_runtime_policy_alone_never_passes_research_isolation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """静态 runtime 策略绿永远不等于隔离通过。
+
+    仓库现状下 identity（IssueWhitelistedResearchSession）与 signed-media
+    （ReserveOriginalImageAccessGrant + TTL policy）契约都已真实落地，因此缺少
+    canonical Data 运行时证据时 blocker 必须是 RUNTIME_PROOF_INCOMPLETE——
+    这同时锁定两个前置 adapter 契约仍然存在；任何一个漂移，blocker code 变化，
+    本断言即红。identity adapter 缺失的分支用注入缺失单独保持覆盖。
+    """
+    for environment in ("alpha", "beta", "gamma", "prod"):
+        with pytest.raises(
+            ValueError,
+            match="DATA.RESEARCH.RUNTIME_PROOF_INCOMPLETE",
+        ):
+            verify_research_content_isolation(
+                environment,
+                release_id="research-release-a",
+                verify_run_id="verify-research-a",
+                manifest_digest="sha256:" + "1" * 64,
+                data_readiness=None,
+                data_readiness_path=None,
+            )
+
+    import quwoquan_ops.cli.lib.research_content_isolation as isolation
+
+    monkeypatch.setattr(isolation, "_identity_adapter_available", lambda: False)
     for environment in ("alpha", "beta", "gamma", "prod"):
         with pytest.raises(
             ValueError,
@@ -124,6 +151,9 @@ def test_handwritten_pass_receipt_cannot_bypass_missing_identity_adapter(
         "mediaAssetIds": ["asset-a"],
     }
 
+    # identity 契约现已真实落地；要证明「手写 PASS receipt 绕不过 identity
+    # adapter 缺失」，必须注入缺失，而不是依赖仓库恰好没有该契约。
+    monkeypatch.setattr(isolation, "_identity_adapter_available", lambda: False)
     with pytest.raises(
         ValueError,
         match="DATA.RESEARCH.IDENTITY_ADAPTER_UNAVAILABLE",

@@ -8,6 +8,10 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[4]
 MODULE_PATH = ROOT / "quwoquan_ops" / "cli" / "feature_tree_content_review.py"
+# REPO_ROOT 的真实绑定在包内 context 模块;门面 re-export 的副本 patch 了也不会
+# 被 canonical_spec_ref 读到,所以测试必须直接 patch context。
+from quwoquan_ops.cli.lib.feature_tree import context as ft_context  # noqa: E402
+
 SPEC = importlib.util.spec_from_file_location("feature_tree_content_review", MODULE_PATH)
 assert SPEC and SPEC.loader
 reviewer = importlib.util.module_from_spec(SPEC)
@@ -207,7 +211,7 @@ def test_acceptance_rejects_unmarked_list_step(tmp_path: Path, monkeypatch) -> N
         "- 未标记的续行。\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(reviewer.feature_tree, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(ft_context, "REPO_ROOT", tmp_path)
     node = SimpleNamespace(level=3, spec=spec)
     review = reviewer.Review(path="spec.md", kind="L3 Story")
 
@@ -232,7 +236,7 @@ def test_acceptance_folds_valid_clause_ref_into_top_level_evidence(
         "- AND 写入审计事实。\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(reviewer.feature_tree, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(ft_context, "REPO_ROOT", tmp_path)
     node = SimpleNamespace(level=3, spec=spec)
     review = reviewer.Review(path="spec.md", kind="L3 Story")
     canonical = reviewer.feature_tree.canonical_spec_ref(spec, "GWT-001")
@@ -260,7 +264,7 @@ def test_acceptance_rejects_dangling_clause_ref_as_top_level_evidence(
         "- THEN 返回结果。\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(reviewer.feature_tree, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(ft_context, "REPO_ROOT", tmp_path)
     node = SimpleNamespace(level=3, spec=spec)
     review = reviewer.Review(path="spec.md", kind="L3 Story")
     canonical = reviewer.feature_tree.canonical_spec_ref(spec, "GWT-001")

@@ -51,6 +51,7 @@ FIELD_PRIVACY_POLICIES = (
     {"objectId": "content.post", "field": "entityMentions", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},
     {"objectId": "content.post", "field": "entityRefs", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},
     {"objectId": "content.post", "field": "experienceClaimMode", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},
+    {"objectId": "content.post", "field": "gatheringRef", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},
     {"objectId": "content.post", "field": "geoTagRef", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},
     {"objectId": "content.post", "field": "height", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},
     {"objectId": "content.post", "field": "helperReadSummary", "classification": "PUBLIC", "action": "drop", "maskStrategy": "", "truncateChars": 0, "explicit": False, "visibility": ()},

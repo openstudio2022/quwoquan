@@ -12,11 +12,11 @@
   发布确认页选中 POI 后只写 `locationPoi`，从不调用它，`Post.geoTagRef` 恒空。
   连锁后果是 `intersection_source.go` 的 `decodeDeclaredVisit` 里区域级同地交集
   分支从未被触发过。
-* `creator_chip` 覆盖 60 个节点，端侧根本没有打标 chip UI；`state.settings.tagRefs`
+* `creator_chip` 覆盖 60 个节点，历史上端侧没有打标 chip UI；`state.settings.tagRefs`
   只能由正文内联 `@[label](tag:ref)` 填充，那是 semanticMentions 通道，不是 chip。
 
 `exif` 已经接通（`create_page_state.dart` 调用 `extractMediaCaptureMetadata`），已从
-基线移除，之后被改回未接通即阻断。
+基线移除，之后被改回未接通即阻断。`poi`、`creator_chip` 同理（见 PRODUCERS 注记）。
 
 因此本门禁不检查「标签定义得好不好」，只检查一件事：**声明了采集通道，就必须有人
 真的去采**。剩余断点进 `UNWIRED_BASELINE`，只减不增：
@@ -76,14 +76,21 @@ PRODUCERS: tuple[ChannelProducer, ...] = (
     ),
     ChannelProducer(
         channel="creator_chip",
-        symbol=None,
-        defined_in=(),
-        note="创作页尚无打标 chip；正文内联 mention 属 semanticMentions 通道，不能顶替 chip",
+        symbol="PublishTagChipPickerPage",
+        defined_in=(
+            "quwoquan_app/lib/service/content_service/content/post/presentation/publish_tag_chip_picker_page.dart",
+        ),
+        note="发布确认页打标 chip：创作者主动声明语义标签写入 PublishSettings.tagRefs；"
+        "正文内联 mention 属 semanticMentions 通道，不能顶替 chip",
     ),
 )
 
 # 当前已知未接通的通道。只减不增：修好一条就必须从这里删掉。
-UNWIRED_BASELINE = frozenset({"poi", "creator_chip"})
+# poi 已接通（create_publish_confirm_sheet.dart 选中 POI 后经 GeoTagRefResolver
+# 解析行政区标签写入 PublishSettings.geoTagRef）；creator_chip 已接通
+# （create_publish_confirm_sheet.dart 打开 PublishTagChipPickerPage 选中 chip
+# 写入 PublishSettings.tagRefs）。任一被改回未接通即阻断。
+UNWIRED_BASELINE = frozenset()
 
 _LINE_COMMENT = re.compile(r"^\s*///?")
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)

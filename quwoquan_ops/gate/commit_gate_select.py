@@ -20,6 +20,11 @@ SMOKE_STATIC = [
     "verify-app-mock-isolation",
     "verify-app-cloud-package-boundaries",
     "verify-app-login-entry-loop",
+    # Both weak-typing ratchets run in ~5s combined. They used to be reachable
+    # only through `make gate`, which no local commit and no CI job invokes, so
+    # both baselines drifted unnoticed.
+    "verify-app-enum-typed-binding",
+    "verify-app-assistant-search-weak-typing-ratchet",
 ]
 
 PAGEFLIP_PREFIXES = (

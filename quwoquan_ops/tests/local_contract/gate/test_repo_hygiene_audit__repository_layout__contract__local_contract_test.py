@@ -193,10 +193,17 @@ def test_feature_tree_has_no_indexer_or_retired_task_pack_path() -> None:
     assert not (ROOT / "quwoquan_service/runtime/agentpack").exists()
     assert not (ROOT / "quwoquan_service/tools/gen_tree_index").exists()
     assert not list((ROOT / "specs/feature-tree").glob("*/tree.yaml"))
-    feature_tree_gate = (ROOT / "quwoquan_ops/cli/feature_tree.py").read_text(encoding="utf-8")
-    assert "discover_nodes" in feature_tree_gate
-    assert "tree_index.yaml" in feature_tree_gate  # only a forbidden-regression name
-    assert "yaml.safe_load" not in feature_tree_gate
+    # 实现单轨挪进了 lib/feature_tree 包;门面只保留 re-export。禁用回归名与
+    # 「不做 yaml 兼容读取」的约束必须覆盖包内全部源文件,而不只是瘦门面。
+    facade = (ROOT / "quwoquan_ops/cli/feature_tree.py").read_text(encoding="utf-8")
+    assert "discover_nodes" in facade
+    package_sources = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((ROOT / "quwoquan_ops/cli/lib/feature_tree").glob("*.py"))
+    )
+    assert "tree_index.yaml" in package_sources  # only a forbidden-regression name
+    assert "yaml.safe_load" not in facade
+    assert "yaml.safe_load" not in package_sources
 
 
 def test_commercial_smoke_scripts_only_accept_canonical_environments() -> None:

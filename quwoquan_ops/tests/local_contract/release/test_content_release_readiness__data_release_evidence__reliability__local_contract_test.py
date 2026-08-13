@@ -403,10 +403,9 @@ def test_data_release_readiness__accepts_typed_source_identity_set__local_contra
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     identities = [
         {
-            "identityKind": "legacy_canonical_migration",
-            "sourceDigest": "sha256:" + "6" * 64,
-            "canonicalObjectDigest": "sha256:" + "7" * 64,
-            "migrationEvidenceDigest": "sha256:" + "8" * 64,
+            "sourceRevision": "sha256:" + "6" * 64,
+            "sourceDigest": "sha256:" + "7" * 64,
+            "entityCatalogDigest": "sha256:" + "8" * 64,
             "executionIds": ["execution-001"],
         }
     ]

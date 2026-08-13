@@ -28,7 +28,7 @@ from quwoquan_ops.cli.lib.startup_attempt_receipt import startup_attempt_path
 
 
 _RUNTIME_IDENTITY_ENV = "QWQ_PROVIDER_CONFORMANCE_RUNTIME_IDENTITY"
-_RUNTIME_IDENTITY_SCHEMA = "stackctl.provider_conformance_runtime_identity.v1"
+_RUNTIME_IDENTITY_SCHEMA = "stackctl.provider_conformance_runtime_identity"
 _RUNTIME_IDENTITY_COMMON_FIELDS = frozenset(
     {
         "schema",

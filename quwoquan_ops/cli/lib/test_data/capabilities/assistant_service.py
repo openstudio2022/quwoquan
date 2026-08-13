@@ -29,6 +29,19 @@ class AssistantRunResult:
     run: BusinessObjectRef
 
 
+@dataclass(frozen=True)
+class SkillSubscriptionParams:
+    actors: OutputRef[AcceptanceActorSet]
+    subscriber_role: ActorRole
+
+
+@dataclass(frozen=True)
+class SkillSubscriptionResult:
+    subscription: BusinessObjectRef
+    skill: BusinessObjectRef
+    subscriber_role: ActorRole
+
+
 ASSISTANT_PROMPT_RUN = CapabilityRef(
     key=CapabilityKey("assistant.run.prompt_response"),
     params_type=AssistantRunParams,
@@ -39,8 +52,18 @@ ASSISTANT_PROMPT_RUN = CapabilityRef(
     ),
 )
 
+ASSISTANT_SKILL_SUBSCRIPTION = CapabilityRef(
+    key=CapabilityKey("assistant.skill_subscription.skill_subscription"),
+    params_type=SkillSubscriptionParams,
+    result_type=SkillSubscriptionResult,
+    owner_service="assistant_service",
+)
+
 __all__ = (
     "ASSISTANT_PROMPT_RUN",
+    "ASSISTANT_SKILL_SUBSCRIPTION",
     "AssistantRunParams",
     "AssistantRunResult",
+    "SkillSubscriptionParams",
+    "SkillSubscriptionResult",
 )

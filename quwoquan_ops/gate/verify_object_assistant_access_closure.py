@@ -43,6 +43,33 @@ DESCRIPTORS_RELATIVE = (
     "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/"
     "infrastructure/skillcontext/descriptors.go"
 )
+READER_CODEGEN_RELATIVE = (
+    "quwoquan_service/services/assistant-service/generated/assistant/"
+    "domain_reader_descriptor/reader_descriptors.g.go"
+)
+
+# 契约 reader 声明字段 -> 生成物 struct 字段；两侧由本门禁锁死逐字段一致。
+READER_FIELD_TO_GENERATED = {
+    "descriptor_id": "DescriptorID",
+    "resolver_ref": "ResolverRef",
+    "owner_service": "OwnerService",
+    "owner_operation_ref": "OwnerOperationRef",
+    "input_schema_ref": "InputSchemaRef",
+    "output_schema_ref": "OutputSchemaRef",
+    "object_type_ref": "ObjectTypeRef",
+    "authority": "Authority",
+    "sensitivity": "Sensitivity",
+    "artifact_policy": "ArtifactPolicy",
+    "citation_policy": "CitationPolicy",
+}
+READER_LIST_FIELD_TO_GENERATED = {
+    "accepted_source_kinds": "AcceptedSourceKinds",
+    "surface_kinds": "SurfaceKinds",
+}
+READER_INT_FIELD_TO_GENERATED = {
+    "max_freshness_seconds": "MaxFreshnessSeconds",
+    "cache_ttl_seconds": "CacheTTLSeconds",
+}
 
 READ_MODES = ("none", "metadata_only", "owner_scoped", "public")
 CITE_MODES = ("none", "internal_reference", "public_citation")
@@ -247,6 +274,18 @@ def descriptor_object_type_refs(repo_root: Path) -> list[str]:
             re.findall(r'"([a-z][a-z0-9_]*\.[A-Z][A-Za-z0-9]*)"', block.group(1))
         )
 
+    # The contract-derived catalogue is generated Go; its singular
+    # `ObjectTypeRef` entries are object identity the assistant can reach too.
+    generated_path = repo_root / READER_CODEGEN_RELATIVE
+    if not generated_path.is_file():
+        raise ScanError(f"missing generated reader catalogue: {generated_path}")
+    literals.update(
+        re.findall(
+            r'ObjectTypeRef:\s*"([a-z][a-z0-9_]*\.[A-Z][A-Za-z0-9]*)"',
+            generated_path.read_text(encoding="utf-8"),
+        )
+    )
+
     if not literals:
         raise ScanError(
             f"{path}: found no object type literals; the descriptor scan would "
@@ -277,6 +316,99 @@ def validate_descriptor_derivation(
                 f"assistant_access.read.mode={mode!r}; a Reader cannot hand the "
                 "assistant an object the contract closes"
             )
+    return failures
+
+
+def generated_reader_entries(repo_root: Path) -> dict[str, dict]:
+    """Parse the codegen catalogue into descriptor_id -> field mapping."""
+    path = repo_root / READER_CODEGEN_RELATIVE
+    if not path.is_file():
+        raise ScanError(f"missing generated reader catalogue: {path}")
+    body = path.read_text(encoding="utf-8")
+    entries: dict[str, dict] = {}
+    for block in re.finditer(r"\{\n((?:\t{3}[A-Za-z].*\n)+)\t\t\},", body):
+        fields: dict = {}
+        for line in block.group(1).splitlines():
+            match = re.match(r'\t{3}(\w+):\s+(.*?),?$', line)
+            if not match:
+                continue
+            name, raw = match.group(1), match.group(2)
+            if raw.startswith('"'):
+                fields[name] = raw.strip('"')
+            elif raw.startswith("[]string{"):
+                fields[name] = re.findall(r'"([^"]*)"', raw)
+            else:
+                try:
+                    fields[name] = int(raw)
+                except ValueError:
+                    fields[name] = raw
+        descriptor_id = fields.get("DescriptorID")
+        if not descriptor_id:
+            raise ScanError(f"{path}: catalogue entry without DescriptorID")
+        entries[descriptor_id] = fields
+    if not entries:
+        raise ScanError(f"{path}: parsed 0 catalogue entries; scan would vacuously pass")
+    return entries
+
+
+def validate_reader_codegen_alignment(
+    repo_root: Path, objects: dict[str, tuple[Path, dict]]
+) -> list[str]:
+    """The generated catalogue must be exactly the contract projection."""
+    declared: dict[str, tuple[str, dict]] = {}
+    failures: list[str] = []
+    for object_id, (_, document) in sorted(objects.items()):
+        read = (document.get("assistant_access") or {}).get("read") or {}
+        reader = read.get("reader")
+        if not isinstance(reader, dict):
+            continue
+        descriptor_id = str(reader.get("descriptor_id", ""))
+        if descriptor_id in declared:
+            failures.append(
+                f"descriptor_id {descriptor_id!r} declared by both "
+                f"{declared[descriptor_id][0]} and {object_id}"
+            )
+            continue
+        declared[descriptor_id] = (object_id, reader)
+    generated = generated_reader_entries(repo_root)
+    for descriptor_id in sorted(set(generated) - set(declared)):
+        failures.append(
+            f"generated reader catalogue carries {descriptor_id!r} that no object "
+            "contract declares; the catalogue must be contract-derived, not authored"
+        )
+    for descriptor_id in sorted(set(declared) - set(generated)):
+        failures.append(
+            f"object {declared[descriptor_id][0]} declares reader "
+            f"{descriptor_id!r} missing from the generated catalogue; rerun "
+            "make -C quwoquan_service codegen-assistant-reader-descriptors"
+        )
+    for descriptor_id in sorted(set(declared) & set(generated)):
+        object_id, reader = declared[descriptor_id]
+        entry = generated[descriptor_id]
+        for contract_key, generated_key in READER_FIELD_TO_GENERATED.items():
+            expected = str(reader.get(contract_key, ""))
+            actual = str(entry.get(generated_key, ""))
+            if expected != actual:
+                failures.append(
+                    f"{object_id} reader {descriptor_id!r}: {contract_key}="
+                    f"{expected!r} but generated {generated_key}={actual!r}"
+                )
+        for contract_key, generated_key in READER_LIST_FIELD_TO_GENERATED.items():
+            expected_list = [str(item) for item in reader.get(contract_key) or []]
+            actual_list = [str(item) for item in entry.get(generated_key) or []]
+            if expected_list != actual_list:
+                failures.append(
+                    f"{object_id} reader {descriptor_id!r}: {contract_key}="
+                    f"{expected_list} but generated {generated_key}={actual_list}"
+                )
+        for contract_key, generated_key in READER_INT_FIELD_TO_GENERATED.items():
+            expected_int = int(reader.get(contract_key) or 0)
+            actual_int = int(entry.get(generated_key) or 0)
+            if expected_int != actual_int:
+                failures.append(
+                    f"{object_id} reader {descriptor_id!r}: {contract_key}="
+                    f"{expected_int} but generated {generated_key}={actual_int}"
+                )
     return failures
 
 
@@ -412,6 +544,7 @@ def run(repo_root: Path) -> tuple[int, list[str]]:
     objects = load_objects(repo_root)
     failures = validate_declarations(repo_root, objects)
     failures += validate_descriptor_derivation(repo_root, objects)
+    failures += validate_reader_codegen_alignment(repo_root, objects)
     failures += validate_privacy_coupling(repo_root, objects)
     failures += validate_search_exposure(repo_root, objects)
     return len(objects), failures

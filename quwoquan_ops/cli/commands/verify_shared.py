@@ -631,13 +631,13 @@ def _run_profile_command(
         )
     if not isinstance(case_id, _stackctl.ProfileActorCaseId) or actor_context is None:
         raise RuntimeError("typed profile Actor context is unavailable")
-    for legacy_key in (
+    for ambient_credential_key in (
         "TEST_AUTH_TOKEN",
         "TEST_REFRESH_TOKEN",
         "APP_CURRENT_OWNER_ID",
         "APP_CURRENT_PERSONA_ID",
     ):
-        command_environment.pop(legacy_key, None)
+        command_environment.pop(ambient_credential_key, None)
     runtime = actor_context.runtime
     if not isinstance(runtime, TestDataRuntime):
         raise TypeError("typed profile Actor runtime is unavailable")

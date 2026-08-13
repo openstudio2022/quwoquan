@@ -21,8 +21,8 @@ from uuid import uuid4
 from .output_paths import env_runs_root, target_process_dir
 
 
-SCHEMA = "stackctl.mutable_test_live_startup_attempt.v1"
-PLAN_SCHEMA = "stackctl.mutable_test_live_runtime.v1"
+SCHEMA = "stackctl.mutable_test_live_startup_attempt"
+PLAN_SCHEMA = "stackctl.mutable_test_live_runtime"
 STATUSES = ("prepared", "partial", "running", "stopped")
 _TRANSITIONS = {
     None: {"prepared"},

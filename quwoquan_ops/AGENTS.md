@@ -10,7 +10,8 @@
 ## 运维与门禁硬约束
 
 - 环境、打包、URL/topology、健康检查、巡检、诊断、修复和部署统一使用 `python3 quwoquan_ops/cli/stackctl.py`；不要新增第二套环境脚本入口。
-- Ops 脚本按职责归入 `cli/`、`ci/`、`gate/`、`observability/`、`runbooks/` 等横切目录；禁止在 `quwoquan_ops/` 中按业务特性新增 `assistant/`、`avatar/`、`chat_avatar/` 等脚本岛或第二套 feature runner。跨环境 smoke/gate/CI 脚本统一归 `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/<service>/`；领域内可解耦测试仍归各服务 `tests/local_contract` 或 `tests/api_integration`。
+- Ops 脚本按职责归入 `cli/`、`ci/`、`gate/`、`observability/`、`runbooks/` 等横切目录；禁止在 `quwoquan_ops/` 中按业务特性新增 `assistant/`、`avatar/`、`chat_avatar/` 等脚本岛或第二套 feature runner。跨环境 smoke/gate/CI 脚本统一归 `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/<service>/`；`producer: ops` 的 readiness case runner 直接指向该树内实现脚本并携带 `readiness_case`/`spec_ref` 双向标注；领域内可解耦测试仍归各服务 `tests/local_contract` 或 `tests/api_integration`。
+- Ops pytest 套件必须同时满足 `test_` 前缀与三层后缀（`__local_contract_test.py` / `__api_integration_test.py` / `__user_acceptance_test.py`）。`tests/local_contract` 根只允许已登记 concern 子目录（`service_ops`、`stackctl`、`test_data`），新增套件进 concern 目录，根平铺存量与 provider conformance 声明残量只减不增（布局门禁棘轮阻断）。`service_ops/<service>/` 的角色目录为 `ci/smoke/gamma/gate/support` 闭集：UAT 证据聚合器归 `gamma/`、共享 helper 归 `support/`、smoke 只承载生命周期 probe。
 - `cli/**` 内部 runner 与 shell 只能由 `stackctl` 或登记的 gate/CI 入口调用；存在实现文件不等于公开入口，Make/workflow/runbook 不得绕过 canonical 编排直接调用。
 - Ops 物理树内全部 Python 文件必须由脚本角色、三层测试、test support 或其他明确治理边界唯一归类；未知路径、无 owner 人工 tool、空扫描 gate、临时脚本和 Python/lint/test 缓存均为阻断项。
 - 四环境语义固定为 `alpha`、`beta`、`gamma`、`prod`；生产灰度是 `prod` rollout stage，不存在 `prod-gray`。

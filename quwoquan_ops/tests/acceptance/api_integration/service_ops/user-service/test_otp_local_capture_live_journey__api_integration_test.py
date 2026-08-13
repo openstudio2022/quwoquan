@@ -11,6 +11,7 @@ import json
 import os
 import ssl
 import sys
+import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -307,6 +308,18 @@ def main() -> int:
         )
     print(json.dumps(receipt, ensure_ascii=False, indent=2))
     return 0
+
+
+class OtpLocalCaptureLiveJourneyTest(unittest.TestCase):
+    """api_integration canonical 入口:在预制真实环境内完整旅程必须成功。
+
+    环境外的 fail-closed 行为(结构化 GATE_BLOCK)由
+    test_sms_local_capture_api_harness__contract__local_contract_test.py
+    经模块加载单独合约化;这里只承载环境内的真实结果。
+    """
+
+    def test_live_otp_capture_journey_completes(self) -> None:
+        self.assertEqual(main(), 0)
 
 
 if __name__ == "__main__":

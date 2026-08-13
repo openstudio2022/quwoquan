@@ -1,196 +1,133 @@
 {
-  "dashboard": {
-    "title": "L2 — 内容飞轮大循环",
-    "uid": "qwq-l2-flywheel",
-    "tags": ["quwoquan", "l2", "flywheel", "recommendation"],
-    "timezone": "browser",
-    "refresh": "30s",
-    "description": "行为反馈 → 兴趣/人群画像派生(content) → 双路 CQRS 投影(user 域 rm_user_profile_view + 宽表 rm_recommend_feature) → 引擎按 policy×segment 归因 → 画像反哺小艺主动。与 quwoquan_service/scripts/product-ops-service/tools/eval_content_flywheel_loop.py 的数据面闭环实证互补。",
-    "panels": [
-      {
-        "title": "① 兴趣画像派生吞吐（result）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-        "description": "content-service InterestProfileAggregator 重算吞吐，按 result(ok|empty|error) 拆分；error 速率即派生失败率。",
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_interest_profile_recompute_total[5m])) by (result)",
-            "legendFormat": "{{ result }}"
-          }
-        ]
+  "title": "L2 — 内容飞轮大循环",
+  "uid": "qwq-l2-flywheel",
+  "tags": [
+    "quwoquan",
+    "l2",
+    "flywheel",
+    "recommendation"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "description": "行为反馈 → user 域兴趣投影(rm_user_profile_view) → 引擎按 policy×segment 归因 → 曝光/点击反馈。画像重算生产端（content 侧 UserInterestRecomputed 发布与 recompute/entropy/segment 指标）尚未实现，对应面板待生产端落地后按真实 emitter 恢复；与 quwoquan_service/scripts/product-ops-service/tools/eval_content_flywheel_loop.py 的数据面闭环实证互补。",
+  "panels": [
+    {
+      "title": "① user 域兴趣投影吞吐（result）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
       },
-      {
-        "title": "① 派生 lifecycle 人群分布",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-        "description": "新增/活跃/沉睡人群在重算流中的占比，用于观测生命周期迁移趋势。",
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_interest_profile_lifecycle_total[5m])) by (stage)",
-            "legendFormat": "{{ stage }}"
-          }
-        ]
+      "description": "user-service InterestProfileProjector 消费 UserInterestRecomputed 写 rm_user_profile_view；parse_error/write_error 速率即 CQRS 投影故障率。上游生产端未落地时本面板长期无样本属预期。",
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_interest_projection_total[5m])) by (result)",
+          "legendFormat": "{{ result }}"
+        }
+      ]
+    },
+    {
+      "title": "① 投影新鲜度滞后（P95/P99 秒）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
       },
-      {
-        "title": "② 画像丰富度 topInterests（P50/P90）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-        "description": "单画像 topInterests 数量分位；过低说明行为信号稀疏或派生过度截断。",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.5, sum(rate(quwoquan_interest_profile_top_interests_bucket[30m])) by (le))",
-            "legendFormat": "P50"
-          },
-          {
-            "expr": "histogram_quantile(0.9, sum(rate(quwoquan_interest_profile_top_interests_bucket[30m])) by (le))",
-            "legendFormat": "P90"
-          }
-        ]
+      "description": "画像 recomputedAt 到投影落库 apply 的滞后；高位说明事件积压，对外画像 API 读到陈旧数据。",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_interest_projection_freshness_lag_seconds_bucket[5m])) by (le))",
+          "legendFormat": "P95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(quwoquan_interest_projection_freshness_lag_seconds_bucket[5m])) by (le))",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "title": "② 引擎按 policy × segment 归因 QPS",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
       },
-      {
-        "title": "② 兴趣多样性熵（P50/P90 bits）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-        "description": "topInterests 分数分布的香农熵；持续走低预示兴趣坍缩/回音壁，需结合策略调参。",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.5, sum(rate(quwoquan_interest_profile_entropy_bits_bucket[30m])) by (le))",
-            "legendFormat": "P50"
-          },
-          {
-            "expr": "histogram_quantile(0.9, sum(rate(quwoquan_interest_profile_entropy_bits_bucket[30m])) by (le))",
-            "legendFormat": "P90"
-          }
-        ]
+      "description": "每个被服务请求归因到其生效的 policyDigest 与人群 segment（rec.pipeline.requests_by_policy_total）；这是策略元数据化 + 人群定向真正生效到引擎的端到端证据。",
+      "targets": [
+        {
+          "expr": "sum(rate(rec_pipeline_requests_by_policy_total[5m])) by (policy_digest, segment)",
+          "legendFormat": "{{ policy_digest }} / {{ segment }}"
+        }
+      ]
+    },
+    {
+      "title": "② 模型 vs 规则命中（闭环健康）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
       },
-      {
-        "title": "③ 人群命中速率（按 segment）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-        "description": "声明式 segments.yaml 各人群在重算时的命中速率；某 segment 长期 0 命中提示规则过严或定义失效。",
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_interest_profile_segment_hit_total[5m])) by (segment)",
-            "legendFormat": "{{ segment }}"
-          }
-        ]
+      "description": "model_hits 占比走低、rule_hits 抬升说明模型路径退化，飞轮反馈未有效驱动模型。",
+      "targets": [
+        {
+          "expr": "sum(rate(rec_pipeline_model_hits_total[5m]))",
+          "legendFormat": "model"
+        },
+        {
+          "expr": "sum(rate(rec_pipeline_rule_hits_total[5m]))",
+          "legendFormat": "rule"
+        }
+      ]
+    },
+    {
+      "title": "② 推荐空 Feed 率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
       },
-      {
-        "title": "③ 人群隶属数（P50/P90）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-        "description": "单画像命中的 segment 数量分位（MatchSegments AND 语义）；过高提示规则重叠。",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.5, sum(rate(quwoquan_interest_profile_segment_membership_bucket[30m])) by (le))",
-            "legendFormat": "P50"
-          },
-          {
-            "expr": "histogram_quantile(0.9, sum(rate(quwoquan_interest_profile_segment_membership_bucket[30m])) by (le))",
-            "legendFormat": "P90"
-          }
-        ]
+      "description": "empty_results / requests；空 feed 率上升直接拉断飞轮（无内容可消费即无反馈）。",
+      "targets": [
+        {
+          "expr": "sum(rate(rec_pipeline_empty_results_total[5m])) / (sum(rate(rec_pipeline_requests_total[5m])) + 0.001)",
+          "legendFormat": "空Feed率"
+        }
+      ]
+    },
+    {
+      "title": "③ 互动: 曝光 / 点击（CTR 反馈燃料）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
       },
-      {
-        "title": "④ user 域兴趣投影吞吐（result）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-        "description": "user-service InterestProfileProjector 消费 UserInterestRecomputed 写 rm_user_profile_view；parse_error/write_error 速率即 CQRS 投影故障率。",
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_interest_projection_total[5m])) by (result)",
-            "legendFormat": "{{ result }}"
-          }
-        ]
-      },
-      {
-        "title": "④ 投影新鲜度滞后（P95/P99 秒）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-        "description": "画像 recomputedAt 到投影落库 apply 的滞后；高位说明事件积压，对外画像 API 读到陈旧数据。",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_interest_projection_freshness_lag_seconds_bucket[5m])) by (le))",
-            "legendFormat": "P95"
-          },
-          {
-            "expr": "histogram_quantile(0.99, sum(rate(quwoquan_interest_projection_freshness_lag_seconds_bucket[5m])) by (le))",
-            "legendFormat": "P99"
-          }
-        ]
-      },
-      {
-        "title": "⑤ 引擎按 policy × segment 归因 QPS",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
-        "description": "每个被服务请求归因到其生效的 policyDigest 与人群 segment（rec.pipeline.requests_by_policy_total）；这是策略元数据化 + 人群定向真正生效到引擎的端到端证据。",
-        "targets": [
-          {
-            "expr": "sum(rate(rec_pipeline_requests_by_policy_total[5m])) by (policy_digest, segment)",
-            "legendFormat": "{{ policy_digest }} / {{ segment }}"
-          }
-        ]
-      },
-      {
-        "title": "⑤ 模型 vs 规则命中（闭环健康）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
-        "description": "model_hits 占比走低、rule_hits 抬升说明模型路径退化，飞轮反馈未有效驱动模型。",
-        "targets": [
-          {
-            "expr": "sum(rate(rec_pipeline_model_hits_total[5m]))",
-            "legendFormat": "model"
-          },
-          {
-            "expr": "sum(rate(rec_pipeline_rule_hits_total[5m]))",
-            "legendFormat": "rule"
-          }
-        ]
-      },
-      {
-        "title": "⑤ 推荐空 Feed 率",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
-        "description": "empty_results / requests；空 feed 率上升直接拉断飞轮（无内容可消费即无反馈）。",
-        "targets": [
-          {
-            "expr": "sum(rate(rec_pipeline_empty_results_total[5m])) / (sum(rate(rec_pipeline_requests_total[5m])) + 0.001)",
-            "legendFormat": "空Feed率"
-          }
-        ]
-      },
-      {
-        "title": "⑥ 互动: 曝光 / 点击（CTR 代理）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
-        "description": "推荐产出被消费的反馈源头；曝光/点击即下一轮行为 → 特征 → 画像的燃料。",
-        "targets": [
-          {
-            "expr": "sum(rate(rec_engagement_impression_total[5m])) by (content_type)",
-            "legendFormat": "曝光 {{ content_type }}"
-          },
-          {
-            "expr": "sum(rate(rec_engagement_click_total[5m])) by (content_type)",
-            "legendFormat": "点击 {{ content_type }}"
-          }
-        ]
-      },
-      {
-        "title": "⑥ 小艺主动个性化覆盖率（画像反哺）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 },
-        "description": "assistant_proactive_personalization_total{personalized=true} 占比；衡量画像真正反哺到主动 AB 触达，闭合「画像→主动触达→再行为」回路。",
-        "targets": [
-          {
-            "expr": "sum(rate(assistant_proactive_personalization_total{personalized=\"true\"}[5m])) / (sum(rate(assistant_proactive_personalization_total[5m])) + 0.001)",
-            "legendFormat": "个性化覆盖率"
-          },
-          {
-            "expr": "sum(rate(assistant_proactive_personalization_total{personalized=\"true\"}[5m])) by (lifecycle)",
-            "legendFormat": "个性化 {{ lifecycle }}"
-          }
-        ]
-      }
-    ]
-  }
+      "description": "推荐产出被消费的反馈源头（content-service 七态漏斗真实计数器）；曝光/点击即下一轮行为 → 特征 → 画像的燃料。CTR = engagement{action=click} / impressed。",
+      "targets": [
+        {
+          "expr": "sum(rate(recommendation_feed_impressed_total[5m]))",
+          "legendFormat": "曝光"
+        },
+        {
+          "expr": "sum(rate(recommendation_feed_engagement_total{action=\"click\"}[5m]))",
+          "legendFormat": "点击"
+        },
+        {
+          "expr": "sum(rate(recommendation_feed_engagement_total{action=\"click\"}[5m])) / (sum(rate(recommendation_feed_impressed_total[5m])) + 0.001)",
+          "legendFormat": "CTR"
+        }
+      ]
+    }
+  ]
 }

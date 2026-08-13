@@ -7,12 +7,31 @@
     排除 **/assistant/generated/** 与 *.g.dart
   - bucket core_search_repository: 单文件 search_repository.dart
 
-指标（每个 bucket，与基线比较）：
-  - map_string_dynamic: 字面量 `Map<String, dynamic>`（含空格变体）
-  - dynamic_keyword: 词边界 `dynamic`（含泛型/形参等）
+指标（每个 bucket，与基线比较，三者互不重叠）：
+  - map_string_dynamic: `Map<String, dynamic>` 站点数
+  - map_string_object_optional: `Map<String, Object?>` 站点数
+  - bare_dynamic: 不属于上述 Map 的独立 `dynamic` 站点数（形参、返回值、
+    字段、泛型实参）
 
-辅助信息（仅 `--json` 输出，不参与基线比较）：
-  - map_string_object_optional: 字面量 `Map<String, Object?>`（含空格变体）
+为什么 `Map<String, Object?>` 也是棘轮桶而不是目标形态：`Object?` 只把 value
+的静态类型从「关闭检查」换成「顶层类型」，数据仍是无 schema 的匿名 Map、仍靠
+字符串 key 访问，一个字段拼错在编译期同样不可见。它曾被登记为 informational
+指标，这等于给 `dynamic -> Object?` 的机械改写留了一条把棘轮读数改好看的通道。
+真正的收敛只有一条路：把匿名 Map 换成 metadata-owned 具名 DTO / sealed type。
+`Map<String, Object?>` 仅允许驻留在两类边界——serde（fromJson/toJson 的 wire
+层）与契约里登记为开放扩展槽（`type: any` / extension map）的字段——这两类
+边界的存量由本桶锁定只减不增，收敛为具名 DTO 时随之下降。
+
+注释与文档注释中的匹配被排除：它们不是类型声明，改注释不该动门禁读数。
+
+历史口径修正记录：
+  - 最初的口径用两个独立正则统计文本出现次数，`dynamic_keyword` 把每个
+    `Map<String, dynamic>` 里的 `dynamic` 又数了一遍：基线 209/373 里有 209
+    是重复计数。现口径先扣掉 Map 内的 `dynamic`。
+  - `bare_dynamic` 归零不可达：`fromJson(Map<String, dynamic>)` 是 Dart 生态
+    与本仓 codegen 自身的标准签名，手写代码与生成 DTO 交互时必然出现。
+
+退出条件见基线 `_governance.expires_when`。
 
 行为：
   - 默认：与 quwoquan_ops/policies/gates/assistant_search_weak_typing_baseline.json 比较，
@@ -60,22 +79,51 @@ SEARCH_REPO_FILE = (
 @dataclass
 class BucketCounts:
     map_string_dynamic: int
-    dynamic_keyword: int
+    map_string_object_optional: int
+    bare_dynamic: int
+
+
+METRICS = ("map_string_dynamic", "map_string_object_optional", "bare_dynamic")
 
 
 def _read_text(p: Path) -> str:
     return p.read_text(encoding="utf-8", errors="replace")
 
 
-def _scan_assistant_handwritten_files() -> tuple[BucketCounts, int]:
-    """Single pass: ratchet counts + informational `Map<String, Object?>` count."""
-    m = d = mo = 0
+def _strip_comments(text: str) -> str:
+    """Drop `//` line comments and `/* */` blocks.
+
+    A `dynamic` inside a comment is not a type declaration; counting it means
+    rewording a doc comment moves the ratchet.
+    """
+
+    without_blocks = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    return re.sub(r"//[^\n]*", "", without_blocks)
+
+
+def count_text(text: str) -> BucketCounts:
+    """Count the three disjoint weak-typing buckets in one source text."""
+
+    code = _strip_comments(text)
+    maps = len(MAP_RE.findall(code))
+    # Every `Map<String, dynamic>` contains exactly one `dynamic`; subtracting
+    # them keeps the metrics disjoint so each one names distinct debt.
+    bare = len(DYNAMIC_RE.findall(code)) - maps
+    return BucketCounts(
+        map_string_dynamic=maps,
+        map_string_object_optional=len(MAP_OBJECT_OPT_RE.findall(code)),
+        bare_dynamic=bare,
+    )
+
+
+def scan_assistant_handwritten() -> BucketCounts:
     base = LIB / "service" / "assistant_service"
     if not base.is_dir():
         raise SystemExit(
             f"ERROR: assistant service root not found: {base.relative_to(ROOT)}\n"
             "搬迁后请把 assistant_handwritten bucket 指向新位置，不要让门禁静默归零。"
         )
+    total = BucketCounts(0, 0, 0)
     for path in base.rglob("*.dart"):
         if path.name.endswith(".g.dart"):
             continue
@@ -85,62 +133,28 @@ def _scan_assistant_handwritten_files() -> tuple[BucketCounts, int]:
             continue
         if "generated" in rel.parts:
             continue
-        text = _read_text(path)
-        m += len(MAP_RE.findall(text))
-        d += len(DYNAMIC_RE.findall(text))
-        mo += len(MAP_OBJECT_OPT_RE.findall(text))
-    return BucketCounts(map_string_dynamic=m, dynamic_keyword=d), mo
+        counts = count_text(_read_text(path))
+        total.map_string_dynamic += counts.map_string_dynamic
+        total.map_string_object_optional += counts.map_string_object_optional
+        total.bare_dynamic += counts.bare_dynamic
+    return total
 
 
-def scan_assistant_handwritten() -> BucketCounts:
-    counts, _ = _scan_assistant_handwritten_files()
-    return counts
-
-
-def _scan_search_repository_files() -> tuple[BucketCounts, int]:
+def scan_search_repository() -> BucketCounts:
     if not SEARCH_REPO_FILE.is_file():
         # 文件缺失必须阻断：静默返回 0 会让搬迁后的 bucket 永久达标，门禁空转。
         raise SystemExit(
             f"ERROR: search repository not found: {SEARCH_REPO_FILE.relative_to(ROOT)}\n"
             "搬迁后请把 SEARCH_REPO_FILE 指向新位置，不要让 bucket 静默归零。"
         )
-    text = _read_text(SEARCH_REPO_FILE)
-    return (
-        BucketCounts(
-            map_string_dynamic=len(MAP_RE.findall(text)),
-            dynamic_keyword=len(DYNAMIC_RE.findall(text)),
-        ),
-        len(MAP_OBJECT_OPT_RE.findall(text)),
-    )
-
-
-def scan_search_repository() -> BucketCounts:
-    counts, _ = _scan_search_repository_files()
-    return counts
+    return count_text(_read_text(SEARCH_REPO_FILE))
 
 
 def current_snapshot() -> dict[str, dict[str, int]]:
-    a = scan_assistant_handwritten()
-    s = scan_search_repository()
     return {
-        "assistant_handwritten": asdict(a),
-        "core_search_repository": asdict(s),
+        "assistant_handwritten": asdict(scan_assistant_handwritten()),
+        "core_search_repository": asdict(scan_search_repository()),
     }
-
-
-def snapshot_for_json() -> tuple[dict[str, dict[str, int]], dict[str, dict[str, int]]]:
-    """One pass per tree/file: ratchet buckets + informational metrics."""
-    a_counts, amo = _scan_assistant_handwritten_files()
-    s_counts, smo = _scan_search_repository_files()
-    buckets = {
-        "assistant_handwritten": asdict(a_counts),
-        "core_search_repository": asdict(s_counts),
-    }
-    info = {
-        "assistant_handwritten": {"map_string_object_optional": amo},
-        "core_search_repository": {"map_string_object_optional": smo},
-    }
-    return buckets, info
 
 
 def load_baseline(path: Path) -> dict[str, dict[str, int]] | None:
@@ -152,13 +166,8 @@ def load_baseline(path: Path) -> dict[str, dict[str, int]] | None:
         return None
     out: dict[str, dict[str, int]] = {}
     for k, v in buckets.items():
-        if isinstance(v, dict) and all(
-            isinstance(v.get(x), int) for x in ("map_string_dynamic", "dynamic_keyword")
-        ):
-            out[str(k)] = {
-                "map_string_dynamic": int(v["map_string_dynamic"]),
-                "dynamic_keyword": int(v["dynamic_keyword"]),
-            }
+        if isinstance(v, dict) and all(isinstance(v.get(x), int) for x in METRICS):
+            out[str(k)] = {metric: int(v[metric]) for metric in METRICS}
     return out if out else None
 
 
@@ -168,10 +177,11 @@ def regressions(
 ) -> list[str]:
     msgs: list[str] = []
     all_keys = sorted(set(baseline) | set(current))
+    empty = {metric: 0 for metric in METRICS}
     for key in all_keys:
-        b = baseline.get(key, {"map_string_dynamic": 0, "dynamic_keyword": 0})
-        c = current.get(key, {"map_string_dynamic": 0, "dynamic_keyword": 0})
-        for metric in ("map_string_dynamic", "dynamic_keyword"):
+        b = baseline.get(key, empty)
+        c = current.get(key, empty)
+        for metric in METRICS:
             if c[metric] > b[metric]:
                 msgs.append(
                     f"{key}.{metric}: baseline={b[metric]} current={c[metric]} (regression +{c[metric] - b[metric]})"
@@ -200,19 +210,15 @@ def main() -> int:
     ap.add_argument(
         "--json",
         action="store_true",
-        help="Print current snapshot JSON (buckets + informational_metrics) to stdout",
+        help="Print current snapshot JSON to stdout",
     )
     args = ap.parse_args()
     baseline_path: Path = args.baseline
 
     if args.json:
-        buckets, info = snapshot_for_json()
         print(
             json.dumps(
-                {
-                    "buckets": buckets,
-                    "informational_metrics": info,
-                },
+                {"buckets": current_snapshot()},
                 indent=2,
                 ensure_ascii=False,
             )
@@ -240,7 +246,7 @@ def main() -> int:
         payload = {
             "_governance": existing_governance,
             "buckets": current,
-            "notes": "Ratchet: any increase in map_string_dynamic or dynamic_keyword per bucket fails CI until baseline is intentionally updated.",
+            "notes": "Ratchet: any increase in map_string_dynamic, map_string_object_optional or bare_dynamic per bucket fails CI until baseline is intentionally updated.",
         }
         baseline_path.parent.mkdir(parents=True, exist_ok=True)
         baseline_path.write_text(

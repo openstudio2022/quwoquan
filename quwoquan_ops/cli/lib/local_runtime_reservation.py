@@ -131,3 +131,28 @@ def assert_local_runtime_available(
         f"{requested_target} cannot start while local runtime "
         f"{', '.join(conflicts)} is active; stop it with {shutdowns}"
     )
+
+
+def assert_no_running_mutable_runtime(
+    mutable_attempt: Mapping[str, Any] | None,
+    requested_target: str,
+) -> None:
+    """同一 target 的 mutable test_live 栈与 immutable candidate 栈共享同一
+    canonical 端口段；test_live 未释放时启动 candidate 栈只会在 Compose 中途
+    以隐晦的 "port is already allocated" 失败并回收现场。receipt 是 test_live
+    资源占用的单一真相源：prepared/partial/running 都可能持有容器与端口
+    （partial 尤其常见于 dev-session 中断后容器仍在运行），只有 stopped 表示
+    资源已确认释放。启动前 fail-fast，把互斥事实与修复动作显式交还调用方。"""
+    if not isinstance(mutable_attempt, Mapping):
+        return
+    status = str(mutable_attempt.get("status") or "")
+    if status == "stopped":
+        return
+    attempt_id = str(mutable_attempt.get("attemptId") or "unknown")
+    raise RuntimeError(
+        f"{requested_target} mutable test_live runtime is not released "
+        f"(status={status or 'unknown'}, attemptId={attempt_id}) and may own "
+        "the shared canonical port range; stop the dev-session first with "
+        f"`python3 quwoquan_ops/cli/stackctl.py down --target {requested_target}` "
+        "before starting the immutable candidate runtime"
+    )

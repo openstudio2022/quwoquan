@@ -304,7 +304,16 @@ export function ProductL1L4MetricsPage() {
               </div>
             </div>
           ))}
-          {(metricsPayload?.alerts ?? []).length === 0 ? (
+          {metricsPayload == null ? (
+            // 指标投影不可用时禁止伪装安静：unavailable 与真实 quiet 必须可区分。
+            <div className="policy-item">
+              <div>
+                <p className="item-title">告警投影不可用</p>
+                <p className="item-subtitle">尚未取得实时指标响应，无法判断告警态；请检查 product-ops 控制面连接。</p>
+              </div>
+              <span className="badge badge--warning">unavailable</span>
+            </div>
+          ) : metricsPayload.alerts.length === 0 ? (
             <div className="policy-item">
               <div>
                 <p className="item-title">暂无实时告警</p>

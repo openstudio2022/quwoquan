@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/spec.md#sit-001
+# readiness_case: conversation_group_lifecycle_probe_ops_env
 """验证群聊候选源、建群、消息回读与 Inbox 投影，并输出可审计证据。"""
 
 from __future__ import annotations

@@ -20,6 +20,15 @@ def _find_repo_root() -> Path:
 
 
 REPO_ROOT = _find_repo_root()
+CHAT_AVATAR_SUPPORT_DIR = Path(__file__).resolve().parents[1] / "support"
+if str(CHAT_AVATAR_SUPPORT_DIR) not in sys.path:
+    sys.path.insert(0, str(CHAT_AVATAR_SUPPORT_DIR))
+
+from managed_chat_avatar_handoff import (
+    ManagedChatAvatarHandoff,
+    load_managed_handoff_from_environment,
+)
+
 FAIL_FAST_EXIT_CODE = 86
 FAIL_FAST_CATEGORIES = {
     "device_not_found",
@@ -77,11 +86,50 @@ def parse_gateway_port(raw_url: str) -> int:
     return 80
 
 
+def build_matrix_command(
+    *,
+    platform: str,
+    env_name: str,
+    device_ids: list[str],
+    handoff: ManagedChatAvatarHandoff,
+) -> list[str]:
+    command = [
+        sys.executable,
+        str(
+            REPO_ROOT
+            / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/"
+            "chat-service/ci/run_chat_avatar_device_matrix.py"
+        ),
+        "--env",
+        env_name,
+        "--platform",
+        platform,
+        "--report",
+        (
+            f".qwq_output/env/{env_name}/runs/device-matrix/"
+            f"chat-avatar-{platform}.json"
+        ),
+        *handoff.command_arguments(),
+    ]
+    for device_id in device_ids:
+        command.extend(["--device-id", device_id])
+    return command
+
+
 def main() -> int:
     args = parse_args()
     env_name = os.environ.get("API_CONTRACT_ENV", "").strip()
     if env_name not in {"alpha", "beta", "gamma", "prod"}:
         print(f"::error::API_CONTRACT_ENV={env_name!r} 不支持 chat avatar 矩阵", file=sys.stderr)
+        return 2
+    try:
+        handoff = load_managed_handoff_from_environment()
+        if env_name != handoff.environment:
+            raise ValueError(
+                "API_CONTRACT_ENV must match the managed ActorLease environment"
+            )
+    except ValueError as exc:
+        print(f"::error::GATE_BLOCK: {exc}", file=sys.stderr)
         return 2
     all_devices = os.environ.get("CHAT_AVATAR_MATRIX_ALL_DEVICES", "").lower() in {
         "1",
@@ -99,27 +147,15 @@ def main() -> int:
         print(f"::error::未发现可用 {args.platform} 设备", file=sys.stderr)
         return 2
     report_env = env_name
-    command = [
-        sys.executable,
-        str(REPO_ROOT / "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/ci/run_chat_avatar_device_matrix.py"),
-        "--env",
-        env_name,
-        "--platform",
-        args.platform,
-        "--report",
-        f".qwq_output/env/{report_env}/runs/device-matrix/chat-avatar-{args.platform}.json",
-    ]
+    command = build_matrix_command(
+        platform=args.platform,
+        env_name=env_name,
+        device_ids=device_ids,
+        handoff=handoff,
+    )
     report_path = (
         REPO_ROOT / ".qwq_output" / "env" / report_env / "runs" / "device-matrix" / f"chat-avatar-{args.platform}.json"
     )
-    for device_id in device_ids:
-        command.extend(["--device-id", device_id])
-    token = os.environ.get(
-        "PROD_TEST_AUTH_TOKEN" if env_name == "prod" else "GAMMA_TEST_AUTH_TOKEN",
-        "",
-    ).strip()
-    if token:
-        command.extend(["--test-auth-token", token])
     code = subprocess.call(command, cwd=str(REPO_ROOT))
     if report_path.exists():
         try:

@@ -11,6 +11,11 @@ from pathlib import Path
 import yaml
 
 from quwoquan_ops.cli.lib.output_paths import service_deployment_package_dir
+from quwoquan_ops.cli.lib.service_core_composition import (
+    SERVICE_CORE_MODULE_SET,
+    SERVICE_CORE_WORKLOAD,
+    service_core_source_digest,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -113,6 +118,31 @@ def packaged_service_source_image_ref(environment: str, service: str) -> str:
     return f"localhost/quwoquan_service_{repository}:{source_digest[7:]}"
 
 
+def runtime_image_owner_names(repo_root: Path = ROOT) -> tuple[str, ...]:
+    """Return deployed image owners after the core modules become one PID."""
+
+    logical = set(first_party_service_names(repo_root))
+    if not SERVICE_CORE_MODULE_SET.issubset(logical):
+        missing = sorted(SERVICE_CORE_MODULE_SET - logical)
+        raise ValueError(
+            "service-core logical module closure is incomplete: " + ", ".join(missing)
+        )
+    return tuple(
+        sorted((logical - SERVICE_CORE_MODULE_SET) | {SERVICE_CORE_WORKLOAD})
+    )
+
+
+def packaged_runtime_source_image_ref(environment: str, service: str) -> str:
+    if service != SERVICE_CORE_WORKLOAD:
+        return packaged_service_source_image_ref(environment, service)
+    module_digests = {
+        module: packaged_service_source_digest(environment, module)
+        for module in SERVICE_CORE_MODULE_SET
+    }
+    digest = service_core_source_digest(module_digests)
+    return f"localhost/quwoquan_service_core:{digest[7:]}"
+
+
 def validate_immutable_image_ref(service: str, ref: str) -> str:
     """Return one exact local-source or OCI-digest ref, never a mutable tag."""
 
@@ -122,7 +152,11 @@ def validate_immutable_image_ref(service: str, ref: str) -> str:
         raise ValueError("immutable image composition contains an empty binding")
     if LOCAL_SOURCE_IMAGE_REF_PATTERN.fullmatch(image_ref) is not None:
         expected_repository = (
-            "localhost/quwoquan_service_" + service_name.replace("-", "_") + ":"
+            "localhost/quwoquan_service_core:"
+            if service_name == SERVICE_CORE_WORKLOAD
+            else "localhost/quwoquan_service_"
+            + service_name.replace("-", "_")
+            + ":"
         )
         if not image_ref.startswith(expected_repository):
             raise ValueError(
@@ -165,9 +199,9 @@ def bind_packaged_image_composition(
     services: Sequence[str] | None = None,
     include_local_release_aliases: bool = False,
 ) -> dict[str, object]:
-    owners = tuple(services or first_party_service_names())
+    owners = tuple(services or runtime_image_owner_names())
     refs = {
-        service: packaged_service_source_image_ref(environment, service)
+        service: packaged_runtime_source_image_ref(environment, service)
         for service in owners
     }
     digest = immutable_image_digest(refs)

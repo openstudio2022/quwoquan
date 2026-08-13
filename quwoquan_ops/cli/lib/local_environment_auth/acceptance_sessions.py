@@ -168,12 +168,12 @@ def open_test_data_acceptance_session(
     actor_index: int,
     timeout_seconds: float = 30.0,
 ) -> LocalAcceptanceActor:
-    """Open an isolated typed test-data actor without exposing legacy identity terms.
+    """Open an isolated typed test-data actor without exposing protected identity terms.
 
     The protected identity-set adapter derives a deterministic internal
     identity scope, while request graphs and receipts use only
-    ``testDataInstanceId``.  This adapter can therefore be retired with the
-    legacy test-live path without coupling typed capabilities to its schema.
+    ``testDataInstanceId``.  This adapter can therefore be retired together
+    with the test-live path without coupling typed capabilities to its schema.
     """
 
     canonical_instance = str(test_data_instance_id).strip()

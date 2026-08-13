@@ -1,6 +1,7 @@
 {
   "_governance": {
     "expires_when": "本棘轮完全并入 ContractGraph object evidence 门禁",
+    "measure": "verify_app_domain_remote_api_integration.py 按域统计 App / Service 侧 api_integration 测试文件数与被覆盖对象数；任一计数低于基线即阻断。",
     "owner": "cloud-contract-governance",
     "reason": "五域对象级 generated Remote API integration 证据只增不减"
   },

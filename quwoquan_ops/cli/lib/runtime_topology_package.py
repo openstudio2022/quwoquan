@@ -16,10 +16,16 @@ from typing import Any, Mapping
 import yaml
 
 from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service_names
+from quwoquan_ops.cli.lib.service_core_composition import (
+    SERVICE_CORE_MODULE_SET,
+    SERVICE_CORE_MODULES,
+    SERVICE_CORE_WORKLOAD,
+    project_compose_document,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
-SCHEMA = "qwq.runtime_topology_package.v1"
+SCHEMA = "qwq.runtime_topology_package.v3"
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 TOPOLOGY_RELATIVE_ROOT = PurePosixPath(
     "packages/runtime-shared/runtime-topology"
@@ -36,6 +42,23 @@ CONTENT_RELEASE_SERVICES = frozenset(
 CONTENT_COMMERCIAL_SERVICES = frozenset(
     {*CONTENT_RELEASE_SERVICES, "product-ops-service"}
 )
+# 服务 Compose 允许以相对路径 bind 挂载的仓库真相源文件。candidate 是自
+# 包含 immutable 包，任何相对 bind 都必须在打包时封装并重写到包内位置；
+# 否则 docker 会对悬空的 host 路径自动创建目录，容器读到 is-a-directory
+# 后 fail-fast（product-ops telemetry alert policy 曾因此冷启动即退出）。
+OBSERVABILITY_ALERT_POLICY_SOURCE = PurePosixPath(
+    "quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml"
+)
+_ALERT_POLICY_PACKAGE_REF = PurePosixPath(
+    "policies/product_telemetry_alerts.yaml"
+)
+# 运行时 project directory 是第一个 -f Compose 文件所在目录，即
+# runtime-topology/（base.compose.yaml 永远是 manifest 首个 entry）。
+_SEALED_BIND_SOURCES: dict[str, str] = {
+    OBSERVABILITY_ALERT_POLICY_SOURCE.as_posix(): (
+        "./" + _ALERT_POLICY_PACKAGE_REF.as_posix()
+    ),
+}
 
 
 class RuntimeTopologyPackageError(ValueError):
@@ -93,12 +116,48 @@ def _sealed_compose_bytes(source: Path) -> tuple[bytes, str]:
         # A runtime candidate is image-only.  Keeping a live build context here
         # would let `up` read the mutable repository after candidate creation.
         service.pop("build", None)
+        _seal_relative_bind_mounts(service, source=source)
+    compose = project_compose_document(compose)
     encoded = yaml.safe_dump(
         compose,
         allow_unicode=True,
         sort_keys=False,
     ).encode("utf-8")
     return encoded, _sha256_bytes(source_bytes)
+
+
+def _seal_relative_bind_mounts(service: dict[str, Any], *, source: Path) -> None:
+    """Rewrite declared relative bind sources to the package-owned copies.
+
+    相对 bind 在开发态以仓库为基准解析，但 candidate 运行时的 project
+    directory 是包内 runtime-topology/。凡未在 ``_SEALED_BIND_SOURCES``
+    声明的相对 bind 都指向包外可变文件，直接拒绝打包。
+    """
+
+    volumes = service.get("volumes")
+    if not isinstance(volumes, list):
+        return
+    for index, volume in enumerate(volumes):
+        if not isinstance(volume, str):
+            continue
+        host, separator, container = volume.partition(":")
+        if not separator or not host.startswith(("./", "../")):
+            continue
+        normalized = os.path.normpath(host)
+        replacement = next(
+            (
+                sealed
+                for declared, sealed in _SEALED_BIND_SOURCES.items()
+                if normalized == declared or normalized.endswith("/" + declared)
+            ),
+            None,
+        )
+        if replacement is None:
+            raise RuntimeTopologyPackageError(
+                "runtime Compose relative bind mount escapes the immutable "
+                f"candidate: {host} ({source})"
+            )
+        volumes[index] = replacement + ":" + container
 
 
 def _validate_relative(relative: PurePosixPath, *, label: str) -> None:
@@ -330,10 +389,75 @@ def materialize_runtime_topology_package(
         ).as_posix(),
         "digest": _sha256_bytes(policy_bytes),
     }
+    # product-ops Compose 以相对 bind 挂载遥测告警策略；打包时封装同一
+    # 字节并把 bind 源重写到包内（见 _seal_relative_bind_mounts）。
+    alert_policy_bytes = _safe_source_bytes(
+        repo_root / OBSERVABILITY_ALERT_POLICY_SOURCE.as_posix(),
+        label="telemetry alert policy source",
+    )
+    _write_exclusive(
+        root,
+        output_prefix / _ALERT_POLICY_PACKAGE_REF,
+        alert_policy_bytes,
+    )
+    observability_policy = {
+        "ref": (TOPOLOGY_RELATIVE_ROOT / _ALERT_POLICY_PACKAGE_REF).as_posix(),
+        "digest": _sha256_bytes(alert_policy_bytes),
+    }
+    runtime_service_names = sorted(
+        (set(service_names) - SERVICE_CORE_MODULE_SET) | {SERVICE_CORE_WORKLOAD}
+    )
+    sbom = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {
+            "component": {
+                "type": "application",
+                "name": "quwoquan-runtime",
+                "version": target,
+            }
+        },
+        "components": [
+            {
+                "type": "application",
+                "name": service,
+                "version": "candidate-bound",
+                **(
+                    {
+                        "properties": [
+                            {
+                                "name": "quwoquan.service-core.modules",
+                                "value": ",".join(SERVICE_CORE_MODULES),
+                            }
+                        ]
+                    }
+                    if service == SERVICE_CORE_WORKLOAD
+                    else {}
+                ),
+            }
+            for service in runtime_service_names
+        ],
+    }
+    sbom_bytes = (
+        json.dumps(sbom, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    sbom_relative = output_prefix / "service-core.sbom.cdx.json"
+    _write_exclusive(root, sbom_relative, sbom_bytes)
+    composition_sbom = {
+        "ref": (
+            TOPOLOGY_RELATIVE_ROOT / "service-core.sbom.cdx.json"
+        ).as_posix(),
+        "digest": _sha256_bytes(sbom_bytes),
+    }
     identity = {
         "compose": entries,
         "policy": policy,
+        "observabilityPolicy": observability_policy,
         "serviceNames": service_names,
+        "runtimeServiceNames": runtime_service_names,
+        "serviceCoreModules": list(SERVICE_CORE_MODULES),
+        "compositionSbom": composition_sbom,
     }
     manifest = {
         "schema": SCHEMA,
@@ -441,7 +565,11 @@ def load_runtime_topology_package(
         "target",
         "compose",
         "policy",
+        "observabilityPolicy",
         "serviceNames",
+        "runtimeServiceNames",
+        "serviceCoreModules",
+        "compositionSbom",
         "topologyDigest",
     }
     if not isinstance(manifest, dict) or set(manifest) != required:
@@ -460,12 +588,38 @@ def load_runtime_topology_package(
         or service_names != sorted(set(service_names))
     ):
         raise RuntimeTopologyPackageError("runtime topology service closure is invalid")
+    runtime_service_names = manifest.get("runtimeServiceNames")
+    service_core_modules = manifest.get("serviceCoreModules")
+    composition_sbom = manifest.get("compositionSbom")
+    expected_runtime_services = sorted(
+        (set(service_names) - SERVICE_CORE_MODULE_SET) | {SERVICE_CORE_WORKLOAD}
+    )
+    if (
+        runtime_service_names != expected_runtime_services
+        or service_core_modules != list(SERVICE_CORE_MODULES)
+        or not SERVICE_CORE_MODULE_SET.issubset(service_names)
+    ):
+        raise RuntimeTopologyPackageError(
+            "runtime topology service-core composition is invalid"
+        )
+    if not isinstance(composition_sbom, dict) or set(composition_sbom) != {
+        "ref",
+        "digest",
+    }:
+        raise RuntimeTopologyPackageError(
+            "runtime topology composition SBOM identity is invalid"
+        )
     compose = manifest.get("compose")
     policy = manifest.get("policy")
+    observability_policy = manifest.get("observabilityPolicy")
     identity = {
         "compose": compose,
         "policy": policy,
+        "observabilityPolicy": observability_policy,
         "serviceNames": service_names,
+        "runtimeServiceNames": runtime_service_names,
+        "serviceCoreModules": service_core_modules,
+        "compositionSbom": composition_sbom,
     }
     if manifest.get("topologyDigest") != _sha256_bytes(_canonical_json(identity)):
         raise RuntimeTopologyPackageError("runtime topology identity digest drifted")
@@ -473,6 +627,13 @@ def load_runtime_topology_package(
         raise RuntimeTopologyPackageError("runtime topology Compose closure is empty")
     if not isinstance(policy, dict) or set(policy) != {"ref", "digest"}:
         raise RuntimeTopologyPackageError("runtime topology policy fields mismatch")
+    if not isinstance(observability_policy, dict) or set(observability_policy) != {
+        "ref",
+        "digest",
+    }:
+        raise RuntimeTopologyPackageError(
+            "runtime topology observability policy fields mismatch"
+        )
 
     selected_services: frozenset[str] | None
     include_control_plane = False
@@ -540,7 +701,14 @@ def load_runtime_topology_package(
                     "runtime topology service layer is duplicated"
                 )
             seen_service_layers.add(service_layer)
-            selected = selected_services is None or service in selected_services
+            selected = (
+                selected_services is None
+                or service in selected_services
+                or (
+                    service in SERVICE_CORE_MODULE_SET
+                    and bool(SERVICE_CORE_MODULE_SET & selected_services)
+                )
+            )
         elif role == "control-plane":
             if layer != "base" or service:
                 raise RuntimeTopologyPackageError(
@@ -625,6 +793,49 @@ def load_runtime_topology_package(
     )
     if policy.get("digest") != _sha256_bytes(policy_bytes):
         raise RuntimeTopologyPackageError("runtime topology policy artifact drifted")
+    alert_policy_reference = _artifact_relative(
+        observability_policy.get("ref"),
+        label="runtime topology observability policy artifact",
+    )
+    alert_policy_bytes = _read_candidate_bytes(
+        candidate_root,
+        alert_policy_reference,
+        label="runtime topology observability policy artifact",
+    )
+    if observability_policy.get("digest") != _sha256_bytes(alert_policy_bytes):
+        raise RuntimeTopologyPackageError(
+            "runtime topology observability policy artifact drifted"
+        )
+    sbom_reference = _artifact_relative(
+        composition_sbom.get("ref"),
+        label="runtime topology composition SBOM",
+    )
+    sbom_bytes = _read_candidate_bytes(
+        candidate_root,
+        sbom_reference,
+        label="runtime topology composition SBOM",
+    )
+    if composition_sbom.get("digest") != _sha256_bytes(sbom_bytes):
+        raise RuntimeTopologyPackageError(
+            "runtime topology composition SBOM drifted"
+        )
+    try:
+        sbom = json.loads(sbom_bytes.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise RuntimeTopologyPackageError(
+            "runtime topology composition SBOM is unreadable"
+        ) from exc
+    components = sbom.get("components") if isinstance(sbom, dict) else None
+    component_names = (
+        [str(item.get("name") or "") for item in components]
+        if isinstance(components, list)
+        and all(isinstance(item, dict) for item in components)
+        else []
+    )
+    if component_names != runtime_service_names:
+        raise RuntimeTopologyPackageError(
+            "runtime topology composition SBOM workload closure drifted"
+        )
 
     return {
         "schema": SCHEMA,
@@ -635,6 +846,9 @@ def load_runtime_topology_package(
         "composeFiles": selected_paths,
         "policyFile": candidate_root / policy_reference.as_posix(),
         "serviceNames": service_names,
+        "runtimeServiceNames": runtime_service_names,
+        "serviceCoreModules": service_core_modules,
+        "compositionSbomFile": candidate_root / sbom_reference.as_posix(),
     }
 
 

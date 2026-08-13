@@ -57,8 +57,15 @@ for prefix in policy.get("pull_request_branch_prefixes", []) or []:
 PY
 )"
 
+zero_sha="0000000000000000000000000000000000000000"
+
 while read -r local_ref local_sha remote_ref remote_sha; do
   [[ -n "${remote_ref:-}" ]] || continue
+  # 删除远端分支(local_sha 全零)是清理违规分支的执行动作,必须放行;
+  # 否则策略宣布 dev1.0 违规却永远删不掉它。
+  if [[ "${local_sha:-}" == "$zero_sha" ]]; then
+    continue
+  fi
   case "$remote_ref" in
     refs/heads/*)
       allowed=false

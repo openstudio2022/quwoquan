@@ -2,17 +2,22 @@
   "_governance": {
     "owner": "runtime-client-foundation",
     "reason": "assistant handwritten and search weak typing can only decrease",
-    "expires_when": "both bucket counters reach zero"
+    "expires_when": "all three buckets reach the irreducible serde/extension floor documented in assistant-runtime-foundation OPEN-003; anonymous string-keyed Maps outside those boundaries reach zero",
+    "measure": "map_string_dynamic counts `Map<String, dynamic>` sites; map_string_object_optional counts `Map<String, Object?>` sites; bare_dynamic counts standalone `dynamic` sites with the dynamic Maps subtracted. The three buckets never count the same token. Comments are excluded.",
+    "superseded_measure": "Two prior measures were retired. The original text-occurrence measure double counted every `Map<String, dynamic>` into a dynamic_keyword metric (baseline 209/373, of which 209 were duplicates) and had drifted to 292/522 without CI blocking it. Its replacement kept `Map<String, Object?>` as an informational metric with a stated target shape of `Map<String, Object?>`, which left a laundering channel open: a mechanical dynamic-to-Object? rewrite moved debt out of the ratchet without removing a single anonymous Map.",
+    "target_shape": "metadata-owned named DTOs / sealed types generated from assistant contract schemas. `Map<String, Object?>` is not a target shape: it is only tolerated at serde boundaries (fromJson/toJson wire layer) and at contract-declared open extension slots, and that residue is locked by its own bucket"
   },
   "buckets": {
     "assistant_handwritten": {
-      "map_string_dynamic": 209,
-      "dynamic_keyword": 373
+      "map_string_dynamic": 157,
+      "map_string_object_optional": 27,
+      "bare_dynamic": 138
     },
     "core_search_repository": {
       "map_string_dynamic": 0,
-      "dynamic_keyword": 0
+      "map_string_object_optional": 0,
+      "bare_dynamic": 0
     }
   },
-  "notes": "Ratchet: any increase in map_string_dynamic or dynamic_keyword per bucket fails CI until baseline is intentionally updated."
+  "notes": "Ratchet: any increase in map_string_dynamic, map_string_object_optional or bare_dynamic per bucket fails CI until baseline is intentionally updated."
 }

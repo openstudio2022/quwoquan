@@ -5,8 +5,11 @@ from typing import Any
 from ..api import BusinessObjectRef, CapabilityRequest
 from ..capabilities.chat_service import (
     DIRECT_CONVERSATION_WITH_MESSAGES,
+    GROUP_CONVERSATION,
     DirectConversationResult,
     DirectConversationWithMessagesParams,
+    GroupConversationParams,
+    GroupConversationResult,
     MessageHandle,
     MessageStatus,
 )
@@ -34,11 +37,22 @@ _DIRECT_MESSAGES = CapabilityDefinition(
         "chat.conversation.DissolveConversation",
     ),
 )
+_GROUP_CONVERSATION = CapabilityDefinition(
+    capability=GROUP_CONVERSATION,
+    operations=(
+        "chat.conversation.CreateConversation",
+        "chat.conversation.UpdateAnnouncement",
+        "chat.conversation_membership.UpdateGroupAdmins",
+        "chat.conversation_membership.ListMembers",
+        "chat.conversation.GetGroupHome",
+        "chat.conversation.DissolveConversation",
+    ),
+)
 
 
 class ChatAcceptanceDataProvider:
     def describe(self) -> tuple[CapabilityDefinition, ...]:
-        return (_DIRECT_MESSAGES,)
+        return (_DIRECT_MESSAGES, _GROUP_CONVERSATION)
 
     def plan(
         self,
@@ -46,13 +60,20 @@ class ChatAcceptanceDataProvider:
         request: CapabilityRequest[Any, Any],
         resolved_params: object,
     ) -> ProviderPlan:
-        return plan_for(_DIRECT_MESSAGES, request, resolved_params)
+        definition = (
+            _GROUP_CONVERSATION
+            if request.capability == GROUP_CONVERSATION
+            else _DIRECT_MESSAGES
+        )
+        return plan_for(definition, request, resolved_params)
 
     def provision(
         self,
         context: TestDataContext,
         plan: ProviderPlan,
     ) -> ProvisionedCapability:
+        if isinstance(plan.resolved_params, GroupConversationParams):
+            return self._provision_group(context, plan.resolved_params)
         if not isinstance(plan.resolved_params, DirectConversationWithMessagesParams):
             raise TypeError("Chat Provider received invalid resolved params")
         params = plan.resolved_params
@@ -145,11 +166,122 @@ class ChatAcceptanceDataProvider:
             operation_count=executor.operation_count,
         )
 
+    def _provision_group(
+        self,
+        context: TestDataContext,
+        params: GroupConversationParams,
+    ) -> ProvisionedCapability:
+        if not isinstance(params.actors, AcceptanceActorSet):
+            raise TypeError("actors dependency was not resolved")
+        if any(
+            not isinstance(gate, int) or gate < 2
+            for gate in params.mutual_follow_gates
+        ):
+            raise TypeError("mutual-follow gates dependency was not resolved")
+        owner = params.actors.require(params.owner_role)
+        members = tuple(params.actors.require(role) for role in params.member_roles)
+        admin = params.actors.require(params.admin_role)
+        executor = _executor(context, GROUP_CONVERSATION.key.value)
+        created = executor.call(
+            "chat.conversation.CreateConversation",
+            actor=owner,
+            step_id="create-group-conversation",
+            body={
+                "type": "group",
+                "title": "验收群聊",
+                "maxGroupSize": 8,
+                "initialMemberIds": [member.account.object_id for member in members],
+            },
+        )
+        conversation = BusinessObjectRef(
+            "Conversation",
+            required_id(created, "conversationId", "id"),
+        )
+        result = GroupConversationResult(
+            conversation=conversation,
+            members=(
+                owner.account,
+                *(member.account for member in members),
+            ),
+            admin=admin.account,
+            owner_role=params.owner_role,
+            admin_role=params.admin_role,
+            announcement=params.announcement,
+        )
+        try:
+            executor.call(
+                "chat.conversation.UpdateAnnouncement",
+                actor=owner,
+                step_id="update-announcement",
+                bindings={"conversationId": conversation.object_id},
+                body={"announcement": params.announcement},
+            )
+            executor.call(
+                "chat.conversation_membership.UpdateGroupAdmins",
+                actor=owner,
+                step_id="update-group-admins",
+                bindings={"conversationId": conversation.object_id},
+                body={"adminIds": [admin.account.object_id]},
+            )
+        except BaseException as error:
+            raise PartialProvisioningError(
+                "Chat Provider stopped after creating a group conversation",
+                provisioned=ProvisionedCapability(
+                    value=result,
+                    cleanup_handle=(conversation,),
+                    cleanup_context=owner,
+                    operation_count=executor.operation_count,
+                ),
+            ) from error
+        return ProvisionedCapability(
+            value=result,
+            cleanup_handle=(conversation,),
+            cleanup_context=owner,
+            operation_count=executor.operation_count,
+        )
+
     def readback(
         self,
         context: TestDataContext,
         provisioned: ProvisionedCapability,
     ) -> ReadbackResult:
+        if isinstance(provisioned.value, GroupConversationResult):
+            owner = provisioned.cleanup_context
+            executor = _executor(context, GROUP_CONVERSATION.key.value + ".readback")
+            listed = executor.call(
+                "chat.conversation_membership.ListMembers",
+                actor=owner,
+                step_id="list-group-members",
+                bindings={
+                    "conversationId": provisioned.value.conversation.object_id,
+                },
+                query={"limit": 50},
+            )
+            observed = {
+                str(item.get("userId") or "").strip()
+                for item in items(listed)
+            }
+            expected = {member.object_id for member in provisioned.value.members}
+            home = executor.call(
+                "chat.conversation.GetGroupHome",
+                actor=owner,
+                step_id="get-group-home",
+                bindings={
+                    "conversationId": provisioned.value.conversation.object_id,
+                },
+            )
+            announcement = str(home.get("announcement") or "")
+            return ReadbackResult(
+                passed=(
+                    expected.issubset(observed)
+                    and announcement == provisioned.value.announcement
+                ),
+                operation_count=executor.operation_count,
+                details={
+                    "memberCount": len(observed),
+                    "announcementVisible": bool(announcement),
+                },
+            )
         if not isinstance(provisioned.value, DirectConversationResult):
             return ReadbackResult(passed=False)
         sender = provisioned.cleanup_context
@@ -179,6 +311,20 @@ class ChatAcceptanceDataProvider:
         context: TestDataContext,
         provisioned: ProvisionedCapability,
     ) -> CleanupResult:
+        if isinstance(provisioned.value, GroupConversationResult):
+            executor = _executor(context, GROUP_CONVERSATION.key.value + ".cleanup")
+            executor.call(
+                "chat.conversation.DissolveConversation",
+                actor=provisioned.cleanup_context,
+                step_id="dissolve-group-conversation",
+                bindings={
+                    "conversationId": provisioned.value.conversation.object_id,
+                },
+            )
+            return CleanupResult(
+                state="released",
+                operation_count=executor.operation_count,
+            )
         if not isinstance(provisioned.value, DirectConversationResult):
             return CleanupResult(state="quarantined")
         executor = _executor(context, DIRECT_CONVERSATION_WITH_MESSAGES.key.value + ".cleanup")

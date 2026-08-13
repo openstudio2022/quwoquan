@@ -181,8 +181,8 @@ def test_android_14_managed_avd_installs_dual_trust_stores_and_resolver_overlay(
     ]
     source_apex_digest = "A" * 64
     incremental_apex_digest = "B" * 64
-    source_legacy_digest = "C" * 64
-    incremental_legacy_digest = "D" * 64
+    source_system_store_digest = "C" * 64
+    incremental_system_store_digest = "D" * 64
     handoff = {
         "target": "alpha-local",
         "address": "127.0.0.1",
@@ -205,9 +205,9 @@ def test_android_14_managed_avd_installs_dual_trust_stores_and_resolver_overlay(
                 source_apex_digest,
                 source_apex_digest,
                 incremental_apex_digest,
-                source_legacy_digest,
-                source_legacy_digest,
-                incremental_legacy_digest,
+                source_system_store_digest,
+                source_system_store_digest,
+                incremental_system_store_digest,
             ),
         ),
         mock.patch.object(subject, "_android_zygote_pids", return_value=[100, 200]),
@@ -244,7 +244,7 @@ def test_android_14_managed_avd_installs_dual_trust_stores_and_resolver_overlay(
     stores = installed["androidTrustStores"]
     assert [store["kind"] for store in stores] == [
         "conscrypt-apex",
-        "legacy-system",
+        "system-partition",
     ]
     assert [store["sourcePath"] for store in stores] == [
         "/apex/com.android.conscrypt@352090000/cacerts",
@@ -256,11 +256,11 @@ def test_android_14_managed_avd_installs_dual_trust_stores_and_resolver_overlay(
     ]
     assert [store["sourceStoreSha256"] for store in stores] == [
         source_apex_digest,
-        source_legacy_digest,
+        source_system_store_digest,
     ]
     assert [store["incrementalStoreSha256"] for store in stores] == [
         incremental_apex_digest,
-        incremental_legacy_digest,
+        incremental_system_store_digest,
     ]
     assert all(store["installedCertificateSha256"] == expected_digest for store in stores)
     assert all(store["mountNamespaces"] == namespaces for store in stores)
@@ -338,9 +338,9 @@ def test_android_verify_proves_dual_stores_resolver_and_current_namespaces(
             "/apex/com.android.conscrypt/cacerts",
         ),
         (
-            "legacy-system",
+            "system-partition",
             "/system/etc/security/cacerts",
-            f"{stage_root}/legacy-cacerts",
+            f"{stage_root}/system-cacerts",
             "/system/etc/security/cacerts",
         ),
     )
@@ -531,10 +531,10 @@ def test_android_dual_store_verifier_rejects_any_namespace_digest_drift() -> Non
     incremental_digest = "B" * 64
     stores = [
         {
-            "kind": "legacy-system",
+            "kind": "system-partition",
             "sourceStoreSha256": base_digest,
             "incrementalStoreSha256": incremental_digest,
-            "stagedStorePath": "/stage/legacy-cacerts",
+            "stagedStorePath": "/stage/system-cacerts",
             "trustStorePath": "/system/etc/security/cacerts",
             "certificatePath": "/system/etc/security/cacerts/b7744e41.0",
         }

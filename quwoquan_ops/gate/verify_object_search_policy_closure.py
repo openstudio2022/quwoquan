@@ -152,7 +152,12 @@ def load_objects(repo_root: Path) -> dict[str, tuple[Path, dict]]:
 
 
 def resolve_go_symbol(repo_root: Path, reference: str) -> str | None:
-    """Return a failure string when `<path>#<Symbol>` does not resolve."""
+    """Return a failure string when `<path>#<Symbol>` does not resolve.
+
+    `<Symbol>` is either a plain function name, or a receiver-qualified method
+    `Type.Method` for projectors implemented as methods on an event/aggregate
+    type (e.g. `UserProfileSearchProjectionEvent.Document`).
+    """
     if "#" not in reference:
         return f"reference {reference!r} must use `<repo-relative path>#<GoSymbol>`"
     relative, symbol = reference.rsplit("#", 1)
@@ -160,6 +165,19 @@ def resolve_go_symbol(repo_root: Path, reference: str) -> str | None:
     if not target.is_file():
         return f"reference {reference!r} points at a missing file"
     body = target.read_text(encoding="utf-8")
+    if "." in symbol:
+        receiver_type, method_name = symbol.rsplit(".", 1)
+        bound = re.compile(
+            rf"^func\s+\([^)]*\*?{re.escape(receiver_type)}\s*\)"
+            rf"\s*{re.escape(method_name)}\s*[\(\[]",
+            re.MULTILINE,
+        )
+        if bound.search(body):
+            return None
+        return (
+            f"reference {reference!r} has no "
+            f"`func (... {receiver_type}) {method_name}` definition"
+        )
     # Plain function, or a method on any receiver. Nothing else counts: a comment
     # or a call site mentioning the name is not a definition.
     plain = re.compile(rf"^func\s+{re.escape(symbol)}\s*[\(\[]", re.MULTILINE)
@@ -306,7 +324,11 @@ def validate_registration_closure(
         if "#" not in reference:
             continue
         symbol = reference.rsplit("#", 1)[1]
-        if not any(symbol in names for names in tests.values()):
+        # A `Type.Method` reference is evidenced by a test that names both the
+        # receiver type and the method in the same file; identifiers cannot
+        # contain a dot, so the joined literal would never match.
+        required = set(symbol.split(".")) if "." in symbol else {symbol}
+        if not any(required <= names for names in tests.values()):
             failures.append(
                 f"{type_id}: no Go test names {symbol} ({tested_key} of {owner}); "
                 "a registered searchable type must have projector evidence"

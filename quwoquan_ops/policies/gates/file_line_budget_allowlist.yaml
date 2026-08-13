@@ -3,6 +3,9 @@ governance:
   owner: repository-architecture
   reason: 超过行数红线的存量文件只减不增
   expires_when: allow 为空时删除本文件
+  measure: |
+    verify_file_line_budget.py 统计各源文件物理行数，超过 block_threshold 且不在
+    allow 内即 BLOCK；allow 内的文件超过各自 max_lines 也 BLOCK。
 block_threshold: 1000
 allow:
 - path: quwoquan_app/lib/service/content_service/content/post/application/post_publication_intent_queue_provider.dart

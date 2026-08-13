@@ -18,13 +18,16 @@ _IDENTITY_CONTRACT = (
     ROOT / "quwoquan_service/services/user-service/contracts/account/"
     "account_session/operations.yaml"
 )
+# 对象化目录归一后，签名媒体授权 operation 与 TTL policy 的唯一真相源是
+# OriginalAccessQuota 聚合（MediaOriginalAccessFact 无独立 transport，
+# `api_routes: []`，审计事实只在额度预留事务内追加）。
 _SIGNED_MEDIA_CONTRACT = (
     ROOT / "quwoquan_service/services/content-service/contracts/media/"
-    "media_original_access_fact/operations.yaml"
+    "original_access_quota/operations.yaml"
 )
 _SIGNED_MEDIA_POLICY = (
     ROOT / "quwoquan_service/services/content-service/contracts/media/"
-    "media_original_access_fact/original_access_policy.yaml"
+    "original_access_quota/original_access_policy.yaml"
 )
 _REQUIRED_IDENTITY_OPERATION = "IssueWhitelistedResearchSession"
 _REQUIRED_TRUE = (
@@ -177,7 +180,7 @@ def _signed_media_adapter_available() -> bool:
         security = raw.get("security")
         fields = raw.get("response_fields")
         if (
-            raw.get("operation") == "RequestOriginalImageAccess"
+            raw.get("operation") == "ReserveOriginalImageAccessGrant"
             and isinstance(security, Mapping)
             and security.get("auth_mode") == "required"
             and security.get("anonymous_policy") == "deny"

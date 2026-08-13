@@ -21,9 +21,11 @@ from .api import (
     ExecutedCase,
     OutputRef,
     Provisioned,
+    ReceiptRef,
     TestDataSession,
     validate_result,
 )
+from .capabilities.common import AcceptanceActorSet
 from .discovery import load_provider
 from .lease import ActorLease, ActorLeaseManager
 from .model import (
@@ -72,7 +74,7 @@ class _SessionImpl(TestDataSession):
         )
         with scope as provisioned:
             executed = scope.execute_case(case, provisioned)
-        return executed
+        return scope.complete_executed_case(executed)
 
 
 class _Scope:
@@ -109,6 +111,8 @@ class _Scope:
         self._lease_thread: Thread | None = None
         self._lease_renewal_error = ""
         self._case_execution: CaseExecution | None = None
+        self._readback_receipts: list[ReceiptRef] = []
+        self._cleanup_receipts: list[ReceiptRef] = []
 
     def __enter__(self) -> Provisioned[Any]:
         if self._entered:
@@ -261,9 +265,12 @@ class _Scope:
         execution_context = CaseExecutionContext(
             environment=self._context.candidate.environment,
             target=self._context.candidate.target,
+            base_url=self._context.base_url,
             candidate_binding_digest=self._context.candidate.digest,
+            test_data_instance_id=self._context.test_data_instance_id,
             request_id=case.request.request_id,
             provision_receipt=provisioned.receipt,
+            runtime=self._context.runtime,
         )
         try:
             execution = case.runner_type.execute(
@@ -277,6 +284,7 @@ class _Scope:
                 {
                     "caseId": str(case.case_id.value),
                     "requestId": case.request.request_id.value,
+                    "provisionReceiptDigest": provisioned.receipt.digest,
                     "status": execution.status.value,
                     "assertions": [
                         {
@@ -302,6 +310,9 @@ class _Scope:
         return ExecutedCase(
             case_id=str(case.case_id.value),
             execution=execution,
+            candidate_binding_digest=self._context.candidate.digest,
+            test_data_instance_id=self._context.test_data_instance_id,
+            request_id=case.request.request_id,
             provision_receipt=provisioned.receipt,
             test_body_receipt=test_body_receipt,
         )
@@ -332,6 +343,8 @@ class _Scope:
             self._metrics["executed"] = 0
             self._metrics["assertionCount"] = 0
         if self._lease is not None and self._lease_manager is not None:
+            if not self._lease.actor_set_digest:
+                cleanup_issues.append("actor-lease-unbound")
             if cleanup_issues:
                 self._lease_manager.quarantine(
                     generation=self._lease.generation,
@@ -515,12 +528,37 @@ class _Scope:
                         provisioned.value,
                         prepared.request.capability.result_type,
                     )
+                    self._bind_actor_set(value)
                     provisioned = replace(provisioned, value=value)
                     with self._result_lock:
                         self._provisioned_for_cleanup[request_id] = provisioned
+                    assert self._journal is not None
+                    provision_receipt = self._journal.append(
+                        "provision",
+                        {
+                            "requestId": request_id,
+                            "capabilityKey": prepared.request.capability.key.value,
+                            "ownerService": prepared.request.capability.owner_service,
+                            "provisionMs": provision_ms,
+                            "operationCount": provisioned.operation_count,
+                        },
+                    )
                     readback_started = time.monotonic()
                     readback = prepared.provider.readback(context, provisioned)
                     readback_ms = _elapsed_ms(readback_started)
+                    readback_receipt = self._journal.append(
+                        "readback",
+                        {
+                            "requestId": request_id,
+                            "capabilityKey": prepared.request.capability.key.value,
+                            "passed": readback.passed,
+                            "readbackMs": readback_ms,
+                            "operationCount": readback.operation_count,
+                            "details": dict(readback.details),
+                        },
+                    )
+                    with self._result_lock:
+                        self._readback_receipts.append(readback_receipt)
                 finally:
                     self._operation_finished()
         except PartialProvisioningError as error:
@@ -559,13 +597,15 @@ class _Scope:
                 value=provisioned,
             )
         assert self._journal is not None
-        receipt = self._journal.append(
+        self._journal.append(
             "capability",
             {
                 "requestId": request_id,
                 "capabilityKey": prepared.request.capability.key.value,
                 "capabilityDefinitionDigest": prepared.definition.digest,
                 "ownerService": prepared.request.capability.owner_service,
+                "provisionReceiptDigest": provision_receipt.digest,
+                "readbackReceiptDigest": readback_receipt.digest,
                 "provisionMs": provision_ms,
                 "readbackMs": readback_ms,
                 "operationCount": provisioned.operation_count + readback.operation_count,
@@ -577,7 +617,7 @@ class _Scope:
                 provisioned,
                 operation_count=provisioned.operation_count + readback.operation_count,
             ),
-            receipt=receipt,
+            receipt=provision_receipt,
             provision_ms=provision_ms,
             readback_ms=readback_ms,
         )
@@ -604,7 +644,7 @@ class _Scope:
                     issues.append(f"{request_id}:{result.state}")
                 self._cleanup_operation_count += result.operation_count
                 assert self._journal is not None
-                self._journal.append(
+                cleanup_receipt = self._journal.append(
                     "cleanup",
                     {
                         "requestId": request_id,
@@ -614,6 +654,8 @@ class _Scope:
                         "details": dict(result.details),
                     },
                 )
+                with self._result_lock:
+                    self._cleanup_receipts.append(cleanup_receipt)
         return issues
 
     def _cleanup_node(
@@ -665,6 +707,37 @@ class _Scope:
     def _operation_finished(self) -> None:
         with self._activity_lock:
             self._active_operations -= 1
+
+    def _bind_actor_set(self, value: object) -> None:
+        if not isinstance(value, AcceptanceActorSet):
+            return
+        if self._lease is None or self._lease_manager is None:
+            raise RuntimeError("mutable ActorSet was provisioned without an ActorLease")
+        self._lease = self._lease_manager.bind_actor_set(
+            generation=self._lease.generation,
+            actor_set_digest=value.identity_digest,
+        )
+
+    def complete_executed_case(self, executed: ExecutedCase) -> ExecutedCase:
+        if not self._readback_receipts or not self._cleanup_receipts:
+            raise RuntimeError(
+                "CaseResult requires provision, test-body, readback and cleanup receipts"
+            )
+        return replace(
+            executed,
+            readback_receipts=tuple(
+                sorted(
+                    self._readback_receipts,
+                    key=lambda receipt: receipt.path.as_posix(),
+                )
+            ),
+            cleanup_receipts=tuple(
+                sorted(
+                    self._cleanup_receipts,
+                    key=lambda receipt: receipt.path.as_posix(),
+                )
+            ),
+        )
 
     def _start_lease_renewal(self) -> None:
         if self._lease is None or self._lease_manager is None:

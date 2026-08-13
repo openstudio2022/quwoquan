@@ -814,6 +814,108 @@ def test_newly_closed_composite_acceptance_requires_clause_binding() -> None:
     )
 
 
+def build_verifiable_tree(tmp_path: Path) -> Path:
+    """建一棵能通过完整 command_verify 的最小树。
+
+    比 build_tree 多出的都是结构性硬门要求：README、逐层子节点链接、无本层 design
+    时指向父 L1 DEC、以及真实存在的工程归属路径。
+    """
+    root = tmp_path / "repo"
+    tree = root / "specs" / "feature-tree"
+    (root / "quwoquan_app" / "lib").mkdir(parents=True, exist_ok=True)
+    write(tree / "README.md", "# 特性树\n")
+    write(tree / "spec.md", "# AppRoot Spec：演示\n\n- [domain](./domain/spec.md)\n")
+    write(tree / "design.md", "# AppRoot Design：演示\n")
+    write(
+        tree / "domain" / "spec.md",
+        "# L1 Domain Service：领域 (`domain`)\n\n"
+        "## 7. 工程归属\n\n- App：`quwoquan_app/lib`\n\n"
+        "- [capability](./capability/spec.md)\n",
+    )
+    write(
+        tree / "domain" / "design.md",
+        '# L1 Design：领域 (`domain`)\n\n<a id="dec-001"></a>\n### DEC-001 决策\n',
+    )
+    write(
+        tree / "domain" / "capability" / "spec.md",
+        "# L2 Business Capability：能力 (`capability`)\n\n"
+        "- 父级设计：[L1 DEC-001](../design.md#dec-001)\n\n"
+        "- [story](./story/spec.md)\n",
+    )
+    write(
+        tree / "domain" / "capability" / "story" / "spec.md",
+        "# L3 Story：故事 (`story`)\n\n"
+        "- 父级设计：[L1 DEC-001](../../design.md#dec-001)\n",
+    )
+    return root
+
+
+def test_unbound_compound_acceptance_blocks_unless_registered(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """无子句级绑定的复合验收必须真的阻断，而不是只打印一个数字。
+
+    这里刻意走完整 command_verify 而不是单测判据函数：旧实现的判据本身是对的，
+    算完却既不读基线也不比对就 return 0，「只减不增」从未被执行过。只有端到端断言
+    退出码，才能防止这段逻辑再次被从 errors 上摘掉。
+    """
+    root = build_verifiable_tree(tmp_path)
+    story = root / "specs" / "feature-tree" / "domain" / "capability" / "story" / "spec.md"
+    write(
+        story,
+        story.read_text(encoding="utf-8")
+        + '\n<a id="gwt-001"></a>\n'
+        + COMPOSITE_ANCHOR,
+    )
+    rel = "specs/feature-tree/domain/capability/story/spec.md"
+    # 整体 spec_ref 让双向门满意，但三条结果子句一条都没有被指名断言过——这正是
+    # 新门要抓的形态，也是既有双向门看不见的盲区。
+    write(
+        root / "quwoquan_app" / "test" / "story__local_contract_test.dart",
+        f"// spec_ref: {rel}#gwt-001\nvoid main() {{}}\n",
+    )
+    monkeypatch.setattr(ft_context, "REPO_ROOT", root)
+    monkeypatch.setattr(ft_context, "TREE_ROOT", root / "specs" / "feature-tree")
+    monkeypatch.setattr(ft_gitio, "git_changed_paths", lambda: [])
+    args = argparse.Namespace(changes=False)
+
+    assert feature_tree.command_verify(args) == 1
+    assert "gwt-001" in capsys.readouterr().err
+
+    # 登记后放行，且末尾统计把它算进在册存量。
+    write(
+        root / feature_tree.UNBOUND_COMPOUND_BASELINE,
+        "governance:\n"
+        "  owner: feature-tree-governance\n"
+        "  reason: 测试夹具\n"
+        "  expires_when: entries 归零\n"
+        f"entries:\n- spec: {rel}\n  anchor: GWT-001\n",
+    )
+    assert feature_tree.command_verify(args) == 0
+    assert "复合验收 1 条" in capsys.readouterr().out
+
+
+def test_compound_acceptance_owed_by_an_open_is_not_double_counted(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """挂在 OPEN 上的复合验收是公开债务，不必再登记进无绑定基线。"""
+    root = build_verifiable_tree(tmp_path)
+    story = root / "specs" / "feature-tree" / "domain" / "capability" / "story" / "spec.md"
+    write(
+        story,
+        story.read_text(encoding="utf-8")
+        + "\n"
+        + COMPOSITE_ANCHOR
+        + "\n## 7. 开放事项\n\n### OPEN-001 尚未闭合\n\n"
+        + "- 完成判定：`GWT-001.t1`、`GWT-001.t2` 与 `GWT-001.t3` 各自被真实测试 `spec_ref` 绑定。\n",
+    )
+    monkeypatch.setattr(ft_context, "REPO_ROOT", root)
+    monkeypatch.setattr(ft_context, "TREE_ROOT", root / "specs" / "feature-tree")
+    monkeypatch.setattr(ft_gitio, "git_changed_paths", lambda: [])
+
+    assert feature_tree.command_verify(argparse.Namespace(changes=False)) == 0
+
+
 def test_clause_transition_detects_open_deletion(tmp_path: Path, monkeypatch) -> None:
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001
     root = tmp_path / "repo"

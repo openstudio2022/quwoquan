@@ -6,7 +6,6 @@
   "additionalProperties": false,
   "required": [
     "schema",
-    "schemaVersion",
     "createdAt",
     "status",
     "repositoryRoot",
@@ -25,7 +24,6 @@
   ],
   "properties": {
     "schema": {"const": "stackctl-output-layout-reconciliation-plan"},
-    "schemaVersion": {"const": 1},
     "createdAt": {"type": "string", "minLength": 1},
     "status": {"enum": ["ready", "blocked"]},
     "repositoryRoot": {"type": "string", "minLength": 1},

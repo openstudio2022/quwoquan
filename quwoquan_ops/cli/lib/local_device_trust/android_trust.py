@@ -19,7 +19,7 @@ from ..local_device_android_trust import AndroidTrustOverlayError
 from ..local_device_resolver import LocalDeviceResolverError
 from .constants import (
     _ANDROID_CONSCRYPT_CACERTS,
-    _ANDROID_LEGACY_CACERTS,
+    _ANDROID_SYSTEM_CACERTS,
     _ANDROID_TRUST_STAGE_ROOT,
     _SAFE,
 )
@@ -232,10 +232,10 @@ def _install_android_conscrypt(
             f"{stage_root}/apex-cacerts",
         ),
         (
-            "legacy-system",
-            _ANDROID_LEGACY_CACERTS,
-            _ANDROID_LEGACY_CACERTS,
-            f"{stage_root}/legacy-cacerts",
+            "system-partition",
+            _ANDROID_SYSTEM_CACERTS,
+            _ANDROID_SYSTEM_CACERTS,
+            f"{stage_root}/system-cacerts",
         ),
     )
     stores: list[dict[str, Any]] = []
@@ -389,13 +389,13 @@ def _install_android_conscrypt(
     }
 
 
-def _install_android_legacy(
+def _install_android_system_store(
     device: str,
     root: Path,
     identity: dict[str, Any],
 ) -> dict[str, Any]:
     subject_hash = _pkg._android_subject_hash(root)
-    remote = f"{_ANDROID_LEGACY_CACERTS}/{subject_hash}.0"
+    remote = f"{_ANDROID_SYSTEM_CACERTS}/{subject_hash}.0"
     _pkg._android_root(device)
     remount = _run(["adb", "-s", device, "remount"])
     if remount.returncode != 0:
@@ -435,7 +435,7 @@ def _install_android_legacy(
         **identity,
         "trustStorePath": remote,
         "installedCertificateSha256": expected_digest,
-        "verification": "legacy-system-root-installed",
+        "verification": "system-partition-root-installed",
     }
 
 
@@ -454,7 +454,7 @@ def _install_android(
             root,
             resolved_identity,
         )
-    return _install_android_legacy(device, root, resolved_identity)
+    return _install_android_system_store(device, root, resolved_identity)
 
 
 def _verify_android_system_trust(
@@ -487,10 +487,10 @@ def _verify_android_system_trust(
                 _ANDROID_CONSCRYPT_CACERTS,
             ),
             (
-                "legacy-system",
-                _ANDROID_LEGACY_CACERTS,
-                f"{stage_root}/legacy-cacerts",
-                _ANDROID_LEGACY_CACERTS,
+                "system-partition",
+                _ANDROID_SYSTEM_CACERTS,
+                f"{stage_root}/system-cacerts",
+                _ANDROID_SYSTEM_CACERTS,
             ),
         )
         stores = receipt.get("androidTrustStores")
@@ -563,7 +563,7 @@ def _verify_android_system_trust(
             "dual-system-trust-ok; trust-stores-verified=2; "
             f"mount-namespaces-verified={namespace_count}; resolver-overlay-verified"
         )
-    remote = f"{_ANDROID_LEGACY_CACERTS}/{subject_hash}.0"
+    remote = f"{_ANDROID_SYSTEM_CACERTS}/{subject_hash}.0"
     if (
         receipt.get("trustStorePath") != remote
         or receipt.get("installedCertificateSha256") != expected_digest
@@ -571,4 +571,4 @@ def _verify_android_system_trust(
         raise LocalDeviceTrustError("device system-trust receipt certificate mismatch")
     if _android_remote_sha256(device, remote) != expected_digest:
         raise LocalDeviceTrustError("Android system CA verification failed")
-    return "legacy-system-trust-ok"
+    return "system-partition-trust-ok"

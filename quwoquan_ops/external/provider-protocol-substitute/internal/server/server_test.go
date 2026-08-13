@@ -112,6 +112,65 @@ func TestProtocolRoutesHealthAndStrictOperatorAuthentication(t *testing.T) {
 		t.Fatalf("location=%d %s", location.Code, location.Body.String())
 	}
 
+	poi := perform(
+		handler,
+		http.MethodGet,
+		"/nominatim/search?q=%E8%A5%BF%E6%B9%96&format=jsonv2&addressdetails=1&limit=2",
+		nil,
+		nil,
+	)
+	var poiRows []struct {
+		OSMType     string `json:"osm_type"`
+		Latitude    string `json:"lat"`
+		Longitude   string `json:"lon"`
+		DisplayName string `json:"display_name"`
+	}
+	if poi.Code != http.StatusOK ||
+		json.Unmarshal(poi.Body.Bytes(), &poiRows) != nil ||
+		len(poiRows) != 2 || poiRows[0].OSMType != "node" ||
+		poiRows[0].Latitude == "" || poiRows[0].Longitude == "" ||
+		!strings.Contains(poiRows[0].DisplayName, "Nonprod POI") {
+		t.Fatalf("nominatim=%d %s", poi.Code, poi.Body.String())
+	}
+	poiMissingQuery := perform(handler, http.MethodGet, "/nominatim/search?limit=2", nil, nil)
+	if poiMissingQuery.Code != http.StatusBadRequest {
+		t.Fatalf("nominatim missing q=%d", poiMissingQuery.Code)
+	}
+
+	route := perform(
+		handler,
+		http.MethodGet,
+		"/osrm/route/v1/driving/120.150000,30.270000;120.160000,30.280000?overview=full&geometries=polyline",
+		nil,
+		nil,
+	)
+	var routePayload struct {
+		Code   string `json:"code"`
+		Routes []struct {
+			Geometry string   `json:"geometry"`
+			Distance *float64 `json:"distance"`
+			Duration *float64 `json:"duration"`
+		} `json:"routes"`
+	}
+	if route.Code != http.StatusOK ||
+		json.Unmarshal(route.Body.Bytes(), &routePayload) != nil ||
+		routePayload.Code != "Ok" || len(routePayload.Routes) != 1 ||
+		routePayload.Routes[0].Geometry == "" ||
+		routePayload.Routes[0].Distance == nil || *routePayload.Routes[0].Distance < 0 ||
+		routePayload.Routes[0].Duration == nil || *routePayload.Routes[0].Duration < 0 {
+		t.Fatalf("osrm=%d %s", route.Code, route.Body.String())
+	}
+	routeBadProfile := perform(
+		handler,
+		http.MethodGet,
+		"/osrm/route/v1/flying/120.15,30.27;120.16,30.28",
+		nil,
+		nil,
+	)
+	if routeBadProfile.Code != http.StatusBadRequest {
+		t.Fatalf("osrm bad profile=%d", routeBadProfile.Code)
+	}
+
 	authTests := []struct {
 		name   string
 		values []string

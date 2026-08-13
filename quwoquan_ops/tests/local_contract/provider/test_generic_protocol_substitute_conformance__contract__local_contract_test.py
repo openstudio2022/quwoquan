@@ -375,7 +375,7 @@ class GenericProtocolSubstituteConformanceContractTest(unittest.TestCase):
             if "protocol_fixture" in path.name or "protocol_substitute" in path.name
         ]
         generic = [path for path in files if runner in path.read_text(encoding="utf-8")]
-        self.assertEqual(len(generic), 18)
+        self.assertEqual(len(generic), 20)
         for path in generic:
             raw = path.read_text(encoding="utf-8")
             self.assertEqual(raw.count(runner), 1, path)

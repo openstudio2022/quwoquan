@@ -215,7 +215,7 @@ export function RecommendationPage() {
       <div className="section-grid section-grid--two">
         <SectionCard
           title="推荐反馈真实指标"
-          subtitle="直接读取 recommendation_behavior_by_attribution_total；不经过 /ops/events"
+          subtitle="读取 content-service 进程内 recommendation_behavior_by_attribution_total（单副本口径；多副本聚合待中央 Prometheus 化）；不经过 /ops/events"
         >
           <div className="stack-list">
             {behaviorByState.map((item) => (

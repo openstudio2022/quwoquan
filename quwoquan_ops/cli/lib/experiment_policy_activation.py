@@ -19,9 +19,16 @@ from .local_environment_auth import mint_local_product_ops_operator_token
 from .output_paths import active_deployment_candidate
 from .port_manifest import load_port_manifest, profile_ports
 from .public_domain_tls import root_certificate_path
+from .redis_stream_probe import RedisStreamProbeError, stream_field_values
 
 
 COLLECTION_PATH = "/control-plane/product/experiments"
+# 真相源：product-ops contracts/product_ops/experiment/storage.yaml 与
+# experiment/infrastructure/messaging/publisher.go 的
+# ExperimentPolicyActivatedStream。该流带 7 天 retention（XTRIM MINID +
+# key EXPIRE），authoritative 策略存储（Postgres）则永续；reused 激活不
+# 发布新事件，因此长驻卷会出现「策略在、事实流空」，必须显式验证可见性。
+ACTIVATION_FACT_STREAM = "events.ops.experiment_policy_activated"
 SEARCH_POLICY_ID = "search_ranking"
 RECOMMENDATION_POLICY_ID = "rec_model_vs_rule"
 SPEC_REFS = (
@@ -85,6 +92,15 @@ def _test_live_policy_recipes() -> tuple[dict[str, Any], ...]:
 
 class ExperimentPolicyActivationError(RuntimeError):
     """Redacted local policy activation failure."""
+
+
+class ExperimentPolicyTransportError(ExperimentPolicyActivationError):
+    """Connection-level failure before any HTTP status was produced.
+
+    只有这一类失败允许在幂等 command 上重试：目标进程尚未监听
+    （bootstrap 与 product-ops 启动竞态）、连接被拒绝或被重置。凡拿到
+    HTTP 状态码的业务失败（4xx/5xx、非 JSON 响应）都必须 fail-fast。
+    """
 
 
 def activate_test_live_experiment_policies(
@@ -236,6 +252,90 @@ def activate_search_experiment_policy(
     }
 
 
+def activate_search_experiment_policy_via_published_port(
+    *,
+    environment: str,
+    target: str,
+    timeout_seconds: float = 120.0,
+) -> dict[str, Any]:
+    """Cold-start policy owner bootstrap through the loopback published port.
+
+    A brand-new target has no Product Ops ExperimentPolicyActivated fact and
+    Recommendation intentionally refuses a full runtime without it, while the
+    projected candidate topology chains product-ops -> service-core (healthy)
+    -> recommendation (healthy) and deadlocks the first full compose up.  The
+    bootstrap therefore activates the exact package-bound canonical policies
+    against the Product Ops published loopback port before the full stack
+    exists, mirroring the test_live policy owner bootstrap.  It is the same
+    authenticated public command with the same idempotency identity as the
+    post-up activation, never a DB seed or a Recommendation-private fallback.
+    """
+
+    _require_nonprod_target(environment, target)
+    active = active_deployment_candidate(target)
+    if not isinstance(active, dict):
+        raise ExperimentPolicyActivationError(
+            "active immutable deployment candidate is required"
+        )
+    baseline_id = str(active.get("baselineId") or "").strip()
+    manifest = load_candidate_manifest(
+        environment,
+        target,
+        baseline_id,
+        require_full=True,
+    )
+    try:
+        ports = profile_ports(load_port_manifest(), target)
+        published_port = int(ports["product-ops-service"])
+        redis_published_port = int(ports["redis"])
+    except (KeyError, OSError, TypeError, ValueError) as exc:
+        raise ExperimentPolicyActivationError(
+            "Product Ops or Redis published port cannot be derived for the target"
+        ) from exc
+    token = mint_local_product_ops_operator_token(environment, target)
+    deadline = time.monotonic() + max(1.0, timeout_seconds)
+    activated = _activate_policy_recipes(
+        recipes=_POLICY_RECIPES,
+        allow_rollout=False,
+        target=target,
+        binding_id=baseline_id,
+        idempotency_prefix="runtime-policy",
+        product_ops_base_url=f"http://127.0.0.1:{published_port}",
+        token=token,
+        cafile=None,
+        deadline=deadline,
+    )
+    stream_visibility = _ensure_activation_facts_visible(
+        activated=activated,
+        product_ops_base_url=f"http://127.0.0.1:{published_port}",
+        token=token,
+        redis_published_port=redis_published_port,
+        deadline=deadline,
+    )
+    return {
+        "schema": "qwq.experiment_policy_bootstrap_receipt",
+        "status": "passed",
+        "launchPolicy": "policy-owner-bootstrap",
+        "target": target,
+        "environment": environment,
+        "baselineId": baseline_id,
+        "packageDigest": str(manifest.get("packageDigest") or ""),
+        "sourceRevision": str(manifest.get("sourceRevision") or ""),
+        "productOpsPublishedPort": published_port,
+        "streamVisibility": stream_visibility,
+        **_activation_result(activated),
+        "specRefs": list(SPEC_REFS),
+        "caseResult": {
+            "schema": "qwq.case_result",
+            "caseId": f"{target}-experiment-policy-owner-bootstrap",
+            "status": "passed",
+            "executed": len(activated),
+            "skipped": 0,
+            "specRefs": list(SPEC_REFS),
+        },
+    }
+
+
 def _require_nonprod_target(environment: str, target: str) -> None:
     if _NONPROD_TARGETS.get(environment) != target:
         raise ExperimentPolicyActivationError(
@@ -282,6 +382,8 @@ def _activation_result(activated: list[dict[str, Any]]) -> dict[str, Any]:
             if "created" in operations
             else "rolled_out"
             if "rolled_out" in operations
+            else "re_emitted"
+            if "re_emitted" in operations
             else "reused"
         ),
         "policy": search_policy,
@@ -292,6 +394,150 @@ def _activation_result(activated: list[dict[str, Any]]) -> dict[str, Any]:
         "recipeDigests": {
             item["policy"]["id"]: item["recipeDigest"] for item in activated
         },
+    }
+
+
+def _ensure_activation_facts_visible(
+    *,
+    activated: list[dict[str, Any]],
+    product_ops_base_url: str,
+    token: str,
+    redis_published_port: int,
+    deadline: float,
+    poll_interval_seconds: float = 1.0,
+) -> dict[str, Any]:
+    """Guarantee every activated policy has a visible fact in the Redis stream.
+
+    reused readback 只证明 authoritative 策略（Postgres）存在，不保证下游
+    可消费的 ``ExperimentPolicyActivated`` 事实仍在事实流里（流有 7 天
+    retention，key 会整体过期）。缺失时经 product-ops 公开 rollout command
+    做等值 re-emission（revision bump + 新事实经 outbox 派发），随后轮询
+    直到事实可见；created / rolled_out 的事实已在 outbox，只需等待派发。
+    禁止直写 Redis / Postgres。
+    """
+
+    expected = {str(item["policy"]["id"]) for item in activated}
+    re_emitted: list[str] = []
+    last_probe_error: RedisStreamProbeError | None = None
+    while True:
+        visible: set[str] | None
+        try:
+            visible = set(
+                stream_field_values(
+                    host="127.0.0.1",
+                    port=redis_published_port,
+                    stream=ACTIVATION_FACT_STREAM,
+                    field="experimentId",
+                )
+            )
+            last_probe_error = None
+        except RedisStreamProbeError as error:
+            visible = None
+            last_probe_error = error
+        if visible is not None:
+            missing = sorted(expected - visible)
+            if not missing:
+                return {
+                    "stream": ACTIVATION_FACT_STREAM,
+                    "reEmittedPolicyIds": re_emitted,
+                }
+            for item in activated:
+                policy_id = str(item["policy"]["id"])
+                if (
+                    policy_id not in missing
+                    or item["operation"] != "reused"
+                    or policy_id in re_emitted
+                ):
+                    continue
+                item["policy"] = _re_emit_policy_activation(
+                    policy_id=policy_id,
+                    variants=item["policy"]["variants"],
+                    product_ops_base_url=product_ops_base_url,
+                    token=token,
+                    deadline=deadline,
+                )
+                item["operation"] = "re_emitted"
+                re_emitted.append(policy_id)
+        if time.monotonic() >= deadline:
+            raise ExperimentPolicyActivationError(
+                "ExperimentPolicyActivated facts are not visible in "
+                f"{ACTIVATION_FACT_STREAM}; a full-stack up would deadlock on "
+                "the recommendation policy wait"
+            ) from last_probe_error
+        time.sleep(poll_interval_seconds)
+
+
+def _re_emit_policy_activation(
+    *,
+    policy_id: str,
+    variants: list[dict[str, Any]],
+    product_ops_base_url: str,
+    token: str,
+    deadline: float,
+) -> dict[str, Any]:
+    """Re-emit the activation fact through the public rollout command.
+
+    等值 rollout（running -> running、variants 原样）是 contracts 允许的
+    转移；它把 revision +1 并经 Postgres outbox 重新发布同 schema 的
+    ``ExperimentPolicyActivated``。幂等键绑定当前 revision：同一 revision
+    的补发重试安全，成功后 revision 变化，未来再次流过期仍可补发。
+    """
+
+    list_status, catalog = _request_json_with_transport_retry(
+        method="GET",
+        url=product_ops_base_url.rstrip("/") + COLLECTION_PATH,
+        token=token,
+        cafile=None,
+        body=None,
+        headers={},
+        attempt_timeout_seconds=10.0,
+        deadline=deadline,
+    )
+    if list_status != 200:
+        raise ExperimentPolicyActivationError(
+            f"experiment policy readback returned HTTP {list_status} for {policy_id}"
+        )
+    current = _select_policy(catalog, policy_id)
+    current_revision = int(current["experimentRevision"])
+    rollout_status, rollout_payload = _request_json_with_transport_retry(
+        method="POST",
+        url=(
+            product_ops_base_url.rstrip("/")
+            + COLLECTION_PATH
+            + f"/{policy_id}:rollout"
+        ),
+        token=token,
+        cafile=None,
+        body={"status": "running", "variants": variants},
+        headers={
+            "If-Match": f'"{current_revision}"',
+            "Idempotency-Key": (
+                f"runtime-policy-reemit/{policy_id}/r{current_revision}"
+            ),
+        },
+        attempt_timeout_seconds=10.0,
+        deadline=deadline,
+    )
+    if rollout_status != 200:
+        raise ExperimentPolicyActivationError(
+            "experiment policy fact re-emission returned "
+            f"HTTP {rollout_status} for {policy_id}"
+        )
+    if (
+        rollout_payload.get("id") != policy_id
+        or rollout_payload.get("status") != "running"
+        or rollout_payload.get("variants") != variants
+        or int(rollout_payload.get("experimentRevision") or 0) <= current_revision
+    ):
+        raise ExperimentPolicyActivationError(
+            f"experiment policy fact re-emission result is invalid for {policy_id}"
+        )
+    return {
+        "id": policy_id,
+        "key": policy_id,
+        "status": "running",
+        "experimentRevision": int(rollout_payload["experimentRevision"]),
+        "variants": rollout_payload["variants"],
     }
 
 
@@ -329,36 +575,32 @@ def _activate_one_policy(
         + "/"
         + recipe_digest.removeprefix("sha256:")[:24]
     )
-    create_status = 0
-    create_payload: dict[str, Any] = {}
-    while True:
-        try:
-            create_status, create_payload = _request_json(
-                method="POST",
-                url=product_ops_base_url.rstrip("/") + COLLECTION_PATH,
-                token=token,
-                cafile=cafile,
-                body=recipe,
-                headers={"Idempotency-Key": idempotency_key},
-                timeout_seconds=min(5.0, max(1.0, deadline - time.monotonic())),
-            )
-            break
-        except ExperimentPolicyActivationError:
-            if time.monotonic() >= deadline:
-                raise
-            time.sleep(0.5)
+    # create 携带 Idempotency-Key、readback 是只读 GET：两者对连接级失败
+    # （进程尚未监听 / 连接被拒 / 连接被重置）重试都是安全的。业务失败
+    # （HTTP 状态码、非 JSON 响应）不进入重试，保持 fail-fast。
+    create_status, create_payload = _request_json_with_transport_retry(
+        method="POST",
+        url=product_ops_base_url.rstrip("/") + COLLECTION_PATH,
+        token=token,
+        cafile=cafile,
+        body=recipe,
+        headers={"Idempotency-Key": idempotency_key},
+        attempt_timeout_seconds=5.0,
+        deadline=deadline,
+    )
     if create_status not in {201, 409}:
         raise ExperimentPolicyActivationError(
             f"experiment policy create returned HTTP {create_status} for {policy_id}"
         )
-    list_status, catalog = _request_json(
+    list_status, catalog = _request_json_with_transport_retry(
         method="GET",
         url=product_ops_base_url.rstrip("/") + COLLECTION_PATH,
         token=token,
         cafile=cafile,
         body=None,
         headers={},
-        timeout_seconds=min(10.0, max(1.0, deadline - time.monotonic())),
+        attempt_timeout_seconds=10.0,
+        deadline=deadline,
     )
     if list_status != 200:
         raise ExperimentPolicyActivationError(
@@ -487,6 +729,45 @@ def _select_policy(catalog: dict[str, Any], policy_id: str) -> dict[str, Any]:
     return item
 
 
+def _request_json_with_transport_retry(
+    *,
+    method: str,
+    url: str,
+    token: str,
+    cafile: str | None,
+    body: dict[str, Any] | None,
+    headers: dict[str, str],
+    attempt_timeout_seconds: float,
+    deadline: float,
+    retry_interval_seconds: float = 0.5,
+) -> tuple[int, dict[str, Any]]:
+    """Bounded retry for connection-level failures only.
+
+    Policy owner bootstrap 在 product-ops 进程刚被拉起时立即激活，HTTP
+    监听可能尚未就绪且 healthz 在 user-service 缺席时必然 unhealthy，
+    所以唯一正确的等待信号就是「连接是否成立」。业务错误直接透传。
+    """
+
+    while True:
+        try:
+            return _request_json(
+                method=method,
+                url=url,
+                token=token,
+                cafile=cafile,
+                body=body,
+                headers=headers,
+                timeout_seconds=min(
+                    attempt_timeout_seconds,
+                    max(1.0, deadline - time.monotonic()),
+                ),
+            )
+        except ExperimentPolicyTransportError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(retry_interval_seconds)
+
+
 def _request_json(
     *,
     method: str,
@@ -528,7 +809,7 @@ def _request_json(
         status = int(exc.code)
         raw = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
     except Exception as exc:  # noqa: BLE001
-        raise ExperimentPolicyActivationError(
+        raise ExperimentPolicyTransportError(
             f"experiment policy request transport failed: {type(exc).__name__}"
         ) from exc
     try:

@@ -142,14 +142,28 @@ def declared_field_names(object_dir: Path, document: dict) -> set[str]:
 
 
 def projector_source_reads(repo_root: Path, reference: str) -> tuple[set[str], set[str]]:
-    """Return (Fields map keys, source selector names) read by a projector."""
+    """Return (Fields map keys, source selector names) read by a projector.
+
+    The symbol is a plain function whose first parameter is the source, or a
+    receiver-qualified `Type.Method` whose receiver is the source (projectors
+    implemented as methods on the projection event type).
+    """
     relative, symbol = reference.rsplit("#", 1)
     body = read_source(repo_root, relative)
-    match = re.search(
-        rf"^func {re.escape(symbol)}\((?P<params>[^)]*)\)[^{{]*\{{(?P<body>.*?)\n\}}",
-        body,
-        re.DOTALL | re.MULTILINE,
-    )
+    if "." in symbol:
+        receiver_type, method_name = symbol.rsplit(".", 1)
+        match = re.search(
+            rf"^func \((?P<params>[^)]*?\*?{re.escape(receiver_type)})\s*\) "
+            rf"{re.escape(method_name)}\([^)]*\)[^{{]*\{{(?P<body>.*?)\n\}}",
+            body,
+            re.DOTALL | re.MULTILINE,
+        )
+    else:
+        match = re.search(
+            rf"^func {re.escape(symbol)}\((?P<params>[^)]*)\)[^{{]*\{{(?P<body>.*?)\n\}}",
+            body,
+            re.DOTALL | re.MULTILINE,
+        )
     if not match:
         raise ScanError(f"{reference}: projector function body not found")
     section = match.group("body")

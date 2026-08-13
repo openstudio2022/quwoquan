@@ -134,7 +134,7 @@ class AppGeneratedManifestContractTest(unittest.TestCase):
             "post_read_surface_id.g.dart",
             "lib/service/circle_service/circle_management/circle/presentation/generated/"
             "circle_ui_config.g.dart",
-            "lib/service/entity_service/entity_homepage/homepage/presentation/generated/"
+            "lib/service/entity_service/entity_homepage/homepage/application/public/generated/"
             "homepage_ui_config.g.dart",
             "lib/service/recommendation_service/recommendation/"
             "recommendation_feature_profile_view/presentation/generated/"

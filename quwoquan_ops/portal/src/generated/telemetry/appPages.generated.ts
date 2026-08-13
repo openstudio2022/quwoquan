@@ -68,6 +68,12 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
+      "internal_id": "createPageTagChipPicker",
+      "location": "page_internal_create_tag_chip_picker",
+      "page_name": "create_tag_chip_picker"
+    },
+    {
+      "collect_page_access": true,
       "internal_id": "createPagePublishCircleSelect",
       "location": "page_internal_create_publish_circle_select",
       "page_name": "create_publish_circle_select"
@@ -242,16 +248,6 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
-      "page_name": "gathering_create",
-      "route_id": "gatheringCreate"
-    },
-    {
-      "collect_page_access": true,
-      "page_name": "gathering_detail",
-      "route_id": "gatheringDetail"
-    },
-    {
-      "collect_page_access": true,
       "page_name": "create",
       "route_id": "create"
     },
@@ -357,6 +353,21 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
+      "page_name": "gathering_create",
+      "route_id": "gatheringCreate"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "gathering_detail",
+      "route_id": "gatheringDetail"
+    },
+    {
+      "collect_page_access": true,
+      "page_name": "gathering_board",
+      "route_id": "gatheringBoard"
+    },
+    {
+      "collect_page_access": true,
       "page_name": "settings",
       "route_id": "settings"
     },
@@ -442,6 +453,11 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
+      "page_name": "my_gatherings",
+      "route_id": "myGatherings"
+    },
+    {
+      "collect_page_access": true,
       "page_name": "object_intersections",
       "route_id": "objectIntersections"
     },
@@ -489,11 +505,6 @@ export const appPages = {
       "collect_page_access": true,
       "page_name": "chat_announcement",
       "route_id": "chatAnnouncement"
-    },
-    {
-      "collect_page_access": true,
-      "page_name": "gathering_board",
-      "route_id": "gatheringBoard"
     },
     {
       "collect_page_access": true,

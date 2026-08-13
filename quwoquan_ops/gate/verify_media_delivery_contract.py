@@ -33,8 +33,8 @@ MEDIA_ROOT = (
     / "test_fixtures"
     / "media"
 )
-# CAS object paths may still appear in seed/creator docs as non-public references.
-# Public fixture media fields are validated separately via FIXTURE_MEDIA_FIELD_FORBIDDEN.
+# CAS object paths may still appear in creator docs as non-public references.
+# Public test media fields are validated separately via FIXTURE_MEDIA_FIELD_FORBIDDEN.
 FORBIDDEN_TOKENS = (
     "media/video/s/mock/",
     "mock/example",
@@ -96,13 +96,6 @@ SCAN_ROOTS = (
 )
 SKIP_PATHS = {
     Path(__file__).resolve(),
-    ROOT
-    / "quwoquan_app"
-    / "test"
-    / "support"
-    / "cloud_services"
-    / "content"
-    / "home_showcase_core_fixture.g.dart",
 }
 METADATA_ROOT = ROOT / "quwoquan_service" / "contracts" / "metadata"
 APP_RUNTIME_CONFIG_DIR = ROOT / "quwoquan_app" / "configs"
@@ -221,13 +214,6 @@ def _validate_media_field_value(
         canonical_public = bool(PUBLIC_SLICE_PREFIX_RE.match(text)) and "mock/seed" not in text
         if not in_manifest and not canonical_public:
             _add("Feed 相对媒体引用必须属于 manifest publicSliceKey 或合法 public slice path")
-        if force_mock_seed_ban and not in_manifest and text.startswith("media/"):
-            # content_mock_data 强制 Feed 引用收敛到 manifest
-            if field_key in {"coverUrl", "thumbnailUrl", "videoUrl", "imageUrls", "avatarUrl", "authorAvatarUrl", "authorBackgroundUrl", "backgroundUrl"}:
-                if text not in manifest_keys:
-                    _add("content_mock_data Feed 媒体引用必须属于 manifest publicSliceKey")
-
-
 def _walk_json_media_fields(
     node: object,
     *,
@@ -398,6 +384,11 @@ def _validate_dart_media_literals(
             issues.append(f"{rel_path}: 禁止出现 media/*/s/mock/seed/")
     for match in DART_STRING_RE.finditer(text):
         value = match.group(2)
+        # Interpolated Dart strings can be split into adjacent literal fragments;
+        # a trailing slash is not a complete media reference. Forbidden mock/seed
+        # tokens are still checked against the full source above.
+        if value.endswith("/") or "$" in value:
+            continue
         field_key = "url"
         if "avatar" in value:
             field_key = "avatarUrl"
@@ -417,13 +408,17 @@ def _validate_dart_media_literals(
 
 
 def _fixture_media_scan_paths() -> list[Path]:
-    # Contract 场景直接保留在 metadata；App 不再生成或编译 fixture bundle。
+    # Contract examples remain service-owned. App local_contract media references
+    # live in object-level Dart builders/doubles and must be checked as literals.
     paths = set(METADATA_ROOT.glob("**/test_fixtures/**/*.json"))
     paths.update(
         (ROOT / "quwoquan_service" / "services").glob(
             "*/tests/support/contract_fixtures/**/*.json"
         )
     )
+    app_support = ROOT / "quwoquan_app" / "test" / "support"
+    paths.update(app_support.glob("**/*builder*.dart"))
+    paths.update(app_support.glob("**/*typed_double*.dart"))
     return sorted(paths)
 
 
@@ -471,7 +466,7 @@ def _validate_fixture_media_fields(issues: list[str]) -> None:
             issues.append(f"缺少 fixture 媒体扫描文件: {path.relative_to(ROOT)}")
             continue
         rel_path = str(path.relative_to(ROOT))
-        force_mock_seed_ban = path.name == "content_mock_data.dart"
+        force_mock_seed_ban = path.suffix == ".dart"
         if path.suffix == ".dart":
             _validate_dart_media_literals(
                 path,

@@ -33,7 +33,7 @@ def _immutable_runtime_handoff(
 ) -> str:
     return json.dumps(
         {
-            "schema": "stackctl.provider_conformance_runtime_identity.v1",
+            "schema": "stackctl.provider_conformance_runtime_identity",
             "runtimeMode": "immutable_candidate",
             "environment": "alpha",
             "target": "alpha-local",
@@ -52,7 +52,7 @@ def _immutable_runtime_handoff(
 def _mutable_runtime_handoff() -> str:
     return json.dumps(
         {
-            "schema": "stackctl.provider_conformance_runtime_identity.v1",
+            "schema": "stackctl.provider_conformance_runtime_identity",
             "runtimeMode": "test_live",
             "environment": "alpha",
             "target": "alpha-local",

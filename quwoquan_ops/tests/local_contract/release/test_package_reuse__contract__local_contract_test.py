@@ -413,7 +413,8 @@ class PackageReuseContractTest(unittest.TestCase):
             },
             "invalid ContractGraph": {
                 **canonical,
-                "contractGraphDigest": "sha256:invalid",
+                # 无 sha256: 前缀的非 canonical digest，必须被 fail-closed 拒绝。
+                "contractGraphDigest": "not-a-canonical-digest",
             },
         }
         for label, payload in cases.items():
@@ -478,7 +479,7 @@ class PackageReuseContractTest(unittest.TestCase):
                     ),
                     self.assertRaisesRegex(
                         ValueError,
-                        "legacy temporary path is occupied",
+                        "predictable temporary path is occupied",
                     ),
                 ):
                     self._write()

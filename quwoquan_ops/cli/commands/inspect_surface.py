@@ -409,10 +409,10 @@ def _data_report(
             "Prod run root contains forbidden nonprod acceptance dataset receipts"
         )
         return report
-    legacy_receipts = sorted(receipt_root.glob("*/*.json"))
-    for path in legacy_receipts:
+    retired_schema_receipts = sorted(receipt_root.glob("*/*.json"))
+    for path in retired_schema_receipts:
         report["issues"].append(
-            "legacy nonprod-data receipt must be explicitly cleaned before "
+            "retired nonprod-data receipt must be explicitly cleaned before "
             f"typed test-data verification: {_stackctl.relpath(path)}"
         )
         report["nonprodAcceptanceDatasets"].append(

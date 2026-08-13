@@ -2,7 +2,7 @@
   "verifiedAt": "2026-07-27",
   "method": "structural_contract_plus_real_env_runs",
   "evidence": {
-    "contractTests": "quwoquan_ops/tests/local_contract/test_commit_gate_fast_path__local_contract_test.py",
+    "contractTests": "quwoquan_ops/tests/local_contract/ci/test_commit_gate_fast_path__local_contract_test.py",
     "baseline": "quwoquan_ops/environments/commit_gate_timing_baseline.json",
     "budgets": "quwoquan_ops/environments/pr_gate_timing_budgets.json#gates.00.local_commit_gate",
     "envMatrix": ".qwq_output/env/repo/runs/commit-gate-env-matrix/matrix.json",

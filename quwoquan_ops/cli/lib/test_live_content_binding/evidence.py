@@ -88,15 +88,7 @@ def _source_identity(value: Mapping[str, Any], *, label: str) -> dict[str, Any]:
     for index, raw in enumerate(raw_identities):
         if not isinstance(raw, Mapping):
             raise ValueError(f"{label} sourceIdentities[{index}] must be an object")
-        is_legacy = raw.get("identityKind") == "legacy_canonical_migration"
-        digest_fields = (
-            ("sourceDigest", "canonicalObjectDigest", "migrationEvidenceDigest")
-            if is_legacy
-            else scalar_fields
-        )
-        expected_fields = {*digest_fields, "executionIds"}
-        if is_legacy:
-            expected_fields.add("identityKind")
+        expected_fields = {*scalar_fields, "executionIds"}
         if set(raw) != expected_fields:
             raise ValueError(f"{label} sourceIdentities[{index}] fields mismatch")
         execution_ids = raw.get("executionIds")
@@ -114,27 +106,15 @@ def _source_identity(value: Mapping[str, Any], *, label: str) -> dict[str, Any]:
                 raw.get(field),
                 label=f"{label} sourceIdentities[{index}].{field}",
             )
-            for field in digest_fields
+            for field in scalar_fields
         }
-        if is_legacy:
-            identity["identityKind"] = "legacy_canonical_migration"
         identity["executionIds"] = list(execution_ids)
         identities.append(identity)
     identity_keys = [
         (
-            (
-                "legacy_canonical_migration",
-                item["sourceDigest"],
-                item["canonicalObjectDigest"],
-                item["migrationEvidenceDigest"],
-            )
-            if item.get("identityKind") == "legacy_canonical_migration"
-            else (
-                "modern_execution",
-                item["sourceRevision"],
-                item["sourceDigest"],
-                item["entityCatalogDigest"],
-            )
+            item["sourceRevision"],
+            item["sourceDigest"],
+            item["entityCatalogDigest"],
         )
         for item in identities
     ]

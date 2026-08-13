@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Candidate-bound repair contract for legacy active-release Content outbox payloads."""
+"""Candidate-bound repair contract for release-scoped active-release Content outbox payloads."""
 
 from __future__ import annotations
 
@@ -335,7 +335,7 @@ def validate_source_import_report(
         or int(counts.get("outboxEventsAppended") or -1) <= 0
     ):
         raise ActiveContentReleaseOutboxRepairError(
-            "Content import report has no bounded legacy deletion closure"
+            "Content import report has no bounded prior-identity deletion closure"
         )
     normalized_bindings, bindings_digest = _validated_post_bindings(
         report.get("postBindings")
@@ -356,7 +356,7 @@ def validate_source_import_report(
         "digest": digest,
         "releaseId": release_id,
         "manifestDigest": manifest_digest,
-        "legacyDeletionCount": int(counts["postsRemoved"]),
+        "postsRemovedCount": int(counts["postsRemoved"]),
         "postBindingCount": len(normalized_bindings),
         "postBindingsDigest": bindings_digest,
     }

@@ -575,6 +575,33 @@ groups:
         annotations:
           summary: "entity ready operation P95 超出 SLO（800ms）"
           description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=800。"
+  - name: quwoquan_gateway_contract_object_coverage
+    rules:
+      - alert: GatewayContractOperationAvailabilityBelow99p5Percent
+        expr: |
+          sum(rate(quwoquan_gateway_contract_operation_requests_total{service="api-edge",operation=~"gateway\\..+",contract_metric=~"gateway_.+",commercial_status="ready",slo_availability_percent="99.5",status=~"5.."}[10m])) by (operation, contract_metric)
+          / clamp_min(sum(rate(quwoquan_gateway_contract_operation_requests_total{service="api-edge",operation=~"gateway\\..+",contract_metric=~"gateway_.+",commercial_status="ready",slo_availability_percent="99.5"}[10m])) by (operation, contract_metric), 0.001) > 0.005
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: gateway
+        annotations:
+          summary: "gateway ready operation 5xx 比率超出可用性 SLO（99.5%）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）5xx 比率 {{ $value | humanizePercentage }} 超出 ContractGraph 声明的可用性 SLO；按对象 owner 检查依赖、鉴权与存储链路。"
+      - alert: GatewayContractOperationLatencyP95Above1500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_gateway_contract_operation_duration_seconds_bucket{service="api-edge",operation=~"gateway\\..+",contract_metric=~"gateway_.+",commercial_status="ready",slo_latency_p95_ms="1500"}[5m])) by (le, operation, contract_metric)
+          ) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: gateway
+        annotations:
+          summary: "gateway ready operation P95 超出 SLO（1500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1500。"
   - name: quwoquan_integration_contract_object_coverage
     rules:
       - alert: IntegrationContractOperationAvailabilityBelow99Percent

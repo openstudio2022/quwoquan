@@ -6,12 +6,14 @@ import hashlib
 import json
 import platform
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Mapping
 
 from .common import write_json
-from .test_data.api import CaseRef, TestDataSession
+from .test_data.api import BusinessObjectRef, CaseRef, TestDataSession
+from .test_data.discovery import load_provider
 from .test_data.model import CandidateBinding, TestDataContext, canonical_digest
 from .test_data.operations import TestDataRuntime
 from .test_data.serialization import collect_request_graph, load_case_requests
@@ -19,6 +21,7 @@ from .test_data.serialization import collect_request_graph, load_case_requests
 
 CASE_RESULT_SCHEMA = "qwq.case_result"
 EVIDENCE_SCHEMA = "qwq.test_data_evidence.v1"
+HANDOFF_SCHEMA = "qwq.test_data_handoff"
 SPEC_REFS = (
     "specs/feature-tree/runtime/runtime-testinfra/spec.md#sit-002",
     "specs/feature-tree/runtime/runtime-testinfra/test-data-provisioning-and-isolation/spec.md#gwt-001",
@@ -36,13 +39,20 @@ def run_test_data_verification(
     request_path: Path,
     evidence_path: Path | None,
     report_dir: Path,
+    handoff_path: Path | None = None,
     static_gate_ms: int = 0,
+    environment_start_ms: int = 0,
+    environment_start_source: str = "prestarted-environment",
+    benchmark_policy: str = "normal",
 ) -> dict[str, Any]:
     started = time.monotonic()
+    run_id = uuid.uuid4().hex
     preparation_started: float | None = None
     root_worker_count = 0
     report_dir.mkdir(parents=True, exist_ok=True)
     try:
+        if benchmark_policy not in {"normal", "serial-no-cache"}:
+            raise ValueError("unsupported test-data benchmark policy")
         candidate = build_candidate_binding(
             environment=environment,
             target=target,
@@ -70,18 +80,38 @@ def run_test_data_verification(
                 )
             }
         )
+        evidence_document: Mapping[str, Any] = {}
+        if evidence_path is not None:
+            loaded_evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+            if not isinstance(loaded_evidence, Mapping):
+                raise ValueError("test-data evidence must be an object")
+            evidence_document = loaded_evidence
         provider_evidence = load_provider_evidence(
             evidence_path,
             candidate,
             request_digest=str(request_document.get("requestDigest") or ""),
             required_capabilities=tuple(required_provider_capabilities),
         )
-        runtime = TestDataRuntime()
+        handoff_document: Mapping[str, Any] = {}
+        if handoff_path is not None:
+            if not evidence_document:
+                raise ValueError("test-data handoff requires exact Provider evidence")
+            handoff_document = load_test_data_handoff(
+                handoff_path,
+                candidate=candidate,
+                readiness=release_readiness,
+                request_document=request_document,
+                evidence=evidence_document,
+            )
+        runtime = TestDataRuntime(
+            candidate_cache_enabled=benchmark_policy == "normal"
+        )
         context = TestDataContext(
             candidate=candidate,
             base_url=base_url,
             output_root=report_dir,
             provider_evidence=provider_evidence,
+            max_concurrency=1 if benchmark_policy == "serial-no-cache" else 4,
             runtime=runtime,
         )
         preparation_started = time.monotonic()
@@ -115,7 +145,14 @@ def run_test_data_verification(
             runtime.max_observed_concurrency,
         )
         capability_timings = _load_capability_timings(report_dir)
-        operation_count = sum(int(item.get("operationCount") or 0) for item in summaries)
+        operation_count = len(runtime.operation_receipts)
+        executed_operation_ids = sorted(
+            {
+                str(item.get("operationId") or "").strip()
+                for item in runtime.operation_receipts
+                if str(item.get("operationId") or "").strip()
+            }
+        )
         loaded_providers = sorted(
             {
                 provider
@@ -162,6 +199,7 @@ def run_test_data_verification(
         )
         result = {
             "schema": CASE_RESULT_SCHEMA,
+            "runId": run_id,
             "caseId": "alpha-beta-gamma-selected-test-data",
             "status": status,
             "preparationStatus": (
@@ -175,22 +213,40 @@ def run_test_data_verification(
             "environment": environment,
             "machineFingerprint": _machine_fingerprint(),
             "candidateBindingDigest": candidate.digest,
+            "sourceRevision": candidate.source_revision,
+            "packageDigest": candidate.package_digest,
+            "runtimeConfigDigest": candidate.runtime_config_digest,
+            "releaseId": candidate.release_id,
+            "manifestDigest": candidate.release_digest,
+            "importRunId": candidate.import_run_id,
+            "readinessReceiptDigest": candidate.readiness_receipt_digest,
             "requestDigest": request_document.get("requestDigest"),
+            "evidenceDigest": evidence_document.get("evidenceDigest", ""),
+            "handoffDigest": handoff_document.get("handoffDigest", ""),
             "caseResults": case_results,
             "preparationResults": preparation_results,
             "operationCount": operation_count,
+            "executedOperationIds": executed_operation_ids,
             "loadedProviders": loaded_providers,
             "requiredProviders": required_providers,
-            "environmentStartMs": 0,
-            "environmentStartSource": "prestarted-environment",
+            "requiredProviderCapabilities": required_provider_capabilities,
+            "environmentStartMs": max(0, int(environment_start_ms)),
+            "environmentStartSource": environment_start_source,
+            "benchmarkPolicy": benchmark_policy,
+            "benchmarkOnly": benchmark_policy != "normal",
             "staticGateMs": max(0, int(static_gate_ms)),
             "dataPreparationMs": case_session_wall_ms,
             "caseSessionWallMs": case_session_wall_ms,
             "maxCaseDataPreparationMs": max_case_data_preparation_ms,
             "phaseWorkMs": phase_work_ms,
+            "controlPlaneOverheadMs": (
+                int(timings["requestCollectionMs"])
+                + int(timings["providerDiscoveryMs"])
+                + int(timings["planningMs"])
+            ),
             **timings,
             "capabilityTimings": capability_timings,
-            "totalMs": _elapsed_ms(started),
+            "totalMs": max(0, int(environment_start_ms)) + _elapsed_ms(started),
             "baselineEligible": status == "passed" and executed == len(cases),
             "specRefs": list(SPEC_REFS),
             "issues": issues,
@@ -203,6 +259,7 @@ def run_test_data_verification(
     except Exception as exc:  # noqa: BLE001 - verifier must emit fail-closed evidence
         result = {
             "schema": CASE_RESULT_SCHEMA,
+            "runId": run_id,
             "caseId": "alpha-beta-gamma-selected-test-data",
             "status": "GATE_BLOCK",
             "preparationStatus": "GATE_BLOCK",
@@ -216,10 +273,14 @@ def run_test_data_verification(
             "environment": environment,
             "machineFingerprint": _machine_fingerprint(),
             "operationCount": 0,
+            "executedOperationIds": [],
             "loadedProviders": [],
             "requiredProviders": [],
-            "environmentStartMs": 0,
-            "environmentStartSource": "prestarted-environment",
+            "requiredProviderCapabilities": [],
+            "environmentStartMs": max(0, int(environment_start_ms)),
+            "environmentStartSource": environment_start_source,
+            "benchmarkPolicy": benchmark_policy,
+            "benchmarkOnly": benchmark_policy != "normal",
             "staticGateMs": max(0, int(static_gate_ms)),
             "dataPreparationMs": (
                 _elapsed_ms(preparation_started)
@@ -236,6 +297,7 @@ def run_test_data_verification(
             "requestCollectionMs": 0,
             "providerDiscoveryMs": 0,
             "planningMs": 0,
+            "controlPlaneOverheadMs": 0,
             "actorProvisionMs": 0,
             "testBodyMs": 0,
             "criticalPathMs": 0,
@@ -246,7 +308,7 @@ def run_test_data_verification(
             "cacheMisses": 0,
             "maxObservedConcurrency": 0,
             "capabilityTimings": [],
-            "totalMs": _elapsed_ms(started),
+            "totalMs": max(0, int(environment_start_ms)) + _elapsed_ms(started),
             "baselineEligible": False,
             "specRefs": list(SPEC_REFS),
             "issues": [str(exc)],
@@ -263,7 +325,9 @@ def _execute_case(
         session = TestDataSession.for_case(case.case_id, context=context)
         executed = session.execute(case)
         return {
-            "caseResult": executed.document(),
+            "caseResult": executed.document(
+                receipt_path_base=context.output_root,
+            ),
             "preparationResult": {
                 "caseId": str(case.case_id.value),
                 "requestId": case.request.request_id.value,
@@ -306,19 +370,102 @@ def build_candidate_binding(
         or readiness.get("manifestDigest") != release_digest
     ):
         raise ValueError("Data readiness is not bound to the package candidate release")
-    post_ids = readiness.get("postIds")
-    if not isinstance(post_ids, list) or not post_ids:
-        raise ValueError("Data readiness must expose release post identities")
+    readiness_phase = str(readiness.get("readinessPhase") or "").strip()
+    if readiness_phase not in {"research", "commercial"}:
+        raise ValueError(
+            "test-data readiness must be an immutable research or commercial release"
+        )
+    if (
+        readiness.get("releaseClass") != readiness_phase
+        or readiness.get("productLifecycleState") != readiness_phase
+    ):
+        raise ValueError(
+            "Data readiness releaseClass/productLifecycleState drift from phase"
+        )
+    readiness_unsigned = {
+        key: value for key, value in readiness.items() if key != "verificationChecksum"
+    }
+    readiness_receipt_digest = str(
+        readiness.get("verificationChecksum") or ""
+    ).strip()
+    if readiness_receipt_digest != canonical_digest(readiness_unsigned):
+        raise ValueError("Data readiness verification checksum mismatch")
+    source_revision = str(manifest.get("sourceRevision") or "").strip()
+    if (
+        len(source_revision) != 40
+        or any(character not in "0123456789abcdef" for character in source_revision)
+        or readiness.get("sourceRevision") != source_revision
+    ):
+        raise ValueError(
+            "Data readiness sourceRevision is not bound to the package candidate"
+        )
+    posts = _release_references(
+        readiness.get("postIds"),
+        field="postIds",
+        object_type="Post",
+    )
+    creators = _release_references(
+        readiness.get("creatorIds"),
+        field="creatorIds",
+        object_type="Creator",
+    )
+    entities = _release_references(
+        readiness.get("entityRefs"),
+        field="entityRefs",
+        object_type="Entity",
+    )
+    tags = _release_references(
+        readiness.get("tagRefs"),
+        field="tagRefs",
+        object_type="Tag",
+    )
+    media_assets = _release_references(
+        readiness.get("mediaAssetIds"),
+        field="mediaAssetIds",
+        object_type="MediaAsset",
+    )
     return CandidateBinding(
         environment=environment,
         target=target,
+        source_revision=source_revision,
         baseline_id=str(manifest.get("baselineId") or ""),
         package_digest=str(manifest.get("packageDigest") or ""),
         runtime_config_digest=str(manifest.get("runtimeConfigDigest") or ""),
         release_id=release_id,
         release_digest=release_digest,
         import_run_id=str(readiness.get("importRunId") or ""),
-        release_post_ids=tuple(str(item).strip() for item in post_ids),
+        readiness_phase=readiness_phase,
+        readiness_receipt_digest=readiness_receipt_digest,
+        release_posts=posts,
+        release_creators=creators,
+        release_entities=entities,
+        release_homepages=tuple(
+            BusinessObjectRef("EntityHomepage", entity.object_id)
+            for entity in entities
+        ),
+        release_tags=tags,
+        release_media_assets=media_assets,
+    )
+
+
+def _release_references(
+    value: object,
+    *,
+    field: str,
+    object_type: str,
+) -> tuple[BusinessObjectRef, ...]:
+    if not isinstance(value, list) or not value:
+        raise ValueError(f"Data readiness must expose release {field}")
+    object_ids = tuple(str(item).strip() for item in value)
+    if any(not object_id for object_id in object_ids) or len(object_ids) != len(
+        set(object_ids)
+    ):
+        raise ValueError(
+            f"Data readiness {field} must contain unique non-empty release identities"
+        )
+    return tuple(
+        BusinessObjectRef(object_type=object_type, object_id=object_id)
+        for object_id in object_ids
     )
 
 
@@ -436,6 +583,125 @@ def build_provider_evidence_document(
         "providerConformance": projected,
     }
     return {**unsigned, "evidenceDigest": canonical_digest(unsigned)}
+
+
+def build_test_data_handoff(
+    *,
+    candidate: CandidateBinding,
+    readiness: Mapping[str, Any],
+    request_document: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Freeze a redacted, exact candidate/request/evidence handoff contract."""
+
+    source_revision = str(readiness.get("sourceRevision") or "").strip()
+    if source_revision != candidate.source_revision:
+        raise ValueError("canonical Data readiness sourceRevision drifted from candidate")
+    evidence_unsigned = {
+        key: value for key, value in evidence.items() if key != "evidenceDigest"
+    }
+    evidence_digest = str(evidence.get("evidenceDigest") or "").strip()
+    if (
+        evidence.get("schema") != EVIDENCE_SCHEMA
+        or evidence_digest != canonical_digest(evidence_unsigned)
+        or evidence.get("candidateBindingDigest") != candidate.digest
+        or evidence.get("requestDigest") != request_document.get("requestDigest")
+    ):
+        raise ValueError("test-data evidence cannot be bound to this handoff")
+    cases = load_case_requests(request_document)
+    graph = {
+        request_id: request
+        for case in cases
+        for request_id, request in collect_request_graph((case.request,)).items()
+    }
+    context = TestDataContext(
+        candidate=candidate,
+        base_url="https://test-data-handoff.invalid",
+        output_root=Path("."),
+        runtime=TestDataRuntime(),
+    )
+    provider_owners = sorted(
+        {request.capability.owner_service for request in graph.values()}
+    )
+    allowed_operations: set[str] = set()
+    required_operations: set[str] = set()
+    for owner in provider_owners:
+        provider = load_provider(owner, context)
+        definitions = provider.describe()
+        definitions_by_capability = {
+            definition.capability: definition for definition in definitions
+        }
+        for request in graph.values():
+            if request.capability.owner_service != owner:
+                continue
+            definition = definitions_by_capability.get(request.capability)
+            if definition is None:
+                raise ValueError(
+                    f"handoff capability is absent from its Provider: "
+                    f"{request.capability.key.value}"
+                )
+            allowed_operations.update(definition.operations)
+            plan = provider.plan(context, request, request.params)
+            if not set(plan.operations).issubset(definition.operations):
+                raise ValueError(
+                    "handoff required operation closure exceeds Provider definition: "
+                    f"{request.capability.key.value}"
+                )
+            required_operations.update(plan.operations)
+    unsigned = {
+        "schema": HANDOFF_SCHEMA,
+        "environment": candidate.environment,
+        "target": candidate.target,
+        "sourceRevision": candidate.source_revision,
+        "baselineId": candidate.baseline_id,
+        "packageDigest": candidate.package_digest,
+        "runtimeConfigDigest": candidate.runtime_config_digest,
+        "releaseId": candidate.release_id,
+        "manifestDigest": candidate.release_digest,
+        "importRunId": candidate.import_run_id,
+        "readinessPhase": candidate.readiness_phase,
+        "readinessReceiptDigest": candidate.readiness_receipt_digest,
+        "requestDigest": request_document.get("requestDigest"),
+        "evidenceDigest": evidence_digest,
+        "candidateBindingDigest": candidate.digest,
+        "expectedCases": [str(case.case_id.value) for case in cases],
+        "expectedProviderOwners": provider_owners,
+        "expectedProviderCapabilities": sorted(
+            str(item)
+            for item in (evidence.get("providerConformance") or {}).keys()
+        ),
+        # The request-specific ProviderPlan is the minimum closure; the
+        # CapabilityDefinition remains the larger authorization surface.
+        "requiredOperations": sorted(required_operations),
+        "allowedOperations": sorted(allowed_operations),
+    }
+    return {**unsigned, "handoffDigest": canonical_digest(unsigned)}
+
+
+def load_test_data_handoff(
+    path: Path,
+    *,
+    candidate: CandidateBinding,
+    readiness: Mapping[str, Any],
+    request_document: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    """Accept only the byte-canonical handoff for this exact execution input."""
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, Mapping):
+        raise ValueError("test-data handoff must be an object")
+    expected = build_test_data_handoff(
+        candidate=candidate,
+        readiness=readiness,
+        request_document=request_document,
+        evidence=evidence,
+    )
+    if dict(payload) != expected:
+        raise ValueError(
+            "test-data handoff does not match the exact candidate/request/evidence"
+        )
+    return payload
 
 
 def _load_run_summaries(root: Path) -> tuple[Mapping[str, Any], ...]:

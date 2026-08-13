@@ -233,9 +233,44 @@ class CaseExecution:
 class CaseExecutionContext:
     environment: str
     target: str
+    base_url: str
     candidate_binding_digest: str
+    test_data_instance_id: str
     request_id: RequestId
     provision_receipt: ReceiptRef
+    runtime: object = field(repr=False, compare=False)
+
+    def actor(self, role: object) -> object:
+        """Resolve one typed ActorHandle for this isolated CaseResult attempt."""
+
+        from .capabilities.common import ActorRole
+        from .operations import TestDataRuntime
+
+        if not isinstance(role, ActorRole):
+            raise TypeError("business case actor role must use ActorRole")
+        if not isinstance(self.runtime, TestDataRuntime):
+            raise TypeError("business case runtime is unavailable")
+        return self.runtime.actor_for(
+            test_data_instance_id=self.test_data_instance_id,
+            role=role,
+        )
+
+    def public_operations(self, capability_key: str) -> object:
+        """Create a receipt-bound executor for a source-owned business query."""
+
+        from .operations import PublicOperationExecutor, TestDataRuntime
+
+        if not capability_key.strip():
+            raise ValueError("business case capability key is required")
+        if not isinstance(self.runtime, TestDataRuntime):
+            raise TypeError("business case runtime is unavailable")
+        return PublicOperationExecutor(
+            base_url=self.base_url,
+            target=self.target,
+            test_data_instance_id=self.test_data_instance_id,
+            capability_key=capability_key,
+            runtime=self.runtime,
+        )
 
 
 class BusinessCaseRunner(Generic[ResultT]):
@@ -276,14 +311,29 @@ class CaseRef(Generic[ResultT]):
 class ExecutedCase:
     case_id: str
     execution: CaseExecution
+    candidate_binding_digest: str
+    test_data_instance_id: str
+    request_id: RequestId
     provision_receipt: ReceiptRef
     test_body_receipt: ReceiptRef
+    readback_receipts: tuple[ReceiptRef, ...] = ()
+    cleanup_receipts: tuple[ReceiptRef, ...] = ()
 
     @property
     def status(self) -> AssertionStatus:
         return self.execution.status
 
-    def document(self) -> dict[str, object]:
+    def document(self, *, receipt_path_base: Path) -> dict[str, object]:
+        def relative_receipt_path(receipt: ReceiptRef) -> str:
+            base = receipt_path_base.expanduser().resolve()
+            try:
+                relative = receipt.path.expanduser().resolve().relative_to(base)
+            except ValueError as exc:
+                raise ValueError(
+                    "receipt path must be inside the CaseResult report directory"
+                ) from exc
+            return relative.as_posix()
+
         assertions = [
             {
                 "assertionId": assertion.assertion_id,
@@ -294,6 +344,9 @@ class ExecutedCase:
         return {
             "caseId": self.case_id,
             "status": self.status.value,
+            "candidateBindingDigest": self.candidate_binding_digest,
+            "testDataInstanceId": self.test_data_instance_id,
+            "requestId": self.request_id.value,
             "assertionIds": [item["assertionId"] for item in assertions],
             "assertions": assertions,
             "testExecution": {
@@ -302,7 +355,21 @@ class ExecutedCase:
                 "skipped": 0,
             },
             "provisionReceiptDigest": self.provision_receipt.digest,
+            "provisionReceiptPath": relative_receipt_path(self.provision_receipt),
             "testBodyReceiptDigest": self.test_body_receipt.digest,
+            "testBodyReceiptPath": relative_receipt_path(self.test_body_receipt),
+            "readbackReceiptDigests": [
+                receipt.digest for receipt in self.readback_receipts
+            ],
+            "readbackReceiptPaths": [
+                relative_receipt_path(receipt) for receipt in self.readback_receipts
+            ],
+            "cleanupReceiptDigests": [
+                receipt.digest for receipt in self.cleanup_receipts
+            ],
+            "cleanupReceiptPaths": [
+                relative_receipt_path(receipt) for receipt in self.cleanup_receipts
+            ],
         }
 
 

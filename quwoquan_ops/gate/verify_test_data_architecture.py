@@ -30,6 +30,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 MAX_FIXTURE_BYTES = 64 * 1024
 MAX_OBJECT_FIXTURE_BYTES = 256 * 1024
+MAX_APP_SUPPORT_FILE_BYTES = 64 * 1024
+MAX_APP_SUPPORT_LINE_BYTES = 16 * 1024
+MAX_APP_SUPPORT_CONST_JSON_BYTES = 8 * 1024
 MAX_SCALAR_LEAVES = 500
 MAX_ARRAY_ITEMS = 100
 FORBIDDEN_SCENARIO_KEYS = {"seedSets", "repositoryExpectations", "requiresSeedReset"}
@@ -53,6 +56,20 @@ RETIRED_TEST_DATA_TOKENS = (
     "datasetEpoch",
     "test_live_business_data",
 )
+RETIRED_ENTITY_INTRODUCTION_TOKENS = (
+    "entity_scenarios.json",
+    "merge_into_scenarios",
+    "handle_entity_introduction",
+    "def register_parser(",
+)
+RETIRED_APP_AGGREGATE_TEST_TOKENS = (
+    "ChatMockData",
+    "CircleMockData",
+    "ContentMockData",
+    "MockChatRepository",
+    "MockContentRepository",
+    "PrototypeMockData",
+)
 
 
 def collect_issues(root: Path = ROOT) -> list[str]:
@@ -62,12 +79,52 @@ def collect_issues(root: Path = ROOT) -> list[str]:
     issues.extend(_provider_contract_issues(root))
     issues.extend(_production_purity_issues(root))
     issues.extend(_user_acceptance_fake_issues(root))
+    issues.extend(_chat_api_integration_actor_issues(root))
     issues.extend(_eval_corpus_issues(root))
     issues.extend(_scenario_dump_source_issues(root))
+    issues.extend(_app_fixture_reader_issues(root))
+    issues.extend(_app_support_source_budget_issues(root))
     issues.extend(_fixture_budget_issues(root))
     issues.extend(_generated_provider_state_issues(root))
     issues.extend(_retired_data_track_issues(root))
     return sorted(set(issues))
+
+
+def _app_fixture_reader_issues(root: Path) -> list[str]:
+    """Keep App contract examples object-local and free of filesystem readers."""
+
+    app_test = root / "quwoquan_app/test"
+    if not app_test.exists():
+        return []
+    issues: list[str] = []
+    retired_reader = "object_contract_example_reader.dart"
+    for path in sorted(app_test.rglob("*.dart")):
+        relative = path.relative_to(root).as_posix()
+        source = path.read_text(encoding="utf-8", errors="ignore")
+        if path.name == retired_reader:
+            issues.append(
+                f"{relative}: cross-domain object contract fixture reader must be deleted"
+            )
+        if retired_reader in source:
+            issues.append(
+                f"{relative}: App tests must use object-local typed builders, "
+                "not the retired cross-domain fixture reader"
+            )
+        if "/test/support/runtime/fixtures/" not in f"/{relative}":
+            continue
+        if "import 'dart:io'" in source or 'import "dart:io"' in source:
+            issues.append(
+                f"{relative}: App fixture support must not read contract examples "
+                "from the runtime filesystem"
+            )
+        if "requireExample(" in source or re.search(
+            r"\bdocument\s*\(\s*String\s+domain\b",
+            source,
+        ):
+            issues.append(
+                f"{relative}: cross-domain named-example fixture matrix is forbidden"
+            )
+    return issues
 
 
 def _generated_provider_state_issues(root: Path) -> list[str]:
@@ -380,6 +437,45 @@ def _user_acceptance_fake_issues(root: Path) -> list[str]:
                 f"{path.relative_to(root)}: user_acceptance must use production "
                 "Remote composition, not a fixture/object-builder gateway"
             )
+        if "--fixture-conversation-id" in source:
+            issues.append(
+                f"{path.relative_to(root)}: user_acceptance must not accept "
+                "a fixed fixture conversation identity"
+            )
+        if re.search(
+            r"(?:default\s*=\s*|--(?:viewer|actor|user|persona)-id\s+)"
+            r"[\"']?(?:fixture_(?:user|persona)|user_test_)[a-zA-Z0-9_-]*",
+            source,
+        ):
+            issues.append(
+                f"{path.relative_to(root)}: user_acceptance must resolve Actor "
+                "identity from the active test-data lease"
+            )
+        if (
+            "service_ops/chat-service/" in path.as_posix()
+            and re.search(r"\buser_test_[0-9]+\b", source)
+        ):
+            issues.append(
+                f"{path.relative_to(root)}: Chat user_acceptance must resolve "
+                "Actor identities from the active test-data lease"
+            )
+    return issues
+
+
+def _chat_api_integration_actor_issues(root: Path) -> list[str]:
+    """Chat API integration must obtain mutable actors from its test session."""
+
+    issues: list[str] = []
+    base = root / "quwoquan_app/test/api_integration/service/chat_service"
+    if not base.exists():
+        return issues
+    actor_pattern = re.compile(r"\buser_test_[A-Za-z0-9_-]+\b")
+    for path in sorted(base.rglob("*.dart")):
+        if actor_pattern.search(path.read_text(encoding="utf-8", errors="ignore")):
+            issues.append(
+                f"{path.relative_to(root)}: Chat api_integration must resolve "
+                "mutable Actor identities from its typed test-data session"
+            )
     return issues
 
 
@@ -400,7 +496,7 @@ def _eval_corpus_issues(root: Path) -> list[str]:
         scenarios = payload.get("scenarios") if isinstance(payload, Mapping) else None
         forbidden = sorted(FORBIDDEN_SCENARIO_KEYS & _keys(payload))
         expected_digest = hashlib.sha256(corpus.read_bytes()).hexdigest()
-        if metadata.get("schema") != "qwq.eval_corpus_manifest.v1":
+        if metadata.get("schema") != "qwq.eval_corpus_manifest":
             issues.append(f"{manifest.relative_to(root)}: eval corpus schema mismatch")
         if metadata.get("corpusFile") != corpus.name:
             issues.append(f"{manifest.relative_to(root)}: eval corpus filename mismatch")
@@ -417,20 +513,99 @@ def _eval_corpus_issues(root: Path) -> list[str]:
 
 
 def _scenario_dump_source_issues(root: Path) -> list[str]:
-    """Reject old scenario-dump keys hidden inside in-memory App builders."""
+    """Reject old scenario dumps hidden inside language-native test support."""
 
     issues: list[str] = []
-    base = root / "quwoquan_app/test/support"
-    if not base.exists():
-        return issues
     token_pattern = re.compile(
         r"[\"'](?:seedSets|repositoryExpectations|requiresSeedReset)[\"']"
     )
-    for path in sorted(base.rglob("*.dart")):
-        if token_pattern.search(path.read_text(encoding="utf-8", errors="ignore")):
+    app_support = root / "quwoquan_app/test/support"
+    if app_support.exists():
+        for path in sorted(app_support.rglob("*.dart")):
+            if not token_pattern.search(
+                path.read_text(encoding="utf-8", errors="ignore")
+            ):
+                continue
             issues.append(
                 f"{path.relative_to(root)}: in-memory builder contains retired "
                 "scenario-data keys"
+            )
+    app_test = root / "quwoquan_app/test"
+    if app_test.exists():
+        for path in sorted(app_test.rglob("*.dart")):
+            source = path.read_text(encoding="utf-8", errors="ignore")
+            for token in RETIRED_APP_AGGREGATE_TEST_TOKENS:
+                if token in source:
+                    issues.append(
+                        f"{path.relative_to(root)}: retired aggregate test-data "
+                        f"symbol remains: {token}"
+                    )
+            if re.search(r"\bimplements\s+ChatRepository\b", source):
+                issues.append(
+                    f"{path.relative_to(root)}: aggregate ChatRepository test "
+                    "double is forbidden; override object-level facets"
+                )
+    data_support = root / "quwoquan_data/tests/support"
+    if data_support.exists():
+        for path in sorted(data_support.rglob("*.py")):
+            source = path.read_text(encoding="utf-8", errors="ignore")
+            if token_pattern.search(source):
+                issues.append(
+                    f"{path.relative_to(root)}: Data test support contains retired "
+                    "scenario-data keys"
+                )
+            if path.name != "entity_introduction_fixture.py":
+                continue
+            for token in RETIRED_ENTITY_INTRODUCTION_TOKENS:
+                if token in source:
+                    issues.append(
+                        f"{path.relative_to(root)}: retired entity-introduction "
+                        f"fixture writer/CLI remains: {token}"
+                    )
+    return issues
+
+
+def _app_support_source_budget_issues(root: Path) -> list[str]:
+    """Reject giant App support files and JSON corpora hidden in Dart constants."""
+
+    support_root = root / "quwoquan_app/test/support"
+    if not support_root.exists():
+        return []
+    issues: list[str] = []
+    const_json_pattern = re.compile(
+        r"const\s+String\s+\w+\s*=\s*r?(?P<quote>'''|\"\"\")"
+        r"(?P<body>.*?)(?P=quote)\s*;",
+        re.DOTALL,
+    )
+    for path in sorted(support_root.rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(root)
+        payload = path.read_bytes()
+        if len(payload) > MAX_APP_SUPPORT_FILE_BYTES:
+            issues.append(
+                f"{relative}: App test support file exceeds 64 KiB "
+                f"({len(payload)} bytes)"
+            )
+        largest_line = max((len(line) for line in payload.splitlines()), default=0)
+        if largest_line > MAX_APP_SUPPORT_LINE_BYTES:
+            issues.append(
+                f"{relative}: App test support contains an oversized single line "
+                f"({largest_line} bytes); generated/const JSON must use a builder"
+            )
+        if path.suffix != ".dart":
+            continue
+        source = payload.decode("utf-8", errors="ignore")
+        for match in const_json_pattern.finditer(source):
+            body = match.group("body")
+            body_size = len(body.encode("utf-8"))
+            if body_size <= MAX_APP_SUPPORT_CONST_JSON_BYTES:
+                continue
+            if not body.lstrip().startswith(("{", "[")):
+                continue
+            issues.append(
+                f"{relative}: App test support const JSON exceeds 8 KiB "
+                f"({body_size} bytes); use a deterministic typed builder"
             )
     return issues
 

@@ -16,6 +16,7 @@ import json
 import re
 import subprocess
 import sys
+import tarfile
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -82,6 +83,31 @@ def _find_spdx(value: Any) -> dict[str, Any] | None:
 
 def _has_slsa_provenance(value: Any) -> bool:
     if isinstance(value, dict):
+        build_definition = value.get("buildDefinition")
+        run_details = value.get("runDetails")
+        run_metadata = (
+            run_details.get("metadata") if isinstance(run_details, dict) else None
+        )
+        if (
+            isinstance(build_definition, dict)
+            and isinstance(build_definition.get("buildType"), str)
+            and bool(build_definition["buildType"])
+            and isinstance(build_definition.get("resolvedDependencies"), list)
+            and isinstance(run_details, dict)
+            and isinstance(run_details.get("builder"), dict)
+            and (
+                bool(run_details["builder"].get("id"))
+                or (
+                    isinstance(run_metadata, dict)
+                    and bool(run_metadata.get("invocationId"))
+                    and isinstance(
+                        run_metadata.get("buildkit_metadata"),
+                        dict,
+                    )
+                )
+            )
+        ):
+            return True
         if (
             isinstance(value.get("builder"), dict)
             and isinstance(value.get("buildType"), str)
@@ -93,6 +119,84 @@ def _has_slsa_provenance(value: Any) -> bool:
     if isinstance(value, list):
         return any(_has_slsa_provenance(child) for child in value)
     return False
+
+
+def inspect_local_oci_archive_attestations(path: Path) -> dict[str, Any]:
+    """Verify unsigned local BuildKit predicates without granting promotion.
+
+    This path exists only for target-scoped test_live images. Release
+    eligibility still requires ``verify_signed_attestations`` against GHCR.
+    """
+
+    if not path.is_file() or path.is_symlink():
+        raise ValueError("local OCI archive must be one regular file")
+    with tarfile.open(path, "r") as archive:
+        members = {member.name: member for member in archive.getmembers()}
+
+        def load_json(name: str) -> Any:
+            member = members.get(name)
+            if member is None or not member.isfile():
+                raise RuntimeError(f"OCI archive member is missing: {name}")
+            source = archive.extractfile(member)
+            if source is None:
+                raise RuntimeError(f"OCI archive member is unreadable: {name}")
+            return json.load(source)
+
+        index = load_json("index.json")
+        manifests = index.get("manifests") if isinstance(index, dict) else None
+        if not isinstance(manifests, list):
+            raise RuntimeError("OCI archive index has no manifests")
+        statements: list[Any] = []
+
+        def collect_descriptor(descriptor: Any) -> None:
+            if not isinstance(descriptor, dict):
+                return
+            annotations = descriptor.get("annotations") or {}
+            digest = str(descriptor.get("digest") or "")
+            if not digest.startswith("sha256:"):
+                return
+            payload = load_json("blobs/sha256/" + digest.removeprefix("sha256:"))
+            if descriptor.get("mediaType") == "application/vnd.oci.image.index.v1+json":
+                for child in payload.get("manifests") or []:
+                    collect_descriptor(child)
+                return
+            if (
+                annotations.get("vnd.docker.reference.type")
+                != "attestation-manifest"
+            ):
+                return
+            manifest = payload
+            for layer in manifest.get("layers") or []:
+                layer_digest = str(layer.get("digest") or "")
+                if layer_digest.startswith("sha256:"):
+                    statements.append(
+                        load_json(
+                            "blobs/sha256/"
+                            + layer_digest.removeprefix("sha256:")
+                        )
+                    )
+
+        for descriptor in manifests:
+            collect_descriptor(descriptor)
+    spdx = next((_find_spdx(value) for value in statements if _find_spdx(value)), None)
+    provenance = next(
+        (value for value in statements if _has_slsa_provenance(value)),
+        None,
+    )
+    if (
+        spdx is None
+        or not isinstance(spdx.get("packages"), list)
+        or not spdx["packages"]
+    ):
+        raise RuntimeError("local OCI image has no structured SPDX SBOM")
+    if provenance is None:
+        raise RuntimeError("local OCI image has no structured SLSA provenance")
+    return {
+        "spdx": spdx,
+        "provenance": provenance,
+        "nonPromotable": True,
+        "promotionEligibility": "GATE_BLOCK",
+    }
 
 
 def inspect_buildkit_attestations(

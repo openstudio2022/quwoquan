@@ -5,7 +5,7 @@
 
 - `specs/feature-tree/product-ops-growth/product-control-plane-foundation/account-moderation-and-appeal-enforcement/spec.md#gwt-003`
 - `specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#gwt-003`
-- `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/product-ops-service/smoke/account_enforcement_gamma_uat_manifest.json`
+- `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/product-ops-service/gamma/account_enforcement_gamma_uat_manifest.json`
 
 ## 前置条件
 

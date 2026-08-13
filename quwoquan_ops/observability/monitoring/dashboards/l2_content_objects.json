@@ -1,283 +1,381 @@
 {
-  "dashboard": {
-    "title": "L2 — Content 对象契约可观测",
-    "uid": "qwq-l2-content-objects",
-    "tags": ["quwoquan", "l2", "content", "contract-graph"],
-    "timezone": "browser",
-    "refresh": "30s",
-    "description": "从 ContractGraph operation/telemetry.metric/SLO 生成 recording rules；面板只消费真实 PromQL，不以注释或 legend 充当覆盖证据。",
-    "panels": [
-      {
-        "title": "Ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }} / {{ contract_metric }}"
-          }
-        ]
+  "title": "L2 — Content 对象契约可观测",
+  "uid": "qwq-l2-content-objects",
+  "tags": [
+    "quwoquan",
+    "l2",
+    "content",
+    "contract-graph"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "description": "从 ContractGraph operation/telemetry.metric/SLO 生成 recording rules；面板只消费真实 PromQL，不以注释或 legend 充当覆盖证据。",
+  "panels": [
+    {
+      "title": "Ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
       },
-      {
-        "title": "Ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }} / {{ contract_metric }} / SLO {{ slo_latency_p95_ms }}ms"
-          }
-        ]
-      },
-      {
-        "title": "Moderation 可用性与延迟",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\.post_moderation_case\\\\..+\",contract_metric=~\"content_moderation_.+\",status=~\"5..\"}[5m])) by (operation, contract_metric)",
-            "legendFormat": "5xx {{ operation }}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"content\\\\.post_moderation_case\\\\..+\",contract_metric=~\"content_moderation_.+\"}[5m])) by (le, operation, contract_metric))",
-            "legendFormat": "P95 {{ operation }}"
-          }
-        ]
-      },
-      {
-        "title": "Original access quota / Outbound share fail-closed",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\.(original_access_quota\\\\.ReserveOriginalImageAccessGrant|outbound_share_fact\\\\.AppendOutboundShareFact)\",contract_metric=~\"content_(media_original_access_request|outbound_share_append)\",commercial_status=~\"ready|blocked\"}[5m])) by (operation, contract_metric, commercial_status, status)",
-            "legendFormat": "{{ operation }} / {{ commercial_status }} / HTTP {{ status }}"
-          }
-        ]
-      },
-      {
-        "title": "Profile interaction P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"(content\\\\.profile_interaction_activity_view\\\\.ListProfileInteractionActivitiesReceived|content\\\\.profile_interaction_activity_view\\\\.ListProfileInteractionActivitiesSent|content\\\\.profile_interaction_read_fact\\\\.AppendProfileInteractionReadFact)\",contract_metric=~\"content_profile_interaction_.+\"}[5m])) by (le, operation, contract_metric))",
-            "legendFormat": "{{ operation }} / {{ contract_metric }}"
-          }
-        ]
-      },
-      {
-        "title": "Media processing result",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=\"content.media_asset.RecordMediaProcessingResult\",contract_metric=\"content_media_processing_result\"}[5m])) by (status)",
-            "legendFormat": "HTTP {{ status }}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=\"content.media_asset.RecordMediaProcessingResult\",contract_metric=\"content_media_processing_result\"}[5m])) by (le))",
-            "legendFormat": "P95"
-          }
-        ]
-      },
-      {
-        "title": "Projection / checkpoint health",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-        "targets": [
-          {
-            "expr": "runtime_health_check_status{instance=~\"content-service(:[0-9]+)?\",check=~\".*(projection|outbox|lifecycle|count).*\"}",
-            "legendFormat": "{{ check }}"
-          }
-        ]
-      },
-      {
-        "title": "Projection checkpoint success age",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-        "targets": [
-          {
-            "expr": "time() - runtime_health_check_last_success_timestamp_seconds{instance=~\"content-service(:[0-9]+)?\",check=~\".*(projection|outbox|lifecycle|count).*\"}",
-            "legendFormat": "{{ check }}"
-          }
-        ]
-      },
-      {
-        "title": "Comment 请求 SLO",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"content\\\\.comment\\\\..+\"}[5m])) by (le, operation, contract_metric))",
-            "legendFormat": "P95 {{ operation }}"
-          },
-          {
-            "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\.comment\\\\..+\",status=~\"5..\"}[5m])) by (operation) / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\.comment\\\\..+\"}[5m])) by (operation), 0.001)",
-            "legendFormat": "5xx ratio {{ operation }}"
-          }
-        ]
-      },
-      {
-        "title": "Comment 合规与频控",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=\"content.comment.CreateComment\",status=\"429\"}[15m])) / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=\"content.comment.CreateComment\"}[15m])), 0.001)",
-            "legendFormat": "create 429 ratio"
-          },
-          {
-            "expr": "sum(rate(content_comment_ip_location_lookup_total{outcome=\"not_found\"}[15m])) / clamp_min(sum(rate(content_comment_ip_location_lookup_total{outcome=~\"ok|not_found\"}[15m])), 0.001)",
-            "legendFormat": "IP location not-found ratio"
-          },
-          {
-            "expr": "content_comment_ip_location_data_age_days",
-            "legendFormat": "IP location data age days"
-          }
-        ]
-      },
-      {
-        "title": "Comment 独立 checkpoint 健康",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 40 },
-        "targets": [
-          {
-            "expr": "runtime_health_check_status{instance=~\"content-service(:[0-9]+)?\",check=~\"content_comment_.*|report_comment_moderation\"}",
-            "legendFormat": "{{ check }}"
-          },
-          {
-            "expr": "time() - runtime_health_check_last_success_timestamp_seconds{instance=~\"content-service(:[0-9]+)?\",check=~\"content_comment_.*|report_comment_moderation\"}",
-            "legendFormat": "success age {{ check }}"
-          }
-        ]
-      },
-      {
-        "title": "B2 页面漏斗与失败关联",
-        "type": "text",
-        "gridPos": { "h": 6, "w": 24, "x": 0, "y": 48 },
-        "options": {
-          "mode": "markdown",
-          "content": "页面黄金指标来自 Elasticsearch `app-product-telemetry-product-action-funnel-hourly`（`rowKind=product_action_funnel`）：`content_share` 按 action/result 计算完成率与失败率，`content_report` 覆盖首页、沉浸浏览器与用户主页三条真实举报入口，`profile_interaction` 按 `mark_seen`/`mark_read` 计算状态写入成功率；失败下钻使用 `failReasonCode`、`recoveryAction`，原始日志以 `requestId`/`traceId` 关联端云链路。告警：`product-content-share-action-failure-rate-high`、`product-content-report-action-failure-rate-high`、`product-profile-interaction-state-failure-rate-high`。Beta/Gamma/Prod 未产生真实 series 时不得作为商业准出证据。"
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }} / {{ contract_metric }}"
         }
+      ]
+    },
+    {
+      "title": "Ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
       },
-      {
-        "title": "Filter catalog active reader",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 54 },
-        "targets": [
-          {
-            "expr": "sum(rate(content_filter_catalog_get_total[5m])) by (outcome)",
-            "legendFormat": "get {{ outcome }}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(content_filter_catalog_operation_duration_seconds_bucket{operation=\"get\"}[5m])) by (le))",
-            "legendFormat": "get P95"
-          }
-        ]
-      },
-      {
-        "title": "Filter catalog release control plane",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 54 },
-        "targets": [
-          {
-            "expr": "sum(rate({__name__=~\"content_filter_catalog_(stage|activate|rollback)_total\"}[5m])) by (__name__, outcome, replayed)",
-            "legendFormat": "{{ __name__ }} / {{ outcome }} / replayed={{ replayed }}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(content_filter_catalog_operation_duration_seconds_bucket{operation=~\"stage|activate|rollback\"}[5m])) by (le, operation, outcome))",
-            "legendFormat": "{{ operation }} P95 / {{ outcome }}"
-          }
-        ]
-      },
-      {
-        "title": "Media processing SLI",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 62 },
-        "targets": [
-          {
-            "expr": "sum(rate(content_media_processing_jobs_total[5m])) by (media_type, input_size_class, result)",
-            "legendFormat": "{{ media_type }} / {{ input_size_class }} / {{ result }}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(content_media_processing_complete_to_ready_seconds_bucket[5m])) by (le, media_type, input_size_class))",
-            "legendFormat": "complete→ready P95 {{ media_type }} / {{ input_size_class }}"
-          },
-          {
-            "expr": "content_media_processing_outbox_oldest_event_age_seconds",
-            "legendFormat": "outbox oldest event age"
-          },
-          {
-            "expr": "max(content_media_processing_dlq_event_age_seconds) by (reason)",
-            "legendFormat": "DLQ admission age {{ reason }}"
-          },
-          {
-            "expr": "sum(rate(content_media_hls_cmaf_packaging_total[5m])) by (result)",
-            "legendFormat": "HLS/CMAF {{ result }}"
-          }
-        ]
-      },
-      {
-        "title": "Publication / preview-track SLI",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 62 },
-        "targets": [
-          {
-            "expr": "sum(rate(ops_content_publication_events_total[5m])) by (publication_stage, content_type, result, background_retry_terminal)",
-            "legendFormat": "{{ publication_stage }} / {{ content_type }} / {{ result }} / {{ background_retry_terminal }}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_content_publish_to_visible_seconds_bucket[5m])) by (le, content_type, result))",
-            "legendFormat": "publish→visible P95 {{ content_type }} / {{ result }}"
-          },
-          {
-            "expr": "sum(rate(ops_video_preview_track_loads_total[5m])) by (result)",
-            "legendFormat": "preview track {{ result }}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_video_preview_track_load_duration_seconds_bucket[5m])) by (le, result))",
-            "legendFormat": "preview track P95 {{ result }}"
-          }
-        ]
-      },
-      {
-        "title": "Publication funnel Elasticsearch authority",
-        "type": "text",
-        "gridPos": { "h": 6, "w": 24, "x": 0, "y": 70 },
-        "options": {
-          "mode": "markdown",
-          "content": "权威小时漏斗为 Elasticsearch `app-product-telemetry-content-publication-funnel-hourly`（`rowKind=content_publication_funnel`），按 `publicationStage/contentType/objectState/surfaceId/result/backgroundRetryTerminal` 聚合；`correlationHash` 只用于 raw 明细关联，绝不进入 Prometheus label 或小时维度。预览轨道使用 `app-product-telemetry-video-preview-track-load-hourly`。Prometheus 面板仅用于近实时告警；缺少 beta/gamma/prod 的真实 series 时必须显示 unavailable，不能作为商业准出证据。"
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }} / {{ contract_metric }} / SLO {{ slo_latency_p95_ms }}ms"
         }
+      ]
+    },
+    {
+      "title": "Moderation 可用性与延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
       },
-      {
-        "title": "Article reader SLI",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 76 },
-        "targets": [
-          {
-            "expr": "sum(rate(ops_article_reader_events_total[5m])) by (stage, result)",
-            "legendFormat": "{{ stage }} / {{ result }}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_article_reader_enter_duration_seconds_bucket{result=\"success\"}[5m])) by (le))",
-            "legendFormat": "reader enter P95"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_article_reader_dwell_seconds_bucket{result=\"success\"}[5m])) by (le))",
-            "legendFormat": "sampled dwell P95"
-          }
-        ]
-      },
-      {
-        "title": "Article reader Elasticsearch authority",
-        "type": "text",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 76 },
-        "options": {
-          "mode": "markdown",
-          "content": "权威小时聚合为 Elasticsearch `app-product-telemetry-article-reader-lifecycle-hourly`（`rowKind=article_reader_lifecycle`）。`enter/exit/error/recovery` 全量采样，`dwell` 为 10% 采样；错误和恢复按 canonical `errorCode/recoveryAction` 下钻，`objectId` 仅存在于 raw 明细，`sessionId` 只生成 approximate distinct-session HLL；两者绝不进入 Prometheus label 或小时维度。SLO：成功 enter P95 ≤ 1.2s、enter 后错误率 < 1%；告警为 `product-article-reader-enter-p95-high`、`product-article-reader-error-rate-high`、`product-article-reader-recovery-failure`。"
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\.post_moderation_case\\\\..+\",contract_metric=~\"content_moderation_.+\",status=~\"5..\"}[5m])) by (operation, contract_metric)",
+          "legendFormat": "5xx {{ operation }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"content\\\\.post_moderation_case\\\\..+\",contract_metric=~\"content_moderation_.+\"}[5m])) by (le, operation, contract_metric))",
+          "legendFormat": "P95 {{ operation }}"
         }
+      ]
+    },
+    {
+      "title": "Original access quota / Outbound share fail-closed",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\.(original_access_quota\\\\.ReserveOriginalImageAccessGrant|outbound_share_fact\\\\.AppendOutboundShareFact)\",contract_metric=~\"content_(media_original_access_request|outbound_share_append)\",commercial_status=~\"ready|blocked\"}[5m])) by (operation, contract_metric, commercial_status, status)",
+          "legendFormat": "{{ operation }} / {{ commercial_status }} / HTTP {{ status }}"
+        }
+      ]
+    },
+    {
+      "title": "Profile interaction P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"(content\\\\.profile_interaction_activity_view\\\\.ListProfileInteractionActivitiesReceived|content\\\\.profile_interaction_activity_view\\\\.ListProfileInteractionActivitiesSent|content\\\\.profile_interaction_read_fact\\\\.AppendProfileInteractionReadFact)\",contract_metric=~\"content_profile_interaction_.+\"}[5m])) by (le, operation, contract_metric))",
+          "legendFormat": "{{ operation }} / {{ contract_metric }}"
+        }
+      ]
+    },
+    {
+      "title": "Media processing result",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=\"content.media_asset.RecordMediaProcessingResult\",contract_metric=\"content_media_processing_result\"}[5m])) by (status)",
+          "legendFormat": "HTTP {{ status }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=\"content.media_asset.RecordMediaProcessingResult\",contract_metric=\"content_media_processing_result\"}[5m])) by (le))",
+          "legendFormat": "P95"
+        }
+      ]
+    },
+    {
+      "title": "Projection / checkpoint health",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "runtime_health_check_status{instance=~\"content-service(:[0-9]+)?\",check=~\".*(projection|outbox|lifecycle|count).*\"}",
+          "legendFormat": "{{ check }}"
+        }
+      ]
+    },
+    {
+      "title": "Projection checkpoint success age",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "targets": [
+        {
+          "expr": "time() - runtime_health_check_last_success_timestamp_seconds{instance=~\"content-service(:[0-9]+)?\",check=~\".*(projection|outbox|lifecycle|count).*\"}",
+          "legendFormat": "{{ check }}"
+        }
+      ]
+    },
+    {
+      "title": "Comment 请求 SLO",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"content\\\\.comment\\\\..+\"}[5m])) by (le, operation, contract_metric))",
+          "legendFormat": "P95 {{ operation }}"
+        },
+        {
+          "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\.comment\\\\..+\",status=~\"5..\"}[5m])) by (operation) / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\.comment\\\\..+\"}[5m])) by (operation), 0.001)",
+          "legendFormat": "5xx ratio {{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "Comment 合规与频控",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=\"content.comment.CreateComment\",status=\"429\"}[15m])) / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=\"content.comment.CreateComment\"}[15m])), 0.001)",
+          "legendFormat": "create 429 ratio"
+        },
+        {
+          "expr": "sum(rate(content_comment_ip_location_lookup_total{outcome=\"not_found\"}[15m])) / clamp_min(sum(rate(content_comment_ip_location_lookup_total{outcome=~\"ok|not_found\"}[15m])), 0.001)",
+          "legendFormat": "IP location not-found ratio"
+        },
+        {
+          "expr": "content_comment_ip_location_data_age_days",
+          "legendFormat": "IP location data age days"
+        }
+      ]
+    },
+    {
+      "title": "Comment 独立 checkpoint 健康",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "runtime_health_check_status{instance=~\"content-service(:[0-9]+)?\",check=~\"content_comment_.*|report_comment_moderation\"}",
+          "legendFormat": "{{ check }}"
+        },
+        {
+          "expr": "time() - runtime_health_check_last_success_timestamp_seconds{instance=~\"content-service(:[0-9]+)?\",check=~\"content_comment_.*|report_comment_moderation\"}",
+          "legendFormat": "success age {{ check }}"
+        }
+      ]
+    },
+    {
+      "title": "B2 页面漏斗与失败关联",
+      "type": "text",
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "页面黄金指标来自 Elasticsearch `app-product-telemetry-product-action-funnel-hourly`（`rowKind=product_action_funnel`）：`content_share` 按 action/result 计算完成率与失败率，`content_report` 覆盖首页、沉浸浏览器与用户主页三条真实举报入口，`profile_interaction` 按 `mark_seen`/`mark_read` 计算状态写入成功率；失败下钻使用 `failReasonCode`、`recoveryAction`，原始日志以 `requestId`/`traceId` 关联端云链路。告警：`product-content-share-action-failure-rate-high`、`product-content-report-action-failure-rate-high`、`product-profile-interaction-state-failure-rate-high`。Beta/Gamma/Prod 未产生真实 series 时不得作为商业准出证据。"
       }
-    ]
-  }
+    },
+    {
+      "title": "Filter catalog active reader",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(content_filter_catalog_get_total[5m])) by (outcome)",
+          "legendFormat": "get {{ outcome }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(content_filter_catalog_operation_duration_seconds_bucket{operation=\"get\"}[5m])) by (le))",
+          "legendFormat": "get P95"
+        }
+      ]
+    },
+    {
+      "title": "Filter catalog release control plane",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 54
+      },
+      "targets": [
+        {
+          "expr": "sum(rate({__name__=~\"content_filter_catalog_(stage|activate|rollback)_total\"}[5m])) by (__name__, outcome, replayed)",
+          "legendFormat": "{{ __name__ }} / {{ outcome }} / replayed={{ replayed }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(content_filter_catalog_operation_duration_seconds_bucket{operation=~\"stage|activate|rollback\"}[5m])) by (le, operation, outcome))",
+          "legendFormat": "{{ operation }} P95 / {{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "Media processing SLI",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 62
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(content_media_processing_jobs_total[5m])) by (media_type, input_size_class, result)",
+          "legendFormat": "{{ media_type }} / {{ input_size_class }} / {{ result }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(content_media_processing_complete_to_ready_seconds_bucket[5m])) by (le, media_type, input_size_class))",
+          "legendFormat": "complete→ready P95 {{ media_type }} / {{ input_size_class }}"
+        },
+        {
+          "expr": "content_media_processing_outbox_oldest_event_age_seconds",
+          "legendFormat": "outbox oldest event age"
+        },
+        {
+          "expr": "max(content_media_processing_dlq_event_age_seconds) by (reason)",
+          "legendFormat": "DLQ admission age {{ reason }}"
+        },
+        {
+          "expr": "sum(rate(content_media_hls_cmaf_packaging_total[5m])) by (result)",
+          "legendFormat": "HLS/CMAF {{ result }}"
+        }
+      ]
+    },
+    {
+      "title": "Publication / preview-track SLI",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 62
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(ops_content_publication_events_total[5m])) by (publication_stage, content_type, result, background_retry_terminal)",
+          "legendFormat": "{{ publication_stage }} / {{ content_type }} / {{ result }} / {{ background_retry_terminal }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ops_content_publish_to_visible_seconds_bucket[5m])) by (le, content_type, result))",
+          "legendFormat": "publish→visible P95 {{ content_type }} / {{ result }}"
+        },
+        {
+          "expr": "sum(rate(ops_video_preview_track_loads_total[5m])) by (result)",
+          "legendFormat": "preview track {{ result }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ops_video_preview_track_load_duration_seconds_bucket[5m])) by (le, result))",
+          "legendFormat": "preview track P95 {{ result }}"
+        }
+      ]
+    },
+    {
+      "title": "Publication funnel Elasticsearch authority",
+      "type": "text",
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 70
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "权威小时漏斗为 Elasticsearch `app-product-telemetry-content-publication-funnel-hourly`（`rowKind=content_publication_funnel`），按 `publicationStage/contentType/objectState/surfaceId/result/backgroundRetryTerminal` 聚合；`correlationHash` 只用于 raw 明细关联，绝不进入 Prometheus label 或小时维度。预览轨道使用 `app-product-telemetry-video-preview-track-load-hourly`。Prometheus 面板仅用于近实时告警；缺少 beta/gamma/prod 的真实 series 时必须显示 unavailable，不能作为商业准出证据。"
+      }
+    },
+    {
+      "title": "Article reader SLI",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 76
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(ops_article_reader_events_total[5m])) by (stage, result)",
+          "legendFormat": "{{ stage }} / {{ result }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ops_article_reader_enter_duration_seconds_bucket{result=\"success\"}[5m])) by (le))",
+          "legendFormat": "reader enter P95"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ops_article_reader_dwell_seconds_bucket{result=\"success\"}[5m])) by (le))",
+          "legendFormat": "sampled dwell P95"
+        }
+      ]
+    },
+    {
+      "title": "Article reader Elasticsearch authority",
+      "type": "text",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 76
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "权威小时聚合为 Elasticsearch `app-product-telemetry-article-reader-lifecycle-hourly`（`rowKind=article_reader_lifecycle`）。`enter/exit/error/recovery` 全量采样，`dwell` 为 10% 采样；错误和恢复按 canonical `errorCode/recoveryAction` 下钻，`objectId` 仅存在于 raw 明细，`sessionId` 只生成 approximate distinct-session HLL；两者绝不进入 Prometheus label 或小时维度。SLO：成功 enter P95 ≤ 1.2s、enter 后错误率 < 1%；告警为 `product-article-reader-enter-p95-high`、`product-article-reader-error-rate-high`、`product-article-reader-recovery-failure`。"
+      }
+    }
+  ]
 }

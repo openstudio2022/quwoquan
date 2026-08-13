@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
 # Python 1000 行硬顶治理：原单文件按场景拆分为本文件与同目录
 # test_single_track_contracts__*__local_contract_test.py 兄弟文件；共享 harness
 # 下沉 quwoquan_ops/tests/support/single_track_contracts_test_support.py。

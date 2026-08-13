@@ -17,7 +17,7 @@ from ..local_environment_auth import (
     LocalEnvironmentHTTPError,
     request_local_environment_json,
 )
-from .capabilities.common import ActorHandle
+from .capabilities.common import ActorHandle, ActorRole
 from .model import ProvisionedCapability
 
 
@@ -75,8 +75,9 @@ class ContractOperationCatalog:
 class TestDataRuntime:
     """Opaque session handles and per-run operation accounting shared by Providers."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, candidate_cache_enabled: bool = True) -> None:
         self._sessions: dict[str, LocalAcceptanceActor] = {}
+        self._actor_handles: dict[tuple[str, ActorRole], ActorHandle] = {}
         self._candidate_cache: dict[tuple[str, str, str], ProvisionedCapability] = {}
         self._candidate_inflight: dict[
             tuple[str, str, str],
@@ -100,6 +101,7 @@ class TestDataRuntime:
         self._resource_capacities: dict[str, threading.BoundedSemaphore] = {}
         self._active_capabilities = 0
         self._max_observed_concurrency = 0
+        self._candidate_cache_enabled = candidate_cache_enabled
         self._lock = threading.Lock()
         self.operation_receipts: list[dict[str, Any]] = []
         self.provider_overrides: dict[str, object] = {}
@@ -197,11 +199,21 @@ class TestDataRuntime:
         with self._lock:
             return self._max_observed_concurrency
 
-    def register_actor(self, handle: ActorHandle, actor: LocalAcceptanceActor) -> None:
+    def register_actor(
+        self,
+        handle: ActorHandle,
+        actor: LocalAcceptanceActor,
+        *,
+        test_data_instance_id: str,
+    ) -> None:
         with self._lock:
             if handle.session_handle in self._sessions:
                 raise RuntimeError("actor session handle collision")
+            key = (test_data_instance_id, handle.role)
+            if key in self._actor_handles:
+                raise RuntimeError("test-data Actor role is already registered")
             self._sessions[handle.session_handle] = actor
+            self._actor_handles[key] = handle
 
     def actor(self, handle: ActorHandle) -> LocalAcceptanceActor:
         with self._lock:
@@ -213,6 +225,21 @@ class TestDataRuntime:
         if actor.session.persona_id != handle.persona.object_id:
             raise RuntimeError("actor session/persona binding mismatch")
         return actor
+
+    def actor_for(
+        self,
+        *,
+        test_data_instance_id: str,
+        role: ActorRole,
+    ) -> ActorHandle:
+        with self._lock:
+            handle = self._actor_handles.get((test_data_instance_id, role))
+        if handle is None:
+            raise RuntimeError(
+                f"test-data Actor role is unavailable: {role.value}"
+            )
+        self.actor(handle)
+        return handle
 
     def register_operation_receipt_sink(
         self,
@@ -253,6 +280,10 @@ class TestDataRuntime:
         capability_key: str,
         params_identity: str,
     ) -> tuple[ProvisionedCapability | None, bool, bool]:
+        if not self._candidate_cache_enabled:
+            with self._lock:
+                self.cache_misses += 1
+            return None, False, False
         key = (candidate_binding_digest, capability_key, params_identity)
         while True:
             with self._lock:

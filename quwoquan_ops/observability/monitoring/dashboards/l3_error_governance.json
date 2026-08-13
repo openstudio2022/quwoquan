@@ -1,0 +1,102 @@
+{
+  "title": "L3 — Error Governance 错误治理",
+  "uid": "qwq-l3-error-governance",
+  "tags": [
+    "quwoquan",
+    "l3",
+    "error-governance"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "description": "错误码治理唯一看板：HTTP 5xx、MODULE.KIND.REASON 错误码速率、App 错误事实与遥测 ingest 拒绝，全部来自统一中间件与 product-ops 权威计数器；无采样时面板显示 No data，不合成趋势。",
+  "panels": [
+    {
+      "title": "全局 HTTP 5xx 比率",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "100 * sum(rate(http_server_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_total[5m])), 0.001)",
+          "legendFormat": "5xx %"
+        }
+      ]
+    },
+    {
+      "title": "按服务 HTTP 5xx 比率",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "100 * sum by (service) (rate(http_server_requests_total{status=~\"5..\"}[5m])) / clamp_min(sum by (service) (rate(http_server_requests_total[5m])), 0.001)",
+          "legendFormat": "{{ service }}"
+        }
+      ]
+    },
+    {
+      "title": "Top 10 错误码速率（MODULE.KIND.REASON）",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (error_code) (rate(http_server_error_codes_total[5m])))",
+          "legendFormat": "{{ error_code }}"
+        }
+      ]
+    },
+    {
+      "title": "错误分布：module × kind",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum by (module, kind) (rate(http_server_error_codes_total[5m]))",
+          "legendFormat": "{{ module }}.{{ kind }}"
+        }
+      ]
+    },
+    {
+      "title": "按服务错误码速率",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum by (service) (rate(http_server_error_codes_total[5m]))",
+          "legendFormat": "{{ service }}"
+        }
+      ]
+    },
+    {
+      "title": "App 错误事实（runtime_exception / page_error_outcome）",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum by (event_type, result) (rate(ops_app_experience_events_total{event_type=~\"runtime_exception|page_error_outcome\"}[10m]))",
+          "legendFormat": "{{ event_type }}/{{ result }}"
+        }
+      ]
+    },
+    {
+      "title": "遥测 ingest 事件结局（拒绝即观测面失血）",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum by (result) (rate(ops_telemetry_ingest_events_total[10m]))",
+          "legendFormat": "{{ result }}"
+        }
+      ]
+    },
+    {
+      "title": "MQ 消费失败速率（消息面错误）",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "targets": [
+        {
+          "expr": "sum by (topic, consumer_group) (rate(mq_consume_total{status=\"error\"}[10m]))",
+          "legendFormat": "{{ topic }}/{{ consumer_group }}"
+        }
+      ]
+    }
+  ]
+}

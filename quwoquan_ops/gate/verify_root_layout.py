@@ -13,47 +13,82 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.gate.verify_output_layout import output_layout_issues  # noqa: E402
 
-FORBIDDEN_TOP_LEVEL = frozenset(
+#: 仓库根目录的封闭白名单。
+#:
+#: 这里必须是白名单而不是黑名单：黑名单只能拦下已经出现过的名字，任何新冒出来的
+#: 垃圾目录都直接漏过门禁。`v/`、`v0/`、`v360p/`（被截断的 ffmpeg 参数误建）和
+#: `.ruff_cache/` 就是这样长期存在而不被发现的。根目录默认封闭之后，新增任何一级
+#: 条目都必须在这里显式登记，登记动作本身就是一次归属评审。
+ALLOWED_TOP_LEVEL = frozenset(
     {
-        "agent_ops",
-        "deploy",
-        "artifacts",
-        "releases",
-        "apps",
-        "packages",
-        "state",
-        "contracts",
-        "changes",
-        "openspec",
-        "app_log",
-        "runtime",
-        "build",
-        "tmp",
-        "tools",
-        "githooks",
-        "social_content_app",
-        "node_modules",
-        ".pytest_cache",
-        ".mainline-release-artifact",
-        ".release-evidence-manifest",
+        # 版本控制与协作配置
+        ".git",
+        ".github",
+        ".gitignore",
+        ".dockerignore",
+        ".cursor",
+        # 本地 IDE 配置：不入库，但开发机上必然存在
+        ".vscode",
+        # 唯一允许的运行输出根
+        ".qwq_output",
+        # 四个源域
+        "quwoquan_app",
+        "quwoquan_service",
+        "quwoquan_data",
+        "quwoquan_ops",
+        # 规格与文档
+        "specs",
+        "docs",
+        "AGENTS.md",
+        "README.md",
+        "LICENSE",
+        # 构建入口与工作区
+        "Makefile",
+        "quwoquan-workspace.code-workspace",
     }
 )
 
-FORBIDDEN_TOP_LEVEL_FILES = frozenset(
-    {
-        ".DS_Store",
-        ".gitmodules",
-        ".env",
-        ".env.local",
-        ".env.beta.local",
-        "eval_report_content_feed.json",
-        "eval_report_content_feed_multiobjective.json",
-        "gate.log",
-        "package-lock.json",
-        "package.json",
-        "runtime_scale10_ids.txt",
-    }
-)
+#: 曾经出现过并已明确退役的根条目。白名单已经能拦下它们，这里只用于给出比
+#: 「未登记条目」更具体的处置提示，避免重复走一遍归属排查。
+RETIRED_TOP_LEVEL = {
+    "agent_ops": "moved into quwoquan_ops",
+    "deploy": "moved into per-service deploy/base",
+    "artifacts": "runtime output belongs under .qwq_output",
+    "releases": "runtime output belongs under .qwq_output",
+    "apps": "moved into quwoquan_app",
+    "packages": "moved into per-domain package roots",
+    "state": "use .qwq_output/env/<env>/local/<target>",
+    "contracts": "moved into per-service contracts/",
+    "changes": "history lives in git log",
+    "openspec": "replaced by specs/feature-tree",
+    "app_log": "runtime output belongs under .qwq_output",
+    "runtime": "moved into quwoquan_app/lib/runtime",
+    "build": "runtime output belongs under .qwq_output",
+    "tmp": "runtime output belongs under .qwq_output",
+    "tools": "moved into per-domain tool roots",
+    "githooks": "moved into quwoquan_ops/hooks",
+    "social_content_app": "renamed to quwoquan_app",
+    "node_modules": "no root-level npm project",
+    ".pytest_cache": "redirect to .qwq_output/env/repo/local/**",
+    ".ruff_cache": "redirect to .qwq_output/env/repo/local/**",
+    ".mypy_cache": "redirect to .qwq_output/env/repo/local/**",
+    ".mainline-release-artifact": "runtime output belongs under .qwq_output",
+    ".release-evidence-manifest": "runtime output belongs under .qwq_output",
+    ".qwq_state": "use .qwq_output/env/<env>/local/<target>",
+    ".DS_Store": "Finder metadata; delete and add to .gitignore",
+    ".gitmodules": "submodules are not used",
+    ".env": "secrets never live in the repository",
+    ".env.local": "secrets never live in the repository",
+    ".env.beta.local": "secrets never live in the repository",
+    "eval_report_content_feed.json": "runtime output belongs under .qwq_output",
+    "eval_report_content_feed_multiobjective.json": (
+        "runtime output belongs under .qwq_output"
+    ),
+    "gate.log": "runtime output belongs under .qwq_output",
+    "package-lock.json": "no root-level npm project",
+    "package.json": "no root-level npm project",
+    "runtime_scale10_ids.txt": "runtime output belongs under .qwq_output",
+}
 ALLOWED_RUNTIME_ROOTS = (".qwq_output",)
 FORBIDDEN_NESTED_DIRS = frozenset(
     {
@@ -130,22 +165,31 @@ def source_cache_issues(root: Path = ROOT) -> list[str]:
     return issues
 
 
-def root_layout_issues(root: Path = ROOT) -> list[str]:
+def top_level_issues(root: Path = ROOT) -> list[str]:
+    """拒绝任何未登记的一级条目。
+
+    遍历真实目录而不是比对固定名单，是这道门能发现 `v/`、`v0/`、`.ruff_cache/`
+    这类从未被预见过的条目的唯一原因。
+    """
     issues: list[str] = []
-    for name in sorted(FORBIDDEN_TOP_LEVEL):
-        path = root / name
-        if path.exists():
+    for entry in sorted(root.iterdir(), key=lambda path: path.name):
+        name = entry.name
+        if name in ALLOWED_TOP_LEVEL:
+            continue
+        retired = RETIRED_TOP_LEVEL.get(name)
+        if retired:
+            issues.append(f"{name}: retired top-level entry; {retired}")
+        else:
             issues.append(
-                f"{_rel(path)}: forbidden top-level directory; move ownership to "
-                f"domain roots or one of {ALLOWED_RUNTIME_ROOTS}"
+                f"{name}: unregistered top-level entry; move ownership to a domain "
+                f"root or one of {ALLOWED_RUNTIME_ROOTS}, or register it in "
+                "ALLOWED_TOP_LEVEL with a reason"
             )
-    for name in sorted(FORBIDDEN_TOP_LEVEL_FILES):
-        path = root / name
-        if path.exists():
-            issues.append(
-                f"{_rel(path)}: forbidden top-level file; move ownership to a "
-                f"domain root or one of {ALLOWED_RUNTIME_ROOTS}"
-            )
+    return issues
+
+
+def root_layout_issues(root: Path = ROOT) -> list[str]:
+    issues: list[str] = list(top_level_issues(root))
     for source_root in ("quwoquan_app", "quwoquan_service", "quwoquan_data", "quwoquan_ops"):
         path = root / source_root / "artifacts"
         if path.exists():
@@ -162,8 +206,6 @@ def root_layout_issues(root: Path = ROOT) -> list[str]:
         path = root / rel
         if path.exists():
             issues.append(f"{_rel(path)}: Portal generated output must not live in source tree")
-    if (root / ".qwq_state").exists():
-        issues.append(".qwq_state: retired; use .qwq_output/env/<env>/local/<target>")
     issues.extend(source_cache_issues(root))
     issues.extend(output_layout_issues(root / ".qwq_output"))
     return issues

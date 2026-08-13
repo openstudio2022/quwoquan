@@ -55,6 +55,15 @@ scrape_configs:
         labels:
           plane: service
 
+  # 边缘平面：限流 admission、灰度 rollout 裁决与设备信任指标的唯一来源。
+  - job_name: quwoquan-edge-plane
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - api-edge:18079
+        labels:
+          plane: edge
+
   - job_name: livekit-sfu
     metrics_path: /metrics
     static_configs:
@@ -76,6 +85,51 @@ scrape_configs:
     static_configs:
       - targets:
           - otel-collector:8889
+        labels:
+          plane: observability
+
+  # ===== 用户视角黑盒拨测（公网域名 + 证书；真相源 prod/runtime.yaml publicBases） =====
+  - job_name: blackbox-public-health
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - https://api.quwoquan.com/healthz
+          - https://quwoquan.com/
+        labels:
+          plane: edge
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: blackbox-public-reachable
+    metrics_path: /probe
+    params:
+      module: [http_public_reachable]
+    static_configs:
+      - targets:
+          - https://cdn.quwoquan.com/
+          - https://ops.quwoquan.com/
+        labels:
+          plane: edge
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  - job_name: blackbox-exporter-self
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - blackbox-exporter:9115
         labels:
           plane: observability
 

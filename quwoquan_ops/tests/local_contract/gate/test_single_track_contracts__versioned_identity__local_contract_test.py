@@ -1,3 +1,4 @@
+# spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md#sit-001
 """verify_single_track_contracts 的版本化身份单轨合约。
 
 由 test_single_track_contracts__contract__local_contract_test.py（Python 1000

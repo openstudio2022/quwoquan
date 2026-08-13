@@ -58,7 +58,7 @@ from .constants import (  # noqa: F401
     PLATFORMS,
     SCHEMA,
     _ANDROID_CONSCRYPT_CACERTS,
-    _ANDROID_LEGACY_CACERTS,
+    _ANDROID_SYSTEM_CACERTS,
     _ANDROID_TRUST_STAGE_ROOT,
     _ROOT,
     _SAFE,
@@ -97,7 +97,7 @@ from .android_trust import (  # noqa: F401
     _android_zygote_pids,
     _install_android,
     _install_android_conscrypt,
-    _install_android_legacy,
+    _install_android_system_store,
     _verify_android_system_trust,
 )
 from .lifecycle import (  # noqa: F401

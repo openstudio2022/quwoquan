@@ -121,7 +121,6 @@ from quwoquan_ops.cli.lib.local_assistant_skill_package_keys import (
     prepare_local_assistant_skill_package_keys,
 )
 from quwoquan_ops.cli.lib.local_assistant_skill_package_publication import publish_alpha_test_live
-from quwoquan_ops.cli.lib.local_search_index_alias_migration import migrate_alpha_legacy_index
 from quwoquan_ops.cli.lib.local_provider_protocol_substitute import (
     prepare_local_provider_protocol_substitute,
 )
@@ -680,29 +679,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     assistant_skill_package_commands.register_parser(subparsers)
 
-    search_index_migration_parser = subparsers.add_parser(
-        "search-index-migration",
-        help="将 Alpha legacy 物理搜索索引安全迁移为 canonical read/write aliases",
-    )
-    search_index_migration_parser.add_argument(
-        "--target",
-        choices=("alpha-local",),
-        required=True,
-    )
-    search_index_migration_parser.add_argument(
-        "--expected-count",
-        type=int,
-        required=True,
-    )
-    search_index_migration_parser.add_argument(
-        "--confirm-legacy-index-alias-migration",
-        action="store_true",
-    )
-    search_index_migration_parser.add_argument(
-        "--report-dir",
-        default=argparse.SUPPRESS,
-    )
-
     up_domain_commands.register_parser(subparsers)
 
     dev_session_domain_commands.register_parser(subparsers)
@@ -863,51 +839,6 @@ def _command_details(result: Any) -> list[str]:
     ]
 
 
-def command_search_index_migration(args: argparse.Namespace) -> dict[str, Any]:
-    target = str(args.target)
-    report_dir = resolve_report_dir(args, "alpha", target)
-    try:
-        receipt = migrate_alpha_legacy_index(
-            ROOT,
-            report_dir,
-            expected_count=int(args.expected_count),
-            confirmation=bool(args.confirm_legacy_index_alias_migration),
-        )
-    except (OSError, RuntimeError, TypeError, ValueError) as exc:
-        failure_receipt = {
-            "schema": "stackctl.local_search_index_alias_migration",
-            "target": target,
-            "environment": "alpha",
-            "status": "gate_block",
-            "completedAt": utc_now(),
-            "mutationAttempted": False,
-            "details": [str(exc)],
-        }
-        write_json(
-            report_dir / "search-index-alias-migration.json",
-            failure_receipt,
-        )
-        return {
-            "exitCode": 2,
-            "summary": "stackctl search-index-migration is GATE_BLOCK",
-            "details": [str(exc)],
-            "reportDir": relpath(report_dir),
-        }
-    return {
-        "exitCode": 0,
-        "summary": "Alpha legacy search index migrated to canonical aliases",
-        "details": [
-            f"sourceCount={receipt['source']['inventory']['count']}",
-            f"generation={receipt['canonical']['generation']}",
-            f"readAlias={receipt['canonical']['readAlias']}",
-            f"writeAlias={receipt['canonical']['writeAlias']}",
-            f"admissionDurationMs={receipt['admission']['durationMs']}",
-        ],
-        "reportDir": relpath(report_dir),
-        "receipt": receipt,
-    }
-
-
 _DEV_SESSION_WORKLOADS = ("full", "content-release", "content-commercial")
 
 
@@ -938,7 +869,6 @@ def main() -> int:
         "provider-conformance": command_provider_conformance,
         "provider-config": command_provider_config,
         "assistant-skill-package": command_assistant_skill_package,
-        "search-index-migration": command_search_index_migration,
         "dev-session": command_dev_session,
         "up": command_up,
         "product-telemetry-log-sink": command_product_telemetry_log_sink,

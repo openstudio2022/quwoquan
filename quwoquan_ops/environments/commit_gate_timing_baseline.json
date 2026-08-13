@@ -1,4 +1,10 @@
 {
+  "_governance": {
+    "owner": "delivery-gate",
+    "reason": "优化前的门禁耗时基线，用于证明后续优化真实生效；不得被无声重采样掩盖回归",
+    "expires_when": "commit gate 稳定达成 targetAfterOptimization 后，用一次干净机精确采样整体替换",
+    "measure": "多次会话实测墙钟 + 门禁结构推算（method=structural_plus_observed_wall_times），非单次干净机精确采样；profiles 按 gate scope 记录 p50/p95 观测墙钟秒数。"
+  },
   "capturedAt": "2026-07-27",
   "method": "structural_plus_observed_wall_times",
   "notes": "优化前基线：跨域 pre-commit 走 make gate，Flutter local_contract concurrency=1 且双跑。数值来自多次会话实测墙钟与门禁结构推算，非单次干净机精确采样。",

@@ -27,11 +27,19 @@ def _find_repo_root() -> Path:
 REPO_ROOT = _find_repo_root()
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+CHAT_AVATAR_SUPPORT_DIR = Path(__file__).resolve().parents[1] / "support"
+if str(CHAT_AVATAR_SUPPORT_DIR) not in sys.path:
+    sys.path.insert(0, str(CHAT_AVATAR_SUPPORT_DIR))
 
 from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENT_CANONICAL_TARGET,
     get_target,
     load_environment_topology,
+)
+from managed_chat_avatar_handoff import (
+    ManagedChatAvatarHandoff,
+    add_required_handoff_arguments,
+    load_managed_handoff_from_environment,
 )
 
 SCENARIO = "chat.group_avatar.sync_display_e2e"
@@ -60,19 +68,7 @@ def parse_args() -> argparse.Namespace:
         "--media-avatar-base-url",
         default="",
     )
-    parser.add_argument(
-        "--test-auth-token",
-        default=os.environ.get("GAMMA_TEST_AUTH_TOKEN")
-        or os.environ.get("PROD_TEST_AUTH_TOKEN")
-        or os.environ.get("TEST_AUTH_TOKEN")
-        or "",
-    )
-    parser.add_argument("--creator-id", default="user_test_001")
-    parser.add_argument("--initial-member-id", action="append", default=[])
-    parser.add_argument("--added-member-id", default="user_test_004")
-    parser.add_argument("--removed-member-id", default="user_test_004")
-    parser.add_argument("--fixture-conversation-id", default="")
-    parser.add_argument("--fixture-add-member-id", default="")
+    add_required_handoff_arguments(parser)
     parser.add_argument("--title-prefix", default="avatar-e2e")
     parser.add_argument("--report", default=".qwq_output/env/beta/runs/avatar-e2e/chat-avatar-report.json")
     parser.add_argument("--timeout-seconds", type=int, default=180)
@@ -109,9 +105,12 @@ def validate_topology_endpoints(args: argparse.Namespace) -> None:
 
 
 def default_members(args: argparse.Namespace) -> list[str]:
-    if args.initial_member_id:
-        return [item for item in args.initial_member_id if item.strip()]
-    return ["user_test_002", "user_test_003"]
+    members = [item.strip() for item in args.initial_member_id if item.strip()]
+    if len(members) != 2 or len(set(members)) != 2:
+        raise ValueError(
+            "--initial-member-id must be supplied exactly twice with distinct accounts"
+        )
+    return members
 
 
 def report_template(args: argparse.Namespace, members: list[str]) -> dict[str, Any]:
@@ -133,6 +132,7 @@ def report_template(args: argparse.Namespace, members: list[str]) -> dict[str, A
             "commitSha": os.environ.get("GITHUB_SHA", ""),
             "githubRunId": os.environ.get("GITHUB_RUN_ID", ""),
         },
+        "testDataLifecycle": managed_handoff(args).public_document(),
         "device": {},
         "conversation": {
             "conversationId": "",
@@ -145,13 +145,6 @@ def report_template(args: argparse.Namespace, members: list[str]) -> dict[str, A
             "groupAvatarVersionBefore": 0,
             "groupAvatarVersionAfterAdd": 0,
             "groupAvatarVersionAfterRemove": 0,
-        },
-        "fixtureConversation": {
-            "conversationId": args.fixture_conversation_id,
-            "avatarUrl": "",
-            "resolvedAvatarUrl": "",
-            "groupAvatarVersionBefore": 0,
-            "groupAvatarVersionAfterAdd": 0,
         },
         "serviceEvidence": {
             "taskOutbox": {"status": "not_collected", "records": []},
@@ -187,6 +180,13 @@ def normalize_env(raw: str) -> str:
     return env_name
 
 
+def managed_handoff(args: argparse.Namespace) -> ManagedChatAvatarHandoff:
+    handoff = getattr(args, "_managed_chat_avatar_handoff", None)
+    if not isinstance(handoff, ManagedChatAvatarHandoff):
+        raise ValueError("managed chat avatar ActorLease handoff is unavailable")
+    return handoff
+
+
 def add_step(report: dict[str, Any], name: str, status: str, **extra: Any) -> None:
     item = {"name": name, "status": status, "at": utc_now()}
     item.update(extra)
@@ -207,10 +207,9 @@ def request_json(
     headers = {
         "Accept": "application/json",
         "X-Client-User-Id": user_id,
+        "Authorization": "Bearer "
+        + managed_handoff(args).actor_for_owner(user_id).access_token,
     }
-    if args.test_auth_token:
-        headers["Authorization"] = "Bearer " + args.test_auth_token
-        headers["X-Test-Auth-Token"] = args.test_auth_token
     if body is not None:
         data = json.dumps(body).encode("utf-8")
         headers["Content-Type"] = "application/json"
@@ -239,11 +238,17 @@ def request_json(
             ) from exc
 
 
-def request_ok(args: argparse.Namespace, url: str, timeout: int = 8) -> bool:
+def request_ok(
+    args: argparse.Namespace,
+    url: str,
+    timeout: int = 8,
+    *,
+    user_id: str = "",
+) -> bool:
     headers: dict[str, str] = {}
-    if args.test_auth_token:
-        headers["Authorization"] = "Bearer " + args.test_auth_token
-        headers["X-Test-Auth-Token"] = args.test_auth_token
+    if user_id:
+        actor = managed_handoff(args).actor_for_owner(user_id)
+        headers["Authorization"] = "Bearer " + actor.access_token
     req = urllib.request.Request(url, headers=headers, method="GET")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return 200 <= int(resp.status) < 300
@@ -388,7 +393,11 @@ def verify_media(args: argparse.Namespace, report: dict[str, Any], avatar_url: s
         return
     resolved_url = resolve_media_url(args, avatar_url)
     report["serviceEndpointEvidence"]["media"] = resolved_url
-    if not request_ok(args, resolved_url):
+    if not request_ok(
+        args,
+        resolved_url,
+        user_id=report["conversation"]["creatorUserId"],
+    ):
         raise ProbeFailure("media_load_failed", f"avatarUrl is not reachable: {resolved_url}")
     report["uiEvidence"]["avatarImageLoaded"] = True
     add_step(report, "media_check", "passed", avatarUrl=avatar_url, resolvedAvatarUrl=resolved_url)
@@ -553,8 +562,6 @@ def run_probe(args: argparse.Namespace, report: dict[str, Any], members: list[st
         raise ProbeFailure("gateway_unreachable", "healthz failed")
     report["steps"][-1]["status"] = "passed"
 
-    verify_fixture_group(args, report)
-
     title = f"{args.title_prefix}-{normalize_env(args.env)}-{int(time.time())}"
     created = request_json(
         args,
@@ -615,87 +622,6 @@ def run_probe(args: argparse.Namespace, report: dict[str, Any], members: list[st
     verify_media(args, report, str(report["conversation"]["finalAvatarUrl"]))
     collect_mongo_evidence(args, report, conversation_id)
 
-
-def verify_fixture_group(args: argparse.Namespace, report: dict[str, Any]) -> None:
-    fixture_conversation_id = args.fixture_conversation_id.strip()
-    if not fixture_conversation_id:
-        return
-    inbox = request_json(
-        args,
-        "GET",
-        "/chat/inbox?limit=50",
-        user_id=args.creator_id,
-    )
-    fixture_item = None
-    for item in inbox.get("items") or []:
-        item_id = str(item.get("conversationId") or item.get("id") or item.get("_id") or "").strip()
-        if item_id == fixture_conversation_id:
-            fixture_item = item
-            break
-    if fixture_item is None:
-        raise ProbeFailure("env_not_ready", f"fixture conversation missing from inbox: {fixture_conversation_id}")
-    avatar_url = str(fixture_item.get("avatarUrl") or "").strip()
-    if has_bad_avatar_placeholder(avatar_url):
-        raise ProbeFailure("media_load_failed", f"fixture inbox avatar invalid: {avatar_url}")
-    if not request_ok(args, resolve_media_url(args, avatar_url), timeout=10):
-        raise ProbeFailure("media_load_failed", f"fixture inbox avatar not reachable: {avatar_url}")
-    report["uiEvidence"]["conversationListAvatarVisible"] = True
-
-    detail = request_json(
-        args,
-        "GET",
-        f"/chat/conversations/{urllib.parse.quote(fixture_conversation_id)}",
-        user_id=args.creator_id,
-    )
-    detail_avatar_url = str(detail.get("avatarUrl") or "").strip()
-    if has_bad_avatar_placeholder(detail_avatar_url):
-        raise ProbeFailure("media_load_failed", f"fixture conversation avatar invalid: {detail_avatar_url}")
-    if not request_ok(args, resolve_media_url(args, detail_avatar_url), timeout=10):
-        raise ProbeFailure("media_load_failed", f"fixture conversation avatar not reachable: {detail_avatar_url}")
-    initial_version = parse_version(detail)
-    if initial_version <= 0:
-        raise ProbeFailure("avatar_task_timeout", f"fixture conversation version not ready: {detail}")
-    report["fixtureConversation"]["avatarUrl"] = detail_avatar_url
-    report["fixtureConversation"]["resolvedAvatarUrl"] = resolve_media_url(args, detail_avatar_url)
-    report["fixtureConversation"]["groupAvatarVersionBefore"] = initial_version
-    report["uiEvidence"]["conversationDetailAvatarVisible"] = True
-    add_step(
-        report,
-        "fixture_group_ready",
-        "passed",
-        conversationId=fixture_conversation_id,
-        avatarUrl=detail_avatar_url,
-        version=initial_version,
-    )
-
-    fixture_add_member_id = args.fixture_add_member_id.strip()
-    if not fixture_add_member_id:
-        return
-    request_json(
-        args,
-        "POST",
-        f"/chat/conversations/{urllib.parse.quote(fixture_conversation_id)}/members",
-        user_id=args.creator_id,
-        body={"userIds": [fixture_add_member_id]},
-    )
-    after_add = wait_for_avatar_version(args, report, fixture_conversation_id, initial_version + 1)
-    after_add_avatar = str(after_add.get("avatarUrl") or "").strip()
-    if not request_ok(args, resolve_media_url(args, after_add_avatar), timeout=10):
-        raise ProbeFailure("media_load_failed", f"fixture updated avatar not reachable: {after_add_avatar}")
-    report["fixtureConversation"]["avatarUrl"] = after_add_avatar
-    report["fixtureConversation"]["resolvedAvatarUrl"] = resolve_media_url(args, after_add_avatar)
-    report["fixtureConversation"]["groupAvatarVersionAfterAdd"] = parse_version(after_add)
-    add_step(
-        report,
-        "fixture_group_add_member_avatar_update",
-        "passed",
-        conversationId=fixture_conversation_id,
-        avatarUrl=after_add_avatar,
-        version=parse_version(after_add),
-        addedMemberId=fixture_add_member_id,
-    )
-
-
 def write_report(report: dict[str, Any], path: Path) -> None:
     report["endedAt"] = utc_now()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -707,11 +633,20 @@ def write_report(report: dict[str, Any], path: Path) -> None:
 def main() -> int:
     args = parse_args()
     try:
+        handoff = load_managed_handoff_from_environment()
+        if normalize_env(args.env) != handoff.environment:
+            raise ValueError("--env must match the managed ActorLease environment")
+        handoff.validate_namespace(args)
+        args._managed_chat_avatar_handoff = handoff
         validate_topology_endpoints(args)
     except ValueError as exc:
         print(f"GATE_BLOCK: {exc}", file=sys.stderr)
         return 2
-    members = default_members(args)
+    try:
+        members = default_members(args)
+    except ValueError as exc:
+        print(f"GATE_BLOCK: {exc}", file=sys.stderr)
+        return 2
     report = report_template(args, members)
     report_path = Path(args.report)
     if not report_path.is_absolute():

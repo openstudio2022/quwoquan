@@ -1,133 +1,192 @@
 {
-  "dashboard": {
-    "title": "L2 — 登录体验、API 与 Provider 健康度",
-    "uid": "qwq-l2-auth-login",
-    "tags": ["quwoquan", "l2", "auth", "login", "commercial"],
-    "timezone": "browser",
-    "refresh": "30s",
-    "panels": [
-      {
-        "title": "登录 API 请求结果",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-        "targets": [
-          {
-            "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/auth/(otp/send|authorization/alipay|login/(phone|wechat|alipay|qq|one-tap.*))\"}[5m])) by (route, status)",
-            "legendFormat": "{{ route }} {{ status }}"
-          }
-        ]
+  "title": "L2 — 登录体验、API 与 Provider 健康度",
+  "uid": "qwq-l2-auth-login",
+  "tags": [
+    "quwoquan",
+    "l2",
+    "auth",
+    "login",
+    "commercial"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "panels": [
+    {
+      "title": "登录 API 请求结果",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
       },
-      {
-        "title": "Provider 非 2xx 比率",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-        "targets": [
-          {
-            "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))\",status!~\"2..\"}[5m])) by (route) / (sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))\"}[5m])) by (route) + 0.001)",
-            "legendFormat": "{{ route }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/auth/(otp/send|authorization/alipay|login/(phone|wechat|alipay|qq|one-tap.*))\"}[5m])) by (route, status)",
+          "legendFormat": "{{ route }} {{ status }}"
+        }
+      ]
+    },
+    {
+      "title": "Provider 非 2xx 比率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
       },
-      {
-        "title": "登录 API P95 延迟",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"user-service\",route=~\"/auth/(otp/send|authorization/alipay|login/(phone|wechat|alipay|qq|one-tap.*))\"}[5m])) by (le, route))",
-            "legendFormat": "P95 {{ route }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))\",status!~\"2..\"}[5m])) by (route) / (sum(rate(http_server_requests_total{service=\"user-service\",route=~\"/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))\"}[5m])) by (route) + 0.001)",
+          "legendFormat": "{{ route }}"
+        }
+      ]
+    },
+    {
+      "title": "登录 API P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
       },
-      {
-        "title": "登录错误码分布",
-        "type": "table",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-        "targets": [
-          {
-            "expr": "topk(30, sum(increase(http_server_error_codes_total{service=\"user-service\",module=\"USER\"}[1h])) by (error_code, kind))",
-            "format": "table",
-            "instant": true
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"user-service\",route=~\"/auth/(otp/send|authorization/alipay|login/(phone|wechat|alipay|qq|one-tap.*))\"}[5m])) by (le, route))",
+          "legendFormat": "P95 {{ route }}"
+        }
+      ]
+    },
+    {
+      "title": "登录错误码分布",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
       },
-      {
-        "title": "客户端登录漏斗",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-        "targets": [
-          {
-            "expr": "sum(rate(ops_login_funnel_events_total[5m])) by (action, result, step)",
-            "legendFormat": "{{ action }} / {{ result }} / {{ step }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "topk(30, sum(increase(http_server_error_codes_total{service=\"user-service\",module=\"USER\"}[1h])) by (error_code, kind))",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "title": "客户端登录漏斗",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
       },
-      {
-        "title": "客户端登录操作失败率",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-        "targets": [
-          {
-            "expr": "sum(rate(ops_login_operation_events_total{result=\"failure\"}[5m])) by (operation, failure_kind) / on (operation) group_left clamp_min(sum(rate(ops_login_operation_events_total[5m])) by (operation), 0.001)",
-            "legendFormat": "{{ operation }} / {{ failure_kind }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(ops_login_funnel_events_total[5m])) by (action, result, step)",
+          "legendFormat": "{{ action }} / {{ result }} / {{ step }}"
+        }
+      ]
+    },
+    {
+      "title": "客户端登录操作失败率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
       },
-      {
-        "title": "登录步骤停留 P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_login_state_dwell_seconds_bucket[10m])) by (le, step))",
-            "legendFormat": "P95 {{ step }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(ops_login_operation_events_total{result=\"failure\"}[5m])) by (operation, failure_kind) / on (operation) group_left clamp_min(sum(rate(ops_login_operation_events_total[5m])) by (operation), 0.001)",
+          "legendFormat": "{{ operation }} / {{ failure_kind }}"
+        }
+      ]
+    },
+    {
+      "title": "登录步骤停留 P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
       },
-      {
-        "title": "首次登录绑定手机号结果",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-        "targets": [
-          {
-            "expr": "sum(rate(ops_login_funnel_events_total{action=\"login_phone_binding\"}[5m])) by (provider, result)",
-            "legendFormat": "{{ provider }} / {{ result }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ops_login_state_dwell_seconds_bucket[10m])) by (le, step))",
+          "legendFormat": "P95 {{ step }}"
+        }
+      ]
+    },
+    {
+      "title": "首次登录绑定手机号结果",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
       },
-      {
-        "title": "验证码投递与确认结果",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
-        "targets": [
-          {
-            "expr": "sum(rate(ops_login_operation_events_total{operation=~\"send_otp|confirm_otp_delivery(_5s|_15s)?\"}[5m])) by (operation, result)",
-            "legendFormat": "{{ operation }} / {{ result }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(ops_login_funnel_events_total{action=\"login_phone_binding\"}[5m])) by (provider, result)",
+          "legendFormat": "{{ provider }} / {{ result }}"
+        }
+      ]
+    },
+    {
+      "title": "验证码投递与确认结果",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
       },
-      {
-        "title": "登录完成率",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
-        "targets": [
-          {
-            "expr": "sum(rate(ops_login_funnel_events_total{action=\"login_terminal\",result=\"login_success\"}[15m])) / clamp_min(sum(rate(ops_login_funnel_events_total{action=\"login_flow_exposed\",result=\"exposed\"}[15m])), 0.001)",
-            "legendFormat": "login completion"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(ops_login_operation_events_total{operation=~\"send_otp|confirm_otp_delivery(_5s|_15s)?\"}[5m])) by (operation, result)",
+          "legendFormat": "{{ operation }} / {{ result }}"
+        }
+      ]
+    },
+    {
+      "title": "登录完成率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
       },
-      {
-        "title": "验证码发送结果确认 P95 延迟",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_login_operation_duration_seconds_bucket{operation=~\"confirm_otp_delivery(_5s|_15s)?\"}[10m])) by (le, operation))",
-            "legendFormat": "P95 {{ operation }}"
-          }
-        ]
-      }
-    ]
-  }
+      "targets": [
+        {
+          "expr": "sum(rate(ops_login_funnel_events_total{action=\"login_terminal\",result=\"login_success\"}[15m])) / clamp_min(sum(rate(ops_login_funnel_events_total{action=\"login_flow_exposed\",result=\"exposed\"}[15m])), 0.001)",
+          "legendFormat": "login completion"
+        }
+      ]
+    },
+    {
+      "title": "验证码发送结果确认 P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ops_login_operation_duration_seconds_bucket{operation=~\"confirm_otp_delivery(_5s|_15s)?\"}[10m])) by (le, operation))",
+          "legendFormat": "P95 {{ operation }}"
+        }
+      ]
+    }
+  ]
 }

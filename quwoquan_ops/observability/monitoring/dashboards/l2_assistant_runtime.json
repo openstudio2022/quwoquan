@@ -1,151 +1,213 @@
 {
-  "dashboard": {
-    "title": "L2 — 小趣运行时与主动订阅",
-    "uid": "qwq-l2-assistant-runtime",
-    "tags": ["quwoquan", "l2", "assistant", "commercial"],
-    "timezone": "browser",
-    "refresh": "30s",
-    "description": "监控小趣订阅调度、外部投递、业务抑制、错发防线、@小趣 DLQ 与公开订阅操作 SLO。",
-    "panels": [
-      {
-        "title": "订阅 scheduler tick",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-        "targets": [
-          {
-            "expr": "sum(rate(assistant_subscription_cron_tick_total[5m])) by (outcome)",
-            "legendFormat": "{{ outcome }}"
-          }
-        ]
+  "title": "L2 — 小趣运行时与主动订阅",
+  "uid": "qwq-l2-assistant-runtime",
+  "tags": [
+    "quwoquan",
+    "l2",
+    "assistant",
+    "commercial"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "description": "监控小趣订阅调度、外部投递、业务抑制、错发防线、@小趣 DLQ 与公开订阅操作 SLO。",
+  "panels": [
+    {
+      "title": "订阅 scheduler tick",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
       },
-      {
-        "title": "主动订阅外部投递",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-        "targets": [
-          {
-            "expr": "sum(rate(assistant_subscription_delivery_attempt_total[5m])) by (outcome, attempt_kind)",
-            "legendFormat": "{{ outcome }} / {{ attempt_kind }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(assistant_subscription_cron_tick_total[5m])) by (outcome)",
+          "legendFormat": "{{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "主动订阅外部投递",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
       },
-      {
-        "title": "投递前业务抑制",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-        "targets": [
-          {
-            "expr": "sum(rate(assistant_subscription_delivery_suppressed_total[5m])) by (reason)",
-            "legendFormat": "{{ reason }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(assistant_subscription_delivery_attempt_total[5m])) by (outcome, attempt_kind)",
+          "legendFormat": "{{ outcome }} / {{ attempt_kind }}"
+        }
+      ]
+    },
+    {
+      "title": "投递前业务抑制",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
       },
-      {
-        "title": "错发防线与 @小趣 DLQ",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-        "targets": [
-          {
-            "expr": "sum(increase(assistant_wrong_destination_incidents_total[5m]))",
-            "legendFormat": "wrong destination"
-          },
-          {
-            "expr": "sum(increase(assistant_mentioned_consumer_dlq_total[5m]))",
-            "legendFormat": "mentioned DLQ"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(assistant_subscription_delivery_suppressed_total[5m])) by (reason)",
+          "legendFormat": "{{ reason }}"
+        }
+      ]
+    },
+    {
+      "title": "错发防线与 @小趣 DLQ",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
       },
-      {
-        "title": "订阅 API 错误率",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-        "targets": [
-          {
-            "expr": "sum(rate(http_server_requests_total{service=\"assistant-service\",route=~\"/assistant/skill-subscriptions.*\",status=~\"5..\"}[5m])) by (route) / clamp_min(sum(rate(http_server_requests_total{service=\"assistant-service\",route=~\"/assistant/skill-subscriptions.*\"}[5m])) by (route), 0.001)",
-            "legendFormat": "{{ route }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(increase(assistant_wrong_destination_incidents_total[5m]))",
+          "legendFormat": "wrong destination"
+        },
+        {
+          "expr": "sum(increase(assistant_mentioned_consumer_dlq_total[5m]))",
+          "legendFormat": "mentioned DLQ"
+        }
+      ]
+    },
+    {
+      "title": "订阅 API 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
       },
-      {
-        "title": "订阅 API P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"assistant-service\",route=~\"/assistant/skill-subscriptions.*\"}[5m])) by (le, route))",
-            "legendFormat": "{{ route }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_total{service=\"assistant-service\",route=~\"/assistant/skill-subscriptions.*\",status=~\"5..\"}[5m])) by (route) / clamp_min(sum(rate(http_server_requests_total{service=\"assistant-service\",route=~\"/assistant/skill-subscriptions.*\"}[5m])) by (route), 0.001)",
+          "legendFormat": "{{ route }}"
+        }
+      ]
+    },
+    {
+      "title": "订阅 API P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
       },
-      {
-        "title": "公开网页工具结果",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-        "targets": [
-          {
-            "expr": "sum(rate(assistant_public_web_tool_total[5m])) by (tool, outcome)",
-            "legendFormat": "{{ tool }} / {{ outcome }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{service=\"assistant-service\",route=~\"/assistant/skill-subscriptions.*\"}[5m])) by (le, route))",
+          "legendFormat": "{{ route }}"
+        }
+      ]
+    },
+    {
+      "title": "公开网页工具结果",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
       },
-      {
-        "title": "公开网页工具 P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(assistant_public_web_tool_duration_seconds_bucket[5m])) by (le, tool))",
-            "legendFormat": "{{ tool }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(assistant_public_web_tool_total[5m])) by (tool, outcome)",
+          "legendFormat": "{{ tool }} / {{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "公开网页工具 P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
       },
-      {
-        "title": "公开网页策略边界",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 32 },
-        "targets": [
-          {
-            "expr": "sum(rate(assistant_public_web_policy_boundary_total[5m])) by (reason)",
-            "legendFormat": "{{ reason }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(assistant_public_web_tool_duration_seconds_bucket[5m])) by (le, tool))",
+          "legendFormat": "{{ tool }}"
+        }
+      ]
+    },
+    {
+      "title": "公开网页策略边界",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 32
       },
-      {
-        "title": "持久 Run Worker claim",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
-        "targets": [
-          {
-            "expr": "sum(rate(assistant_run_worker_claim_total[5m])) by (outcome)",
-            "legendFormat": "{{ outcome }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(assistant_public_web_policy_boundary_total[5m])) by (reason)",
+          "legendFormat": "{{ reason }}"
+        }
+      ]
+    },
+    {
+      "title": "持久 Run Worker claim",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
       },
-      {
-        "title": "Run 取消收敛 P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(assistant_run_cancel_duration_seconds_bucket{outcome=\"succeeded\"}[5m])) by (le))",
-            "legendFormat": "cancel p95"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(assistant_run_worker_claim_total[5m])) by (outcome)",
+          "legendFormat": "{{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "Run 取消收敛 P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
       },
-      {
-        "title": "恢复 Checkpoint 年龄 P95",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 48 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(assistant_run_checkpoint_age_seconds_bucket[5m])) by (le))",
-            "legendFormat": "checkpoint age p95"
-          }
-        ]
-      }
-    ],
-    "schemaVersion": 39,
-    "version": 2
-  },
-  "overwrite": true
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(assistant_run_cancel_duration_seconds_bucket{outcome=\"succeeded\"}[5m])) by (le))",
+          "legendFormat": "cancel p95"
+        }
+      ]
+    },
+    {
+      "title": "恢复 Checkpoint 年龄 P95",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(assistant_run_checkpoint_age_seconds_bucket[5m])) by (le))",
+          "legendFormat": "checkpoint age p95"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 2
 }

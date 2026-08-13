@@ -7,32 +7,321 @@ spec:
   adapter: ext.obs.elasticsearch
   sourceIndexRole: aggregate
   fallback: forbidden
+  # 每条告警的 condition 字段必须由 fields 显式派生：
+  #   sum(measure) [where <维度条件>]      跨文档数值求和
+  #   p95(histogramMeasure)               合并直方图后线性插值 P95（毫秒）
+  #   hcount(histogramMeasure)            合并直方图样本总数
+  #   htailratio(histogramMeasure, ms)    直方图中 > ms 的样本占比
+  #   cardinality(hashesField)            跨文档 hash 集合并集基数
+  #   div(fieldA, fieldB)                 已声明字段相除；分母为 0 时字段缺失、条件不触发
+  #   evaluator(name)                     评估器自产运行指标（control_plane 专用）
+  # where 条件与 rollups.yaml 的 filter/where 共用同一条件语言；
+  # filter 是应用到全部字段查询的公共维度过滤（excludeResult 表示 result != 值）。
   alerts:
-  - {name: product-startup-content-p95-high, rowKind: performance, filter: {eventType: app_startup}, condition: "sampleCount >= 100 AND p95Ms > 3000", severity: warning}
-  - {name: product-startup-error-rate-high, rowKind: performance, filter: {eventType: app_startup}, condition: "sampleCount >= 100 AND errorRate > 0.001", severity: critical}
-  - {name: product-video-ready-p95-high, rowKind: video_qoe, condition: "sampleCount >= 100 AND p95Ms > 3000", severity: warning}
-  - {name: product-video-rebuffer-rate-high, rowKind: video_qoe, condition: "sampleCount >= 100 AND rebufferRate > 0.01", severity: warning}
-  - {name: product-video-duration-mismatch-rate-high, rowKind: video_qoe, condition: "sampleCount >= 100 AND mismatchRate > 0.01", severity: warning}
-  - {name: product-video-seek-command-failure-rate-high, rowKind: video_qoe, condition: "seekCount >= 100 AND failureRate >= 0.005", severity: warning}
-  - {name: product-video-source-switch-seek-unsettled-rate-high, rowKind: video_qoe, condition: "sampleCount >= 100 AND unsettledRate >= 0.005", severity: warning}
-  - {name: product-video-dropped-frame-ratio-high, rowKind: video_qoe, condition: "sampleCount >= 100 AND processedFrames >= 1000 AND droppedFrameRatio >= 0.01", severity: warning}
-  - {name: product-video-audio-underrun-detected, rowKind: video_qoe, condition: "sampleCount >= 100 AND audioUnderrunCount > 0", severity: warning}
-  - {name: product-rtc-media-connect-rate-low, rowKind: rtc_qoe, filter: {excludeResult: abandoned, connected: true}, condition: "sampleCount >= 50 AND connectRate < 0.98", severity: critical}
-  - {name: product-rtc-media-connect-p95-high, rowKind: rtc_qoe, filter: {mediaConnected: true}, condition: "sampleCount >= 50 AND p95Ms > 3000", severity: warning}
-  - {name: product-rtc-unexpected-disconnect-rate-high, rowKind: rtc_qoe, filter: {mediaConnected: true, result: connection_lost}, condition: "sampleCount >= 50 AND disconnectRate > 0.02", severity: critical}
-  - {name: product-content-share-action-failure-rate-high, rowKind: product_action_funnel, filter: {journey: content_share}, condition: "sampleCount >= 20 AND failureRate > 0.05", severity: warning}
-  - {name: product-content-report-action-failure-rate-high, rowKind: product_action_funnel, filter: {journey: content_report}, condition: "sampleCount >= 20 AND failureRate > 0.05", severity: warning}
-  - {name: product-article-reader-enter-p95-high, rowKind: article_reader_lifecycle, filter: {eventType: article_reader_enter, result: success}, condition: "sampleCount >= 100 AND p95Ms > 1200", severity: warning}
-  - {name: product-article-reader-error-rate-high, rowKind: article_reader_lifecycle, condition: "enterCount >= 100 AND errorRate > 0.01", severity: warning}
-  - {name: product-article-reader-recovery-failure, rowKind: article_reader_lifecycle, filter: {eventType: article_reader_recovery, result: failure}, condition: "recoveryFailureCount > 0", severity: warning}
-  - {name: product-profile-interaction-state-failure-rate-high, rowKind: product_action_funnel, filter: {journey: profile_interaction}, condition: "sampleCount >= 20 AND failureRate > 0.02", severity: warning}
-  - {name: product-chat-group-create-failure-rate-high, rowKind: chat_funnel, filter: {chatAction: group_create}, condition: "sampleCount >= 20 AND failureRate > 0.05", severity: warning}
-  - {name: product-chat-governance-failure-rate-high, rowKind: chat_funnel, filter: {chatAction: group_governance}, condition: "sampleCount >= 20 AND failureRate > 0.02", severity: warning}
-  - {name: product-search-effective-success-rate-low, rowKind: search_funnel, condition: "submitCount >= 100 AND effectiveSuccessRate < 0.35", severity: warning}
-  - {name: product-search-first-actionable-p95-high, rowKind: search_funnel, condition: "sampleCount >= 100 AND p95Ms > 1500", severity: warning}
-  - {name: product-search-effective-action-rate-low, rowKind: search_funnel, condition: "resultCount >= 100 AND effectiveActionRate < 0.20", severity: warning}
-  - {name: product-telemetry-transform-failed, rowKind: control_plane, condition: "failedTransformCount > 0", severity: critical}
-  - {name: product-telemetry-aggregate-stale, rowKind: control_plane, condition: "freshnessMinutes > 70", severity: warning}
-  - {name: product-telemetry-raw-retention-drift, rowKind: control_plane, condition: "rawRetentionDays != 3", severity: critical}
-  - {name: runtime-diagnostics-error-fingerprint-spike, rowKind: runtime_diagnostics, condition: "count >= 10", severity: warning}
-  - {name: runtime-diagnostics-raw-retention-drift, rowKind: control_plane, condition: "runtimeRawRetentionDays != 3", severity: critical}
+  - name: product-startup-content-p95-high
+    rowKind: performance
+    filter: {eventType: app_startup}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      p95Ms: p95(contentHistogram)
+    condition: "sampleCount >= 100 AND p95Ms > 3000"
+    severity: warning
+  - name: product-startup-error-rate-high
+    rowKind: performance
+    filter: {eventType: app_startup}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      startupErrorCount: sum(errorCount)
+      errorRate: div(startupErrorCount, sampleCount)
+    condition: "sampleCount >= 100 AND errorRate > 0.001"
+    severity: critical
+  - name: product-video-ready-p95-high
+    rowKind: video_qoe
+    window_minutes: 60
+    fields:
+      sampleCount: sum(readyCount)
+      p95Ms: p95(readyHistogram)
+    condition: "sampleCount >= 100 AND p95Ms > 3000"
+    severity: warning
+  # 阈值与 golden_metric_catalog.yaml#video_playback_rebuffer_ratio 的 target 同源（0.02）。
+  - name: product-video-rebuffer-rate-high
+    rowKind: video_qoe
+    window_minutes: 60
+    fields:
+      sampleCount: sum(readyCount)
+      rebufferSessions: sum(rebufferSessionCount)
+      rebufferRate: div(rebufferSessions, sampleCount)
+    condition: "sampleCount >= 100 AND rebufferRate > 0.02"
+    severity: warning
+  - name: product-video-duration-mismatch-rate-high
+    rowKind: video_qoe
+    window_minutes: 60
+    fields:
+      sampleCount: sum(readyCount)
+      mismatchCount: sum(durationMismatchCount)
+      mismatchRate: div(mismatchCount, sampleCount)
+    condition: "sampleCount >= 100 AND mismatchRate > 0.01"
+    severity: warning
+  - name: product-video-seek-command-failure-rate-high
+    rowKind: video_qoe
+    window_minutes: 60
+    fields:
+      seekCount: sum(seekCount)
+      seekFailures: sum(seekFailureCount)
+      failureRate: div(seekFailures, seekCount)
+    condition: "seekCount >= 100 AND failureRate >= 0.005"
+    severity: warning
+  # unsettled 代理口径：seek settle 超 2000ms 视为未收敛（seekSettleHistogram 尾部占比）。
+  - name: product-video-source-switch-seek-unsettled-rate-high
+    rowKind: video_qoe
+    window_minutes: 60
+    fields:
+      sampleCount: sum(readyCount)
+      unsettledRate: htailratio(seekSettleHistogram, 2000)
+    condition: "sampleCount >= 100 AND unsettledRate >= 0.005"
+    severity: warning
+  - name: product-video-dropped-frame-ratio-high
+    rowKind: video_qoe
+    window_minutes: 60
+    fields:
+      sampleCount: sum(readyCount)
+      droppedFrameTotal: sum(droppedFrames)
+      processedFrames: sum(processedVideoFrames)
+      droppedFrameRatio: div(droppedFrameTotal, processedFrames)
+    condition: "sampleCount >= 100 AND processedFrames >= 1000 AND droppedFrameRatio >= 0.01"
+    severity: warning
+  - name: product-video-audio-underrun-detected
+    rowKind: video_qoe
+    window_minutes: 60
+    fields:
+      sampleCount: sum(readyCount)
+      audioUnderrunCount: sum(audioUnderrunCount)
+    condition: "sampleCount >= 100 AND audioUnderrunCount > 0"
+    severity: warning
+  # 分子（mediaConnected=true）由字段 where 承载；filter 只排除用户主动放弃。
+  - name: product-rtc-media-connect-rate-low
+    rowKind: rtc_qoe
+    filter: {excludeResult: abandoned}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      connectedCount: sum(count) where mediaConnected = true
+      connectRate: div(connectedCount, sampleCount)
+    condition: "sampleCount >= 50 AND connectRate < 0.98"
+    severity: critical
+  - name: product-rtc-media-connect-p95-high
+    rowKind: rtc_qoe
+    filter: {mediaConnected: true}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      p95Ms: p95(connectTimeHistogram)
+    condition: "sampleCount >= 50 AND p95Ms > 3000"
+    severity: warning
+  # 分母是已建连的通话，分子是其中 connection_lost 的意外断开。
+  - name: product-rtc-unexpected-disconnect-rate-high
+    rowKind: rtc_qoe
+    filter: {mediaConnected: true}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      disconnectCount: sum(count) where result = connection_lost
+      disconnectRate: div(disconnectCount, sampleCount)
+    condition: "sampleCount >= 50 AND disconnectRate > 0.02"
+    severity: critical
+  - name: product-content-share-action-failure-rate-high
+    rowKind: product_action_funnel
+    filter: {journey: content_share}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      failedCount: sum(count) where result = failure
+      failureRate: div(failedCount, sampleCount)
+    condition: "sampleCount >= 20 AND failureRate > 0.05"
+    severity: warning
+  - name: product-content-report-action-failure-rate-high
+    rowKind: product_action_funnel
+    filter: {journey: content_report}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      failedCount: sum(count) where result = failure
+      failureRate: div(failedCount, sampleCount)
+    condition: "sampleCount >= 20 AND failureRate > 0.05"
+    severity: warning
+  - name: product-relationship-action-failure-rate-high
+    rowKind: product_action_funnel
+    filter: {journey: relationship}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      failedCount: sum(count) where result = failure
+      failureRate: div(failedCount, sampleCount)
+    condition: "sampleCount >= 20 AND failureRate > 0.05"
+    severity: warning
+  - name: product-contact-discovery-action-failure-rate-high
+    rowKind: product_action_funnel
+    filter: {journey: contact_discovery}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      failedCount: sum(count) where result = failure
+      failureRate: div(failedCount, sampleCount)
+    condition: "sampleCount >= 20 AND failureRate > 0.05"
+    severity: warning
+  - name: product-content-more-actions-failure-rate-high
+    rowKind: product_action_funnel
+    filter: {journey: content_more_actions}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      failedCount: sum(count) where result = failure
+      failureRate: div(failedCount, sampleCount)
+    condition: "sampleCount >= 20 AND failureRate > 0.05"
+    severity: warning
+  - name: product-profile-share-action-failure-rate-high
+    rowKind: product_action_funnel
+    filter: {journey: profile_share}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      failedCount: sum(count) where result = failure
+      failureRate: div(failedCount, sampleCount)
+    condition: "sampleCount >= 20 AND failureRate > 0.05"
+    severity: warning
+  # 长尾产品动作（单动作 journey）共享兜底：全量 product_action 失败率，阈值放宽避免与专属告警重复。
+  - name: product-action-longtail-failure-rate-high
+    rowKind: product_action_funnel
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      failedCount: sum(count) where result = failure
+      failureRate: div(failedCount, sampleCount)
+    condition: "sampleCount >= 20 AND failureRate > 0.10"
+    severity: warning
+  - name: product-article-reader-enter-p95-high
+    rowKind: article_reader_lifecycle
+    filter: {eventType: article_reader_enter, result: success}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      p95Ms: p95(durationHistogram)
+    condition: "sampleCount >= 100 AND p95Ms > 1200"
+    severity: warning
+  - name: product-article-reader-error-rate-high
+    rowKind: article_reader_lifecycle
+    window_minutes: 60
+    fields:
+      enterCount: sum(count) where eventType = article_reader_enter
+      readerErrorCount: sum(count) where eventType = article_reader_error
+      errorRate: div(readerErrorCount, enterCount)
+    condition: "enterCount >= 100 AND errorRate > 0.01"
+    severity: warning
+  - name: product-article-reader-recovery-failure
+    rowKind: article_reader_lifecycle
+    filter: {eventType: article_reader_recovery, result: failure}
+    window_minutes: 60
+    fields:
+      recoveryFailureCount: sum(count)
+    condition: "recoveryFailureCount > 0"
+    severity: warning
+  - name: product-profile-interaction-state-failure-rate-high
+    rowKind: product_action_funnel
+    filter: {journey: profile_interaction}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count)
+      failedCount: sum(count) where result = failure
+      failureRate: div(failedCount, sampleCount)
+    condition: "sampleCount >= 20 AND failureRate > 0.02"
+    severity: warning
+  # 分母排除用户主动取消（chatOutcome 枚举：succeeded/failed/rejected/cancelled）。
+  - name: product-chat-group-create-failure-rate-high
+    rowKind: chat_funnel
+    filter: {chatAction: group_create}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count) where chatOutcome != cancelled
+      failedCount: sum(count) where chatOutcome = failed
+      failureRate: div(failedCount, sampleCount)
+    condition: "sampleCount >= 20 AND failureRate > 0.05"
+    severity: warning
+  - name: product-chat-governance-failure-rate-high
+    rowKind: chat_funnel
+    filter: {chatAction: group_governance}
+    window_minutes: 60
+    fields:
+      sampleCount: sum(count) where chatOutcome != cancelled
+      failedCount: sum(count) where chatOutcome = failed
+      failureRate: div(failedCount, sampleCount)
+    condition: "sampleCount >= 20 AND failureRate > 0.02"
+    severity: warning
+  - name: product-search-effective-success-rate-low
+    rowKind: search_funnel
+    window_minutes: 60
+    fields:
+      submitCount: cardinality(querySubmitCountHashes)
+      effectiveCount: cardinality(effectiveActionRequestCountHashes)
+      effectiveSuccessRate: div(effectiveCount, submitCount)
+    condition: "submitCount >= 100 AND effectiveSuccessRate < 0.35"
+    severity: warning
+  - name: product-search-first-actionable-p95-high
+    rowKind: search_funnel
+    window_minutes: 60
+    fields:
+      sampleCount: hcount(firstActionableHistogram)
+      p95Ms: p95(firstActionableHistogram)
+    condition: "sampleCount >= 100 AND p95Ms > 1500"
+    severity: warning
+  - name: product-search-effective-action-rate-low
+    rowKind: search_funnel
+    window_minutes: 60
+    fields:
+      resultCount: cardinality(nonEmptyResultCountHashes)
+      effectiveCount: cardinality(effectiveActionRequestCountHashes)
+      effectiveActionRate: div(effectiveCount, resultCount)
+    condition: "resultCount >= 100 AND effectiveActionRate < 0.20"
+    severity: warning
+  # control_plane 字段由评估器自产：failedTransformCount 是评估周期内字段派生/查询失败次数；
+  # freshnessMinutes 读 aggregate 全 rowKind 最大 generatedThrough 与 now 的差；
+  # retentionDays 读 Elasticsearch ILM 策略实际 delete min_age。
+  - name: product-telemetry-transform-failed
+    rowKind: control_plane
+    window_minutes: 60
+    fields:
+      failedTransformCount: evaluator(failedTransformCount)
+    condition: "failedTransformCount > 0"
+    severity: critical
+  - name: product-telemetry-aggregate-stale
+    rowKind: control_plane
+    window_minutes: 60
+    fields:
+      freshnessMinutes: evaluator(freshnessMinutes)
+    condition: "freshnessMinutes > 70"
+    severity: warning
+  - name: product-telemetry-raw-retention-drift
+    rowKind: control_plane
+    window_minutes: 60
+    fields:
+      rawRetentionDays: evaluator(rawRetentionDays)
+    condition: "rawRetentionDays != 3"
+    severity: critical
+  # 按 fingerprint 分组评估：任一错误指纹在窗口内聚合命中次数达到阈值即告警。
+  - name: runtime-diagnostics-error-fingerprint-spike
+    rowKind: runtime_diagnostics
+    filter: {severity: error}
+    group_by: [fingerprint]
+    window_minutes: 60
+    fields:
+      count: sum(count)
+    condition: "count >= 10"
+    severity: warning
+  - name: runtime-diagnostics-raw-retention-drift
+    rowKind: control_plane
+    window_minutes: 60
+    fields:
+      runtimeRawRetentionDays: evaluator(runtimeRawRetentionDays)
+    condition: "runtimeRawRetentionDays != 3"
+    severity: critical

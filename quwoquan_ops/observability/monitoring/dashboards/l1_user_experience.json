@@ -1,70 +1,83 @@
 {
-  "dashboard": {
-    "title": "L1 — 用户体验与运营指标",
-    "uid": "qwq-l1-ux",
-    "tags": ["quwoquan", "l1", "user-experience"],
-    "timezone": "browser",
-    "refresh": "1m",
-    "panels": [
-      {
-        "title": "用户行为漏斗 (impression → click → deep_engage)",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-        "targets": [
-          {
-            "expr": "sum(rate(rec_engagement_impression_total[5m]))",
-            "legendFormat": "曝光"
-          },
-          {
-            "expr": "sum(rate(rec_engagement_click_total[5m]))",
-            "legendFormat": "点击"
-          },
-          {
-            "expr": "sum(rate(rec_engagement_deep_engage_total[5m]))",
-            "legendFormat": "深度互动"
-          }
-        ]
+  "title": "L1 — 用户体验与运营指标",
+  "uid": "qwq-l1-ux",
+  "tags": [
+    "quwoquan",
+    "l1",
+    "user-experience"
+  ],
+  "timezone": "browser",
+  "refresh": "1m",
+  "panels": [
+    {
+      "title": "用户行为漏斗 (impression → click → deep_engage)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
       },
-      {
-        "title": "启动阶段时长 P50/P95（匿名可靠性遥测）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-        "description": "真实 producer: product-ops-service ops_startup_phase_duration_seconds；attemptId 不进入指标标签。",
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.50, sum(rate(ops_startup_phase_duration_seconds_bucket[10m])) by (le, phase, platform, runtime_env))",
-            "legendFormat": "P50 {{ platform }} {{ phase }}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(ops_startup_phase_duration_seconds_bucket[10m])) by (le, phase, platform, runtime_env))",
-            "legendFormat": "P95 {{ platform }} {{ phase }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(recommendation_feed_impressed_total[5m]))",
+          "legendFormat": "曝光"
+        },
+        {
+          "expr": "sum(rate(recommendation_feed_engagement_total{action=\"click\"}[5m]))",
+          "legendFormat": "点击"
+        },
+        {
+          "expr": "sum(rate(recommendation_feed_completion_total[5m]))",
+          "legendFormat": "深度消费完成"
+        }
+      ]
+    },
+    {
+      "title": "启动阶段时长 P50/P95（匿名可靠性遥测）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
       },
-      {
-        "title": "启动漏斗、恢复面与可靠投影",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-        "description": "native_pre_flutter → flutter_first_frame → shell_first_paint → terminal；恢复、journal 溢出和 Mongo embedded outbox 投影结果均来自受限启动遥测。",
-        "targets": [
-          {
-            "expr": "sum(rate(ops_startup_phase_total{phase=~\"native_pre_flutter|flutter_first_frame|shell_first_paint|terminal\"}[10m])) by (phase, platform)",
-            "legendFormat": "{{ platform }} {{ phase }}"
-          },
-          {
-            "expr": "sum(rate(ops_startup_phase_total{phase=\"recovery\"}[10m])) by (outcome, recovery_surface, platform)",
-            "legendFormat": "恢复 {{ platform }} {{ recovery_surface }} {{ outcome }}"
-          },
-          {
-            "expr": "sum(rate(ops_startup_phase_total{phase=\"terminal\",outcome=\"journal_drop\"}[10m])) by (platform, runtime_env)",
-            "legendFormat": "journal_drop {{ platform }} {{ runtime_env }}"
-          },
-          {
-            "expr": "sum(rate(ops_startup_projection_total[10m])) by (result)",
-            "legendFormat": "投影 {{ result }}"
-          }
-        ]
-      }
-    ]
-  }
+      "description": "真实 producer: product-ops-service ops_startup_phase_duration_seconds；attemptId 不进入指标标签。",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(ops_startup_phase_duration_seconds_bucket[10m])) by (le, phase, platform, runtime_env))",
+          "legendFormat": "P50 {{ platform }} {{ phase }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(ops_startup_phase_duration_seconds_bucket[10m])) by (le, phase, platform, runtime_env))",
+          "legendFormat": "P95 {{ platform }} {{ phase }}"
+        }
+      ]
+    },
+    {
+      "title": "启动漏斗、恢复面与可靠投影",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "description": "native_pre_flutter → flutter_first_frame → shell_first_paint → terminal；恢复、journal 溢出和 Mongo embedded outbox 投影结果均来自受限启动遥测。",
+      "targets": [
+        {
+          "expr": "sum(rate(ops_startup_phase_total{phase=~\"native_pre_flutter|flutter_first_frame|shell_first_paint|terminal\"}[10m])) by (phase, platform)",
+          "legendFormat": "{{ platform }} {{ phase }}"
+        },
+        {
+          "expr": "sum(rate(ops_startup_phase_total{phase=\"recovery\"}[10m])) by (outcome, recovery_surface, platform)",
+          "legendFormat": "恢复 {{ platform }} {{ recovery_surface }} {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(ops_startup_phase_total{phase=\"terminal\",outcome=\"journal_drop\"}[10m])) by (platform, runtime_env)",
+          "legendFormat": "journal_drop {{ platform }} {{ runtime_env }}"
+        }
+      ]
+    }
+  ]
 }

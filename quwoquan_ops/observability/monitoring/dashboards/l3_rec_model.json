@@ -1,121 +1,159 @@
 {
-  "dashboard": {
-    "title": "L3 — 推荐模型服务 (recommendation-service)",
-    "uid": "qwq-l3-rec-model",
-    "tags": ["quwoquan", "l3", "rec-model", "prometheus"],
-    "timezone": "browser",
-    "refresh": "30s",
-    "templating": {
-      "list": [
+  "title": "L3 — 推荐模型服务 (recommendation-service)",
+  "uid": "qwq-l3-rec-model",
+  "tags": [
+    "quwoquan",
+    "l3",
+    "rec-model",
+    "prometheus"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "job",
+        "type": "query",
+        "query": "label_values(http_server_requests_total{service=\"recommendation-service\"}, job)",
+        "refresh": 2,
+        "hide": 0,
+        "includeAll": true,
+        "multi": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "title": "HTTP 请求速率 (by route)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
         {
-          "name": "job",
-          "type": "query",
-          "query": "label_values(http_requests_total, job)",
-          "refresh": 2,
-          "hide": 0,
-          "includeAll": true,
-          "multi": true
+          "expr": "sum(rate(http_server_requests_total{job=~\"$job\",service=\"recommendation-service\"}[5m])) by (route)",
+          "legendFormat": "{{ route }}"
         }
       ]
     },
-    "panels": [
-      {
-        "title": "HTTP 请求速率 (by handler)",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-        "targets": [
-          {
-            "expr": "sum(rate(http_requests_total{job=~\"$job\"}[5m])) by (handler)",
-            "legendFormat": "{{ handler }}"
-          }
-        ]
+    {
+      "title": "HTTP 延迟 P50 / P95 / P99",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
       },
-      {
-        "title": "HTTP 延迟 P50 / P95 / P99（全局 high-res）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_highr_seconds_bucket{job=~\"$job\"}[5m])) by (le))",
-            "legendFormat": "P50"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_highr_seconds_bucket{job=~\"$job\"}[5m])) by (le))",
-            "legendFormat": "P95"
-          },
-          {
-            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_highr_seconds_bucket{job=~\"$job\"}[5m])) by (le))",
-            "legendFormat": "P99"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_server_duration_seconds_bucket{job=~\"$job\",service=\"recommendation-service\"}[5m])) by (le))",
+          "legendFormat": "P50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_duration_seconds_bucket{job=~\"$job\",service=\"recommendation-service\"}[5m])) by (le))",
+          "legendFormat": "P95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_duration_seconds_bucket{job=~\"$job\",service=\"recommendation-service\"}[5m])) by (le))",
+          "legendFormat": "P99"
+        }
+      ]
+    },
+    {
+      "title": "打分耗时 P50 / P95 / P99（by model_release_id）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
       },
-      {
-        "title": "打分耗时 P50 / P95 / P99（by model_release_id）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.50, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_release_id))",
-            "legendFormat": "P50 {{ model_release_id }}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_release_id))",
-            "legendFormat": "P95 {{ model_release_id }}"
-          },
-          {
-            "expr": "histogram_quantile(0.99, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_release_id))",
-            "legendFormat": "P99 {{ model_release_id }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_release_id))",
+          "legendFormat": "P50 {{ model_release_id }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_release_id))",
+          "legendFormat": "P95 {{ model_release_id }}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(rec_score_duration_seconds_bucket{job=~\"$job\"}[5m])) by (le, model_release_id))",
+          "legendFormat": "P99 {{ model_release_id }}"
+        }
+      ]
+    },
+    {
+      "title": "模型是否已加载 (rec_model_loaded)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
       },
-      {
-        "title": "模型是否已加载 (rec_model_loaded)",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-        "targets": [
-          {
-            "expr": "rec_model_loaded{job=~\"$job\"}",
-            "legendFormat": "{{ scorer_kind }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "rec_model_loaded{job=~\"$job\"}",
+          "legendFormat": "{{ scorer_kind }}"
+        }
+      ]
+    },
+    {
+      "title": "HTTP 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
       },
-      {
-        "title": "HTTP 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-        "targets": [
-          {
-            "expr": "sum(rate(http_requests_total{job=~\"$job\",status=\"5xx\"}[5m])) / sum(rate(http_requests_total{job=~\"$job\"}[5m]))",
-            "legendFormat": "5xx 占比"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_total{job=~\"$job\",service=\"recommendation-service\",status=~\"5..\"}[5m])) / sum(rate(http_server_requests_total{job=~\"$job\",service=\"recommendation-service\"}[5m]))",
+          "legendFormat": "5xx 占比"
+        }
+      ]
+    },
+    {
+      "title": "业务请求 rec_requests_total 速率 (by endpoint)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
       },
-      {
-        "title": "业务请求 rec_requests_total 速率 (by endpoint)",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-        "targets": [
-          {
-            "expr": "sum(rate(rec_requests_total{job=~\"$job\"}[5m])) by (endpoint)",
-            "legendFormat": "{{ endpoint }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(rec_requests_total{job=~\"$job\"}[5m])) by (endpoint)",
+          "legendFormat": "{{ endpoint }}"
+        }
+      ]
+    },
+    {
+      "title": "打分分布 P50 / P95（by scorer_kind）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 24
       },
-      {
-        "title": "打分分布 P50 / P95（by scorer_kind）",
-        "type": "timeseries",
-        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.50, sum(rate(rec_score_value_bucket{job=~\"$job\"}[5m])) by (le, scorer_kind))",
-            "legendFormat": "P50 {{ scorer_kind }}"
-          },
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(rec_score_value_bucket{job=~\"$job\"}[5m])) by (le, scorer_kind))",
-            "legendFormat": "P95 {{ scorer_kind }}"
-          }
-        ]
-      }
-    ]
-  }
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(rec_score_value_bucket{job=~\"$job\"}[5m])) by (le, scorer_kind))",
+          "legendFormat": "P50 {{ scorer_kind }}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(rec_score_value_bucket{job=~\"$job\"}[5m])) by (le, scorer_kind))",
+          "legendFormat": "P95 {{ scorer_kind }}"
+        }
+      ]
+    }
+  ]
 }

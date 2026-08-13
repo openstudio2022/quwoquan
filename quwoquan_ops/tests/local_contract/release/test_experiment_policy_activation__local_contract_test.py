@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
 from unittest import mock
 
@@ -426,7 +427,7 @@ class ExperimentPolicyActivationLocalContractTest(unittest.TestCase):
             mock.patch.object(
                 activation,
                 "profile_ports",
-                return_value={"product-ops-service": 19250},
+                return_value={"product-ops-service": 19250, "redis": 19420},
             ),
             mock.patch.object(
                 activation,
@@ -437,6 +438,11 @@ class ExperimentPolicyActivationLocalContractTest(unittest.TestCase):
                 activation,
                 "root_certificate_path",
             ) as certificate_path,
+            mock.patch.object(
+                activation,
+                "stream_field_values",
+                return_value=("search_ranking", "rec_model_vs_rule"),
+            ),
             mock.patch.object(
                 activation,
                 "_request_json",
@@ -478,6 +484,415 @@ class ExperimentPolicyActivationLocalContractTest(unittest.TestCase):
             ),
             create_call["headers"]["Idempotency-Key"],
         )
+
+    @staticmethod
+    def _bootstrap_environment_patches(
+        *,
+        stream_policy_ids: tuple[str, ...] | None = (
+            "search_ranking",
+            "rec_model_vs_rule",
+        ),
+    ) -> tuple[mock._patch, ...]:
+        patches = [
+            mock.patch.object(
+                activation,
+                "active_deployment_candidate",
+                return_value={"baselineId": "sha256:" + "a" * 64},
+            ),
+            mock.patch.object(
+                activation,
+                "load_candidate_manifest",
+                return_value={
+                    "packageDigest": "sha256:" + "b" * 64,
+                    "sourceRevision": "revision-1",
+                },
+            ),
+            mock.patch.object(activation, "load_port_manifest", return_value={}),
+            mock.patch.object(
+                activation,
+                "profile_ports",
+                return_value={"product-ops-service": 19250, "redis": 19420},
+            ),
+            mock.patch.object(
+                activation,
+                "mint_local_product_ops_operator_token",
+                return_value="sensitive-bearer",
+            ),
+        ]
+        if stream_policy_ids is not None:
+            patches.append(
+                mock.patch.object(
+                    activation,
+                    "stream_field_values",
+                    return_value=stream_policy_ids,
+                )
+            )
+        return tuple(patches)
+
+    def test_connection_refused_is_retried_until_listener_accepts(self) -> None:
+        """product-ops 进程刚被 bootstrap 拉起时 HTTP 监听尚未就绪，且其
+        healthz 在 user-service 缺席时必然 unhealthy；唯一正确的等待信号
+        是连接级重试，连接成立后同一幂等 command 必须一次成功。"""
+
+        catalog = {
+            "items": [
+                {
+                    "id": "search_ranking",
+                    "key": "search_ranking",
+                    "status": "running",
+                    "experimentRevision": 1,
+                    "variants": [
+                        {"key": "control", "allocationBasisPoints": 5000},
+                        {"key": "term_heat", "allocationBasisPoints": 5000},
+                    ],
+                },
+                {
+                    "id": "rec_model_vs_rule",
+                    "key": "rec_model_vs_rule",
+                    "status": "running",
+                    "experimentRevision": 1,
+                    "variants": [
+                        {"key": "rule", "allocationBasisPoints": 5000},
+                        {"key": "model", "allocationBasisPoints": 5000},
+                    ],
+                },
+            ]
+        }
+        refused = activation.ExperimentPolicyTransportError(
+            "experiment policy request transport failed: URLError"
+        )
+        with ExitStack() as stack:
+            for patcher in self._bootstrap_environment_patches():
+                stack.enter_context(patcher)
+            stack.enter_context(mock.patch("time.sleep"))
+            request_json = stack.enter_context(
+                mock.patch.object(
+                    activation,
+                    "_request_json",
+                    side_effect=[
+                        refused,
+                        refused,
+                        (201, dict(catalog["items"][0])),
+                        (200, catalog),
+                        (201, dict(catalog["items"][1])),
+                        (200, catalog),
+                    ],
+                )
+            )
+            receipt = activation.activate_search_experiment_policy_via_published_port(
+                environment="gamma",
+                target="gamma-local",
+            )
+
+        self.assertEqual(receipt["status"], "passed")
+        self.assertEqual(request_json.call_count, 6)
+        first_urls = {
+            call.kwargs["url"] for call in request_json.call_args_list[:3]
+        }
+        # 连接被拒的重试必须停留在同一个幂等 create 上，不得跳过或换目标。
+        self.assertEqual(len(first_urls), 1)
+
+    def test_business_http_error_fails_fast_without_retry(self) -> None:
+        with ExitStack() as stack:
+            for patcher in self._bootstrap_environment_patches():
+                stack.enter_context(patcher)
+            sleep = stack.enter_context(mock.patch("time.sleep"))
+            request_json = stack.enter_context(
+                mock.patch.object(
+                    activation,
+                    "_request_json",
+                    return_value=(500, {"code": "OPS.SYSTEM.internal"}),
+                )
+            )
+            with self.assertRaisesRegex(
+                activation.ExperimentPolicyActivationError,
+                "HTTP 500",
+            ):
+                activation.activate_search_experiment_policy_via_published_port(
+                    environment="gamma",
+                    target="gamma-local",
+                )
+
+        self.assertEqual(request_json.call_count, 1)
+        sleep.assert_not_called()
+
+    def test_transport_retry_budget_exhaustion_fails(self) -> None:
+        refused = activation.ExperimentPolicyTransportError(
+            "experiment policy request transport failed: URLError"
+        )
+        with ExitStack() as stack:
+            for patcher in self._bootstrap_environment_patches():
+                stack.enter_context(patcher)
+            request_json = stack.enter_context(
+                mock.patch.object(
+                    activation,
+                    "_request_json",
+                    side_effect=refused,
+                )
+            )
+            with self.assertRaises(activation.ExperimentPolicyTransportError):
+                activation.activate_search_experiment_policy_via_published_port(
+                    environment="gamma",
+                    target="gamma-local",
+                    timeout_seconds=1.2,
+                )
+
+        self.assertGreaterEqual(request_json.call_count, 2)
+
+    @staticmethod
+    def _reused_catalog() -> dict[str, object]:
+        return {
+            "items": [
+                {
+                    "id": "search_ranking",
+                    "key": "search_ranking",
+                    "status": "running",
+                    "experimentRevision": 1,
+                    "variants": [
+                        {"key": "control", "allocationBasisPoints": 5000},
+                        {"key": "term_heat", "allocationBasisPoints": 5000},
+                    ],
+                },
+                {
+                    "id": "rec_model_vs_rule",
+                    "key": "rec_model_vs_rule",
+                    "status": "running",
+                    "experimentRevision": 1,
+                    "variants": [
+                        {"key": "rule", "allocationBasisPoints": 5000},
+                        {"key": "model", "allocationBasisPoints": 5000},
+                    ],
+                },
+            ]
+        }
+
+    def test_reused_with_missing_stream_fact_re_emits_through_public_rollout(
+        self,
+    ) -> None:
+        """事实流 7 天 retention 会整体过期，而 authoritative 策略永续：
+        reused readback 不足以保证下游可见性。缺失事实必须经公开 rollout
+        command 等值补发（revision bump），随后事实在流中可见。"""
+
+        catalog = self._reused_catalog()
+
+        def rollout_payload(policy_id: str) -> dict[str, object]:
+            variants = next(
+                item["variants"]
+                for item in catalog["items"]
+                if item["id"] == policy_id
+            )
+            return {
+                "id": policy_id,
+                "key": policy_id,
+                "status": "running",
+                "experimentRevision": 2,
+                "variants": variants,
+            }
+
+        with ExitStack() as stack:
+            for patcher in self._bootstrap_environment_patches(
+                stream_policy_ids=None,
+            ):
+                stack.enter_context(patcher)
+            stack.enter_context(mock.patch("time.sleep"))
+            stream = stack.enter_context(
+                mock.patch.object(
+                    activation,
+                    "stream_field_values",
+                    side_effect=[
+                        (),
+                        ("search_ranking", "rec_model_vs_rule"),
+                    ],
+                )
+            )
+            request_json = stack.enter_context(
+                mock.patch.object(
+                    activation,
+                    "_request_json",
+                    side_effect=[
+                        (409, {"code": "OPS.USER.version_conflict"}),
+                        (200, catalog),
+                        (409, {"code": "OPS.USER.version_conflict"}),
+                        (200, catalog),
+                        # search_ranking re-emission: readback + rollout
+                        (200, catalog),
+                        (200, rollout_payload("search_ranking")),
+                        # rec_model_vs_rule re-emission: readback + rollout
+                        (200, catalog),
+                        (200, rollout_payload("rec_model_vs_rule")),
+                    ],
+                )
+            )
+            receipt = activation.activate_search_experiment_policy_via_published_port(
+                environment="gamma",
+                target="gamma-local",
+            )
+
+        self.assertEqual(receipt["operation"], "re_emitted")
+        self.assertEqual(
+            receipt["streamVisibility"],
+            {
+                "stream": "events.ops.experiment_policy_activated",
+                "reEmittedPolicyIds": ["search_ranking", "rec_model_vs_rule"],
+            },
+        )
+        self.assertEqual(
+            receipt["policyOperations"],
+            {"search_ranking": "re_emitted", "rec_model_vs_rule": "re_emitted"},
+        )
+        rollout_calls = [
+            call
+            for call in request_json.call_args_list
+            if ":rollout" in call.kwargs["url"]
+        ]
+        self.assertEqual(len(rollout_calls), 2)
+        for call in rollout_calls:
+            self.assertEqual(call.kwargs["headers"]["If-Match"], '"1"')
+            self.assertIn(
+                "runtime-policy-reemit/",
+                call.kwargs["headers"]["Idempotency-Key"],
+            )
+            self.assertEqual(call.kwargs["body"]["status"], "running")
+        self.assertEqual(stream.call_count, 2)
+        recommendation = next(
+            item
+            for item in receipt["policies"]
+            if item["id"] == "rec_model_vs_rule"
+        )
+        self.assertEqual(recommendation["experimentRevision"], 2)
+
+    def test_reused_with_visible_stream_fact_takes_no_action(self) -> None:
+        catalog = self._reused_catalog()
+        with ExitStack() as stack:
+            for patcher in self._bootstrap_environment_patches():
+                stack.enter_context(patcher)
+            request_json = stack.enter_context(
+                mock.patch.object(
+                    activation,
+                    "_request_json",
+                    side_effect=[
+                        (409, {"code": "OPS.USER.version_conflict"}),
+                        (200, catalog),
+                        (409, {"code": "OPS.USER.version_conflict"}),
+                        (200, catalog),
+                    ],
+                )
+            )
+            receipt = activation.activate_search_experiment_policy_via_published_port(
+                environment="gamma",
+                target="gamma-local",
+            )
+
+        self.assertEqual(receipt["operation"], "reused")
+        self.assertEqual(receipt["streamVisibility"]["reEmittedPolicyIds"], [])
+        self.assertEqual(request_json.call_count, 4)
+        self.assertFalse(
+            any(
+                ":rollout" in call.kwargs["url"]
+                for call in request_json.call_args_list
+            )
+        )
+
+    def test_created_waits_for_outbox_dispatch_without_re_emission(self) -> None:
+        """created 的事实已在 Postgres outbox；可见性验证只等待派发完成，
+        不得触发 rollout 补发。"""
+
+        catalog = self._reused_catalog()
+        with ExitStack() as stack:
+            for patcher in self._bootstrap_environment_patches(
+                stream_policy_ids=None,
+            ):
+                stack.enter_context(patcher)
+            stack.enter_context(mock.patch("time.sleep"))
+            stream = stack.enter_context(
+                mock.patch.object(
+                    activation,
+                    "stream_field_values",
+                    side_effect=[
+                        (),
+                        ("search_ranking", "rec_model_vs_rule"),
+                    ],
+                )
+            )
+            request_json = stack.enter_context(
+                mock.patch.object(
+                    activation,
+                    "_request_json",
+                    side_effect=[
+                        (201, dict(catalog["items"][0])),
+                        (200, catalog),
+                        (201, dict(catalog["items"][1])),
+                        (200, catalog),
+                    ],
+                )
+            )
+            receipt = activation.activate_search_experiment_policy_via_published_port(
+                environment="gamma",
+                target="gamma-local",
+            )
+
+        self.assertEqual(receipt["operation"], "created")
+        self.assertEqual(receipt["streamVisibility"]["reEmittedPolicyIds"], [])
+        self.assertEqual(request_json.call_count, 4)
+        self.assertEqual(stream.call_count, 2)
+
+    def test_stream_visibility_budget_exhaustion_fails(self) -> None:
+        catalog = self._reused_catalog()
+        with ExitStack() as stack:
+            for patcher in self._bootstrap_environment_patches(
+                stream_policy_ids=None,
+            ):
+                stack.enter_context(patcher)
+            stack.enter_context(mock.patch("time.sleep"))
+            stack.enter_context(
+                mock.patch.object(
+                    activation,
+                    "stream_field_values",
+                    return_value=(),
+                )
+            )
+            stack.enter_context(
+                mock.patch.object(
+                    activation,
+                    "_request_json",
+                    side_effect=[
+                        (201, dict(catalog["items"][0])),
+                        (200, catalog),
+                        (201, dict(catalog["items"][1])),
+                        (200, catalog),
+                    ],
+                )
+            )
+            with self.assertRaisesRegex(
+                activation.ExperimentPolicyActivationError,
+                "not visible",
+            ):
+                activation.activate_search_experiment_policy_via_published_port(
+                    environment="gamma",
+                    target="gamma-local",
+                    timeout_seconds=1.2,
+                )
+
+    def test_request_json_maps_connection_refused_to_transport_error(self) -> None:
+        import socket
+
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            port = probe.getsockname()[1]
+
+        with self.assertRaisesRegex(
+            activation.ExperimentPolicyTransportError,
+            "transport failed",
+        ):
+            activation._request_json(
+                method="GET",
+                url=f"http://127.0.0.1:{port}/control-plane/product/experiments",
+                token="redacted",
+                cafile=None,
+                body=None,
+                headers={},
+                timeout_seconds=1.0,
+            )
 
     def test_published_port_bootstrap_rejects_prod_before_credentials(self) -> None:
         with (

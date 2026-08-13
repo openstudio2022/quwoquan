@@ -1,465 +1,495 @@
 {
-  "dashboard": {
-    "title": "L2 — 契约对象 ready operation 覆盖",
-    "uid": "qwq-l2-contract-object-coverage",
-    "tags": [
-      "quwoquan",
-      "l2",
-      "contract-graph",
-      "generated"
-    ],
-    "timezone": "browser",
-    "refresh": "30s",
-    "description": "Code generated from quwoquan_service/generated/contract_graph.json；regenerate with verify_object_alert_coverage.py --write。每域 ready operation 的可用性与 P95 由对象级 recording rule 派生。",
-    "panels": [
-      {
-        "title": "assistant ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 0
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_assistant_contract_operation_requests_total{service=\"assistant-service\",operation=~\"assistant\\\\..+\",contract_metric=~\"assistant_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_assistant_contract_operation_requests_total{service=\"assistant-service\",operation=~\"assistant\\\\..+\",contract_metric=~\"assistant_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+  "title": "L2 — 契约对象 ready operation 覆盖",
+  "uid": "qwq-l2-contract-object-coverage",
+  "tags": [
+    "quwoquan",
+    "l2",
+    "contract-graph",
+    "generated"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "description": "Code generated from quwoquan_service/generated/contract_graph.json；regenerate with verify_object_alert_coverage.py --write。每域 ready operation 的可用性与 P95 由对象级 recording rule 派生。",
+  "panels": [
+    {
+      "title": "assistant ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
       },
-      {
-        "title": "assistant ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 0
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service=\"assistant-service\",operation=~\"assistant\\\\..+\",contract_metric=~\"assistant_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_assistant_contract_operation_requests_total{service=\"assistant-service\",operation=~\"assistant\\\\..+\",contract_metric=~\"assistant_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_assistant_contract_operation_requests_total{service=\"assistant-service\",operation=~\"assistant\\\\..+\",contract_metric=~\"assistant_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "assistant ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
       },
-      {
-        "title": "chat ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 8
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_chat_contract_operation_requests_total{service=\"chat-service\",operation=~\"chat\\\\..+\",contract_metric=~\"chat_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_chat_contract_operation_requests_total{service=\"chat-service\",operation=~\"chat\\\\..+\",contract_metric=~\"chat_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_assistant_contract_operation_duration_seconds_bucket{service=\"assistant-service\",operation=~\"assistant\\\\..+\",contract_metric=~\"assistant_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "chat ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
       },
-      {
-        "title": "chat ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 8
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_chat_contract_operation_duration_seconds_bucket{service=\"chat-service\",operation=~\"chat\\\\..+\",contract_metric=~\"chat_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_chat_contract_operation_requests_total{service=\"chat-service\",operation=~\"chat\\\\..+\",contract_metric=~\"chat_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_chat_contract_operation_requests_total{service=\"chat-service\",operation=~\"chat\\\\..+\",contract_metric=~\"chat_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "chat ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
       },
-      {
-        "title": "circle ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 16
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_circle_contract_operation_requests_total{service=\"circle-service\",operation=~\"circle\\\\..+\",contract_metric=~\"circle_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_circle_contract_operation_requests_total{service=\"circle-service\",operation=~\"circle\\\\..+\",contract_metric=~\"circle_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_chat_contract_operation_duration_seconds_bucket{service=\"chat-service\",operation=~\"chat\\\\..+\",contract_metric=~\"chat_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "circle ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
       },
-      {
-        "title": "circle ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 16
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service=\"circle-service\",operation=~\"circle\\\\..+\",contract_metric=~\"circle_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_circle_contract_operation_requests_total{service=\"circle-service\",operation=~\"circle\\\\..+\",contract_metric=~\"circle_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_circle_contract_operation_requests_total{service=\"circle-service\",operation=~\"circle\\\\..+\",contract_metric=~\"circle_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "circle ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
       },
-      {
-        "title": "content ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 24
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_circle_contract_operation_duration_seconds_bucket{service=\"circle-service\",operation=~\"circle\\\\..+\",contract_metric=~\"circle_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "content ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
       },
-      {
-        "title": "content ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 24
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_content_contract_operation_requests_total{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "content ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
       },
-      {
-        "title": "entity ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 32
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_entity_contract_operation_requests_total{service=\"entity-service\",operation=~\"entity\\\\..+\",contract_metric=~\"entity_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_entity_contract_operation_requests_total{service=\"entity-service\",operation=~\"entity\\\\..+\",contract_metric=~\"entity_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_content_contract_operation_duration_seconds_bucket{service=\"content-service\",operation=~\"content\\\\..+\",contract_metric=~\"content_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "entity ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 32
       },
-      {
-        "title": "entity ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 32
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_entity_contract_operation_duration_seconds_bucket{service=\"entity-service\",operation=~\"entity\\\\..+\",contract_metric=~\"entity_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_entity_contract_operation_requests_total{service=\"entity-service\",operation=~\"entity\\\\..+\",contract_metric=~\"entity_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_entity_contract_operation_requests_total{service=\"entity-service\",operation=~\"entity\\\\..+\",contract_metric=~\"entity_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "entity ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 32
       },
-      {
-        "title": "integration ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 40
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_integration_contract_operation_requests_total{service=\"integration-service\",operation=~\"integration\\\\..+\",contract_metric=~\"integration_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_integration_contract_operation_requests_total{service=\"integration-service\",operation=~\"integration\\\\..+\",contract_metric=~\"integration_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_entity_contract_operation_duration_seconds_bucket{service=\"entity-service\",operation=~\"entity\\\\..+\",contract_metric=~\"entity_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "gateway ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
       },
-      {
-        "title": "integration ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 40
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_integration_contract_operation_duration_seconds_bucket{service=\"integration-service\",operation=~\"integration\\\\..+\",contract_metric=~\"integration_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_gateway_contract_operation_requests_total{service=\"api-edge\",operation=~\"gateway\\\\..+\",contract_metric=~\"gateway_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_gateway_contract_operation_requests_total{service=\"api-edge\",operation=~\"gateway\\\\..+\",contract_metric=~\"gateway_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "gateway ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 40
       },
-      {
-        "title": "notification ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 48
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_notification_contract_operation_requests_total{service=\"notification-service\",operation=~\"notification\\\\..+\",contract_metric=~\"notification_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_notification_contract_operation_requests_total{service=\"notification-service\",operation=~\"notification\\\\..+\",contract_metric=~\"notification_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_gateway_contract_operation_duration_seconds_bucket{service=\"api-edge\",operation=~\"gateway\\\\..+\",contract_metric=~\"gateway_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "integration ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
       },
-      {
-        "title": "notification ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 48
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_notification_contract_operation_duration_seconds_bucket{service=\"notification-service\",operation=~\"notification\\\\..+\",contract_metric=~\"notification_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_integration_contract_operation_requests_total{service=\"integration-service\",operation=~\"integration\\\\..+\",contract_metric=~\"integration_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_integration_contract_operation_requests_total{service=\"integration-service\",operation=~\"integration\\\\..+\",contract_metric=~\"integration_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "integration ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
       },
-      {
-        "title": "ops ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 56
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_ops_contract_operation_requests_total{service=\"product-ops-service\",operation=~\"ops\\\\..+\",contract_metric=~\"ops_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_ops_contract_operation_requests_total{service=\"product-ops-service\",operation=~\"ops\\\\..+\",contract_metric=~\"ops_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_integration_contract_operation_duration_seconds_bucket{service=\"integration-service\",operation=~\"integration\\\\..+\",contract_metric=~\"integration_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "notification ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
       },
-      {
-        "title": "ops ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 56
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service=\"product-ops-service\",operation=~\"ops\\\\..+\",contract_metric=~\"ops_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_notification_contract_operation_requests_total{service=\"notification-service\",operation=~\"notification\\\\..+\",contract_metric=~\"notification_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_notification_contract_operation_requests_total{service=\"notification-service\",operation=~\"notification\\\\..+\",contract_metric=~\"notification_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "notification ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 56
       },
-      {
-        "title": "realtime ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 64
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_realtime_contract_operation_requests_total{service=\"realtime-gateway\",operation=~\"realtime\\\\..+\",contract_metric=~\"realtime_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_realtime_contract_operation_requests_total{service=\"realtime-gateway\",operation=~\"realtime\\\\..+\",contract_metric=~\"realtime_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_notification_contract_operation_duration_seconds_bucket{service=\"notification-service\",operation=~\"notification\\\\..+\",contract_metric=~\"notification_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "ops ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 64
       },
-      {
-        "title": "realtime ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 64
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_realtime_contract_operation_duration_seconds_bucket{service=\"realtime-gateway\",operation=~\"realtime\\\\..+\",contract_metric=~\"realtime_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_ops_contract_operation_requests_total{service=\"product-ops-service\",operation=~\"ops\\\\..+\",contract_metric=~\"ops_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_ops_contract_operation_requests_total{service=\"product-ops-service\",operation=~\"ops\\\\..+\",contract_metric=~\"ops_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "ops ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 64
       },
-      {
-        "title": "recommendation ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 72
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_recommendation_contract_operation_requests_total{service=\"recommendation-service\",operation=~\"recommendation\\\\..+\",contract_metric=~\"recommendation_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_recommendation_contract_operation_requests_total{service=\"recommendation-service\",operation=~\"recommendation\\\\..+\",contract_metric=~\"recommendation_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_ops_contract_operation_duration_seconds_bucket{service=\"product-ops-service\",operation=~\"ops\\\\..+\",contract_metric=~\"ops_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "realtime ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 72
       },
-      {
-        "title": "recommendation ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 72
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_recommendation_contract_operation_duration_seconds_bucket{service=\"recommendation-service\",operation=~\"recommendation\\\\..+\",contract_metric=~\"recommendation_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_realtime_contract_operation_requests_total{service=\"realtime-gateway\",operation=~\"realtime\\\\..+\",contract_metric=~\"realtime_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_realtime_contract_operation_requests_total{service=\"realtime-gateway\",operation=~\"realtime\\\\..+\",contract_metric=~\"realtime_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "realtime ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 72
       },
-      {
-        "title": "rtc ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 80
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_rtc_contract_operation_requests_total{service=\"rtc-service\",operation=~\"rtc\\\\..+\",contract_metric=~\"rtc_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_rtc_contract_operation_requests_total{service=\"rtc-service\",operation=~\"rtc\\\\..+\",contract_metric=~\"rtc_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_realtime_contract_operation_duration_seconds_bucket{service=\"realtime-gateway\",operation=~\"realtime\\\\..+\",contract_metric=~\"realtime_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "recommendation ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 80
       },
-      {
-        "title": "rtc ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 80
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_rtc_contract_operation_duration_seconds_bucket{service=\"rtc-service\",operation=~\"rtc\\\\..+\",contract_metric=~\"rtc_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_recommendation_contract_operation_requests_total{service=\"recommendation-service\",operation=~\"recommendation\\\\..+\",contract_metric=~\"recommendation_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_recommendation_contract_operation_requests_total{service=\"recommendation-service\",operation=~\"recommendation\\\\..+\",contract_metric=~\"recommendation_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "recommendation ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 80
       },
-      {
-        "title": "search ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 88
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_search_contract_operation_requests_total{service=\"search-service\",operation=~\"search\\\\..+\",contract_metric=~\"search_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_search_contract_operation_requests_total{service=\"search-service\",operation=~\"search\\\\..+\",contract_metric=~\"search_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_recommendation_contract_operation_duration_seconds_bucket{service=\"recommendation-service\",operation=~\"recommendation\\\\..+\",contract_metric=~\"recommendation_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "rtc ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 88
       },
-      {
-        "title": "search ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 88
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_search_contract_operation_duration_seconds_bucket{service=\"search-service\",operation=~\"search\\\\..+\",contract_metric=~\"search_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_rtc_contract_operation_requests_total{service=\"rtc-service\",operation=~\"rtc\\\\..+\",contract_metric=~\"rtc_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_rtc_contract_operation_requests_total{service=\"rtc-service\",operation=~\"rtc\\\\..+\",contract_metric=~\"rtc_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "rtc ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 88
       },
-      {
-        "title": "tag ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 96
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_tag_contract_operation_requests_total{service=\"tag-service\",operation=~\"tag\\\\..+\",contract_metric=~\"tag_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_tag_contract_operation_requests_total{service=\"tag-service\",operation=~\"tag\\\\..+\",contract_metric=~\"tag_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_rtc_contract_operation_duration_seconds_bucket{service=\"rtc-service\",operation=~\"rtc\\\\..+\",contract_metric=~\"rtc_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "search ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 96
       },
-      {
-        "title": "tag ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 96
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_tag_contract_operation_duration_seconds_bucket{service=\"tag-service\",operation=~\"tag\\\\..+\",contract_metric=~\"tag_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_search_contract_operation_requests_total{service=\"search-service\",operation=~\"search\\\\..+\",contract_metric=~\"search_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_search_contract_operation_requests_total{service=\"search-service\",operation=~\"search\\\\..+\",contract_metric=~\"search_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "search ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 96
       },
-      {
-        "title": "user ready operation 5xx 错误率",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 0,
-          "y": 104
-        },
-        "targets": [
-          {
-            "expr": "sum(rate(quwoquan_user_contract_operation_requests_total{service=\"user-service\",operation=~\"user\\\\..+\",contract_metric=~\"user_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_user_contract_operation_requests_total{service=\"user-service\",operation=~\"user\\\\..+\",contract_metric=~\"user_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_search_contract_operation_duration_seconds_bucket{service=\"search-service\",operation=~\"search\\\\..+\",contract_metric=~\"search_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "tag ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 104
       },
-      {
-        "title": "user ready operation P95 延迟",
-        "type": "timeseries",
-        "gridPos": {
-          "h": 8,
-          "w": 12,
-          "x": 12,
-          "y": 104
-        },
-        "targets": [
-          {
-            "expr": "histogram_quantile(0.95, sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service=\"user-service\",operation=~\"user\\\\..+\",contract_metric=~\"user_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
-            "legendFormat": "{{ operation }}"
-          }
-        ]
-      }
-    ]
-  }
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_tag_contract_operation_requests_total{service=\"tag-service\",operation=~\"tag\\\\..+\",contract_metric=~\"tag_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_tag_contract_operation_requests_total{service=\"tag-service\",operation=~\"tag\\\\..+\",contract_metric=~\"tag_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "tag ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 104
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_tag_contract_operation_duration_seconds_bucket{service=\"tag-service\",operation=~\"tag\\\\..+\",contract_metric=~\"tag_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "user ready operation 5xx 错误率",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 112
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(quwoquan_user_contract_operation_requests_total{service=\"user-service\",operation=~\"user\\\\..+\",contract_metric=~\"user_.+\",commercial_status=\"ready\",status=~\"5..\"}[5m])) by (operation, contract_metric) / clamp_min(sum(rate(quwoquan_user_contract_operation_requests_total{service=\"user-service\",operation=~\"user\\\\..+\",contract_metric=~\"user_.+\",commercial_status=\"ready\"}[5m])) by (operation, contract_metric), 0.001)",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    },
+    {
+      "title": "user ready operation P95 延迟",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 112
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(quwoquan_user_contract_operation_duration_seconds_bucket{service=\"user-service\",operation=~\"user\\\\..+\",contract_metric=~\"user_.+\",commercial_status=\"ready\"}[5m])) by (le, operation, contract_metric, slo_latency_p95_ms))",
+          "legendFormat": "{{ operation }}"
+        }
+      ]
+    }
+  ]
 }

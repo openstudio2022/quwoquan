@@ -2,7 +2,8 @@
   "_governance": {
     "owner": "runtime-client-foundation",
     "reason": "startup TTID regression threshold",
-    "expires_when": "replaced atomically by a measured stricter baseline"
+    "expires_when": "replaced atomically by a measured stricter baseline",
+    "measure": "verify_startup_ttid_baseline.py reads the brandWelcomeFirstVisibleMs probe from a device startup trace and compares the P50 against p50.firstVisibleMs; a slower P50 blocks."
   },
   "metric": "brandWelcomeFirstVisibleMs",
   "p50": {

@@ -12,6 +12,8 @@ import { GovernancePage } from '../domains/product/GovernancePage.js';
 import { ProductDashboardPage } from '../domains/product/ProductDashboardPage.js';
 import { ProductL1L4MetricsPage } from '../domains/product/ProductL1L4MetricsPage.js';
 import { RecommendationPage } from '../domains/product/RecommendationPage.js';
+import { ExperimentOperationsPage } from '../domains/product/ExperimentOperationsPage.js';
+import { AccountEnforcementPage } from '../domains/product/AccountEnforcementPage.js';
 import { PortalScopeProvider } from '../shared/layout/PortalContext.js';
 import { PortalLayout } from '../shared/layout/PortalLayout.js';
 import { PortalLoginPage } from '../shared/auth/PortalLoginPage.js';
@@ -56,6 +58,8 @@ function AuthenticatedRoutes() {
             element={<EntityHomepageGovernancePage />}
           />
           <Route path="/product/recommendation" element={<RecommendationPage />} />
+          <Route path={portalRoutePath('experiment-operations')} element={<ExperimentOperationsPage />} />
+          <Route path={portalRoutePath('account-enforcement')} element={<AccountEnforcementPage />} />
           <Route path="/audit" element={<AuditPage />} />
         </Route>
       </Routes>

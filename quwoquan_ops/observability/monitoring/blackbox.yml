@@ -1,0 +1,22 @@
+# blackbox exporter 探测模块。目标域名真相源是
+# quwoquan_ops/environments/prod/runtime.yaml 的 publicBases；
+# prometheus.yml 的 blackbox job targets 必须与其一致
+# （verify_prometheus_scrape_homology.py 校验）。
+modules:
+  # 严格 2xx：健康端点与主站首页。
+  http_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      fail_if_ssl: false
+      fail_if_not_ssl: true
+  # 可达性：CDN / 控制台等根路径可能返回重定向或鉴权态，
+  # 只判定 DNS/TLS/连通与非 5xx。
+  http_public_reachable:
+    prober: http
+    timeout: 10s
+    http:
+      preferred_ip_protocol: ip4
+      fail_if_not_ssl: true
+      valid_status_codes: [200, 204, 301, 302, 307, 308, 401, 403, 404]

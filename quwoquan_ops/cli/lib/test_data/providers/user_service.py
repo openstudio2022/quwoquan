@@ -5,11 +5,21 @@ from typing import Any
 
 from ...local_environment_auth import open_test_data_acceptance_session
 from ..api import BusinessObjectRef, CapabilityRequest
-from ..capabilities.common import AcceptanceActorSet, ActorHandle
+from ..capabilities.common import (
+    AcceptanceActorSet,
+    ActorHandle,
+    ImmutableReleaseHandle,
+)
 from ..capabilities.user_service import (
     AUTHENTICATED_ACTORS,
+    GREETING_INBOX,
     PERSONA_RELATIONSHIP,
+    USER_FOLLOWING_SUBJECTS,
     AuthenticatedActorsParams,
+    FollowingSubjectsParams,
+    FollowingSubjectsResult,
+    GreetingInboxParams,
+    GreetingInboxResult,
     RelationshipParams,
     RelationshipResult,
 )
@@ -24,7 +34,7 @@ from ..model import (
     canonical_digest,
 )
 from ..operations import PublicOperationExecutor, TestDataRuntime
-from .support import plan_for
+from .support import items, plan_for
 
 
 _ACTORS = CapabilityDefinition(
@@ -44,11 +54,29 @@ _RELATIONSHIP = CapabilityDefinition(
         "user.persona_relationship.UnfollowUser",
     ),
 )
+_FOLLOWING_SUBJECTS = CapabilityDefinition(
+    capability=USER_FOLLOWING_SUBJECTS,
+    operations=(
+        "user.subject_follow.FollowSubject",
+        "user.following_subject.ListFollowingSubjects",
+        "user.subject_follow.UnfollowSubject",
+    ),
+)
+_GREETING_INBOX = CapabilityDefinition(
+    capability=GREETING_INBOX,
+    operations=(
+        "user.greeting_request.SendGreetingRequest",
+        "user.greeting_request.ListGreetingInbox",
+        "user.greeting_request.IgnoreGreetingRequest",
+    ),
+)
+# SubjectFollowTargetKind 闭集中 release homepage 对应的 canonical 值。
+_HOMEPAGE_SUBJECT_TYPE = "homepage"
 
 
 class UserAcceptanceDataProvider:
     def describe(self) -> tuple[CapabilityDefinition, ...]:
-        return (_ACTORS, _RELATIONSHIP)
+        return (_ACTORS, _RELATIONSHIP, _FOLLOWING_SUBJECTS, _GREETING_INBOX)
 
     def plan(
         self,
@@ -56,7 +84,14 @@ class UserAcceptanceDataProvider:
         request: CapabilityRequest[Any, Any],
         resolved_params: object,
     ) -> ProviderPlan:
-        definition = _ACTORS if request.capability == AUTHENTICATED_ACTORS else _RELATIONSHIP
+        if request.capability == AUTHENTICATED_ACTORS:
+            definition = _ACTORS
+        elif request.capability == USER_FOLLOWING_SUBJECTS:
+            definition = _FOLLOWING_SUBJECTS
+        elif request.capability == GREETING_INBOX:
+            definition = _GREETING_INBOX
+        else:
+            definition = _RELATIONSHIP
         return plan_for(definition, request, resolved_params)
 
     def provision(
@@ -89,7 +124,11 @@ class UserAcceptanceDataProvider:
                         ),
                         session_handle=str(uuid.uuid4()),
                     )
-                    runtime.register_actor(handle, actor)
+                    runtime.register_actor(
+                        handle,
+                        actor,
+                        test_data_instance_id=context.test_data_instance_id,
+                    )
                     handles.append(handle)
                     for operation_id, step_id in (
                         (
@@ -143,6 +182,10 @@ class UserAcceptanceDataProvider:
                 cleanup_handle=tuple(handle.account for handle in handles),
                 operation_count=2 * len(handles),
             )
+        if isinstance(plan.resolved_params, FollowingSubjectsParams):
+            return self._provision_following_subject(context, plan.resolved_params)
+        if isinstance(plan.resolved_params, GreetingInboxParams):
+            return self._provision_greeting_inbox(context, plan.resolved_params)
         if not isinstance(plan.resolved_params, RelationshipParams):
             raise TypeError("User Provider received invalid resolved params")
         params = plan.resolved_params
@@ -179,11 +222,135 @@ class UserAcceptanceDataProvider:
             operation_count=executor.operation_count,
         )
 
+    def _provision_following_subject(
+        self,
+        context: TestDataContext,
+        params: FollowingSubjectsParams,
+    ) -> ProvisionedCapability:
+        if not isinstance(params.release, ImmutableReleaseHandle):
+            raise TypeError("release dependency was not resolved")
+        if not isinstance(params.actors, AcceptanceActorSet):
+            raise TypeError("actors dependency was not resolved")
+        follower = params.actors.require(params.follower_role)
+        subject = params.release.homepages[0]
+        executor = _executor(context, USER_FOLLOWING_SUBJECTS.key.value)
+        executor.call(
+            "user.subject_follow.FollowSubject",
+            actor=follower,
+            step_id="follow-subject",
+            bindings={
+                "subjectType": _HOMEPAGE_SUBJECT_TYPE,
+                "subjectId": subject.object_id,
+            },
+            body={"source": "homepage_detail"},
+        )
+        return ProvisionedCapability(
+            value=FollowingSubjectsResult(
+                subject=subject,
+                subject_type=_HOMEPAGE_SUBJECT_TYPE,
+                follower_role=params.follower_role,
+            ),
+            cleanup_handle=(subject,),
+            cleanup_context=follower,
+            operation_count=executor.operation_count,
+        )
+
+    def _provision_greeting_inbox(
+        self,
+        context: TestDataContext,
+        params: GreetingInboxParams,
+    ) -> ProvisionedCapability:
+        if not isinstance(params.actors, AcceptanceActorSet):
+            raise TypeError("actors dependency was not resolved")
+        sender = params.actors.require(params.sender_role)
+        receiver = params.actors.require(params.receiver_role)
+        executor = _executor(context, GREETING_INBOX.key.value)
+        created = executor.call(
+            "user.greeting_request.SendGreetingRequest",
+            actor=sender,
+            step_id="send-greeting-request",
+            body={
+                "targetPersonaId": receiver.persona.object_id,
+                "requestMessage": params.request_message,
+                "source": "profile",
+            },
+        )
+        greeting_id = str(
+            created.get("id") or created.get("requestId") or ""
+        ).strip()
+        if not greeting_id:
+            raise RuntimeError("greeting request response misses required identity")
+        return ProvisionedCapability(
+            value=GreetingInboxResult(
+                greeting=BusinessObjectRef("GreetingRequest", greeting_id),
+                sender_persona=sender.persona,
+                sender_role=params.sender_role,
+                receiver_role=params.receiver_role,
+            ),
+            cleanup_handle=(BusinessObjectRef("GreetingRequest", greeting_id),),
+            cleanup_context=params,
+            operation_count=executor.operation_count,
+        )
+
     def readback(
         self,
         context: TestDataContext,
         provisioned: ProvisionedCapability,
     ) -> ReadbackResult:
+        if isinstance(provisioned.value, GreetingInboxResult):
+            params = provisioned.cleanup_context
+            if not isinstance(params, GreetingInboxParams) or not isinstance(
+                params.actors,
+                AcceptanceActorSet,
+            ):
+                return ReadbackResult(passed=False)
+            receiver = params.actors.require(params.receiver_role)
+            executor = _executor(context, GREETING_INBOX.key.value + ".readback")
+            listed = executor.call(
+                "user.greeting_request.ListGreetingInbox",
+                actor=receiver,
+                step_id="list-greeting-inbox",
+                query={"limit": 50, "status": "pending"},
+            )
+            observed = {
+                (
+                    str(item.get("id") or "").strip(),
+                    str(item.get("requesterPersonaId") or "").strip(),
+                )
+                for item in items(listed)
+            }
+            expected = (
+                provisioned.value.greeting.object_id,
+                provisioned.value.sender_persona.object_id,
+            )
+            return ReadbackResult(
+                passed=expected in observed,
+                operation_count=executor.operation_count,
+                details={"inboxCount": len(observed)},
+            )
+        if isinstance(provisioned.value, FollowingSubjectsResult):
+            executor = _executor(
+                context,
+                USER_FOLLOWING_SUBJECTS.key.value + ".readback",
+            )
+            listed = executor.call(
+                "user.following_subject.ListFollowingSubjects",
+                actor=provisioned.cleanup_context,
+                step_id="list-following-subjects",
+                query={
+                    "limit": 50,
+                    "subjectType": provisioned.value.subject_type,
+                },
+            )
+            observed = {
+                str(item.get("subjectId") or "").strip()
+                for item in items(listed)
+            }
+            return ReadbackResult(
+                passed=provisioned.value.subject.object_id in observed,
+                operation_count=executor.operation_count,
+                details={"followingSubjectCount": len(observed)},
+            )
         if isinstance(provisioned.value, AcceptanceActorSet):
             executor = _executor(context, AUTHENTICATED_ACTORS.key.value + ".readback")
             observed = 0
@@ -245,6 +412,45 @@ class UserAcceptanceDataProvider:
         context: TestDataContext,
         provisioned: ProvisionedCapability,
     ) -> CleanupResult:
+        if isinstance(provisioned.value, GreetingInboxResult):
+            params = provisioned.cleanup_context
+            if not isinstance(params, GreetingInboxParams) or not isinstance(
+                params.actors,
+                AcceptanceActorSet,
+            ):
+                return CleanupResult(state="quarantined")
+            receiver = params.actors.require(params.receiver_role)
+            executor = _executor(context, GREETING_INBOX.key.value + ".cleanup")
+            # 契约上 decline 对应 IgnoreGreetingRequest（终态 ignored）；
+            # ReplyGreetingRequest 是接受语义，会创建正式会话副作用。
+            executor.call(
+                "user.greeting_request.IgnoreGreetingRequest",
+                actor=receiver,
+                step_id="ignore-greeting-request",
+                bindings={"requestId": provisioned.value.greeting.object_id},
+            )
+            return CleanupResult(
+                state="released",
+                operation_count=executor.operation_count,
+            )
+        if isinstance(provisioned.value, FollowingSubjectsResult):
+            executor = _executor(
+                context,
+                USER_FOLLOWING_SUBJECTS.key.value + ".cleanup",
+            )
+            executor.call(
+                "user.subject_follow.UnfollowSubject",
+                actor=provisioned.cleanup_context,
+                step_id="unfollow-subject",
+                bindings={
+                    "subjectType": provisioned.value.subject_type,
+                    "subjectId": provisioned.value.subject.object_id,
+                },
+            )
+            return CleanupResult(
+                state="released",
+                operation_count=executor.operation_count,
+            )
         if isinstance(provisioned.cleanup_context, RelationshipParams):
             params = provisioned.cleanup_context
             actors = params.actors

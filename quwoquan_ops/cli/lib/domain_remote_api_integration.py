@@ -43,6 +43,11 @@ FORBIDDEN_SOURCE_PATTERNS = {
     "raw package:http": re.compile(r"package:http/"),
     "raw HttpClient": re.compile(r"\bHttpClient\b"),
 }
+FORBIDDEN_TEST_ONLY_PATTERNS = {
+    "direct adapter import": re.compile(r"/adapters/[^']+\.dart'"),
+    "platform environment": re.compile(r"\bPlatform\.environment\b"),
+}
+TYPED_ENVIRONMENT_RESOLVER = "api_contract_environment.dart"
 
 
 @dataclass(frozen=True)
@@ -87,6 +92,32 @@ def _graph_document(root: Path) -> dict[str, Any]:
 def discover_cases(root: Path) -> tuple[list[DomainRemoteApiCase], list[str]]:
     """Select governed App API cases from ContractGraph readiness evidence."""
 
+    return _discover_cases(root, required_test_paths=None)
+
+
+def discover_selected_cases(
+    root: Path,
+    test_paths: tuple[str, ...],
+) -> tuple[list[DomainRemoteApiCase], list[str]]:
+    """Select exact ContractGraph-owned App API cases for a focused run."""
+
+    normalized = tuple(sorted({path.strip() for path in test_paths if path.strip()}))
+    if not normalized:
+        return [], ["focused App API integration requires at least one test path"]
+    cases, issues = _discover_cases(root, required_test_paths=set(normalized))
+    discovered_paths = {case.test_path for case in cases}
+    for missing in sorted(set(normalized) - discovered_paths):
+        issues.append(
+            f"focused App API integration path is not owned by ContractGraph: {missing}"
+        )
+    return cases, issues
+
+
+def _discover_cases(
+    root: Path,
+    *,
+    required_test_paths: set[str] | None,
+) -> tuple[list[DomainRemoteApiCase], list[str]]:
     document = _graph_document(root)
     cases: list[DomainRemoteApiCase] = []
     issues: list[str] = []
@@ -96,7 +127,7 @@ def discover_cases(root: Path) -> tuple[list[DomainRemoteApiCase], list[str]]:
             continue
         object_id = str(item.get("objectId") or "")
         domain = object_id.partition(".")[0]
-        if domain not in GOVERNED_DOMAINS:
+        if required_test_paths is None and domain not in GOVERNED_DOMAINS:
             continue
         app = item.get("app") if isinstance(item.get("app"), dict) else {}
         service = item.get("service") if isinstance(item.get("service"), dict) else {}
@@ -108,6 +139,11 @@ def discover_cases(root: Path) -> tuple[list[DomainRemoteApiCase], list[str]]:
             if not isinstance(evidence, dict):
                 continue
             test_path = str(evidence.get("path") or "")
+            if (
+                required_test_paths is not None
+                and test_path not in required_test_paths
+            ):
+                continue
             if not (
                 test_path.startswith(APP_API_TEST_PREFIX)
                 and test_path.endswith(APP_API_TEST_SUFFIX)
@@ -159,6 +195,8 @@ def _resolve_harness(test_path: Path, source: str) -> Path | None:
 def validate_cases(
     root: Path,
     cases: list[DomainRemoteApiCase],
+    *,
+    required_domains: tuple[str, ...] = GOVERNED_DOMAINS,
 ) -> tuple[list[DomainRemoteApiCase], list[str]]:
     """Validate generated-client, production-Remote, and no-substitute boundaries."""
 
@@ -177,6 +215,9 @@ def validate_cases(
         if SPEC_REF.search(source) is None:
             issues.append(f"{case.domain}: test lacks stable spec_ref: {case.test_path}")
         for label, pattern in FORBIDDEN_SOURCE_PATTERNS.items():
+            if pattern.search(source):
+                issues.append(f"{case.domain}: {label} is forbidden: {case.test_path}")
+        for label, pattern in FORBIDDEN_TEST_ONLY_PATTERNS.items():
             if pattern.search(source):
                 issues.append(f"{case.domain}: {label} is forbidden: {case.test_path}")
         harness_path = _resolve_harness(test_path, source)
@@ -201,12 +242,17 @@ def validate_cases(
                 f"{harness_path.name}: {case.test_path}"
             )
         harness_source = harness_path.read_text(encoding="utf-8")
-        required_tokens = (
-            "buildGeneratedCloudOperationClient",
-            "API_CONTRACT_BASE_URL",
-            "CloudRuntimeEnvironment(",
-            "defaultValue: 'gamma'",
-        )
+        required_tokens = ["buildGeneratedCloudOperationClient"]
+        if TYPED_ENVIRONMENT_RESOLVER in harness_source:
+            required_tokens.append("ApiContractEnvironment.resolve()")
+        else:
+            required_tokens.extend(
+                (
+                    "API_CONTRACT_BASE_URL",
+                    "CloudRuntimeEnvironment(",
+                    "defaultValue: 'gamma'",
+                )
+            )
         for token in required_tokens:
             if token not in harness_source:
                 issues.append(
@@ -240,7 +286,7 @@ def validate_cases(
             )
         )
 
-    for domain in GOVERNED_DOMAINS:
+    for domain in required_domains:
         domain_cases = [case for case in cases if case.domain == domain]
         if not domain_cases:
             issues.append(

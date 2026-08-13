@@ -475,6 +475,62 @@ class StackctlDevSessionResumeComposeTest(StackctlDevSessionTestBase):
                 str((root / "service").resolve()),
             )
 
+    def test_mutable_compose_execution_copy_resolves_relative_bind_sources(self) -> None:
+        with tempfile.TemporaryDirectory(dir=stackctl.output_root()) as temporary:
+            root = Path(temporary)
+            source_dir = root / "service/deploy"
+            source_dir.mkdir(parents=True)
+            policy = root / "ops/policy.yaml"
+            policy.parent.mkdir(parents=True)
+            policy.write_text("schema: test\n", encoding="utf-8")
+            source = source_dir / "compose.yaml"
+            source.write_text(
+                "services:\n"
+                "  product-ops-service:\n"
+                "    volumes:\n"
+                "      - ../../ops/policy.yaml:/etc/qwq/policy.yaml:ro\n",
+                encoding="utf-8",
+            )
+
+            with mock.patch.object(stackctl, "ROOT", root):
+                outputs = stackctl._dev_session_materialize_compose_files(
+                    [source],
+                    destination_root=root / "rendered",
+                )
+
+            payload = json.loads(outputs[0].read_text(encoding="utf-8"))
+            self.assertEqual(
+                payload["services"]["product-ops-service"]["volumes"],
+                [f"{policy.resolve()}:/etc/qwq/policy.yaml:ro"],
+            )
+
+    def test_product_ops_policy_bind_resolves_from_canonical_source(self) -> None:
+        source = (
+            stackctl.ROOT
+            / "quwoquan_service/services/product-ops-service/deploy/compose.yaml"
+        )
+        expected = (
+            stackctl.ROOT
+            / "quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml"
+        ).resolve()
+        base = (
+            stackctl.ROOT
+            / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+        )
+        with tempfile.TemporaryDirectory(dir=stackctl.output_root()) as temporary:
+            outputs = stackctl._dev_session_materialize_compose_files(
+                [base, source],
+                destination_root=Path(temporary) / "rendered",
+            )
+
+            payload = json.loads(outputs[1].read_text(encoding="utf-8"))
+
+        volumes = payload["services"]["product-ops-service"]["volumes"]
+        self.assertIn(
+            f"{expected}:/etc/qwq/observability/product_telemetry_alerts.yaml:ro",
+            volumes,
+        )
+
     def test_mutable_runtime_dependencies_exist_only_in_execution_copies(self) -> None:
         with tempfile.TemporaryDirectory(dir=stackctl.output_root()) as temporary:
             root = Path(temporary)

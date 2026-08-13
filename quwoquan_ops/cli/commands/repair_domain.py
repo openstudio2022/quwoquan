@@ -600,7 +600,7 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
         "--expected-outbox-repair-count",
         type=int,
         default=-1,
-        help="Exact legacy payload count expected in this replay transaction.",
+        help="Exact release-scoped payload count expected in this replay transaction.",
     )
     repair_parser.add_argument(
         "--confirm-orphaned-process-reclaim",

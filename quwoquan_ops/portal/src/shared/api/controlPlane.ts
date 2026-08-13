@@ -1235,6 +1235,106 @@ export async function rollbackPremiumPoolEntry(contentId: string): Promise<Premi
   );
 }
 
+export interface ExperimentVariant {
+  key: string;
+  allocationBasisPoints: number;
+}
+
+export interface ExperimentCatalogItem {
+  id: string;
+  key: string;
+  status: string;
+  experimentRevision: number;
+  variants: ExperimentVariant[];
+  variantStats: Record<string, number>;
+  assignedSubjects: number;
+}
+
+export async function fetchExperiments(): Promise<ExperimentCatalogItem[]> {
+  const payload = await fetchJSON<{ items: ExperimentCatalogItem[] }>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    productControlPlaneOperationPath('ListExperiments'),
+  );
+  return payload.items;
+}
+
+// rollout 为版本前置的原子重分配：expectedVersion 经 If-Match 承载，
+// 权重总和必须精确为 10000 且至少一个变体为正（服务端强校验）。
+export async function updateExperimentRollout(payload: {
+  experimentId: string;
+  expectedVersion: number;
+  status: string;
+  variants: ExperimentVariant[];
+}): Promise<ExperimentCatalogItem> {
+  const path = productControlPlaneOperationPath('UpdateExperimentRollout')
+    .replace('{experimentId}', encodeURIComponent(payload.experimentId));
+  return mutateJSON<ExperimentCatalogItem>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    'POST',
+    path,
+    { status: payload.status, variants: payload.variants },
+    {
+      'If-Match': String(payload.expectedVersion),
+      'Idempotency-Key':
+        `portal-experiment-rollout-${payload.experimentId}-${payload.expectedVersion}`,
+    },
+  );
+}
+
+export interface AccountEnforcementCaseView {
+  caseId: string;
+  caseKind: string;
+  status: string;
+  version: number;
+  approvalCount: number;
+  decisionId?: string;
+  deliveryStatus?: string;
+  updatedAt: string;
+}
+
+export async function fetchAccountEnforcementCase(
+  caseId: string,
+): Promise<AccountEnforcementCaseView> {
+  const path = productControlPlaneOperationPath('GetAccountEnforcementCase')
+    .replace('{caseId}', encodeURIComponent(caseId));
+  return fetchJSON<AccountEnforcementCaseView>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    path,
+  );
+}
+
+// review 为双签高危处置：不同 principal 各自 approve 后才生成处置决定，
+// 幂等键绑定 case 与 verdict，重复提交回放而不重复计票。
+export async function reviewAccountEnforcementCase(
+  caseId: string,
+  verdict: 'approve' | 'reject',
+): Promise<AccountEnforcementCaseView> {
+  const path = productControlPlaneOperationPath('ReviewAccountEnforcementCase')
+    .replace('{caseId}', encodeURIComponent(caseId));
+  return mutateJSON<AccountEnforcementCaseView>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    'POST',
+    path,
+    { verdict },
+    { 'Idempotency-Key': `portal-enforcement-review-${caseId}-${verdict}` },
+  );
+}
+
+export async function retryAccountEnforcementDelivery(
+  caseId: string,
+): Promise<AccountEnforcementCaseView> {
+  const path = productControlPlaneOperationPath('RetryAccountEnforcementDelivery')
+    .replace('{caseId}', encodeURIComponent(caseId));
+  // retry-delivery 契约要求空 body（服务端 requireEmptyBody 强校验）。
+  return mutateJSON<AccountEnforcementCaseView>(
+    envBaseUrl('VITE_PRODUCT_OPS_BASE_URL'),
+    'POST',
+    path,
+    undefined,
+    { 'Idempotency-Key': `portal-enforcement-retry-${caseId}` },
+  );
+}
+
 // takedown 为双签高危动作：单 principal 调用会返回 pending approval 状态，
 // 第二个不同 principal 复核后才真正弹出条目。
 export async function takedownPremiumPoolEntry(contentId: string): Promise<PremiumPoolMutationResponse> {
@@ -1358,6 +1458,15 @@ export interface GrowthDailyItem {
   updatedAt?: string;
 }
 
+export interface GrowthFunnelSegment {
+  sourceTrack: string;
+  consumedActors: number;
+  publishedActors: number;
+  returnedActors: number;
+  exposedActors: number | null;
+  exposedNote?: string;
+}
+
 export interface GrowthOverviewResponse {
   days: GrowthDailyItem[];
   todayPv: number;
@@ -1366,6 +1475,7 @@ export interface GrowthOverviewResponse {
   mau: number;
   d1RetentionPercent: number;
   d7RetentionPercent: number;
+  funnel: GrowthFunnelSegment;
   source: string;
   generatedAt: string;
 }

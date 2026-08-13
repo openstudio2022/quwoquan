@@ -1,0 +1,155 @@
+{
+  "title": "L3 — 对象投影与事实链健康",
+  "uid": "qwq-l3-projection-facts",
+  "tags": [
+    "quwoquan",
+    "l3",
+    "projection"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "description": "各对象契约 runtime_entrypoints[].telemetry.metric 的真实入口计数（投影 apply、事实 append、订阅 ingest、边缘决策）；指标名与 operations.yaml 声明同源，emit 缺失由 verify_metric_emitter_existence 与 verify_object_alert_coverage 双向把关。",
+  "panels": [
+    {
+      "title": "投影 apply 吞吐（outcome）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(circle_search_item_projection[5m])) by (outcome)",
+          "legendFormat": "circle_search_item {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(entity_homepage_search_item_projection[5m])) by (outcome)",
+          "legendFormat": "entity_homepage_search_item {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(tag_object_tag_index_projection[5m])) by (outcome)",
+          "legendFormat": "tag_object_tag_index {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(user_creator_runtime_profile_projection[5m])) by (outcome)",
+          "legendFormat": "user_creator_profile {{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "候选索引投影（consumer × outcome）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(recommendation_candidate_index_projection[5m])) by (consumer, outcome)",
+          "legendFormat": "{{ consumer }} {{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "事实 append 吞吐（outcome）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(content_deleted_post_tombstone_append[5m])) by (outcome)",
+          "legendFormat": "deleted_post_tombstone {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(content_feed_delivery_page_append[5m])) by (outcome)",
+          "legendFormat": "feed_delivery_page {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(search_recommendation_signal_append[5m])) by (outcome)",
+          "legendFormat": "search_signal {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(integration_external_interaction_attempt_append[5m])) by (outcome)",
+          "legendFormat": "external_attempt {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(integration_external_interaction_dead_letter_append[5m])) by (outcome)",
+          "legendFormat": "external_dead_letter {{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "订阅 ingest 吞吐（outcome）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(recommendation_exposure_ingest[5m])) by (outcome)",
+          "legendFormat": "exposure {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(recommendation_feedback_ingest[5m])) by (outcome)",
+          "legendFormat": "feedback {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(recommendation_subject_closure_ingest[5m])) by (outcome)",
+          "legendFormat": "subject_closure {{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "能力解析与推送投递（outcome）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(integration_capability_grant_resolve[5m])) by (outcome)",
+          "legendFormat": "capability_grant {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(integration_push_delivery_provider_invoke[5m])) by (outcome)",
+          "legendFormat": "push_delivery {{ outcome }}"
+        }
+      ]
+    },
+    {
+      "title": "边缘灰度决策（stage × target × reason）",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "description": "api-edge 生产灰度按有界标签归因的路由决策；evaluation_failure/assignment_store_failure 是灰度基础设施故障信号。",
+      "targets": [
+        {
+          "expr": "sum(rate(api_edge_rollout_decisions_total[5m])) by (stage, target)",
+          "legendFormat": "{{ stage }} → {{ target }}"
+        },
+        {
+          "expr": "sum(rate(api_edge_rollout_decisions_total{reason=~\"evaluation_failure|assignment_store_failure\"}[5m])) by (reason)",
+          "legendFormat": "故障 {{ reason }}"
+        }
+      ]
+    }
+  ]
+}

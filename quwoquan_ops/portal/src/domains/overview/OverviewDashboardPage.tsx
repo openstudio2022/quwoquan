@@ -5,6 +5,7 @@ import { Activity, AlertTriangle, ShieldCheck, Sparkles } from 'lucide-react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import {
+  fetchExperiments,
   fetchGrowthOverview,
   fetchPlatformAudits,
   fetchProductEventDrilldown,
@@ -14,6 +15,7 @@ import {
   fetchProductWorkflows,
   fetchRecommendationBehaviorMetrics,
   fetchReleases,
+  type ExperimentCatalogItem,
   type GrowthOverviewResponse,
   type PlatformAuditItem,
   type ProductEventDrilldownItem,
@@ -40,6 +42,7 @@ export function OverviewDashboardPage() {
   const [behaviorMetrics, setBehaviorMetrics] = useState<RecommendationBehaviorMetrics | null>(null);
   const [drilldownItems, setDrilldownItems] = useState<ProductEventDrilldownItem[]>([]);
   const [l1l4Metrics, setL1l4Metrics] = useState<ProductMetricItem[]>([]);
+  const [experiments, setExperiments] = useState<ExperimentCatalogItem[]>([]);
   const [growth, setGrowth] = useState<GrowthOverviewResponse | null>(null);
   const [growthError, setGrowthError] = useState<RuntimeError | null>(null);
   const [remoteReady, setRemoteReady] = useState(false);
@@ -63,8 +66,9 @@ export function OverviewDashboardPage() {
       fetchRecommendationBehaviorMetrics(),
       fetchProductEventDrilldown({ from: rawFrom, to: rawTo, limit: 6 }),
       fetchProductL1L4Metrics({}),
+      fetchExperiments(),
     ])
-      .then(([auditItems, workflowItems, releaseItems, summaryItem, pageAccessItem, businessItem, qoeItem, behaviorItem, drilldown, l1l4Payload]) => {
+      .then(([auditItems, workflowItems, releaseItems, summaryItem, pageAccessItem, businessItem, qoeItem, behaviorItem, drilldown, l1l4Payload, experimentItems]) => {
         setAudits(auditItems);
         setWorkflows(workflowItems);
         setReleases(releaseItems);
@@ -75,6 +79,7 @@ export function OverviewDashboardPage() {
         setBehaviorMetrics(behaviorItem);
         setDrilldownItems(drilldown.items);
         setL1l4Metrics(l1l4Payload.items);
+        setExperiments(experimentItems);
         setRemoteReady(true);
         setRuntimeError(null);
       })
@@ -102,15 +107,14 @@ export function OverviewDashboardPage() {
       })),
     [workflows],
   );
-  const moderationTrend = useMemo(
-    () => [
-      {
-        day: 'now',
-        created: workflows.length,
-        resolved: workflows.filter((item) => ['closed', 'completed', 'active', 'approved', 'recovered'].includes(item.state)).length,
-        slaRisk: summary?.pendingDualReview ?? 0,
-      },
-    ],
+  // 控制面工作流只有当前快照没有历史时序，诚实呈现为状态计数，
+  // 禁止用单点数据伪装趋势图。
+  const moderationSnapshot = useMemo(
+    () => ({
+      open: workflows.length,
+      resolved: workflows.filter((item) => ['closed', 'completed', 'active', 'approved', 'recovered'].includes(item.state)).length,
+      slaRisk: summary?.pendingDualReview ?? 0,
+    }),
     [summary?.pendingDualReview, workflows],
   );
   const candidateAckRows = useMemo(
@@ -196,11 +200,11 @@ export function OverviewDashboardPage() {
         />
         <KpiCard
           label="运行中实验"
-          value={remoteReady ? String(workflows.filter((item) => item.objectType === 'experiment').length) : '—'}
+          value={remoteReady ? String(experiments.filter((item) => item.status === 'running').length) : '—'}
           icon={<Sparkles size={20} color="#2563EB" />}
-          trendLabel="来自真实工作流"
+          trendLabel={remoteReady ? `实验目录共 ${experiments.length} 个` : '等待实验目录'}
           trendTone="positive"
-          description="覆盖发现页 IA、推荐扶持和召回策略。"
+          description="来自 ListExperiments 实验目录的真实运行状态。"
         />
         <KpiCard
           label="页面访问事件"
@@ -216,7 +220,7 @@ export function OverviewDashboardPage() {
           icon={<Activity size={20} color="#16A34A" />}
           trendLabel="跨迟到增量合并 HLL"
           trendTone="positive"
-          description="会话数由无身份 HyperLogLog 草图合并计算，不直接累加分片 UV。"
+          description="去重会话数由无身份 HyperLogLog 草图合并计算，不直接累加分片计数。"
         />
         <KpiCard
           label="SLA 风险队列"
@@ -317,22 +321,64 @@ export function OverviewDashboardPage() {
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        <div className="stack-list" style={{ marginTop: 16 }}>
+          <div className="policy-item">
+            <div>
+              <p className="item-title">今日跨轨漏斗（产品轨段，actor 去重）</p>
+              <p className="item-subtitle">
+                曝光段属行为归因轨：{growth?.funnel?.exposedActors == null
+                  ? '归因端点扩展前显式不可用，不做跨轨换算'
+                  : `exposed=${growth.funnel.exposedActors}`}
+              </p>
+            </div>
+            <div className="badge-row">
+              <span className="badge badge--neutral">
+                曝光 {growth?.funnel?.exposedActors ?? '不可用'}
+              </span>
+              <span className="badge badge--neutral">
+                消费 {growth ? growth.funnel.consumedActors : '—'}
+              </span>
+              <span className="badge badge--neutral">
+                发布 {growth ? growth.funnel.publishedActors : '—'}
+              </span>
+              <span className="badge badge--neutral">
+                回访 {growth ? growth.funnel.returnedActors : '—'}
+              </span>
+              <span className="badge badge--success">
+                track={growth?.funnel?.sourceTrack ?? '—'}
+              </span>
+            </div>
+          </div>
+        </div>
       </SectionCard>
 
       <div className="section-grid section-grid--two">
-        <SectionCard title="治理负载与处理趋势" subtitle="当前控制面闭合窗口的创建量、解决量和 SLA 风险">
-          <div style={{ width: '100%', height: 320 }}>
-            <ResponsiveContainer>
-              <AreaChart data={moderationTrend}>
-                <CartesianGrid stroke="rgba(17, 24, 39, 0.08)" />
-                <XAxis dataKey="day" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
-                <Tooltip />
-                <Area type="monotone" dataKey="created" stackId="1" stroke="#2563EB" fill="rgba(37, 99, 235, 0.18)" />
-                <Area type="monotone" dataKey="resolved" stackId="2" stroke="#16A34A" fill="rgba(22, 163, 74, 0.18)" />
-                <Area type="monotone" dataKey="slaRisk" stackId="3" stroke="#F59E0B" fill="rgba(245, 158, 11, 0.18)" />
-              </AreaChart>
-            </ResponsiveContainer>
+        <SectionCard title="治理负载快照" subtitle="控制面工作流当前状态计数（快照无历史时序，趋势请看审计流水）">
+          <div className="section-grid section-grid--cards">
+            <KpiCard
+              label="在办工作流"
+              value={remoteReady ? String(moderationSnapshot.open) : '—'}
+              icon={<ShieldCheck size={20} color="#2563EB" />}
+              trendLabel="全部治理/申诉/恢复对象"
+              trendTone="warning"
+              description="控制面工作流当前快照总数。"
+            />
+            <KpiCard
+              label="已闭合"
+              value={remoteReady ? String(moderationSnapshot.resolved) : '—'}
+              icon={<Activity size={20} color="#16A34A" />}
+              trendLabel="closed/completed/approved 等终态"
+              trendTone="positive"
+              description="已进入终态的工作流数量。"
+            />
+            <KpiCard
+              label="SLA 风险（需双签）"
+              value={remoteReady ? String(moderationSnapshot.slaRisk) : '—'}
+              icon={<AlertTriangle size={20} color="#F59E0B" />}
+              trendLabel="来自投影 pendingDualReview"
+              trendTone="warning"
+              description="等待双签复核的治理对象。"
+            />
           </div>
         </SectionCard>
 
@@ -422,19 +468,19 @@ export function OverviewDashboardPage() {
       </div>
 
       <SectionCard
-        title="运营基本盘：PV / 会话 UV / 漏斗 / 页面使用强度"
-        subtitle="24 小时闭合窗口；PV、UV、漏斗与轻量页面热力均来自统一事件事实源"
+        title="运营基本盘：PV / 去重会话 / 漏斗 / 页面使用强度"
+        subtitle="24 小时闭合窗口；PV（page_open）、去重会话数、漏斗与轻量页面热力均来自统一事件事实源"
       >
         <div className="section-grid section-grid--two">
           <div>
-            <h3 className="item-title">PV / 会话 UV / QoE</h3>
+            <h3 className="item-title">PV / 去重会话 / QoE</h3>
             <div className="stack-list">
               <div className="case-item">
                 <span>page_open PV</span>
                 <strong>{pageAccessSummary ? pageAccessSummary.totalCount : '—'}</strong>
               </div>
               <div className="case-item">
-                <span>session UV</span>
+                <span>去重会话数</span>
                 <strong>{pageAccessSummary ? pageAccessSummary.sessionCount : '—'}</strong>
               </div>
               <div className="case-item">

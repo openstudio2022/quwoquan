@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -77,6 +78,58 @@ LOCAL_TLS_PROFILE_BY_TARGET = {
     "prod-sim": "acme-dns01-sim",
 }
 PROD_TLS_PROFILE = "public-ca-prod"
+
+
+@dataclass(frozen=True)
+class EnvironmentTargetBase:
+    environment: str
+    target: str
+    api_base: str
+
+
+def resolve_environment_target_base(
+    manifest: dict[str, Any],
+    environment: str,
+    *,
+    target_name: str | None = None,
+) -> EnvironmentTargetBase:
+    """Resolve the canonical environment target and its public API base."""
+
+    canonical_target = ENVIRONMENT_CANONICAL_TARGET.get(environment)
+    if canonical_target is None:
+        raise ValueError(f"unsupported environment: {environment}")
+    resolved_target = target_name or canonical_target
+    if resolved_target != canonical_target:
+        raise ValueError(
+            f"{environment} API integration requires canonical target "
+            f"{canonical_target}, got {resolved_target}"
+        )
+    target = get_target(manifest, resolved_target)
+    if str(target.get("env") or "") != environment:
+        raise ValueError(
+            f"{resolved_target} environment identity does not match {environment}"
+        )
+    public_bases = target.get("publicBases")
+    if not isinstance(public_bases, dict):
+        raise ValueError(f"{resolved_target} publicBases are unavailable")
+    api_base = str(public_bases.get("api") or "").strip().rstrip("/")
+    parsed = urlparse(api_base)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(
+            f"{resolved_target} publicBases.api must be canonical HTTPS"
+        )
+    return EnvironmentTargetBase(
+        environment=environment,
+        target=resolved_target,
+        api_base=api_base,
+    )
 
 
 def load_environment_topology(path: Path | None = None) -> dict[str, Any]:

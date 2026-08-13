@@ -119,6 +119,10 @@ run_static_check() {
     verify-app-mock-isolation) make verify-app-mock-isolation ;;
     verify-app-cloud-package-boundaries) make verify-app-cloud-package-boundaries ;;
     verify-app-login-entry-loop) make verify-app-login-entry-loop-contract ;;
+    verify-app-enum-typed-binding) make verify-app-enum-typed-binding ;;
+    verify-app-assistant-search-weak-typing-ratchet)
+      make verify-app-assistant-search-weak-typing-ratchet
+      ;;
     metadata_contract) bash quwoquan_service/scripts/verify/contract_graph/verify_contract_metadata.sh ;;
     commercial_contract) make verify-commercial-contract-generation ;;
     pageflip_backward_mainline) make verify-app-pageflip-back-mainline ;;

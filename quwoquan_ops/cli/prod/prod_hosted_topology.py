@@ -154,10 +154,10 @@ def _host_specs(access: dict[str, Any]) -> dict[str, dict[str, Any]]:
     )
     if default_host_id not in hosts:
         raise ProdHostedTopologyError("management.defaultHostId is unknown")
-    legacy_host = str(management.get("sshHost") or "").strip()
-    if legacy_host and legacy_host != hosts[default_host_id]["sshHost"]:
+    management_host = str(management.get("sshHost") or "").strip()
+    if management_host and management_host != hosts[default_host_id]["sshHost"]:
         raise ProdHostedTopologyError(
-            "management.sshHost must match the default host during compatibility transition"
+            "management.sshHost must match the default management host"
         )
     return hosts
 

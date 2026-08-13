@@ -142,15 +142,15 @@ def _atomic_write_fingerprint(path: Path, encoded: bytes) -> None:
         absolute,
         create=True,
     )
-    legacy_temporary = f".{absolute.name}.tmp"
+    predictable_temporary = f".{absolute.name}.tmp"
     temporary = f".{absolute.name}.{uuid4().hex}.tmp"
     descriptor = -1
     temporary_exists = False
     expected_identity: tuple[int, int] | None = None
     try:
-        if _fingerprint_entry_info(parent_descriptor, legacy_temporary) is not None:
+        if _fingerprint_entry_info(parent_descriptor, predictable_temporary) is not None:
             raise _UnsafeFingerprintPath(
-                "package fingerprint legacy temporary path is occupied"
+                "package fingerprint predictable temporary path is occupied"
             )
         current = _fingerprint_entry_info(parent_descriptor, absolute.name)
         if current is not None and not stat.S_ISREG(current.st_mode):
@@ -181,9 +181,9 @@ def _atomic_write_fingerprint(path: Path, encoded: bytes) -> None:
         descriptor = -1
 
         _revalidate_fingerprint_parent(absolute, expected=identities)
-        if _fingerprint_entry_info(parent_descriptor, legacy_temporary) is not None:
+        if _fingerprint_entry_info(parent_descriptor, predictable_temporary) is not None:
             raise _UnsafeFingerprintPath(
-                "package fingerprint legacy temporary path is occupied"
+                "package fingerprint predictable temporary path is occupied"
             )
         current = _fingerprint_entry_info(parent_descriptor, absolute.name)
         if current is not None and not stat.S_ISREG(current.st_mode):

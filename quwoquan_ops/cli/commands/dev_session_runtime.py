@@ -507,6 +507,57 @@ def _dev_session_materialize_compose_files(
                 raise ValueError(
                     f"mutable Compose service must be an object: {source}:{service_name}"
                 )
+            volumes = service.get("volumes")
+            if volumes is not None:
+                if not isinstance(volumes, list):
+                    raise ValueError(
+                        f"mutable Compose volumes must be a list: {source}:{service_name}"
+                    )
+                rewritten_volumes: list[object] = []
+                for volume in volumes:
+                    if isinstance(volume, str) and volume.startswith("."):
+                        host_ref, separator, container_ref = volume.partition(":")
+                        host_path = Path(
+                            os.path.abspath(source.parent / Path(host_ref))
+                        )
+                        if (
+                            not separator
+                            or not host_path.is_relative_to(_stackctl.ROOT)
+                            or not host_path.exists()
+                            or contains_symlink(host_path)
+                        ):
+                            raise ValueError(
+                                "mutable Compose bind source is unsafe: "
+                                f"{source}:{service_name}:{host_ref}"
+                            )
+                        rewritten_volumes.append(
+                            str(host_path) + separator + container_ref
+                        )
+                        continue
+                    if (
+                        isinstance(volume, dict)
+                        and volume.get("type") == "bind"
+                        and str(volume.get("source") or "").startswith(".")
+                    ):
+                        host_ref = str(volume["source"])
+                        host_path = Path(
+                            os.path.abspath(source.parent / Path(host_ref))
+                        )
+                        if (
+                            not host_path.is_relative_to(_stackctl.ROOT)
+                            or not host_path.exists()
+                            or contains_symlink(host_path)
+                        ):
+                            raise ValueError(
+                                "mutable Compose bind source is unsafe: "
+                                f"{source}:{service_name}:{host_ref}"
+                            )
+                        rewritten_volumes.append(
+                            {**volume, "source": str(host_path)}
+                        )
+                        continue
+                    rewritten_volumes.append(volume)
+                service["volumes"] = rewritten_volumes
             build = service.get("build")
             if isinstance(build, str):
                 build = {"context": build}

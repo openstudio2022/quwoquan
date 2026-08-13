@@ -465,6 +465,80 @@ export const productControlPlane = {
     },
     {
       "deployment_profile": "latency_sensitive",
+      "label": "账号治理 case",
+      "object_type": "account_enforcement_case",
+      "operations": [
+        {
+          "approval_mode": "single",
+          "auth_mode": "required",
+          "contract_operation_id": "ops.account_enforcement_case.OpenAccountModerationCase",
+          "danger_level": "high",
+          "method": "POST",
+          "operation": "OpenAccountModerationCase",
+          "path": "/control-plane/product/account-enforcement-cases/moderation",
+          "principal": "operator",
+          "scopes": [
+            "ops.account.moderation.write"
+          ]
+        },
+        {
+          "approval_mode": "single",
+          "auth_mode": "required",
+          "contract_operation_id": "ops.account_enforcement_case.OpenAccountAppealCase",
+          "danger_level": "high",
+          "method": "POST",
+          "operation": "OpenAccountAppealCase",
+          "path": "/control-plane/product/account-enforcement-cases/appeal",
+          "principal": "operator",
+          "scopes": [
+            "ops.account.appeal.write"
+          ]
+        },
+        {
+          "approval_mode": "dual",
+          "auth_mode": "required",
+          "contract_operation_id": "ops.account_enforcement_case.ReviewAccountEnforcementCase",
+          "danger_level": "critical",
+          "method": "POST",
+          "operation": "ReviewAccountEnforcementCase",
+          "path": "/control-plane/product/account-enforcement-cases/{caseId}:review",
+          "principal": "operator",
+          "scopes": [
+            "ops.account.enforcement.review"
+          ]
+        },
+        {
+          "approval_mode": "single",
+          "auth_mode": "required",
+          "contract_operation_id": "ops.account_enforcement_case.RetryAccountEnforcementDelivery",
+          "danger_level": "high",
+          "method": "POST",
+          "operation": "RetryAccountEnforcementDelivery",
+          "path": "/control-plane/product/account-enforcement-cases/{caseId}:retry-delivery",
+          "principal": "operator",
+          "scopes": [
+            "ops.account.enforcement.recover"
+          ]
+        },
+        {
+          "auth_mode": "required",
+          "contract_operation_id": "ops.account_enforcement_case.GetAccountEnforcementCase",
+          "method": "GET",
+          "operation": "GetAccountEnforcementCase",
+          "path": "/control-plane/product/account-enforcement-cases/{caseId}",
+          "principal": "operator",
+          "scopes": [
+            "ops.account.enforcement.read"
+          ]
+        }
+      ],
+      "risk_level": "high",
+      "source_entity": "AccountEnforcementCase",
+      "view_kind": "case",
+      "view_model": "AccountEnforcementCase"
+    },
+    {
+      "deployment_profile": "latency_sensitive",
       "label": "全局精选池条目",
       "object_type": "premium_pool_entry",
       "operations": [

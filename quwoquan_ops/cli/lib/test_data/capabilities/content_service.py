@@ -34,6 +34,32 @@ class PostCommentsResult:
     comments: tuple[BusinessObjectRef, ...]
 
 
+@dataclass(frozen=True)
+class PostReactionParams:
+    release: OutputRef[ImmutableReleaseHandle]
+    actors: OutputRef[AcceptanceActorSet]
+    reactor_role: ActorRole
+
+
+@dataclass(frozen=True)
+class PostReactionResult:
+    post: BusinessObjectRef
+    reactor_role: ActorRole
+
+
+@dataclass(frozen=True)
+class PostFootprintParams:
+    release: OutputRef[ImmutableReleaseHandle]
+    actors: OutputRef[AcceptanceActorSet]
+    viewer_role: ActorRole
+
+
+@dataclass(frozen=True)
+class PostFootprintResult:
+    post: BusinessObjectRef
+    viewer_role: ActorRole
+
+
 ACTIVE_REFERENCE_RELEASE = CapabilityRef(
     key=CapabilityKey("content.release.active_reference"),
     params_type=ActiveReleaseParams,
@@ -50,10 +76,30 @@ POST_COMMENTS = CapabilityRef(
     owner_service="content_service",
 )
 
+POST_REACTIONS = CapabilityRef(
+    key=CapabilityKey("content.content_reaction.post_reactions"),
+    params_type=PostReactionParams,
+    result_type=PostReactionResult,
+    owner_service="content_service",
+)
+
+POST_FOOTPRINT = CapabilityRef(
+    key=CapabilityKey("content.content_behavior_fact.post_footprint"),
+    params_type=PostFootprintParams,
+    result_type=PostFootprintResult,
+    owner_service="content_service",
+)
+
 __all__ = (
     "ACTIVE_REFERENCE_RELEASE",
     "POST_COMMENTS",
+    "POST_FOOTPRINT",
+    "POST_REACTIONS",
     "ActiveReleaseParams",
     "PostCommentsParams",
     "PostCommentsResult",
+    "PostFootprintParams",
+    "PostFootprintResult",
+    "PostReactionParams",
+    "PostReactionResult",
 )

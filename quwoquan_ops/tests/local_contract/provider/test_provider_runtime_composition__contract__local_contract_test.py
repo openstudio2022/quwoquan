@@ -53,7 +53,7 @@ class ProviderRuntimeCompositionContractTest(unittest.TestCase):
                 )
                 self.assertEqual(
                     len(by_role["provider-protocol-substitute"]["capabilityIds"]),
-                    11 if environment == "alpha" else 9,
+                    10 if environment == "alpha" else 9,
                 )
                 if environment == "alpha":
                     binding_by_capability = {
@@ -64,9 +64,15 @@ class ProviderRuntimeCompositionContractTest(unittest.TestCase):
                         binding_by_capability["location.poi.search"]["adapterId"],
                         "ext.map.nominatim.protocol_substitute",
                     )
+                    # route.read 保持未启用（App 无路线消费页面），不进入
+                    # alpha substitute workload。
+                    self.assertEqual(
+                        binding_by_capability["location.route.read"]["state"],
+                        "not_required",
+                    )
                     self.assertEqual(
                         binding_by_capability["location.route.read"]["adapterId"],
-                        "ext.route.osrm.protocol_substitute",
+                        "",
                     )
                 self.assertIn(
                     "INTEGRATION_SMS_ENDPOINT",

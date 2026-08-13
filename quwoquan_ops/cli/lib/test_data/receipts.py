@@ -17,7 +17,7 @@ from .api import ReceiptRef
 from .model import canonical_digest
 
 
-RECEIPT_SCHEMA = "qwq.test_data_receipt.v1"
+RECEIPT_SCHEMA = "qwq.test_data_receipt"
 _FORBIDDEN_KEYS = frozenset(
     {
         "accesstoken",

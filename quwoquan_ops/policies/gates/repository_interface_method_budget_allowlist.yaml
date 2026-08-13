@@ -3,5 +3,8 @@ governance:
   owner: repository-architecture
   reason: 超过方法数红线的存量 Repository 只减不增
   expires_when: allow 为空时删除本文件
+  measure: |
+    verify_repository_interface_method_budget.py 统计各 Repository 抽象接口的公开
+    方法数，超过 method_threshold 且不在 allow 内即 BLOCK。
 method_threshold: 10
 allow: []

@@ -11,6 +11,7 @@ import signal
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 from pathlib import Path
@@ -21,7 +22,13 @@ def _find_repo_root() -> Path:
         if (candidate / "quwoquan_app").is_dir() and (candidate / "quwoquan_service").is_dir():
             return candidate
     raise RuntimeError("cannot locate quwoquan repo root")
+
+
 from typing import Any
+
+CHAT_AVATAR_SUPPORT_DIR = Path(__file__).resolve().parents[1] / "support"
+if str(CHAT_AVATAR_SUPPORT_DIR) not in sys.path:
+    sys.path.insert(0, str(CHAT_AVATAR_SUPPORT_DIR))
 
 from quwoquan_ops.ci.device_matrix.evidence import (
     capture_device_screenshot,
@@ -35,6 +42,11 @@ from quwoquan_ops.cli.lib.environment_topology import (
     ENVIRONMENT_CANONICAL_TARGET,
     get_target,
     load_environment_topology,
+)
+from managed_chat_avatar_handoff import (
+    ManagedChatAvatarHandoff,
+    add_required_handoff_arguments,
+    load_managed_handoff_from_environment,
 )
 
 
@@ -55,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device-id", action="append", default=[])
     parser.add_argument("--gateway-base-url", default="")
     parser.add_argument("--media-avatar-base-url", default="")
-    parser.add_argument("--test-auth-token", default=os.environ.get("GAMMA_TEST_AUTH_TOKEN", ""))
+    add_required_handoff_arguments(parser)
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
     parser.add_argument("--test-timeout-seconds", type=int, default=600)
     parser.add_argument("--probe-timeout-seconds", type=int, default=180)
@@ -203,6 +215,13 @@ def report_path(raw: str) -> Path:
     return path if path.is_absolute() else REPO_ROOT / path
 
 
+def managed_handoff(args: argparse.Namespace) -> ManagedChatAvatarHandoff:
+    handoff = getattr(args, "_managed_chat_avatar_handoff", None)
+    if not isinstance(handoff, ManagedChatAvatarHandoff):
+        raise ValueError("managed chat avatar ActorLease handoff is unavailable")
+    return handoff
+
+
 SUPPORTED_ENVIRONMENTS = {"alpha", "beta", "gamma", "prod"}
 
 
@@ -292,11 +311,10 @@ def run_probe(
         str(path),
         "--timeout-seconds",
         str(args.probe_timeout_seconds),
+        *managed_handoff(args).command_arguments(),
     ]
     if media_url:
         command.extend(["--media-avatar-base-url", media_url])
-    if args.test_auth_token:
-        command.extend(["--test-auth-token", args.test_auth_token])
     if args.skip_media_check:
         command.append("--skip-media-check")
     if env_name == "gamma":
@@ -362,7 +380,8 @@ def run_patrol(
         f"--dart-define=API_CONTRACT_ENV={env_name}",
         f"--dart-define=CLOUD_GATEWAY_BASE_URL={base_url}",
         f"--dart-define=API_CONTRACT_BASE_URL={base_url}",
-        f"--dart-define=TEST_AUTH_TOKEN={args.test_auth_token}",
+        "--dart-define=QWQ_PATROL_SESSION_MODE="
+        "test_data_protected_authenticated_session",
         f"--dart-define=CHAT_AVATAR_E2E_CONVERSATION_ID={conversation_id}",
         f"--dart-define=CHAT_AVATAR_E2E_FINAL_AVATAR_URL={final_avatar_url}",
         f"--dart-define=CHAT_AVATAR_UI_REPORT={ui_report}",
@@ -376,29 +395,39 @@ def run_patrol(
                 f"--dart-define=MEDIA_UPLOAD_BASE_URL={media_url}",
             ]
         )
-    if args.dry_run:
-        ui_report.write_text(
-            json.dumps({"status": "passed", "dryRun": True}, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        return {
-            "command": command,
-            "commandResult": {
+    private_defines = write_private_patrol_defines(managed_handoff(args))
+    command.append(f"--dart-define-from-file={private_defines}")
+    try:
+        if args.dry_run:
+            ui_report.write_text(
+                json.dumps(
+                    {"status": "passed", "dryRun": True},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            return {
                 "command": command,
-                "exitCode": 0,
-                "timedOut": False,
-                "durationMs": 0,
-                "outputSummary": "dry-run",
-            },
-            "reportPath": str(ui_report),
-            "report": json.loads(ui_report.read_text()),
-        }
-    result = run_command(
-        command,
-        cwd=APP_DIR,
-        timeout_seconds=args.test_timeout_seconds,
-        log_path=log_path,
-    )
+                "commandResult": {
+                    "command": command,
+                    "exitCode": 0,
+                    "timedOut": False,
+                    "durationMs": 0,
+                    "outputSummary": "dry-run",
+                },
+                "reportPath": str(ui_report),
+                "report": json.loads(ui_report.read_text()),
+            }
+        result = run_command(
+            command,
+            cwd=APP_DIR,
+            timeout_seconds=args.test_timeout_seconds,
+            log_path=log_path,
+        )
+    finally:
+        private_defines.unlink(missing_ok=True)
     report: dict[str, Any] = {}
     if ui_report.exists():
         report = json.loads(ui_report.read_text(encoding="utf-8"))
@@ -410,10 +439,50 @@ def run_patrol(
     }
 
 
+def write_private_patrol_defines(handoff: ManagedChatAvatarHandoff) -> Path:
+    descriptor, raw_path = tempfile.mkstemp(
+        prefix="qwq_chat_avatar_patrol_",
+        suffix=".json",
+        text=True,
+    )
+    path = Path(raw_path)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8", closefd=True) as handle:
+            json.dump(
+                handoff.primary_patrol_defines(),
+                handle,
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except BaseException:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        path.unlink(missing_ok=True)
+        raise
+    return path
+
+
 def main() -> int:
     args = parse_args()
+    try:
+        requested_envs = envs(args.env)
+        handoff = load_managed_handoff_from_environment()
+        if requested_envs != [handoff.environment]:
+            raise ValueError(
+                "chat avatar matrix must run exactly the managed ActorLease environment"
+            )
+        handoff.validate_namespace(args)
+        args._managed_chat_avatar_handoff = handoff
+    except ValueError as exc:
+        print(f"GATE_BLOCK: {exc}", file=sys.stderr)
+        return 2
     out = report_path(args.report)
-    requested_envs = envs(args.env)
     report: dict[str, Any] = {
         "schema": "chat-avatar-device-matrix-report",
         "suiteId": "chat_avatar_sync",
@@ -424,6 +493,7 @@ def main() -> int:
         "rerunRecommended": False,
         "startedAt": utc_now(),
         "endedAt": "",
+        "testDataLifecycle": handoff.public_document(),
         "requestedEnvironments": requested_envs,
         "platform": args.platform,
         "devices": [],

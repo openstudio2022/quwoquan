@@ -28,9 +28,9 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib.test_data.model import canonical_digest
 
 
-HANDOFF_SCHEMA = "qwq.test_data_handoff.v1"
+HANDOFF_SCHEMA = "qwq.test_data_handoff"
 CASE_RESULT_SCHEMA = "qwq.case_result"
-RECEIPT_SCHEMA = "qwq.test_data_receipt.v1"
+RECEIPT_SCHEMA = "qwq.test_data_receipt"
 ENVIRONMENTS = ("alpha", "beta", "gamma")
 _DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 

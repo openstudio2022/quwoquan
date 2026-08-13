@@ -39,36 +39,9 @@ groups:
           summary: "登录 Provider {{ $labels.route }} 错误率连续两个窗口 > 2%"
           description: "当前非 2xx 比率 {{ $value | humanizePercentage }}。立即验证该 provider 降级、短信验证码恢复入口与配置回滚。"
 
-      - alert: AuthChallengeLatencyHigh
-        expr: |
-          histogram_quantile(
-            0.95,
-            sum(rate(http_server_duration_seconds_bucket{service="user-service",route="/auth/otp/send"}[5m])) by (le)
-          ) > 1.2
-        for: 10m
-        labels:
-          severity: warning
-          layer: l2
-          domain: user-auth
-        annotations:
-          summary: "验证码发送 P95 延迟连续两个窗口超过 1.2 秒"
-          description: "检查 User Service 幂等重放、Integration 投递和短信 Provider 延迟；客户端总 deadline 仍为 3 秒。"
-
-      - alert: AuthLoginLatencyHigh
-        expr: |
-          histogram_quantile(
-            0.95,
-            sum(rate(http_server_duration_seconds_bucket{service="user-service",route=~"/auth/login/(phone|wechat|alipay|qq|one-tap.*)"}[5m])) by (le, route)
-          ) > 1.5
-        for: 10m
-        labels:
-          severity: warning
-          layer: l2
-          domain: user-auth
-        annotations:
-          summary: "登录校验 P95 延迟连续两个窗口超过 1.5 秒"
-          description: "按 route 定位手机号或第三方登录延迟，并验证 session 签发与 readback；客户端超时后必须保留验证码或恢复动作。"
-
+      # OTP 发送与登录校验的 P95 延迟告警由 ContractGraph 派生
+      # （user_contract recording + slo.latencyP95Milliseconds 口径）承载，
+      # 手写等价规则属可派生残留，禁止回归。
       - alert: LoginClientStateStalled
         expr: |
           sum(increase(ops_login_funnel_events_total{action="login_state_changed",result="stalled"}[5m])) > 0
@@ -608,6 +581,78 @@ groups:
         annotations:
           summary: "MQ publish error rate > 5%"
 
+  # 用户视角黑盒拨测：公网入口可达性与 TLS 证书有效期。
+  - name: quwoquan_blackbox_probes
+    rules:
+      - alert: PublicEndpointProbeFailed
+        expr: probe_success == 0
+        for: 5m
+        labels:
+          severity: critical
+          layer: l4
+          domain: edge-probe
+        annotations:
+          summary: "公网入口 {{ $labels.instance }} 黑盒探测失败"
+          description: "DNS/TLS/HTTP 探测连续失败；先核对 edge Caddy 与证书，再查 api-edge 健康。"
+          runbook_url: "quwoquan_ops/runbooks/slo_burn_rate.md"
+      - alert: PublicEndpointCertExpiringSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) < 14 * 86400
+        for: 1h
+        labels:
+          severity: warning
+          layer: l4
+          domain: edge-probe
+        annotations:
+          summary: "公网证书 {{ $labels.instance }} 将在 14 天内过期"
+          description: "检查 ACME 自动续期链路；证书真相源与续期规则见 edge deploy。"
+
+  # 全局可用性 SLO 燃烧率（Google SRE multi-window multi-burn-rate）：
+  # SLO 99.9%（错误预算 0.1%）。快烧 14.4x（1h+5m 双窗）触发即 page；
+  # 慢烧 6x（6h+30m 双窗）转工单。简单阈值告警会漏慢烧、骚扰快烧，
+  # 全局 SLO 面必须以燃烧率表达。
+  - name: quwoquan_slo_burn_rate
+    rules:
+      - alert: GlobalHttpAvailabilityFastBurn
+        expr: |
+          (
+            sum(rate(http_server_requests_total{status=~"5.."}[1h]))
+            / clamp_min(sum(rate(http_server_requests_total[1h])), 0.001) > 14.4 * 0.001
+          )
+          and
+          (
+            sum(rate(http_server_requests_total{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_server_requests_total[5m])), 0.001) > 14.4 * 0.001
+          )
+        for: 2m
+        labels:
+          severity: critical
+          layer: l3
+          domain: slo-burn-rate
+        annotations:
+          summary: "全局可用性错误预算快烧（14.4x，约 1 小时烧完 2% 月度预算）"
+          description: "1h 与 5m 双窗 5xx 比率同时超过 14.4 倍预算燃烧率；立即按 Error Governance 看板定位 top 错误码与服务。"
+          runbook_url: "quwoquan_ops/runbooks/slo_burn_rate.md"
+      - alert: GlobalHttpAvailabilitySlowBurn
+        expr: |
+          (
+            sum(rate(http_server_requests_total{status=~"5.."}[6h]))
+            / clamp_min(sum(rate(http_server_requests_total[6h])), 0.001) > 6 * 0.001
+          )
+          and
+          (
+            sum(rate(http_server_requests_total{status=~"5.."}[30m]))
+            / clamp_min(sum(rate(http_server_requests_total[30m])), 0.001) > 6 * 0.001
+          )
+        for: 15m
+        labels:
+          severity: warning
+          layer: l3
+          domain: slo-burn-rate
+        annotations:
+          summary: "全局可用性错误预算慢烧（6x，持续将在数日内耗尽月度预算）"
+          description: "6h 与 30m 双窗 5xx 比率同时超过 6 倍预算燃烧率；按服务下钻并安排修复工单。"
+          runbook_url: "quwoquan_ops/runbooks/slo_burn_rate.md"
+
   - name: quwoquan_l3_service
     rules:
       - alert: HighErrorRate
@@ -674,13 +719,13 @@ groups:
     rules:
       - alert: ProjectorFailures
         expr: |
-          sum(rate(projector_events_total{status="error"}[5m])) by (projector) > 0
+          sum(rate(mq_consume_total{status="error"}[5m])) by (consumer_group) > 0
         for: 5m
         labels:
           severity: warning
           layer: l2
         annotations:
-          summary: "Projector {{ $labels.projector }} 持续失败"
+          summary: "投影消费者 {{ $labels.consumer_group }} 持续失败"
 
       - alert: EventStorePublishFailures
         expr: |
@@ -978,29 +1023,9 @@ groups:
           summary: "推荐负反馈率 > 8%"
           description: "dislike/report/hide 等负反馈 / impressed 占比 {{ $value | humanizePercentage }}，超出 SLO（negative_feedback_rate<=0.08）。"
 
-      - alert: TagFeedbackConsumerLagHigh
-        expr: |
-          histogram_quantile(0.95,
-            sum(rate(content_tag_feedback_fact_consumer_lag_seconds_bucket[10m])) by (le)
-          ) > 30
-        for: 10m
-        labels:
-          severity: critical
-          layer: l2
-        annotations:
-          summary: "显式标签反馈投影 P95 时延 > 30s"
-          description: "TagFeedbackRecorded 从 tag-service 到 content-service 特征提交的 P95 时延为 {{ $value | humanizeDuration }}；检查 Redis PEL、Mongo inbox 与消费者健康。"
-
-      - alert: TagFeedbackConsumerFailuresSustained
-        expr: sum(rate(content_tag_feedback_fact_consumer_total{result="failed"}[5m])) > 0
-        for: 10m
-        labels:
-          severity: critical
-          layer: l2
-        annotations:
-          summary: "显式标签反馈消费者持续失败"
-          description: "TagFeedbackRecorded 消费扫描持续失败；事实保留在 Redis PEL 以供 reclaim，但必须在 stream 保留期前恢复。"
-
+      # TagFeedbackRecorded 的 content 侧消费者尚未实现（career-interest-profile-editor
+      # OPEN 跟踪）；其 lag/failure 告警随消费者实现与真实 emitter 一同恢复，
+      # 禁止先于实现挂死告警。
       - alert: RecommendationAttributionUnknownRateHigh
         expr: |
           sum(rate(recommendation_behavior_by_attribution_total{channel="unknown",recall_path="unknown"}[10m]))
@@ -1404,17 +1429,17 @@ groups:
 
   - name: quwoquan_content_flywheel
     rules:
-      - alert: InterestRecomputeErrorRateHigh
+      - alert: InterestProjectionErrorRateHigh
         expr: |
-          sum(rate(quwoquan_interest_profile_recompute_total{result="error"}[5m]))
-          / (sum(rate(quwoquan_interest_profile_recompute_total[5m])) + 0.001) > 0.05
+          sum(rate(quwoquan_interest_projection_total{result!="ok"}[5m]))
+          / (sum(rate(quwoquan_interest_projection_total[5m])) + 0.001) > 0.05
         for: 10m
         labels:
           severity: warning
           layer: l2
         annotations:
-          summary: "兴趣画像派生失败率 > 5%"
-          description: "content-service InterestProfileAggregator 重算失败 {{ $value | humanizePercentage }}，飞轮上游派生环节受损"
+          summary: "兴趣画像投影失败率 > 5%"
+          description: "user-service InterestProfileProjector 投影失败 {{ $value | humanizePercentage }}（parse_error/write_error），画像 CQRS 读模型受损"
 
       - alert: InterestProjectionFailures
         expr: |
@@ -1920,7 +1945,7 @@ groups:
 
       - alert: ExternalInteractionDeadLettersPresent
         expr: |
-          sum(reliable_task_dead_letters{owner_domain="integration"}) > 0
+          sum(qwq_reliabletask_records{service="integration-service", status="dead_letter"}) > 0
         for: 30m
         labels:
           severity: warning
@@ -2534,3 +2559,62 @@ groups:
         annotations:
           summary: "{{ $labels.environment }} operation {{ $labels.operation }} 限流命中率超过 20%"
           description: "区分攻击流量、客户端重试风暴与真实业务容量不足；阈值调整必须更新 api-edge 自治配置并重做 stable/gray 总阈值验收。"
+
+  # ===== 对象投影与事实链（契约 runtime_entrypoints telemetry 同源）=====
+  - name: quwoquan_l3_projection_facts
+    rules:
+      - alert: ObjectProjectionApplyFailures
+        expr: |
+          (sum(rate(circle_search_item_projection{outcome="error"}[5m])) or vector(0))
+          + (sum(rate(entity_homepage_search_item_projection{outcome="error"}[5m])) or vector(0))
+          + (sum(rate(tag_object_tag_index_projection{outcome="error"}[5m])) or vector(0))
+          + (sum(rate(user_creator_runtime_profile_projection{outcome="error"}[5m])) or vector(0))
+          + (sum(rate(recommendation_candidate_index_projection{outcome="error"}[5m])) or vector(0)) > 0
+        for: 10m
+        labels: {severity: warning, layer: l3, domain: projection}
+        annotations:
+          summary: "对象投影 apply 持续失败"
+          description: "任一读模型投影（circle/entity/tag/user/recommendation 候选索引）持续报错；按 qwq-l3-projection-facts 看板定位具体投影与 consumer，读模型正在陈旧化。"
+
+      - alert: ObjectFactAppendFailures
+        expr: |
+          (sum(rate(content_deleted_post_tombstone_append{outcome="error"}[5m])) or vector(0))
+          + (sum(rate(content_feed_delivery_page_append{outcome="error"}[5m])) or vector(0))
+          + (sum(rate(search_recommendation_signal_append{outcome="error"}[5m])) or vector(0))
+          + (sum(rate(integration_external_interaction_attempt_append{outcome="error"}[5m])) or vector(0))
+          + (sum(rate(integration_external_interaction_dead_letter_append{outcome="error"}[5m])) or vector(0)) > 0
+        for: 10m
+        labels: {severity: warning, layer: l3, domain: projection}
+        annotations:
+          summary: "对象事实 append 持续失败"
+          description: "不可变事实追加（tombstone/feed 交付页/搜索信号/外部交互 attempt 与 dead letter）持续报错；事实缺失会破坏幂等与审计链，按 qwq-l3-projection-facts 看板定位。"
+
+      - alert: RecommendationIngestFailures
+        expr: |
+          (sum(rate(recommendation_exposure_ingest{outcome="error"}[5m])) or vector(0))
+          + (sum(rate(recommendation_feedback_ingest{outcome="error"}[5m])) or vector(0))
+          + (sum(rate(recommendation_subject_closure_ingest{outcome="error"}[5m])) or vector(0)) > 0
+        for: 10m
+        labels: {severity: warning, layer: l3, domain: projection}
+        annotations:
+          summary: "推荐侧订阅 ingest 持续失败"
+          description: "曝光/行为反馈/账号闭环订阅消费持续报错，推荐特征与合规闭环正在滞后；消息保留在 PEL 可重放，但必须在 stream 保留期内恢复。"
+
+      - alert: IntegrationEntrypointFailures
+        expr: |
+          (sum(rate(integration_capability_grant_resolve{outcome="error"}[5m])) or vector(0))
+          + (sum(rate(integration_push_delivery_provider_invoke{outcome="failed"}[5m])) or vector(0)) > 0
+        for: 10m
+        labels: {severity: warning, layer: l3, domain: projection}
+        annotations:
+          summary: "集成能力解析或推送投递持续失败"
+          description: "capability grant 解析报错或推送 provider 调用失败持续存在；检查 provider 凭据、连接与 reliable task 死信。"
+
+      - alert: RolloutDecisionInfrastructureFailures
+        expr: |
+          sum(rate(api_edge_rollout_decisions_total{reason=~"evaluation_failure|assignment_store_failure"}[5m])) by (reason) > 0
+        for: 10m
+        labels: {severity: warning, layer: l2, domain: gateway}
+        annotations:
+          summary: "生产灰度决策基础设施故障（{{ $labels.reason }}）"
+          description: "灰度评估或分配存储持续失败，受影响请求按 fail-safe 落 stable；检查 assignment store 与评估配置。"

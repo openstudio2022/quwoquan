@@ -41,6 +41,9 @@ OPAQUE_DISPOSABLE_CACHE_DIRS = frozenset(
     {
         "cache",
         "dist",
+        "go-build",
+        "go-mod",
+        "go-mod-cache",
         "node_modules",
         "python-test-deps",
         "site-packages",
@@ -226,6 +229,52 @@ def _is_runtime_process_state_record(candidate: Path, output_root: Path) -> bool
     )
 
 
+# 名字即证据的硬档:证书/密钥后缀与 dotenv 形态不做内容豁免,一律拦。
+_HARD_FORBIDDEN_NAME = re.compile(
+    r"(?i)(?:(?:^|\.)env(?:\.|$)|(?:\.pem|\.key|\.crt|\.p12|\.pfx)$)"
+)
+
+
+def _contains_secret_material(candidate: Path) -> bool:
+    """启发式文件名命中后的真判据:文件里是否真的落了密钥材料。
+
+    config/credential/caddyfile 这类词表命中是启发式——stackctl 物化的
+    Caddyfile 与「缺凭据」blocker 收据都会撞词,但它们不含任何 secret 值。
+    放行只发生在内容可读、无 PEM 块且逐行无未豁免 secret 赋值时;二进制、
+    超限或解码失败一律保守判真。
+    """
+    try:
+        if candidate.stat().st_size > MAX_INSPECTED_OUTPUT_FILE_BYTES:
+            return True
+        text = candidate.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError, ValueError):
+        return True
+    if "-----BEGIN" in text:
+        return True
+    for line in text.splitlines():
+        match = SECRET_ASSIGNMENT.search(line)
+        if match is None:
+            continue
+        value = match.group(1).strip().strip("\"'")
+        normalized = value.lower()
+        if not (
+            any(normalized.startswith(prefix) for prefix in SAFE_SECRET_REFERENCES)
+            or normalized.startswith("$")
+        ):
+            return True
+    return False
+
+
+def _forbidden_output_file(candidate: Path, output_root: Path) -> bool:
+    if not FORBIDDEN_OUTPUT_FILE_NAME.search(candidate.name):
+        return False
+    if _is_runtime_process_state_record(candidate, output_root):
+        return False
+    if _HARD_FORBIDDEN_NAME.search(candidate.name):
+        return True
+    return _contains_secret_material(candidate)
+
+
 def output_source_truth_issues(root: Path) -> list[str]:
     """Reject reusable configuration, certificate and unredacted secret material."""
     if not root.is_dir():
@@ -260,10 +309,7 @@ def output_source_truth_issues(root: Path) -> list[str]:
         dirnames[:] = retained
         for filename in filenames:
             candidate = current_path / filename
-            if FORBIDDEN_OUTPUT_FILE_NAME.search(filename) and not _is_runtime_process_state_record(
-                candidate,
-                root,
-            ):
+            if _forbidden_output_file(candidate, root):
                 issues.append(
                     f"{_rel(candidate)}: deployment configuration, TLS or secret material "
                     "is forbidden under disposable output"
