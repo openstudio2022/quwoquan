@@ -12,7 +12,6 @@ from core.paths import DATA_EXECUTIONS_ROOT, RELEASE_ROOT
 from core.release_layout import attestation_root, payload_file
 from core.source_digest import (
     ExecutionBundleIdentity,
-    FrozenSourceDigest,
     SourceDigest,
     SourceDigestError,
     SourceDefinitionSnapshot,
@@ -36,7 +35,7 @@ def _read_object(path: Path, *, issues: list[str]) -> dict[str, object] | None:
 
 def _document_digests(
     document: dict[str, object], *, path: Path, issues: list[str]
-) -> tuple[SourceDigest | FrozenSourceDigest, ...] | None:
+) -> tuple[SourceDigest, ...] | None:
     raw_value = document.get("sourceDigests")
     if not isinstance(raw_value, list):
         issues.append(f"{path}: sourceDigests must be an array")
@@ -45,19 +44,9 @@ def _document_digests(
     if not isinstance(raw_identities, list):
         issues.append(f"{path}: sourceIdentities must be an array")
         return None
-    legacy_digests = frozenset(
-        str(item.get("sourceDigest") or "")
-        for item in raw_identities
-        if isinstance(item, dict)
-        and item.get("identityKind") == "legacy_canonical_migration"
-    )
     try:
         source_digests = tuple(
-            parse_source_digest_document(
-                item,
-                frozen_digest_allowlist=legacy_digests,
-            )
-            for item in raw_value
+            parse_source_digest_document(item) for item in raw_value
         )
     except SourceDigestError as exc:
         issues.append(f"{path}: {exc}")
@@ -116,7 +105,7 @@ def source_digest_issues(
                 issues.append(
                     f"{manifest_path}: GATE_BLOCK "
                     "DATA.EXECUTION.SOURCE_IDENTITY_MIGRATION_REQUIRED: "
-                    "legacy nonterminal execution cannot resume"
+                    "pre-bundle nonterminal execution cannot resume"
                 )
                 continue
             try:

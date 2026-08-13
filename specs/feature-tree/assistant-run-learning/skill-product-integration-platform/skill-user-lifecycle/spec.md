@@ -106,6 +106,10 @@
 - 准出影响：`block`
 - 影响或价值：尚缺 `assistant.skill_center` 同一候选上的完整 Catalog、Setting、Consent、Subscription、Activity、DataControl 和 Connector 恢复旅程，用户目前无法在一个入口以 production Remote 完成并验证这些分轨控制。
 - 尚缺实现：仍缺 `event/context_change/follow_up` Trigger setup、Connector native 建连/重连、SkillActivity/DataControl generated App 接线，以及相关 SLI/SLO 和回滚装配。
+- 验收数据供给现状：
+  - `assistant.skill_center` 的 Catalog/Subscription 分轨已由 `assistant-skill-subscription` typed capability 供数（依赖环境 skill package，目录为空时 fail-closed）。
+  - SkillActivity 子面依赖 assistant run 历史累积（`assistant-prompt` capability 可部分供给）。
+  - Connector 子面依赖用户主动三方授权流程，测试数据控制面不伪造授权，首访空态为合法验收态。
 - 尚缺验收证据：仍缺同一候选的受管 Remote、撤权后 Run 安全边界、主动规则物理真机、数据控制恢复、双端物理真机和回滚收据。
 - 完成判定：`GWT-001/GWT-002/GWT-003/GWT-004` 具有 Catalog/Setting/Consent/Subscription/Activity/DataControl/Connector 的对象 local_contract、真实 api_integration 与 Flutter user_acceptance 直接 `spec_ref`，并完成事件/上下文主动规则、Connector 和数据控制 generated App 管理。
 - 环境证据：绑定同一 commit、ContractGraph、candidate、production Remote composition 和环境 Provider 的 Android 实机与 iPhone 实机 `ReadinessResultBundle` 均为 passed，并取得受管环境 activate/readback/rollback 回执。

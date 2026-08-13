@@ -1,67 +1,5 @@
-/// 从 timeline 消息松散字段解析 `uiUsageStats`（供 Assistant Run 使用，避免在页面层写 `Map<String, dynamic>`）。
-Map<String, dynamic> assistantUiUsageStatsMapFromMessageField(Object? raw) {
-  if (raw is! Map) {
-    return const <String, dynamic>{};
-  }
-  return Map<String, dynamic>.from(
-    raw.map((k, v) => MapEntry(k.toString(), v)),
-  );
-}
-
-Map<String, dynamic> buildAssistantCumulativeUsageStatsProtocolMap({
-  required Map<String, dynamic> currentRunStats,
-  required Iterable<Map<String, dynamic>> previousRunStats,
-}) {
-  final currentRun = AssistantUiUsageStatsViewData.fromProtocolMap(
-    currentRunStats,
-  );
-  final currentRunLedger = _ledgerMaps(currentRunStats['runUsageLedger']);
-
-  var previousCalls = 0;
-  var previousTokens = 0;
-  var previousMaxTokens = 0;
-  final cumulativeLedger = <Map<String, dynamic>>[];
-  for (final stats in previousRunStats) {
-    if (stats.isEmpty) continue;
-    final run = AssistantUiUsageStatsViewData.fromProtocolMap(stats);
-    previousCalls += run.runModelCallCount;
-    previousTokens += run.runTotalTokens;
-    if (run.runMaxTokensPerCall > previousMaxTokens) {
-      previousMaxTokens = run.runMaxTokensPerCall;
-    }
-    cumulativeLedger.addAll(_ledgerMaps(stats['runUsageLedger']));
-  }
-  cumulativeLedger.addAll(currentRunLedger);
-
-  final cumulativeCalls = previousCalls + currentRun.runModelCallCount;
-  final cumulativeTokens = previousTokens + currentRun.runTotalTokens;
-  final cumulativeMaxTokens = previousMaxTokens > currentRun.runMaxTokensPerCall
-      ? previousMaxTokens
-      : currentRun.runMaxTokensPerCall;
-
-  return <String, dynamic>{
-    ...currentRunStats,
-    'runModelCallCount': currentRun.runModelCallCount,
-    'runTotalTokens': currentRun.runTotalTokens,
-    'runMaxTokensPerCall': currentRun.runMaxTokensPerCall,
-    'runUsageLedger': currentRunLedger,
-    'sessionUsageStats': <String, dynamic>{
-      'modelCallCount': cumulativeCalls,
-      'totalTokens': cumulativeTokens,
-      'maxTokensPerCall': cumulativeMaxTokens,
-      'usageLedger': cumulativeLedger,
-    },
-    'cumulativeModelCallCount': cumulativeCalls,
-    'cumulativeTotalTokens': cumulativeTokens,
-    'cumulativeMaxTokensPerCall': cumulativeMaxTokens,
-    'cumulativeUsageLedger': cumulativeLedger,
-    'modelCallCount': currentRun.runModelCallCount,
-    'totalTokens': currentRun.runTotalTokens,
-    'maxTokensPerCall': currentRun.runMaxTokensPerCall,
-  };
-}
-
-/// 与助手消息 `uiUsageStats` 协议 Map 对齐的只读视图（用于 journey / UI，不参与持久化编码）。
+/// 与助手消息 `uiUsageStats` 协议 Map 对齐的只读视图（Row typed 字段与
+/// journey / UI 消费同源；Map 编解码只发生在 Codec 磁盘/协议边界）。
 final class AssistantUsageLedgerEntryViewData {
   const AssistantUsageLedgerEntryViewData({
     this.totalTokens = 0,
@@ -86,6 +24,14 @@ final class AssistantUsageLedgerEntryViewData {
       modelRef: (m['modelRef'] ?? '').toString().trim(),
     );
   }
+
+  Map<String, dynamic> toMap() => <String, dynamic>{
+        'totalTokens': totalTokens,
+        'inputTokens': inputTokens,
+        'outputTokens': outputTokens,
+        'source': source,
+        'modelRef': modelRef,
+      };
 }
 
 final class AssistantUiUsageStatsViewData {
@@ -159,6 +105,29 @@ final class AssistantUiUsageStatsViewData {
       sessionLedger: sessionLedger,
     );
   }
+
+  /// 协议 Map 序列化出口（canonical 形态；[fromProtocolMap] 可无损读回）。
+  Map<String, dynamic> toProtocolMap() {
+    if (isEmpty) return const <String, dynamic>{};
+    return <String, dynamic>{
+      'runModelCallCount': runModelCallCount,
+      'runTotalTokens': runTotalTokens,
+      'runMaxTokensPerCall': runMaxTokensPerCall,
+      if (runLedger.isNotEmpty)
+        'runUsageLedger': runLedger
+            .map((entry) => entry.toMap())
+            .toList(growable: false),
+      'sessionUsageStats': <String, dynamic>{
+        'modelCallCount': sessionModelCallCount,
+        'totalTokens': sessionTotalTokens,
+        'maxTokensPerCall': sessionMaxTokensPerCall,
+        if (sessionLedger.isNotEmpty)
+          'usageLedger': sessionLedger
+              .map((entry) => entry.toMap())
+              .toList(growable: false),
+      },
+    };
+  }
 }
 
 List<AssistantUsageLedgerEntryViewData> _parseLedger(List<dynamic> raw) {
@@ -169,16 +138,6 @@ List<AssistantUsageLedgerEntryViewData> _parseLedger(List<dynamic> raw) {
           e.cast<String, dynamic>(),
         ),
       )
-      .toList(growable: false);
-}
-
-List<Map<String, dynamic>> _ledgerMaps(Object? raw) {
-  if (raw is! List) {
-    return const <Map<String, dynamic>>[];
-  }
-  return raw
-      .whereType<Map>()
-      .map((item) => item.cast<String, dynamic>())
       .toList(growable: false);
 }
 

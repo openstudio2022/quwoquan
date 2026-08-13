@@ -19,8 +19,11 @@ class DeveloperLogCacheTelemetrySink implements CacheTelemetrySink {
   }
 }
 
-class NoopCacheTelemetrySink implements CacheTelemetrySink {
-  const NoopCacheTelemetrySink();
+/// 静默丢弃缓存遥测的 null-object 实现。
+///
+/// 用于不需要缓存观测的装配点（如一次性 probe store）；不是测试替身。
+class SilentCacheTelemetrySink implements CacheTelemetrySink {
+  const SilentCacheTelemetrySink();
 
   @override
   void record(String eventName, Map<String, Object?> attributes) {}

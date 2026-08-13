@@ -140,7 +140,17 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：4 类对象 SEO 快照测试覆盖 canonical/OG/JSON-LD。
+- 影响或价值：尚缺 circle/user/entity_homepage 三类对象页与公网部署接线
+  （gateway 路由、`CONTENT_PUBLIC_WEB_ORIGIN` 环境配置、公网域名证据）；post
+  对象页第一段已落地——content-service `/public-web/post/{postId}` 输出
+  canonical/OG/JSON-LD envelope 与 `articleMarkdown` 派生的安全正文 HTML，
+  robots.txt 与 post sitemap 同面暴露，非公开对象 fail-closed 404，XSS 转义、
+  行内样式/列表/引用语义标签均有 local_contract
+  （`public_web_handler__local_contract_test.go`）。第二段已补：正文图片经
+  `articleAssetManifest` 渲染为 `<figure><img alt>`——公网地址取 cdnUrl 优先、
+  否则由 `PublicSliceKey` + `CONTENT_PUBLIC_WEB_CDN_ORIGIN` 派生，无公网
+  URL 的 asset fail-closed 跳过；行内链接按 https/http 白名单渲染
+  `<a rel="noopener">`，恶意 scheme 保持字面量。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>
@@ -149,7 +159,14 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：中转页 UA 分流 contract 覆盖 4 类环境。
+- 影响或价值：仍缺短链 token → 对象解析后端、引导页真实 universal
+  link/wx-open-launch-app 前端注入与 4 类环境部署证据。第一段已接线——
+  content-service `/public-web/open`（query target/id）与
+  `/public-web/s/{token}` 消费 `runtime/publicweb` `ResolveTransfer`：
+  爬虫/未知 UA 302 到对象 SEO 页，iOS/Android/微信/PC 按 UA 矩阵渲染
+  noindex 引导页（`data-transfer-mode`/`data-launch-method` 语义），
+  无目标 fallback 首页不伪造跳转，分流矩阵有 local_contract
+  （`public_web_handler__local_contract_test.go`）。
 - 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-003"></a>
@@ -168,4 +185,4 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：仓内已有响应式 Flutter Web 主 Shell 和核心业务路由，但尚缺四环境 DNS/TLS、真实同源 API、Safari/Android 浏览器、PWA 安装、Web Push/RTC 与完整业务矩阵的公网证据。
-- 完成判定：Alpha/Beta/Gamma/Prod 分别通过 UTF-8、登录、浏览、发布、互动、聊天、PWA 安装、Android 下载横幅和同源 API 的 `api_integration` 与 `user_acceptance`；缺项必须保留明确降级，不得宣称完整等价。
+- 完成判定：`GWT-003`、`GWT-004` 与 `GWT-005` 在四环境公网真实通过，且 Alpha/Beta/Gamma/Prod 分别通过 UTF-8、登录、浏览、发布、互动、聊天、PWA 安装、Android 下载横幅和同源 API 的 `api_integration` 与 `user_acceptance`；缺项必须保留明确降级，不得宣称完整等价。

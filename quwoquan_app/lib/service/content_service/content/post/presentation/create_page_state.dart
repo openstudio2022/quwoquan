@@ -3,7 +3,11 @@ part of 'create_page.dart';
 class _CreatePageState extends ConsumerState<CreatePage>
     with WidgetsBindingObserver, RouteAware {
   static const int _kMaxMediaImages = 20;
-  static const int _kMaxBodyLength = 5000;
+
+  /// 正文上限单一真相：codegen 自 `publication_policy.yaml`，端云同源，
+  /// 禁止在页面内维护第二份长度常量（GWT-002）。
+  static const int _kMaxBodyLength = ContentPublicationPolicy.microBodyMaxRunes;
+  static const int _kMaxTitleLength = ContentPublicationPolicy.titleMaxRunes;
   final CreateCircleService _circleService = const CreateCircleService();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _bodyController = TextEditingController();
@@ -181,8 +185,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
           notifier.setDraftFlowKind(_resolveInitialDraftFlowKind());
         }
         final anchorCircleId = widget.initialCircleId?.trim();
+        final anchorGatheringId = widget.initialGatheringId?.trim();
         if (widget.initialHomepage != null ||
-            (anchorCircleId != null && anchorCircleId.isNotEmpty)) {
+            (anchorCircleId != null && anchorCircleId.isNotEmpty) ||
+            (anchorGatheringId != null && anchorGatheringId.isNotEmpty)) {
           var nextSettings = ref.read(createEditorProvider).settings;
           if (widget.initialHomepage != null) {
             nextSettings = nextSettings.copyWith(
@@ -202,6 +208,14 @@ class _CreatePageState extends ConsumerState<CreatePage>
                 if (anchorCircleName != null && anchorCircleName.isNotEmpty)
                   anchorCircleName,
               ],
+            );
+          }
+          if (anchorGatheringId != null && anchorGatheringId.isNotEmpty) {
+            // 回顾关联必须公开可见才能进入共同经历聚合区；作者仍可移除关联。
+            nextSettings = nextSettings.copyWith(
+              isPublic: true,
+              gatheringRef: anchorGatheringId,
+              gatheringTitle: widget.initialGatheringTitle?.trim() ?? '',
             );
           }
           notifier.setSettings(nextSettings);
@@ -621,7 +635,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   Future<String?> _generateVideoThumbnail(String path) async {
     try {
-      return await IosVideoEditingService().generateThumbnail(
+      return await NativeVideoEditingService().generateThumbnail(
         videoPath: path,
         maxDimension: 360,
       );
@@ -747,6 +761,12 @@ class _CreatePageState extends ConsumerState<CreatePage>
           joinedCircles: joinedCircles,
           recommendedCircles: const [],
           circleLoadUnavailable: circleLoadUnavailable,
+          // 文字创作：系统建议形态进确认页固化，最终以用户确认为准（GWT-001）。
+          suggestedTextContentType: state.editorKind == CreateEditorKind.text
+              ? (shouldPublishAsArticleForPayload(state)
+                    ? 'article'
+                    : 'micro')
+              : null,
         ),
       ),
     );
@@ -831,6 +851,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
                       state: state,
                       collapseProgress: _heroCollapseProgress,
                     ),
+                    _buildGatheringContextBar(state),
                     Expanded(
                       child: state.editorKind == CreateEditorKind.media
                           ? SingleChildScrollView(

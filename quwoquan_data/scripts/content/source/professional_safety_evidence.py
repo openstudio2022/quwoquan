@@ -143,6 +143,8 @@ def _validate_video_physical_refs(
             raise ValueError(
                 f"{item.get('assetId')}: non-manual safety evidence forbids fileRef"
             )
+        _validate_video_source_attribution(evidence, item)
+        _validate_source_review_evidence(evidence, evidence_root=evidence_root)
         return
     if manual_root is None:
         raise ValueError("manual_root is required by manual_file safety evidence")
@@ -160,6 +162,66 @@ def _validate_video_physical_refs(
         raise ValueError(
             f"{item.get('assetId')}: safety evidence physical video drift"
         )
+    _validate_video_source_attribution(evidence, item)
+    _validate_source_review_evidence(evidence, evidence_root=evidence_root)
+
+
+def _validate_video_source_attribution(
+    evidence: Mapping[str, Any],
+    item: Mapping[str, Any],
+) -> None:
+    attribution = evidence.get("sourceAttribution")
+    if attribution is None:
+        return
+    if not isinstance(attribution, Mapping):
+        raise TypeError(
+            f"{item.get('assetId')}: video safety source attribution is invalid"
+        )
+    expected = {
+        "provider": item.get("provider"),
+        "sourcePostUrl": item.get("sourceUrl"),
+        "originalAssetUrl": item.get("assetUrl"),
+        "creator": item.get("creator"),
+        "license": item.get("license"),
+        "termsUrl": item.get("termsUrl"),
+        "authorizationProof": item.get("authorizationProof"),
+    }
+    drift = [
+        field
+        for field, value in expected.items()
+        if attribution.get(field) != value
+    ]
+    if drift:
+        raise ValueError(
+            f"{item.get('assetId')}: video safety source/rights drift: "
+            + ", ".join(drift)
+        )
+
+
+def _validate_source_review_evidence(
+    evidence: Mapping[str, Any],
+    *,
+    evidence_root: Path,
+) -> None:
+    review = evidence.get("reviewEvidence")
+    if review is None:
+        return
+    if not isinstance(review, Mapping):
+        raise TypeError("video source review evidence is invalid")
+    for ref_field, digest_field in (
+        ("sourceReviewRequestRef", "sourceReviewRequestSha256"),
+        ("sourceReviewAttemptRef", "sourceReviewAttemptSha256"),
+        ("sourceCapacityReceiptRef", "sourceCapacityReceiptSha256"),
+    ):
+        path = _safe_file(
+            evidence_root,
+            review.get(ref_field),
+            label=f"video source review {ref_field}",
+        )
+        if file_sha256(path) != review.get(digest_field):
+            raise ValueError(
+                f"video source review evidence SHA-256 drift: {ref_field}"
+            )
 
 
 def validate_image_safety_payload(

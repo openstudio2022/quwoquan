@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from content.execution.closure.adoption_contract import (
+    ReleaseIdentityIncident,
+    file_digest,
     validate_release_identity_incident,
     validate_reviewed_closure_adoption_receipt,
     validate_reviewed_closure_adoption_ref,
@@ -13,10 +16,103 @@ from content.release.canonical.object_transaction_contract import (
     ObjectTransactionError,
     _read_json,
 )
-from content.release.canonical.release_identity_incident_legacy_migration import (
-    load_validated_legacy_incident_projection,
+from core.paths import (
+    OUTPUT_ROOT,
+    RELEASE_IDENTITY_INCIDENT_MIGRATIONS_ROOT,
+    RELEASE_IDENTITY_INCIDENTS_ROOT,
 )
-from core.paths import OUTPUT_ROOT, RELEASE_IDENTITY_INCIDENTS_ROOT
+
+_INCIDENT_OBSERVATION_IDENTITY_KEYS = (
+    "releaseId",
+    "payloadSha256",
+    "canonicalMerkle",
+    "attestationFileSha256",
+    "executionIds",
+    "observedAt",
+)
+
+
+def _observation_identity_rows(value: object, *, label: str) -> list[dict[str, object]]:
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{label} must be an object")
+    rows = value.get("observedIdentities")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError(f"{label} observedIdentities must be a non-empty array")
+    identity_rows: list[dict[str, object]] = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            raise ValueError(f"{label} observation must be an object")
+        identity_rows.append(
+            {key: row.get(key) for key in _INCIDENT_OBSERVATION_IDENTITY_KEYS}
+        )
+    return identity_rows
+
+
+def _migrated_incident_projection(
+    incident_path: Path,
+    *,
+    output_root: Path,
+) -> ReleaseIdentityIncident:
+    """Validate the create-once migrated projection of a pre-contract incident.
+
+    Incidents recorded before the current provenance contract stay immutable in
+    their canonical location; the completed one-shot migration left a
+    current-schema projection in the append-only migration namespace.  The
+    projection is only consumed while the source incident still matches the
+    migration receipt byte-for-byte and the projection replays the exact
+    observation identities and execution closure; any drift stays fail closed.
+    """
+
+    root = output_root.resolve()
+    incident_root = incident_path.parent
+    migration_namespace = (
+        root
+        / RELEASE_IDENTITY_INCIDENT_MIGRATIONS_ROOT.relative_to(OUTPUT_ROOT)
+        / incident_root.parent.name
+        / incident_root.name
+    )
+    if migration_namespace.is_symlink() or not migration_namespace.is_dir():
+        raise ValueError("pre-contract incident has no migrated projection namespace")
+    candidates = sorted(
+        (
+            path
+            for path in migration_namespace.iterdir()
+            if path.is_dir() and not path.is_symlink()
+        ),
+        key=lambda path: path.name,
+    )
+    if len(candidates) != 1:
+        raise ValueError(
+            "migrated incident projection namespace must hold exactly one migration"
+        )
+    receipt = _read_json(candidates[0] / "migration_receipt.json")
+    source_binding = (
+        receipt.get("sourceIncident") if isinstance(receipt, Mapping) else None
+    )
+    if (
+        not isinstance(source_binding, Mapping)
+        or file_digest(incident_path) != source_binding.get("fileSha256")
+    ):
+        raise ValueError(
+            "pre-contract incident no longer matches its migration receipt binding"
+        )
+    projection_path = candidates[0] / "incident_projection.json"
+    if projection_path.is_symlink() or not projection_path.is_file():
+        raise ValueError("migrated incident projection file is missing")
+    projection = _read_json(projection_path)
+    source = _read_json(incident_path)
+    if not isinstance(source, Mapping) or not isinstance(projection, Mapping):
+        raise ValueError("incident and migrated projection must be objects")
+    if (
+        projection.get("releaseId") != source.get("releaseId")
+        or projection.get("incidentId") != source.get("incidentId")
+        or projection.get("protectedExecutionIds")
+        != source.get("protectedExecutionIds")
+        or _observation_identity_rows(projection, label="migrated projection")
+        != _observation_identity_rows(source, label="pre-contract incident")
+    ):
+        raise ValueError("migrated incident projection drifted from its source")
+    return validate_release_identity_incident(projection, output_root=root)
 
 
 def release_identity_incident_refs(
@@ -77,7 +173,7 @@ def release_identity_incident_refs(
                         output_root=output_root.resolve(),
                     )
                 except (OSError, TypeError, ValueError):
-                    incident = load_validated_legacy_incident_projection(
+                    incident = _migrated_incident_projection(
                         incident_path,
                         output_root=output_root.resolve(),
                     )

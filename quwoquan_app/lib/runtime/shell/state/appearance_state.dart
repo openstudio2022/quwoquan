@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/runtime/shell/state/accessibility_provider.dart';
 
 enum AppBreakpoint { compact, regular, expanded }
@@ -57,8 +58,8 @@ class ResponsiveNotifier extends Notifier<ResponsiveState> {
 
   void updateFromSize(Size size, {double devicePixelRatio = 1.0}) {
     final breakpoint = switch (size.width) {
-      < 360 => AppBreakpoint.compact,
-      >= 600 => AppBreakpoint.expanded,
+      < AppSpacing.compactBreakpoint => AppBreakpoint.compact,
+      >= AppSpacing.expandedBreakpoint => AppBreakpoint.expanded,
       _ => AppBreakpoint.regular,
     };
     final orientation = size.width > size.height

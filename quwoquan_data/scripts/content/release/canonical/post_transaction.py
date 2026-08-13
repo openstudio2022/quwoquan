@@ -264,7 +264,8 @@ def build_post_object_transaction_package(
                     )
                 ):
                     raise ObjectTransactionError(
-                        "DATA.POOL.IDEMPOTENCY_CONFLICT: legacy package contract drift"
+                        "DATA.POOL.IDEMPOTENCY_CONFLICT: "
+                        "pre-media-mode package contract drift"
                     )
             if rights_mode is None:
                 rights = {**rights, "publishMediaMode": "text_only"}
@@ -308,7 +309,8 @@ def build_post_object_transaction_package(
                     or pool_record.get("recordSequence") != 1
                 ):
                     raise ObjectTransactionError(
-                        "DATA.POOL.IDEMPOTENCY_CONFLICT: legacy pool record drift"
+                        "DATA.POOL.IDEMPOTENCY_CONFLICT: "
+                        "pre-media-mode pool record drift"
                     )
                 refreshed_pool_record = build_canonical_pool_record(
                     object_root=object_root,
@@ -322,7 +324,8 @@ def build_post_object_transaction_package(
                     if key not in {"payloadDigest", "canonicalObjectDigest"}
                 ):
                     raise ObjectTransactionError(
-                        "DATA.POOL.IDEMPOTENCY_CONFLICT: legacy pool record drift"
+                        "DATA.POOL.IDEMPOTENCY_CONFLICT: "
+                        "pre-media-mode pool record drift"
                     )
                 _write_json(pool_record_path, refreshed_pool_record)
                 review_binding = _review_binding(object_root, existing)

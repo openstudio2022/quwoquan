@@ -5,7 +5,7 @@
 /// 即群头像组件走通了真实数据路径，空列表不是合法终态。
 ///
 /// 分工声明：**成员头像变化的跨端传播正确性**由
-/// `quwoquan_ops/.../chat-service/ci/run_chat_avatar_device_matrix.py`
+/// `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/ci/run_chat_avatar_device_matrix.py`
 /// 绑定的 probe 断言；本用例负责 App 侧「真实群会话在列表中可见」的
 /// readback 基线，二者合并构成该旅程的完整验收。
 library;

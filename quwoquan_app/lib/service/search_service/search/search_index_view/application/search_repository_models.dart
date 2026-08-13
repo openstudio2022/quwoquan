@@ -11,6 +11,7 @@ class SearchRequest {
     this.contentTypes = const <SearchContentTypeFilter>{},
     this.categoryId,
     this.subCategory,
+    this.cursor,
   });
 
   final String query;
@@ -22,6 +23,10 @@ class SearchRequest {
   final Set<SearchContentTypeFilter> contentTypes;
   final String? categoryId;
   final String? subCategory;
+
+  /// 服务端签发的 opaque 分页游标（响应 `nextCursor` 原样回传）；
+  /// 首屏为 null。端侧不得解释或改写其内容。
+  final String? cursor;
 
   SearchRequest normalized() {
     final trimmedQuery = query.trim();
@@ -43,6 +48,7 @@ class SearchRequest {
       contentTypes: contentTypes,
       categoryId: _normalize(categoryId),
       subCategory: _normalize(subCategory),
+      cursor: _normalize(cursor),
     );
   }
 }
@@ -64,31 +70,46 @@ final class SearchPageResultItem {
   const SearchPageResultItem({
     required this.objectRef,
     required this.resultType,
+    this.contentType,
     required this.title,
     this.subtitle,
     this.snippet,
     this.thumbnailUrl,
     required this.action,
+    this.rankPosition = 0,
+    this.rankReason,
   });
 
   factory SearchPageResultItem.fromWireSlice(SearchPageItem value) =>
       SearchPageResultItem(
         objectRef: value.objectRef,
         resultType: value.resultType,
+        contentType: value.contentType,
         title: value.title,
         subtitle: value.subtitle,
         snippet: value.snippet,
         thumbnailUrl: value.thumbnailUrl,
         action: value.action,
+        rankPosition: value.rankPosition,
+        rankReason: value.rankReason,
       );
 
   final String objectRef;
   final SearchPageObjectType resultType;
+
+  /// 仅 `content.post` 命中携带（article/image/video）；媒体 Tab 依赖它区分形态。
+  final SearchPageContentType? contentType;
   final String title;
   final String? subtitle;
   final String? snippet;
   final String? thumbnailUrl;
   final String action;
+
+  /// 服务端最终排序位置（0 起）；端侧只读消费，不得客户端重排。
+  final int rankPosition;
+
+  /// 服务端首要排序理由 label；null 时不展示理由标签。
+  final String? rankReason;
 }
 
 final class SearchPageResultFacet {
@@ -173,6 +194,7 @@ class SearchResponse {
     required this.sections,
     this.degradeSignals = const <SearchDegradeSignal>[],
     this.relatedTerms = const <String>[],
+    this.matchedTerms = const <String>[],
     this.searchRequestId,
     this.pageItems = const <SearchPageResultItem>[],
     this.pageFacets = const <SearchPageResultFacet>[],
@@ -186,6 +208,10 @@ class SearchResponse {
   /// 云侧相关搜索词（`_shared/search_contract.yaml` responseFields.relatedTerms）；
   /// 结果页「相关搜索」优先消费它，本地扇出（mock/local）为空（R-003）。
   final List<String> relatedTerms;
+
+  /// 云侧归一化命中词（查询级别对全部结果一致），用于命中片段高亮；
+  /// 本地扇出为空列表。
+  final List<String> matchedTerms;
 
   /// 云侧单次搜索请求 ID（响应 envelope `requestId`），
   /// 是搜索反馈（impression/click）归因锚点；本地扇出为 null 时不上报反馈。

@@ -461,3 +461,45 @@ def test_commons_source_and_license_drift_fail_before_reacquisition(
             handoff_ref=handoff,
             output_root=root,
         )
+
+
+def test_commons_cc_license_url_protocol_is_normalized_to_https(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Commons CC0 条目的 http:// canonical license URL 归一为 https://。"""
+    from content.source.research import auto_plan_video
+
+    page = {
+        "pageid": 1,
+        "title": "File:Lushan summit.webm",
+        "imageinfo": [
+            {
+                "url": "https://upload.wikimedia.org/lushan.webm",
+                "descriptionurl": "https://commons.wikimedia.org/wiki/File:Lushan_summit.webm",
+                "size": 1024,
+                "duration": 12.0,
+                "mediatype": "VIDEO",
+                "extmetadata": {
+                    "ImageDescription": {"value": "庐山 Lushan summit"},
+                    "LicenseShortName": {"value": "CC0"},
+                    "LicenseUrl": {
+                        "value": "http://creativecommons.org/publicdomain/zero/1.0/deed.en"
+                    },
+                    "Artist": {"value": "Photographer"},
+                    "Categories": {"value": "Lushan"},
+                },
+            }
+        ],
+    }
+    monkeypatch.setattr(
+        auto_plan_video.network_io,
+        "wiki_api",
+        lambda *_args, **_kwargs: {"query": {"pages": [page]}},
+    )
+    candidates = auto_plan_video.discover_commons_sourced_videos(
+        "庐山", entity_aliases=["Lushan"]
+    )
+    assert candidates, "CC0 http license URL must not be dropped by rights gate"
+    assert candidates[0]["termsUrl"] == (
+        "https://creativecommons.org/publicdomain/zero/1.0/deed.en"
+    )

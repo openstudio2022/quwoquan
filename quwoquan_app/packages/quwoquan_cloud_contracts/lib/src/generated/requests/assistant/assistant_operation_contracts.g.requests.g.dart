@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
+// ContractGraph SHA256: ba2dde9a203e9d9979e42aa34fc1994593f88f10ce159c4e37a42f66497c1ef9
 
 part of '../../../assistant/assistant_operation_contracts.g.dart';
 
@@ -1270,6 +1270,34 @@ final class GetSkillDataControlRequestQuery {
   };
 }
 
+final class GetSkillSurfacePlacementQuery {
+  GetSkillSurfacePlacementQuery({
+    required SkillSurfaceKind surfaceKind,
+    required String surfaceId,
+  }) : surfaceKind = surfaceKind,
+       surfaceId = surfaceId {
+    if (this.surfaceId.isEmpty) {
+      throw ArgumentError.value(this.surfaceId, "surfaceId", 'must not be blank');
+    }
+  }
+
+  final SkillSurfaceKind surfaceKind;
+  final String surfaceId;
+
+  factory GetSkillSurfacePlacementQuery.fromWire(Map<String, Object?> map, [String path = "GetSkillSurfacePlacementQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"surfaceKind", "surfaceId"}, path);
+    return GetSkillSurfacePlacementQuery(
+      surfaceKind: switch (map["surfaceKind"]) { "conversation" => SkillSurfaceKind.conversation, "circle" => SkillSurfaceKind.circle, _ => throw FormatException('$path.surfaceKind' + ' has an invalid enum value'), },
+      surfaceId: _generatedRequestString(map["surfaceId"], '$path.surfaceId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "surfaceKind": this.surfaceKind.wireName,
+    "surfaceId": this.surfaceId,
+  };
+}
+
 final class GetSkillUserSettingQuery {
   GetSkillUserSettingQuery({
     required String skillId,
@@ -1559,6 +1587,54 @@ final class PageContextSnapshot {
     "pageObjects": this.pageObjects.map((value) => value.toWire()).toList(growable: false),
     "userActions": this.userActions.map((value) => value.toWire()).toList(growable: false),
     "consentGranted": this.consentGranted,
+  };
+}
+
+final class PutSkillSurfacePlacementRequest {
+  PutSkillSurfacePlacementRequest({
+    required SkillSurfaceKind surfaceKind,
+    required String surfaceId,
+    required SkillSurfacePlacementPolicy policy,
+    required List<String> disabledSkillIds,
+    required SkillSurfacePlacementStatus status,
+    required int expectedRevision,
+  }) : surfaceKind = surfaceKind,
+       surfaceId = surfaceId,
+       policy = policy,
+       disabledSkillIds = List.unmodifiable(disabledSkillIds),
+       status = status,
+       expectedRevision = expectedRevision {
+    if (this.surfaceId.isEmpty) {
+      throw ArgumentError.value(this.surfaceId, "surfaceId", 'must not be blank');
+    }
+  }
+
+  final SkillSurfaceKind surfaceKind;
+  final String surfaceId;
+  final SkillSurfacePlacementPolicy policy;
+  final List<String> disabledSkillIds;
+  final SkillSurfacePlacementStatus status;
+  final int expectedRevision;
+
+  factory PutSkillSurfacePlacementRequest.fromWire(Map<String, Object?> map, [String path = "PutSkillSurfacePlacementRequest"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"surfaceKind", "surfaceId", "policy", "disabledSkillIds", "status", "expectedRevision"}, path);
+    return PutSkillSurfacePlacementRequest(
+      surfaceKind: switch (map["surfaceKind"]) { "conversation" => SkillSurfaceKind.conversation, "circle" => SkillSurfaceKind.circle, _ => throw FormatException('$path.surfaceKind' + ' has an invalid enum value'), },
+      surfaceId: _generatedRequestString(map["surfaceId"], '$path.surfaceId'),
+      policy: switch (map["policy"]) { "all_shared_eligible" => SkillSurfacePlacementPolicy.allSharedEligible, _ => throw FormatException('$path.policy' + ' has an invalid enum value'), },
+      disabledSkillIds: List<String>.unmodifiable(_generatedRequestList(map["disabledSkillIds"], '$path.disabledSkillIds').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.disabledSkillIds' + '[${entry.key}]'))),
+      status: switch (map["status"]) { "active" => SkillSurfacePlacementStatus.active, "archived" => SkillSurfacePlacementStatus.archived, _ => throw FormatException('$path.status' + ' has an invalid enum value'), },
+      expectedRevision: _generatedRequestInt(map["expectedRevision"], '$path.expectedRevision'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "surfaceKind": this.surfaceKind.wireName,
+    "surfaceId": this.surfaceId,
+    "policy": this.policy.wireName,
+    "disabledSkillIds": this.disabledSkillIds.map((value) => value).toList(growable: false),
+    "status": this.status.wireName,
+    "expectedRevision": this.expectedRevision,
   };
 }
 
@@ -2097,6 +2173,30 @@ CloudOperationRequestPayload encodeAssistantSkillSubscriptionUpdateSkillSubscrip
     body: <String, Object?>{
       "status": request.status,
       "clientRequestId": request.clientRequestId,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeAssistantSkillSurfacePlacementGetSkillSurfacePlacementGeneratedRequest(GetSkillSurfacePlacementQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "surfaceKind": (request.surfaceKind.wireName).toString(),
+      "surfaceId": request.surfaceId,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeAssistantSkillSurfacePlacementPutSkillSurfacePlacementGeneratedRequest(PutSkillSurfacePlacementRequest request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "surfaceKind": (request.surfaceKind.wireName).toString(),
+      "surfaceId": request.surfaceId,
+    },
+    body: <String, Object?>{
+      "policy": request.policy.wireName,
+      "disabledSkillIds": request.disabledSkillIds.map((value) => value).toList(growable: false),
+      "status": request.status.wireName,
+      "expectedRevision": request.expectedRevision,
     },
   );
 }

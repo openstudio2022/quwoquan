@@ -2,7 +2,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import '../../../../../support/runtime/fixtures/fixture_user_resolver.dart';
+import '../../../../../support/service/user_service/account/user_account/fixture_user_resolver.dart';
 
 void main() {
   test('shared user without persona refs falls back to its user id', () {

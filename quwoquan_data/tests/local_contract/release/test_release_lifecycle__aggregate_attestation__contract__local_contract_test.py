@@ -12,7 +12,6 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from content.release.canonical.baseline_release import build_empty_baseline_release
-from content.release.canonical.object_source_identity import source_identity_set
 from core.release_layout import payload_digest
 from core.source_digest import content_source_revision, current_source_digest
 from verify import verify_release_lifecycle as lifecycle
@@ -112,34 +111,15 @@ def _fixture(tmp_path: Path) -> Path:
     return release
 
 
-def _rewrite_as_legacy_identity_set(release: Path, *, bind_digest: bool) -> None:
+def _rewrite_with_frozen_source_digest(release: Path) -> None:
     header_path = release / "payload/release.json"
     attestation_path = release / "attestations/release.json"
     header = json.loads(header_path.read_text(encoding="utf-8"))
     attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
     source_digest = dict(header["sourceDigests"][0])
     source_digest["inputs"] = ["quwoquan_data/historical/pre-contract-source"]
-    digest = str(source_digest["digest"])
-    identity_digest = digest if bind_digest else "sha256:" + "f" * 64
-    identities, identity_set_digest = source_identity_set(
-        [
-            {
-                "identityKind": "legacy_canonical_migration",
-                "executionId": EXECUTION_IDS[0],
-                "sourceDigest": identity_digest,
-                "canonicalObjectDigest": "sha256:" + "1" * 64,
-                "migrationEvidenceDigest": "sha256:" + "2" * 64,
-            }
-        ]
-    )
     for document in (header, attestation):
-        document.pop("sourceRevision")
-        document.pop("sourceDigest")
-        document.pop("entityCatalogDigest")
-        document["executionIds"] = [EXECUTION_IDS[0]]
         document["sourceDigests"] = [source_digest]
-        document["sourceIdentities"] = identities
-        document["sourceIdentitySetDigest"] = identity_set_digest
     _write_json(header_path, header)
     attestation["payloadSha256"] = payload_digest(release)
     _write_json(attestation_path, attestation)
@@ -359,26 +339,19 @@ def test_release_lifecycle__accepts_schema_bound_aggregate_attestation__local_co
     assert lifecycle.release_lifecycle_issues(RELEASE_ID) == []
 
 
-def test_release_lifecycle__accepts_identity_bound_legacy_source_digest__local_contract(
+def test_release_lifecycle__rejects_frozen_source_digest__local_contract(
     monkeypatch, tmp_path: Path
 ) -> None:
     release = _fixture(tmp_path)
-    _rewrite_as_legacy_identity_set(release, bind_digest=True)
-    monkeypatch.setattr(lifecycle, "RELEASE_ROOT", tmp_path)
-
-    assert lifecycle.release_lifecycle_issues(RELEASE_ID) == []
-
-
-def test_release_lifecycle__rejects_unbound_legacy_source_digest__local_contract(
-    monkeypatch, tmp_path: Path
-) -> None:
-    release = _fixture(tmp_path)
-    _rewrite_as_legacy_identity_set(release, bind_digest=False)
+    _rewrite_with_frozen_source_digest(release)
     monkeypatch.setattr(lifecycle, "RELEASE_ROOT", tmp_path)
 
     issues = lifecycle.release_lifecycle_issues(RELEASE_ID)
 
-    assert any("source identity set closure drifted" in issue for issue in issues)
+    assert any(
+        "sourceDigest.inputs must name the fixed repository inputs" in issue
+        for issue in issues
+    )
 
 
 def test_release_lifecycle__rejects_attestation_payload_drift__local_contract(

@@ -29,6 +29,7 @@ class ContentRequestPageIds {
     'GetCurrentPostModerationCase': 'content.get.current.post.moderation.case',
     'GetEntityWishlistState': 'content.get.entity.wishlist.state',
     'GetFeed': 'content.feed.list',
+    'GetGatheringSocialProof': 'content.get.gathering.social.proof',
     'GetHelperRead': 'content.get.helper.read',
     'GetMediaAsset': 'content.media.get',
     'GetMediaAssetDeliveryReference': 'content.get.media.asset.delivery.reference',
@@ -38,6 +39,7 @@ class ContentRequestPageIds {
     'GetMyFootprint': 'content.footprint.list',
     'GetMyIntersectionSummary': 'content.get.my.intersection.summary',
     'GetObjectIntersections': 'content.get.object.intersections',
+    'GetOriginalImageAccessAudit': 'content.get.original.image.access.audit',
     'GetOwnedMediaAsset': 'content.get.owned.media.asset',
     'GetPost': 'content.post.get',
     'GetPostPublicationEligibility': 'content.get.post.publication.eligibility',
@@ -54,6 +56,7 @@ class ContentRequestPageIds {
     'ListCommentsForPostAuthor': 'content.list.comments.for.post.author',
     'ListMyIntersections': 'content.list.my.intersections',
     'ListMyReports': 'content.list.my.reports',
+    'ListPostsByGathering': 'content.list.posts.by.gathering',
     'ListProfileInteractionActivitiesReceived': 'content.profile.interactions.received',
     'ListProfileInteractionActivitiesSent': 'content.profile.interactions.sent',
     'ListReports': 'content.list.reports',
@@ -111,6 +114,7 @@ class ContentRequestPageIds {
   static const String getCurrentPostModerationCase = 'content.get.current.post.moderation.case';
   static const String getEntityWishlistState = 'content.get.entity.wishlist.state';
   static const String getFeed = 'content.feed.list';
+  static const String getGatheringSocialProof = 'content.get.gathering.social.proof';
   static const String getHelperRead = 'content.get.helper.read';
   static const String getMediaAsset = 'content.media.get';
   static const String getMediaAssetDeliveryReference = 'content.get.media.asset.delivery.reference';
@@ -120,6 +124,7 @@ class ContentRequestPageIds {
   static const String getMyFootprint = 'content.footprint.list';
   static const String getMyIntersectionSummary = 'content.get.my.intersection.summary';
   static const String getObjectIntersections = 'content.get.object.intersections';
+  static const String getOriginalImageAccessAudit = 'content.get.original.image.access.audit';
   static const String getOwnedMediaAsset = 'content.get.owned.media.asset';
   static const String getPost = 'content.post.get';
   static const String getPostPublicationEligibility = 'content.get.post.publication.eligibility';
@@ -136,6 +141,7 @@ class ContentRequestPageIds {
   static const String listCommentsForPostAuthor = 'content.list.comments.for.post.author';
   static const String listMyIntersections = 'content.list.my.intersections';
   static const String listMyReports = 'content.list.my.reports';
+  static const String listPostsByGathering = 'content.list.posts.by.gathering';
   static const String listProfileInteractionActivitiesReceived = 'content.profile.interactions.received';
   static const String listProfileInteractionActivitiesSent = 'content.profile.interactions.sent';
   static const String listReports = 'content.list.reports';

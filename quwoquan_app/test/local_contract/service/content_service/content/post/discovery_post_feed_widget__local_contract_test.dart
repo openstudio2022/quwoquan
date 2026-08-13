@@ -10,25 +10,30 @@ import 'package:quwoquan_app/runtime/observability/analytics.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart'
-    show kFeedSortRecommend;
+    show ContentDiscoveryFeedQuery, kFeedSortRecommend;
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/post_interaction_state.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 ProviderContainer _container(
-  MockContentRepository repo, {
+  ContentDiscoveryFeedQuery repo, {
   AnalyticsService? analytics,
 }) {
   return ProviderContainer(
     overrides: [
-      ...mockContentFacetOverrides(repo),
+      ...mockContentFacetOverrides(
+        store: InMemoryContentPostStore(),
+        feedQuery: repo,
+      ),
       if (analytics != null) analyticsProvider.overrideWithValue(analytics),
       postInteractionStateProvider.overrideWith(
         _NoopPostInteractionStateNotifier.new,
@@ -37,37 +42,63 @@ ProviderContainer _container(
   );
 }
 
+List<ContentPostViewData> _defaultFeedPosts() => <ContentPostViewData>[
+  contentPostViewDataBuilder(
+    postId: 'default-photo',
+    contentType: 'image',
+    mediaUrls: const <String>[testContentImageUrl],
+  ),
+  contentPostViewDataBuilder(
+    postId: 'default-video',
+    contentType: 'video',
+    videoUrl: testContentVideoUrl,
+  ),
+];
+
+class _SuiteFeedQuery extends InMemoryContentDiscoveryFeedQuery {
+  _SuiteFeedQuery({List<ContentPostViewData>? posts})
+    : super(InMemoryContentPostStore(posts: posts ?? _defaultFeedPosts()));
+}
+
+List<ContentPostViewData> _paginationPhotoPosts() {
+  return contentPostListBuilder(
+    contentType: 'image',
+    count: 21,
+    idPrefix: 'pagination-photo',
+  );
+}
+
+ContentDiscoveryFeedQuery _pagedPhotoRepository() =>
+    _SuiteFeedQuery(posts: _paginationPhotoPosts());
+
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 void main() {
   group('DiscoveryFeedMapNotifier', () {
     test('initial state is empty map', () {
-      final container = _container(MockContentRepository());
+      final container = _container(_SuiteFeedQuery());
       addTearDown(container.dispose);
       final state = container.read(discoveryFeedMapProvider);
       expect(state, isEmpty);
     });
 
-    test(
-      'load(photo) populates feed items from MockContentRepository',
-      () async {
-        final container = _container(MockContentRepository());
-        addTearDown(container.dispose);
+    test('load(photo) populates feed items from typed feed query', () async {
+      final container = _container(_SuiteFeedQuery());
+      addTearDown(container.dispose);
 
-        await container.read(discoveryFeedMapProvider.notifier).load('photo');
+      await container.read(discoveryFeedMapProvider.notifier).load('photo');
 
-        final feedAsync = container.read(discoveryFeedMapProvider)['photo'];
-        expect(feedAsync, isNotNull);
-        final feed = feedAsync!.value;
-        expect(feed, isNotNull);
-        expect(feed!.items, isNotEmpty);
-        expect(feed.items.first, isA<ContentPostViewData>());
-        expect(feed.items.first.type, 'image');
-      },
-    );
+      final feedAsync = container.read(discoveryFeedMapProvider)['photo'];
+      expect(feedAsync, isNotNull);
+      final feed = feedAsync!.value;
+      expect(feed, isNotNull);
+      expect(feed!.items, isNotEmpty);
+      expect(feed.items.first, isA<ContentPostViewData>());
+      expect(feed.items.first.type, 'image');
+    });
 
     test('load(video) returns canonical video presentation items', () async {
-      final container = _container(MockContentRepository());
+      final container = _container(_SuiteFeedQuery());
       addTearDown(container.dispose);
 
       await container.read(discoveryFeedMapProvider.notifier).load('video');
@@ -164,7 +195,7 @@ void main() {
     });
 
     test('appendNextPage 会在存在 nextCursor 时追加下一页并推进 cursor', () async {
-      final container = _container(MockContentRepository());
+      final container = _container(_pagedPhotoRepository());
       addTearDown(container.dispose);
 
       await container.read(discoveryFeedMapProvider.notifier).load('photo');
@@ -273,7 +304,7 @@ void main() {
     test(
       'load with cached items keeps staleDataError and preserves items',
       () async {
-        final container = _container(MockContentRepository());
+        final container = _container(_SuiteFeedQuery());
         addTearDown(container.dispose);
 
         await container.read(discoveryFeedMapProvider.notifier).load('photo');
@@ -295,7 +326,10 @@ void main() {
         };
 
         container.updateOverrides([
-          ...mockContentFacetOverrides(_FailingContentRepository()),
+          ...mockContentFacetOverrides(
+            store: InMemoryContentPostStore(),
+            feedQuery: _FailingContentRepository(),
+          ),
           postInteractionStateProvider.overrideWith(
             _NoopPostInteractionStateNotifier.new,
           ),
@@ -753,7 +787,7 @@ void main() {
 
 // ─── test double ──────────────────────────────────────────────────────────────
 
-class _FailingContentRepository extends MockContentRepository {
+class _FailingContentRepository extends _SuiteFeedQuery {
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
@@ -771,20 +805,9 @@ class _FailingContentRepository extends MockContentRepository {
   }) async {
     throw Exception('network_error');
   }
-
-  @override
-  Future<List<ContentPostViewData>> listDiscoveryFeed({
-    required String category,
-    String? identity,
-    String? type,
-    String? subCategory,
-    int limit = 20,
-    String? cursor,
-    String sort = kFeedSortRecommend,
-  }) async => throw Exception('network_error');
 }
 
-class _CancelledContentRepository extends MockContentRepository {
+class _CancelledContentRepository extends _SuiteFeedQuery {
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
@@ -804,7 +827,7 @@ class _CancelledContentRepository extends MockContentRepository {
   }
 }
 
-class _EmptyCacheFallbackContentRepository extends MockContentRepository {
+class _EmptyCacheFallbackContentRepository extends _SuiteFeedQuery {
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
@@ -828,7 +851,7 @@ class _EmptyCacheFallbackContentRepository extends MockContentRepository {
   }
 }
 
-class _EmptyDiscoveryFeedContentRepository extends MockContentRepository {
+class _EmptyDiscoveryFeedContentRepository extends _SuiteFeedQuery {
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
@@ -855,7 +878,7 @@ class _EmptyDiscoveryFeedContentRepository extends MockContentRepository {
   }
 }
 
-class _EmptyContinuationContentRepository extends MockContentRepository {
+class _EmptyContinuationContentRepository extends _SuiteFeedQuery {
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
@@ -975,7 +998,7 @@ class _CachedContinuationFallbackContentRepository
         deadlineAt: deadlineAt,
       );
     }
-    final page = await MockContentRepository().listDiscoveryFeedPage(
+    final page = await _SuiteFeedQuery().listDiscoveryFeedPage(
       category: category,
       channelId: channelId,
       identity: identity,
@@ -1000,7 +1023,7 @@ class _CachedContinuationFallbackContentRepository
   }
 }
 
-class _EmptyRefreshContentRepository extends MockContentRepository {
+class _EmptyRefreshContentRepository extends _SuiteFeedQuery {
   var _requestCount = 0;
 
   @override
@@ -1039,7 +1062,7 @@ class _EmptyRefreshContentRepository extends MockContentRepository {
   }
 }
 
-class _ControllableContentRepository extends MockContentRepository {
+class _ControllableContentRepository extends _SuiteFeedQuery {
   bool holdNextRequest = false;
   Completer<DiscoveryFeedPage>? _pending;
   DiscoveryFeedPage? _heldPage;
@@ -1085,7 +1108,7 @@ class _ControllableContentRepository extends MockContentRepository {
   }
 }
 
-class _NeverCompletingContentRepository extends MockContentRepository {
+class _NeverCompletingContentRepository extends _SuiteFeedQuery {
   final Completer<DiscoveryFeedPage> _pending = Completer<DiscoveryFeedPage>();
   CloudOperationCancellationSignal? cancellation;
   DateTime? deadlineAt;
@@ -1113,7 +1136,9 @@ class _NeverCompletingContentRepository extends MockContentRepository {
   }
 }
 
-class _PendingAppendContentRepository extends MockContentRepository {
+class _PendingAppendContentRepository extends _SuiteFeedQuery {
+  _PendingAppendContentRepository() : super(posts: _paginationPhotoPosts());
+
   final Completer<DiscoveryFeedPage> _pending = Completer<DiscoveryFeedPage>();
   DiscoveryFeedPage? _heldPage;
   CloudOperationCancellationSignal? cancellation;
@@ -1158,7 +1183,7 @@ class _PendingAppendContentRepository extends MockContentRepository {
   }
 }
 
-class _StaleWhileRevalidateContentRepository extends MockContentRepository {
+class _StaleWhileRevalidateContentRepository extends _SuiteFeedQuery {
   final List<_PendingRevalidationRequest> requests =
       <_PendingRevalidationRequest>[];
 
@@ -1239,7 +1264,9 @@ final class _PendingRevalidationRequest {
   final Completer<DiscoveryFeedPage> completer = Completer<DiscoveryFeedPage>();
 }
 
-class _SupersedingContentRepository extends MockContentRepository {
+class _SupersedingContentRepository extends _SuiteFeedQuery {
+  _SupersedingContentRepository() : super(posts: _paginationPhotoPosts());
+
   final List<_PendingFeedRequest> requests = <_PendingFeedRequest>[];
 
   @override
@@ -1312,7 +1339,10 @@ class _NoopPostInteractionStateNotifier extends PostInteractionStateNotifier {
   PostInteractionState build() => const PostInteractionState();
 
   @override
-  void applyConfirmedPosts(Iterable<ContentPostViewData> posts) {
+  void applyConfirmedPosts(
+    Iterable<ContentPostViewData> posts, {
+    Set<String> pendingLikePostIds = const <String>{},
+  }) {
     final nextConfirmedShareCounts = Map<String, int>.from(
       state.confirmedShareCounts,
     );

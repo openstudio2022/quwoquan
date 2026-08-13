@@ -1,4 +1,4 @@
-"""Plan and apply object-level pool admission without rewriting legacy objects."""
+"""Plan and apply object-level pool admission without rewriting canonical objects."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ from typing import Any
 import yaml
 from content.release.canonical.content_pool_record import (
     append_pool_record,
-    build_legacy_migration_source_identity,
     is_pool_record_admitted,
     iter_pool_records,
     pool_payload_digest,
@@ -145,11 +144,7 @@ def _author_plan_items(
             payload_digest=_digest_file(path),
         )
         latest = records[-1] if records else None
-        if (
-            latest is not None
-            and not latest.get("_legacyRecord")
-            and is_pool_record_admitted(latest)
-        ):
+        if latest is not None and is_pool_record_admitted(latest):
             replay_record = dict(record)
             replay_record["recordSequence"] = latest["recordSequence"]
             if latest == replay_record:
@@ -370,15 +365,7 @@ def _apply_item(
         declared_identity = record.get("sourceIdentity")
         if not isinstance(declared_identity, Mapping):
             raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_INVALID")
-        if declared_identity.get("identityKind") == "legacy_canonical_migration":
-            expected_identity = build_legacy_migration_source_identity(
-                manifest=manifest,
-                canonical_object_digest=actual_payload_digest,
-                source_attribution=record["sourceAttribution"],
-                admission_evidence_digest=str(record.get("evidenceDigest") or ""),
-            )
-        else:
-            expected_identity = validate_object_source_identity(manifest)
+        expected_identity = validate_object_source_identity(manifest)
         if dict(declared_identity) != expected_identity:
             raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_DRIFT")
     else:

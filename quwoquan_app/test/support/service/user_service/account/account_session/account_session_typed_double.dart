@@ -85,6 +85,19 @@ final class InMemoryAccountSessionFacet implements AccountSessionWriter {
     return LogoutAck(revoked: revoked);
   }
 
+  @override
+  Future<WhitelistedResearchSession> issueWhitelistedResearchSession(
+    IssueWhitelistedResearchSessionCommand command,
+  ) async {
+    return WhitelistedResearchSession(
+      // sha256("alpha-test-research-subject")
+      subjectHash:
+          'sha256:07510c28cabfc85fbf4aeb9ad8b56683feef80e42f1a14286db9c763ad6069dc',
+      attestationId: 'alpha-test-research-attestation',
+      expiresAt: DateTime.utc(2099),
+    );
+  }
+
   AuthSessionGrant _issueSession({
     required String identityOrigin,
     AccountHintSnapshot? accountHint,

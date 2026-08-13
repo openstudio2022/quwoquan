@@ -1,3 +1,4 @@
+// readiness_case: homepage_status_report_app_uat
 // spec_ref: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-offline-report-and-history-retention/spec.md#gwt-002
 /// Patrol UAT：disposable persona 经 production App 提交状态上报，页面内部完成
 /// typed receipt + pending readback 后才退出；随后以重复 pending failure 验证

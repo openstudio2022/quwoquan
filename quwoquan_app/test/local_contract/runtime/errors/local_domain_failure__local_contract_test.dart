@@ -1,5 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/runtime/errors/domain_error_code.dart';
+import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/rtc/rtc_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/search/search_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/tag/tag_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/local_domain_failure.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
 
@@ -26,6 +30,41 @@ void main() {
     expect(exception.statusCode, RtcErrorCode.blocked.httpStatus);
     expect(exception.domainErrorCode, isNotNull);
     expect(exception.runtimeFailure, isNotNull);
+  });
+
+  test('SEARCH/TAG/OPS 域已注册进 registry，本地判定不再 ArgumentError', () {
+    final searchCode = DomainErrorCodeRegistry.fromCode(
+      SearchErrorCode.searchHotQueryUnavailable.code,
+    );
+    expect(searchCode, isNotNull);
+    expect(searchCode!.domain, 'search');
+    expect(
+      searchCode.defaultMessage,
+      SearchErrorCode.searchHotQueryUnavailable.defaultMessage,
+    );
+
+    final tagCode = DomainErrorCodeRegistry.fromCode(
+      TagErrorCode.tagNotFound.code,
+    );
+    expect(tagCode, isNotNull);
+    expect(tagCode!.domain, 'tag');
+    expect(tagCode.httpStatus, TagErrorCode.tagNotFound.httpStatus);
+
+    final opsCode = DomainErrorCodeRegistry.fromCode(
+      OpsEventRecordErrorCode.logstoreUnavailable.code,
+    );
+    expect(opsCode, isNotNull);
+    expect(opsCode!.domain, 'ops');
+
+    for (final code in <String>[
+      SearchErrorCode.searchHotQueryUnavailable.code,
+      TagErrorCode.tagNotFound.code,
+      OpsEventRecordErrorCode.logstoreUnavailable.code,
+    ]) {
+      final exception = localDomainCloudException(code);
+      expect(exception.code, code);
+      expect(exception.runtimeFailure, isNotNull);
+    }
   });
 
   testWidgets('本地判定与云端返回同一个码时，展示语义与埋点完全一致', (tester) async {

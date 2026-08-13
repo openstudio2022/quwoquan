@@ -1,6 +1,7 @@
 """Execution service extracted from the retired monolithic runner."""
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 from core.cursor_credentials import cursor_safe_subprocess_env
@@ -76,6 +77,195 @@ def _managed_agent_worker_main() -> None:
         json.dumps(outcome.to_document(), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+def _source_review_agent_worker_main() -> None:
+    """Subprocess entrypoint for a source-scoped review without an execution ID."""
+    from content.execution.agent.agent_runner import _default_managed_agent_runner
+
+    input_path = Path(sys.argv[1])
+    output_path = Path(sys.argv[2])
+    payload = json.loads(input_path.read_text(encoding="utf-8"))
+    model_selection = CursorModelSelection.from_config(
+        payload.get("model"),
+        payload.get("modelParameters"),
+        label="source_review_agent_worker",
+    )
+    context = SimpleNamespace(
+        runtime=str(payload.get("runtime") or "local"),
+        model_selection=model_selection,
+        agent_provider="cursor_sdk",
+        max_workers=1,
+    )
+    outcome = _default_managed_agent_runner(
+        context,
+        str(payload.get("prompt") or ""),
+    )
+    output_path.write_text(
+        json.dumps(outcome.to_document(), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def run_source_review_agent_isolated(
+    *,
+    runtime: object,
+    model_selection: CursorModelSelection,
+    prompt: str,
+    timeout_seconds: float | None = None,
+) -> "AgentRunOutcome":
+    """Run one source review with visible progress and a killable hard deadline."""
+    from core.control_types import AgentFailureKind, AgentProvider
+
+    from content.execution.agent.agent_runner import _redact_managed_secret
+    from content.execution.agent.managed_workspace import (
+        terminate_workspace_cursor_bridges,
+    )
+    from content.execution.agent.outcome import AgentRunOutcome
+
+    timeout = float(
+        active_runtime_policy().agent_timeout_seconds
+        if timeout_seconds is None
+        else timeout_seconds
+    )
+    if timeout <= 0:
+        raise ValueError("source review timeout must be positive")
+    heartbeat_seconds = min(15.0, max(1.0, timeout / 4.0))
+    with tempfile.TemporaryDirectory(prefix="qwq-source-review-") as tmp:
+        temp_root = Path(tmp)
+        input_path = temp_root / "input.json"
+        output_path = temp_root / "output.json"
+        input_path.write_text(
+            json.dumps(
+                {
+                    "runtime": str(runtime),
+                    "model": model_selection.model_id,
+                    "modelParameters": model_selection.parameters_document(),
+                    "prompt": prompt,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        scripts_dir = str(Path(__file__).resolve().parents[3])
+        env = cursor_safe_subprocess_env(os.environ)
+        env["PYTHONPATH"] = (
+            scripts_dir
+            if not env.get("PYTHONPATH")
+            else scripts_dir + os.pathsep + str(env.get("PYTHONPATH"))
+        )
+        try:
+            proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "from content.execution.agent.agent_worker import "
+                        "_source_review_agent_worker_main; _source_review_agent_worker_main()"
+                    ),
+                    str(input_path),
+                    str(output_path),
+                ],
+                cwd=str(Path.cwd()),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                start_new_session=True,
+            )
+        except OSError as exc:
+            return AgentRunOutcome.failed(
+                AgentFailureKind.SUBPROCESS_EXITED,
+                provider=AgentProvider.CURSOR_SDK,
+                message=f"source review subprocess failed to start: {type(exc).__name__}",
+                retryable=True,
+                error_code="semantic_provider_startup_failed",
+            )
+        _register_managed_agent_subprocess(proc.pid)
+        print(
+            f"[source-review] started pid={proc.pid} deadlineSeconds={timeout:g}",
+            file=sys.stderr,
+            flush=True,
+        )
+        try:
+            started_at = time.monotonic()
+            next_heartbeat = started_at + heartbeat_seconds
+            while proc.poll() is None:
+                now = time.monotonic()
+                elapsed = now - started_at
+                if elapsed >= timeout:
+                    try:
+                        os.killpg(proc.pid, signal.SIGTERM)
+                    except OSError:
+                        pass
+                    try:
+                        stdout, stderr = proc.communicate(
+                            timeout=_PROCESS_TERMINATION_TIMEOUT_SECONDS
+                        )
+                    except subprocess.TimeoutExpired:
+                        try:
+                            os.killpg(proc.pid, signal.SIGKILL)
+                        except OSError:
+                            pass
+                        stdout, stderr = proc.communicate()
+                    print(
+                        f"[source-review] timed out after {timeout:g}s; bridge cleanup requested",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    return AgentRunOutcome.failed(
+                        AgentFailureKind.SUBPROCESS_TIMEOUT,
+                        provider=AgentProvider.CURSOR_SDK,
+                        message=f"source review subprocess timed out after {timeout:g}s",
+                        started=True,
+                        retryable=True,
+                        error_code="semantic_provider_transport_timeout",
+                        duration_ms=int(elapsed * 1000),
+                        stdout_tail=_redact_managed_secret(stdout)[-1200:],
+                        stderr_tail=_redact_managed_secret(stderr)[-1200:],
+                    )
+                if now >= next_heartbeat:
+                    print(
+                        f"[source-review] heartbeat elapsedSeconds={int(elapsed)}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    next_heartbeat = now + heartbeat_seconds
+                time.sleep(min(1.0, max(0.05, timeout - elapsed)))
+            stdout, stderr = proc.communicate()
+            if not output_path.is_file():
+                return AgentRunOutcome.failed(
+                    AgentFailureKind.SUBPROCESS_EXITED,
+                    provider=AgentProvider.CURSOR_SDK,
+                    message=(
+                        f"source review subprocess exited {proc.returncode} without outcome; "
+                        f"stderr={_redact_managed_secret(stderr)[-1200:]}"
+                    ),
+                    started=True,
+                    retryable=proc.returncode != 0,
+                    stdout_tail=_redact_managed_secret(stdout)[-1200:],
+                    stderr_tail=_redact_managed_secret(stderr)[-1200:],
+                )
+            try:
+                return AgentRunOutcome.from_document(
+                    json.loads(output_path.read_text(encoding="utf-8")),
+                    label="source review subprocess outcome",
+                )
+            except (OSError, TypeError, ValueError) as exc:
+                return AgentRunOutcome.failed(
+                    AgentFailureKind.SUBPROCESS_OUTPUT_INVALID,
+                    provider=AgentProvider.CURSOR_SDK,
+                    message=f"source review subprocess wrote invalid output: {type(exc).__name__}",
+                    started=True,
+                    retryable=True,
+                    stdout_tail=_redact_managed_secret(stdout)[-1200:],
+                    stderr_tail=_redact_managed_secret(stderr)[-1200:],
+                )
+        finally:
+            _unregister_managed_agent_subprocess(proc.pid)
+            terminate_workspace_cursor_bridges(Path.cwd())
+
 
 def _register_managed_agent_subprocess(pid: int) -> None:
     if pid <= 0:

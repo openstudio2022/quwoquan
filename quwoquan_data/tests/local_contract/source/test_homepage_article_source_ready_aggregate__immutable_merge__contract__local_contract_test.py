@@ -9,6 +9,7 @@ from content.source.research.homepage_article_source_ready_aggregate import (
 )
 from content.source.research.homepage_article_source_ready_batch import (
     HomepageArticleSourceReadyBatchError,
+    _digest,
     freeze_homepage_article_source_ready_batch,
     load_homepage_article_source_ready_batch,
 )
@@ -16,7 +17,7 @@ from content.source.research.homepage_article_source_ready_batch import (
 from quwoquan_data.tests.local_contract.source.test_homepage_article_source_ready_batch__evidence_projection__contract__local_contract_test import (
     _batch,
 )
-from quwoquan_data.tests.local_contract.source.test_scale_source_pool_homepage_article__catalog_projection__contract__local_contract_test import (
+from support.scale_source_pool_catalog_fixture import (
     IDENTITY,
 )
 
@@ -46,6 +47,28 @@ def _merge(root: Path, manifests: list[Path]) -> dict[str, object]:
         entity_catalog_digest=IDENTITY["entityCatalogDigest"],
         created_at="2026-08-08T01:00:00Z",
     )
+
+
+def _carrier_only_member(root: Path, *, index: int, carrier: str) -> Path:
+    batch, path = _batch(root, index=index)
+    binding = next(
+        row for row in batch["candidateCapsules"] if row["carrier"] == carrier
+    )
+    stable = {
+        key: value for key, value in batch.items() if key != "sourceSetDigest"
+    }
+    stable["sourceSetId"] = f"{batch['sourceSetId']}-{carrier}"
+    stable["candidateCapsules"] = [binding]
+    stable["counts"] = {
+        "homepage": 1 if carrier == "homepage" else 0,
+        "article": 1 if carrier == "article" else 0,
+    }
+    document = {**stable, "sourceSetDigest": _digest(stable)}
+    path.write_text(
+        json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return path
 
 
 def test_merge_rebases_member_roots_and_freezes_exact_catalogs(tmp_path: Path) -> None:
@@ -79,6 +102,37 @@ def test_merge_rebases_member_roots_and_freezes_exact_catalogs(tmp_path: Path) -
     )
     assert frozen["homepage"]["candidateCount"] == 2
     assert frozen["article"]["candidateCount"] == 2
+
+
+def test_merge_accepts_carrier_exclusive_batches_from_one_frozen_selection(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    homepage = _carrier_only_member(
+        output_root / "homepage-article-source-ready/m100/homepage-member",
+        index=10,
+        carrier="homepage",
+    )
+    article = _carrier_only_member(
+        output_root / "homepage-article-source-ready/m100/article-member",
+        index=11,
+        carrier="article",
+    )
+
+    result = _merge(output_root, [homepage, article])
+
+    assert result["counts"] == {"homepage": 1, "article": 1}
+    projection = json.loads(
+        (output_root / str(result["aggregateProjectionRef"])).read_text()
+    )
+    assert sorted(
+        (
+            row["counts"]["homepage"],
+            row["counts"]["article"],
+        )
+        for row in projection["memberBatches"]
+    ) == [(0, 1), (1, 0)]
 
 
 def test_merge_rejects_duplicate_or_identity_drift(tmp_path: Path) -> None:

@@ -274,6 +274,10 @@ class _PhoneContactsPageState extends ConsumerState<PhoneContactsPage> {
           .getCapability(targetPersonaId)
           .timeout(_followReadbackTimeout);
       _requireFollowReadback(confirmed, targetPersonaId);
+      // 权威确认后回写共享关系投影，其他 watch 该投影的页面即时一致。
+      ref
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowing(targetPersonaId, confirmed.viewerFollowsTarget);
       if (!_isCurrentFollowAttempt(
         targetPersonaId,
         attempt,

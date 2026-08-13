@@ -157,6 +157,38 @@ extension _WorksImmersiveViewerIntersectionActions
     );
   }
 
+  /// 交集 CTA 一级化：把云侧主行动（如「发起聚集」）按 actionKeyMeta.dispatch
+  /// 分发到真实承接页；分发失败时回落到证据详情，不做静默失败。
+  void _openIntersectionActionHint(
+    BuildContext context,
+    ContentPostViewData post,
+    IntersectionReason reason,
+    IntersectionActionHint hint,
+  ) {
+    final navigator = IntersectionTargetNavigator(
+      onTrack: (target, attribution) {
+        _trackIntersectionTargetClick(
+          post: post,
+          target: target,
+          attribution: attribution,
+        );
+      },
+    );
+    final opened = navigator
+        .openActionHint(
+          context,
+          hint,
+          sourceRef: reason.source,
+          attribution: _intersectionNavAttribution(reason),
+          evidenceReason: reason,
+          contextObjectTarget: _postIntersectionContextTarget(post),
+        )
+        .didOpen;
+    if (!opened) {
+      _showIntersectionDetail(context, post);
+    }
+  }
+
   void _openIntersectionFallback(
     BuildContext context,
     ContentPostViewData post,

@@ -10,7 +10,7 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart'
         credentialBindingQueryProvider;
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/user_service/account/account_session/test_auth_facets.dart';
-import '../../../../../support/runtime/fixtures/fixture_user_resolver.dart';
+import '../../../../../support/service/user_service/account/user_account/fixture_user_resolver.dart';
 
 void main() {
   test('测试专用对象 Facet 可逐一 override 且五种登录返回 metadata 当前身份', () async {

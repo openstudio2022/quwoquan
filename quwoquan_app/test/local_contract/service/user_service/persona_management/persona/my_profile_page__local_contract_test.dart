@@ -19,7 +19,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/content_service/content/profile_interaction_activity_view/test_profile_interaction_facets.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 
@@ -312,7 +312,7 @@ List<Override> _profilePageBoundaryOverrides() => <Override>[
   authorImpactQueryProvider.overrideWith(
     (ref, surface) => const MockUserProfileRepository(),
   ),
-  ...mockContentFacetOverrides(MockContentRepository()),
+  ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
   profileInteractionQueryFacetProvider.overrideWithValue(
     const TestProfileInteractionFacets(),
   ),

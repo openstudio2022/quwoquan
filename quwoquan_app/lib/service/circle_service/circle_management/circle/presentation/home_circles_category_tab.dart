@@ -8,6 +8,7 @@ import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/di/post_interaction_state_dependencies.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_hub_feed_post_entry.dart';
 
 const Set<String> _visualPriorityCategoryIds = <String>{
@@ -44,6 +45,9 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isDark = ref.watch(isDarkProvider);
+    // 点赞事实的唯一真相源是全局互动投影；entry 的会话内快照只作未命中时兜底，
+    // 保证在其他页面点赞后返回圈子 Hub 也能实时一致。
+    final interaction = ref.watch(postInteractionStateProvider);
     final cardBg = AppColorsFunctional.getColor(
       isDark,
       ColorType.surfaceElevated,
@@ -102,8 +106,13 @@ class HomeCirclesCategoryTab extends ConsumerWidget {
               : entry.authorDisplayName;
           final coverUrl = entry.coverUrl;
           final avatarUrl = entry.authorAvatarUrl;
-          final likeCount = entry.likeCount;
-          final isLiked = entry.isLiked;
+          final likeCount = interaction.likeCountFor(
+            entry.postId,
+            fallback: entry.likeCount,
+          );
+          final isLiked = interaction.hasLikeStateFor(entry.postId)
+              ? interaction.isLiked(entry.postId)
+              : entry.isLiked;
           final aspectRatio = entry.coverAspectRatio;
           final inlineImageUrls = entry.showsVideoBadge
               ? const <String>[]

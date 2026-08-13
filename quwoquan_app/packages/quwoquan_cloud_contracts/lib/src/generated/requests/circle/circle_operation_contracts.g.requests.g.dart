@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
+// ContractGraph SHA256: ba2dde9a203e9d9979e42aa34fc1994593f88f10ce159c4e37a42f66497c1ef9
 
 part of '../../../circle/circle_operation_contracts.g.dart';
 
@@ -1413,6 +1413,137 @@ final class GatheringIDQuery {
 
   Map<String, Object?> toWire() => <String, Object?>{
     "gatheringId": this.gatheringId,
+  };
+}
+
+final class GatheringListByHostQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 50;
+
+  GatheringListByHostQuery({
+    required GatheringHostSubjectKind hostSubjectKind,
+    required String hostSubjectId,
+    String? cursor,
+    int limit = 20,
+  }) : hostSubjectKind = hostSubjectKind,
+       hostSubjectId = hostSubjectId,
+       cursor = cursor,
+       limit = limit {
+    if (this.hostSubjectId.isEmpty) {
+      throw ArgumentError.value(this.hostSubjectId, "hostSubjectId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
+    }
+  }
+
+  final GatheringHostSubjectKind hostSubjectKind;
+  final String hostSubjectId;
+  final String? cursor;
+  final int limit;
+
+  factory GatheringListByHostQuery.fromWire(Map<String, Object?> map, [String path = "GatheringListByHostQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"hostSubjectKind", "hostSubjectId", "cursor", "limit"}, path);
+    return GatheringListByHostQuery(
+      hostSubjectKind: switch (map["hostSubjectKind"]) { "persona" => GatheringHostSubjectKind.persona, "entity_homepage" => GatheringHostSubjectKind.entityHomepage, "circle" => GatheringHostSubjectKind.circle, _ => throw FormatException('$path.hostSubjectKind' + ' has an invalid enum value'), },
+      hostSubjectId: _generatedRequestString(map["hostSubjectId"], '$path.hostSubjectId'),
+      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "hostSubjectKind": this.hostSubjectKind.wireName,
+    "hostSubjectId": this.hostSubjectId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
+}
+
+final class GatheringListBySourceQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 50;
+
+  GatheringListBySourceQuery({
+    required String sourceObjectTypeRef,
+    required String sourceObjectId,
+    String? cursor,
+    int limit = 20,
+  }) : sourceObjectTypeRef = sourceObjectTypeRef,
+       sourceObjectId = sourceObjectId,
+       cursor = cursor,
+       limit = limit {
+    if (this.sourceObjectTypeRef.isEmpty) {
+      throw ArgumentError.value(this.sourceObjectTypeRef, "sourceObjectTypeRef", 'must not be blank');
+    }
+    if (this.sourceObjectId.isEmpty) {
+      throw ArgumentError.value(this.sourceObjectId, "sourceObjectId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
+    }
+  }
+
+  final String sourceObjectTypeRef;
+  final String sourceObjectId;
+  final String? cursor;
+  final int limit;
+
+  factory GatheringListBySourceQuery.fromWire(Map<String, Object?> map, [String path = "GatheringListBySourceQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"sourceObjectTypeRef", "sourceObjectId", "cursor", "limit"}, path);
+    return GatheringListBySourceQuery(
+      sourceObjectTypeRef: _generatedRequestString(map["sourceObjectTypeRef"], '$path.sourceObjectTypeRef'),
+      sourceObjectId: _generatedRequestString(map["sourceObjectId"], '$path.sourceObjectId'),
+      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "sourceObjectTypeRef": this.sourceObjectTypeRef,
+    "sourceObjectId": this.sourceObjectId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
+}
+
+final class GatheringMineListQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 50;
+
+  GatheringMineListQuery({
+    String? cursor,
+    int limit = 20,
+  }) : cursor = cursor,
+       limit = limit {
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 50) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
+    }
+  }
+
+  final String? cursor;
+  final int limit;
+
+  factory GatheringMineListQuery.fromWire(Map<String, Object?> map, [String path = "GatheringMineListQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"cursor", "limit"}, path);
+    return GatheringMineListQuery(
+      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
   };
 }
 
@@ -3052,6 +3183,18 @@ CloudOperationRequestPayload encodeCircleGatheringCreateGatheringDraftGeneratedR
   );
 }
 
+CloudOperationRequestPayload encodeCircleGatheringDeclineGatheringInvitationGeneratedRequest(GatheringParticipationVersionCommand request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    body: <String, Object?>{
+      "expectedGatheringVersion": request.expectedGatheringVersion,
+      "expectedParticipationVersion": request.expectedParticipationVersion,
+    },
+  );
+}
+
 CloudOperationRequestPayload encodeCircleGatheringEndGatheringEarlyGeneratedRequest(GatheringReasonCommand request) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{
@@ -3103,6 +3246,37 @@ CloudOperationRequestPayload encodeCircleGatheringJoinOpenGatheringGeneratedRequ
     body: <String, Object?>{
       "expectedGatheringVersion": request.expectedGatheringVersion,
       "expectedParticipationVersion": request.expectedParticipationVersion,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringListGatheringsByHostGeneratedRequest(GatheringListByHostQuery request) {
+  return CloudOperationRequestPayload(
+    queryParameters: <String, String>{
+      "hostSubjectKind": (request.hostSubjectKind.wireName).toString(),
+      "hostSubjectId": request.hostSubjectId,
+      if (request.cursor != null) "cursor": request.cursor!,
+      "limit": (request.limit).toString(),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringListGatheringsBySourceGeneratedRequest(GatheringListBySourceQuery request) {
+  return CloudOperationRequestPayload(
+    queryParameters: <String, String>{
+      "sourceObjectTypeRef": request.sourceObjectTypeRef,
+      "sourceObjectId": request.sourceObjectId,
+      if (request.cursor != null) "cursor": request.cursor!,
+      "limit": (request.limit).toString(),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeCircleGatheringListMyHostedGatheringsGeneratedRequest(GatheringMineListQuery request) {
+  return CloudOperationRequestPayload(
+    queryParameters: <String, String>{
+      if (request.cursor != null) "cursor": request.cursor!,
+      "limit": (request.limit).toString(),
     },
   );
 }

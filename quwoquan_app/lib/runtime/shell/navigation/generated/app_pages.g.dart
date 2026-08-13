@@ -59,6 +59,7 @@ abstract final class PageNames {
   static const String createPublishCircleSelect = 'create_publish_circle_select';
   static const String createPublishConfirm = 'create_publish_confirm';
   static const String createPublishSettings = 'create_publish_settings';
+  static const String createTagChipPicker = 'create_tag_chip_picker';
   static const String createVideoEditor = 'create_video_editor';
   static const String gatheringBoard = 'gathering_board';
   static const String gatheringCreate = 'gathering_create';
@@ -83,6 +84,7 @@ abstract final class PageNames {
   static const String locationPlaceLanding = 'location_place_landing';
   static const String login = 'login';
   static const String myFootprint = 'my_footprint';
+  static const String myGatherings = 'my_gatherings';
   static const String myIntersections = 'my_intersections';
   static const String myQrCode = 'my_qr_code';
   static const String myReports = 'my_reports';
@@ -135,6 +137,7 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'my_reports', routeId: 'myReports', pathTemplate: '/settings/my-reports', collectPageAccess: true),
     AppPageDefinition(pageName: 'add_contact_search', routeId: 'addContactSearch', pathTemplate: '/add-contact/search', collectPageAccess: true),
     AppPageDefinition(pageName: 'assistant_personal', routeId: 'assistantPersonal', pathTemplate: '/assistant/personal', collectPageAccess: true),
+    AppPageDefinition(pageName: 'my_gatherings', routeId: 'myGatherings', pathTemplate: '/profile/gatherings', collectPageAccess: true),
     AppPageDefinition(pageName: 'settings_dark_mode', routeId: 'settingsDarkMode', pathTemplate: '/settings/dark-mode', collectPageAccess: true),
     AppPageDefinition(pageName: 'add_contact_phone', routeId: 'addContactPhone', pathTemplate: '/add-contact/phone', collectPageAccess: true),
     AppPageDefinition(pageName: 'create_edit_image', routeId: 'createEditImage', pathTemplate: '/create/edit-image', collectPageAccess: true),
@@ -205,6 +208,7 @@ abstract final class AppPages {
     'page_internal_create_publish_confirm': 'create_publish_confirm',
     'page_internal_create_article_typography': 'create_article_typography',
     'page_internal_create_location_picker': 'create_location_picker',
+    'page_internal_create_tag_chip_picker': 'create_tag_chip_picker',
     'page_internal_create_publish_circle_select': 'create_publish_circle_select',
     'page_internal_create_homepage_search': 'create_homepage_search',
     'page_internal_circle_edit_settings': 'circle_edit_settings',

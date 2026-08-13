@@ -1,15 +1,16 @@
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_ui_usage_stats_view_data.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_journey.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/run_artifacts.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/domain/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_citation.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_assistant_timeline_payload.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_transcript_timeline_row.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_turn_message_resolver.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('assistant transcript row protocol parity', () {
-    test('FromTranscriptRow 与 FromMessage(encode(row)) 对助手行一致', () {
+  group('assistant transcript row typed payload', () {
+    test('typed payload 经 codec 往返后读数不变（替代 encode->resolve 桥）', () {
       final runArtifacts = const RunArtifacts(
         displayMarkdown: 'hello',
         displayPlainText: 'hello',
@@ -32,74 +33,181 @@ void main() {
         senderName: 'Assistant',
         persisted: PersistedAssistantTimelinePayload.fromMap(runArtifacts),
       );
-      final m = PersistedTimelineTurnCodec.encode(row);
+
+      final roundTripped = PersistedTimelineTurnCodec.decode(
+        PersistedTimelineTurnCodec.encode(row),
+      );
+
+      expect(roundTripped, isA<AssistantAnswerTranscriptRow>());
+      final decoded = (roundTripped as AssistantAnswerTranscriptRow).persisted;
       expect(
-        resolveAssistantJourneyFromTranscriptRow(row).toJson(),
-        resolveAssistantJourneyFromMessage(m).toJson(),
+        decoded.journey?.toJson(),
+        row.persisted.journey?.toJson(),
       );
       expect(
-        resolveAssistantProcessTimelineFromTranscriptRow(
-          row,
-        ).map((frame) => frame.toJson()).toList(),
-        resolveAssistantProcessTimelineFromMessage(
-          m,
-        ).map((frame) => frame.toJson()).toList(),
+        decoded.visibleProcessTimeline
+            .map((frame) => frame.toJson())
+            .toList(),
+        row.persisted.visibleProcessTimeline
+            .map((frame) => frame.toJson())
+            .toList(),
       );
       expect(
-        resolveAssistantRetrievalProcessingFromTranscriptRow(
-          row,
-        ).processingSummary,
-        resolveAssistantRetrievalProcessingFromMessage(m).processingSummary,
+        decoded.retrievalProcessing?.processingSummary,
+        row.persisted.retrievalProcessing?.processingSummary,
       );
     });
 
-    test('非助手行 FromTranscriptRow 给出空 journey / timeline', () {
-      final row = UserTranscriptTimelineRow(
-        id: 'u1',
-        sessionId: 'c1',
-        content: 'hi',
-        senderId: 'user1',
-        senderName: 'Me',
-      );
-      expect(resolveAssistantJourneyFromTranscriptRow(row).isEmpty, isTrue);
-      expect(resolveAssistantProcessTimelineFromTranscriptRow(row), isEmpty);
+    test('空 payload 的派生读数为空（原非助手行语义）', () {
+      final empty = PersistedAssistantTimelinePayload.empty();
+
+      expect(empty.journey, isNull);
+      expect(empty.visibleProcessTimeline, isEmpty);
+      expect(empty.retrievalProcessing, isNull);
+      expect(empty.resolvedDisplayMarkdown, isEmpty);
+      expect(empty.sanitizedFollowupPrompt, isEmpty);
+      expect(empty.sanitizedActionHints, isEmpty);
     });
 
-    test('持久化 turn 只读取 canonical 顶层字段', () {
-      const nestedOnly = <String, dynamic>{
-        'runArtifacts': <String, dynamic>{
-          'journey': <String, dynamic>{'summary': 'retired nested value'},
-          'retrievalProcessing': <String, dynamic>{
-            'processingSummary': 'retired nested value',
+    test('持久化 payload 只读取 canonical 顶层字段', () {
+      final payload = PersistedAssistantTimelinePayload.fromMap(
+        const <String, dynamic>{
+          'runArtifacts': <String, dynamic>{
+            'journey': <String, dynamic>{'summary': 'retired nested value'},
+            'retrievalProcessing': <String, dynamic>{
+              'processingSummary': 'retired nested value',
+            },
           },
         },
-      };
-
-      expect(resolveAssistantJourneyFromMessage(nestedOnly).isEmpty, isTrue);
-      expect(
-        resolveAssistantRetrievalProcessingFromMessage(
-          nestedOnly,
-        ).processingSummary,
-        isEmpty,
       );
+
+      expect(payload.journey, isNull);
+      expect(payload.retrievalProcessing, isNull);
     });
 
     test('持久化 payload 只保留单轨字段并完整往返结构化状态', () {
       final payload = PersistedAssistantTimelinePayload.fromMap(
         <String, dynamic>{
           assistantJourneyField: <String, dynamic>{'summary': 'canonical'},
-          assistantSystemContextEnvelopeField: <String, dynamic>{
-            'contextKey': 'ctx-1',
+          assistantRetrievalProcessingField: <String, dynamic>{
+            'processingSummary': 'summary-1',
           },
-          assistantTaskGraphField: <String, dynamic>{'graphId': 'graph-1'},
           'uiProcessTimeline': <String, dynamic>{'summary': 'retired'},
         },
       ).toMap();
 
       expect(payload[assistantJourneyField], isNotNull);
-      expect(payload[assistantSystemContextEnvelopeField], isNotNull);
-      expect(payload[assistantTaskGraphField], isNotNull);
+      expect(payload[assistantRetrievalProcessingField], isNotNull);
       expect(payload.containsKey('uiProcessTimeline'), isFalse);
+    });
+
+    test('typed uiUsageStats 与 uiReferences 经 codec 往返读数不变', () {
+      final row = AssistantAnswerTranscriptRow(
+        id: 'm2',
+        sessionId: 'c1',
+        content: 'hello',
+        senderId: 'assistant',
+        senderName: 'Assistant',
+        uiUsageStats: const AssistantUiUsageStatsViewData(
+          runModelCallCount: 2,
+          runTotalTokens: 120,
+          runMaxTokensPerCall: 80,
+          sessionModelCallCount: 5,
+          sessionTotalTokens: 300,
+          sessionMaxTokensPerCall: 90,
+          runLedger: <AssistantUsageLedgerEntryViewData>[
+            AssistantUsageLedgerEntryViewData(
+              totalTokens: 120,
+              inputTokens: 40,
+              outputTokens: 80,
+              source: 'understanding',
+              modelRef: 'model-a',
+            ),
+          ],
+        ),
+        uiReferences: <AssistantCitation>[
+          AssistantCitation.external(
+            url: 'https://example.com/doc',
+            title: 'Example Doc',
+            source: 'example.com',
+            snippet: 'snippet text',
+          ),
+        ],
+      );
+
+      final decoded =
+          PersistedTimelineTurnCodec.decode(
+                PersistedTimelineTurnCodec.encode(row),
+              )
+              as AssistantAnswerTranscriptRow;
+
+      expect(decoded.uiUsageStats.runModelCallCount, 2);
+      expect(decoded.uiUsageStats.runTotalTokens, 120);
+      expect(decoded.uiUsageStats.sessionModelCallCount, 5);
+      expect(decoded.uiUsageStats.sessionMaxTokensPerCall, 90);
+      expect(decoded.uiUsageStats.runLedger, hasLength(1));
+      expect(decoded.uiUsageStats.runLedger.first.modelRef, 'model-a');
+      expect(decoded.uiReferences, hasLength(1));
+      expect(decoded.uiReferences.first.title, 'Example Doc');
+      expect(
+        decoded.uiReferences.first.externalUrl,
+        'https://example.com/doc',
+      );
+    });
+
+    test('退役键 dialogueState/uiActions/assistantBoundaryOutcome 被丢弃且不进 extra',
+        () {
+      final decoded =
+          PersistedTimelineTurnCodec.decode(<String, dynamic>{
+                'id': 'm3',
+                'sessionId': 'c1',
+                'content': 'hello',
+                'senderId': 'assistant',
+                'senderName': 'Assistant',
+                'dialogueState': <String, dynamic>{'retired': true},
+                'uiActions': <Map<String, dynamic>>[
+                  <String, dynamic>{'retired': true},
+                ],
+                'assistantBoundaryOutcome': <String, dynamic>{'retired': true},
+                'customKey': 'kept',
+              })
+              as AssistantAnswerTranscriptRow;
+
+      expect(decoded.extra.containsKey('dialogueState'), isFalse);
+      expect(decoded.extra.containsKey('uiActions'), isFalse);
+      expect(decoded.extra.containsKey('assistantBoundaryOutcome'), isFalse);
+      expect(decoded.extra['customKey'], 'kept');
+
+      final reEncoded = PersistedTimelineTurnCodec.encode(decoded);
+      expect(reEncoded.containsKey('dialogueState'), isFalse);
+      expect(reEncoded.containsKey('uiActions'), isFalse);
+      expect(reEncoded.containsKey('assistantBoundaryOutcome'), isFalse);
+    });
+
+    test('displayState answer blocks 优先于持久化 markdown 字符串', () {
+      final payload = PersistedAssistantTimelinePayload.fromMap(
+        <String, dynamic>{
+          assistantDisplayMarkdownField: 'fallback text',
+          assistantDisplayStateField: const AssistantDisplayState(
+            answer: AssistantAnswerDisplayState(
+              blocks: <AssistantAnswerDisplayBlock>[
+                AssistantAnswerDisplayBlock(
+                  blockId: 'b1',
+                  kind: DisplayBlockKind.paragraph,
+                  body: 'typed',
+                ),
+              ],
+            ),
+          ).toJson(),
+        },
+      );
+
+      expect(payload.resolvedDisplayMarkdown, contains('typed'));
+
+      final withoutState = PersistedAssistantTimelinePayload.fromMap(
+        <String, dynamic>{assistantDisplayMarkdownField: 'fallback text'},
+      );
+      expect(withoutState.resolvedDisplayMarkdown, 'fallback text');
     });
   });
 }

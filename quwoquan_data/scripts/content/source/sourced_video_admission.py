@@ -119,12 +119,18 @@ def _sample_frames_with_ffmpeg(
     return samples
 
 
-def _sample_frames(
+def sample_video_frame_files(
     path: Path,
     *,
     sample_count: int,
     output_dir: Path,
 ) -> list[Path]:
+    """Decode evenly spread sample frames with an ffmpeg timestamp fallback.
+
+    OpenCV frame seeking is unreliable for Commons WebM/VP8/VP9 files whose
+    container frame count is an estimate; falling back to timestamp decoding
+    keeps real playable videos from being misjudged as unreadable.
+    """
     probe = probe_sourced_video(path)
     frame_count = int(probe["frameCount"])
     frames_per_second = float(probe["framesPerSecond"])
@@ -161,7 +167,7 @@ def scan_sourced_video_watermark(
     sample_count: int = 12,
 ) -> dict[str, object]:
     with tempfile.TemporaryDirectory(prefix="qwq_sourced_video_scan_") as temp:
-        samples = _sample_frames(
+        samples = sample_video_frame_files(
             path,
             sample_count=sample_count,
             output_dir=Path(temp),
@@ -252,5 +258,6 @@ def admitted_audio_evidence(
 __all__ = [
     "admitted_audio_evidence",
     "probe_sourced_video",
+    "sample_video_frame_files",
     "scan_sourced_video_watermark",
 ]

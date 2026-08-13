@@ -244,13 +244,13 @@
     "imageAcquisitionRequirement": {
       "type": "object",
       "required": [
-        "phase1Mode",
+        "externalInputMode",
         "requiredExternalInputKinds",
         "operatorPrompt"
       ],
       "additionalProperties": false,
       "properties": {
-        "phase1Mode": {
+        "externalInputMode": {
           "const": "external_acquisition"
         },
         "requiredExternalInputKinds": {
@@ -267,13 +267,13 @@
     "videoAcquisitionRequirement": {
       "type": "object",
       "required": [
-        "phase1Mode",
+        "externalInputMode",
         "requiredExternalInputKinds",
         "operatorPrompt"
       ],
       "additionalProperties": false,
       "properties": {
-        "phase1Mode": {
+        "externalInputMode": {
           "const": "external_acquisition"
         },
         "requiredExternalInputKinds": {
@@ -290,13 +290,13 @@
     "articleRequirement": {
       "type": "object",
       "required": [
-        "phase1Mode",
+        "externalInputMode",
         "requiredExternalInputKinds",
         "operatorPrompt"
       ],
       "additionalProperties": false,
       "properties": {
-        "phase1Mode": {
+        "externalInputMode": {
           "const": "execution_source_unit_freeze"
         },
         "requiredExternalInputKinds": {

@@ -33,6 +33,27 @@ abstract interface class ContentAuthorPostsReader {
   });
 }
 
+/// 某次 Gathering 的公开回顾内容分页读取（行动详情共同经历聚合区）。
+/// 服务端只返回 public + published + 审核通过且作者主动写入 gatheringRef
+/// 的内容；作者删除或转私密即从聚合区消失。
+abstract interface class ContentGatheringPostsReader {
+  Future<CursorPage<ContentPostViewData>> listPostsByGathering({
+    required String gatheringId,
+    String? cursor,
+    int limit = ContentGatheringPostsQuery.defaultLimit,
+  });
+}
+
+/// 四锚点（organizer/entity/content/creator）两级诚实社会证明计数读取。
+/// 计数由 recommendation 聚合派生并经 content 代理透传；发起级仅
+/// organizer 锚点具有产品语义，展示面只用成形/经历两级。
+abstract interface class ContentGatheringSocialProofReader {
+  Future<GatheringSocialProofSummary> getGatheringSocialProof({
+    required String anchorKind,
+    required String objectId,
+  });
+}
+
 abstract interface class ContentConfigRepository {
   Future<AppConfigSlice> getAppConfig();
 

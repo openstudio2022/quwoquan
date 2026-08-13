@@ -424,7 +424,8 @@ class SemanticCapacityBroker:
         self,
         lease: SemanticCapacityLease,
         *,
-        execution_id: str,
+        execution_id: str = "",
+        source_review: Mapping[str, object] | None = None,
         model: str,
         role: str,
         prompt: str,
@@ -436,21 +437,39 @@ class SemanticCapacityBroker:
         if lease.broker is not self:
             raise ValueError("capacity lease belongs to another broker")
         normalized_execution_id = str(execution_id or "").strip()
+        normalized_source_review = dict(source_review or {})
         normalized_model = str(model or "").strip()
         normalized_role = str(role or "").strip()
         if normalized_role not in {"author", "reviewer", "calibration"}:
             raise ValueError("capacity receipt role is invalid")
-        if not normalized_execution_id or not normalized_model:
-            raise ValueError("capacity receipt executionId and model are required")
+        if bool(normalized_execution_id) == bool(normalized_source_review):
+            raise ValueError(
+                "capacity receipt requires exactly one executionId or sourceReview identity"
+            )
+        if not normalized_model:
+            raise ValueError("capacity receipt model is required")
         from core.schema import assert_valid
 
         stable_identity = {
-            "executionId": normalized_execution_id,
             "provider": lease.provider.value,
             "model": normalized_model,
             "role": normalized_role,
             "requestId": lease.request_id,
         }
+        if normalized_execution_id:
+            stable_identity["executionId"] = normalized_execution_id
+            receipt_scope = normalized_execution_id
+        else:
+            required = {
+                "sourceRevision", "sourceDigest", "entityCatalogDigest",
+                "executionBundleDigest", "handoffDigest", "requestDigest",
+            }
+            if set(normalized_source_review) != required:
+                raise ValueError("sourceReview identity fields are invalid")
+            stable_identity["sourceReview"] = normalized_source_review
+            receipt_scope = "source-review-" + str(
+                normalized_source_review["requestDigest"]
+            ).removeprefix("sha256:")[:20]
         receipt_id = "sha256:" + hashlib.sha256(
             json.dumps(
                 stable_identity,
@@ -494,7 +513,7 @@ class SemanticCapacityBroker:
             "semantic_capacity_receipt",
             label=f"semantic capacity receipt:{receipt_id}",
         )
-        receipt_root = self.root / "receipts" / normalized_execution_id
+        receipt_root = self.root / "receipts" / receipt_scope
         receipt_root.mkdir(parents=True, exist_ok=True)
         path = receipt_root / f"{receipt_id.removeprefix('sha256:')}.json"
         encoded = json.dumps(

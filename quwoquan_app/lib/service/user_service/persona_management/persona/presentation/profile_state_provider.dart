@@ -9,7 +9,10 @@ import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart';
+import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
+    show resolvedOwnerUserIdProvider;
 import 'package:quwoquan_app/runtime/di/client_state_sync_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/content_publication_epoch.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/user_service/relationship/greeting_request/application/public/greeting_repository.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_profile_view_data.dart'
@@ -158,6 +161,19 @@ class ProfileNotifier extends Notifier<ProfileState> {
       next,
     ) {
       _syncFollowStateFromShared(next);
+    });
+    // GWT-005：发布成功后当前 Persona 作品列表失效并回读同一 Post，
+    // 不要求用户手动下拉。epoch 由发布链路 notifyCommitted 推进；
+    // 只有本人主页需要回读，他人主页与发布无关。
+    ref.listen<int>(contentPublicationEpochProvider, (previous, next) {
+      if (previous == null || next == previous) {
+        return;
+      }
+      final ownerUserId = ref.read(resolvedOwnerUserIdProvider).trim();
+      if (ownerUserId.isEmpty || ownerUserId != _userId.trim()) {
+        return;
+      }
+      unawaited(reloadWorks());
     });
     Future.microtask(() {
       if (!ref.mounted ||
@@ -437,7 +453,10 @@ class ProfileNotifier extends Notifier<ProfileState> {
       final posts = postsPage.items;
       ref
           .read(postInteractionStateProvider.notifier)
-          .applyConfirmedPosts(posts);
+          .applyConfirmedPosts(
+            posts,
+            pendingLikePostIds: ref.read(pendingLikeSyncPostIdsProvider),
+          );
       final fallbackError = postsPage.cacheFallbackError;
       final fallbackFailure = fallbackError == null
           ? null

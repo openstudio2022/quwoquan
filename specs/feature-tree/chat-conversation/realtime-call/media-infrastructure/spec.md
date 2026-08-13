@@ -112,15 +112,6 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 Room/mediaAccess 与 realtime-gateway 单通道对齐
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：Room、mediaAccess、auth_ack、wire type、ReportMediaConnected 与状态机有端云证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
-
 <a id="open-002"></a>
 ### OPEN-002 离线来电 provider 与平台唤醒
 
@@ -128,7 +119,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：事务 result relay、设备级幂等收件与 operator 时间线已有直接 `spec_ref`；仍缺 Gamma/Prod 受控 APNs/FCM 凭据及 iOS/Android 真机产生的真实唤醒、展示 ACK 与取消竞态 readback，禁止用本地通知或 fixture 关闭。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 完成判定：`GWT-002` 的 4 条 THEN 组全部具备子句级 `spec_ref`（`gwt-002.t1..t4`）绑定的真实测试证据，且唤醒、展示 ACK 与取消竞态三段证据必须来自受控凭据下的 iOS/Android 双真机 readback。
 
 <a id="open-003"></a>
 ### OPEN-003 媒体 QoE 黄金指标可查询并驱动灰度
@@ -136,7 +127,10 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺 Gamma/Prod 真实通话产生的有效 series、告警 firing/resolved 与回滚 receipt 的同版本运行证据；仓库内 emitter、终态去重、受控下钻与双设备 UAT 同候选绑定已具备。
+- 影响或价值：仍缺 Gamma/Prod 真实通话产生的有效 series、告警 firing/resolved 与回滚 receipt 的同版本运行证据。
+  - 仓库内 emitter、终态去重、受控下钻与双设备 UAT 同候选绑定已具备。
+  - 执行入口已就绪：`GET /ops/events/rtc-media-qoe/summary` readback、patrol_cli 4.6.0 + iOS/Android 双模拟器、`run_provider_patrol_uat.py` 的 gamma 支持均已核验。
+  - gamma-local 启动当前被并行服务改动的启动前置（recommendation 要求 `rec_model_vs_rule` 先激活而 `stackctl up` 在 compose 成功后才激活）与 alpha 运行时互斥阻塞，环境恢复后按既有入口执行即可。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-004"></a>

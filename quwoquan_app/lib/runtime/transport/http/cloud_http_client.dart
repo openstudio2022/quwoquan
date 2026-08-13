@@ -58,7 +58,7 @@ class CloudHttpClient {
     CloudJsonBodyDecoder? jsonBodyDecoder,
   }) : _client = client ?? RetryHttpClient(),
        _authTokenProvider =
-           authTokenProvider ?? const StubCloudAuthTokenProvider(),
+           authTokenProvider ?? const UnauthenticatedCloudAuthTokenProvider(),
        _timeout = timeout ?? const Duration(seconds: 12),
        _jsonBodyDecoder = jsonBodyDecoder ?? CloudJsonBodyDecoder.shared;
 
@@ -422,7 +422,7 @@ class CloudHttpClient {
   ///
   /// 1. **不合并鉴权头**：数据面授权只由服务端签发的 URL 承载，把 App bearer
   ///    附到对象存储 origin 等于把凭证泄露给第三方。调用方必须使用
-  ///    `mediaDataPlaneHttpClientProvider`（`StubCloudAuthTokenProvider`），
+  ///    `mediaDataPlaneHttpClientProvider`（`UnauthenticatedCloudAuthTokenProvider`），
   ///    本方法额外主动剥掉 `Authorization`，形成双保险。
   /// 2. **不套 retry**：请求体是一次性 `Stream`，重放会发出截断的第二份 body，
   ///    因此固定走 [_sendSingleAttempt]。

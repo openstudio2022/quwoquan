@@ -2,20 +2,18 @@ import 'package:quwoquan_app/service/user_service/profile_projection/following_s
 import 'package:quwoquan_app/service/user_service/relationship/followed_subject_visit_state/application/public/followed_subject_visit_state_writer.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
-
 /// Alpha-only 关注主体读面与访问回执；状态只来自不可变 contract fixture。
 final class InMemoryFollowingSubjectFacet
     implements FollowingSubjectReader, FollowedSubjectVisitStateWriter {
-  InMemoryFollowingSubjectFacet({ObjectContractExampleReader? fixtures})
-    : _items = _load(fixtures ?? objectContractExampleReader);
+  InMemoryFollowingSubjectFacet({
+    Map<String, Object?>? followingSubjectWireExample,
+  }) : _items = _load(
+         followingSubjectWireExample ?? _followingSubjectWireExample(),
+       );
 
   final List<FollowingSubjectItemView> _items;
 
-  static List<FollowingSubjectItemView> _load(
-    ObjectContractExampleReader fixtures,
-  ) {
-    final seed = fixtures.requireExample('user', 'following_subject_core');
+  static List<FollowingSubjectItemView> _load(Map<String, Object?> seed) {
     final rawItems = seed['items'];
     if (rawItems is! List<Object?>) {
       throw const FormatException(
@@ -86,3 +84,42 @@ final class InMemoryFollowingSubjectFacet
     );
   }
 }
+
+Map<String, Object?> _followingSubjectWireExample() => <String, Object?>{
+  'items': const <Map<String, Object?>>[
+    <String, Object?>{
+      'subjectId': 'user_travel_photographer',
+      'subjectType': 'persona',
+      'displayName': '旅行摄影师',
+      'avatarUrl':
+          'media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png',
+      'coverUrl': '',
+      'subtitle': '对象级动态',
+      'targetRouteId': 'persona_detail',
+      'targetObjectId': 'user_travel_photographer',
+      'followedAt': '2026-05-20T08:00:00Z',
+      'lastVisitedAt': '2026-06-01T08:00:00Z',
+      'latestChangedAt': '2026-06-02T00:30:00Z',
+      'unreadChangeCount': 1,
+      'hasUnreadChanges': true,
+      'latestChangeReason': '发布了新内容',
+    },
+    <String, Object?>{
+      'subjectId': 'circle_sichuan_travel',
+      'subjectType': 'circle',
+      'displayName': '四川旅行圈',
+      'avatarUrl': '',
+      'coverUrl':
+          'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
+      'subtitle': '对象级动态',
+      'targetRouteId': 'circle_detail',
+      'targetObjectId': 'circle_sichuan_travel',
+      'followedAt': '2026-05-20T08:00:00Z',
+      'lastVisitedAt': '2026-06-01T08:00:00Z',
+      'latestChangedAt': '2026-06-02T00:30:00Z',
+      'unreadChangeCount': 0,
+      'hasUnreadChanges': false,
+      'latestChangeReason': '',
+    },
+  ],
+};

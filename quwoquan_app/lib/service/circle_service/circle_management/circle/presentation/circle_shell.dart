@@ -254,6 +254,9 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     final isManager =
         state.role == CircleRole.owner || state.role == CircleRole.admin;
     final isMember = state.role != CircleRole.visitor;
+    // 圈主不能直接退出（owner 保护是服务端事实）；成员/管理员可退出。
+    final canLeave =
+        state.joinStatus == 'joined' && state.role != CircleRole.owner;
     final sections = <AppActionSheetSection<_CircleMoreAction>>[];
     if (isManager) {
       sections.add(
@@ -327,9 +330,18 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           ),
         ],
       ),
+    ]);
+    sections.add(
       AppActionSheetSection<_CircleMoreAction>(
         items: <AppActionSheetItem<_CircleMoreAction>>[
-          AppActionSheetItem<_CircleMoreAction>(
+          if (canLeave)
+            const AppActionSheetItem<_CircleMoreAction>(
+              value: _CircleMoreAction.leave,
+              label: CommunityText.leaveCircleAction,
+              icon: CupertinoIcons.square_arrow_right,
+              isDestructive: true,
+            ),
+          const AppActionSheetItem<_CircleMoreAction>(
             value: _CircleMoreAction.report,
             label: ContentText.report,
             icon: CupertinoIcons.flag,
@@ -337,7 +349,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
           ),
         ],
       ),
-    ]);
+    );
     final action = await showAppActionSheet<_CircleMoreAction>(
       context,
       title: circleName.isEmpty ? AppConceptConstants.circles : circleName,
@@ -402,9 +414,60 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         if (context.mounted) {
           AppToast.show(context, ChatText.shareLinkCopied);
         }
+      case _CircleMoreAction.leave:
+        await _confirmAndLeaveCircle(context);
       case _CircleMoreAction.report:
         _gatedReportCircle(context);
     }
+  }
+
+  /// 退出圈子：确认弹窗如实披露影响（同时退出圈子群聊），成功 toast、
+  /// 失败回滚并给出可重试的错误反馈；不产生部分成功。
+  Future<void> _confirmAndLeaveCircle(BuildContext context) async {
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text(CommunityText.circleLeaveConfirmTitle),
+        content: const Text(CommunityText.circleLeaveConfirmMessage),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text(FoundationText.cancel),
+          ),
+          CupertinoDialogAction(
+            key: const ValueKey<String>('circle-leave-confirm'),
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text(CommunityText.leaveCircleAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+    final notifier = ref.read(circleStateProvider(widget.circleId).notifier);
+    final left = await notifier.leaveCircle();
+    if (!context.mounted) {
+      return;
+    }
+    if (left) {
+      AppToast.show(context, CommunityText.circleLeaveSuccessToast);
+      return;
+    }
+    final error = ref.read(circleStateProvider(widget.circleId)).loadError;
+    if (error == null) {
+      return;
+    }
+    await AppActionErrorFeedback.show(
+      context,
+      semantic: runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
+      ),
+    );
   }
 
   /// 系统分享圈子深链；[asInvite] 时使用邀请语气文案（同链路，不另建通道）。

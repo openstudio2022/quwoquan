@@ -2,18 +2,24 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
-import json
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
 
-from core.io import read_json
 from core.paths import SOURCE_ACQUISITION_ROOT
 
 from content.source.professional_image_discovery_governed import (
     build_professional_image_governed_candidate_catalog,
     write_professional_image_governed_candidate_catalog,
+)
+from content.source.research.handler_cli_io import (
+    canonical_candidates_destination,
+    canonical_pool_destination,
+    file_sha256,
+    load_array,
+    load_candidates,
+    load_object,
+    print_document,
+    typed_error,
 )
 from content.source.research.homepage_article_seed_selection_writer import (
     register_seed_selection_parser,
@@ -31,8 +37,6 @@ from content.source.research.professional_image_manual_file_evidence_cli import 
     register_professional_image_manual_file_evidence_parser,
 )
 from content.source.research.scale_source_pool import (
-    SOURCE_POOL_INVALID,
-    ScaleSourcePoolError,
     build_scale_source_pool_plan,
     validate_scale_source_pool,
     validate_scale_source_pool_evidence,
@@ -40,7 +44,6 @@ from content.source.research.scale_source_pool import (
 )
 from content.source.research.scale_source_pool_candidates import (
     build_scale_source_pool_candidates,
-    validate_scale_source_pool_candidates,
     write_create_once_scale_source_pool_candidates,
 )
 from content.source.research.scale_source_pool_homepage_article import (
@@ -49,107 +52,6 @@ from content.source.research.scale_source_pool_homepage_article import (
 from content.source.research.scale_source_pool_image_video import (
     project_scale_source_pool_image_video,
 )
-
-
-def _typed_error(error: Exception) -> ScaleSourcePoolError:
-    if isinstance(error, ScaleSourcePoolError):
-        return error
-    code = str(getattr(error, "code", "") or "").strip()
-    raw_issues = getattr(error, "issues", None)
-    if code and isinstance(raw_issues, tuple | list):
-        return ScaleSourcePoolError(code, raw_issues)
-    issue = str(getattr(error, "issue", "") or "").strip()
-    if code and issue:
-        return ScaleSourcePoolError(code, [issue])
-    return ScaleSourcePoolError(SOURCE_POOL_INVALID, [str(error)])
-
-
-def _load_object(path: str, *, label: str) -> dict[str, Any]:
-    try:
-        payload = read_json(Path(path).expanduser().resolve())
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-        raise _typed_error(exc) from exc
-    if not isinstance(payload, dict):
-        raise ScaleSourcePoolError(SOURCE_POOL_INVALID, [f"{label} must be an object"])
-    return payload
-
-
-def _load_candidates(path: str) -> list[Mapping[str, Any]]:
-    try:
-        payload = read_json(Path(path).expanduser().resolve())
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-        raise _typed_error(exc) from exc
-    if (
-        isinstance(payload, dict)
-        and payload.get("schema") == "quwoquan_data.scale_source_pool_candidates"
-    ):
-        payload = validate_scale_source_pool_candidates(payload)
-    candidates = payload.get("candidates") if isinstance(payload, dict) else payload
-    if not isinstance(candidates, list) or any(
-        not isinstance(candidate, Mapping) for candidate in candidates
-    ):
-        raise ScaleSourcePoolError(
-            SOURCE_POOL_INVALID,
-            ["candidates input must be an array of objects"],
-        )
-    return candidates
-
-
-def _load_array(path: str, *, label: str) -> list[Mapping[str, Any]]:
-    try:
-        payload = read_json(Path(path).expanduser().resolve())
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-        raise _typed_error(exc) from exc
-    if not isinstance(payload, list) or any(not isinstance(row, Mapping) for row in payload):
-        raise ScaleSourcePoolError(SOURCE_POOL_INVALID, [f"{label} must be an array of objects"])
-    return payload
-
-
-def _file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return "sha256:" + digest.hexdigest()
-
-
-def _canonical_destination(
-    plan: Mapping[str, Any],
-    *,
-    output_root: Path,
-) -> Path:
-    target_scale = str(plan.get("targetScale") or "").strip().lower()
-    digest = str(plan.get("planDigest") or "").removeprefix("sha256:")
-    if not target_scale or len(digest) != 64:
-        raise ScaleSourcePoolError(
-            SOURCE_POOL_INVALID,
-            ["targetScale/planDigest cannot derive canonical pool path"],
-        )
-    return output_root / "scale-source-pools" / target_scale / f"{digest}.json"
-
-
-def _canonical_candidates_destination(
-    candidates: Mapping[str, Any],
-    *,
-    output_root: Path,
-) -> Path:
-    target_scale = str(candidates.get("targetScale") or "").strip().lower()
-    digest = str(candidates.get("candidatesDigest") or "").removeprefix("sha256:")
-    if not target_scale or len(digest) != 64:
-        raise ScaleSourcePoolError(
-            SOURCE_POOL_INVALID,
-            ["targetScale/candidatesDigest cannot derive canonical candidate path"],
-        )
-    return (
-        output_root
-        / "scale-source-pool-candidates"
-        / target_scale
-        / f"{digest}.json"
-    )
-
-
-def _print(document: Mapping[str, Any]) -> None:
-    print(json.dumps(dict(document), ensure_ascii=False, indent=2, sort_keys=True))
 
 
 def handle_plan(args: argparse.Namespace) -> None:
@@ -161,33 +63,33 @@ def handle_plan(args: argparse.Namespace) -> None:
             source_digest=args.source_digest,
             entity_catalog_digest=args.entity_catalog_digest,
             created_at=args.created_at,
-            candidates=_load_candidates(args.candidates),
+            candidates=load_candidates(args.candidates),
         )
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-        raise SystemExit(f"[source-pool plan] GATE_BLOCK {_typed_error(exc)}") from exc
-    _print(plan)
+        raise SystemExit(f"[source-pool plan] GATE_BLOCK {typed_error(exc)}") from exc
+    print_document(plan)
 
 
 def handle_validate(args: argparse.Namespace) -> None:
     try:
         validation = validate_scale_source_pool_evidence(
-            _load_object(args.plan, label="plan"),
+            load_object(args.plan, label="plan"),
             evidence_root=Path(args.evidence_root),
         )
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise SystemExit(
-            f"[source-pool validate] GATE_BLOCK {_typed_error(exc)}"
+            f"[source-pool validate] GATE_BLOCK {typed_error(exc)}"
         ) from exc
-    _print(validation)
+    print_document(validation)
 
 
 def handle_write(args: argparse.Namespace) -> None:
     try:
-        plan = _load_object(args.plan, label="plan")
+        plan = load_object(args.plan, label="plan")
         output_root = Path(
             args.output_root or SOURCE_ACQUISITION_ROOT
         ).expanduser().resolve()
-        destination = _canonical_destination(plan, output_root=output_root)
+        destination = canonical_pool_destination(plan, output_root=output_root)
         frozen = write_create_once_scale_source_pool(
             destination,
             plan,
@@ -195,8 +97,8 @@ def handle_write(args: argparse.Namespace) -> None:
         )
         validation = validate_scale_source_pool(frozen)
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-        raise SystemExit(f"[source-pool write] GATE_BLOCK {_typed_error(exc)}") from exc
-    _print(
+        raise SystemExit(f"[source-pool write] GATE_BLOCK {typed_error(exc)}") from exc
+    print_document(
         {
             "schema": "quwoquan_data.scale_source_pool_write_result",
             "planRef": destination.relative_to(output_root).as_posix(),
@@ -261,7 +163,7 @@ def handle_project_candidates(args: argparse.Namespace) -> None:
         output_root = Path(
             args.output_root or SOURCE_ACQUISITION_ROOT
         ).expanduser().resolve()
-        destination = _canonical_candidates_destination(
+        destination = canonical_candidates_destination(
             candidates,
             output_root=output_root,
         )
@@ -271,9 +173,9 @@ def handle_project_candidates(args: argparse.Namespace) -> None:
         )
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise SystemExit(
-            f"[source-pool project-candidates] GATE_BLOCK {_typed_error(exc)}"
+            f"[source-pool project-candidates] GATE_BLOCK {typed_error(exc)}"
         ) from exc
-    _print(
+    print_document(
         {
             "schema": "quwoquan_data.scale_source_pool_candidates_write_result",
             "targetScale": frozen["targetScale"],
@@ -301,9 +203,9 @@ def handle_freeze_homepage_article_catalogs(args: argparse.Namespace) -> None:
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise SystemExit(
             "[source-pool freeze-homepage-article-catalogs] GATE_BLOCK "
-            f"{_typed_error(exc)}"
+            f"{typed_error(exc)}"
         ) from exc
-    _print(result)
+    print_document(result)
 
 
 def handle_merge_homepage_article(args: argparse.Namespace) -> None:
@@ -321,9 +223,9 @@ def handle_merge_homepage_article(args: argparse.Namespace) -> None:
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise SystemExit(
             "[source-pool merge-homepage-article] GATE_BLOCK "
-            f"{_typed_error(exc)}"
+            f"{typed_error(exc)}"
         ) from exc
-    _print(result)
+    print_document(result)
 
 
 def handle_acquire_homepage_article(args: argparse.Namespace) -> None:
@@ -342,16 +244,17 @@ def handle_acquire_homepage_article(args: argparse.Namespace) -> None:
             homepage_count=args.homepage_count,
             article_count=args.article_count,
             seed_selection=Path(args.seed_selection),
+            acquisition_concurrency=args.acquisition_concurrency,
         )
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         checkpoint = getattr(exc, "checkpoint", None)
         if isinstance(checkpoint, Mapping):
-            _print(checkpoint)
+            print_document(checkpoint)
         raise SystemExit(
             "[source-pool acquire-homepage-article] GATE_BLOCK "
-            f"{_typed_error(exc)}"
+            f"{typed_error(exc)}"
         ) from exc
-    _print(result)
+    print_document(result)
 
 
 def handle_freeze_professional_image_catalog(args: argparse.Namespace) -> None:
@@ -376,14 +279,14 @@ def handle_freeze_professional_image_catalog(args: argparse.Namespace) -> None:
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise SystemExit(
             f"[source-pool freeze-professional-image-catalog] GATE_BLOCK "
-            f"{_typed_error(exc)}"
+            f"{typed_error(exc)}"
         ) from exc
-    _print(
+    print_document(
         {
             "schema": "quwoquan_data.professional_image_governed_catalog_write_result",
             "catalogRef": destination.relative_to(output_root).as_posix(),
             "catalogDigest": catalog["catalogDigest"],
-            "catalogFileSha256": _file_sha256(destination),
+            "catalogFileSha256": file_sha256(destination),
             "candidateCount": catalog["candidateCount"],
             "providerCounts": catalog["providerCounts"],
         }
@@ -404,10 +307,10 @@ def handle_freeze_professional_video_catalog(args: argparse.Namespace) -> None:
             source_revision=args.source_revision,
             source_digest=args.source_digest,
             entity_catalog_digest=args.entity_catalog_digest,
-            metadata_responses=_load_array(
+            metadata_responses=load_array(
                 args.metadata_responses, label="supported API metadata responses"
             ),
-            manual_file_manifests=_load_array(
+            manual_file_manifests=load_array(
                 args.manual_file_manifests, label="manual video manifests"
             ),
             evidence_root=Path(args.evidence_root),
@@ -423,13 +326,13 @@ def handle_freeze_professional_video_catalog(args: argparse.Namespace) -> None:
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise SystemExit(
             f"[source-pool freeze-professional-video-catalog] GATE_BLOCK "
-            f"{_typed_error(exc)}"
+            f"{typed_error(exc)}"
         ) from exc
-    _print({
+    print_document({
         "schema": "quwoquan_data.professional_video_popular_catalog_write_result",
         "catalogRef": destination.relative_to(output_root).as_posix(),
         "catalogDigest": frozen["catalogDigest"],
-        "catalogFileSha256": _file_sha256(destination),
+        "catalogFileSha256": file_sha256(destination),
         "candidateCount": frozen["candidateCount"],
         "providerCounts": frozen["providerCounts"],
     })
@@ -462,6 +365,12 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "--seed-selection",
         required=True,
         help="identity-free historical hints intersected with fresh coverage evidence",
+    )
+    acquire_content.add_argument(
+        "--acquisition-concurrency",
+        type=int,
+        default=1,
+        help="单一 create-once batch 内的有界网络取得并发度（1-32）",
     )
     acquire_content.add_argument("--output-root")
     acquire_content.set_defaults(handler=handle_acquire_homepage_article)

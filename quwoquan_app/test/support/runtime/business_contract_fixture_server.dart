@@ -12,9 +12,87 @@ import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentType;
 
-import 'fixtures/object_contract_example_reader.dart';
-
 const String businessFixtureCurrentUserId = 'fixture_user_current';
+
+/// Object-owned wire seeds assembled by each consuming test.
+///
+/// Runtime harness code must not import object-owned builders, so every
+/// business wire example enters through this explicit seed container built by
+/// the test from its object-owned `test/support/service/**` builders.
+final class BusinessFixtureSeeds {
+  const BusinessFixtureSeeds({
+    required this.content,
+    required this.chatTimeline,
+    required this.chatContacts,
+    required this.circle,
+    required this.user,
+    required this.notificationMessages,
+  });
+
+  /// `contentDiscoveryWireExample()`-shaped map with a `posts` list.
+  final Map<String, Object?> content;
+
+  /// Chat timeline seed: currentUserId/conversations/messages/members/userStates.
+  final Map<String, Object?> chatTimeline;
+
+  /// Chat contacts seed: contacts/circleIds/groupConversationIds.
+  final Map<String, Object?> chatContacts;
+
+  /// `businessCircleWireExample()`-shaped map with `circles` and `groups`.
+  final Map<String, Object?> circle;
+
+  /// `userProfileWireExample()`-shaped map with a `profiles` list.
+  final Map<String, Object?> user;
+
+  /// `appMessageWireExamples()`-shaped app message rows.
+  final List<Map<String, Object?>> notificationMessages;
+}
+
+const Map<String, dynamic> _businessEntitySeed = <String, dynamic>{
+  'homepages': <Map<String, dynamic>>[
+    <String, dynamic>{
+      'homepageId': 'fixture_homepage_author',
+      'homepageType': 'author',
+      'title': '契约摄影师主页',
+    },
+  ],
+};
+
+const Map<String, dynamic> _businessLocationSeed = <String, dynamic>{
+  'pois': <Map<String, dynamic>>[
+    <String, dynamic>{
+      'poiId': 'fixture_poi_west_lake',
+      'name': '杭州西湖',
+      'address': '浙江省杭州市西湖区',
+      'lat': 30.2431,
+      'lng': 120.1505,
+    },
+  ],
+};
+
+Map<String, dynamic> _businessNotificationSeed(
+  List<Map<String, Object?>> messages,
+) {
+  return <String, dynamic>{
+    'appMessages': messages,
+    'unreadCount': messages.where((message) => message['read'] != true).length,
+  };
+}
+
+const Map<String, dynamic> _businessRtcSeed = <String, dynamic>{
+  'sessions': <Map<String, dynamic>>[
+    <String, dynamic>{
+      'sessionId': '11111111-1111-4111-8111-111111111111',
+      'type': 'audio',
+      'state': 'incoming',
+      'callerUserId': 'fixture_user_friend',
+      'participantUserIds': <String>[
+        'fixture_user_current',
+        'fixture_user_friend',
+      ],
+    },
+  ],
+};
 
 class _BusinessFixtures {
   _BusinessFixtures({
@@ -43,75 +121,32 @@ class _BusinessFixtures {
   final Map<String, dynamic> notificationSeed;
   final Map<String, dynamic> rtcSeed;
 
-  static _BusinessFixtures load() {
-    final content = objectContractExampleReader
-        .document('content')
-        .cast<String, dynamic>();
-    final chat = objectContractExampleReader
-        .document('chat')
-        .cast<String, dynamic>();
-    final circle = objectContractExampleReader
-        .document('circle')
-        .cast<String, dynamic>();
-    final user = objectContractExampleReader
-        .document('user')
-        .cast<String, dynamic>();
-    final entity = objectContractExampleReader
-        .document('entity')
-        .cast<String, dynamic>();
-    final integration = objectContractExampleReader
-        .document('integration')
-        .cast<String, dynamic>();
-    final notification = objectContractExampleReader
-        .document('notification')
-        .cast<String, dynamic>();
-    final rtc = objectContractExampleReader
-        .document('rtc')
-        .cast<String, dynamic>();
+  static _BusinessFixtures from(BusinessFixtureSeeds seeds) {
     return _BusinessFixtures(
-      contentSeed:
-          (content['examples']
-                  as Map<String, dynamic>)['content_discovery_core']
-              as Map<String, dynamic>,
-      chatSeed:
-          (chat['examples'] as Map<String, dynamic>)['chat_core']
-              as Map<String, dynamic>,
-      chatContactsSeed:
-          (chat['examples'] as Map<String, dynamic>)['chat_contacts_core']
-              as Map<String, dynamic>,
-      circleSeed: _canonicalCircleSeed(
-        (circle['examples'] as Map<String, dynamic>)['circle_core']
-            as Map<String, dynamic>,
-      ),
-      circleHomeSeed:
-          (circle['examples'] as Map<String, dynamic>)['circle_home_feed_core']
-              as Map<String, dynamic>,
-      userSeed:
-          (user['examples'] as Map<String, dynamic>)['user_profile_core']
-              as Map<String, dynamic>,
-      userFeedSeed:
-          (user['examples'] as Map<String, dynamic>)['profile_feed_core']
-              as Map<String, dynamic>,
-      entitySeed: _example(entity, 'entity_homepage_core'),
-      integrationSeed: _example(integration, 'location_poi_core'),
-      notificationSeed: _example(notification, 'notification_core'),
-      rtcSeed: _example(rtc, 'rtc_core'),
+      contentSeed: seeds.content.cast<String, dynamic>(),
+      chatSeed: seeds.chatTimeline.cast<String, dynamic>(),
+      chatContactsSeed: seeds.chatContacts.cast<String, dynamic>(),
+      circleSeed: _canonicalCircleSeed(seeds.circle.cast<String, dynamic>()),
+      circleHomeSeed: const <String, dynamic>{
+        'featuredCircleIds': <String>['fixture_circle_photo'],
+        'groupFeedPostIds': <String>['fixture_photo_001'],
+      },
+      userSeed: seeds.user.cast<String, dynamic>(),
+      userFeedSeed: const <String, dynamic>{
+        'myPostIds': <String>[
+          'fixture_moment_001',
+          'fixture_moment_002',
+          'fixture_moment_003',
+          'fixture_post_lifestyle_001',
+        ],
+        'authorPostIds': <String>['fixture_photo_001'],
+        'commentIds': <String>[],
+      },
+      entitySeed: _businessEntitySeed,
+      integrationSeed: _businessLocationSeed,
+      notificationSeed: _businessNotificationSeed(seeds.notificationMessages),
+      rtcSeed: _businessRtcSeed,
     );
-  }
-
-  static Map<String, dynamic> _example(
-    Map<String, dynamic> document,
-    String key,
-  ) {
-    final examples = document['examples'];
-    if (examples is! Map<String, dynamic>) {
-      throw FormatException('$key contract examples are missing');
-    }
-    final value = examples[key];
-    if (value is! Map<String, dynamic>) {
-      throw FormatException('$key contract example is missing');
-    }
-    return value;
   }
 
   static Map<String, dynamic> _canonicalCircleSeed(
@@ -149,8 +184,10 @@ final class BusinessContractFixtureServer {
               as Map<String, dynamic>)['sessionId']
           as String;
 
-  static Future<BusinessContractFixtureServer> start() async {
-    final fixtures = _BusinessFixtures.load();
+  static Future<BusinessContractFixtureServer> start({
+    required BusinessFixtureSeeds seeds,
+  }) async {
+    final fixtures = _BusinessFixtures.from(seeds);
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     final wrapper = BusinessContractFixtureServer._(server, fixtures);
     wrapper._serve();
@@ -598,8 +635,8 @@ final class BusinessContractFixtureServer {
             ...row,
             'subtitle': row['subtitle'] ?? '',
             'avatarUrl': row['avatarUrl'] ?? '',
-            'summaryIntersections':
-                row['summaryIntersections'] ?? const <String>[],
+            'intersectionFacts':
+                row['intersectionFacts'] ?? const <Map<String, Object?>>[],
             'contactCount': row['contactCount'] ?? 0,
             'sortKey': row['sortKey'],
           },

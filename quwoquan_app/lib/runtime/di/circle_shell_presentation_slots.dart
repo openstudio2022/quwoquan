@@ -3,7 +3,6 @@ import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart';
 import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circle_shell_participant_slots.dart';
-import 'package:quwoquan_app/service/circle_service/circle_management/circle_file/presentation/section_storage.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_group_membership/presentation/circle_group_membership_panel.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/presentation/circle_membership_approval_page.dart';
@@ -54,18 +53,6 @@ CircleShellParticipantSlots buildCircleShellParticipantSlots({
             access: access,
             isDark: isDark,
           ),
-  buildStorageSection:
-      ({
-        required circleId,
-        required isDark,
-        required storageUsedBytes,
-        required storageQuotaBytes,
-      }) => SectionStorage(
-        circleId: circleId,
-        isDark: isDark,
-        storageUsedBytes: storageUsedBytes,
-        storageQuotaBytes: storageQuotaBytes,
-      ),
   startCall:
       ({
         required context,

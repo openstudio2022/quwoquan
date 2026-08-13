@@ -97,24 +97,6 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 成员角色权限结果子句尚未逐条绑定
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：缺 `GWT-001` 两条结果子句的逐条证据，且两条绑定测试均无失败路径断言，t2 的 canonical failure 语义没有证据支撑。
-- 完成判定：`GWT-001.t1` 与 `GWT-001.t2` 各自被真实测试 `spec_ref` 绑定。
-
-<a id="open-002"></a>
-### OPEN-002 open 圈子加入即 active 且游客走登录续接
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：加入/退出乐观更新 + 失败回滚 + 行为事实链路在 local_contract 有断言。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
-
 <a id="open-004"></a>
 ### OPEN-004 圈子审批页 production Remote UAT 尚未闭合
 

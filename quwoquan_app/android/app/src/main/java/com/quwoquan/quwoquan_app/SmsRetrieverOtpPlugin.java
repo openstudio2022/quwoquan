@@ -89,11 +89,11 @@ final class SmsRetrieverOtpPlugin {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       return extras.getParcelable(SmsRetriever.EXTRA_STATUS, Status.class);
     }
-    return readLegacyStatus(extras);
+    return readUntypedStatus(extras);
   }
 
   @SuppressWarnings("deprecation")
-  private static Status readLegacyStatus(Bundle extras) {
+  private static Status readUntypedStatus(Bundle extras) {
     return extras.getParcelable(SmsRetriever.EXTRA_STATUS);
   }
 

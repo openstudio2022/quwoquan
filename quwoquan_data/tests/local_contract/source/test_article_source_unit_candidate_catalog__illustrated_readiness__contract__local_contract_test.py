@@ -148,7 +148,6 @@ def _catalog(
 ) -> dict[str, object]:
     return build_article_source_unit_catalog(
         catalog_id="travel-article-source-units-west-lake",
-        catalog_version="2026-08-08.1",
         created_at="2026-08-08T00:00:00Z",
         minimum_candidate_count=minimum,
         candidates=candidates if candidates is not None else [_candidate(i) for i in range(3)],
@@ -172,7 +171,6 @@ def test_registry_admitted_catalog_freezes_illustrated_source_units() -> None:
 
     assert evidence == {
         "catalogId": "travel-article-source-units-west-lake",
-        "catalogVersion": "2026-08-08.1",
         "catalogDigest": catalog["catalogDigest"],
         "candidateCount": 3,
         "illustratedCandidateCount": 3,

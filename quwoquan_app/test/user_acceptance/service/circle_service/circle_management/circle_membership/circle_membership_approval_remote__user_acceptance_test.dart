@@ -1,3 +1,4 @@
+// readiness_case: circle_membership_approval_app_uat
 // spec_ref: specs/feature-tree/circle-community/activity-member-governance/member-role-permission/spec.md#gwt-004
 /// 两个 disposable actor 经公开 Circle API 建立 approval 圈子与真实 pending
 /// membership，再由 production App 审批并以 Remote 队列、成员版本和 memberCount

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping
 from pathlib import Path
@@ -118,8 +119,13 @@ def load_professional_video_acquisition_receipt(
     stable = {key: value for key, value in receipt.items() if key != "receiptDigest"}
     if receipt["receiptDigest"] != document_digest(stable):
         raise ValueError("professional video acquisition receipt digest mismatch")
-    expected_name = f"{str(receipt['manifestDigest']).removeprefix('sha256:')}.json"
-    if path.parent.name != "receipts" or path.name != expected_name:
+    token = str(receipt["manifestDigest"]).removeprefix("sha256:")
+    # Attempt 1 is receipts/<token>.json; retries after retryable acquisition
+    # failures append receipts/<token>-attempt-NNN.json without rewriting
+    # historical receipts.
+    if path.parent.name != "receipts" or not re.fullmatch(
+        rf"{re.escape(token)}(-attempt-\d{{3,}})?\.json", path.name
+    ):
         raise ValueError("professional video acquisition receipt path is not canonical")
     assert_funnel_consistent(receipt)
     for row in receipt["assets"]:

@@ -1,9 +1,13 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-004
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-003
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/service/notification_service/notification_delivery/notification_delivery_job/application/public/incoming_call_presentation_acknowledger.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/incoming_call_coordinator.dart';
+import 'package:quwoquan_app/service/user_service/account/device_registration/application/device_push_endpoint_writer.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/rtc_signal_events.dart';
 import 'package:quwoquan_app/runtime/platform/incoming_call_envelope.dart';
 import 'package:quwoquan_app/runtime/platform/incoming_call_native_bridge.dart';
@@ -17,6 +21,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/rtc_service/rtc/call_session/rtc_contract_test_builders.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   // ──────────────────────────────────────────────────────────────────
   // 协调器装配：在不同平台能力位下都能解析（不依赖被删除的 goRouterProvider）。
   // ──────────────────────────────────────────────────────────────────
@@ -63,6 +69,111 @@ void main() {
         isA<IncomingCallCoordinator>(),
       );
     });
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // pushDelivery 能力门控（R-XP1/R-XP5/R-XP9）：同一批行为契约由 profile 驱动。
+  // mobile：登录后推送 endpoint 注册路径可达；web/ohos：结构化跳过注册与
+  // 登出反注册，且全程无原生通道调用。
+  // ──────────────────────────────────────────────────────────────────
+  group('IncomingCallCoordinator — pushDelivery 能力门控', () {
+    ProviderContainer makePushGatedContainer(
+      PlatformCapabilities caps, {
+      required PushEndpointGateway gateway,
+      required DevicePushEndpointWriter writer,
+    }) {
+      final router = GoRouter(
+        routes: [
+          GoRoute(path: '/', builder: (context, state) => const _Empty()),
+        ],
+      );
+      return ProviderContainer(
+        overrides: [
+          platformCapabilitiesProvider.overrideWithValue(caps),
+          incomingCallRouterReaderProvider.overrideWithValue(() => router),
+          callKitServiceProvider.overrideWithValue(_RecordingCallKitService()),
+          pushEndpointGatewayProvider.overrideWithValue(gateway),
+          devicePushEndpointWriterProvider.overrideWithValue(writer),
+          notificationDeliveryJobProcessCommandWriterProvider.overrideWithValue(
+            _RecordingPresentationAcknowledger(),
+          ),
+        ],
+      );
+    }
+
+    PushEndpointMutation pendingUpsertMutation() => PushEndpointMutation(
+      mutationId: 'mutation-upsert',
+      kind: PushEndpointMutationKind.upsert,
+      endpoint: DevicePushEndpoint(
+        kind: PushEndpointKind.fcm,
+        token: 'token-upsert',
+      ),
+      occurredAt: DateTime.utc(2026, 8, 12),
+    );
+
+    test('mobile：登录 start 后本地待同步 mutation 到达远端 writer 并 ack', () async {
+      final gateway = _CountingPushEndpointGateway()
+        ..pending.add(pendingUpsertMutation());
+      final writer = _RecordingDevicePushEndpointWriter();
+      final container = makePushGatedContainer(
+        CapabilityProfile.mobile,
+        gateway: gateway,
+        writer: writer,
+      );
+      addTearDown(container.dispose);
+
+      container.read(incomingCallCoordinatorProvider).start('user-current');
+      await pumpEventQueue();
+
+      expect(gateway.readPendingCalls, greaterThan(0));
+      expect(writer.upserts.single.token, 'token-upsert');
+      expect(gateway.acknowledged, <String>['mutation-upsert']);
+    });
+
+    for (final entry in <String, PlatformCapabilities>{
+      'web': CapabilityProfile.web,
+      'ohos': CapabilityProfile.ohos,
+    }.entries) {
+      test('${entry.key}：start/stop 全程结构化跳过注册且无原生通道调用', () async {
+        final nativeCalls = <String>[];
+        const nativeChannel = MethodChannel('quwoquan/rtc/incoming_call');
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(nativeChannel, (call) async {
+              nativeCalls.add(call.method);
+              return null;
+            });
+        addTearDown(() {
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+              .setMockMethodCallHandler(nativeChannel, null);
+        });
+
+        final gateway = _CountingPushEndpointGateway()
+          ..pending.add(pendingUpsertMutation());
+        final writer = _RecordingDevicePushEndpointWriter();
+        final container = makePushGatedContainer(
+          entry.value,
+          gateway: gateway,
+          writer: writer,
+        );
+        addTearDown(container.dispose);
+        final coordinator = container.read(incomingCallCoordinatorProvider);
+
+        coordinator.start('user-current');
+        await pumpEventQueue();
+        coordinator.stop();
+        await pumpEventQueue();
+
+        expect(gateway.readPendingCalls, 0);
+        expect(gateway.queueRemovalCalls, 0);
+        expect(writer.upserts, isEmpty);
+        expect(writer.removals, isEmpty);
+        expect(
+          nativeCalls,
+          isEmpty,
+          reason: '能力关闭平台不得触达原生推送/来电通道（R-XP4/R-XP5）',
+        );
+      });
+    }
   });
 
   // ──────────────────────────────────────────────────────────────────
@@ -284,6 +395,52 @@ final class _RecordingPresentationAcknowledger
   @override
   Future<void> acknowledge(IncomingCallPresentationReceipt receipt) async {
     receipts.add(receipt);
+  }
+}
+
+final class _CountingPushEndpointGateway implements PushEndpointGateway {
+  final pending = <PushEndpointMutation>[];
+  final acknowledged = <String>[];
+  int readPendingCalls = 0;
+  int queueRemovalCalls = 0;
+
+  @override
+  Future<void> recordUpsert(DevicePushEndpoint endpoint) async {}
+
+  @override
+  Future<List<PushEndpointMutation>> readPendingMutations() async {
+    readPendingCalls += 1;
+    return List<PushEndpointMutation>.of(pending);
+  }
+
+  @override
+  Future<void> acknowledgeMutation(String mutationId) async {
+    acknowledged.add(mutationId);
+    pending.removeWhere((mutation) => mutation.mutationId == mutationId);
+  }
+
+  @override
+  Future<void> queueActiveEndpointRemovals() async {
+    queueRemovalCalls += 1;
+  }
+
+  @override
+  Future<void> purgeForTerminalAccountClosure() async {}
+}
+
+final class _RecordingDevicePushEndpointWriter
+    implements DevicePushEndpointWriter {
+  final upserts = <DevicePushEndpoint>[];
+  final removals = <DevicePushEndpoint>[];
+
+  @override
+  Future<void> upsert(DevicePushEndpoint endpoint) async {
+    upserts.add(endpoint);
+  }
+
+  @override
+  Future<void> remove(DevicePushEndpoint endpoint) async {
+    removals.add(endpoint);
   }
 }
 

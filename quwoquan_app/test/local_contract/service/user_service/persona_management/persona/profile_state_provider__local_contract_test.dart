@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart'
+    show ContentAuthorPostsReader;
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_profile_view_data.dart';
@@ -15,7 +17,7 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/pre
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/user_service/relationship/greeting_request/user_typed_facet_test_support.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
 
@@ -90,7 +92,7 @@ class _FailingUserProfileRepository extends MockUserProfileRepository {
   }
 }
 
-class _CountingProfileContentRepository extends MockContentRepository {
+class _CountingProfileContentRepository implements ContentAuthorPostsReader {
   int listUserPostsCalls = 0;
 
   @override
@@ -147,7 +149,7 @@ void main() {
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _testRelationshipCapabilityRepository(),
         ),
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       ],
     );
     addTearDown(container.dispose);
@@ -205,7 +207,7 @@ void main() {
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _testRelationshipCapabilityRepository(),
         ),
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       ],
     );
     addTearDown(container.dispose);
@@ -232,7 +234,7 @@ void main() {
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _testRelationshipCapabilityRepository(),
         ),
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       ],
     );
     addTearDown(container.dispose);
@@ -262,7 +264,7 @@ void main() {
           (ref, surface) => _TestUserProfileRepository(),
         ),
         relationshipCapabilityRepositoryProvider.overrideWithValue(capRepo),
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       ],
     );
     addTearDown(container.dispose);
@@ -290,7 +292,10 @@ void main() {
           profileQueryProvider.overrideWith(
             (ref, surface) => _TestUserProfileRepository(),
           ),
-          ...mockContentFacetOverrides(contentRepo),
+          ...mockContentFacetOverrides(
+            store: InMemoryContentPostStore(),
+            authorPostsReader: contentRepo,
+          ),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
             _testRelationshipCapabilityRepository(),
           ),
@@ -317,7 +322,7 @@ void main() {
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _testRelationshipCapabilityRepository(),
         ),
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       ],
     );
     addTearDown(container.dispose);

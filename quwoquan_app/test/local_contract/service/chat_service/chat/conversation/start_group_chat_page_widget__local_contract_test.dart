@@ -12,7 +12,6 @@ import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/start_group_chat_page.dart';
@@ -22,6 +21,8 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import '../../../../../support/runtime/errors/runtime_failure_fixtures.dart';
 import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
 
 void _suppressImageErrors() {
@@ -88,15 +89,23 @@ class _RecordingAnalyticsService extends AnalyticsService {
   );
 }
 
-ProviderContainer _buildContainer(
-  MockChatRepository repository, {
+ProviderContainer _buildContainer({
+  ChatTestFacets? facets,
+  ChatConversationRepository? conversation,
+  ChatContactRepository? contact,
+  ChatGroupSelectionRepository? groupSelection,
   AnalyticsService? analytics,
   RecordingAppTelemetryRecorder? telemetryRecorder,
 }) {
   final container = ProviderContainer(
     retry: (_, _) => null,
     overrides: [
-      chatRepositoryCompositionProvider.overrideWithValue(repository),
+      ...chatTestRepositoryOverrides(
+        facets: facets,
+        conversation: conversation,
+        contact: contact,
+        groupSelection: groupSelection,
+      ),
       profileQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
       ),
@@ -110,8 +119,9 @@ ProviderContainer _buildContainer(
 }
 
 /// 模拟服务端互关/拉黑/上限校验失败：createConversation 抛出携带结构化
-/// userMessage 的 CloudException，其余能力沿用 MockChatRepository。
-class _RejectingCreateChatRepository extends MockChatRepository {
+/// userMessage 的 CloudException。
+class _RejectingCreateChatRepository extends Fake
+    implements ChatConversationRepository {
   _RejectingCreateChatRepository(this._error);
 
   final CloudException _error;
@@ -130,7 +140,8 @@ class _RejectingCreateChatRepository extends MockChatRepository {
 
 /// 模拟服务端已提交、但首个 HTTP 响应在客户端丢失。重试必须使用同一幂等键，
 /// 才能由 Remote 返回首个已创建的会话。
-class _ResponseLostCreateChatRepository extends MockChatRepository {
+class _ResponseLostCreateChatRepository extends Fake
+    implements ChatConversationRepository {
   final List<String?> receivedIdempotencyKeys = <String?>[];
   bool _firstResponseLost = true;
 
@@ -165,7 +176,8 @@ class _ResponseLostCreateChatRepository extends MockChatRepository {
   }
 }
 
-class _SeededGroupCandidatesChatRepository extends MockChatRepository {
+class _SeededGroupCandidatesChatRepository extends Fake
+    implements ChatContactRepository {
   _SeededGroupCandidatesChatRepository(this._rows);
 
   final List<ChatContactRowViewData> _rows;
@@ -183,7 +195,8 @@ class _SeededGroupCandidatesChatRepository extends MockChatRepository {
 
 /// 确定性「从群聊中选择」数据源：图四群列表与图五群成员均由测试给定，
 /// 用于稳定校验返回路径、long title 无 overflow 等 UI 契约。
-class _SelectableGroupChatRepository extends MockChatRepository {
+class _SelectableGroupChatRepository extends Fake
+    implements ChatGroupSelectionRepository {
   _SelectableGroupChatRepository({
     required this.groups,
     required this.membersByConversation,
@@ -279,7 +292,7 @@ void main() {
             relationState: 'mutual',
           ),
         ]);
-    final container = _buildContainer(repository);
+    final container = _buildContainer(contact: repository);
     await _pumpStartGroupChatPage(tester, container: container);
 
     expect(find.byType(SettingsInsetMemberPickerPageScaffold), findsOneWidget);
@@ -298,7 +311,7 @@ void main() {
   testWidgets('遗留 start_gathering extra 不再激活普通群聊内的活动语义分支', (tester) async {
     await _pumpStartGroupChatPage(
       tester,
-      container: _buildContainer(MockChatRepository()),
+      container: _buildContainer(),
       routeExtra: const StartGroupChatRouteExtra(
         actionKey: 'start_gathering',
         targetObjectId: 'place-1',
@@ -335,7 +348,7 @@ void main() {
         ),
       ),
     );
-    final container = _buildContainer(repository);
+    final container = _buildContainer(conversation: repository);
     await _pumpStartGroupChatPage(tester, container: container);
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
@@ -357,7 +370,7 @@ void main() {
     _suppressImageErrors();
 
     final repository = _ResponseLostCreateChatRepository();
-    final container = _buildContainer(repository);
+    final container = _buildContainer(conversation: repository);
     await _pumpStartGroupChatPage(tester, container: container);
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
@@ -389,10 +402,7 @@ void main() {
     _suppressImageErrors();
 
     final analytics = _RecordingAnalyticsService();
-    final container = _buildContainer(
-      MockChatRepository(),
-      analytics: analytics,
-    );
+    final container = _buildContainer(analytics: analytics);
     await _pumpStartGroupChatPage(tester, container: container);
 
     // 曝光 + 候选加载成功（itemCount 透出，App→Observability 链路接通）
@@ -430,7 +440,10 @@ void main() {
         ),
       ),
     );
-    final container = _buildContainer(repository, analytics: analytics);
+    final container = _buildContainer(
+      conversation: repository,
+      analytics: analytics,
+    );
     await _pumpStartGroupChatPage(tester, container: container);
 
     await tester.tap(find.byIcon(CupertinoIcons.circle).first);
@@ -449,7 +462,7 @@ void main() {
   testWidgets('选中联系人后可提交并跳转到新会话', (tester) async {
     _suppressImageErrors();
 
-    final container = _buildContainer(MockChatRepository());
+    final container = _buildContainer();
     await _pumpStartGroupChatPage(tester, container: container);
 
     expect(find.byType(StartGroupChatPage), findsOneWidget);
@@ -485,7 +498,7 @@ void main() {
             source: 'mutual',
           ),
         ]);
-    final container = _buildContainer(repository);
+    final container = _buildContainer(contact: repository);
     await _pumpStartGroupChatPage(
       tester,
       container: container,
@@ -532,7 +545,7 @@ void main() {
     _suppressImageErrors();
 
     final container = _buildContainer(
-      _SeededGroupCandidatesChatRepository(<ChatContactRowViewData>[
+      contact: _SeededGroupCandidatesChatRepository(<ChatContactRowViewData>[
         ChatContactRowViewData(
           userId: 'user_li_ming',
           displayName: '李明',
@@ -569,7 +582,7 @@ void main() {
   testWidgets('点击已选头像取消选择并提示用户', (tester) async {
     _suppressImageErrors();
 
-    final container = _buildContainer(MockChatRepository());
+    final container = _buildContainer();
     await _pumpStartGroupChatPage(tester, container: container);
 
     // 选中第一个候选。
@@ -600,7 +613,7 @@ void main() {
   testWidgets('从群聊中选择联系人：群列表展示朋友数且可进入群成员多选', (tester) async {
     _suppressImageErrors();
 
-    final container = _buildContainer(MockChatRepository());
+    final container = _buildContainer();
     await _pumpStartGroupChatPage(tester, container: container);
 
     // 点击「从群聊中选择」入口进入图四。
@@ -668,7 +681,7 @@ void main() {
         ],
       },
     );
-    final container = _buildContainer(repository);
+    final container = _buildContainer(groupSelection: repository);
     await _pumpStartGroupChatPage(tester, container: container);
 
     await tester.tap(find.text(ChatText.startGroupChatPickFromCircle));
@@ -707,8 +720,8 @@ void main() {
   testWidgets('建群聊成功后同时刷新消息列表与群聊列表', (tester) async {
     _suppressImageErrors();
 
-    final repository = MockChatRepository();
-    final container = _buildContainer(repository);
+    final facets = ChatTestFacets();
+    final container = _buildContainer(facets: facets);
     final keepAlive = container.listen(chatInboxListProvider, (_, _) {});
     addTearDown(keepAlive.close);
     await _pumpStartGroupChatPage(tester, container: container);
@@ -728,7 +741,7 @@ void main() {
     await tester.tap(find.text(ChatText.startGroupChatActionCount(1)));
     await tester.pumpAndSettle();
 
-    final repositoryInbox = await repository.listInbox(limit: 100);
+    final repositoryInbox = await facets.inbox.listInbox(limit: 100);
     expect(
       repositoryInbox.any(
         (item) => item.id.startsWith('fixture_conv_created_'),
@@ -791,7 +804,10 @@ void main() {
         ],
       },
     );
-    final container = _buildContainer(repository, telemetryRecorder: ops);
+    final container = _buildContainer(
+      groupSelection: repository,
+      telemetryRecorder: ops,
+    );
     await _pumpStartGroupChatPage(tester, container: container);
 
     // 进入图四群列表。
@@ -919,7 +935,7 @@ void main() {
         ],
       },
     );
-    final container = _buildContainer(repository);
+    final container = _buildContainer(groupSelection: repository);
     await _pumpStartGroupChatPage(tester, container: container);
 
     await tester.tap(find.text(ChatText.startGroupChatPickFromGroup));
@@ -1003,7 +1019,7 @@ void main() {
         ],
       },
     );
-    final container = _buildContainer(repository);
+    final container = _buildContainer(groupSelection: repository);
     await _pumpStartGroupChatPage(tester, container: container);
 
     await tester.tap(find.text(ChatText.startGroupChatPickFromGroup));

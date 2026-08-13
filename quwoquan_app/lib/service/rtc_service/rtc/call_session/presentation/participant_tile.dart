@@ -1,13 +1,16 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/media_device_provider.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_participant.dart';
+import 'package:quwoquan_app/design_system/spacing/call_surface_motion.dart';
 
-class ParticipantTile extends StatelessWidget {
+class ParticipantTile extends ConsumerWidget {
   const ParticipantTile({
     super.key,
     required this.participant,
@@ -24,15 +27,21 @@ class ParticipantTile extends StatelessWidget {
   final RtcVideoTrack? videoTrack;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final effectiveRadius =
         borderRadius ?? BorderRadius.circular(AppSpacing.sm);
     // Prefer the track bound onto the participant VM (synced from LiveKit);
     // fall back to an explicitly passed track for callers that manage it.
     final effectiveTrack = videoTrack ?? participant.videoTrack;
+    final mirrorLocalPreview = shouldMirrorLocalPreview(
+      isLocal: participant.isLocal,
+      cameraPosition: ref.watch(
+        mediaDeviceProvider.select((device) => device.cameraPosition),
+      ),
+    );
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+      duration: CallSurfaceMotion.stateFade,
       decoration: BoxDecoration(
         color: AppColors.overlayDark,
         borderRadius: effectiveRadius,
@@ -57,7 +66,10 @@ class ParticipantTile extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (participant.isCameraOn && effectiveTrack != null)
-            RtcVideoTrackRenderer(track: effectiveTrack)
+            RtcVideoTrackRenderer(
+              track: effectiveTrack,
+              mirror: mirrorLocalPreview,
+            )
           else if (participant.isCameraOn && effectiveTrack == null)
             Container(
               color: AppColors.overlayMedium,

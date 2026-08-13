@@ -2,7 +2,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 // Barrel re-export：消费者继续 import 本文件即可访问 kind 映射与句式合成公开 API；
 // 拆分（R03 体量收敛）对 intersection_repository / T1 合约测试零改动。
-export 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_kind_mapping.dart';
+export 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_kind_mapping.dart';
 export 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_statement_synthesizer.dart';
 
 List<IntersectionReason> rankAndDedupeIntersections(

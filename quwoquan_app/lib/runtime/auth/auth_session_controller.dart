@@ -576,12 +576,15 @@ class AuthSessionController extends Notifier<AuthSessionState> {
       } catch (error, stackTrace) {
         // The in-memory authority must still fail closed. A later launch will
         // present the stale bearer to the server again and retry canonical
-        // cleanup; no raw failure reaches the restricted surface.
-        developer.log(
-          'authoritative account-state session cleanup failed',
-          name: 'AuthSessionController',
-          error: error,
-          stackTrace: stackTrace,
+        // cleanup; the failure itself must stay observable.
+        unawaited(
+          ref
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'auth.session.account_state_cleanup',
+                error: error,
+                stackTrace: stackTrace,
+              ),
         );
       }
       if (!ref.mounted || state.accessToken.trim() != requestToken) {
@@ -773,11 +776,15 @@ class AuthSessionController extends Notifier<AuthSessionState> {
             ),
           );
     } catch (error, stackTrace) {
-      developer.log(
-        'terminal account cleanup receipt persistence failed',
-        name: 'AuthSessionController',
-        error: error,
-        stackTrace: stackTrace,
+      // 回执丢失会让下次启动重复清理；事实必须结构化上报。
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'auth.session.terminal_cleanup_receipt',
+              error: error,
+              stackTrace: stackTrace,
+            ),
       );
     }
   }

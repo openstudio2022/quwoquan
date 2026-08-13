@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
@@ -14,8 +15,6 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/application/
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/persona_query.dart';
 
 const _conversationId = 'fixture_conv_group';
-const _photoGroupId = 'fixture_conv_photo_group';
-const _travelGroupId = 'fixture_conv_travel_group';
 const _newMemberId = 'user_roster_contract_new';
 
 /// Roster consistency does not exercise persona-backed local search. Keep that
@@ -52,13 +51,10 @@ final class _RosterPersonaQuery implements PersonaQuery {
   }
 }
 
-List<Override> _boundaryOverrides(MockChatRepository repository) {
+List<Override> _boundaryOverrides(ChatTestFacets facets) {
   return <Override>[
     ...sealedCloudBoundaryOverrides(),
-    chatConversationRepositoryProvider.overrideWithValue(repository),
-    chatMessageRepositoryProvider.overrideWithValue(repository),
-    chatMemberRepositoryProvider.overrideWithValue(repository),
-    chatGroupAdminRepositoryProvider.overrideWithValue(repository),
+    ...chatTestRepositoryOverrides(facets: facets),
     personaQueryProvider(
       AppUiSurfaces.appShell,
     ).overrideWithValue(const _RosterPersonaQuery()),
@@ -69,8 +65,10 @@ List<Override> _boundaryOverrides(MockChatRepository repository) {
 void main() {
   group('local_contract.chat.member_roster', () {
     test('listMembers 与 chatMessageProvider sender 快照一致', () async {
-      final repo = MockChatRepository();
-      final container = ProviderContainer(overrides: _boundaryOverrides(repo));
+      final facets = ChatTestFacets();
+      final container = ProviderContainer(
+        overrides: _boundaryOverrides(facets),
+      );
       addTearDown(container.dispose);
 
       final members = await container
@@ -111,8 +109,10 @@ void main() {
     });
 
     test('addMembers / removeMember 后 provider 与 repository 人数一致', () async {
-      final repo = MockChatRepository();
-      final container = ProviderContainer(overrides: _boundaryOverrides(repo));
+      final facets = ChatTestFacets();
+      final container = ProviderContainer(
+        overrides: _boundaryOverrides(facets),
+      );
       addTearDown(container.dispose);
 
       final notifier = container.read(
@@ -131,12 +131,14 @@ void main() {
       expect(afterAdd.length, before + 1);
       expect(afterAdd.any((m) => m.userId == _newMemberId), isTrue);
 
-      final repoMembers = await repo.listMembers(
+      final repoMembers = await facets.member.listMembers(
         conversationId: _conversationId,
       );
       expect(repoMembers.length, afterAdd.length);
 
-      final conversation = await repo.getConversation(_conversationId);
+      final conversation = await facets.conversation.getConversation(
+        _conversationId,
+      );
       expect(conversation.memberCount, afterAdd.length);
 
       await notifier.removeMember(_newMemberId);
@@ -148,11 +150,13 @@ void main() {
     });
 
     test('invalidate 后 reload 仍与 repository 对齐', () async {
-      final repo = MockChatRepository();
-      final container = ProviderContainer(overrides: _boundaryOverrides(repo));
+      final facets = ChatTestFacets();
+      final container = ProviderContainer(
+        overrides: _boundaryOverrides(facets),
+      );
       addTearDown(container.dispose);
 
-      await repo.addMembers(
+      await facets.member.addMembers(
         conversationId: _conversationId,
         userIds: ['user_roster_invalidate'],
       );
@@ -168,47 +172,43 @@ void main() {
           .read(conversationMembersProvider(_conversationId))
           .members
           .length;
-      final repoCount = (await repo.listMembers(
+      final repoCount = (await facets.member.listMembers(
         conversationId: _conversationId,
       )).length;
       expect(providerCount, repoCount);
 
-      await repo.removeMember(
+      await facets.member.removeMember(
         conversationId: _conversationId,
         userId: 'user_roster_invalidate',
       );
     });
 
     test(
-      'contract groups memberCount / listMembers / getGroupHome 一致',
+      'contract group memberCount / listMembers / getGroupHome 一致',
       () async {
-        final repo = MockChatRepository();
-        for (final conversationId in [_photoGroupId, _travelGroupId]) {
-          final members = await repo.listMembers(
-            conversationId: conversationId,
-            limit: 200,
-          );
-          final conversation = await repo.getConversation(conversationId);
-          final groupHome = await repo.getGroupHome(conversationId);
+        final facets = ChatTestFacets();
+        final members = await facets.member.listMembers(
+          conversationId: _conversationId,
+          limit: 200,
+        );
+        final conversation = await facets.conversation.getConversation(
+          _conversationId,
+        );
+        final groupHome = await facets.groupAdmin.getGroupHome(_conversationId);
 
-          expect(
-            conversation.memberCount,
-            members.length,
-            reason: conversationId,
-          );
-          expect(groupHome.memberCount, members.length, reason: conversationId);
-        }
+        expect(conversation.memberCount, members.length);
+        expect(groupHome.memberCount, members.length);
       },
     );
 
     test('addMembers 后 contract groupAvatarVersion 递增', () async {
-      final repo = MockChatRepository();
-      final before = await repo.getConversation(_photoGroupId);
-      await repo.addMembers(
-        conversationId: _photoGroupId,
-        userIds: ['fixture_user_weekend_1'],
+      final facets = ChatTestFacets();
+      final before = await facets.conversation.getConversation(_conversationId);
+      await facets.member.addMembers(
+        conversationId: _conversationId,
+        userIds: ['user_group_avatar_version_new'],
       );
-      final after = await repo.getConversation(_photoGroupId);
+      final after = await facets.conversation.getConversation(_conversationId);
       expect(after.memberCount, before.memberCount + 1);
       expect(after.groupAvatarVersion, greaterThan(before.groupAvatarVersion));
     });

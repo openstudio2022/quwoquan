@@ -45,6 +45,17 @@
 - 关联要求：`REQ-001`
 - 关联能力：[`chat-experience-optimization`](./chat-experience-optimization/spec.md)、[`commercial-message-system`](./commercial-message-system/spec.md)、[`contact-and-session-governance`](./contact-and-session-governance/spec.md)、[`group-creation-member-management`](./group-creation-member-management/spec.md)、[`list-detail-message-delivery`](./list-detail-message-delivery/spec.md)、[`realtime-call`](./realtime-call/spec.md)
 
+<a id="dec-002"></a>
+### DEC-002 聊天信息页是群空间首页，三类群共用同一壳
+- 决策：聊天群不是单纯消息流；聊天信息页承担「群空间首页」职责，统一承载群信息、群公告、相册（Chat AssetIndex）/文件/活动（Gathering Board 入口）/成员四宫格与共享 Skill 挂载入口。私建群、圈子群（CircleGroup 绑定）、Gathering 活动群三类群共用同一壳，按会话来源字段（`circleGroupId`/`gatheringId`）差异化展示能力入口。
+- 理由：把「群组及空间」做成一等产品概念，让群成为线上协作与线下行动沉淀的容器，而不是为每类群建独立页面或第二套信息架构；与交集飞轮（活动群破冰卡、行动回流）共享同一承载面。
+- 被否决方案：为圈子群/活动群新建独立空间页面或 Workspace 聚合；把 Gathering/Circle 事实迁入 Chat 域形成单聚合「空间」。
+- 约束与影响：沿用 Circle 拥有圈子/活动事实、Chat 拥有会话/消息的双 owner 投影模型。
+  - 四宫格与 Board 均为 typed 只读组合，不建立第二消息/文件存储（与 `REQ-004` 一致）。
+  - 相册/文件宫格只消费 Chat AssetIndex，活动宫格只消费 Gathering Board 投影。
+- 关联要求：`REQ-004`、`REQ-005`
+- 关联能力：[`commercial-message-system`](./commercial-message-system/spec.md)、[`list-detail-message-delivery`](./list-detail-message-delivery/spec.md)、[`intersection-native-messaging`](./intersection-native-messaging/spec.md)
+
 ## 6. 质量与运行约束
 
 - canary deployment → 监控 p99/错误率/seq gap 24h。

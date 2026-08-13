@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/circle-community/spec.md#dom-002
+// spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/spec.md#gwt-002
+// spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/spec.md#gwt-002.t1
 // spec_ref: specs/feature-tree/circle-community/spec.md#dom-002.t1
 // spec_ref: specs/feature-tree/circle-community/spec.md#dom-002.t2
 // spec_ref: specs/feature-tree/circle-community/spec.md#dom-002.t6

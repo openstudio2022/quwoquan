@@ -26,6 +26,7 @@
 ### REQ-001 Reader 与 Connector 必须声明权威、可见性和能力边界
 
 - Reader descriptor 必须声明 owner operation、schema、对象/可见范围、authority、sensitivity、freshness/cache、surface applicability 和 artifact/citation 规则。
+- 跨域公开对象 Reader 的唯一声明位置是 owner 对象契约的 `assistant_access.read.reader` 段，经 `make -C quwoquan_service codegen-assistant-reader-descriptors` 生成目录数据表（`reader_descriptors.g.go`），`assistant_run` 组合层只消费生成目录；生成物与契约逐字段一致由 `verify_object_assistant_access_closure.py` 阻断校验。`assistant_run` 自有进程内 seam Reader（trigger/turn/preferences/feedback/subscription/conversation context）保留服务内声明。
 - Context 第一阶段只加载入口、目标对象、共享 surface 与短 Skill 索引；确定 Skill 后只执行 ContextProfile 声明的 Reader/Resolver，大结果进入 Artifact Store。
 - Skill 只引用 `calendar.event.create`、`map.route.open` 等 canonical capability，不引用厂商；Assistant 只能看到 connectionRef/capability state，凭证和 Provider 错误归一化由 Integration Service 拥有。
 - ActionTool/DeviceAction 必须 proposal→confirmation→owner/native receipt→continuation；酒店餐饮交通只允许经验证的公开外链，不继承 Cookie/Authorization，不执行预订或支付。

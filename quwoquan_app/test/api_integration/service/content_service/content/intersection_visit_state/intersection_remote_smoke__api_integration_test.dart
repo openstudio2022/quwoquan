@@ -25,7 +25,7 @@ const _baseUrl = String.fromEnvironment('LOCAL_GAMMA_CONTENT_BASE_URL');
 const _viewerId = String.fromEnvironment('APP_CURRENT_USER_ID');
 const _personObjectId = String.fromEnvironment('TEST_INTERSECTION_OBJECT_ID');
 
-/// canonical acceptance JWT（`quwoquan_ops/cli/lib/local_environment_auth.py`
+/// canonical acceptance JWT（`quwoquan_ops/cli/lib/local_environment_auth/__main__.py`
 /// 本地签发通道），由工具
 /// `quwoquan_app/scripts/tools/gamma/intersection_remote_smoke.py`
 /// 仅通过测试子进程环境注入，禁止写入 flutter argv / dart-define / 报告。

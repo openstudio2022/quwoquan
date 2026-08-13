@@ -316,29 +316,14 @@ def validate_release_header(
                 digest = source_identity_digest(raw)
                 for execution_id in raw_execution_ids:
                     normalized_id = str(execution_id or "").strip()
-                    if raw.get("identityKind") == "legacy_canonical_migration":
-                        expanded.append(
-                            {
-                                "identityKind": "legacy_canonical_migration",
-                                "executionId": normalized_id,
-                                "sourceDigest": str(raw.get("sourceDigest") or ""),
-                                "canonicalObjectDigest": str(
-                                    raw.get("canonicalObjectDigest") or ""
-                                ),
-                                "migrationEvidenceDigest": str(
-                                    raw.get("migrationEvidenceDigest") or ""
-                                ),
-                            }
-                        )
-                    else:
-                        expanded.append({
-                            "executionId": normalized_id,
-                            "sourceRevision": str(raw.get("sourceRevision") or ""),
-                            "sourceDigest": str(raw.get("sourceDigest") or ""),
-                            "entityCatalogDigest": str(
-                                raw.get("entityCatalogDigest") or ""
-                            ),
-                        })
+                    expanded.append({
+                        "executionId": normalized_id,
+                        "sourceRevision": str(raw.get("sourceRevision") or ""),
+                        "sourceDigest": str(raw.get("sourceDigest") or ""),
+                        "entityCatalogDigest": str(
+                            raw.get("entityCatalogDigest") or ""
+                        ),
+                    })
                     identity_bindings.add((normalized_id, digest))
             expected_identities, expected_set_digest = source_identity_set(expanded)
             if (

@@ -23,7 +23,7 @@ import '../../../../../support/service/user_service/account/account_session/acco
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/runtime/transport/recording_content_media_facet.dart';
 import '../../../../../support/service/content_service/content/post/recording_content_post_publication_writer.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
 
 const _resolvedActivePersona = ActivePersonaContextViewData(
@@ -131,7 +131,7 @@ class _CreateHostApp extends StatelessWidget {
 }
 
 Widget _buildApp(
-  MockContentRepository repository,
+  InMemoryContentPostStore store,
   RecordingContentPostPublicationWriter postPublication,
 ) {
   final router = GoRouter(
@@ -167,7 +167,7 @@ Widget _buildApp(
       activePersonaContextProvider.overrideWith(
         (_) async => _resolvedActivePersona,
       ),
-      ...mockContentFacetOverrides(repository),
+      ...mockContentFacetOverrides(store: store),
       createContentPostPublicationWriterProvider.overrideWithValue(
         postPublication,
       ),
@@ -224,13 +224,13 @@ void main() {
   });
 
   testWidgets('退出保存后可从本地草稿页恢复，并在发布成功后清稿', (tester) async {
-    final repository = MockContentRepository();
+    final store = InMemoryContentPostStore();
     final postPublication = RecordingContentPostPublicationWriter();
     final draftRepository = SharedPreferencesCreateDraftRepository(
       scopeKey: CreateDraftLocalStorage.scopeKeyForUser('user_001'),
     );
 
-    await tester.pumpWidget(_buildApp(repository, postPublication));
+    await tester.pumpWidget(_buildApp(store, postPublication));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('打开创作'));

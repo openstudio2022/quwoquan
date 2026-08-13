@@ -89,6 +89,6 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前物理测试门仍容纳旧技术大桶，App 路径未逐级验证 context/object，readiness 入口也未把 App、服务与 Ops 的结构证据和 runner 结果完整分侧承载，因此局部文件存在仍可能掩盖另一侧缺口。
-- 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
+- 影响或价值：当前物理测试门仍容纳旧技术大桶，App 路径未逐级验证 context/object，readiness 入口也未把 App、服务与 Ops 的结构证据和 runner 结果完整分侧承载，因此局部文件存在仍可能掩盖另一侧缺口。UAT 与 ops 层测试义务由 `quwoquan_ops/gate/verify_readiness_case_coverage.py` 看护：磁盘验收测试必须有契约 readiness case，UA 声明 runner 路径 strict-zero，无缺口容忍基线。全部有 UAT 测试的对象声明 `layer: user_acceptance` case，全部有环境验收脚本的服务声明 `producer: ops, layer: environment_acceptance` case，runner 均携带 `readiness_case`/`spec_ref` 双向标注并由 loader 校验；ops runner 的 canonical 位置是 `tests/acceptance/user_acceptance/service_ops/<service>/` 内的实现脚本（loader 与根 AGENTS 条款同源单轨）。
+- 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效；`readiness_case_coverage_baseline.json` 两个缺口清单清零后删除。
 - 依赖：对象级 case、生产 runner、canonical snapshot authority、结果 receipt 与 stage 消费边界完成。

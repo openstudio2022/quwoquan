@@ -415,7 +415,6 @@ extension PersonalAssistantRunStreamLifecycle
         final streamEvent = AssistantRunStreamEvent.fromWire(event);
         if (streamEvent.type ==
                 AssistantRunStreamEventType.presentationSnapshot ||
-            streamEvent.type == AssistantRunStreamEventType.presentationPatch ||
             streamEvent.type ==
                 AssistantRunStreamEventType.presentationCommit) {
           try {

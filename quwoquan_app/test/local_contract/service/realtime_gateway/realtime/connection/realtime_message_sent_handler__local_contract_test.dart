@@ -3,15 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_view_data.dart';
 import 'package:quwoquan_app/runtime/transport/generated/cloud_api_defaults.g.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/runtime/di/realtime_message_handler.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/conversation_cache_record.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_repository.dart';
 import 'package:quwoquan_app/runtime/di/chat_message_application_dependencies.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 
 void main() {
   // 会话/离线缓存清理会落到本地 sqflite 索引，VM 测试需先装配 ffi factory。
@@ -23,9 +26,7 @@ void main() {
       ProviderScope(
         overrides: [
           ...sealedCloudBoundaryOverrides(),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           activePersonaContextLoaderProvider.overrideWithValue(
             _activePersonaContext,
           ),
@@ -73,13 +74,13 @@ void main() {
   });
 
   testWidgets('已移除字段 event 与 media event 均通过 Reader 恢复而非动态解码', (tester) async {
-    final repository = _CountingMessageRepository();
+    final repository = _CountingMessageRepository(ChatTestFacets().message);
     late ProviderContainer container;
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           ...sealedCloudBoundaryOverrides(),
-          chatRepositoryCompositionProvider.overrideWithValue(repository),
+          ...chatTestRepositoryOverrides(message: repository),
           activePersonaContextLoaderProvider.overrideWithValue(
             _activePersonaContext,
           ),
@@ -152,9 +153,7 @@ void main() {
       ProviderScope(
         overrides: [
           ...sealedCloudBoundaryOverrides(),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           activePersonaContextLoaderProvider.overrideWithValue(
             _activePersonaContext,
           ),
@@ -198,7 +197,10 @@ Future<ActivePersonaContextViewData> _activePersonaContext() async =>
       avatarUrl: '',
     );
 
-class _CountingMessageRepository extends MockChatRepository {
+class _CountingMessageRepository implements ChatMessageRepository {
+  _CountingMessageRepository(this._delegate);
+
+  final ChatMessageRepository _delegate;
   int listMessagesCallCount = 0;
 
   @override
@@ -210,4 +212,42 @@ class _CountingMessageRepository extends MockChatRepository {
     listMessagesCallCount += 1;
     return const <ChatMessageViewData>[];
   }
+
+  @override
+  Future<void> recallMessage({
+    required String conversationId,
+    required String messageId,
+  }) => _delegate.recallMessage(
+    conversationId: conversationId,
+    messageId: messageId,
+  );
+
+  @override
+  Future<ChatMessageSyncViewData> syncMessages({
+    required String conversationId,
+    required int lastSeq,
+    int limit = ChatSyncMessagesQuery.defaultLimit,
+  }) => _delegate.syncMessages(
+    conversationId: conversationId,
+    lastSeq: lastSeq,
+    limit: limit,
+  );
+
+  @override
+  Future<void> markAsRead({
+    required String conversationId,
+    required String messageId,
+  }) => _delegate.markAsRead(
+    conversationId: conversationId,
+    messageId: messageId,
+  );
+
+  @override
+  Future<List<ChatMessageReceipt>> getReceipts({
+    required String conversationId,
+    required String messageId,
+  }) => _delegate.getReceipts(
+    conversationId: conversationId,
+    messageId: messageId,
+  );
 }

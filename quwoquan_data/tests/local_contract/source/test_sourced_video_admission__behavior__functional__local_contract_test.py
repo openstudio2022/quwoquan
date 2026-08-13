@@ -162,13 +162,34 @@ def test_sample_frames_falls_back_to_ffmpeg_when_opencv_seek_fails(
         fail_opencv,
     )
     with tempfile.TemporaryDirectory(prefix="qwq_ffmpeg_frames_") as temp:
-        samples = sourced_video_admission._sample_frames(
+        samples = sourced_video_admission.sample_video_frame_files(
             source,
             sample_count=3,
             output_dir=Path(temp),
         )
         assert len(samples) == 3
         assert all(path.suffix == ".png" and path.stat().st_size > 0 for path in samples)
+
+
+def test_professional_probe_admits_motion_video_when_opencv_seek_fails(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """WebM 风格的容器帧数只是估计：seek 失败不得把可整段解码的动态视频误判为不可读。"""
+    source = _video(tmp_path / "seek-blind.mp4", motion_step=12)
+
+    monkeypatch.setattr(
+        sourced_video_admission,
+        "_sample_frames_with_opencv",
+        lambda *_args, **_kwargs: None,
+    )
+
+    probe = probe_professional_video(source)
+
+    assert probe["playable"] is True
+    assert probe["motionVideo"] is True
+    assert probe["staticImageSequence"] is False
+    assert probe["sampleCount"] >= 3
 
 
 def test_sampled_watermark_hit_is_fail_closed(

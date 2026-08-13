@@ -216,6 +216,9 @@ class CircleStateNotifier extends Notifier<CircleState> {
           !result.idempotentReplay) {
         _appendBehaviorFact(BehaviorEventType.joinCircle);
       }
+      if (result.state == CircleMembershipState.active) {
+        await _autoJoinDefaultPublicGroup();
+      }
     } catch (error) {
       state = state.copyWith(
         joinStatus: previousStatus,
@@ -226,11 +229,67 @@ class CircleStateNotifier extends Notifier<CircleState> {
     }
   }
 
-  Future<void> leaveCircle() async {
+  /// 入圈即入群：加入成功后自动申请默认公共群（open 群即时 active，
+  /// approval 群进入待审，inviteOnly 不申请）。群侧失败不回滚圈子加入——
+  /// 加入事实已成立，讨论区成员面板仍保留手动申请入口，失败进全局异常遥测。
+  Future<void> _autoJoinDefaultPublicGroup() async {
+    final defaultGroupId = state.circleData?.defaultPublicGroupId?.trim() ?? '';
+    if (defaultGroupId.isEmpty) {
+      return;
+    }
+    try {
+      final group = await ref
+          .read(circleDetailGroupQueryProvider)
+          .get(CircleGroupQuery(circleId: _circleId, groupId: defaultGroupId));
+      if (!ref.mounted) return;
+      state = state.copyWith(defaultPublicGroup: group);
+      if (group.joinPolicy == CircleGroupJoinPolicy.inviteOnly) {
+        return;
+      }
+      final access = ref.read(circleDetailGroupMembershipAccessProvider);
+      final mine = await access.findMy(
+        MyCircleGroupMembershipQuery(
+          circleId: _circleId,
+          groupId: defaultGroupId,
+        ),
+      );
+      if (!ref.mounted) return;
+      final canApply =
+          mine == null ||
+          mine.state == CircleGroupMembershipState.left ||
+          mine.state == CircleGroupMembershipState.removed ||
+          mine.state == CircleGroupMembershipState.rejected;
+      if (!canApply) {
+        return;
+      }
+      await access.apply(
+        ApplyCircleGroupMembershipCommand(
+          circleId: _circleId,
+          groupId: defaultGroupId,
+        ),
+      );
+    } catch (error, stackTrace) {
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordGlobalException(
+              source: 'circle.membership.auto_join_default_group',
+              exceptionText: error.toString(),
+              stackText: stackTrace.toString(),
+            ),
+      );
+    }
+  }
+
+  /// 退出圈子（App 侧编排，成功返回 true）：先退默认公共群（active 且非群主），
+  /// 再退圈。群退出失败整体中止并回滚——否则退圈后讨论区按成员资格封禁，
+  /// 用户将永久失去「退出群聊」入口（Chat 侧圈群治理只回跳圈子）。
+  Future<bool> leaveCircle() async {
     final previousStatus = state.joinStatus;
     final previousRole = state.role;
     final previousVersion = state.membershipVersion;
     try {
+      await _leaveDefaultPublicGroupFirst();
       state = state.copyWith(
         joinStatus: 'none',
         role: CircleRole.visitor,
@@ -249,6 +308,7 @@ class CircleStateNotifier extends Notifier<CircleState> {
       if (!result.idempotentReplay) {
         _appendBehaviorFact(BehaviorEventType.leaveCircle);
       }
+      return true;
     } catch (error) {
       state = state.copyWith(
         joinStatus: previousStatus,
@@ -257,7 +317,32 @@ class CircleStateNotifier extends Notifier<CircleState> {
         clearMembershipVersion: previousVersion == null,
         loadError: error,
       );
+      return false;
     }
+  }
+
+  Future<void> _leaveDefaultPublicGroupFirst() async {
+    final groupId =
+        state.defaultPublicGroup?.groupId.trim() ??
+        state.circleData?.defaultPublicGroupId?.trim() ??
+        '';
+    if (groupId.isEmpty) {
+      return;
+    }
+    final access = ref.read(circleDetailGroupMembershipAccessProvider);
+    final mine = await access.findMy(
+      MyCircleGroupMembershipQuery(circleId: _circleId, groupId: groupId),
+    );
+    if (mine == null || mine.state != CircleGroupMembershipState.active) {
+      return;
+    }
+    // 群主不可退群（owner 保护由群治理拥有）；此处不阻断退圈。
+    if (mine.role == CircleGroupMembershipRole.owner) {
+      return;
+    }
+    await access.leave(
+      LeaveCircleGroupMembershipCommand(circleId: _circleId, groupId: groupId),
+    );
   }
 
   /// 行为事实是推荐 HotPath 的 fire-and-forget 信号：

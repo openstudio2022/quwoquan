@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/spacing/call_surface_motion.dart';
 
 enum NetworkQuality {
   good,
@@ -57,7 +58,7 @@ class CallQualityIndicator extends ConsumerWidget {
           final barHeight = AppSpacing.xs + (barIndex * AppSpacing.three);
 
           return AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
+            duration: CallSurfaceMotion.stateFade,
             width: AppSpacing.three,
             height: barHeight,
             decoration: BoxDecoration(

@@ -505,6 +505,78 @@ void main() {
       expect(createRequest!.referralSource, ReferralSource.myIntersections);
     });
 
+    testWidgets('gathering dispatch + 人上下文 → 双人邀约携带受邀者', (tester) async {
+      GatheringCreateNavigationRequest? createRequest;
+      late BuildContext homeContext;
+      await tester.pumpWidget(
+        hostWith(
+          (c) => homeContext = c,
+          gatheringBinding: (context, [request]) async =>
+              createRequest = request,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final result = const IntersectionTargetNavigator().openActionHint(
+        homeContext,
+        intersectionActionHintFixture(
+          actionKey: 'start_gathering',
+          dispatch: 'gathering',
+          target: intersectionTargetFixture(
+            objectId: 'fixture_homepage_travel_photo_west_lake',
+            objectKind: 'place',
+          ),
+        ),
+        // 他人主页交集卡：展示位上下文对象是人 → TA 即受邀者。
+        contextObjectTarget: intersectionTargetFixture(
+          objectId: 'persona-xiaoya',
+          objectKind: 'person',
+          routeId: 'userProfile',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(result.status, IntersectionActionDispatchStatus.opened);
+      expect(createRequest, isNotNull);
+      expect(createRequest!.inviteePersonaId, 'persona-xiaoya');
+      expect(createRequest!.isDuoInvitation, isTrue);
+    });
+
+    testWidgets('gathering dispatch + 实体上下文 → 不携带受邀者（多人预设）', (tester) async {
+      GatheringCreateNavigationRequest? createRequest;
+      late BuildContext homeContext;
+      await tester.pumpWidget(
+        hostWith(
+          (c) => homeContext = c,
+          gatheringBinding: (context, [request]) async =>
+              createRequest = request,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      const IntersectionTargetNavigator().openActionHint(
+        homeContext,
+        intersectionActionHintFixture(
+          actionKey: 'start_gathering',
+          dispatch: 'gathering',
+          target: intersectionTargetFixture(
+            objectId: 'fixture_homepage_travel_photo_west_lake',
+            objectKind: 'place',
+          ),
+        ),
+        contextObjectTarget: intersectionTargetFixture(
+          objectId: 'homepage-west-lake',
+          objectKind: 'place',
+          routeId: 'homepageDetail',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(createRequest, isNotNull);
+      expect(createRequest!.inviteePersonaId, isEmpty);
+      expect(createRequest!.isDuoInvitation, isFalse);
+    });
+
     testWidgets('gathering dispatch + 无 target → 不调用 typed binding', (
       tester,
     ) async {

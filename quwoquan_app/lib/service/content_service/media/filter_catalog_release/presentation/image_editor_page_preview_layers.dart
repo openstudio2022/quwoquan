@@ -157,6 +157,38 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
     return _buildMiddleImageForPath(_currentPath, fgSecondary);
   }
 
+  /// 透视编辑会话的实时预览：与烘焙共用 PerspectiveGeometry 的同一矩阵
+  /// （角度参数一致，矩阵构造对显示尺寸具有相似不变性），禁止第二坐标链。
+  Widget _wrapWithPerspectivePreview(Widget imageWidget) {
+    if (!_isEditingPerspective ||
+        !_hasPerspectiveAdjustments ||
+        _isComparingSessionBaseline) {
+      return imageWidget;
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
+        final rect = _resolveImageRect(imageSize);
+        if (rect.isEmpty) {
+          return imageWidget;
+        }
+        final geometry = PerspectiveGeometry(
+          width: rect.width,
+          height: rect.height,
+          horizontalDegrees: _perspectiveDegrees(_perspectiveHorizontal),
+          verticalDegrees: _perspectiveDegrees(_perspectiveVertical),
+        );
+        return ClipRect(
+          child: Transform(
+            alignment: Alignment.center,
+            transform: geometry.centeredTransformWithFill(),
+            child: imageWidget,
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildMiddleImageForPath(String path, Color fgSecondary) {
     if (path.isEmpty) {
       return Center(
@@ -198,10 +230,12 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
     }
     imageWidget = _wrapWithFilterAdjustments(imageWidget);
     imageWidget = _wrapWithProAdjustments(imageWidget);
+    imageWidget = _wrapWithPerspectivePreview(imageWidget);
     final previewWidget = _selectedToolIndex == kImageEditorToolRotate
         ? _buildRotatePreview(imageWidget)
         : imageWidget;
     final isHslEditing = _isEditingHsl;
+    final isOverallEditing = _isEditingOverall;
     final isBwEditing = _isEditingBwLevels;
     final isLocalEditing = _isEditingLocal;
     final isCurveEditing = _isEditingCurve;
@@ -210,6 +244,7 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
     final isTextEditing = _isEditingText;
     final usesSessionLayer =
         isHslEditing ||
+        isOverallEditing ||
         isBwEditing ||
         isLocalEditing ||
         isCurveEditing ||
@@ -252,6 +287,9 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
     if (isHslEditing) {
       return _buildHslSessionImageLayer(content);
     }
+    if (isOverallEditing) {
+      return _buildOverallSessionImageLayer(content);
+    }
     if (isBwEditing) {
       return _buildBwSessionImageLayer(content);
     }
@@ -285,6 +323,19 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
   }
 
   Widget _buildHslSessionImageLayer(Widget content) {
+    // CPU 分带预览与导出 applyHslBands 同一算法（同源，确认不跳变）；
+    // 无调整或按住对比时回退原图层。
+    final hslPreview = _hslPreviewImage;
+    final effectiveContent =
+        hslPreview != null && !_isComparingSessionBaseline
+        ? Center(
+            child: RawImage(
+              image: hslPreview,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.medium,
+            ),
+          )
+        : content;
     return LayoutBuilder(
       builder: (context, constraints) {
         final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
@@ -297,7 +348,7 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              content,
+              effectiveContent,
               if (_hslPickerPoint != null && _hslPickerActive)
                 Positioned(
                   left: _hslPickerPoint!.dx - AppSpacing.iconMedium,
@@ -341,6 +392,22 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
     );
   }
 
+  /// 整体面板编辑层：CPU 组合预览（矩阵+细节/分区/颗粒，与烘焙同管线）。
+  Widget _buildOverallSessionImageLayer(Widget content) {
+    final basePreview = _basePreviewImage;
+    final effectiveContent =
+        basePreview != null && !_isComparingSessionBaseline
+        ? Center(
+            child: RawImage(
+              image: basePreview,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.medium,
+            ),
+          )
+        : content;
+    return _buildBwSessionImageLayer(effectiveContent);
+  }
+
   Widget _buildBwSessionImageLayer(Widget content) {
     return Stack(
       fit: StackFit.expand,
@@ -371,6 +438,20 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
   }
 
   Widget _buildLocalSessionImageLayer(Widget content) {
+    // CPU 局部预览与烘焙同一管线（径向权重+矩阵+细节）；预览可用时接管
+    // 底图并停用旧的每锚点 ShaderMask 矩阵层，避免双重叠加。
+    final localPreview = _localPreviewImage;
+    final usesCpuPreview =
+        localPreview != null && !_isComparingSessionBaseline;
+    final effectiveContent = usesCpuPreview
+        ? Center(
+            child: RawImage(
+              image: localPreview,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.medium,
+            ),
+          )
+        : content;
     return LayoutBuilder(
       builder: (context, constraints) {
         final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
@@ -387,8 +468,9 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              content,
-              ..._buildLocalPreviewLayers(content, imageRect),
+              effectiveContent,
+              if (!usesCpuPreview)
+                ..._buildLocalPreviewLayers(content, imageRect),
               if (_localRangeVisible) ..._buildLocalRangeOverlays(imageRect),
               ..._buildLocalAnchorWidgets(imageRect),
               if (_localDragging && _localMagnifierPoint != null)

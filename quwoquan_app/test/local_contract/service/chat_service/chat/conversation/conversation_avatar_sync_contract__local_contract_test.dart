@@ -3,7 +3,7 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/conve
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/conversation_cache_record.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/adapters/conversation_cache_service.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_store.dart';
-import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_search_namespace.dart';
+import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/local_search_namespace.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/conversation_avatar_search_index.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';

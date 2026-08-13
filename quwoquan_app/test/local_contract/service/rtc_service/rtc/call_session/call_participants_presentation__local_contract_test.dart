@@ -1,3 +1,9 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/group-call/spec.md#gwt-002
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/group-call/spec.md#gwt-003
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003.t6
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003.t7
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/group-call/spec.md#gwt-002.t2
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_participant_presentation.dart';

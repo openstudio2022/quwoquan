@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
+// ContractGraph SHA256: ba2dde9a203e9d9979e42aa34fc1994593f88f10ce159c4e37a42f66497c1ef9
 
 library;
 
@@ -2166,6 +2166,60 @@ final class GatheringApplicationQuestionOption {
   };
 }
 
+final class GatheringByHostPageSlice {
+  const GatheringByHostPageSlice({
+    required this.items,
+    this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<GatheringPublicCardSlice> items;
+  final String? nextCursor;
+  final bool hasMore;
+
+  factory GatheringByHostPageSlice.fromWire(Map<String, Object?> map, [String path = "GatheringByHostPageSlice"]) {
+    _rejectUnknownFields(map, const <String>{"items", "nextCursor", "hasMore"}, path);
+    return GatheringByHostPageSlice(
+      items: List<GatheringPublicCardSlice>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => GatheringPublicCardSlice.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "items": items.map((value) => value.toWire()).toList(growable: false),
+    if (nextCursor != null) "nextCursor": nextCursor!,
+    "hasMore": hasMore,
+  };
+}
+
+final class GatheringBySourcePageSlice {
+  const GatheringBySourcePageSlice({
+    required this.items,
+    this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<GatheringPublicCardSlice> items;
+  final String? nextCursor;
+  final bool hasMore;
+
+  factory GatheringBySourcePageSlice.fromWire(Map<String, Object?> map, [String path = "GatheringBySourcePageSlice"]) {
+    _rejectUnknownFields(map, const <String>{"items", "nextCursor", "hasMore"}, path);
+    return GatheringBySourcePageSlice(
+      items: List<GatheringPublicCardSlice>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => GatheringPublicCardSlice.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "items": items.map((value) => value.toWire()).toList(growable: false),
+    if (nextCursor != null) "nextCursor": nextCursor!,
+    "hasMore": hasMore,
+  };
+}
+
 final class GatheringCapacityPolicy {
   const GatheringCapacityPolicy({
     required this.maxParticipants,
@@ -3224,6 +3278,12 @@ CircleSearchResultView decodeCircleSearchResultView(Object? response) =>
 
 CircleStatsWire decodeCircleStatsWire(Object? response) =>
     CircleStatsWire.fromWire(_requiredObject(response, "CircleStatsWire"), "CircleStatsWire");
+
+GatheringByHostPageSlice decodeGatheringByHostPageSlice(Object? response) =>
+    GatheringByHostPageSlice.fromWire(_requiredObject(response, "GatheringByHostPageSlice"), "GatheringByHostPageSlice");
+
+GatheringBySourcePageSlice decodeGatheringBySourcePageSlice(Object? response) =>
+    GatheringBySourcePageSlice.fromWire(_requiredObject(response, "GatheringBySourcePageSlice"), "GatheringBySourcePageSlice");
 
 GatheringCommandResult decodeGatheringCommandResult(Object? response) =>
     GatheringCommandResult.fromWire(_requiredObject(response, "GatheringCommandResult"), "GatheringCommandResult");

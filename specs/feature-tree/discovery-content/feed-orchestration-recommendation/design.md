@@ -63,6 +63,20 @@
 - 影响 Story：本决策约束该 Story 的推荐续页路径。
 - 关联验收：`SIT-002`
 
+<a id="dec-004"></a>
+### DEC-004 搜推协同：单向意图信号 + 共享基础设施不加倍
+- 决策：搜索与推荐的协同固定为四条边界。
+  - 搜索行为只经 search-service `RecommendationSignalFact` 的 `events.search.recommendation_signals` durable stream 单向进入推荐 `FeatureProfile`（query 信号归并进有界衰减的 `searchTermAffinities`：半衰期 7 天、每主体至多 50 term；click 信号仅推进幂等收据；signalId 幂等；原始查询词只进入特征投影，不进入日志、DLQ 或错误信息）。
+  - 推荐不建第二套 ES/向量引擎：候选召回单轨走 Mongo 候选投影的多路有界召回（fresh/hot/collaborative/following），未来若需要标签或文本召回，只允许复用搜索主索引做只读旁路且不进入 feed 主链路 SLO。
+  - Redis 容量合账：推荐窗口/交付页 quota shard 预算（DEC-003）与搜索 result cache 在环境容量规划中合并核算，压测画像同目录同 verdict 口径（`quwoquan_service/scripts/recommendation-service/tools/recommendation_load_profile.py` 与 `search_load_benchmark.py` 各自对照本域 `load_model`）。
+  - 归因同源：`searchRequestId`（搜索）与 `feedRequestId`（推荐）在 ops 观测各自保持单轨，不新增第二套跨域归因标识；搜推转化分析由两条归因链在分析侧 join，不在 wire 上双写。
+- 理由：搜索 query 是最强的短期意图信号（业界搜推联动共识），但双向同步或共享存储会制造第二真相源；本项目规模（`load_model` 的 RPS 量级）不支撑独立向量引擎的运维成本。
+- 被否决方案：推荐自建 ES/向量索引做文本召回、搜索直接读推荐特征集合、跨域共享一个归因 id，以及把搜索意图写进 content 行为契约形成双通道。
+- 约束与影响：搜索侧 stream 契约（retention 86400s、signalId 幂等）是唯一进入面；推荐消费失败走对象 DLQ 且不透传查询词。`searchTermAffinities` 只经 `read_for_scoring` 进入模型 user_features，不进入交集解释或任何用户可见文案。
+- 关联要求：`REQ-001`、`REQ-002`
+- 影响 Story：[`collaborative-recall`](./collaborative-recall/spec.md)、[`personalized-ranking`](./personalized-ranking/spec.md)
+- 关联验收：`SIT-001`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

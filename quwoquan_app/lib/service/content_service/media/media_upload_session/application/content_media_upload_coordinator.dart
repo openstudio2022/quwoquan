@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'dart:convert';
 import 'dart:developer' as developer;
 
@@ -344,11 +346,13 @@ final class ContentMediaUploadCoordinator implements ContentMediaUploadService {
         ),
       );
     } catch (error, stackTrace) {
-      developer.log(
-        'Media upload telemetry recording failed',
-        name: 'ContentMediaUploadCoordinator',
-        error: error,
-        stackTrace: stackTrace,
+      // 上传遥测链路故障必须可观测，否则发布体验盲区无法发现。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'content.media_upload.telemetry_record',
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }

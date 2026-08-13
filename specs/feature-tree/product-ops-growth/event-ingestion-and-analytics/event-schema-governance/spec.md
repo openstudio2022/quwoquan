@@ -76,3 +76,43 @@
 - 准出影响：`track`
 - 影响或价值：尚缺少能够证明“事件 Schema 治理”已满足当前规格的真实测试证据。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 注册专用漏斗事件缺失，首注与回登不可区分
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：缺注册专用事件——`event_catalog.yaml` 只有
+  `login_funnel`/`login_operation`；首注转化只能从登录结果与
+  `ops_actor_first_seen` 间接推断，新老用户混淆，获客漏斗无法作为
+  黄金指标注册。登录页埋点区当前由 auth 工作流活跃改造中，事件与埋点
+  必须在其静止后同一增量落地，避免死 schema 与调用点冲突。
+  已探明的实施路径：登录响应现有 `identityOrigin` 是身份来源类型
+  （anonymous_device、phone、federated、migrated_seed），不能区分
+  账号本次新建与回登，须先在 user-service `account_session` 登录响应
+  增加账号新建标志字段并 codegen；端侧埋点承载文件是
+  `login_page_auth_flow.dart`（`_trackln` 调用族），云侧
+  `login_lifecycle` rowKind 以该标志维度扩展即可，不必新增 rowKind。
+- 完成判定：注册漏斗事件进入 canonical catalog 并经 codegen 产出端侧
+  payload，登录/注册页埋点调用与云侧 rollup 同一增量交付，满足
+  [GWT-001](#gwt-001) 的 schema 同源可观察结果。
+- 依赖：user-identity 登录页工作流静止
+  （`account_session` contracts 当前处于并行改造中间态）；
+  ContractGraph 静止点 codegen。
+
+<a id="open-003"></a>
+### OPEN-003 40 个已声明交互动作页面缺遥测出口
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：尚有 40 个页面缺强类型遥测出口——埋点覆盖矩阵
+  （`make verify-page-telemetry-coverage`，报告 `.qwq_output/env/repo/runs/telemetry-coverage/report.md`）
+  显示 70 个自有交互声明页面中 40 个扫描不到强类型遥测出口调用；
+  primary 漏斗页面（登录/创作/搜索）已全埋并被门禁 BLOCK 保护，
+  剩余为非关键页面的渐进补齐面。
+- 完成判定：覆盖报告 `uncoveredPages` 归零或对应页面的
+  `telemetry_descriptor` 声明被修正为实际行为，满足 [GWT-001](#gwt-001)
+  的声明与实现同源。
+- 依赖：各页面 owner 领域的埋点补齐增量。

@@ -23,6 +23,7 @@ import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/runtime/observability/runtime_log_ports.dart';
 import 'package:quwoquan_app/runtime/observability/runtime_log_record.dart';
 import 'package:quwoquan_app/runtime/observability/runtime_logger.dart';
+import 'package:quwoquan_app/runtime/platform/official_call_ringtone_catalog.dart';
 import 'package:quwoquan_app/runtime/platform/push_endpoint_gateway.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_reporter.dart';
@@ -420,7 +421,7 @@ void main() {
       await tester.tap(find.text(SettingsText.settingsCallSection));
       await tester.pumpAndSettle();
       expect(
-        find.text(SettingsText.settingsCallRingtoneDefault),
+        find.text(OfficialCallRingtoneCatalog.items.first.label),
         findsOneWidget,
       );
       await tester.tap(find.text(SettingsText.settingsEnableCallVibration));
@@ -910,7 +911,7 @@ final class _RecordingUserSettingsCommandWriter
     if (failNotification) {
       throw CloudErrorMapper.fromStatusCode(
         503,
-        requestPath: '/v1/user/settings/notification',
+        requestPath: '/user/settings/notifications',
       );
     }
     notificationCommands.add(command);

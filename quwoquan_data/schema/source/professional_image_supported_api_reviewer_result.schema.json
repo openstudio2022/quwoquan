@@ -4,8 +4,7 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema", "candidateId", "contentSha256", "reviewRequestRef", "reviewRequestSha256", "semanticTaskRequestRef",
-    "semanticTaskRequestSha256", "semanticTaskAttemptRef", "semanticTaskAttemptSha256",
+    "schema", "candidateId", "contentSha256", "reviewRequestRef", "reviewRequestSha256",
     "provider", "model", "runId", "reviewedAt", "resultSha256", "judgment", "judgmentDigest"
   ],
   "properties": {
@@ -18,6 +17,13 @@
     "semanticTaskRequestSha256": {"$ref": "#/$defs/sha256"},
     "semanticTaskAttemptRef": {"$ref": "#/$defs/safeRef"},
     "semanticTaskAttemptSha256": {"$ref": "#/$defs/sha256"},
+    "sourceReview": {"$ref": "#/$defs/sourceReview"},
+    "sourceReviewRequestRef": {"$ref": "#/$defs/safeRef"},
+    "sourceReviewRequestSha256": {"$ref": "#/$defs/sha256"},
+    "sourceReviewAttemptRef": {"$ref": "#/$defs/safeRef"},
+    "sourceReviewAttemptSha256": {"$ref": "#/$defs/sha256"},
+    "sourceCapacityReceiptRef": {"$ref": "#/$defs/safeRef"},
+    "sourceCapacityReceiptSha256": {"$ref": "#/$defs/sha256"},
     "provider": {"enum": ["cursor_sdk", "codex_sdk"]},
     "model": {"type": "string", "minLength": 1},
     "runId": {"type": "string", "minLength": 1},
@@ -26,9 +32,39 @@
     "judgment": {"$ref": "#/$defs/judgment"},
     "judgmentDigest": {"$ref": "#/$defs/sha256"}
   },
+  "oneOf": [
+    {
+      "required": [
+        "semanticTaskRequestRef", "semanticTaskRequestSha256",
+        "semanticTaskAttemptRef", "semanticTaskAttemptSha256"
+      ],
+      "not": {"required": ["sourceReview"]}
+    },
+    {
+      "required": [
+        "sourceReview", "sourceReviewRequestRef", "sourceReviewRequestSha256",
+        "sourceReviewAttemptRef", "sourceReviewAttemptSha256",
+        "sourceCapacityReceiptRef", "sourceCapacityReceiptSha256"
+      ],
+      "not": {"required": ["semanticTaskRequestRef"]}
+    }
+  ],
   "$defs": {
     "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "safeRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "sourceReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionBundleDigest", "handoffDigest", "requestDigest"],
+      "properties": {
+        "sourceRevision": {"$ref": "#/$defs/sha256"},
+        "sourceDigest": {"$ref": "#/$defs/sha256"},
+        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "executionBundleDigest": {"$ref": "#/$defs/sha256"},
+        "handoffDigest": {"$ref": "#/$defs/sha256"},
+        "requestDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
     "judgment": {
       "type": "object",
       "additionalProperties": false,

@@ -52,6 +52,19 @@ class DiscoveryFeedText {
   static const String intersectionCollapse = '收起';
   static const String intersectionNewBadgeSuffix = '条新增';
   static const String intersectionAffinityLabel = '推荐';
+  // 可行动交集分组（REQ-008 可约分层）：分组标题与收件箱卡入口。
+  // 判定事实来自云侧 actionHints/expiresAt，端侧只做展示分层不重排组内顺序。
+  static const String intersectionActionableGroupTitle = '可约';
+  static String intersectionActionableEntry(int count) => '可约 $count';
+  // 「共同经历」资产行（REQ-008）：只读 coExperiencedGathering 经历交集事实，
+  // 无经历不渲染整个区块；读取失败展示可恢复错误行，不伪造空态。
+  static const String myExperienceTitle = '共同经历';
+  static const String myExperienceLoadFailed = '共同经历加载失败';
+  // 创作者「成行力」（creator 锚点两级诚实计数）：成形为 0 整行不渲染；
+  // 经历为 0 只陈述成形事实。计数由云侧四锚点社会证明读面下发，端不估算。
+  static String creatorFlywheelFormedLabel(int formed) => '你的内容促成了 $formed 次同行';
+  static String creatorFlywheelExperiencedSuffix(int experienced) =>
+      ' · 留下 $experienced 段共同经历';
 
   // ==================== 影响明细 sheet ====================
   // 影响明细 sheet（统一交互子契约落地：展示云侧样本，不编造全量）

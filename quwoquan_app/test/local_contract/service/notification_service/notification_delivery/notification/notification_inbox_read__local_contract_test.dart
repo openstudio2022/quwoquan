@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/models/visit_models.dart';
@@ -110,9 +110,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           greetingRepositoryProvider.overrideWithValue(
             alphaGreetingRepository(),
           ),
@@ -163,9 +161,7 @@ void main() {
     expect(find.byKey(const ValueKey('ua-post-detail')), findsOneWidget);
 
     // 已读状态持久推进：inbox 中该行已读，未读数收敛为 0。
-    final unread = await facet.getUnreadCount(
-      GetAppMessageUnreadCountQuery(),
-    );
+    final unread = await facet.getUnreadCount(GetAppMessageUnreadCountQuery());
     expect(unread.unreadCount, 0);
     final message = await facet.getAppMessage(
       GetAppMessageQuery(messageId: 'ua-msg-1'),

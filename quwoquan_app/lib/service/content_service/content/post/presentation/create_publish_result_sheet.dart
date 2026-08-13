@@ -4,8 +4,34 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
+import 'package:quwoquan_app/service/content_service/content/post/domain/publish_settings_models.dart';
 
 enum CreatePublishResultState { published, pendingReview, queued }
+
+/// 发布结果页去向摘要（GWT-005）：只陈述用户真实选择的分发去向，
+/// 无对应选择的维度不出现，不伪造去向。
+String buildPublishDestinationSummary(PublishSettings settings) {
+  final homepageTitle = settings.homepage?.title.trim() ?? '';
+  final parts = <String>[
+    settings.isPublic
+        ? CreationText.publishDestinationPublic
+        : CreationText.publishDestinationPrivate,
+    if (settings.circleNames.isNotEmpty)
+      '${CreationText.publishDestinationCircles}：'
+          '${settings.circleNames.join('、')}',
+    if (homepageTitle.isNotEmpty)
+      '${CreationText.publishDestinationHomepage}：$homepageTitle',
+    if (settings.tagLabels.isNotEmpty)
+      '${CreationText.publishDestinationTags}：${settings.tagLabels.join('、')}',
+    if (settings.locationName.trim().isNotEmpty)
+      '${CreationText.publishDestinationLocation}：'
+          '${settings.locationName.trim()}',
+    if (settings.gatheringTitle.trim().isNotEmpty)
+      '${CreationText.publishDestinationGathering}：'
+          '${settings.gatheringTitle.trim()}',
+  ];
+  return parts.join(' · ');
+}
 
 enum CreatePublishResultAction { viewWork, viewPublicationTasks, done }
 
@@ -20,6 +46,7 @@ Future<CreatePublishResultAction?> showCreatePublishResultSheet(
   BuildContext context, {
   required CreatePublishResultState state,
   String? postId,
+  String destinationSummary = '',
   ValueListenable<CreatePublishResultPresentation>? presentationListenable,
 }) {
   final initialPresentation = CreatePublishResultPresentation(
@@ -34,12 +61,16 @@ Future<CreatePublishResultAction?> showCreatePublishResultSheet(
         return _buildCreatePublishResultSheet(
           sheetContext,
           initialPresentation,
+          destinationSummary: destinationSummary,
         );
       }
       return ValueListenableBuilder<CreatePublishResultPresentation>(
         valueListenable: listenable,
-        builder: (context, presentation, _) =>
-            _buildCreatePublishResultSheet(context, presentation),
+        builder: (context, presentation, _) => _buildCreatePublishResultSheet(
+          context,
+          presentation,
+          destinationSummary: destinationSummary,
+        ),
       );
     },
   );
@@ -47,8 +78,9 @@ Future<CreatePublishResultAction?> showCreatePublishResultSheet(
 
 Widget _buildCreatePublishResultSheet(
   BuildContext sheetContext,
-  CreatePublishResultPresentation presentation,
-) {
+  CreatePublishResultPresentation presentation, {
+  String destinationSummary = '',
+}) {
   final state = presentation.state;
   final postId = presentation.postId;
   final canViewWork =
@@ -87,7 +119,20 @@ Widget _buildCreatePublishResultSheet(
         Text(title),
       ],
     ),
-    message: Text(description),
+    message: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Text(description),
+        if (destinationSummary.trim().isNotEmpty) ...<Widget>[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            destinationSummary.trim(),
+            key: TestKeys.createPublishResultDestinationSummary,
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ],
+    ),
     actions: [
       if (canViewWork)
         CupertinoActionSheetAction(

@@ -10,6 +10,7 @@ import 'package:quwoquan_app/runtime/shell/share/forward_share_models.dart';
 import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/contact_intersection_subtitle.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Binds the runtime share shell to Chat-owned production ports. The shell sees
@@ -45,23 +46,55 @@ final forwardShareDependenciesProvider = Provider<ForwardShareDependencies>(
           final activeContext = await ref.read(
             activePersonaContextProvider.future,
           );
-          final content = note.isNotEmpty ? note : payload.messagePreview;
-          await ref
-              .read(chatMessageCommandWriterProvider)
-              .sendMessage(
+          final writer = ref.read(chatMessageCommandWriterProvider);
+          if (payload.kind == AppForwardSubjectKind.chatMessage) {
+            // 会话消息转发：正文原样发 text 消息；附言另发一条，
+            // 端不改写不拼接转发原文。
+            await writer.sendMessage(
+              ChatSendMessageCommand(
+                conversationId: conversationId,
+                type: 'text',
+                content: payload.messagePreview,
+                senderDisplayNameSnapshot: activeContext.displayName,
+                senderAvatarUrlSnapshot: activeContext.avatarUrl,
+                personaContextVersion: activeContext.contextVersion > 0
+                    ? activeContext.contextVersion
+                    : null,
+                clientMsgId: clientMsgId,
+              ),
+            );
+            if (note.isNotEmpty) {
+              await writer.sendMessage(
                 ChatSendMessageCommand(
                   conversationId: conversationId,
-                  type: 'card',
-                  content: content,
-                  card: payload.toMessageCardCommand(message: note),
+                  type: 'text',
+                  content: note,
                   senderDisplayNameSnapshot: activeContext.displayName,
                   senderAvatarUrlSnapshot: activeContext.avatarUrl,
                   personaContextVersion: activeContext.contextVersion > 0
                       ? activeContext.contextVersion
                       : null,
-                  clientMsgId: clientMsgId,
+                  clientMsgId: '$clientMsgId-note',
                 ),
               );
+            }
+            return;
+          }
+          final content = note.isNotEmpty ? note : payload.messagePreview;
+          await writer.sendMessage(
+            ChatSendMessageCommand(
+              conversationId: conversationId,
+              type: 'card',
+              content: content,
+              card: payload.toMessageCardCommand(message: note),
+              senderDisplayNameSnapshot: activeContext.displayName,
+              senderAvatarUrlSnapshot: activeContext.avatarUrl,
+              personaContextVersion: activeContext.contextVersion > 0
+                  ? activeContext.contextVersion
+                  : null,
+              clientMsgId: clientMsgId,
+            ),
+          );
         },
   ),
 );
@@ -99,7 +132,7 @@ AppForwardRecipient _recipientFromContactHome(ContactHomeRow row) {
     title: title,
     subtitle: row.subtitle.trim().isNotEmpty
         ? row.subtitle.trim()
-        : row.summaryIntersections.take(2).join(' · '),
+        : contactIntersectionFactsSubtitle(row.intersectionFacts),
     avatarUrl: resolveAvatarImageUrl(row.avatarUrl),
     conversationId: row.conversationId?.trim() ?? '',
     userId: (row.userId?.trim().isNotEmpty ?? false)

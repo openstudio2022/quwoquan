@@ -75,11 +75,54 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
       _participantsSub = _lkRoom.onParticipantsChanged.listen(
         (_) => _onParticipantsChanged(),
       );
+
+      // 媒体连通后激活通话音频会话（playAndRecord + 中断事实订阅）；
+      // 激活失败只降级不打断通话（gateway 内部已收口失败）。
+      unawaited(_activateCallAudioSession());
     } catch (e) {
       _mediaQoe.markDisconnect(RtcMediaDisconnectReason.connectFailed);
       _runtimeState = _runtimeState.copyWith(failure: _failureFrom(e));
     } finally {
       _mediaConnectInFlight = false;
+    }
+  }
+
+  Future<void> _activateCallAudioSession() async {
+    final gateway = _runtimeRef.read(callAudioSessionGatewayProvider);
+    await _audioSessionEventsSub?.cancel();
+    _interruptionMutedLocally = false;
+    _audioSessionEventsSub = gateway.events.listen(_onCallAudioSessionEvent);
+    await gateway.activateForCall();
+  }
+
+  void _deactivateCallAudioSession() {
+    unawaited(_audioSessionEventsSub?.cancel());
+    _audioSessionEventsSub = null;
+    _interruptionMutedLocally = false;
+    unawaited(_runtimeRef.read(callAudioSessionGatewayProvider).deactivate());
+  }
+
+  /// 系统音频中断的采集策略：
+  /// - began：本地静音采集（不改服务端 mute 事实，远端表现为暂时无声）。
+  /// - ended(shouldResume)：仅当此前因中断而静音、且用户未主动静音时恢复。
+  /// - ended(no resume)：保持现状，等待用户动作。
+  /// becomingNoisy（耳机拔出防外放）由 MediaDeviceNotifier 处理路由。
+  void _onCallAudioSessionEvent(CallAudioSessionEvent event) {
+    switch (event) {
+      case CallAudioSessionEvent.interruptionBegan:
+        if (!_runtimeState.isMuted) {
+          _interruptionMutedLocally = true;
+          unawaited(_lkRoom.setMicrophoneEnabled(false));
+        }
+      case CallAudioSessionEvent.interruptionEndedShouldResume:
+        if (_interruptionMutedLocally && !_runtimeState.isMuted) {
+          unawaited(_lkRoom.setMicrophoneEnabled(true));
+        }
+        _interruptionMutedLocally = false;
+      case CallAudioSessionEvent.interruptionEnded:
+        _interruptionMutedLocally = false;
+      case CallAudioSessionEvent.becameNoisy:
+        break;
     }
   }
 
@@ -189,6 +232,7 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
   void _endCallState({bool clearActiveCall = true}) {
     _cancelTimeoutTimer();
     _detachLiveKitObservers();
+    _deactivateCallAudioSession();
     unawaited(_disconnectLiveKit());
     if (clearActiveCall) {
       _runtimeRef.read(activeCallProvider.notifier).endCall();
@@ -252,11 +296,15 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
               ),
             );
       } catch (error, stackTrace) {
-        developer.log(
-          'RTC media QoE telemetry failed',
-          name: 'CallSessionNotifier',
-          error: error.runtimeType,
-          stackTrace: stackTrace,
+        // QoE 上报链路自身故障必须可观测，否则通话质量盲区无法发现。
+        unawaited(
+          _runtimeRef
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'rtc.call_session.media_qoe_telemetry',
+                error: error,
+                stackTrace: stackTrace,
+              ),
         );
       }
     }());
@@ -266,24 +314,42 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
     try {
       await _lkRoom.disconnect();
     } catch (error, stackTrace) {
-      developer.log(
-        'RTC media disconnect failed',
-        name: 'CallSessionNotifier',
-        error: error.runtimeType,
-        stackTrace: stackTrace,
+      // 断开失败可能泄漏媒体资源/占用麦克风，事实必须结构化上报。
+      unawaited(
+        _runtimeRef
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'rtc.call_session.media_disconnect',
+              error: error,
+              stackTrace: stackTrace,
+            ),
       );
     }
   }
 
   /// 通话结束一次性上报结果（rtc_call_outcome，metadata event_catalog 真相源）。
+  ///
+  /// 结局粒度以服务端 `endReason` 事实为准（reject/cancel/hangup 的 writer
+  /// 返回与 `call.ended` 信令都会写回 session.endReason）；无事实时按本地
+  /// 状态兜底。运营漏斗依赖 completed/rejected/cancelled/no_answer/failed
+  /// 五种结局可区分，禁止合并归因。
   void _reportCallOutcome() {
     final session = _runtimeState.session;
     if (session == null || _runtimeState.status == CallStatus.ended) return;
     final endedInCall = _runtimeState.status == CallStatus.inCall;
-    final result = switch (_runtimeState.status) {
-      CallStatus.inCall => 'completed',
-      CallStatus.connecting => 'failed',
-      _ => 'cancelled',
+    final result = switch (session.endReason) {
+      EndReason.rejected => 'rejected',
+      EndReason.cancelled => 'cancelled',
+      EndReason.noAnswer || EndReason.timeout => 'no_answer',
+      EndReason.error ||
+      EndReason.accountClosed ||
+      EndReason.accountSuspended => 'failed',
+      EndReason.normal || EndReason.lastLeave => 'completed',
+      null => switch (_runtimeState.status) {
+        CallStatus.inCall => 'completed',
+        CallStatus.connecting => 'failed',
+        _ => 'cancelled',
+      },
     };
     final startedAt = session.startedAt;
     unawaited(() async {
@@ -302,11 +368,15 @@ extension _CallSessionNotifierRuntime on CallSessionNotifier {
               ),
             );
       } catch (error, stackTrace) {
-        developer.log(
-          'RTC call-outcome telemetry failed',
-          name: 'CallSessionNotifier',
-          error: error.runtimeType,
-          stackTrace: stackTrace,
+        // 通话结局上报失败会让运营漏斗缺数据，事实必须结构化上报。
+        unawaited(
+          _runtimeRef
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'rtc.call_session.call_outcome_telemetry',
+                error: error,
+                stackTrace: stackTrace,
+              ),
         );
       }
     }());

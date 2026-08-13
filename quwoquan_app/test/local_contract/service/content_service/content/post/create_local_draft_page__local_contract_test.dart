@@ -1,9 +1,14 @@
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-015.t4
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-015.t5
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-016.t5
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -16,7 +21,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/cr
 import 'package:quwoquan_app/service/content_service/content/post/adapters/create_draft_local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
 
 class _FakeFileStorageGateway implements FileStorageGateway {
@@ -102,7 +107,41 @@ EditorStartAction? _actionFromType(String? raw) {
   };
 }
 
-Widget _buildApp() {
+class _FailingThenRecoveringDraftRepository implements CreateDraftRepository {
+  _FailingThenRecoveringDraftRepository({required this.failuresBeforeSuccess});
+
+  int failuresBeforeSuccess;
+
+  Future<CreateDraftStoreState> _loadOrThrow() async {
+    if (failuresBeforeSuccess > 0) {
+      failuresBeforeSuccess -= 1;
+      throw StateError('draft storage unavailable');
+    }
+    return const CreateDraftStoreState();
+  }
+
+  @override
+  Future<CreateDraftStoreState> load() => _loadOrThrow();
+
+  @override
+  Future<CreateDraft?> loadDraft(String draftId) async => null;
+
+  @override
+  Future<CreateDraftStoreState> upsertDraft(
+    CreateDraft draft, {
+    String? currentDraftId,
+  }) async => const CreateDraftStoreState();
+
+  @override
+  Future<CreateDraftStoreState> deleteDraft(String draftId) async =>
+      const CreateDraftStoreState();
+
+  @override
+  Future<CreateDraftStoreState> setCurrentDraftId(String? draftId) async =>
+      const CreateDraftStoreState();
+}
+
+Widget _buildApp({CreateDraftRepository? draftRepository}) {
   final router = GoRouter(
     initialLocation: AppRoutePaths.localDrafts,
     routes: <RouteBase>[
@@ -125,11 +164,13 @@ Widget _buildApp() {
   return ProviderScope(
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
       fileStorageGatewayProvider.overrideWithValue(
         const _FakeFileStorageGateway(),
       ),
+      if (draftRepository != null)
+        createDraftRepositoryProvider.overrideWithValue(draftRepository),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),
@@ -147,6 +188,32 @@ void main() {
   group('local_drafts_page', () {
     setUp(() {
       SharedPreferences.setMockInitialValues(<String, Object>{});
+    });
+
+    testWidgets('草稿加载失败显示错误态与重试，不伪装成无草稿空态', (tester) async {
+      // build() 与 initState 的 reload 各失败一次，之后恢复。
+      final repository = _FailingThenRecoveringDraftRepository(
+        failuresBeforeSuccess: 2,
+      );
+      await tester.pumpWidget(_buildApp(draftRepository: repository));
+      await tester.pumpAndSettle();
+
+      // 错误必须以错误态呈现：不得渲染「无草稿」空态误导用户草稿丢失。
+      expect(find.text(MediaText.noDraft), findsNothing);
+      final errorState = find.byType(AppSectionErrorState);
+      expect(errorState, findsOneWidget);
+
+      // 恢复入口存在且可用：点重试后加载成功，进入真实空态。
+      final retryButton = find.descendant(
+        of: errorState,
+        matching: find.byType(CupertinoButton),
+      );
+      expect(retryButton, findsWidgets);
+      await tester.tap(retryButton.first);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppSectionErrorState), findsNothing);
+      expect(find.text(MediaText.noDraft), findsOneWidget);
     });
 
     testWidgets('显示设备提示、无图占位并可原地删除草稿', (tester) async {

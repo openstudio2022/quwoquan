@@ -416,6 +416,8 @@ final class MessageSentEventPayload extends ChatRealtimeEventPayload {
     required this.type,
     this.content,
     this.mediaAssetId,
+    this.audioDurationMs,
+    this.audioWaveform,
     this.card,
     this.replyToMessageId,
     this.mentions,
@@ -433,6 +435,8 @@ final class MessageSentEventPayload extends ChatRealtimeEventPayload {
   final MessageType type;
   final String? content;
   final String? mediaAssetId;
+  final int? audioDurationMs;
+  final List<double>? audioWaveform;
   final MessageCard? card;
   final String? replyToMessageId;
   final List<String>? mentions;
@@ -453,6 +457,8 @@ final class MessageSentEventPayload extends ChatRealtimeEventPayload {
         'type',
         'content',
         'mediaAssetId',
+        'audioDurationMs',
+        'audioWaveform',
         'card',
         'replyToMessageId',
         'mentions',
@@ -472,6 +478,8 @@ final class MessageSentEventPayload extends ChatRealtimeEventPayload {
       type: MessageType.fromWire(_chatEventRequiredValue(wire, 'type', 'MessageSentEventPayload.type'), 'MessageSentEventPayload.type'),
       content: _chatEventOptionalString(wire, 'content', 'MessageSentEventPayload.content'),
       mediaAssetId: _chatEventOptionalString(wire, 'mediaAssetId', 'MessageSentEventPayload.mediaAssetId'),
+      audioDurationMs: _chatEventOptionalInt(wire, 'audioDurationMs', 'MessageSentEventPayload.audioDurationMs', positive: true),
+      audioWaveform: _chatEventOptionalDoubleList(wire, 'audioWaveform', 'MessageSentEventPayload.audioWaveform'),
       card: wire['card'] == null ? null : MessageCard.fromWire(_chatEventRequiredObject(wire, 'card', 'MessageSentEventPayload.card'), 'MessageSentEventPayload.card'),
       replyToMessageId: _chatEventOptionalString(wire, 'replyToMessageId', 'MessageSentEventPayload.replyToMessageId'),
       mentions: _chatEventOptionalStringList(wire, 'mentions', 'MessageSentEventPayload.mentions'),
@@ -492,6 +500,8 @@ final class MessageSentEventPayload extends ChatRealtimeEventPayload {
     'type': type.wireName,
     if (content != null) 'content': content!,
     if (mediaAssetId != null) 'mediaAssetId': mediaAssetId!,
+    if (audioDurationMs != null) 'audioDurationMs': audioDurationMs!,
+    if (audioWaveform != null) 'audioWaveform': audioWaveform!.toList(growable: false),
     if (card != null) 'card': card!.toWire(),
     if (replyToMessageId != null) 'replyToMessageId': replyToMessageId!,
     if (mentions != null) 'mentions': mentions!.toList(growable: false),
@@ -596,6 +606,21 @@ List<String> _chatEventRequiredStringList(Map<String, dynamic> wire, String fiel
 List<String>? _chatEventOptionalStringList(Map<String, dynamic> wire, String field, String path) {
   if (wire[field] == null) return null;
   return _chatEventRequiredStringList(wire, field, path);
+}
+
+List<double> _chatEventRequiredDoubleList(Map<String, dynamic> wire, String field, String path) {
+  final value = _chatEventRequiredValue(wire, field, path);
+  if (value is! List || value.any((item) => item is! num)) {
+    throw FormatException('$path must be number[]');
+  }
+  return List<double>.unmodifiable(
+    value.map((item) => (item as num).toDouble()),
+  );
+}
+
+List<double>? _chatEventOptionalDoubleList(Map<String, dynamic> wire, String field, String path) {
+  if (wire[field] == null) return null;
+  return _chatEventRequiredDoubleList(wire, field, path);
 }
 
 Map<String, Object?> _chatEventRequiredObject(Map<String, dynamic> wire, String field, String path) {

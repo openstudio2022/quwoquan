@@ -934,6 +934,11 @@ val vendoredAndroidArtifactsDir =
 
 dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
+    // 原生视频编辑（trim/mute 导出）：media3 Transformer，与 iOS AVFoundation
+    // 桥共用 quwoquan/video_editing channel 契约。
+    implementation("androidx.media3:media3-transformer:1.4.1")
+    implementation("androidx.media3:media3-common:1.4.1")
+    implementation("androidx.media3:media3-effect:1.4.1")
     implementation("com.google.android.gms:play-services-auth-api-phone:18.3.1")
     implementation("com.tencent.mm.opensdk:wechat-sdk-android:6.8.34")
     implementation("com.alipay.sdk:alipaysdk-android:15.8.42")

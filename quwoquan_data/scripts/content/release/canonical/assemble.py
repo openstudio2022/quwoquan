@@ -105,7 +105,7 @@ def _assemble_release(execution_id: str, release_id: str) -> Path:
 
 
 def assemble_release(execution_id: str, release_id: str) -> Path:
-    """Guard the legacy canonical assembler with the same incident registry."""
+    """Guard the single-execution canonical assembler with the same incident registry."""
 
     releases = release_root(release_id).parent
     with canonical_release_identity_guard(

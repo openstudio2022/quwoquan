@@ -52,7 +52,7 @@ class InMemoryAssistantSkillCatalogFacet implements AssistantSkillCatalogFacet {
       String? iconHint,
       String domainId = 'assistant',
       List<String> requiredConsentScopes = const <String>[],
-      String activationMode = 'hybrid',
+      SkillActivationMode activationMode = SkillActivationMode.hybrid,
     }) {
       return AssistantSkillCatalogItemView(
         packageId: 'quwoquan.official.$skillId',

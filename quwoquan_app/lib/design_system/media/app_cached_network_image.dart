@@ -285,9 +285,10 @@ class AppCachedNetworkImage extends ConsumerWidget {
               child: child,
             );
           },
+          // 占位色随主题动态解析：深色模式禁止闪白底。
           placeholder: (context, url) =>
               placeholder ??
-              Container(color: AppColors.light.backgroundSecondary),
+              Container(color: AppColors.iosGroupedSurface(context)),
           errorWidget: (context, url, error) {
             final nextIndex = index + 1;
             if (nextIndex < candidates.length) {
@@ -396,7 +397,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
             constraints.maxHeight < AppSpacing.forty;
         final iconSize = isCompact ? AppSpacing.iconSmall : AppSpacing.twenty;
         return Container(
-          color: AppColors.light.backgroundSecondary,
+          color: AppColors.iosGroupedSurface(context),
           child: Center(
             child: isCompact
                 ? Icon(

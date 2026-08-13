@@ -41,14 +41,6 @@ typedef CircleGroupMembershipPanelBuilder =
       required bool isDark,
     });
 
-typedef CircleStorageSectionBuilder =
-    Widget Function({
-      required String circleId,
-      required bool isDark,
-      required int storageUsedBytes,
-      required int storageQuotaBytes,
-    });
-
 typedef CircleCallStarter =
     Future<void> Function({
       required BuildContext context,
@@ -69,7 +61,6 @@ final class CircleShellParticipantSlots {
     required this.creations,
     required this.buildMembersSection,
     required this.buildGroupMembershipPanel,
-    required this.buildStorageSection,
     required this.startCall,
   });
 
@@ -79,6 +70,5 @@ final class CircleShellParticipantSlots {
   final CircleCreationsParticipantSlots creations;
   final CircleMembersSectionBuilder buildMembersSection;
   final CircleGroupMembershipPanelBuilder buildGroupMembershipPanel;
-  final CircleStorageSectionBuilder buildStorageSection;
   final CircleCallStarter startCall;
 }

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-006
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-006.t1
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/errors/generated/rtc/rtc_errors.g.dart';
 

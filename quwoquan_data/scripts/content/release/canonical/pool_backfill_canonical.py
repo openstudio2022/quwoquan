@@ -10,7 +10,6 @@ from typing import Any
 from content.release.canonical.content_pool_record import (
     POOL_RECORD_SCHEMA,
     _commercial_proof_closed,
-    build_legacy_migration_source_identity,
     is_pool_record_admitted,
     iter_pool_records,
     pool_payload_digest,
@@ -351,22 +350,14 @@ def canonical_plan_items(
         try:
             source_identity = validate_object_source_identity(manifest)
         except ObjectTransactionError:
-            try:
-                source_identity = build_legacy_migration_source_identity(
-                    manifest=manifest,
-                    canonical_object_digest=payload_digest,
-                    source_attribution=attribution,
-                    admission_evidence_digest=evidence_digest,
-                )
-            except ObjectTransactionError:
-                exclusions.append(
-                    {
-                        "objectType": object_type,
-                        "objectRef": object_ref,
-                        "reason": "DATA.POOL.SOURCE_IDENTITY_INVALID",
-                    }
-                )
-                continue
+            exclusions.append(
+                {
+                    "objectType": object_type,
+                    "objectRef": object_ref,
+                    "reason": "DATA.POOL.SOURCE_IDENTITY_INVALID",
+                }
+            )
+            continue
         record_sequence = int(latest_old["recordSequence"]) + 1 if latest_old else 1
         record = build_pool_record(
             object_type=object_type,
@@ -384,11 +375,7 @@ def canonical_plan_items(
             source_identity=source_identity,
             source_attribution=attribution,
         )
-        if (
-            latest_old is not None
-            and not latest_old.get("_legacyRecord")
-            and is_pool_record_admitted(latest_old)
-        ):
+        if latest_old is not None and is_pool_record_admitted(latest_old):
             replay_record = dict(record)
             replay_record["recordSequence"] = latest_old["recordSequence"]
             if latest_old == replay_record:

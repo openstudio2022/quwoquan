@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/observability/app_log_models.dart';
@@ -14,6 +15,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show AssistantEntryAction, AssistantEntryChip;
 import 'package:quwoquan_app/design_system/avatar/assistant_avatar.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart'
     show AppTransientErrorNotice;
 import 'package:quwoquan_app/design_system/semantics/design_semantic_constants.dart';
@@ -216,8 +218,13 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
         _closeAndPush(AppRoutePaths.assistantSkills);
         return;
       case UiErrorActionType.login:
+        // 统一走登录路由构造器：编码 reason 与 dismiss 策略，禁止手拼
+        // AppRoutePaths.login(...) 绕过登录门契约（15-auth-entry-no-loop）。
         _closeAndPush(
-          AppRoutePaths.login(redirect: AppRoutePaths.assistantPersonal),
+          buildLoginRouteLocation(
+            reasonName: AuthGateReason.generic.name,
+            redirect: AppRoutePaths.assistantPersonal,
+          ),
         );
         return;
       case UiErrorActionType.openUpdate:
@@ -361,9 +368,7 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
             ],
             if (showLoadingSkeleton) ...[
               SizedBox(height: containerMd),
-              _AssistantHalfSheetLoadingSkeleton(
-                color: fgSecondary.withValues(alpha: 0.18),
-              ),
+              const _AssistantHalfSheetLoadingSkeleton(),
             ] else if (chips.isNotEmpty) ...[
               SizedBox(height: containerMd),
               Wrap(
@@ -478,33 +483,29 @@ class _AssistantHalfSheetState extends ConsumerState<AssistantHalfSheet> {
   }
 }
 
+/// 半弹窗个性化加载骨架：布局形状留在页面，占位视觉与脉冲统一走
+/// AppSkeleton primitives（禁止自绘第二套占位色/动画）。
 class _AssistantHalfSheetLoadingSkeleton extends StatelessWidget {
-  const _AssistantHalfSheetLoadingSkeleton({required this.color});
-
-  final Color color;
+  const _AssistantHalfSheetLoadingSkeleton();
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-      child: Column(
-        children: <Widget>[
-          for (final widthFactor in <double>[0.92, 0.68])
-            Padding(
-              padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
-              child: FractionallySizedBox(
-                widthFactor: widthFactor,
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  height: AppSpacing.intraGroupSm,
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusTwo),
-                  ),
+      child: AppSkeletonShimmer(
+        child: Column(
+          children: <Widget>[
+            for (final widthFactor in <double>[0.92, 0.68])
+              Padding(
+                padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
+                child: FractionallySizedBox(
+                  widthFactor: widthFactor,
+                  alignment: Alignment.centerLeft,
+                  child: const AppSkeletonLine(height: AppSpacing.intraGroupSm),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

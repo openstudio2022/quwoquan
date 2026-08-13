@@ -156,9 +156,16 @@ class AppExceptionTelemetryService implements ExceptionTelemetryPort {
     return true;
   }
 
+  /// 指纹基于脱敏归一化后的方法栈（而非原始 stack 文本），使同一故障在不同
+  /// 时刻/路径/内存地址下聚合为同一指纹，与 AppRuntimeDiagnostics 的
+  /// stack-identity 语义对齐。
   String _fingerprint(String source, String exceptionText, String stackText) =>
       sha256
-          .convert(utf8.encode('$source\n$exceptionText\n$stackText'))
+          .convert(
+            utf8.encode(
+              '$source\n$exceptionText\n${_methodStack(stackText).join('\n')}',
+            ),
+          )
           .toString();
 
   List<String> _methodStack(String stackText) {

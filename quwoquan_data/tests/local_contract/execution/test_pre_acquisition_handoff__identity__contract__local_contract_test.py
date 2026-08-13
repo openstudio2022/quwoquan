@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from content.execution.campaign import external_inputs as campaign_external_inputs
 from content.execution.campaign import request_envelope as envelopes
+from content.execution.campaign import request_envelope_build as envelope_build
 from content.execution.campaign.scale import campaign_workload_targets
 from content.execution.controller.execute import pre_acquisition_handoff as handoffs
 from content.source.research.scale_source_pool import (
@@ -101,6 +102,32 @@ def test_m10000_handoff_uses_policy_video_target_and_rejects_tamper(
         )
 
 
+def _pool_source_attribution() -> dict[str, object]:
+    source_url = "https://zh.wikipedia.org/wiki/测试实体"
+    return {
+        "isOriginal": False,
+        "originalCreatorId": None,
+        "originalCreatorName": "维基百科贡献者",
+        "originalCreatorProfileUrl": None,
+        "platform": "维基百科",
+        "sourcePostUrl": source_url,
+        "originalAssetUrl": source_url,
+        "attributionText": "正文事实来源：维基百科（维基百科贡献者）",
+        "rightsBasis": "CC BY-SA 4.0",
+        "commercialAuthorizationStatus": "verified",
+        "publicationAdmission": "research_release",
+        "authorizationProofUrl": source_url,
+        "termsUrl": "https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use",
+        "riskAcceptanceId": None,
+        "watermarkStatus": "absent",
+        "audioRightsStatus": "no_audio",
+        "modelReleaseStatus": "not_required",
+        "propertyReleaseStatus": "not_required",
+        "collectedAt": "2026-08-07T00:00:00Z",
+        "takedownPolicy": "remove_on_verified_rights_or_source_dispute",
+    }
+
+
 def _write_scale_source_pool(output_root: Path) -> tuple[Path, Path]:
     evidence_root = output_root / "data/local/workspace/scale-source-pools/m100/evidence"
     evidence: dict[str, tuple[str, str]] = {}
@@ -126,8 +153,17 @@ def _write_scale_source_pool(output_root: Path) -> tuple[Path, Path]:
             if carrier == "image":
                 provider = "pinterest" if index < 100 else "tuchong" if index < 150 else "pexels"
             playability = evidence["playability"] if carrier == "video" else (None, None)
+            source_ready_binding: dict[str, object] = {}
+            if carrier in {"homepage", "article"}:
+                source_ready_binding = {
+                    "sourceReadyEvidenceRootRef": ".",
+                    "sourceAttribution": _pool_source_attribution(),
+                }
+            if carrier == "article":
+                source_ready_binding["publishMediaMode"] = "text_only"
             candidates.append(
                 {
+                    **source_ready_binding,
                     "candidateId": f"{carrier}-candidate-{index:03d}",
                     "carrier": carrier,
                     "objectRef": object_ref,
@@ -254,6 +290,56 @@ def test_handoff_revision_is_create_once_and_preserves_superseded_bytes(
         )
 
 
+def test_superseding_retired_wire_shape_revision_keeps_chain_and_rejects_tamper(
+    tmp_path: Path,
+) -> None:
+    """历史 revision 以其创建时 schema 冻结：契约改名不得使 supersession 链失效，篡改仍必须被拒。"""
+    import json
+
+    output_root = tmp_path / "output"
+    revision_one, revision_one_path = _write_handoff(output_root)
+    # 模拟契约字段改名前冻结的历史 wire 形态（digest 自洽但不再过当前 schema）。
+    retired = json.loads(revision_one_path.read_text(encoding="utf-8"))
+    requirements = retired["carrierRequirements"]
+    for carrier in requirements:
+        requirements[carrier]["retiredWireField"] = requirements[carrier].pop(
+            "externalInputMode"
+        )
+    stable = {
+        key: value
+        for key, value in retired.items()
+        if key not in {"handoffDigest", "createdAt"}
+    }
+    retired["handoffDigest"] = "sha256:" + hashlib.sha256(
+        json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    revision_one_path.write_text(
+        json.dumps(retired, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    with pytest.raises(handoffs.PreAcquisitionHandoffError):
+        handoffs.load_pre_acquisition_handoff(revision_one_path)
+
+    revision_two, _path = _write_handoff(
+        output_root, revision=2, supersedes=revision_one_path
+    )
+    assert revision_two["supersedes"]["handoffRevision"] == 1
+    assert revision_two["supersedes"]["handoffFileDigest"] == handoffs._file_digest(
+        revision_one_path
+    )
+
+    tampered = json.loads(revision_one_path.read_text(encoding="utf-8"))
+    tampered["sourceRevision"] = SOURCE_B
+    revision_one_path.write_text(
+        json.dumps(tampered, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    with pytest.raises(
+        handoffs.PreAcquisitionHandoffError, match="DIGEST_DRIFT"
+    ):
+        _write_handoff(
+            output_root, revision=3, supersedes=revision_one_path
+        )
+
+
 def test_handoff_revision_rejects_manual_predecessor(tmp_path: Path) -> None:
     output_root = tmp_path / "output"
     revision_one, _revision_one_path = _write_handoff(output_root)
@@ -300,11 +386,16 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
     repo = tmp_path / "repo"
     (repo / "quwoquan_data/reference/travel/entities/china").mkdir(parents=True)
     monkeypatch.setattr(
-        envelopes,
-        "current_source_digest",
-        lambda **_kwargs: SourceDigest(digest=SOURCE_A),
+        envelope_build,
+        "current_source_definition_snapshot",
+        lambda **_kwargs: SourceDefinitionSnapshot(digest=SOURCE_A),
     )
-    monkeypatch.setattr(envelopes, "entity_catalog_digest", lambda _ref: CATALOG)
+    monkeypatch.setattr(
+        envelope_build,
+        "current_execution_bundle_identity",
+        lambda **_kwargs: ExecutionBundleIdentity(digest="sha256:" + "d" * 64),
+    )
+    monkeypatch.setattr(envelope_build, "entity_catalog_digest", lambda _ref: CATALOG)
     monkeypatch.setattr(
         envelopes,
         "_require_stable_source_inputs",
@@ -322,12 +413,14 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
         ),
     )
 
+    wave_targets = ("测试实体",)
     homepage = envelopes.build_envelope(
         scale="M100",
         carrier="homepage",
         region_ref="china",
         repo_root=repo,
         day="20260807",
+        target_names=wave_targets,
         pre_acquisition_handoff=handoff_path,
         pre_acquisition_handoff_output_root=output_root,
         external_input_refs=[{"kind": "professional_image_acquisition"}],
@@ -339,6 +432,7 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
         region_ref="china",
         repo_root=repo,
         day="20260807",
+        target_names=wave_targets,
         pre_acquisition_handoff=handoff_path,
         pre_acquisition_handoff_output_root=output_root,
         **pool_kwargs,
@@ -350,7 +444,7 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
     assert homepage["preAcquisitionHandoff"]["handoffRevision"] == 1
     assert article["externalInputRefs"] == []
     assert (
-        _handoff["carrierRequirements"]["article"]["phase1Mode"]
+        _handoff["carrierRequirements"]["article"]["externalInputMode"]
         == "execution_source_unit_freeze"
     )
     with pytest.raises(
@@ -363,6 +457,7 @@ def test_envelopes_bind_handoff_and_derive_article_no_acquisition(
             region_ref="china",
             repo_root=repo,
             day="20260808",
+            target_names=wave_targets,
             pre_acquisition_handoff=handoff_path,
             pre_acquisition_handoff_output_root=output_root,
             **pool_kwargs,

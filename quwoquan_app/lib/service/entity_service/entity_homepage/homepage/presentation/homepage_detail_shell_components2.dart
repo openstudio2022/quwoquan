@@ -103,61 +103,6 @@ class _HomepagePreviewCover extends StatelessWidget {
   }
 }
 
-class _HomepageEmptyState extends StatelessWidget {
-  const _HomepageEmptyState({
-    required this.icon,
-    required this.title,
-    required this.description,
-  });
-
-  final IconData icon;
-  final String title;
-  final String description;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.containerLg),
-      child: Column(
-        children: <Widget>[
-          Container(
-            width: AppSpacing.buttonSize,
-            height: AppSpacing.buttonSize,
-            decoration: BoxDecoration(
-              color: AppColors.iosSecondaryFill(context),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyFour),
-            ),
-            child: Icon(
-              icon,
-              size: AppSpacing.iconLarge,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-          ),
-          SizedBox(height: AppSpacing.containerSm),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: AppTypography.iosSubheadline,
-              fontWeight: AppTypography.semiBold,
-              color: AppColors.iosLabel(context),
-            ),
-          ),
-          SizedBox(height: AppSpacing.intraGroupXs),
-          Text(
-            description,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: AppTypography.iosFootnote,
-              color: AppColors.iosSecondaryLabel(context),
-              height: AppSpacing.textLineHeightBody,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _HomepageRelatedCircleCard extends StatelessWidget {
   const _HomepageRelatedCircleCard({required this.group});
 

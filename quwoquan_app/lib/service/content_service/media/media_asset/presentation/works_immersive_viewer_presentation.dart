@@ -242,8 +242,9 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     final PostArticleDetailProjector projector = ref.read(
       postArticleDetailProjectorProvider,
     );
+    // _rawArticleDataFor 每次返回新建 map，无需再做防御拷贝。
     return projector.project(
-      Map<String, dynamic>.from(_rawArticleDataFor(post)),
+      _rawArticleDataFor(post),
       fallbackArticleId: post.id,
     );
   }
@@ -754,8 +755,8 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       return articlePaperTextureFromString(override);
     }
     final item = _workItemFor(post);
-    final profile = item.articleRenderProfile ?? const <String, dynamic>{};
-    final profileTexture = _stringFromProfile(profile, 'paperTexture');
+    final profileTexture = item.articleRenderProfile?['paperTexture']
+        ?.toString();
     if (profileTexture != null && profileTexture.trim().isNotEmpty) {
       return articlePaperTextureFromString(profileTexture);
     }
@@ -768,12 +769,6 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     );
   }
 
-  String? _stringFromProfile(Map<String, dynamic> profile, String key) {
-    final value = profile[key];
-    if (value == null) return null;
-    return value.toString();
-  }
-
   void _handleArticleInlineMentionTap(
     ContentPostViewData post,
     ArticleInlineSpan span,
@@ -781,6 +776,14 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     final targetType = span.targetType?.trim();
     final targetId = span.targetId?.trim() ?? '';
     if (targetId.isEmpty) return;
+    // 行内链接（GWT-004）：白名单 scheme 已在解析期收口，这里只负责打开。
+    if (span.isLink) {
+      final uri = Uri.tryParse(targetId);
+      if (uri != null) {
+        unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
+      }
+      return;
+    }
     if (span.isTag) {
       final tagRef = _tagRefForArticleMention(targetId);
       if (tagRef.isEmpty) return;

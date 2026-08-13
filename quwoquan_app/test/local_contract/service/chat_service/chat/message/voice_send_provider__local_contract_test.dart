@@ -11,7 +11,7 @@ import 'package:quwoquan_app/service/content_service/media/media_upload_session/
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/media_upload_manager.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/local_media_upload_source.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/voice_send_provider.dart';
@@ -19,7 +19,7 @@ import 'package:quwoquan_app/service/chat_service/chat/message/application/publi
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/voice_recording.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/runtime/transport/recording_content_media_facet.dart';
 
 void main() {
@@ -44,12 +44,10 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           contentConfigRepositoryProvider.overrideWithValue(
-            MockContentRepository(),
+            InMemoryContentConfigRepository(),
           ),
           currentUserIdProvider.overrideWithValue('user_001'),
           activePersonaContextProvider.overrideWith(
@@ -106,12 +104,10 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           contentConfigRepositoryProvider.overrideWithValue(
-            MockContentRepository(),
+            InMemoryContentConfigRepository(),
           ),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
@@ -159,12 +155,10 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           contentConfigRepositoryProvider.overrideWithValue(
-            MockContentRepository(),
+            InMemoryContentConfigRepository(),
           ),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
@@ -208,12 +202,10 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           contentConfigRepositoryProvider.overrideWithValue(
-            MockContentRepository(),
+            InMemoryContentConfigRepository(),
           ),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(

@@ -5,6 +5,7 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/spacing/recovery_surface_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
 import 'package:quwoquan_app/runtime/observability/startup/startup_telemetry.dart';
 import 'package:quwoquan_app/runtime/shell/recovery/recovery_state_machine.dart';
 import 'package:quwoquan_app/runtime/shell/recovery/startup_recovery_controller.dart';
@@ -205,7 +206,8 @@ class _StartupRecoveryPageState extends State<StartupRecoveryPage>
   }
 
   void _showTransientMessage(String message) {
-    AppToast.show(context, message);
+    // 恢复页轻提示均为外部通道打开失败：以警示 tone 呈现，保持可辨识。
+    AppToast.show(context, message, tone: UiErrorTone.caution);
   }
 }
 

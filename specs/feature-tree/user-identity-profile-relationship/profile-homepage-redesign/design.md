@@ -33,6 +33,16 @@
 - 影响 Story：[`career-interest-profile-editor`](./career-interest-profile-editor/spec.md)、[`owner-persona-homepage-unification`](./owner-persona-homepage-unification/spec.md)、[`profile-commercial-readiness`](./profile-commercial-readiness/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-002"></a>
+### DEC-002 主页交集资产面只消费既有公开读面，经历资产以经历交集事实直出
+- 决策：我的主页交集资产面（可行动分层、我的行动、共同经历）只消费对象级 typed 读面。可行动分层消费 `IntersectionReason.actionHints/expiresAt` 做端侧展示分层，「我的行动」消费 `circle.gathering.ListMyHostedGatherings` host 本人私有读面（含 draft 与全部 audiencePolicy，host 身份由服务端从受信 persona 解析），「共同经历」资产行消费 `content.ListMyIntersections(sourceRef=coExperiencedGathering)` 的经历交集事实（云侧 `gathering_shared_experience` 物化器是唯一生产者）。
+- 理由：`coExperiencedGathering` 交集是"我参与且双方已沉淀公开回顾"这一事实的唯一物化读模型。"我参与的行动"私有聚合读面不存在，端侧用 participation+`ListPostsByGathering` 组合聚合会重建第二真相源并放大读扇出。经历默认只在 mine 模式渲染（交集读面本就是 viewer 私有），他人主页公开经历展示延后到 disclosure 契约就绪。
+- 被否决方案：端侧以 participation + `ListPostsByGathering` 组合推导"我的经历"、为资产区新造私有聚合契约、在 other 模式渲染经历资产区。
+- 约束与影响：可行动分组内顺序保持云侧排序主权。「我的行动」私有读面授权边界固定为 host 本人（服务端 fail-closed，无 persona actor 拒绝），公开披露面 `ListGatheringsByHost` 保留给对象页等公开消费者；资产行主句只读云侧 primaryText，端不拼句。
+- 关联要求：`REQ-008`
+- 影响 Story：[`profile-commercial-readiness`](./profile-commercial-readiness/spec.md)
+- 关联验收：`SIT-008`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

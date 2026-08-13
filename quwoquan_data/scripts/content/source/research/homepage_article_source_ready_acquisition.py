@@ -1,9 +1,11 @@
 """Canonical coverage-to-capsule acquisition for homepage/article source pools."""
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -321,6 +323,7 @@ def _acquire_carrier(
     *,
     carrier: str,
     required: int,
+    acquisition_concurrency: int,
     identity: Mapping[str, str],
     captured_at: str,
     evidence_root: Path,
@@ -334,76 +337,227 @@ def _acquire_carrier(
     bindings: list[dict[str, Any]] = []
     accepted_coverage_ids: set[str] = set()
     attempted = 0
-    for row in planned:
+
+    eligible = [
+        row
+        for row in planned
+        if str(row.get("coverageEntityIdentity") or "") not in excluded_coverage_ids
+    ]
+
+    existing_by_seed: dict[str, tuple[dict[str, Any], set[str], str]] = {}
+    capsule_root = evidence_root / "capsules" / carrier
+    if capsule_root.is_dir():
+        for capsule_path in sorted(capsule_root.iterdir()):
+            if capsule_path.is_symlink() or not capsule_path.is_file():
+                raise HomepageArticleSourceReadyAcquisitionError(
+                    SOURCE_INVALID_EVIDENCE,
+                    [f"existing {carrier} capsule must be a regular file"],
+                )
+            try:
+                raw_capsule = json.loads(capsule_path.read_text(encoding="utf-8"))
+                capsule = validate_source_ready_candidate_capsule(
+                    raw_capsule,
+                    evidence_root=evidence_root,
+                )
+                provenance = capsule["provenance"]
+                materialization = capsule["materialization"]
+                seed_id = str(provenance["seedId"])
+                coverage_id = str(
+                    provenance["coverageKey"]["coverageEntityIdentity"]
+                )
+                if (
+                    capsule["carrier"] != carrier
+                    or any(capsule[key] != value for key, value in identity.items())
+                    or provenance["seedSelectionDigest"]
+                    != seed_selection_binding["digest"]
+                ):
+                    raise ValueError("existing capsule identity binding drift")
+                physical = {
+                    str(materialization["body"]["contentSha256"]),
+                    *(
+                        str(row["contentSha256"])
+                        for row in materialization["media"]
+                    ),
+                }
+                binding = {
+                    "carrier": carrier,
+                    "candidateId": str(capsule["candidate"]["candidateId"]),
+                    "evidenceRootRef": ".",
+                    "ref": capsule_path.relative_to(evidence_root).as_posix(),
+                    "digest": str(capsule["capsuleDigest"]),
+                    "fileSha256": file_sha256(capsule_path),
+                }
+            except (
+                HomepageArticleSourceReadyBatchError,
+                KeyError,
+                OSError,
+                TypeError,
+                ValueError,
+                json.JSONDecodeError,
+            ) as exc:
+                raise HomepageArticleSourceReadyAcquisitionError(
+                    SOURCE_INVALID_EVIDENCE,
+                    [f"existing {carrier} capsule is invalid: {exc}"],
+                ) from exc
+            if seed_id in existing_by_seed:
+                # Historical waves may have frozen more than one valid capsule
+                # for the same seed (for example when the source page changed
+                # between interrupted runs).  An idempotent same-parameter
+                # resume keeps the deterministic first capsule (sorted by
+                # digest file name) and skips the extras instead of rejecting
+                # the whole batch; each duplicate has already passed full
+                # capsule validation above.
+                continue
+            existing_by_seed[seed_id] = (binding, physical, coverage_id)
+
+    def _seed_id(row: Mapping[str, Any]) -> str:
+        seed = row.get("seed")
+        return str(seed.get("seedId") or "") if isinstance(seed, Mapping) else ""
+
+    for row in eligible:
         if len(bindings) >= required:
             break
-        coverage_id = str(row.get("coverageEntityIdentity") or "")
-        if coverage_id in excluded_coverage_ids:
+        existing = existing_by_seed.get(_seed_id(row))
+        if existing is None:
             continue
-        attempted += 1
-        try:
-            source = row.get("source")
-            source = source if isinstance(source, Mapping) else {}
-            if carrier == "homepage" and source.get("sourceKind") in {
-                "baidu_baike",
-                "toutiao_baike",
-            }:
-                acquired = acquire_baike_homepage_source_ready_candidate(
-                    row,
-                    source_revision=identity["sourceRevision"],
-                    source_digest=identity["sourceDigest"],
-                    entity_catalog_digest=identity["entityCatalogDigest"],
-                    captured_at=captured_at,
-                )
-            elif carrier == "article":
-                acquired = acquire_article_site_source_ready_candidate(
-                    row,
-                    source_revision=identity["sourceRevision"],
-                    source_digest=identity["sourceDigest"],
-                    entity_catalog_digest=identity["entityCatalogDigest"],
-                    captured_at=captured_at,
-                )
-            else:
-                acquired = acquire_mediawiki_source_ready_candidate(
-                    row,
-                    carrier=carrier,
-                    source_revision=identity["sourceRevision"],
-                    source_digest=identity["sourceDigest"],
-                    entity_catalog_digest=identity["entityCatalogDigest"],
-                    captured_at=captured_at,
-                )
-            physical = _physical_content(acquired)
-            if physical & used_content:
-                raise MediaWikiSourceReadyRejected(
-                    "body or media duplicates another accepted source-ready candidate"
-                )
-            binding = _write_acquired_candidate(
-                acquired,
-                evidence_root=evidence_root,
-                identity=identity,
-                captured_at=captured_at,
-                coverage_binding=coverage_binding,
-                seed_selection_binding=seed_selection_binding,
-                seed=row["seed"],
+        binding, physical, coverage_id = existing
+        if physical & used_content:
+            raise HomepageArticleSourceReadyAcquisitionError(
+                SOURCE_INVALID_EVIDENCE,
+                [f"existing {carrier} capsule duplicates accepted physical content"],
             )
-        except (MediaWikiSourceReadyRejected, HomepageArticleSourceReadyBatchError) as exc:
-            reason = str(exc)
-            rejection_counts[reason] += 1
-            rejections.append(
-                {
-                    "carrier": carrier,
-                    "coverageEntityIdentity": coverage_id,
-                    "candidateName": str(row.get("candidateName") or ""),
-                    "entityType": str(row.get("entityType") or ""),
-                    "sourceKind": str(source.get("sourceKind") or ""),
-                    "sourceUrl": str(source.get("sourceUrl") or ""),
-                    "reason": reason,
-                }
-            )
-            continue
         bindings.append(binding)
         accepted_coverage_ids.add(coverage_id)
         used_content.update(physical)
+        attempted += 1
+
+    remaining = required - len(bindings)
+    if remaining <= 0:
+        return bindings, accepted_coverage_ids, attempted
+
+    def acquire(row: dict[str, Any]) -> AcquiredSourceReadyCandidate:
+        source = row.get("source")
+        source = source if isinstance(source, Mapping) else {}
+        if carrier == "homepage" and source.get("sourceKind") in {
+            "baidu_baike",
+            "toutiao_baike",
+        }:
+            return acquire_baike_homepage_source_ready_candidate(
+                row,
+                source_revision=identity["sourceRevision"],
+                source_digest=identity["sourceDigest"],
+                entity_catalog_digest=identity["entityCatalogDigest"],
+                captured_at=captured_at,
+            )
+        if carrier == "article":
+            try:
+                return acquire_article_site_source_ready_candidate(
+                    row,
+                    source_revision=identity["sourceRevision"],
+                    source_digest=identity["sourceDigest"],
+                    entity_catalog_digest=identity["entityCatalogDigest"],
+                    captured_at=captured_at,
+                )
+            except MediaWikiSourceReadyRejected as frontier_rejection:
+                # The governed site frontier stays first choice.  When every
+                # frontier site produced nothing, a coverage-qualified public
+                # Wikipedia detail page is itself an admitted article source
+                # profile (`wikipedia_zh`), so the exact seed source falls
+                # back to the MediaWiki producer instead of losing the seed.
+                if source.get("sourceKind") != "wikipedia":
+                    raise
+                try:
+                    return acquire_mediawiki_source_ready_candidate(
+                        row,
+                        carrier="article",
+                        source_revision=identity["sourceRevision"],
+                        source_digest=identity["sourceDigest"],
+                        entity_catalog_digest=identity["entityCatalogDigest"],
+                        captured_at=captured_at,
+                    )
+                except MediaWikiSourceReadyRejected as wikipedia_rejection:
+                    raise MediaWikiSourceReadyRejected(
+                        f"{frontier_rejection}; wikipedia fallback: "
+                        f"{wikipedia_rejection}"
+                    ) from wikipedia_rejection
+        return acquire_mediawiki_source_ready_candidate(
+            row,
+            carrier=carrier,
+            source_revision=identity["sourceRevision"],
+            source_digest=identity["sourceDigest"],
+            entity_catalog_digest=identity["entityCatalogDigest"],
+            captured_at=captured_at,
+        )
+
+    # An idempotent resume must retry every seed that has no frozen capsule
+    # yet, including seeds rejected by earlier runs: producer fixes between
+    # resumes are exactly what makes a previously rejected source acquirable.
+    # Skipping is therefore keyed on capsule existence, never on list position.
+    pending_rows = [
+        row for row in eligible if _seed_id(row) not in existing_by_seed
+    ]
+    executor = ThreadPoolExecutor(max_workers=acquisition_concurrency)
+    futures: list[tuple[dict[str, Any], Future[AcquiredSourceReadyCandidate]]] = [
+        (row, executor.submit(acquire, row)) for row in pending_rows[:remaining]
+    ]
+    next_candidate = len(futures)
+    future_index = 0
+    try:
+        while future_index < len(futures) and len(bindings) < required:
+            row, future = futures[future_index]
+            future_index += 1
+            attempted += 1
+            rejected = False
+            coverage_id = str(row.get("coverageEntityIdentity") or "")
+            source = row.get("source")
+            source = source if isinstance(source, Mapping) else {}
+            try:
+                acquired = future.result()
+                physical = _physical_content(acquired)
+                if physical & used_content:
+                    raise MediaWikiSourceReadyRejected(
+                        "body or media duplicates another accepted source-ready candidate"
+                    )
+                binding = _write_acquired_candidate(
+                    acquired,
+                    evidence_root=evidence_root,
+                    identity=identity,
+                    captured_at=captured_at,
+                    coverage_binding=coverage_binding,
+                    seed_selection_binding=seed_selection_binding,
+                    seed=row["seed"],
+                )
+            except (
+                MediaWikiSourceReadyRejected,
+                HomepageArticleSourceReadyBatchError,
+            ) as exc:
+                rejected = True
+                reason = str(exc)
+                rejection_counts[reason] += 1
+                rejections.append(
+                    {
+                        "carrier": carrier,
+                        "coverageEntityIdentity": coverage_id,
+                        "candidateName": str(row.get("candidateName") or ""),
+                        "entityType": str(row.get("entityType") or ""),
+                        "sourceKind": str(source.get("sourceKind") or ""),
+                        "sourceUrl": str(source.get("sourceUrl") or ""),
+                        "reason": reason,
+                    }
+                )
+            if rejected:
+                if next_candidate < len(pending_rows):
+                    replacement = pending_rows[next_candidate]
+                    next_candidate += 1
+                    futures.append(
+                        (replacement, executor.submit(acquire, replacement))
+                    )
+                continue
+            bindings.append(binding)
+            accepted_coverage_ids.add(coverage_id)
+            used_content.update(physical)
+    finally:
+        executor.shutdown(wait=True, cancel_futures=True)
     return bindings, accepted_coverage_ids, attempted
 
 
@@ -420,6 +574,7 @@ def acquire_homepage_article_source_ready_batch(
     homepage_count: int,
     article_count: int,
     seed_selection: Path,
+    acquisition_concurrency: int = 1,
 ) -> dict[str, Any]:
     """Acquire exact source-ready counts and freeze a physical batch manifest."""
 
@@ -438,6 +593,11 @@ def acquire_homepage_article_source_ready_batch(
                 "homepage/article candidate counts must be non-negative "
                 "and at least one carrier must be active"
             ],
+        )
+    if not 1 <= acquisition_concurrency <= 32:
+        raise HomepageArticleSourceReadyAcquisitionError(
+            SOURCE_INVALID_EVIDENCE,
+            ["acquisition concurrency must be between 1 and 32"],
         )
     identity = _identity(
         source_revision=source_revision,
@@ -527,6 +687,7 @@ def acquire_homepage_article_source_ready_batch(
         active_selected["homepage"],
         carrier="homepage",
         required=homepage_count,
+        acquisition_concurrency=acquisition_concurrency,
         identity=identity,
         captured_at=captured_at,
         evidence_root=evidence_root,
@@ -541,6 +702,7 @@ def acquire_homepage_article_source_ready_batch(
         active_selected["article"],
         carrier="article",
         required=article_count,
+        acquisition_concurrency=acquisition_concurrency,
         identity=identity,
         captured_at=captured_at,
         evidence_root=evidence_root,

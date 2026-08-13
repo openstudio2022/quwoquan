@@ -37,6 +37,13 @@
 - 关系态必须用对象真相源驱动，而不是页面局部状态拼装。
 - 网络写回必须与 UI 即时反馈分层。
 - 端侧待同步状态只持久化 `desiredBoolValue + confirmedBoolValue` 的 canonical outbox entry；禁止读取 `needsRemoteSync`、guard-only 旧形态或通过缺失字段反推确认态，非法记录必须失效清除且不得发出远程写入。
+- outbox 自动重试期间的瞬时失败保持静默，不打扰用户。
+- entry 首次入队时间超过 `maxPendingAge` 必须进入终态失败：放弃重试并移除 entry、回滚乐观布尔态到已确认值（计数由权威投影下次刷新收敛）、发布可订阅的终态失败信号。
+- 终态失败必须以统一恢复语义的警示轻提示告知用户，文案来自恢复组，不新增字面量。
+- feed/详情读投影携带 viewer 维度 `viewerLiked`（`content_post_projection.yaml` / `content_post_detail_slice.yaml`）：true/false 为服务端权威值，`null` 表示本次响应
+  未附着 viewer 态（匿名请求或附着降级），端侧不得据 `null` 回滚本地状态。
+- App 以权威投影 hydrate 本地点赞态时，仍有待同步 like 意图的 post 由本地 pending
+  意图优先；计数无条件采纳权威值。附着降级不阻断内容主路径。
 
 ## 4. 契约引用
 
@@ -51,6 +58,8 @@
 - WHEN 参与者执行“浏览器与作者主页状态同步”对应的公开行为。
 - THEN viewer、profile 与 feed 消费同一 canonical `RelationshipCapabilityView` 关系矩阵。
 - AND 同一交互的本地 outbox 只存在一份 canonical entry；旧字段或错误 JSON 类型不会被迁移成待同步命令。
+- AND feed/详情响应的 `viewerLiked` 权威值 hydrate 本地点赞态；`null` 不回滚本地态，
+  待同步 like 意图优先于权威投影。
 - AND 失败时返回 canonical failure，且不产生伪成功事实。
 
 ## 6. 依赖
@@ -61,11 +70,4 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 浏览器与作者主页状态同步结果子句尚未逐条绑定
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：缺 `GWT-001` 三条结果子句的逐条证据，t3 的 canonical failure 语义在 3 条绑定测试中几乎没有断言信号。
-- 完成判定：`GWT-001.t1`、`GWT-001.t2` 与 `GWT-001.t3` 各自被真实测试 `spec_ref` 绑定。
+- 无。

@@ -390,7 +390,6 @@ def validate_homepage_source_unit_catalog(
         )
     return {
         "catalogId": catalog["catalogId"],
-        "catalogVersion": catalog["catalogVersion"],
         "catalogDigest": catalog["catalogDigest"],
         "candidateCount": len(rows),
         "heroReadyCount": len(rows),
@@ -403,7 +402,6 @@ def validate_homepage_source_unit_catalog(
 def build_homepage_source_unit_catalog(
     *,
     catalog_id: str,
-    catalog_version: str,
     created_at: str,
     minimum_candidate_count: int,
     source_revision: str,
@@ -420,7 +418,6 @@ def build_homepage_source_unit_catalog(
     stable: dict[str, Any] = {
         "schema": CATALOG_SCHEMA,
         "catalogId": str(catalog_id).strip(),
-        "catalogVersion": str(catalog_version).strip(),
         "policyRevision": HOMEPAGE_SOURCE_POLICY_REVISION,
         "sourceRevision": source_revision,
         "sourceDigest": source_digest,

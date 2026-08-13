@@ -6,6 +6,10 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 
 /// 设置中枢「通知与提醒 / 通话与铃声」区块状态：
 /// 读投影为单一真相源；toggle 乐观更新，命令失败回滚并暴露结构化错误。
+///
+/// [rawError] 只承载**加载**失败（触发整页错误态）；单个开关命令失败进入
+/// [actionError]（回滚 + dialog 轻反馈），不得把动作失败升级为整页错误、
+/// 清空用户正在操作的行区。
 class UserSettingsSectionsState {
   const UserSettingsSectionsState({
     this.notification,
@@ -13,6 +17,7 @@ class UserSettingsSectionsState {
     this.call,
     this.isLoading = false,
     this.rawError,
+    this.actionError,
   });
 
   final contracts.NotificationSettingsView? notification;
@@ -20,6 +25,7 @@ class UserSettingsSectionsState {
   final contracts.CallSettingsView? call;
   final bool isLoading;
   final Object? rawError;
+  final Object? actionError;
 
   bool get isLoaded => notification != null && privacy != null && call != null;
 
@@ -32,6 +38,7 @@ class UserSettingsSectionsState {
     contracts.CallSettingsView? call,
     bool? isLoading,
     Object? Function()? rawError,
+    Object? Function()? actionError,
   }) {
     return UserSettingsSectionsState(
       notification: notification ?? this.notification,
@@ -39,6 +46,7 @@ class UserSettingsSectionsState {
       call: call ?? this.call,
       isLoading: isLoading ?? this.isLoading,
       rawError: rawError != null ? rawError() : this.rawError,
+      actionError: actionError != null ? actionError() : this.actionError,
     );
   }
 }
@@ -223,11 +231,13 @@ class UserSettingsSectionsNotifier extends Notifier<UserSettingsSectionsState> {
     optimistic();
     try {
       await command();
-      state = state.copyWith(rawError: () => null);
+      state = state.copyWith(actionError: () => null);
       return true;
     } catch (e) {
       rollback();
-      state = state.copyWith(rawError: () => e);
+      // 动作失败只回滚 + 记录 actionError 供 dialog 消费；
+      // 不污染 rawError，页面主体（行区）必须保持可用。
+      state = state.copyWith(actionError: () => e);
       return false;
     }
   }

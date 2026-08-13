@@ -76,6 +76,34 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
     });
   }
 
+  bool get _semanticHasExitAction {
+    final semantic = widget.semantic;
+    return semantic.primaryAction?.type == UiErrorActionType.dismiss ||
+        semantic.secondaryAction?.type == UiErrorActionType.dismiss;
+  }
+
+  /// 内建「返回」：错误页永远给用户一条离开的路（统一设计契约）。
+  ///
+  /// 原 semantic 没有任何 dismiss 动作且当前页面可 pop 时补位；
+  /// 无恢复处理器时只保留内建返回，避免渲染无人响应的死按钮。
+  Future<void> _dispatchAction(
+    UiErrorAction action, {
+    required bool syntheticExitInstalled,
+  }) async {
+    if (syntheticExitInstalled &&
+        action.type == UiErrorActionType.dismiss &&
+        !_semanticHasExitAction) {
+      _enqueueErrorOutcome(
+        semantic: widget.semantic,
+        result: 'handed_off',
+        action: action,
+      );
+      await Navigator.maybeOf(context)?.maybePop();
+      return;
+    }
+    await _handleAction(action);
+  }
+
   Future<void> _handleAction(UiErrorAction action) async {
     final callback = widget.onRecovery;
     if (callback == null) {
@@ -164,6 +192,39 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.maybeOf(context)?.canPop() ?? false;
+    final hasRecoveryHandler = widget.onRecovery != null;
+    UiErrorSemantic effectiveSemantic = widget.semantic;
+    var syntheticExitInstalled = false;
+    if (canPop && !_semanticHasExitAction) {
+      // 出路文案按容器语境：push 页面显示「返回」，modal/全屏 sheet 显示
+      // 「关闭」。「×」图标关闭仅属 modal chrome 层，错误内容区保持文字动作
+      // （可发现性与可访问性优于图标钮），两者语义一致均走 maybePop。
+      final route = ModalRoute.of(context);
+      final isModalContainer =
+          route != null && (route is PageRoute ? route.fullscreenDialog : true);
+      final exitAction = UiErrorAction(
+        type: UiErrorActionType.dismiss,
+        label: isModalContainer ? FoundationText.close : ContentText.back,
+      );
+      if (!hasRecoveryHandler) {
+        effectiveSemantic = _semanticWithExitAction(
+          widget.semantic,
+          exit: exitAction,
+          keepExistingActions: false,
+        );
+        syntheticExitInstalled = true;
+      } else if (widget.semantic.secondaryAction == null) {
+        effectiveSemantic = _semanticWithExitAction(
+          widget.semantic,
+          exit: exitAction,
+          keepExistingActions: true,
+        );
+        syntheticExitInstalled = true;
+      }
+    }
+    final showActions = hasRecoveryHandler || syntheticExitInstalled;
+    final installedSyntheticExit = syntheticExitInstalled;
     return _wrapWithErrorAppearance(
       context,
       widget.semantic,
@@ -187,8 +248,13 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
                     maxWidth: AppSpacing.feedMaxContentWidth,
                   ),
                   child: _ErrorEmptyPageBody(
-                    semantic: widget.semantic,
-                    onAction: widget.onRecovery == null ? null : _handleAction,
+                    semantic: effectiveSemantic,
+                    onAction: !showActions
+                        ? null
+                        : (action) => _dispatchAction(
+                            action,
+                            syntheticExitInstalled: installedSyntheticExit,
+                          ),
                   ),
                 ),
               ),
@@ -198,6 +264,40 @@ class _AppPageErrorStateState extends State<AppPageErrorState> {
       ),
     );
   }
+}
+
+/// [AppPageErrorState] 内建返回：在保留恢复语义其余字段的前提下补「离开」动作。
+///
+/// [keepExistingActions] 为 true 时把 [exit] 放入空置的 secondary 位；
+/// 为 false 时（页面未接恢复回调）只保留 [exit]，避免死按钮。
+UiErrorSemantic _semanticWithExitAction(
+  UiErrorSemantic base, {
+  required UiErrorAction exit,
+  required bool keepExistingActions,
+}) {
+  return UiErrorSemantic(
+    category: base.category,
+    scope: base.scope,
+    title: base.title,
+    message: base.message,
+    secondaryMessage: base.secondaryMessage,
+    primaryAction: keepExistingActions ? base.primaryAction : exit,
+    secondaryAction: keepExistingActions ? exit : null,
+    dismissible: base.dismissible,
+    sourceCode: base.sourceCode,
+    failureKind: base.failureKind,
+    copyKey: base.copyKey,
+    recoveryAction: base.recoveryAction,
+    presentation: base.presentation,
+    tone: base.tone,
+    appearanceMode: base.appearanceMode,
+    sourceRouteId: base.sourceRouteId,
+    sourceSurfaceId: base.sourceSurfaceId,
+    sourceOperationId: base.sourceOperationId,
+    requestId: base.requestId,
+    traceId: base.traceId,
+    userRecoveryGroup: base.userRecoveryGroup,
+  );
 }
 
 /// 区块首屏无可用数据时的阻塞错误态。

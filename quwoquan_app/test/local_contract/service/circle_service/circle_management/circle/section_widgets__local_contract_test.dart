@@ -13,6 +13,9 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle_pos
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/section_creations.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/section_chat.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_file/presentation/section_storage.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/presentation/section_members.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/circle_service/circle_management/circle/typed_circle_query_test_double.dart';
@@ -430,6 +433,86 @@ void main() {
       );
       await tester.pump();
       expect(find.byType(SectionChat), findsOneWidget);
+      expect(find.text(CommunityText.circleNoChatEnabled), findsOneWidget);
+    });
+
+    testWidgets('有默认群但绑定未就绪时展示开通中与重试', (tester) async {
+      var retried = 0;
+      await tester.pumpWidget(
+        _wrap(
+          SectionChat(
+            circleId: 'fixture_circle_photo',
+            conversationId: null,
+            hasDefaultGroup: true,
+            isDark: false,
+            onRefresh: () => retried += 1,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('circle-chat-binding-pending')),
+        findsOneWidget,
+      );
+      expect(
+        find.text(CommunityText.circleChatBindingPendingTitle),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('circle-chat-binding-retry')),
+      );
+      expect(retried, 1);
+    });
+  });
+
+  group('SectionMembers — Widget 契约', () {
+    testWidgets('成员行点击进入用户主页（建联承接）', (tester) async {
+      String? navigatedHandle;
+      Object? capturedExtra;
+      final app = ProviderScope(
+        overrides: [
+          circleDetailMembershipQueryProvider.overrideWithValue(
+            _SectionMembersQueryFixture(),
+          ),
+        ],
+        child: MaterialApp.router(
+          routerConfig: GoRouter(
+            initialLocation: '/',
+            routes: [
+              GoRoute(
+                path: '/',
+                builder: (_, _) => Scaffold(
+                  body: SectionMembers(
+                    circleId: 'fixture_circle_photo',
+                    isDark: false,
+                  ),
+                ),
+              ),
+              GoRoute(
+                path: '/user/:userHandle',
+                builder: (_, state) {
+                  navigatedHandle = state.pathParameters['userHandle'];
+                  capturedExtra = state.extra;
+                  return const SizedBox();
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.pumpWidget(app);
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('circle-member-row-fixture_persona')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(navigatedHandle, 'fixture_persona');
+      expect(
+        (capturedExtra as UserProfileRouteExtra?)?.safePersonaId,
+        'fixture_persona',
+      );
     });
   });
 
@@ -576,4 +659,40 @@ class _ArticleFixtureCircleQuery extends CircleQueryReaderTestDouble {
     createdAt: DateTime.utc(2026, 5, 6),
     updatedAt: DateTime.utc(2026, 5, 6),
   );
+}
+
+final class _SectionMembersQueryFixture implements CircleMembershipQueries {
+  @override
+  Future<CircleMembershipSlice> getMyMembership(
+    MyCircleMembershipQuery query,
+  ) => throw UnsupportedError('getMyMembership is outside this section');
+
+  @override
+  Future<CircleMembershipPageSlice> listMemberships(
+    CircleMembershipListQuery query,
+  ) async {
+    final now = DateTime.utc(2026, 8, 6);
+    return CircleMembershipPageSlice(
+      items: <CircleMembershipSlice>[
+        CircleMembershipSlice(
+          membershipId: 'membership-001',
+          version: 1,
+          circleId: query.circleId,
+          personaId: 'fixture_persona',
+          role: CircleMemberRole.member,
+          state: CircleMembershipState.active,
+          joinedAt: now,
+          lastActiveAt: now,
+          contribution: 0,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<PersonaCirclePageSlice> listPersonaCircles(
+    PersonaCircleListQuery query,
+  ) => throw UnsupportedError('listPersonaCircles is outside this section');
 }

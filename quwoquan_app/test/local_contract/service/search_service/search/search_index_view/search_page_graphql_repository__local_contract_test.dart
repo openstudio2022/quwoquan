@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-003.t4
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/remote_search_page_repository.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_page_query_facet.dart';
@@ -15,17 +16,23 @@ void main() {
             SearchPageItem(
               objectRef: 'ref:content-post:opaque-1',
               resultType: SearchPageObjectType.contentPost,
+              contentType: SearchPageContentType.article,
               title: '山间路线',
               subtitle: '两日徒步',
               snippet: '从营地出发',
               thumbnailUrl: 'https://cdn.example.test/cover.jpg',
               action: '/posts/opaque-1',
+              rankPosition: 1,
+              rankReason: '标题命中',
             ),
           ],
           facets: <SearchPageFacet>[
             SearchPageFacet(key: 'CONTENT_POST', count: 1),
           ],
           suggestions: <String>['山间徒步'],
+          matchedTerms: <String>['山间'],
+          degradeSignals: <SearchPageDegradeSignal>[],
+          searchRequestId: 'search.req.test-1',
           nextCursor: 'cursor:opaque-next',
         ),
       );
@@ -55,8 +62,15 @@ void main() {
       );
       expect(response.pageFacets.single.key, 'CONTENT_POST');
       expect(response.relatedTerms, <String>['山间徒步']);
+      expect(response.matchedTerms, <String>['山间']);
+      expect(response.pageItems.single.rankPosition, 1);
+      expect(response.pageItems.single.rankReason, '标题命中');
+      expect(
+        response.pageItems.single.contentType,
+        SearchPageContentType.article,
+      );
       expect(response.nextCursor, 'cursor:opaque-next');
-      expect(response.searchRequestId, isNull);
+      expect(response.searchRequestId, 'search.req.test-1');
     },
   );
 
@@ -66,6 +80,9 @@ void main() {
         items: <SearchPageItem>[],
         facets: <SearchPageFacet>[],
         suggestions: <String>[],
+        matchedTerms: <String>[],
+        degradeSignals: <SearchPageDegradeSignal>[],
+        searchRequestId: 'search.req.test-2',
       ),
     );
     final repository = RemoteSearchPageRepository(remoteQuery: facet);

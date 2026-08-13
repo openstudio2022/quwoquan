@@ -694,4 +694,68 @@ void main() {
     await tester.pump();
     expect(find.text('真实会话 4'), findsNothing);
   });
+
+  testWidgets('启用状态只来自 SkillUserSetting，Subscription/Consent 不当启用开关', (
+    tester,
+  ) async {
+    // REQ-002 分轨：Setting=个人启用、Subscription=主动触达、Consent=数据授权。
+    final repository = InMemoryAssistantFacets();
+    final travelCatalog = (await repository.listSkillCatalog()).singleWhere(
+      (item) => item.skillId == 'travel_companion',
+    );
+    // 主动订阅 active + 数据授权 granted，但个人设置显式停用。
+    await repository.createSkillSubscription(
+      skillId: 'travel_companion',
+      domainId: 'travel',
+      rawText: '行程风险提醒',
+      clientRequestId: 'sub-split-track',
+    );
+    await repository.grantSkillConsent(
+      skillId: 'travel_companion',
+      grantedScopes: travelCatalog.requiredConsentScopes,
+      clientRequestId: 'consent-split-track',
+    );
+    await repository.putSkillUserSetting(
+      skillId: 'travel_companion',
+      status: SkillUserSettingStatus.disabled,
+      configurationData: const <String, Object?>{},
+      configurationSchemaDigest: travelCatalog.configurationSchemaDigest,
+      memoryPolicy: SkillMemoryPolicy.packageDefault,
+      connectorConnectionRefs: const <String>[],
+      expectedRevision: 0,
+      clientRequestId: 'setting-split-track',
+    );
+    await tester.pumpWidget(
+      _buildApp(repository, visitRecorder: _CapturingVisitRecorder()),
+    );
+    await tester.pumpAndSettle();
+
+    // 启用开关 off：即便订阅 active、授权 granted，也不改变启用状态。
+    final skillToggle = find.byKey(
+      const ValueKey<String>('assistant_skill_toggle_travel_companion'),
+    );
+    await _scrollTo(tester, skillToggle);
+    expect(tester.widget<CupertinoSwitch>(skillToggle).value, isFalse);
+    expect(
+      find.textContaining(AssistantText.assistantSkillDisabled),
+      findsWidgets,
+    );
+
+    // Subscription 开关独立为 on：它只表达主动触达，不表达启用。
+    final subscription = (await repository.listSkillSubscriptions()).single;
+    final subscriptionToggle = find.byKey(
+      ValueKey<String>(
+        'assistant_skill_subscription_${subscription.subscriptionId}',
+      ),
+    );
+    await _scrollTo(tester, subscriptionToggle);
+    expect(tester.widget<CupertinoSwitch>(subscriptionToggle).value, isTrue);
+
+    // 无显式 Setting 的官方响应式 Skill 默认可用（REQ-002 默认语义）。
+    final defaultToggle = find.byKey(
+      const ValueKey<String>('assistant_skill_toggle_daily_assistant'),
+    );
+    await _scrollTo(tester, defaultToggle);
+    expect(tester.widget<CupertinoSwitch>(defaultToggle).value, isTrue);
+  });
 }

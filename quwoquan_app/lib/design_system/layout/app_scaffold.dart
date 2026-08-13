@@ -96,15 +96,24 @@ class AppNavigationBarIconButton extends StatelessWidget {
     required this.icon,
     required this.onPressed,
     this.color,
+    this.surface = AppChromeSurface.standard,
   });
 
   final IconData icon;
   final VoidCallback? onPressed;
   final Color? color;
 
+  /// chrome 表面语义：`immersive` 渲染半透明暗色圆底并取白色图标，
+  /// 保证媒体失败退到浅色背景时按钮仍可见；颜色决策收口在
+  /// [AppNavigationSemanticConstants]，调用方不再自管颜色。
+  final AppChromeSurface surface;
+
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final background = AppNavigationSemanticConstants.chromeActionBackground(
+      surface: surface,
+    );
     return CupertinoButton(
       padding: EdgeInsets.zero,
       onPressed: onPressed,
@@ -112,14 +121,22 @@ class AppNavigationBarIconButton extends StatelessWidget {
         AppSpacing.appChromeActionButtonSize,
         AppSpacing.appChromeActionButtonSize,
       ),
-      child: SizedBox(
-        width: AppSpacing.appChromeActionButtonSize,
-        height: AppSpacing.appChromeActionButtonSize,
-        child: Center(
-          child: Icon(
-            icon,
-            size: AppSpacing.appChromeActionIconSize,
-            color: color ?? AppNavigationSemanticConstants.barIconColor(isDark),
+      child: DecoratedBox(
+        decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+        child: SizedBox(
+          width: AppSpacing.appChromeActionButtonSize,
+          height: AppSpacing.appChromeActionButtonSize,
+          child: Center(
+            child: Icon(
+              icon,
+              size: AppSpacing.appChromeActionIconSize,
+              color:
+                  color ??
+                  AppNavigationSemanticConstants.chromeActionIconColor(
+                    isDark,
+                    surface: surface,
+                  ),
+            ),
           ),
         ),
       ),

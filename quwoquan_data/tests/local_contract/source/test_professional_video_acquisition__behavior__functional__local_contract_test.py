@@ -901,3 +901,56 @@ def test_auto_plan_selects_highest_comparable_professional_video(tmp_path: Path)
     assert payload["videos"][0]["professionalAssetId"] == "high"
     assert report["videoDiscovery"][0]["professionalAcquisitionCandidates"] == 2
     assert report["videoDiscovery"][0]["rankingEligibleCandidates"] == 2
+
+
+def test_failed_acquisition_allows_new_attempt_without_rewriting_history(
+    tmp_path: Path,
+) -> None:
+    """429/网络失败被冻结进 receipt 后，同一 manifest 必须能开新 attempt 而不篡改历史。"""
+    manual_root = tmp_path / "manual"
+    manual_root.mkdir()
+    manifest_path = tmp_path / "manifest.json"
+    write_json(
+        manifest_path,
+        _manifest(
+            [_item("retry", "retry.mp4", counts=(1_000, 10, 2, 1, 2))],
+            manifest_id="retry-attempts",
+        ),
+    )
+    output_root = tmp_path / "acquisition"
+
+    first, first_path = acquire_professional_videos(
+        manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
+        manual_root=manual_root,
+        output_root=output_root,
+    )
+    assert first["assets"][0]["acquisitionStatus"] == "failed"
+    assert first["assets"][0]["failureCode"] == "DATA.SOURCE.ACQUISITION_FAILED"
+    first_bytes = first_path.read_bytes()
+
+    _write_video(manual_root / "retry.mp4", moving=True, seed=41)
+    second, second_path = acquire_professional_videos(
+        manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
+        manual_root=manual_root,
+        output_root=output_root,
+    )
+    assert second_path != first_path
+    assert second_path.name.endswith("-attempt-002.json")
+    assert second["manifestDigest"] == first["manifestDigest"]
+    assert second["assets"][0]["acquisitionStatus"] == "acquired"
+    assert second["assets"][0]["distributionDecision"] == "research_allowed"
+    assert first_path.read_bytes() == first_bytes
+
+    replay, replay_path = acquire_professional_videos(
+        manifest_path,
+        handoff_ref=tmp_path / "handoff.json",
+        manual_root=manual_root,
+        output_root=output_root,
+    )
+    assert replay_path == second_path
+    assert replay == second
+    assert load_professional_video_acquisition_receipt(
+        second_path.relative_to(output_root).as_posix(), root=output_root
+    ) == second

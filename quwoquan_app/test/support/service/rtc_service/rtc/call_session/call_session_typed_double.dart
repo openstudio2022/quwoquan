@@ -1,6 +1,5 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 import 'rtc_contract_test_builders.dart';
 
 /// CallSession 对象级 typed double（仅测试树可达）。
@@ -223,48 +222,28 @@ final class CallSessionTypedDouble
   }
 
   void _seed() {
-    final root = objectContractExampleReader.document('rtc');
-    final examples = root['examples'];
-    if (examples is! Map<Object?, Object?>) return;
-    final core = examples['rtc_core'];
-    if (core is! Map<Object?, Object?>) return;
-    final sessions = core['sessions'];
-    if (sessions is! List<Object?>) return;
-    for (final raw in sessions) {
-      if (raw is! Map<Object?, Object?>) continue;
-      final callId = raw['sessionId']?.toString().trim() ?? '';
-      final callerId = raw['callerUserId']?.toString().trim() ?? '';
-      final participantIds = raw['participantUserIds'];
-      if (callId.isEmpty || callerId.isEmpty || participantIds is! List) {
-        continue;
-      }
-      final callType = raw['type'] == 'video' ? CallType.video : CallType.audio;
-      final state = raw['state'] == 'incoming'
-          ? CallStatus.ringing
-          : CallStatus.initiated;
-      final participants = participantIds
-          .map((value) => value.toString().trim())
-          .where((id) => id.isNotEmpty)
+    for (final seed in _initialCallSeeds) {
+      final participants = seed.participantUserIds
           .map(
             (id) => buildCallParticipantContract(
               userId: id,
-              role: id == callerId
+              role: id == seed.callerUserId
                   ? ParticipantRole.initiator
                   : ParticipantRole.invitee,
-              status: state == CallStatus.ringing
+              status: seed.status == CallStatus.ringing
                   ? ParticipantStatus.ringing
                   : ParticipantStatus.invited,
               isMuted: false,
-              isCameraOn: callType == CallType.video,
+              isCameraOn: seed.callType == CallType.video,
             ),
           )
           .toList(growable: false);
-      _sessions[callId] = buildCallSessionContract(
-        id: callId,
-        callType: callType,
-        status: state,
-        initiatorId: callerId,
-        roomId: 'rtc-room-$callId',
+      _sessions[seed.callId] = buildCallSessionContract(
+        id: seed.callId,
+        callType: seed.callType,
+        status: seed.status,
+        initiatorId: seed.callerUserId,
+        roomId: 'rtc-room-${seed.callId}',
         maxParticipants: 32,
         participantCount: participants.length,
         participants: participants,
@@ -322,6 +301,34 @@ final class CallSessionTypedDouble
     );
   }
 }
+
+typedef _InitialCallSeed = ({
+  String callId,
+  CallType callType,
+  CallStatus status,
+  String callerUserId,
+  List<String> participantUserIds,
+});
+
+const List<_InitialCallSeed> _initialCallSeeds = <_InitialCallSeed>[
+  (
+    callId: '11111111-1111-4111-8111-111111111111',
+    callType: CallType.audio,
+    status: CallStatus.ringing,
+    callerUserId: 'fixture_user_friend',
+    participantUserIds: <String>['fixture_user_current', 'fixture_user_friend'],
+  ),
+  (
+    callId: '22222222-2222-4222-8222-222222222222',
+    callType: CallType.video,
+    status: CallStatus.initiated,
+    callerUserId: 'fixture_user_current',
+    participantUserIds: <String>[
+      'fixture_user_current',
+      'fixture_user_weekend_1',
+    ],
+  ),
+];
 
 List<CallParticipant> _participants(CallSession session) =>
     session.participants ?? <CallParticipant>[];

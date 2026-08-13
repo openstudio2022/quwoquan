@@ -345,29 +345,14 @@
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
     "sourceIdentity": {
-      "oneOf": [
-        {
-          "type": "object", "additionalProperties": false,
-          "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionIds"],
-          "properties": {
-            "sourceRevision": {"$ref": "#/$defs/digest"},
-            "sourceDigest": {"$ref": "#/$defs/digest"},
-            "entityCatalogDigest": {"$ref": "#/$defs/digest"},
-            "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
-          }
-        },
-        {
-          "type": "object", "additionalProperties": false,
-          "required": ["identityKind", "sourceDigest", "canonicalObjectDigest", "migrationEvidenceDigest", "executionIds"],
-          "properties": {
-            "identityKind": {"const": "legacy_canonical_migration"},
-            "sourceDigest": {"$ref": "#/$defs/digest"},
-            "canonicalObjectDigest": {"$ref": "#/$defs/digest"},
-            "migrationEvidenceDigest": {"$ref": "#/$defs/digest"},
-            "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
-          }
-        }
-      ]
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionIds"],
+      "properties": {
+        "sourceRevision": {"$ref": "#/$defs/digest"},
+        "sourceDigest": {"$ref": "#/$defs/digest"},
+        "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+        "executionIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
     },
     "researchIsolationPolicy": {
       "type": "object",

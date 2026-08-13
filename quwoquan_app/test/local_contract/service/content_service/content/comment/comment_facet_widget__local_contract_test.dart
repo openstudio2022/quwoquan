@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-001
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
@@ -192,6 +195,52 @@ void main() {
     expect(comments.reactionCalls, 1);
     expect(comments.lastReactionCommand?.reaction, CommentReactionType.like);
     expect(find.byIcon(CupertinoIcons.heart_fill), findsOneWidget);
+  });
+
+  testWidgets('点赞失败回滚乐观态并以统一恢复语义轻提示，不泄漏异常', (tester) async {
+    final comments = InMemoryContentCommentFacet(
+      items: <CommentListItem>[
+        testCommentItem(
+          id: 'comment-like-fail',
+          postId: 'post-like-fail',
+          content: '点赞会失败的评论',
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      _app(
+        comments,
+        const CommentThreadView(postId: 'post-like-fail'),
+        authenticated: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final reactionFailure = StateError('reaction unavailable');
+    comments.failure = reactionFailure;
+    await tester.tap(find.byIcon(CupertinoIcons.heart));
+    await tester.pumpAndSettle();
+
+    // 乐观红心已回滚，用户不会停留在假成功态。
+    expect(find.byIcon(CupertinoIcons.heart_fill), findsNothing);
+    expect(find.byIcon(CupertinoIcons.heart), findsOneWidget);
+
+    // 轻提示文案与统一 resolver 同源计算，不手写字面量。
+    final context = tester.element(find.byType(CommentThreadView));
+    final expectedMessage = runtimeErrorSemantic(
+      context,
+      error: reactionFailure,
+      category: UiErrorCategory.backgroundAction,
+      scope: UiErrorScope.global,
+      allowRetry: false,
+    ).message;
+    expect(find.text(expectedMessage), findsOneWidget);
+
+    // 异常已被 presentation helper 吸收，不进入 unhandled zone。
+    expect(tester.takeException(), isNull);
+
+    // 让 AppToast 的自动消失计时器走完，避免 pending timer。
+    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets(

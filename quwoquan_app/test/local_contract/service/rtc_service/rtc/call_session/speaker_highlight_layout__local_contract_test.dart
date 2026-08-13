@@ -1,4 +1,6 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/call-experience/spec.md#gwt-001
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_participant.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_state.dart';
@@ -25,16 +27,19 @@ Widget _buildLayout({
   ValueChanged<String>? onTapThumbnail,
 }) {
   final participants = _makeParticipants(participantCount);
-  return MaterialApp(
-    home: Scaffold(
-      body: SizedBox(
-        width: 400,
-        height: 700,
-        child: SpeakerHighlightLayout(
-          participants: participants,
-          activeSpeaker: activeSpeaker ?? participants.first,
-          lockedSpeakerId: lockedSpeakerId,
-          onTapThumbnail: onTapThumbnail,
+  // ParticipantTile 读取 mediaDeviceProvider（本地预览镜像决策），需要 scope。
+  return ProviderScope(
+    child: MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 400,
+          height: 700,
+          child: SpeakerHighlightLayout(
+            participants: participants,
+            activeSpeaker: activeSpeaker ?? participants.first,
+            lockedSpeakerId: lockedSpeakerId,
+            onTapThumbnail: onTapThumbnail,
+          ),
         ),
       ),
     ),
@@ -73,14 +78,16 @@ void main() {
       final speaker = participants[1];
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 400,
-              height: 700,
-              child: SpeakerHighlightLayout(
-                participants: participants,
-                activeSpeaker: speaker,
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 400,
+                height: 700,
+                child: SpeakerHighlightLayout(
+                  participants: participants,
+                  activeSpeaker: speaker,
+                ),
               ),
             ),
           ),
@@ -145,14 +152,16 @@ void main() {
   group('SpeakerHighlightLayout — 错误态渲染', () {
     testWidgets('空参与者列表 → SizedBox.shrink', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 400,
-              height: 700,
-              child: SpeakerHighlightLayout(
-                participants: const [],
-                activeSpeaker: null,
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 400,
+                height: 700,
+                child: SpeakerHighlightLayout(
+                  participants: const [],
+                  activeSpeaker: null,
+                ),
               ),
             ),
           ),
@@ -167,14 +176,16 @@ void main() {
     testWidgets('仅 1 人时无缩略行', (tester) async {
       final participants = _makeParticipants(1);
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 400,
-              height: 700,
-              child: SpeakerHighlightLayout(
-                participants: participants,
-                activeSpeaker: participants.first,
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 400,
+                height: 700,
+                child: SpeakerHighlightLayout(
+                  participants: participants,
+                  activeSpeaker: participants.first,
+                ),
               ),
             ),
           ),

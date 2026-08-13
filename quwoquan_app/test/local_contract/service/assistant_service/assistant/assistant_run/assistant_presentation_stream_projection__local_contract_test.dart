@@ -5,7 +5,7 @@ import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/d
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
-  test('snapshot patch commit 按 revision 投影并允许相同事件重放', () {
+  test('snapshot commit 按 revision 投影并允许相同事件重放', () {
     final projection = AssistantPresentationStreamProjection();
     final snapshot = _event(
       AssistantStreamEventType.presentationSnapshot,
@@ -22,42 +22,21 @@ void main() {
 
     projection.apply(
       _event(
-        AssistantStreamEventType.presentationPatch,
+        AssistantStreamEventType.presentationCommit,
         revision: 2,
         payload: <String, dynamic>{
           'baseRevision': 1,
           'revision': 2,
-          'patches': <Map<String, dynamic>>[
-            <String, dynamic>{
-              'operation': 'replace',
-              'nodeId': 'root',
-              'node': <String, dynamic>{
-                ...(_documentJson(revision: 1)['nodes'] as List).single
-                    as Map<String, dynamic>,
-                'body': '更新后的行程',
-              },
-            },
-          ],
-        },
-      ),
-    );
-    projection.apply(
-      _event(
-        AssistantStreamEventType.presentationCommit,
-        revision: 3,
-        payload: <String, dynamic>{
-          'baseRevision': 2,
-          'revision': 3,
           'committedAt': '2026-07-31T12:00:03.000Z',
         },
       ),
     );
 
     expect(projection.committed, isTrue);
-    expect(projection.revision, 3);
-    expect(projection.document?.revision, 3);
+    expect(projection.revision, 2);
+    expect(projection.document?.revision, 2);
     expect(projection.document?.committedAt, '2026-07-31T12:00:03.000Z');
-    expect(projection.document?.nodes.single.body, '更新后的行程');
+    expect(projection.document?.nodes.single.body, '原始行程');
   });
 
   test('gap、冲突重放与 commit 后写入全部 fail closed', () {
@@ -77,12 +56,12 @@ void main() {
     expect(
       () => projection.apply(
         _event(
-          AssistantStreamEventType.presentationPatch,
+          AssistantStreamEventType.presentationCommit,
           revision: 3,
           payload: <String, dynamic>{
             'baseRevision': 2,
             'revision': 3,
-            'patches': const <Object>[],
+            'committedAt': '2026-07-31T12:00:03.000Z',
           },
         ),
       ),
@@ -117,12 +96,12 @@ void main() {
     expect(
       () => projection.apply(
         _event(
-          AssistantStreamEventType.presentationPatch,
+          AssistantStreamEventType.presentationCommit,
           revision: 3,
           payload: <String, dynamic>{
             'baseRevision': 2,
             'revision': 3,
-            'patches': const <Object>[],
+            'committedAt': '2026-07-31T12:00:03.000Z',
           },
         ),
       ),

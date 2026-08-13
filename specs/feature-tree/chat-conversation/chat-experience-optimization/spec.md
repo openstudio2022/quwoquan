@@ -67,3 +67,17 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：统一趣聊入口、会话详情与群聊管理的交互和状态。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 chat 域空态与骨架未对齐 design system 标准组件
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 chat 域页面对 `AppEmptyState` 与 `AppSkeleton` 标准组件的接入，
+  涉及 Inbox 列表、会话页、设置页、成员搜索、公告与转发面板。当前空态为手写
+  `Text`/图标组合，加载态无骨架屏、只有 `AppRequestFeedback`，与 design system
+  新组件不一致，跨页面空态视觉与语义漂移。
+- 完成判定：`SIT-001` 所述交互与状态在空态与加载态上同样成立——chat 域主表面空态
+  经 `AppEmptyState`、列表加载经 `AppSkeleton` 呈现，并有对应 widget 测试
+  `spec_ref`。

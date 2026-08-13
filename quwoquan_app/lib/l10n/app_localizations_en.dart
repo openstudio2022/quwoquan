@@ -257,7 +257,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settings => 'TODO: translate';
 
   @override
-  String get createCircle => 'TODO: translate';
+  String get createCircle => 'Create Circle';
 
   @override
   String get editCircle => 'TODO: translate';

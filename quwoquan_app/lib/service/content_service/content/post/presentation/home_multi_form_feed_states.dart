@@ -1,80 +1,51 @@
 // ignore_for_file: unnecessary_non_null_assertion
 part of 'home_multi_form_feed.dart';
 
-class _HomeFeedSkeleton extends StatefulWidget {
+class _HomeFeedSkeleton extends StatelessWidget {
   const _HomeFeedSkeleton({required this.isDark});
+
+  static const int _placeholderCardCount = 3;
 
   final bool isDark;
 
   @override
-  State<_HomeFeedSkeleton> createState() => _HomeFeedSkeletonState();
-}
-
-class _HomeFeedSkeletonState extends State<_HomeFeedSkeleton>
-    with SingleTickerProviderStateMixin {
-  static const int _placeholderCardCount = 3;
-  AnimationController? _pulse;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    if (reduceMotion) {
-      _pulse?.dispose();
-      _pulse = null;
-      return;
-    }
-    _pulse ??= AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _pulse?.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final pageBackground =
-        SettingsSemanticConstants.conversationSheetCardSurface(widget.isDark);
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     return ColoredBox(
       color: pageBackground,
-      child: ListView.separated(
-        key: const ValueKey('home-feed-skeleton'),
-        padding: EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.md),
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: _placeholderCardCount,
-        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
-        itemBuilder: (context, index) => _HomeFeedSkeletonCard(pulse: _pulse),
+      child: AppSkeletonShimmer(
+        child: ListView.separated(
+          key: const ValueKey('home-feed-skeleton'),
+          padding: EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.md),
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _placeholderCardCount,
+          separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.md),
+          itemBuilder: (context, index) => const _HomeFeedSkeletonCard(),
+        ),
       ),
     );
   }
 }
 
 class _HomeFeedSkeletonCard extends StatelessWidget {
-  const _HomeFeedSkeletonCard({required this.pulse});
-
-  final Animation<double>? pulse;
+  const _HomeFeedSkeletonCard();
 
   @override
   Widget build(BuildContext context) {
-    final fill = AppColors.iosFill(context);
-
-    Widget bar({double? width, double? height}) => Container(
-      width: width,
-      height: height ?? DiscoveryFeedSpacing.homeFeedSkeletonLineHeight,
-      decoration: BoxDecoration(
-        color: fill,
-        borderRadius: BorderRadius.circular(
-          DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
-        ),
-      ),
+    // 卡片形状：作者行（头像+名称/元信息）+ 两行正文 + 媒体位；
+    // 脉动与占位视觉由统一 AppSkeleton primitives 承载。
+    final cornerRadius = BorderRadius.circular(
+      DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
     );
 
-    final body = Padding(
+    Widget bar({double? width}) => AppSkeletonBlock(
+      width: width,
+      height: DiscoveryFeedSpacing.homeFeedSkeletonLineHeight,
+      borderRadius: cornerRadius,
+    );
+
+    return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.sm,
@@ -84,11 +55,7 @@ class _HomeFeedSkeletonCard extends StatelessWidget {
         children: <Widget>[
           Row(
             children: <Widget>[
-              Container(
-                width: AppSpacing.forty,
-                height: AppSpacing.forty,
-                decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
-              ),
+              const AppSkeletonCircle(size: AppSpacing.forty),
               const SizedBox(width: AppSpacing.sm),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,42 +75,18 @@ class _HomeFeedSkeletonCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           AspectRatio(
             aspectRatio: DiscoveryFeedSpacing.homeFeedSkeletonMediaAspectRatio,
-            child: Container(
-              decoration: BoxDecoration(
-                color: fill,
-                borderRadius: BorderRadius.circular(
-                  DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
-                ),
-              ),
-            ),
+            child: AppSkeletonBlock(borderRadius: cornerRadius),
           ),
         ],
       ),
-    );
-
-    final pulse = this.pulse;
-    if (pulse == null) {
-      return Opacity(
-        opacity: DiscoveryFeedSpacing.homeFeedSkeletonShimmerMaxOpacity,
-        child: body,
-      );
-    }
-    return AnimatedBuilder(
-      animation: pulse,
-      builder: (context, child) {
-        final opacity =
-            DiscoveryFeedSpacing.homeFeedSkeletonShimmerMinOpacity +
-            (DiscoveryFeedSpacing.homeFeedSkeletonShimmerMaxOpacity -
-                    DiscoveryFeedSpacing.homeFeedSkeletonShimmerMinOpacity) *
-                pulse.value;
-        return Opacity(opacity: opacity, child: child);
-      },
-      child: body,
     );
   }
 }
 
 /// 关注频道加载成功但尚无动态时的正常空态。
+///
+/// 反馈层统一走 `AppEmptyState`（feed 内嵌形态：无图标、融入内容流）；
+/// 外层保留 `AppTerminalViewport` 承载整屏终态视口语义。
 class _HomeFollowingFeedEmptyState extends StatelessWidget {
   const _HomeFollowingFeedEmptyState({required this.isDark});
 
@@ -153,14 +96,6 @@ class _HomeFollowingFeedEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final pageBackground =
         SettingsSemanticConstants.conversationSheetCardSurface(isDark);
-    final primaryText = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final secondaryText = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
     return ColoredBox(
       color: pageBackground,
       child: AppTerminalViewport(
@@ -168,30 +103,10 @@ class _HomeFollowingFeedEmptyState extends StatelessWidget {
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.containerMd,
         ),
-        child: Column(
-          key: const ValueKey('home-following-feed-empty'),
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              DiscoveryFeedText.followingFeedEmptyTitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.iosSubheadline,
-                fontWeight: AppTypography.semiBold,
-                color: primaryText,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              DiscoveryFeedText.followingFeedEmptyDescription,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.iosBody,
-                color: secondaryText,
-                height: AppSpacing.textLineHeightBody,
-              ),
-            ),
-          ],
+        child: const AppEmptyState(
+          key: ValueKey('home-following-feed-empty'),
+          title: DiscoveryFeedText.followingFeedEmptyTitle,
+          subtitle: DiscoveryFeedText.followingFeedEmptyDescription,
         ),
       ),
     );
@@ -247,48 +162,17 @@ class _HomeFeedNoActiveReleaseState extends StatelessWidget {
   Widget build(BuildContext context) {
     final pageBackground =
         SettingsSemanticConstants.conversationSheetCardSurface(isDark);
-    final primaryText = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final secondaryText = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
     return ColoredBox(
       color: pageBackground,
       child: AppTerminalViewport(
         padding: EdgeInsets.all(AppSpacing.containerLg),
-        child: Column(
+        child: AppEmptyState(
           key: const ValueKey<String>('home-feed-no-active-release'),
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              SearchText.recoveryContentUnavailableTitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.iosTitle3,
-                fontWeight: AppTypography.semiBold,
-                color: primaryText,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              SearchText.recoveryContentUnavailableMessage,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.iosBody,
-                color: secondaryText,
-                height: AppSpacing.textLineHeightBody,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.containerMd),
-            CupertinoButton.filled(
-              key: const ValueKey<String>('home-feed-no-active-release-retry'),
-              onPressed: onRetry,
-              child: const Text(SearchText.reload),
-            ),
-          ],
+          title: SearchText.recoveryContentUnavailableTitle,
+          subtitle: SearchText.recoveryContentUnavailableMessage,
+          actionLabel: SearchText.reload,
+          actionKey: const ValueKey<String>('home-feed-no-active-release-retry'),
+          onAction: onRetry,
         ),
       ),
     );

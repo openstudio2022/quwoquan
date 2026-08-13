@@ -27,6 +27,10 @@ class _SearchNetworkResultsPageState
   List<SearchHit> _groupResults = const <SearchHit>[];
   List<SearchHit> _locationResults = const <SearchHit>[];
   List<SearchPageResultItem> _pageItems = const <SearchPageResultItem>[];
+  // 服务端签发的下一页 opaque 游标；null 表示无更多页。翻页请求原样回传，
+  // cursor 因策略/查询身份变化 fail-closed 时清空并保留已加载结果（结构化恢复）。
+  String? _nextCursor;
+  bool _isLoadingMore = false;
   // 云侧内容命中的排序/封面/理由元信息（按 postId 索引），由 [_contentItemsFromResponse]
   // 解析云侧 SearchHit 时填充；结果页据此消费 rankPosition/coverWidth/coverHeight/rankReasons
   // （R-001/R-003）。响应未携带可选云信号时保持既定端侧展示。
@@ -381,13 +385,23 @@ class _SearchNetworkResultsPageState
                       AppSpacing.containerMd,
                       AppSpacing.containerLg,
                     ),
-                    child: ListView(
-                      key: ValueKey<String>('network_results_$_activeTabId'),
-                      padding: EdgeInsets.zero,
-                      children: _buildResultChildren(
-                        isDark: isDark,
-                        fgSecondary: fgSecondary,
-                        activeTab: activeTab,
+                    child: NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        // 距底不足半屏时预取下一页（与首页 feed 同一预取节奏）。
+                        if (notification.metrics.extentAfter <
+                            notification.metrics.viewportDimension * 0.5) {
+                          _loadMoreResults();
+                        }
+                        return false;
+                      },
+                      child: ListView(
+                        key: ValueKey<String>('network_results_$_activeTabId'),
+                        padding: EdgeInsets.zero,
+                        children: _buildResultChildren(
+                          isDark: isDark,
+                          fgSecondary: fgSecondary,
+                          activeTab: activeTab,
+                        ),
                       ),
                     ),
                   ),
@@ -424,17 +438,9 @@ class _SearchNetworkResultsPageState
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.square(
-                    AppSpacing.appChromeActionButtonSize,
-                  ),
+                AppNavigationBarIconButton(
+                  icon: CupertinoIcons.chevron_back,
                   onPressed: _handleClose,
-                  child: Icon(
-                    CupertinoIcons.chevron_back,
-                    color: fgSecondary,
-                    size: AppSpacing.appChromeActionIconSize,
-                  ),
                 ),
                 SizedBox(width: AppSpacing.intraGroupXs),
                 Expanded(

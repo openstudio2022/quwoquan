@@ -55,6 +55,13 @@
 - WHEN 调用方解析响应信封并呈现恢复动作。
 - THEN 错误上下文、稳定 code 与恢复语义一致，且不以成功响应掩盖失败。
 
+<a id="gwt-003"></a>
+### GWT-003 每个 HTTP 服务的错误响应保持完整信封形状
+
+- GIVEN 任一有 HTTP 面的第一方服务在业务错误路径返回失败。
+- WHEN 客户端收到该错误响应。
+- THEN 响应体是完整的 RuntimeErrorResponse 信封（code、userMessage、kind、origin、nature、requestId、recovery），不退化为裸 code 或自造结构。
+
 ## 6. 依赖
 
 - 前置要求：[`runtime-errors`](../spec.md) 的范围、要求与 SIT。
@@ -63,20 +70,4 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 错误代码与响应信封主路径尚未形成直接测试证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：将服务失败映射为统一 RuntimeErrorResponse，并让调用方按稳定 code 获得恢复动作。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-002"></a>
-### OPEN-002 错误上下文与恢复动作保持一致尚未形成直接测试证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：将服务失败映射为统一 RuntimeErrorResponse，并让调用方按稳定 code 获得恢复动作。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
+- 无。

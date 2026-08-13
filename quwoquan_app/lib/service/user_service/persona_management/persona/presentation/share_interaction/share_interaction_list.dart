@@ -8,7 +8,11 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/share_interaction_capabilities.dart';
@@ -83,9 +87,19 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
     }
     if (state.items.isEmpty) {
       if (state.error != null) {
-        return _InitialErrorState(onRetry: _refresh);
+        return AppSectionErrorState(
+          semantic: ensureRetryUiErrorSemantic(
+            runtimeErrorSemantic(
+              context,
+              error: state.error!,
+              category: UiErrorCategory.sectionLoad,
+              scope: UiErrorScope.section,
+            ),
+          ),
+          onAction: (_) => _refresh(),
+        );
       }
-      return ShareEmptyState(
+      return shareInteractionEmptyState(
         direction: widget.direction,
         onAction: () {
           if (widget.direction == ShareInteractionDirection.received) {
@@ -363,100 +377,50 @@ class _ShareInteractionSkeletonList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
-    final color = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundSecondary,
-    );
-    return Column(
-      children: List<Widget>.generate(
-        4,
-        (index) => ConstrainedBox(
-          constraints: const BoxConstraints(
-            minHeight: AppSpacing.profileShareInteractionRowMinHeight,
-          ),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.containerMd,
-              vertical: AppSpacing.md,
-            ),
-            child: Row(
-              children: <Widget>[
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const SizedBox.square(
-                    dimension: AppSpacing.profileShareInteractionAvatarSize,
-                  ),
-                ),
-                SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      _SkeletonBar(color: color, widthFactor: 0.4),
-                      SizedBox(height: AppSpacing.xs),
-                      _SkeletonBar(color: color, widthFactor: 0.8),
-                    ],
-                  ),
-                ),
-                SizedBox(width: AppSpacing.sm),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-                  ),
-                  child: const SizedBox.square(
-                    dimension: AppSpacing.profileShareInteractionPreviewSize,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SkeletonBar extends StatelessWidget {
-  const _SkeletonBar({required this.color, required this.widthFactor});
-
-  final Color color;
-  final double widthFactor;
-
-  @override
-  Widget build(BuildContext context) {
-    return FractionallySizedBox(
+    // 行形状：头像位 + 两行文字条 + 预览缩略位；脉动由统一 primitives 承载。
+    Widget bar(double widthFactor) => FractionallySizedBox(
       widthFactor: widthFactor,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
-        ),
-        child: SizedBox(height: AppSpacing.sm),
-      ),
+      child: const AppSkeletonLine(height: AppSpacing.sm),
     );
-  }
-}
-
-class _InitialErrorState extends StatelessWidget {
-  const _InitialErrorState({required this.onRetry});
-
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: CupertinoButton(
-        minimumSize: const Size(
-          AppSpacing.minInteractiveSize,
-          AppSpacing.minInteractiveSize,
+    return AppSkeletonShimmer(
+      child: Column(
+        children: List<Widget>.generate(
+          4,
+          (index) => ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: AppSpacing.profileShareInteractionRowMinHeight,
+            ),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.containerMd,
+                vertical: AppSpacing.md,
+              ),
+              child: Row(
+                children: <Widget>[
+                  const AppSkeletonCircle(
+                    size: AppSpacing.profileShareInteractionAvatarSize,
+                  ),
+                  SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        bar(0.4),
+                        SizedBox(height: AppSpacing.xs),
+                        bar(0.8),
+                      ],
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.sm),
+                  const AppSkeletonBlock(
+                    width: AppSpacing.profileShareInteractionPreviewSize,
+                    height: AppSpacing.profileShareInteractionPreviewSize,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
-        onPressed: onRetry,
-        child: Text(ProfileText.profileShareLoadFailed),
       ),
     );
   }

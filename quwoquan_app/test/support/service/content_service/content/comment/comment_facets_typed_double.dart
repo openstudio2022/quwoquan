@@ -1,13 +1,14 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
-
 /// local_contract Comment/ContentReaction 对象替身。
 final class InMemoryContentCommentFacet implements ContentCommentFacet {
   InMemoryContentCommentFacet({
-    ObjectContractExampleReader? fixtures,
+    Map<String, Object?>? commentThreadWireExample,
     this.actorId = 'fixture_user_current',
-  }) : _items = _readItems(fixtures ?? objectContractExampleReader, actorId);
+  }) : _items = _readItems(
+         commentThreadWireExample ?? _commentThreadWireExample(),
+         actorId,
+       );
 
   final String actorId;
   List<CommentListItem> _items;
@@ -381,16 +382,11 @@ final class InMemoryContentCommentFacet implements ContentCommentFacet {
   }
 
   static List<CommentListItem> _readItems(
-    ObjectContractExampleReader fixtures,
+    Map<String, Object?> seed,
     String actorId,
   ) {
-    final root = fixtures.document('content');
-    if (root['examples'] is! Map) {
-      throw FormatException('Content alpha fixture examples is missing');
-    }
-    final seed = (root['examples'] as Map)['comment_thread_core'];
-    if (seed is! Map || seed['comments'] is! List) {
-      throw FormatException('comment_thread_core fixture is missing');
+    if (seed['comments'] is! List) {
+      throw FormatException('comment wire example is missing');
     }
     final rawItems = (seed['comments'] as List)
         .whereType<Map>()
@@ -528,3 +524,30 @@ Uri? _optionalUri(String? raw) {
   final value = raw?.trim() ?? '';
   return value.isEmpty ? null : Uri.parse(value);
 }
+
+Map<String, Object?> _commentThreadWireExample() => <String, Object?>{
+  'comments': List<Map<String, Object?>>.generate(182, (index) {
+    final id = switch (index) {
+      0 => 'fixture_comment_parent_001',
+      1 => 'fixture_comment_reply_001',
+      _ => 'fixture_comment_boundary_${index + 1}',
+    };
+    return <String, Object?>{
+      'commentId': id,
+      'postId': 'fixture_photo_001',
+      'authorId': index.isEven ? 'fixture_user_current' : 'fixture_user_friend',
+      'authorDisplayNameSnapshot': index.isEven ? '测试用户' : '契约好友',
+      'content': '对象级评论 ${index + 1}',
+      'createdAt': DateTime.utc(
+        2026,
+        6,
+        5,
+      ).add(Duration(minutes: index)).toIso8601String(),
+      if (index == 1) 'replyToCommentId': 'fixture_comment_parent_001',
+      if (index == 1) 'parentCommentId': 'fixture_comment_parent_001',
+      if (index == 1) 'replyToUserId': 'fixture_user_current',
+      'likeCount': index == 0 ? 128 : index % 13,
+      if (index == 0) 'replyCount': 1,
+    };
+  }, growable: false),
+};

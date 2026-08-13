@@ -57,6 +57,11 @@ final class AppRuntimeDiagnostics with WidgetsBindingObserver {
   final Duration anrWatchdogPeriod;
   final Duration anrStallThreshold;
 
+  /// 首帧后未捕获异常（FlutterError / PlatformDispatcher）的唯一 ES 写入口
+  /// 是否已由本诊断器接管。bootstrap 的 error handler 据此让位，保证同一
+  /// 未捕获异常只产生一条结构化记录，不出现 bootstrap + diagnostics 双写。
+  static bool globalUncaughtCaptureActive = false;
+
   FlutterExceptionHandler? _previousFlutterErrorHandler;
   bool Function(Object, StackTrace)? _previousPlatformErrorHandler;
   late final FlutterExceptionHandler _flutterErrorHandler = _onFlutterError;
@@ -75,6 +80,7 @@ final class AppRuntimeDiagnostics with WidgetsBindingObserver {
   void install() {
     if (_installed) return;
     _installed = true;
+    globalUncaughtCaptureActive = true;
     _previousFlutterErrorHandler = FlutterError.onError;
     FlutterError.onError = _flutterErrorHandler;
     _previousPlatformErrorHandler = PlatformDispatcher.instance.onError;
@@ -93,6 +99,7 @@ final class AppRuntimeDiagnostics with WidgetsBindingObserver {
   void dispose() {
     if (!_installed) return;
     _installed = false;
+    globalUncaughtCaptureActive = false;
     _anrWatchdog?.cancel();
     _anrWatchdog = null;
     WidgetsBinding.instance.removeObserver(this);

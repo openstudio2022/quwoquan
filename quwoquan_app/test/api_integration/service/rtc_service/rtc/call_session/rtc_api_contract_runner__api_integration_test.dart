@@ -1,6 +1,11 @@
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-008
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/media-infrastructure/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-002.t1
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003.t4
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/media-infrastructure/spec.md#gwt-001.t1
 // readiness_case: call_session_initiate_call_app_api
 // readiness_case: call_session_list_calls_app_api
 // readiness_case: call_session_get_call_app_api

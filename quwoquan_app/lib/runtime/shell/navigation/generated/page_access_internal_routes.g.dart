@@ -11,6 +11,7 @@ abstract final class PageAccessInternalRoutes {
   static const String createPagePublishConfirm = 'page_internal_create_publish_confirm';
   static const String createPageArticleTypography = 'page_internal_create_article_typography';
   static const String createPageLocationPicker = 'page_internal_create_location_picker';
+  static const String createPageTagChipPicker = 'page_internal_create_tag_chip_picker';
   static const String createPagePublishCircleSelect = 'page_internal_create_publish_circle_select';
   static const String createPageHomepageSearch = 'page_internal_create_homepage_search';
   static const String circleShellEditSettings = 'page_internal_circle_edit_settings';

@@ -86,6 +86,58 @@ final homepageDetailEntityWishlistStateReaderProvider =
           .wishlistState,
     );
 
+/// workBrowser 沉浸详情态的想去状态读取：详情底栏想去按钮按
+/// primaryHomepageId 锚点读取当前用户 wishlist 状态。
+final workBrowserEntityWishlistStateReaderProvider =
+    Provider<ContentEntityWishlistStateReader>(
+      (ref) => ref
+          .watch(_contentPostReaderFacetsProvider(AppUiSurfaces.workBrowser))
+          .wishlistState,
+    );
+
+/// Gathering 详情页共同经历聚合区读取：某次行动的公开回顾内容分页。
+final gatheringDetailGatheringPostsReaderProvider =
+    Provider<ContentGatheringPostsReader>(
+      (ref) => ref
+          .watch(
+            _contentPostReaderFacetsProvider(AppUiSurfaces.gatheringDetail),
+          )
+          .gatheringPosts,
+    );
+
+/// 四锚点社会证明读取（按 surface 装配）：gathering 详情发起人卡、
+/// 实体主页近期行动区与沉浸详情内容锚点共用同一 typed 读面。
+final gatheringDetailSocialProofReaderProvider =
+    Provider<ContentGatheringSocialProofReader>(
+      (ref) => ref
+          .watch(
+            _contentPostReaderFacetsProvider(AppUiSurfaces.gatheringDetail),
+          )
+          .gatheringSocialProof,
+    );
+
+final homepageDetailSocialProofReaderProvider =
+    Provider<ContentGatheringSocialProofReader>(
+      (ref) => ref
+          .watch(_contentPostReaderFacetsProvider(AppUiSurfaces.homepageDetail))
+          .gatheringSocialProof,
+    );
+
+final workBrowserSocialProofReaderProvider =
+    Provider<ContentGatheringSocialProofReader>(
+      (ref) => ref
+          .watch(_contentPostReaderFacetsProvider(AppUiSurfaces.workBrowser))
+          .gatheringSocialProof,
+    );
+
+/// 我的主页影响力卡「成行力」creator 锚点计数（REQ-008 / OPEN-007 收口）。
+final profileHomeSocialProofReaderProvider =
+    Provider<ContentGatheringSocialProofReader>(
+      (ref) => ref
+          .watch(_contentPostReaderFacetsProvider(AppUiSurfaces.profileHome))
+          .gatheringSocialProof,
+    );
+
 final userProfileContentAuthorPostsReaderProvider =
     Provider<ContentAuthorPostsReader>(
       (ref) => ref

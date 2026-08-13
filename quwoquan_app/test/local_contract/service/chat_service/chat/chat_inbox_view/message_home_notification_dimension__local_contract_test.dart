@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
@@ -121,7 +121,7 @@ AppMessage _interactionMessage({
 Widget _scopedApp(_FakeAppMessageFacet facet) {
   return ProviderScope(
     overrides: [
-      chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
+      ...chatTestRepositoryOverrides(),
       greetingRepositoryProvider.overrideWithValue(alphaGreetingRepository()),
       visitRecorderServiceProvider.overrideWithValue(
         _NoopVisitRecorderService(),

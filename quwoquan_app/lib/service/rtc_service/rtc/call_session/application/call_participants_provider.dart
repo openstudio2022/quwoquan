@@ -1,4 +1,4 @@
-import 'dart:developer' as developer;
+import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_participant_presentation.dart';
@@ -72,11 +72,15 @@ class CallParticipantsNotifier extends Notifier<CallParticipantsState> {
               ),
         );
       } catch (error, stackTrace) {
-        developer.log(
-          'RTC participant presentation resolve failed',
-          name: 'CallParticipantsNotifier',
-          error: error,
-          stackTrace: stackTrace,
+        // 降级为 userId 展示不阻断通话，但解析失败必须结构化上报。
+        unawaited(
+          ref
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'rtc.call_session.participant_presentation_resolve',
+                error: error,
+                stackTrace: stackTrace,
+              ),
         );
       }
     }

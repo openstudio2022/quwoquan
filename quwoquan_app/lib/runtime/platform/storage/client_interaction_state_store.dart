@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/platform/storage/hive_runtime.dart';
 
 const String _clientInteractionStateBoxName = 'client_interaction_state';
@@ -34,8 +36,16 @@ Future<Map<String, dynamic>?> readPersistedInteractionMap(String key) async {
     if (decoded is Map) {
       return decoded.cast<String, dynamic>();
     }
-  } catch (_) {
-    /* best-effort: 本地交互状态损坏时回退到 null，由调用方按未持久化态初始化 */
+  } catch (error, stackTrace) {
+    // 回退到 null（调用方按未持久化态初始化），但投影损坏意味着用户点赞/
+    // 关注离线态丢失，事实必须结构化上报（自带指纹去重）。
+    unawaited(
+      AppExceptionTelemetryService.instance.recordHandledException(
+        source: 'platform.interaction_state_store.read',
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    );
   }
   return null;
 }
@@ -51,8 +61,15 @@ Future<void> writePersistedInteractionMap(
       return;
     }
     await box.put(key, jsonEncode(value));
-  } catch (_) {
-    /* best-effort: 本地交互状态持久化失败仅丢失离线缓存，云端同步仍为真相源 */
+  } catch (error, stackTrace) {
+    // 云端同步仍为真相源，但持久化持续失败会让冷启动丢互动态；上报观测。
+    unawaited(
+      AppExceptionTelemetryService.instance.recordHandledException(
+        source: 'platform.interaction_state_store.write',
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    );
   }
 }
 

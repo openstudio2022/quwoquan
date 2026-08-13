@@ -38,7 +38,7 @@
         "city", "district", "entityType", "sourceKind", "extractor"
       ],
       "properties": {
-        "seedOrigin": {"enum": ["legacy_hint", "current_coverage"]},
+        "seedOrigin": {"enum": ["historical_capsule_hint", "current_coverage"]},
         "seedId": {"$ref": "#/$defs/sha256"},
         "coverageKey": {
           "type": "object",
@@ -83,7 +83,7 @@
       },
       "allOf": [
         {
-          "if": {"properties": {"seedOrigin": {"const": "legacy_hint"}}},
+          "if": {"properties": {"seedOrigin": {"const": "historical_capsule_hint"}}},
           "then": {"required": ["historicalBaseline"]},
           "else": {"not": {"required": ["historicalBaseline"]}}
         },

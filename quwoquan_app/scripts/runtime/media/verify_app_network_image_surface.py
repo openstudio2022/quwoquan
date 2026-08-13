@@ -58,11 +58,27 @@ def _load() -> dict[str, int]:
     }
 
 
-def _write(current: dict[str, int]) -> None:
+def _write(current: dict[str, int]) -> list[str]:
+    """按基线自称的「只减不增」写入，拒绝把新增违规固化成豁免。
+
+    基线文件写着 "Counts may only decrease"，但 ``--write-baseline`` 原先无条件重写，
+    等于给这句话开了一扇后门：新增一处直连图片 API 再跑一次就能转绿。这里用既有基线
+    作为上限——文件已随债务清零而删除时上限为空，于是任何重建都会被挡下。
+
+    返回超过既有上限的条目；非空表示拒绝写入。
+    """
+    ceiling = _load()
+    regressions = [
+        f"{path}: {count} > 既有基线 {ceiling.get(path, 0)}"
+        for path, count in sorted(current.items())
+        if count > ceiling.get(path, 0)
+    ]
+    if regressions:
+        return regressions
     if not current:
         if ALLOWLIST.is_file():
             ALLOWLIST.unlink()
-        return
+        return []
     lines = [
         "version: 1",
         "description: Transitional baseline for pre-AppImage direct image APIs. Counts may only decrease.",
@@ -76,6 +92,7 @@ def _write(current: dict[str, int]) -> None:
             ]
         )
     ALLOWLIST.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return []
 
 
 def main() -> int:
@@ -84,7 +101,15 @@ def main() -> int:
     args = parser.parse_args()
     current = _scan()
     if args.write_baseline:
-        _write(current)
+        regressions = _write(current)
+        if regressions:
+            print(
+                "[app-network-image] BLOCK: 基线只减不增，拒绝把新增直连固化成豁免",
+                file=sys.stderr,
+            )
+            for line in regressions:
+                print(f"  {line}", file=sys.stderr)
+            return 2
         print(f"[app-network-image] wrote baseline entries={len(current)}")
         return 0
 

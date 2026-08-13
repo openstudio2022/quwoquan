@@ -1,6 +1,7 @@
 import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/message_home_rows.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -11,7 +12,7 @@ final messageHomeRowsStateProvider =
           .read(pageLifecycleObservabilityProvider)
           .recordPageState(
             pageName: 'chat_list',
-            route: '/chat',
+            route: AppRoutePaths.chat,
             surface: filter,
             phase: 'onlineLoading',
             source: 'online',
@@ -23,7 +24,7 @@ final messageHomeRowsStateProvider =
             .read(pageLifecycleObservabilityProvider)
             .recordPageState(
               pageName: 'chat_list',
-              route: '/chat',
+              route: AppRoutePaths.chat,
               surface: filter,
               phase: 'onlineSuccess',
               source: 'online',
@@ -38,7 +39,7 @@ final messageHomeRowsStateProvider =
             .read(pageLifecycleObservabilityProvider)
             .recordPageState(
               pageName: 'chat_list',
-              route: '/chat',
+              route: AppRoutePaths.chat,
               surface: filter,
               phase: 'blockingFailure',
               source: 'online',

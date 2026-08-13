@@ -111,3 +111,28 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：领域边界、上下游依赖、工程映射和服务治理清晰。
 - 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 GraphQL hosted read plane 商用证据未完成，阻断全部 legacy REST query 迁移
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺 `POST /graphql` 统一读入口的 hosted 商用证据（api-edge contract 以 `gap_id: GATEWAY_GRAPHQL_READ_HOSTED_EVIDENCE` 声明 `commercial.status: blocked`）。
+  - 缺 API Edge composition root 接入、签名 persisted query registry 发布包与真实 owner Query Slice 的 api_integration 证据。
+  - 在该前置解除前，`verify_graphql_read_rest_command_single_track.py` 计数的 App/public legacy REST query（当前 167 条）无一可完成商用切轨；`content.post.GetPost` 五 slice persisted 链虽已双侧合约齐备，App 仍必须走 REST。
+  - 例外：SearchPage 专属路由已 `commercial: ready`，是当前唯一 hosted GraphQL 读面先例。
+- 完成判定：[`DOM-001`](#dom-001) 对应行为在 hosted GraphQL 读面上满足并有真实测试 `spec_ref`，具体为下列全部达成。
+  - api-edge `/graphql` 路由 `commercial.status` 转为 `ready` 且 gap_id 撤销。
+  - composition root 装配、签名 registry 发布与至少一条 owner Query Slice（建议 `content.post.GetPost`）的 api_integration 证据绑定本节点。
+  - 随后首批迁移波次（零 App 消费的 `GetCounters`、`GetHelperRead`、`GetOwnedMediaAsset` 优先裁决，`GetPost` 作为首条真实切轨）使 `appPublicLegacyRestQueryRoutes` 从 167 严格下降。
+
+<a id="open-003"></a>
+### OPEN-003 App 侧 persisted query 消费缺对象级承载，canonical coverage 无计量单元
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 `gateway.persisted_query_execution.SearchPage` 带已提交 `clientContract`，但 App 侧没有任何对象级生产代码承载它——transport 生成代码归 `lib/runtime/transport/graphql_read/generated`（runtime 横切，按 `object_path_map` 设计不承载对象身份），消费端 adapter 归 `search.search_index_view` 对象。已提交 `object_path_map` 义务模型（有 clientContract 的对象 App 侧必须有 `application + adapters` 层）在全仓报告的缺层对象仅此一个，canonical coverage 门对 `app:api_edge/graphql_read/persisted_query_execution` 因无 owned production coverage unit 而 fail-closed。
+- 收敛二选一（必须整体裁决，禁止只改一处消音）：在 App 侧建立 `lib/service/api_edge_service/graphql_read/persisted_query_execution/{application,adapters}` 对象级 typed port，把 search 对 transport 生成代码的直接消费收口进去；或架构裁定 GraphQL persisted read 端侧承载即 runtime 横切、不产生对象义务，则同步修改 `required_app_layers` 义务模型与 coverage 门的 `expected_app_capability_units` 并在本节点 design 记 DEC。
+- 完成判定：`DOM-001` 对应的工程映射覆盖该对象——canonical coverage 门（`quwoquan_ops/tests/local_contract/gate/test_canonical_coverage__gate__local_contract_test.py` 的 `test_app_scope_measures_the_real_repository_instead_of_an_empty_roster` 与 `test_app_entry_and_l10n_sources_are_measured_not_dropped`）在真实仓库上通过，且 `object_path_map` 缺层报告归零。

@@ -1,3 +1,4 @@
+// readiness_case: feed_delivery_page_edge_recovery_app_uat
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-009
 // spec_ref: specs/feature-tree/runtime/runtime-config/environment-topology-and-packaging/spec.md#gwt-002
 library;

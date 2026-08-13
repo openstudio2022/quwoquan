@@ -5,15 +5,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/conversation_dto.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/user_sync_repository.dart';
 import 'package:quwoquan_app/runtime/di/realtime_message_handler.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/transport/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/conversation_cache_record.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_store.dart';
-import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_search_namespace.dart';
+import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/local_search_namespace.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
@@ -25,6 +28,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/runtime/platform/explicit_test_local_database_path_resolver.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 
 class _FakeUserSyncRepository implements UserSyncRepository {
   @override
@@ -154,7 +159,58 @@ class _CountingUserSyncRepository implements UserSyncRepository {
   }
 }
 
-class _ResyncChatRepository extends MockChatRepository {
+class _ResyncConversationRepository implements ChatConversationRepository {
+  _ResyncConversationRepository(this._delegate);
+
+  final ChatConversationRepository _delegate;
+
+  @override
+  Future<List<MessageHomeRow>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) => _delegate.listMessageHome(filter: filter, cursor: cursor, limit: limit);
+
+  @override
+  Future<List<ChatInboxViewData>> listConversations({
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) => _delegate.listConversations(cursor: cursor, limit: limit);
+
+  @override
+  Future<ChatConversationCreatedViewData> createConversation({
+    required String type,
+    String? title,
+    int? maxGroupSize,
+    List<String>? initialMemberIds,
+    String? idempotencyKey,
+  }) => _delegate.createConversation(
+    type: type,
+    title: title,
+    maxGroupSize: maxGroupSize,
+    initialMemberIds: initialMemberIds,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
+  Future<ConversationViewData> getConversation(String conversationId) =>
+      _delegate.getConversation(conversationId);
+
+  @override
+  Future<void> updateConversationTitle(String conversationId, String title) =>
+      _delegate.updateConversationTitle(conversationId, title);
+
+  @override
+  Future<void> updateConversationSettings({
+    required String conversationId,
+    bool? muted,
+    bool? pinned,
+  }) => _delegate.updateConversationSettings(
+    conversationId: conversationId,
+    muted: muted,
+    pinned: pinned,
+  );
+
   @override
   Future<List<ChatConversationTimestamp>> getConversationTimestamps() async {
     final timestamp = DateTime.utc(2026, 4, 23, 10);
@@ -302,12 +358,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          // ConversationSync 会经 chatRepositoryComposition 触达 generated
-          // operation client：先封死边界，再给对象级会话读写替身。
+          // ConversationSync 依赖对象级 chat facets：先封死 cloud 边界，
+          // 再注入窄会话读写替身。
           ...sealedCloudBoundaryOverrides(),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           userSyncRepositoryProvider.overrideWithValue(
             _FakeUserSyncRepository(),
           ),
@@ -372,12 +426,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          // ConversationSync 会经 chatRepositoryComposition 触达 generated
-          // operation client：先封死边界，再给对象级会话读写替身。
+          // ConversationSync 依赖对象级 chat facets：先封死 cloud 边界，
+          // 再注入窄会话读写替身。
           ...sealedCloudBoundaryOverrides(),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           userSyncRepositoryProvider.overrideWithValue(
             _UserAvatarPatchRepository(),
           ),
@@ -434,13 +486,15 @@ void main() {
       'avatarUrl': 'https://cdn.example.com/old.png?v=1',
       'updatedAt': '2026-04-23T09:00:00.000Z',
     });
+    final facets = ChatTestFacets();
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           ...sealedCloudBoundaryOverrides(),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            _ResyncChatRepository(),
+          ...chatTestRepositoryOverrides(
+            facets: facets,
+            conversation: _ResyncConversationRepository(facets.conversation),
           ),
           userSyncRepositoryProvider.overrideWithValue(
             _GapUserSyncRepository(),
@@ -503,12 +557,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          // ConversationSync 会经 chatRepositoryComposition 触达 generated
-          // operation client：先封死边界，再给对象级会话读写替身。
+          // ConversationSync 依赖对象级 chat facets：先封死 cloud 边界，
+          // 再注入窄会话读写替身。
           ...sealedCloudBoundaryOverrides(),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           userSyncRepositoryProvider.overrideWithValue(syncRepository),
           localChatSearchStoreProvider.overrideWithValue(store),
           activePersonaContextLoaderProvider.overrideWithValue(
@@ -571,12 +623,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          // ConversationSync 会经 chatRepositoryComposition 触达 generated
-          // operation client：先封死边界，再给对象级会话读写替身。
+          // ConversationSync 依赖对象级 chat facets：先封死 cloud 边界，
+          // 再注入窄会话读写替身。
           ...sealedCloudBoundaryOverrides(),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           userSyncRepositoryProvider.overrideWithValue(
             _InvalidAvatarPatchRepository(),
           ),

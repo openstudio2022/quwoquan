@@ -63,4 +63,5 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：缺 `GWT-001` 两条结果子句的逐条证据，3 条绑定测试均无失败路径断言，t2 的 canonical failure 语义没有证据支撑。
+- `circle.stats` 页主面板（圈子与成员统计）已由 `circle-membership` typed capability 供数；点赞排行、`circle_group` 等次级子列表依赖成员行为累积（reaction/群组活动），测试数据控制面暂不承诺确定性 provision，UAT 将子列表空态视为合法冷启动验收态，待行为供给能力落地后收紧。
 - 完成判定：`GWT-001.t1` 与 `GWT-001.t2` 各自被真实测试 `spec_ref` 绑定。

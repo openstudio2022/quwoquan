@@ -54,7 +54,7 @@ import 'package:quwoquan_app/runtime/di/circle_shell_presentation_slots.dart'
     show buildCircleMembershipApprovalPage, buildCircleShellParticipantSlots;
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circle_stats_page.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circles_page.dart';
-import 'package:quwoquan_app/service/content_service/content/post/presentation/create_entry_route_host.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/create_entry_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
 import 'package:quwoquan_app/runtime/di/navigation/create_entry_navigation_arguments.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_page.dart';
@@ -109,6 +109,7 @@ import 'package:quwoquan_app/service/user_service/account/user_account/presentat
 import 'package:quwoquan_app/service/user_service/account/account_session/presentation/login_page.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/persona_management_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/my_footprint_page.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/my_gatherings_page.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_page.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/presentation/blocked_users_page.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/presentation/profile_stats_page.dart';
@@ -593,6 +594,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final initialHomepage = entryArgs?.homepage;
           final initialCircleId = entryArgs?.circleId;
           final initialCircleName = entryArgs?.circleName;
+          final initialGatheringId = entryArgs?.gatheringId;
+          final initialGatheringTitle = entryArgs?.gatheringTitle;
           final draftIdRaw = state.uri.queryParameters['draftId']?.trim();
           final initialDraftId = draftIdRaw != null && draftIdRaw.isNotEmpty
               ? draftIdRaw
@@ -615,6 +618,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               initialHomepage: initialHomepage,
               initialCircleId: initialCircleId,
               initialCircleName: initialCircleName,
+              initialGatheringId: initialGatheringId,
+              initialGatheringTitle: initialGatheringTitle,
               initialDraftId: initialDraftId,
               mediaPickerPort: ProviderScope.containerOf(
                 context,
@@ -980,6 +985,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => appRoutePage<void>(
           state: state,
           child: MyIntersectionInboxPage.fromQuery(state.uri.queryParameters),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.myGatheringsPathTemplate,
+        pageBuilder: (context, state) => appRoutePage<void>(
+          state: state,
+          child: MyGatheringsPage.fromQuery(state.uri.queryParameters),
         ),
       ),
       GoRoute(

@@ -1,3 +1,4 @@
+// readiness_case: skill_subscription_release_consent_app_uat
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-context-proactive-runtime/spec.md#gwt-001
 library;
 

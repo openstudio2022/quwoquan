@@ -49,6 +49,7 @@ void main() {
         kImageEditorProCategoryBwLevels,
         kImageEditorProCategoryCurve,
         kImageEditorProCategoryWhiteBalance,
+        kImageEditorProCategoryPerspective,
       ],
     );
     expect(
@@ -243,6 +244,10 @@ Widget _buildPanelHarness({
             bwBlackLevel: 0,
             onBwWhiteLevelChanged: (_) {},
             onBwBlackLevelChanged: (_) {},
+            perspectiveHorizontal: 0,
+            perspectiveVertical: 0,
+            onPerspectiveHorizontalChanged: (_) {},
+            onPerspectiveVerticalChanged: (_) {},
             proBaseSelectedIndex: 0,
             proBaseValues: const <String, double>{},
             onProBaseSelectedIndexChanged: (_) {},

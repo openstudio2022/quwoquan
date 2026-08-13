@@ -266,6 +266,7 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
         ..addAll(_filterSnapshotStrengthByPresetId);
       _selectedToolIndex = null;
     });
+    _disposeFilterPreviewResources();
   }
 
   void _clearFilterPreviewCache() {
@@ -313,6 +314,7 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
               .toDouble();
       _syncFilterCategoryFromTemplateIndex(safeIndex);
     });
+    _scheduleFilterPreviewRecompute();
   }
 
   void _onFilterIntensityChanged(double value) {
@@ -331,6 +333,7 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
       _filterIntensity = clamped;
       _filterStrengthByPresetId[_selectedFilterPresetId!] = clamped;
     });
+    _scheduleFilterPreviewRecompute();
   }
 
   void _onFilterRemove() {
@@ -339,6 +342,7 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
       _filterTemplateIndex = -1;
       _filterIntensity = 100;
     });
+    _scheduleFilterPreviewRecompute();
   }
 
   void _ensureFilterSelectionForEditing() {
@@ -445,6 +449,129 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
       return data?.buffer.asUint8List();
     } catch (_) {
       return null;
+    }
+  }
+
+  // ---- 滤镜 CPU 预览 session（与烘焙同一管线，GWT-009）----
+  //
+  // 目录小缩略图（上方 _buildFilterPreviewBytes）保留纯矩阵轻量近似（仅供
+  // 挑选参考）；主预览在选中滤镜含细节类参数时由以下 CPU session 接管，
+  // 矩阵 + 细节逐像素与确认烘焙 applyBaseAdjustments 同源不跳变。
+
+  void _disposeFilterPreviewResources() {
+    _filterPreviewBase?.dispose();
+    _filterPreviewBase = null;
+    _filterPreviewBaseRgba = null;
+    _filterPreviewImage?.dispose();
+    _filterPreviewImage = null;
+    _filterPreviewDirty = false;
+    _filterPreviewComputing = false;
+  }
+
+  /// 进入滤镜工具：异步准备降采样底图供 CPU 滤镜预览。
+  void _prepareFilterPreviewSession() {
+    _disposeFilterPreviewResources();
+    unawaited(_loadFilterPreviewBase());
+  }
+
+  Future<void> _loadFilterPreviewBase() async {
+    try {
+      final bytes = await _loadImageBytes(_currentPath);
+      if (bytes.isEmpty || !mounted) return;
+      final image = await ImageEditorExportEngine.decodeConstrained(
+        bytes,
+        maxDimension: ImageEditorExportEngine.kPreviewDecodeDimension,
+      );
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+      _setEditorState(() {
+        _filterPreviewBase = image;
+        _filterPreviewBaseRgba = data?.buffer.asUint8List();
+      });
+      _scheduleFilterPreviewRecompute();
+    } catch (error) {
+      _observability.recordPageState(
+        pageName: _ImageEditorPageState._kPageName,
+        phase: 'failure',
+        surface: _ImageEditorPageState._kSurfaceId,
+        copyKey: 'filter_preview_load',
+        error: error is Exception ? error : null,
+      );
+    }
+  }
+
+  void _scheduleFilterPreviewRecompute() {
+    if (_filterPreviewComputing) {
+      _filterPreviewDirty = true;
+      return;
+    }
+    _filterPreviewDirty = false;
+    _filterPreviewComputing = true;
+    unawaited(_recomputeFilterPreview());
+  }
+
+  Future<void> _recomputeFilterPreview() async {
+    try {
+      final base = _filterPreviewBase;
+      final baseRgba = _filterPreviewBaseRgba;
+      if (base == null || baseRgba == null || !mounted) {
+        return;
+      }
+      final preset = _selectedFilterPreset;
+      final strength =
+          (preset == null
+                  ? 0
+                  : (_filterStrengthByPresetId[preset.id] ?? _filterIntensity))
+              .clamp(0, 100)
+              .toDouble();
+      // 无滤镜或滤镜不含细节参数：交回 GPU 矩阵路径。
+      if (preset == null ||
+          strength <= 0.001 ||
+          !imageEditorFilterHasDetailParams(preset)) {
+        final old = _filterPreviewImage;
+        if (old != null) {
+          _setEditorState(() => _filterPreviewImage = null);
+          old.dispose();
+        }
+        return;
+      }
+      final pixels = Uint8List.fromList(baseRgba);
+      ImageEditorExportEngine.applyColorMatrixToRgbaPixels(
+        pixels,
+        _buildFilterColorMatrix(preset, strength),
+      );
+      ImageEditorExportEngine.applyDetailAdjustmentsToRgbaPixels(
+        pixels,
+        base.width,
+        base.height,
+        _buildFilterDetailSpec(preset, strength),
+      );
+      final buffer = await ui.ImmutableBuffer.fromUint8List(pixels);
+      final descriptor = ui.ImageDescriptor.raw(
+        buffer,
+        width: base.width,
+        height: base.height,
+        pixelFormat: ui.PixelFormat.rgba8888,
+      );
+      final codec = await descriptor.instantiateCodec();
+      final frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      final old = _filterPreviewImage;
+      _setEditorState(() => _filterPreviewImage = frame.image);
+      if (!identical(old, frame.image)) {
+        old?.dispose();
+      }
+    } finally {
+      _filterPreviewComputing = false;
+      if (_filterPreviewDirty && mounted) {
+        _scheduleFilterPreviewRecompute();
+      }
     }
   }
 }

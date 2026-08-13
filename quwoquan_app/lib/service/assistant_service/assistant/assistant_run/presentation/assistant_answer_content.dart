@@ -628,7 +628,7 @@ class AssistantAnswerContent extends StatelessWidget {
 
   static List<_AssistantReferenceItem> _resolveReferenceItemsFromAnswerParts({
     required Map<String, dynamic> runArtifactsMap,
-    required List<Map<String, dynamic>> uiReferences,
+    required List<AssistantCitation> uiReferences,
   }) {
     final items = <_AssistantReferenceItem>[];
     final runArtifacts = _resolveRunArtifactsFromMap(runArtifactsMap);
@@ -660,18 +660,16 @@ class AssistantAnswerContent extends StatelessWidget {
       return items;
     }
     for (var index = 0; index < uiReferences.length; index++) {
-      final reference = uiReferences[index];
-      final citation = AssistantCitation.tryFromReferenceMap(reference);
-      if (citation == null) continue;
+      final citation = uiReferences[index];
       final url = citation.externalUrl;
       items.add(
         _AssistantReferenceItem(
           index: index + 1,
-          title: (reference['title'] as String?)?.trim().isNotEmpty == true
-              ? (reference['title'] as String).trim()
+          title: citation.title.isNotEmpty
+              ? citation.title
               : (url.isNotEmpty ? url : citation.destination.objectId ?? ''),
-          source: (reference['source'] as String?)?.trim() ?? '',
-          snippet: (reference['snippet'] as String?)?.trim() ?? '',
+          source: citation.source,
+          snippet: citation.snippet,
           label: '[${index + 1}]',
           citation: citation,
         ),

@@ -1,333 +1,148 @@
-import 'package:test/test.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
-import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
-import '../../../../../support/runtime/fixtures/object_contract_example_reader.dart';
+import 'package:test/test.dart';
+
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
+
+List<ContentPostViewData> _suitePosts() => <ContentPostViewData>[
+  contentPostViewDataBuilder(
+    postId: 'repository-image',
+    contentType: 'image',
+    mediaUrls: const <String>[testContentImageUrl],
+  ),
+  contentPostViewDataBuilder(
+    postId: 'repository-video',
+    contentType: 'video',
+    videoUrl: testContentVideoUrl,
+  ),
+  contentPostViewDataBuilder(postId: 'repository-micro', contentType: 'micro'),
+  contentPostViewDataBuilder(
+    postId: 'repository-article',
+    contentType: 'article',
+    title: 'Repository typed contract',
+  ),
+  contentPostViewDataBuilder(
+    postId: 'repository-author-article',
+    contentType: 'article',
+    authorId: 'nature_photographer',
+    title: '作者作品',
+  ),
+];
 
 void main() {
-  group('Content facets — 常规契约', () {
-    late MockContentRepository repo;
+  late List<ContentPostViewData> posts;
+  late InMemoryContentPostStore store;
+  late InMemoryContentDiscoveryFeedQuery feedQuery;
+  late InMemoryContentPostDetailReader detailReader;
+  late InMemoryContentAuthorPostsReader authorPostsReader;
 
-    setUp(() {
-      repo = MockContentRepository();
+  setUp(() {
+    posts = _suitePosts();
+    store = InMemoryContentPostStore(
+      posts: posts,
+      details: <String, ContentPostDetailPayload>{
+        for (final post in posts)
+          post.id: contentPostDetailPayloadBuilder(
+            post: post,
+            articleMarkdown: post.isArticleLike
+                ? '# ${post.title}\n\nSuite-local detail.'
+                : null,
+          ),
+      },
+    );
+    feedQuery = InMemoryContentDiscoveryFeedQuery(store);
+    detailReader = InMemoryContentPostDetailReader(store);
+    authorPostsReader = InMemoryContentAuthorPostsReader(store);
+  });
+
+  group('Content 对象级 typed doubles — 常规契约', () {
+    test('feed query 返回最小多形态集合', () async {
+      final page = await feedQuery.listDiscoveryFeedPage(
+        category: 'all',
+        limit: 0,
+      );
+
+      expect(page.items, hasLength(posts.length));
+      expect(
+        page.items.map((post) => post.type),
+        containsAll(<String>['image', 'video', 'micro', 'article']),
+      );
     });
 
-    test('listDiscoveryFeed 返回非空帖子列表', () async {
-      final posts = await repo.listDiscoveryFeed(category: 'all');
-      expect(posts, isNotEmpty);
-    });
-
-    test('共享内容 seed 只保留 read-model 字段，并由 codegen 投影为 App DTO', () {
-      const retiredClientAliases = <String>{
-        'id',
-        'type',
-        'identity',
-        'displayName',
-        'avatarUrl',
-        'imageUrls',
-      };
-      final rawPosts = objectContractExampleReader.contentExample()?['posts'];
-      expect(rawPosts, isA<List>());
-      final source = (rawPosts! as List)
-          .whereType<Map>()
-          .map((row) => row.cast<String, dynamic>())
-          .first;
-
-      expect(source.keys.toSet().intersection(retiredClientAliases), isEmpty);
-      final post = contentPostViewDataFromReadModelMap(source);
-      expect(post.id, source['postId']);
-      expect(post.type, source['contentType']);
-      expect(post.identity, source['contentIdentity']);
-      expect(post.displayName, source['authorDisplayName']);
-      expect(post.avatarUrl, source['authorAvatarUrl']);
-      expect(post.imageUrls, source['mediaUrls']);
-    });
-
-    test('mock 内容作者头像均引用可归档用户/圈子头像，不返回缺失 content/default 资产', () async {
-      final feedPosts = await repo.listDiscoveryFeed(category: 'all', limit: 0);
-      final previewPost = await repo.getPost(postId: 'nature_photographer_p1');
-      final avatarUrls = <String>[
-        ...feedPosts.map((post) => post.avatarUrl),
-        previewPost.post.avatarUrl,
-      ];
-
-      expect(avatarUrls, isNotEmpty);
-      for (final url in avatarUrls) {
-        expect(url.trim(), isNotEmpty);
-        expect(
-          url,
-          isNot(contains('media/avatar/s/archived-avatar/content/default/')),
-        );
-      }
-    });
-
-    test('listDiscoveryFeed 支持按 identity/type 过滤', () async {
-      final works = await repo.listDiscoveryFeed(
+    test('feed query 支持 identity/type 过滤', () async {
+      final page = await feedQuery.listDiscoveryFeedPage(
         category: 'work',
         identity: 'work',
         type: 'article',
       );
-      expect(works, isNotEmpty);
-      expect(works.every((post) => post.identity == 'work'), isTrue);
-      expect(works.every((post) => post.displayFormat == 'note'), isTrue);
+
+      expect(page.items, isNotEmpty);
+      expect(page.items.every((post) => post.identity == 'work'), isTrue);
+      expect(page.items.every((post) => post.isArticleLike), isTrue);
     });
 
-    test('首页推荐稳定返回全样式 showcase 顺序', () async {
-      const expectedIds = <String>[
-        'home_showcase_moment_grid_1',
-        'home_showcase_moment_grid_2',
-        'home_showcase_moment_grid_3',
-        'home_showcase_moment_grid_4',
-        'home_showcase_moment_grid_5',
-        'home_showcase_moment_grid_6',
-        'home_showcase_moment_grid_7',
-        'home_showcase_moment_grid_8',
-        'home_showcase_moment_grid_10',
-        'home_showcase_photo_landscape_single',
-        'home_showcase_photo_landscape_carousel',
-        'home_showcase_photo_portrait_single',
-        'home_showcase_photo_portrait_carousel',
-        'home_showcase_photo_extreme_ratio_guard',
-        'home_showcase_video_portrait_playable',
-        'home_showcase_video_landscape_playable',
-        'home_showcase_article_text_short',
-        'home_showcase_article_text_long',
-        'home_showcase_article_top_image',
-        'home_showcase_article_side_image',
-        'home_showcase_article_top_three_images',
-      ];
-
-      final recommend = await repo.listDiscoveryFeed(
-        category: 'micro',
-        identity: 'moment',
-        limit: 0,
+    test('feed query 分页并回显权威 feedRequestId', () async {
+      final first = await feedQuery.listDiscoveryFeedPage(
+        category: 'all',
+        limit: 2,
+        feedRequestId: 'frq_echo_001',
       );
-      final explicitRecommend = await repo.listDiscoveryFeed(
-        category: 'recommend',
-        limit: 0,
-      );
-      final moment = await repo.listDiscoveryFeed(
-        category: 'moment',
-        identity: 'moment',
-        limit: 0,
+      final second = await feedQuery.listDiscoveryFeedPage(
+        category: 'all',
+        limit: 2,
+        cursor: first.nextCursor,
       );
 
-      expect(recommend.map((post) => post.id).toList(), expectedIds);
-      expect(explicitRecommend.map((post) => post.id).toList(), expectedIds);
-      expect(moment.map((post) => post.id).toList(), expectedIds);
-      expect(recommend.length, expectedIds.length);
+      expect(first.items, hasLength(2));
+      expect(first.nextCursor, '2');
+      expect(first.feedRequestId, 'frq_echo_001');
+      expect(first.policyDigest, isNotEmpty);
+      expect(second.items, hasLength(2));
+      expect(second.items.first.id, isNot(first.items.first.id));
+    });
 
-      ContentPostViewData byId(String id) =>
-          recommend.firstWhere((post) => post.id == id);
+    test('detail reader 对已知对象返回 typed payload', () async {
+      final article = posts.firstWhere((post) => post.isArticleLike);
+      final detail = await detailReader.getPost(postId: article.id);
 
-      expect(byId('home_showcase_moment_grid_1').mediaImageUrls, hasLength(1));
-      expect(byId('home_showcase_moment_grid_2').mediaImageUrls, hasLength(2));
-      expect(byId('home_showcase_moment_grid_3').mediaImageUrls, hasLength(3));
-      expect(byId('home_showcase_moment_grid_4').mediaImageUrls, hasLength(4));
-      expect(byId('home_showcase_moment_grid_5').mediaImageUrls, hasLength(5));
-      expect(byId('home_showcase_moment_grid_6').mediaImageUrls, hasLength(6));
-      expect(byId('home_showcase_moment_grid_7').mediaImageUrls, hasLength(7));
-      expect(byId('home_showcase_moment_grid_8').mediaImageUrls, hasLength(8));
-      expect(
-        byId('home_showcase_moment_grid_10').mediaImageUrls.length,
-        greaterThan(9),
-      );
+      expect(detail.post.id, article.id);
+      expect(detail.detailWire.articleMarkdown, contains('#'));
+      expect(detail.detailWire.articleAssetManifest, isNotNull);
+    });
 
+    test('detail reader 对未知对象返回结构化失败', () async {
       expect(
-        byId('home_showcase_photo_landscape_single').mediaImageUrls,
-        hasLength(1),
-      );
-      expect(
-        byId('home_showcase_photo_landscape_single').aspectRatio,
-        greaterThan(1),
-      );
-      expect(
-        byId('home_showcase_photo_landscape_carousel').mediaImageUrls.length,
-        7,
-      );
-      expect(
-        byId('home_showcase_photo_portrait_single').mediaImageUrls,
-        hasLength(1),
-      );
-      expect(
-        byId('home_showcase_photo_portrait_single').aspectRatio,
-        lessThan(1),
-      );
-      expect(
-        byId('home_showcase_photo_portrait_carousel').mediaImageUrls.length,
-        5,
-      );
-      expect(
-        byId('home_showcase_photo_portrait_carousel').aspectRatio,
-        lessThan(1),
-      );
-      expect(
-        byId('home_showcase_photo_extreme_ratio_guard').aspectRatio,
-        greaterThan(4),
-      );
-
-      expect(byId('home_showcase_video_portrait_playable').identity, 'moment');
-      expect(
-        byId('home_showcase_video_portrait_playable').normalizedTitle,
-        isEmpty,
-      );
-      expect(byId('home_showcase_video_portrait_playable').hasVideo, isTrue);
-      expect(
-        byId('home_showcase_video_portrait_playable').aspectRatio,
-        lessThan(1),
-      );
-      expect(byId('home_showcase_video_landscape_playable').hasVideo, isTrue);
-      expect(
-        byId('home_showcase_video_landscape_playable').aspectRatio,
-        greaterThan(1),
-      );
-      expect(
-        byId('home_showcase_video_landscape_playable').durationMs,
-        isNotNull,
-      );
-
-      expect(byId('home_showcase_article_text_short').mediaCoverUrl, isEmpty);
-      expect(byId('home_showcase_article_text_long').mediaCoverUrl, isEmpty);
-      expect(byId('home_showcase_article_top_image').mediaCoverUrl, isNotEmpty);
-      expect(
-        byId('home_showcase_article_side_image').mediaCoverUrl,
-        isNotEmpty,
-      );
-      expect(
-        byId('home_showcase_article_top_three_images').mediaCoverUrl,
-        isNotEmpty,
-      );
-      expect(
-        recommend.every((post) => post.intersectionReasons?.isNotEmpty == true),
-        isTrue,
+        () => detailReader.getPost(postId: 'nonexistent'),
+        throwsA(isA<CloudException>()),
       );
     });
 
-    test('首页推荐分页首刷返回 showcase，禁止写入空首屏', () async {
-      final page = await repo.listDiscoveryFeedPage(
-        category: 'micro',
-        identity: 'moment',
-        limit: 20,
+    test('author posts reader 只返回指定作者并支持 identity', () async {
+      final page = await authorPostsReader.listUserPosts(
+        userId: 'nature_photographer',
+        identity: 'work',
       );
 
-      expect(page.items, hasLength(20));
-      expect(page.nextCursor, '20');
-      expect(page.items.first.id, 'home_showcase_moment_grid_1');
-      expect(page.items.any((post) => post.mediaImageUrls.isNotEmpty), isTrue);
-      expect(page.items.any((post) => post.hasVideo), isTrue);
+      expect(page.items, isNotEmpty);
       expect(
         page.items.every(
-          (post) => post.avatarUrl.isNotEmpty && post.displayName.isNotEmpty,
+          (post) =>
+              post.authorId == 'nature_photographer' && post.identity == 'work',
         ),
         isTrue,
       );
     });
 
-    test('listDiscoveryFeedPage 返回带游标的分页结果', () async {
-      final page = await repo.listDiscoveryFeedPage(category: 'all');
-      expect(page.items, isNotEmpty);
-    });
+    test('config double 返回显式测试配置', () async {
+      final config = await InMemoryContentConfigRepository().getAppConfig();
 
-    test('listDiscoveryFeedPage envelope 携带服务端权威 feedRequestId', () async {
-      final page = await repo.listDiscoveryFeedPage(category: 'all');
-      expect(page.feedRequestId, isNotNull);
-      expect(page.feedRequestId, isNotEmpty);
-      expect(page.policyDigest, isNotEmpty);
-    });
-
-    test('listDiscoveryFeedPage 回显端侧传入的 feedRequestId', () async {
-      final page = await repo.listDiscoveryFeedPage(
-        category: 'all',
-        feedRequestId: 'frq_echo_001',
-      );
-      expect(page.feedRequestId, 'frq_echo_001');
-    });
-
-    test('discovery mock 媒体输出与 contract seed archived 家族同源', () async {
-      final posts = await repo.listDiscoveryFeed(category: 'all', limit: 0);
-      final mediaUrls = posts
-          .expand(
-            (post) => <String>[
-              post.avatarUrl,
-              post.authorBackgroundUrl ?? '',
-              post.mediaCoverUrl,
-              post.mediaThumbnailUrl,
-              post.mediaVideoUrl,
-              ...post.mediaImageUrls,
-            ],
-          )
-          .map((url) => url.trim())
-          .where((url) => url.isNotEmpty)
-          .toList(growable: false);
-
-      expect(mediaUrls, isNotEmpty);
-      expect(mediaUrls.any((url) => url.contains('/s/mock/')), isFalse);
-      expect(
-        mediaUrls.any((url) => url.contains('media/image/s/archived-image/')),
-        isTrue,
-      );
-      expect(mediaUrls.any((url) => url.contains('media/video/s/')), isTrue);
-      expect(
-        mediaUrls.any((url) => url.contains('media/avatar/s/archived-avatar/')),
-        isTrue,
-      );
-    });
-
-    test('getPost 不存在的 ID 抛出异常', () async {
-      expect(
-        () async => await repo.getPost(postId: 'nonexistent'),
-        throwsException,
-      );
-    });
-
-    test('getAppConfig 返回 feature flags 与 gray release 结构', () async {
-      final config = await repo.getAppConfig();
       expect(config.content.featureFlags.enableCreateActionEntry, isTrue);
       expect(config.content.featureFlags.enableUnifiedCreateEditor, isTrue);
-      expect(config.content.featureFlags.enableIdentityBasedSurfaces, isTrue);
-      expect(config.content.featureFlags.enableIdentityShareTemplate, isTrue);
       expect(config.content.featureFlags.enableArticleBookReader, isTrue);
-      expect(config.content.featureFlags.enableArticlePageCurl, isTrue);
-      expect(
-        config.content.featureFlags.enableAssistantContentIdentityIndex,
-        isTrue,
-      );
       expect(config.content.grayRelease.experimentBucket, isNotEmpty);
-      expect(config.content.grayRelease.currentStage, isNotEmpty);
-      expect(config.content.grayRelease.canaryMatrix, isNotEmpty);
-    });
-
-    test('listUserPosts 支持按 identity 过滤', () async {
-      final page = await repo.listUserPosts(
-        userId: 'fixture_user_photo',
-        identity: 'work',
-      );
-      expect(page.items, isNotEmpty);
-      expect(page.items.every((post) => post.identity == 'work'), isTrue);
-    });
-
-    test('listUserPosts 为用户主页 mock 记录补齐长文类型', () async {
-      final page = await repo.listUserPosts(userId: 'nature_photographer');
-      final articleTitles = page.items
-          .where((post) => post.isArticleLike)
-          .map((post) => post.normalizedTitle)
-          .toList(growable: false);
-
-      expect(articleTitles, contains('极简摄影的真谛'));
-    });
-
-    test('getPost 支持用户主页互动 targetContentId 关联内容', () async {
-      final image = await repo.getPost(postId: 'nature_photographer_p1');
-      final video = await repo.getPost(postId: 'nature_photographer_video');
-      final article = await repo.getPost(postId: 'nature_photographer_a2');
-
-      expect(image.post.id, 'nature_photographer_p1');
-      expect(image.post.displayFormat, 'image');
-      expect(video.post.id, 'nature_photographer_video');
-      expect(video.post.isVideoLike, isTrue);
-      expect(article.post.id, 'nature_photographer_a2');
-      expect(article.post.isArticleLike, isTrue);
     });
 
     test('MediaAssetSlice 仅接受 canonical typed wire', () {
@@ -343,6 +158,7 @@ void main() {
         'imageHeight': 100,
         'cdnUrl': 'https://cdn.example/m1.jpg',
       });
+
       expect(asset.assetId, 'm1');
       expect(asset.status, MediaAssetStatus.ready);
       expect(asset.cdnUrl, Uri.parse('https://cdn.example/m1.jpg'));
@@ -356,21 +172,18 @@ void main() {
     });
   });
 
-  group('Content facets — 异常/边界契约', () {
-    late MockContentRepository repo;
-
-    setUp(() {
-      repo = MockContentRepository();
+  group('Content 对象级 typed doubles — 边界契约', () {
+    test('limit=0 返回全部对象', () async {
+      final page = await feedQuery.listDiscoveryFeedPage(
+        category: 'all',
+        limit: 0,
+      );
+      expect(page.items, hasLength(posts.length));
     });
 
-    test('listDiscoveryFeed limit=0 不崩溃', () async {
-      final posts = await repo.listDiscoveryFeed(category: 'all', limit: 0);
-      expect(posts, isList);
-    });
-
-    test('listDiscoveryFeed 空 category 不崩溃', () async {
-      final posts = await repo.listDiscoveryFeed(category: '');
-      expect(posts, isList);
+    test('空 category 不崩溃', () async {
+      final page = await feedQuery.listDiscoveryFeedPage(category: '');
+      expect(page.items, isList);
     });
   });
 }

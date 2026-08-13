@@ -1,3 +1,4 @@
+// readiness_case: contact_discovery_phone_contacts_app_uat
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-002
 /// 物理通讯录 → production Remote discovery → typed Follow → capability
 /// readback 的标准 Patrol source runner。

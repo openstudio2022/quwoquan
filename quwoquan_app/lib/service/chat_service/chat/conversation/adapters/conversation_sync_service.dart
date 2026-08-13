@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/user_sync_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/conversation_cache_record.dart';
@@ -125,8 +128,17 @@ class ConversationSyncService {
       }
 
       return hasChanges;
-    } catch (_) {
+    } catch (error, stackTrace) {
       _lastFullSyncFailed = true;
+      // 全量同步失败保持 fail-soft（下次防抖窗口重试），但必须留下结构化
+      // 观测，长期失败不得静默。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'chat_conversation_full_sync',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       return false;
     } finally {
       _syncing = false;
@@ -279,7 +291,15 @@ class ConversationSyncService {
   Future<SearchActorScope?> _resolveNamespace() async {
     try {
       return await personaContextLoader();
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // namespace 解析失败跳过本次同步（fail-soft），但失败必须可观测。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'chat_conversation_sync_namespace',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       return null;
     }
   }

@@ -89,11 +89,28 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 chat 事件尚未接入通知投递
+### OPEN-001 通知投递主链已接入，剩 integration 通道通用化与真机证据
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前通知服务不消费任何会话事件，离线用户既收不到设备推送也没有投递记录，消息可达性在离线场景下为零。
+- 影响或价值：尚缺 iOS 普通 alert 推送端点种类（现有 `apns_voip` 仅来电，APNs VoIP 通道对 alert 返回结构化不可用）；
+  尚缺 `GWT-001` 真机推送证据（父能力凭据阻断）。
+  事件到投影到投递记录终态的 api_integration 证据已补：真 Redis durable stream 加真 Mongo 加真 PresenceClient，
+  在线抑制、裁剪预览、DedupeKey 重放收敛，见 `chat_offline_push_stream__reliability__api_integration_test.go`。
+  integration 通用 alert 通道已落地：契约 `PushDeliveryAction` 扩展 alert 类别（十字段严格白名单、来电字段互斥），
+  FCM 使用 notification 加 data 组合形状（通知栏 title/body 加 targetType/targetId 路由锚点），
+  notification 侧 `Deliver` 按收件人真实设备端点逐端点组装提交（无端点按无操作完成），
+  证据见 `push_alert_channel__local_contract_test.go` 与 `integration_delivery_adapter__contract__local_contract_test.go`。
+  三段主链已落地并有 local_contract 证据。
+  第一段：chat-service `MessageSent`（仅 outbox 主路径）扇出面向 notification 的 `events.chat.messages` durable stream，
+  收件人排除发送者、载荷最小化不带 card/media/mentions，证据见 `chat_message_offline_stream__local_contract_test.go`。
+  第二段：notification-service `ChatOfflinePushProjectionHandler` 经既有 interaction consumer 基座消费（DLQ 与失败计数共用），
+  presence 在线抑制、离线收件人各一条 push 投递作业（幂等键为 eventId 加 recipient、重放收敛）、不落 AppMessage inbox、
+  投递记录只带不超过 64 rune 的裁剪预览不留正文、单收件人失败不中断其余；`object.yaml` 已登记 `chat.message.MessageSent` 消费者，
+  kill-switch 经 `NOTIFICATION_CHAT_OFFLINE_PUSH_ENABLED`，证据见 `chat_offline_push_projection__local_contract_test.go` 与 `chat_offline_push_consumer__local_contract_test.go`。
+  第三段：App 推送 tap 路由 `PushTapNavigator` 把冷启动初始消息与后台点开消息经同一链处理（targetType 为 conversation 时直达 `chatDetail`），
+  来电帧隔离、不可承接目标静默、非 Android 平台一致降级，`MarkAsRead` 由会话页打开流程既有逻辑执行，
+  证据见 `push_tap_navigation__local_contract_test.dart`；前台抑制语义由服务端 presence 在线抑制承担（在线用户不产生推送作业）。
 - 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
-- 依赖：父能力 `OPEN-001` 的受控凭据
+- 依赖：父能力 `OPEN-001` 的受控凭据；integration-service push_delivery 契约演进。

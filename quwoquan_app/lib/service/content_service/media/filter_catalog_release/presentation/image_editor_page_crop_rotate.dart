@@ -213,9 +213,11 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
       final bytes = await _loadImageBytes(_currentPath);
       if (bytes.isEmpty) return null;
       final image = await ImageEditorExportEngine.decodeConstrained(bytes);
-      final adjusted = await ImageEditorExportEngine.applyColorMatrix(
+      // 滤镜与整体面板同源：纯色彩矩阵 + 细节类逐像素管线（GWT-009）。
+      final adjusted = await ImageEditorExportEngine.applyBaseAdjustments(
         image,
-        _buildFilterColorMatrix(preset, strength.toDouble()),
+        colorMatrix: _buildFilterColorMatrix(preset, strength.toDouble()),
+        detail: _buildFilterDetailSpec(preset, strength.toDouble()),
       );
       image.dispose();
       return _writeImageToTemp(adjusted, 'filter');
@@ -400,6 +402,9 @@ extension _ImageEditorPageCropRotate on _ImageEditorPageState {
       }
       _selectedToolIndex = null;
     });
+    if (toolIndex == kImageEditorToolFilter) {
+      _disposeFilterPreviewResources();
+    }
   }
 
   /// 剪裁底部 X：放弃剪裁，仅退出剪裁面板，返回图片编辑器。

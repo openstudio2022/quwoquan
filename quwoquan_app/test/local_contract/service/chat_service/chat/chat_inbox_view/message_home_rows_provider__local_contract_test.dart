@@ -3,18 +3,19 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
-import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/message_home_rows.dart';
 import 'package:quwoquan_app/runtime/di/chat_message_application_dependencies.dart';
+
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 
 void main() {
   group('messageHomeRowsProvider', () {
     test('透传 filter 并映射 conversation 行', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: chatTestRepositoryOverrides(conversation: repo),
       );
       addTearDown(container.dispose);
 
@@ -33,7 +34,7 @@ void main() {
     test('notification 行生成 notification id，不当作会话', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: chatTestRepositoryOverrides(conversation: repo),
       );
       addTearDown(container.dispose);
 
@@ -51,7 +52,7 @@ void main() {
     test('未读角标数汇总 unread filter 的 unreadCount', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: chatTestRepositoryOverrides(conversation: repo),
       );
       addTearDown(container.dispose);
 
@@ -64,7 +65,7 @@ void main() {
     test('会话已读刷新会失效所有 MessageHome filter', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: chatTestRepositoryOverrides(conversation: repo),
       );
       addTearDown(container.dispose);
 
@@ -98,7 +99,7 @@ void main() {
     test('远端刷新失败保留 last-confirmed 并进入错误态', () async {
       final repo = _FakeChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: chatTestRepositoryOverrides(conversation: repo),
       );
       addTearDown(container.dispose);
 
@@ -121,7 +122,7 @@ void main() {
     test('被失效的迟到响应不能覆盖较新的 authoritative 结果', () async {
       final repo = _ControlledChatRepository();
       final container = ProviderContainer(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: chatTestRepositoryOverrides(conversation: repo),
       );
       addTearDown(container.dispose);
 
@@ -169,7 +170,8 @@ void main() {
   });
 }
 
-final class _ControlledChatRepository extends MockChatRepository {
+final class _ControlledChatRepository extends Fake
+    implements ChatConversationRepository {
   final List<Completer<List<MessageHomeRow>>> responses =
       <Completer<List<MessageHomeRow>>>[];
 
@@ -186,7 +188,8 @@ final class _ControlledChatRepository extends MockChatRepository {
   }
 }
 
-final class _FakeChatRepository extends MockChatRepository {
+final class _FakeChatRepository extends Fake
+    implements ChatConversationRepository {
   final List<String> requestedFilters = <String>[];
   final Set<String> _readConversationIds = <String>{};
   bool failRequests = false;

@@ -216,16 +216,6 @@
 - 目标：领域边界、上下游依赖、工程映射和服务治理清晰。
 - 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效
 
-<a id="open-002"></a>
-### OPEN-002 圈子发现聚合读模型契约
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：ListCircleDiscoveryFeed 是圈子频道唯一聚合读接口；服务端完成 category、subCategory、scope、可见性和成员范围过滤，App 不得 listCircles 后逐圈拉取 feed。
-- 完成判定：`DOM-002` 对应行为满足且真实测试 `spec_ref` 有效
-
 <a id="open-003"></a>
 ### OPEN-003 Gathering 目标所有权与跨域闭环尚未准出
 

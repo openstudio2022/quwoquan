@@ -4,6 +4,9 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/app
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/remote_search_repository.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+// 生成 barrel 尚未导出 interpretedQuery 投影类型；测试树受控深 import。
+// ignore: implementation_imports
+import 'package:quwoquan_cloud_contracts/src/generated/search/owner_search_interpreted_query.g.dart';
 
 void main() {
   test(
@@ -74,6 +77,7 @@ final class _UserSearchQueryFacet implements CanonicalSearchQueryFacet {
     DateTime? deadlineAt,
   }) async {
     return SearchResponseView(
+        interpretedQuery: OwnerSearchInterpretedQuery(normalized: 'q'),
       provenance: CanonicalSearchProvenance(
         provider: 'elasticsearch',
         generatedAt: DateTime.utc(2026, 7, 31),
@@ -108,6 +112,7 @@ final class _AllTargetsFacet implements CanonicalSearchQueryFacet {
     DateTime? deadlineAt,
   }) async {
     return SearchResponseView(
+        interpretedQuery: OwnerSearchInterpretedQuery(normalized: 'q'),
       provenance: CanonicalSearchProvenance(
         provider: 'elasticsearch',
         generatedAt: DateTime.utc(2026, 7, 31),

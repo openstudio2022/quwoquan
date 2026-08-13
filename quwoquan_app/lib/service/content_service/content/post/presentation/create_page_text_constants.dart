@@ -3,6 +3,12 @@
 /// 页面局部新增文案从 [UITextConstants] 大桶拆出，避免共享常量文件继续膨胀。
 abstract final class CreatePageText {
   static const String photoPageTitle = '图片创作';
+
+  /// 共同经历回流上下文条（发布回顾）。
+  static const String gatheringContextPrefix = '来自：';
+  static const String gatheringContextSuffix = ' · 发布到这次共同经历';
+  static const String gatheringContextFallbackTitle = '这次行动';
+  static const String gatheringContextRemove = '移除关联';
   static const String titleFieldLabel = '标题';
   static const String writeSomethingFirst = '先写点内容';
   static const String publishNotCompleted = '发布未完成';

@@ -227,7 +227,13 @@ class MediaDownloadCache {
 
       _evictIfNeeded();
       _completeRequest(request, localPath);
-    } catch (_) {
+    } catch (error) {
+      // 下载失败按 cache miss 降级（调用方回退远程 URL），但失败事实必须
+      // 可观测，网络/存储异常不得静默消失。
+      _telemetrySink.record('media.download_failed', <String, Object?>{
+        'key': request.key,
+        'error': error.toString(),
+      });
       _completeRequest(request, null);
     } finally {
       _inflightByKey.remove(request.key);

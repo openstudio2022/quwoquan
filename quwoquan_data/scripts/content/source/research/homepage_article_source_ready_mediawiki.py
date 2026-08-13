@@ -18,6 +18,7 @@ from core.runtime_policy import active_runtime_policy
 
 from content.post.article.evidence_text import score_source_markdown
 from content.source.contracts import MediaProvenance
+from content.source.fetch_payload import fetch_source_payload
 from content.source.mediawiki_page import fetch_mediawiki_page_bundle_for_url
 from content.source.research import network_io
 from content.source.research.article_frontier_profile import (
@@ -25,8 +26,12 @@ from content.source.research.article_frontier_profile import (
     article_search_sites,
     resolve_article_source_binding,
 )
+from content.source.research.baike_com import resolve_toutiao_baike_page
 from content.source.research.homepage_article_source_ready_wikidata import (
     wikidata_structured_fact,
+)
+from content.source.research.homepage_structured_fact_text import (
+    extract_structured_fact_from_text,
 )
 from content.source.research.homepage_article_source_attribution import (
     encyclopedia_source_attribution,
@@ -113,11 +118,72 @@ def _entity_ref(planned: Mapping[str, Any]) -> str:
     return f"/entity/{parts[0]}/{parts[1]}/{name}"
 
 
+def _baike_structured_fact(
+    *,
+    entity_name: str,
+    geo_context_terms: tuple[str, ...],
+) -> tuple[str, object, str, str, float, bytes] | None:
+    """Discover one governed Baike encyclopedia fact for a Wikipedia body.
+
+    The narrative body stays bound to the already qualified Wikipedia page;
+    only the structured fact rides an independent encyclopedia fact source,
+    exactly as ``structuredFactsPolicy`` splits the two evidence tracks.
+    """
+
+    try:
+        resolution = resolve_toutiao_baike_page(
+            entity_name,
+            geo_context_terms=geo_context_terms,
+        )
+        if resolution is None:
+            return None
+        payload = fetch_source_payload(
+            resolution.url,
+            source={
+                "sourceKind": "toutiao_baike",
+                "extractor": "toutiao_baike_html",
+                "fetchable": True,
+            },
+            include_page_images=False,
+            entity_id=entity_name,
+        )
+    except (OSError, RuntimeError, TypeError, ValueError):
+        return None
+    text = str(payload.get("text") or "").strip()
+    if not text:
+        return None
+    extracted = extract_structured_fact_from_text(text)
+    if extracted is None:
+        return None
+    field, value = extracted
+    raw_body = payload.get("htmlBytes")
+    raw_body = bytes(raw_body) if isinstance(raw_body, bytes | bytearray) else b""
+    raw = json.dumps(
+        {
+            "schema": "quwoquan_data.homepage_baike_fact_source_raw_evidence",
+            "entityName": entity_name,
+            "resolvedTitle": resolution.title,
+            "matchedTerm": resolution.matched_term,
+            "matchConfidence": resolution.match_confidence,
+            "sourceUrl": resolution.url,
+            "bodyText": text,
+            "htmlContentSha256": _sha256(raw_body),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return field, value, "toutiao_baike", resolution.url, 0.8, raw
+
+
 def _structured_fact_material(
     wikitext: str,
     *,
+    rendered_text: str,
     resolved_title: str,
     source_url: str,
+    entity_name: str = "",
+    geo_context_terms: tuple[str, ...] = (),
 ) -> tuple[str, object, str, str, float, bytes | None]:
     official_url = ""
     for match in re.finditer(
@@ -144,11 +210,21 @@ def _structured_fact_material(
             if -500 <= altitude <= 9000:
                 field = "altitudeMeters"
                 value = altitude
+    if not field:
+        extracted = extract_structured_fact_from_text(rendered_text)
+        if extracted is not None:
+            field, value = extracted
     if field:
         return field, value, "wikipedia", source_url, 0.9, None
     wikidata = wikidata_structured_fact(resolved_title)
     if wikidata is not None:
         return wikidata
+    baike = _baike_structured_fact(
+        entity_name=entity_name or resolved_title,
+        geo_context_terms=geo_context_terms,
+    )
+    if baike is not None:
+        return baike
     raise MediaWikiSourceReadyRejected(
         "homepage source lacks an immutable structured fact"
     )
@@ -355,14 +431,27 @@ def acquire_mediawiki_source_ready_candidate(
             )
         fact_material = _structured_fact_material(
             bundle.wikitext,
+            rendered_text=bundle.rendered_text,
             resolved_title=bundle.resolved_title,
             source_url=source_url,
+            entity_name=str(planned.get("candidateName") or ""),
+            geo_context_terms=tuple(
+                term
+                for term in (
+                    str(planned.get(scope) or "").strip()
+                    for scope in ("province", "city", "district")
+                )
+                if term
+            ),
         )
         if fact_material[-1] is not None:
+            external_raw_key = (
+                "baikeRaw" if fact_material[2] == "toutiao_baike" else "wikidataRaw"
+            )
             raw_evidence = json.dumps(
                 {
                     "mediawikiRaw": bundle.raw,
-                    "wikidataRaw": fact_material[-1].decode("utf-8"),
+                    external_raw_key: fact_material[-1].decode("utf-8"),
                 },
                 ensure_ascii=False,
                 sort_keys=True,
@@ -527,6 +616,8 @@ def acquire_mediawiki_source_ready_candidate(
                 "fileSha256",
                 "safetyEvidence",
                 "accessEvidence",
+                "usageScope",
+                "modelReleaseStatus",
             ):
                 row.pop(field)
             row["sourceUnitId"] = source_unit_id

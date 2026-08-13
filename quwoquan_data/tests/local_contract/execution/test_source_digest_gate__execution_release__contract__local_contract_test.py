@@ -68,33 +68,34 @@ def test_source_digest_gate__rejects_release_receipt_drift__contract__local_cont
     ) == [f"{aggregate}: sourceDigests drift from release header"]
 
 
-def test_source_digest_gate__accepts_identity_bound_legacy_digest__contract__local_contract(
+def test_source_digest_gate__rejects_identity_annotated_frozen_digest__contract__local_contract(
     tmp_path: Path,
 ) -> None:
     digest = current_source_digest().to_document()
     digest["inputs"] = ["quwoquan_data/historical/pre-contract-source"]
     identities = [
         {
-            "identityKind": "legacy_canonical_migration",
+            "identityKind": "retired-kind-must-not-unlock-frozen-inputs",
             "sourceDigest": digest["digest"],
         }
     ]
-    for relative in (
-        "releases/example/payload/release.json",
-        "releases/example/attestations/release.json",
-    ):
-        _write(
-            tmp_path / relative,
-            {"sourceDigests": [digest], "sourceIdentities": identities},
-        )
+    header = tmp_path / "releases/example/payload/release.json"
+    aggregate = tmp_path / "releases/example/attestations/release.json"
+    for path in (header, aggregate):
+        _write(path, {"sourceDigests": [digest], "sourceIdentities": identities})
 
-    assert source_digest_issues(
+    issues = source_digest_issues(
         executions_root=tmp_path / "tasks",
         release_root=tmp_path / "releases",
-    ) == []
+    )
+
+    assert issues == [
+        f"{header}: sourceDigest.inputs must name the fixed repository inputs",
+        f"{aggregate}: sourceDigest.inputs must name the fixed repository inputs",
+    ]
 
 
-def test_source_digest_gate__rejects_unbound_legacy_digest__contract__local_contract(
+def test_source_digest_gate__rejects_frozen_digest__contract__local_contract(
     tmp_path: Path,
 ) -> None:
     digest = current_source_digest().to_document()

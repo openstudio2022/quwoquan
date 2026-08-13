@@ -6,28 +6,35 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
-import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/generated/homepage_ui_config.g.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/generated/homepage_ui_config.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/link_templates.g.dart';
 import 'package:quwoquan_app/runtime/transport/links/app_public_content_links.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+import 'package:quwoquan_app/runtime/di/homepage_circle_presentation_slots.dart'
+    show buildHomepageRecentGatheringsSlot;
+import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart'
+    show objectSharedReasonsProvider;
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_kind_mapping.dart'
+    show intersectionMutualCountOf;
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/runtime/di/navigation/create_entry_navigation_arguments.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/homepage_product_action_tracker.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/domain/homepage_tab.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/homepage_detail_shell.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
-    show
-        activePersonaContextProvider,
-        chatConversationRepositoryProvider,
-        journeyEventTrackerProvider;
+    show activePersonaContextProvider, journeyEventTrackerProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
     show homepageQueryProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
@@ -186,9 +193,67 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       onOpenIntroduction: _openIntroduction,
       onOpenRecord: _openRecord,
       onAttach: (reference) => context.pop(reference),
+      onStartGathering: _wishlistIntentApplicable ? _startGatheringHere : null,
+      buildRecentGatherings: _wishlistIntentApplicable
+          ? ({required bool isDark}) => buildHomepageRecentGatheringsSlot(
+              homepageId: widget.homepageId,
+              isDark: isDark,
+            )
+          : null,
       onReviewsChanged: () => unawaited(_load()),
       requireReviewAuth: _requireReviewAuth,
       reviewContinuationResumeToken: _reviewContinuationResumeToken,
+    );
+  }
+
+  /// 在这里发起：persona host 携实体来源引用进入 Gathering 创建。
+  /// 发起不依赖交集存在；游客由创建路由的登录门与续接承接。
+  void _startGatheringHere() {
+    final detail = _detail;
+    if (detail == null) {
+      return;
+    }
+    unawaited(
+      trackHomepageProductAction(
+        ref.read(journeyEventTrackerProvider),
+        action: 'start_gathering_here',
+        pageName: AppUiSurfaces.homepageDetail.id,
+        result: 'success',
+        startedAt: DateTime.now(),
+        homepageId: widget.homepageId,
+      ),
+    );
+    context.push(
+      AppRoutePaths.gatheringCreate,
+      extra: GatheringCreateNavigationRequest(
+        actionKey: 'start_gathering',
+        actionLabel: ObjectHomepageText.entityActionStartGathering,
+        sourceRefs: <GatheringCreateSourceReference>[
+          GatheringCreateSourceReference(
+            sourceRef: 'homepage',
+            objectId: widget.homepageId,
+            objectKind: 'homepage',
+            routeId: 'homepageDetail',
+          ),
+        ],
+        targetObject: GatheringCreateTargetObject(
+          objectId: widget.homepageId,
+          objectKind: 'homepage',
+          objectName: detail.title,
+          routeId: 'homepageDetail',
+        ),
+        intersection: const GatheringCreateIntersectionContext(
+          intersectionId: '',
+          dimension: '',
+          intersectionClass: '',
+        ),
+        evidence: const GatheringCreateEvidenceContext(
+          evidenceId: '',
+          sourceRef: 'homepage',
+          tagRefs: <String>[],
+        ),
+        referralSource: ReferralSource.entityPage,
+      ),
     );
   }
 
@@ -551,6 +616,64 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         homepageId: widget.homepageId,
       ),
     );
+    if (wishlisted) {
+      await _showWishlistIntersectionFeedback();
+    } else {
+      AppToast.show(context, ObjectHomepageText.wishlistRemovedFeedback);
+    }
+  }
+
+  /// 想去的即时回报（诚实两态，与沉浸页同构）：有对象交集 → 点名共同人数；
+  /// 无 → 只确认「已加入想去清单」，不伪造同行者。页面内交集卡即完整证据，
+  /// 不附加跳转动作。
+  Future<void> _showWishlistIntersectionFeedback() async {
+    final personaId = ref
+        .read(authSessionControllerProvider)
+        .activePersonaId
+        .trim();
+    List<IntersectionReason> reasons = const <IntersectionReason>[];
+    try {
+      reasons = await ref.read(
+        objectSharedReasonsProvider(
+          ObjectIntersectionQuery(
+            objectAId: personaId,
+            objectAType: 'person',
+            objectBId: widget.homepageId,
+            objectBType: 'homepage',
+          ),
+        ).future,
+      );
+    } catch (error, stackTrace) {
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'entity.homepage.wishlist_intersection_feedback',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    final wishReason = reasons.isEmpty
+        ? null
+        : reasons.firstWhere(
+            (reason) => reason.kind == 'coWishlistedEntity',
+            orElse: () => reasons.first,
+          );
+    final mutualCount = wishReason == null
+        ? 0
+        : intersectionMutualCountOf(wishReason);
+    if (wishReason == null || mutualCount <= 0) {
+      AppToast.show(context, ObjectHomepageText.wishlistAddedFeedback);
+      return;
+    }
+    AppToast.show(
+      context,
+      ObjectHomepageText.wishlistSharedFeedback(mutualCount),
+    );
   }
 
   Future<void> _toggleHomepageFollow(HomepageDetail detail) async {
@@ -622,7 +745,11 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     }
   }
 
-  Future<void> _openOwnerMessage() async {
+  /// 私信 Owner：进入 owner 主页并立即执行主页既有的「私信 / 打招呼」
+  /// 关系能力位分流（canOpen→会话 / canGreet→打招呼 / pending→提示）。
+  /// 陌生人破冰、`greeting_required` 门禁与登录续接全部复用主页实现，
+  /// 实体侧不再直建会话绕过 conversation-entry 矩阵。
+  void _openOwnerMessage() {
     final ownerPersonaId =
         (_detail?.ownerPersonaId?.trim().isNotEmpty == true
                 ? _detail!.ownerPersonaId
@@ -631,69 +758,23 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
     if (ownerPersonaId == null || ownerPersonaId.isEmpty) {
       return;
     }
-    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
-      ref
-          .read(authContinuationProvider.notifier)
-          .set(
-            OpenHomepageOwnerConversationContinuation(
-              homepageId: widget.homepageId,
-              ownerPersonaId: ownerPersonaId,
-            ),
-          );
-      await requireLogin(
-        ref,
-        context,
-        AuthGateReason.sendMessage,
-        dismissFallback: AppRoutePaths.homepageDetail(id: widget.homepageId),
-        dismissPolicy: LoginDismissPolicy.safeFallback,
-      );
-      return;
-    }
-    final startedAt = DateTime.now();
-    try {
-      final created = await ref
-          .read(chatConversationRepositoryProvider)
-          .createConversation(
-            type: 'direct',
-            initialMemberIds: <String>[ownerPersonaId],
-          );
-      if (!mounted || created.conversationId.isEmpty) {
-        return;
-      }
-      unawaited(
-        trackHomepageProductAction(
-          ref.read(journeyEventTrackerProvider),
-          action: 'message_owner',
-          pageName: AppUiSurfaces.homepageDetail.id,
-          result: 'success',
-          startedAt: startedAt,
-          homepageId: widget.homepageId,
-        ),
-      );
-      context.push(AppRoutePaths.chatDetail(id: created.conversationId));
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      final resolved = runtimeErrorSemantic(
-        context,
-        error: error,
-        category: UiErrorCategory.submit,
-        scope: UiErrorScope.global,
-      );
-      await AppActionErrorFeedback.show(context, semantic: resolved);
-      unawaited(
-        trackHomepageProductAction(
-          ref.read(journeyEventTrackerProvider),
-          action: 'message_owner',
-          pageName: AppUiSurfaces.homepageDetail.id,
-          result: 'failure',
-          startedAt: startedAt,
-          homepageId: widget.homepageId,
-          error: error,
-        ),
-      );
-    }
+    unawaited(
+      trackHomepageProductAction(
+        ref.read(journeyEventTrackerProvider),
+        action: 'message_owner',
+        pageName: AppUiSurfaces.homepageDetail.id,
+        result: 'success',
+        startedAt: DateTime.now(),
+        homepageId: widget.homepageId,
+      ),
+    );
+    context.push(
+      AppRoutePaths.userProfile(userHandle: ownerPersonaId),
+      extra: UserProfileRouteExtra(
+        personaId: ownerPersonaId,
+        openMessageComposer: true,
+      ),
+    );
   }
 
   void _resumeHomepageInteractionAfterLogin() {
@@ -728,16 +809,6 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
         controller.set(follow);
       }
       return;
-    }
-    final message = controller
-        .take<OpenHomepageOwnerConversationContinuation>();
-    if (message == null) {
-      return;
-    }
-    if (message.homepageId == widget.homepageId) {
-      unawaited(_openOwnerMessage());
-    } else {
-      controller.set(message);
     }
   }
 

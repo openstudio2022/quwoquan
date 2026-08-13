@@ -219,6 +219,11 @@ final class GatheringDetailPageCopy {
     required this.admissionApproval,
     required this.admissionInviteOnly,
     required this.noRequirements,
+    required this.recapAction,
+    required this.sharedExperienceTitle,
+    required this.sharedExperienceSingleTitle,
+    required this.sharedExperienceEndedEmpty,
+    required this.organizerStatsLabel,
   });
 
   final String pageTitle;
@@ -270,6 +275,11 @@ final class GatheringDetailPageCopy {
   final String admissionApproval;
   final String admissionInviteOnly;
   final String noRequirements;
+  final String recapAction;
+  final String sharedExperienceTitle;
+  final String sharedExperienceSingleTitle;
+  final String sharedExperienceEndedEmpty;
+  final String organizerStatsLabel;
 
   String primaryAction(GatheringPrimaryAction value) => switch (value) {
     GatheringPrimaryAction.join => joinAction,

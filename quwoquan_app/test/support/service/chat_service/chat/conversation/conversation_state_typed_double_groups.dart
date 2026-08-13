@@ -212,9 +212,18 @@ extension AlphaChatGroupState on InMemoryChatStateEngine {
           'subtitle': subtitle,
           'avatarUrl': _text(contact['avatarUrl']),
           'relationState': _text(contact['relationState']),
-          'summaryIntersections': subtitle.isEmpty
-              ? const <String>[]
-              : <String>[subtitle],
+          // typed 交集事实 wire（≤2 条）；double 只在有解释句时给一条最小事实。
+          'intersectionFacts': subtitle.isEmpty
+              ? const <Map<String, Object?>>[]
+              : <Map<String, Object?>>[
+                  <String, Object?>{
+                    'intersectionId': 'ix_double_$userId',
+                    'kind': 'sharedCircle',
+                    'dimension': 'relationship',
+                    'intersectionClass': 'fact',
+                    'primaryText': subtitle,
+                  },
+                ],
           'sourceEntityTitle': '',
           'sourceCircleTitle': '',
           'memberCount': 0,
@@ -245,7 +254,7 @@ extension AlphaChatGroupState on InMemoryChatStateEngine {
             circle['coverUrl'],
           ]),
           'relationState': 'not_following',
-          'summaryIntersections': const <String>[],
+          'intersectionFacts': const <Map<String, Object?>>[],
           'sourceEntityTitle': '',
           'sourceCircleTitle': '',
           'memberCount': _int(circle['memberCount']),
@@ -273,7 +282,7 @@ extension AlphaChatGroupState on InMemoryChatStateEngine {
           'subtitle': _text(conversation['lastMessagePreview']),
           'avatarUrl': _text(conversation['avatarUrl']),
           'relationState': 'not_following',
-          'summaryIntersections': const <String>[],
+          'intersectionFacts': const <Map<String, Object?>>[],
           'sourceEntityTitle': '',
           'sourceCircleTitle': '',
           'memberCount': _int(conversation['memberCount']),

@@ -509,7 +509,10 @@ abstract class _DiscoveryFeedMapLoadingCore
         .adoptServerFeedRequestId(page.feedRequestId);
     ref
         .read(postInteractionStateProvider.notifier)
-        .applyConfirmedPosts(page.items);
+        .applyConfirmedPosts(
+          page.items,
+          pendingLikePostIds: ref.read(pendingLikeSyncPostIdsProvider),
+        );
     final seen = _boundedSeenItemIds(
       const <String>[],
       residentWindow.visibleItems.map((item) => item.id),

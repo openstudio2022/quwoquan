@@ -2,8 +2,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart';
 import 'package:quwoquan_app/runtime/di/content_behavior_dependencies.dart';
@@ -21,7 +24,7 @@ import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 /// 对象页交集区块（V4 · 商用完整态 · 三主页统一）。
 ///
 /// 设计与产品（设计师 + 产品经理视角）：
-/// - 统一 async 三态：loading → 骨架；data → 交集卡或空态行动引导（常驻行动区）；error → 收起（不报错噪声，交集是增强位）。
+/// - 统一 async 三态：loading → 骨架；data → 交集卡或空态行动引导（常驻行动区）；error → 低打扰软卡 + 重试（保留恢复入口，不整页报错）。
 /// - 旅程无断点（§7.3）：命中 [intersectionHighlightIntentProvider] 且对象匹配时，透传 highlightKind 自动展开高亮，并消费意图（一次性）。
 /// - 三主页（用户/圈子/实体）共用本组件，杜绝各页各态。
 class ObjectIntersectionSection extends ConsumerWidget {
@@ -57,8 +60,20 @@ class ObjectIntersectionSection extends ConsumerWidget {
 
     final Widget body = async.when(
       loading: () => ObjectIntersectionCardSkeleton(isDark: isDark),
-      // error 时收起：交集是增强位，不以错误噪声打断对象页主体验。
-      error: (_, _) => const SizedBox.shrink(),
+      // error 时保留低打扰软卡 + 重试：交集承载「为什么推荐」解释，
+      // 无声消失会让用户在重进页面前永远失去该内容与恢复入口。
+      error: (error, _) => AppSectionErrorCard(
+        semantic: ensureRetryUiErrorSemantic(
+          runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.sectionLoad,
+            scope: UiErrorScope.section,
+          ),
+        ),
+        margin: EdgeInsets.zero,
+        onAction: (_) async => ref.invalidate(objectSharedReasonsProvider(query)),
+      ),
       data: (reasons) => _buildCard(
         context,
         ref,

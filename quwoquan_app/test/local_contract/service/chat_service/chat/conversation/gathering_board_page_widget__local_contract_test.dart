@@ -256,7 +256,7 @@ void main() {
     expect(find.text('当前设备暂不可打开地图'), findsOneWidget);
     expect(find.text('当前设备没有可用日历'), findsOneWidget);
     expect(
-      find.byIcon(CupertinoIcons.exclamationmark_circle),
+      find.byIcon(CupertinoIcons.info_circle),
       findsNWidgets(3),
     );
     expect(find.text('请带三脚架，集合后统一确认返程。'), findsOneWidget);

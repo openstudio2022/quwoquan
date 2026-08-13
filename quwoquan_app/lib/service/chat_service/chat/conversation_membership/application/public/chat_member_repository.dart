@@ -2,14 +2,10 @@ import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 List<ConversationMemberListRow> sortChatMemberRows(
   List<ConversationMemberListRow> members,
-  String? sort,
+  MemberListSort? sort,
 ) {
-  final normalized = switch (sort?.trim()) {
-    'display_name_asc' => 'display_name_asc',
-    _ => 'joined_asc',
-  };
   final copy = List<ConversationMemberListRow>.from(members);
-  if (normalized == 'display_name_asc') {
+  if (sort == MemberListSort.displayNameAsc) {
     copy.sort((a, b) {
       final da = a.displayName.isNotEmpty ? a.displayName : a.userId;
       final db = b.displayName.isNotEmpty ? b.displayName : b.userId;
@@ -34,7 +30,7 @@ abstract interface class ChatMemberRepository {
     String? cursor,
     required int limit,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   });
 
   Future<List<ConversationMemberListRow>> searchMembers({

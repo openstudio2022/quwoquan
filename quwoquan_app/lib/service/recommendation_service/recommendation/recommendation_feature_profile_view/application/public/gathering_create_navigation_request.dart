@@ -65,6 +65,8 @@ final class GatheringCreateNavigationRequest {
     required this.intersection,
     required this.evidence,
     required this.referralSource,
+    this.inviteePersonaId = '',
+    this.inviteeDisplayName = '',
   });
 
   final String actionKey;
@@ -74,4 +76,12 @@ final class GatheringCreateNavigationRequest {
   final GatheringCreateIntersectionContext intersection;
   final GatheringCreateEvidenceContext evidence;
   final ReferralSource referralSource;
+
+  /// 双人邀约（1对1 同好邀约）：从人对人交集发起时携带受邀者。
+  /// 非空即进入双人预设——maxParticipants=2 + admission=invite_only，
+  /// 发布成功后自动向该 persona 发出披露安全邀请。
+  final String inviteePersonaId;
+  final String inviteeDisplayName;
+
+  bool get isDuoInvitation => inviteePersonaId.trim().isNotEmpty;
 }

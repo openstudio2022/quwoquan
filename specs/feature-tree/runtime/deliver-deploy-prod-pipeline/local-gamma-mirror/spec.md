@@ -130,7 +130,7 @@
 - canonical：`quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml` 与 `quwoquan_service/services/*/deploy/compose.yaml`
 - canonical：`quwoquan_ops/environments`
 - canonical：`quwoquan_ops/gate/verify_service_architecture.py`
-- canonical：`quwoquan_ops/cli/lib/orphan_compose_teardown.py`
+- canonical：`quwoquan_ops/cli/lib/orphan_compose_teardown/`
 
 ## 5. 验收场景
 
@@ -224,7 +224,7 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：尚缺真实 main 候选 Gamma 回执与直接 `spec_ref`；目标：gamma-local 既是开发与提交前的主验证链，也是绑定当前 candidate digest 的正式 Prod 前置阻断阶段。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 完成判定：`GWT-001` 的 17 条 THEN 组全部具备子句级 `spec_ref`（`gwt-001.t1..t17`）绑定的真实测试或可执行门证据，且 Gamma 回执必须绑定真实 main 候选的 candidate digest。
 
 <a id="open-002"></a>
 ### OPEN-002 prod canary 远端复验证据

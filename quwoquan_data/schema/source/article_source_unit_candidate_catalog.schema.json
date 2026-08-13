@@ -7,7 +7,6 @@
   "required": [
     "schema",
     "catalogId",
-    "catalogVersion",
     "policyRevision",
     "sourceRevision",
     "sourceDigest",
@@ -20,7 +19,6 @@
   "properties": {
     "schema": {"const": "quwoquan_data.article_source_unit_candidate_catalog"},
     "catalogId": {"type": "string", "minLength": 1},
-    "catalogVersion": {"type": "string", "minLength": 1, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$"},
     "policyRevision": {"const": "article-source-registry-v1"},
     "sourceRevision": {"$ref": "#/$defs/sha256"},
     "sourceDigest": {"$ref": "#/$defs/sha256"},

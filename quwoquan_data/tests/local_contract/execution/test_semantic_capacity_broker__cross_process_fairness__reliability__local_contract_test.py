@@ -193,6 +193,39 @@ def test_capacity_receipt_is_create_once_and_binds_invocation(
     assert path.is_file()
 
 
+def test_source_review_receipt_uses_shared_lease_without_execution_id(tmp_path, monkeypatch) -> None:
+    broker = SemanticCapacityBroker(tmp_path, pid_alive=lambda _pid: True)
+    monkeypatch.setattr(
+        "content.execution.agent.capacity_broker._provider_runtime_version",
+        lambda _provider: "cursor-sdk 1.0.0",
+    )
+    lease = broker.acquire(
+        AgentProvider.CURSOR_SDK, lane="image", capacity=4,
+        wait_timeout_seconds=1, lease_ttl_seconds=10,
+    )
+    receipt, path = broker.write_capacity_receipt(
+        lease,
+        source_review={
+            "sourceRevision": "sha256:" + "1" * 64,
+            "sourceDigest": "sha256:" + "2" * 64,
+            "entityCatalogDigest": "sha256:" + "3" * 64,
+            "executionBundleDigest": "sha256:" + "4" * 64,
+            "handoffDigest": "sha256:" + "5" * 64,
+            "requestDigest": "sha256:" + "6" * 64,
+        },
+        model="grok-4.5", role="reviewer", prompt="source review",
+        outcome=AgentRunOutcome.finished(
+            provider=AgentProvider.CURSOR_SDK, run_id="cursor-run", result_text="{}",
+        ),
+        runtime_profile_id="semantic_agent_local_calibrated",
+    )
+    lease.release()
+
+    assert "executionId" not in receipt
+    assert receipt["sourceReview"]["requestDigest"] == "sha256:" + "6" * 64
+    assert "source-review-" in path.as_posix()
+
+
 def test_retry_after_circuit_preserves_retryability(tmp_path) -> None:
     broker = SemanticCapacityBroker(tmp_path, pid_alive=lambda _pid: True)
     circuit = broker.open_circuit(

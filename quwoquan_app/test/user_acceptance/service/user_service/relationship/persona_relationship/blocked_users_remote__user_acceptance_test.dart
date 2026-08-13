@@ -1,3 +1,4 @@
+// readiness_case: persona_relationship_blocked_users_app_uat
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
 /// Patrol UAT 前置由公开 User API 创建两个 disposable actor 与真实 block edge。
 ///

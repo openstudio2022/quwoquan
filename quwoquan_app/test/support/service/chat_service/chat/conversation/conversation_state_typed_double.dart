@@ -5,7 +5,7 @@ import 'dart:convert' show jsonEncode, utf8;
 import 'package:crypto/crypto.dart';
 import 'package:quwoquan_cloud_contracts/chat_contracts.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
+import 'chat_state_seed_builder.dart';
 
 part 'conversation_state_typed_double_conversations.dart';
 part 'conversation_state_typed_double_groups.dart';
@@ -56,29 +56,21 @@ ChatFixtureCursorPage _fixtureCursorPage(
 
 /// local_contract 使用的纯 Dart chat 对象状态引擎。
 ///
-/// 初始数据按需读取 chat/circle 服务 canonical 场景；production composition 与
+/// 初始数据只接受当前 suite 显式给出的 Chat 对象 seed；production composition 与
 /// Patrol/UAT 不可达。
 final class InMemoryChatStateEngine {
   InMemoryChatStateEngine({
-    ObjectContractExampleReader? fixtures,
+    required ChatStateSeed seed,
     List<ChatFixtureObject>? seedConversations,
     Map<String, List<ChatFixtureObject>>? seedMembers,
     Map<String, List<ChatFixtureObject>>? seedMessages,
   }) {
-    final scenarioReader = fixtures ?? objectContractExampleReader;
-    final chatRoot = scenarioReader.document('chat');
-    final examples = _asObject(chatRoot['examples']);
-    final core = _asObject(examples['chat_core']);
-    final contacts = _asObject(examples['chat_contacts_core']);
-    final settings = _asObject(examples['chat_settings_core']);
-
-    currentUserId = _text(core['currentUserId']);
+    currentUserId = seed.currentUserId.trim();
     if (currentUserId.isEmpty) {
-      throw const FormatException('chat_core.currentUserId is required');
+      throw const FormatException('ChatStateSeed.currentUserId is required');
     }
 
-    final conversationRows =
-        seedConversations ?? _objectList(core['conversations']);
+    final conversationRows = seedConversations ?? seed.conversations;
     for (final row in conversationRows) {
       final id = _text(row['id']);
       if (id.isNotEmpty) {
@@ -86,17 +78,17 @@ final class InMemoryChatStateEngine {
       }
     }
 
-    final memberRows = seedMembers ?? _objectListMap(core['members']);
+    final memberRows = seedMembers ?? seed.members;
     for (final entry in memberRows.entries) {
       _members[entry.key] = entry.value.map(_copy).toList(growable: true);
     }
 
-    final messageRows = seedMessages ?? _objectListMap(core['messages']);
+    final messageRows = seedMessages ?? seed.messages;
     for (final entry in messageRows.entries) {
       _messages[entry.key] = entry.value.map(_copy).toList(growable: true);
     }
 
-    for (final row in _objectList(core['userStates'])) {
+    for (final row in seed.userStates) {
       if (_text(row['userId']) == currentUserId) {
         final conversationId = _text(row['conversationId']);
         if (conversationId.isNotEmpty) {
@@ -106,25 +98,21 @@ final class InMemoryChatStateEngine {
     }
 
     _contacts.addAll(
-      _objectList(contacts['contacts']).where(_hasAvatarMediaObject).map((row) {
+      seed.contacts.where(_hasAvatarMediaObject).map((row) {
         final contact = _copy(row);
         contact['userHandle'] = _text(row['userHandle']);
         return contact;
       }),
     );
-    _contactCircleIds.addAll(_stringList(contacts['circleIds']));
-    _contactGroupConversationIds.addAll(
-      _stringList(contacts['groupConversationIds']),
-    );
-
-    for (final row in _objectList(settings['settings'])) {
+    _contactCircleIds.addAll(seed.contactCircleIds);
+    _contactGroupConversationIds.addAll(seed.contactGroupConversationIds);
+    _circleRows.addAll(seed.circleRows.map(_copy));
+    for (final row in seed.settings) {
       final conversationId = _text(row['conversationId']);
       if (conversationId.isNotEmpty) {
         _groupSettings[conversationId] = _copy(row);
       }
     }
-
-    _circleRows.addAll(_readCircleRows(scenarioReader));
     _materializeGroupAvatarMetadata();
   }
 
@@ -290,15 +278,6 @@ final class InMemoryChatStateEngine {
         );
       }
     }
-  }
-
-  static List<ChatFixtureObject> _readCircleRows(
-    ObjectContractExampleReader fixtures,
-  ) {
-    final root = fixtures.document('circle');
-    final examples = _asObject(root['examples']);
-    final core = _asObject(examples['circle_core']);
-    return _objectList(core['circles']).map(_copy).toList(growable: false);
   }
 
   static bool _hasAvatarMediaObject(ChatFixtureObject row) =>

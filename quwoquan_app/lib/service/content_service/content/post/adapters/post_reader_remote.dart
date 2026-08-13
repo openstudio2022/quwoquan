@@ -19,6 +19,8 @@ final class RemoteContentPostReaderAdapter
         ContentPostDetailReader,
         ContentEntityWishlistStateReader,
         ContentAuthorPostsReader,
+        ContentGatheringPostsReader,
+        ContentGatheringSocialProofReader,
         ContentPostPublicationStatusReader {
   const RemoteContentPostReaderAdapter({
     required this.client,
@@ -92,6 +94,39 @@ final class RemoteContentPostReaderAdapter
     return CursorPage<ContentPostViewData>(
       items: response.items.map(projectionMapper.toDto).toList(growable: false),
       nextCursor: response.nextCursor,
+    );
+  }
+
+  @override
+  Future<CursorPage<ContentPostViewData>> listPostsByGathering({
+    required String gatheringId,
+    String? cursor,
+    int limit = ContentGatheringPostsQuery.defaultLimit,
+  }) async {
+    final response = await client.contentPostListPostsByGathering(
+      ContentGatheringPostsQuery(
+        gatheringId: gatheringId,
+        cursor: cursor,
+        limit: limit,
+      ),
+      context: invocationContext(ContentRequestPageIds.listPostsByGathering),
+    );
+    return CursorPage<ContentPostViewData>(
+      items: response.items.map(projectionMapper.toDto).toList(growable: false),
+      nextCursor: response.nextCursor,
+    );
+  }
+
+  @override
+  Future<GatheringSocialProofSummary> getGatheringSocialProof({
+    required String anchorKind,
+    required String objectId,
+  }) {
+    return client.contentPostGetGatheringSocialProof(
+      GetGatheringSocialProofQuery(anchorKind: anchorKind, objectId: objectId),
+      context: invocationContext(
+        ContentRequestPageIds.getGatheringSocialProof,
+      ),
     );
   }
 

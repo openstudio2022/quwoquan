@@ -3,8 +3,6 @@ import 'dart:convert' show utf8;
 import 'package:crypto/crypto.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
-
 /// Alpha/test 的 ProfileInteraction typed Facet。
 ///
 /// 数据只来自 metadata seed manifest 生成的 immutable bundle；seen/read 事实按
@@ -116,12 +114,8 @@ final class InMemoryProfileInteractionFacet
   }
 
   static List<_InMemoryProfileActivityRow> _loadRows() {
-    final root = objectContractExampleReader.document('content');
-    if (root['examples'] is! Map) {
-      throw const FormatException('content fixture examples are missing');
-    }
-    final seed = (root['examples'] as Map)['profile_share_interaction_core'];
-    if (seed is! Map || seed['profileShareInteractions'] is! List) {
+    final seed = _profileShareInteractionWireExample();
+    if (seed['profileShareInteractions'] is! List) {
       return <_InMemoryProfileActivityRow>[];
     }
     return (seed['profileShareInteractions'] as List)
@@ -335,4 +329,48 @@ DateTime _requiredDateTime(Object? value, String name) {
     throw FormatException('$name must be an ISO-8601 timestamp');
   }
   return parsed;
+}
+
+Map<String, Object?> _profileShareInteractionWireExample() {
+  const states = <String>[
+    'active',
+    'active',
+    'active',
+    'deleted',
+    'private',
+    'reviewing',
+    'author_deactivated',
+  ];
+  return <String, Object?>{
+    'profileShareInteractions': List<Map<String, Object?>>.generate(
+      states.length,
+      (index) {
+        final received = index != 1;
+        return <String, Object?>{
+          'interactionId': 'share_fixture_${index + 1}',
+          'activityType': 'share',
+          'direction': received ? 'received' : 'sent',
+          'ownerPersonaId': 'fixture_user_current',
+          'actorPersonaId': received
+              ? 'fixture_user_friend'
+              : 'fixture_user_current',
+          'actorDisplayName': received ? '林清越' : '测试用户',
+          'targetPersonaId': received
+              ? 'fixture_user_current'
+              : 'fixture_user_photo',
+          'targetContentId': 'fixture_content_${index + 1}',
+          'targetKind': index == 2 ? 'discussion' : 'record',
+          'targetAvailability': states[index],
+          'previewMediaKind': states[index] == 'active'
+              ? (index == 0 ? 'video' : 'image')
+              : 'none',
+          'previewImageUrl': states[index] == 'active'
+              ? 'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png'
+              : '',
+          'occurredAt': '2026-07-${12 - index}T08:10:00Z',
+        };
+      },
+      growable: false,
+    ),
+  };
 }

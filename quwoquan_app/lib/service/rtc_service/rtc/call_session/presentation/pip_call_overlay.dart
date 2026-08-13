@@ -3,8 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/spacing/call_surface_motion.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/active_call_service.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_timer_provider.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/media_device_provider.dart';
 import 'package:quwoquan_app/runtime/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_presenter.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
@@ -59,68 +62,74 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
         return Stack(
           children: [
             AnimatedPositioned(
-              duration: const Duration(milliseconds: 250),
+              duration: CallSurfaceMotion.surfaceTransition,
               curve: Curves.easeOut,
               left: _position.dx,
               top: _position.dy,
-              child: GestureDetector(
-                onTap: widget.onReturnToCall,
-                onLongPress: () => _confirmHangup(context),
-                onPanUpdate: (d) {
-                  setState(() {
-                    _position = Offset(
-                      (_position.dx + d.delta.dx).clamp(
-                        _edgePadding,
-                        constraints.maxWidth - _width - _edgePadding,
+              // PiP 主体是单一可点击语义节点：点按回流通话页。
+              child: Semantics(
+                button: true,
+                label: CallText.callOngoing,
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: widget.onReturnToCall,
+                  onLongPress: () => _confirmHangup(context),
+                  onPanUpdate: (d) {
+                    setState(() {
+                      _position = Offset(
+                        (_position.dx + d.delta.dx).clamp(
+                          _edgePadding,
+                          constraints.maxWidth - _width - _edgePadding,
+                        ),
+                        (_position.dy + d.delta.dy).clamp(
+                          _edgePadding,
+                          constraints.maxHeight - _height - _edgePadding,
+                        ),
+                      );
+                    });
+                  },
+                  onPanEnd: (d) => _onDragEnd(d, constraints),
+                  child: Container(
+                    width: _width,
+                    height: _height,
+                    decoration: BoxDecoration(
+                      color: AppColors.overlayDark,
+                      borderRadius: BorderRadius.circular(
+                        AppSpacing.borderRadius,
                       ),
-                      (_position.dy + d.delta.dy).clamp(
-                        _edgePadding,
-                        constraints.maxHeight - _height - _edgePadding,
-                      ),
-                    );
-                  });
-                },
-                onPanEnd: (d) => _onDragEnd(d, constraints),
-                child: Container(
-                  width: _width,
-                  height: _height,
-                  decoration: BoxDecoration(
-                    color: AppColors.overlayDark,
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.borderRadius,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.overlayLight,
+                          blurRadius: AppSpacing.sm,
+                          offset: Offset(0, AppSpacing.xs),
+                        ),
+                      ],
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.overlayLight,
-                        blurRadius: AppSpacing.sm,
-                        offset: Offset(0, AppSpacing.xs),
-                      ),
-                    ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      _buildContent(callState),
-                      Positioned(
-                        bottom: AppSpacing.xs,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: Text(
-                            _formatDuration(callState.elapsed),
-                            style: TextStyle(
-                              color: AppColors.white,
-                              fontSize: AppTypography.xs,
-                              fontWeight: AppTypography.medium,
-                              fontFeatures: const [
-                                FontFeature.tabularFigures(),
-                              ],
+                    clipBehavior: Clip.antiAlias,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        _buildContent(callState),
+                        Positioned(
+                          bottom: AppSpacing.xs,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Text(
+                              formatCallDuration(callState.elapsed),
+                              style: TextStyle(
+                                color: AppColors.white,
+                                fontSize: AppTypography.xs,
+                                fontWeight: AppTypography.medium,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -138,6 +147,12 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
       return RtcVideoTrackRenderer(
         track: videoTrack,
         fit: RtcVideoViewFit.cover,
+        mirror: shouldMirrorLocalPreview(
+          isLocal: speaker?.isLocal ?? false,
+          cameraPosition: ref.watch(
+            mediaDeviceProvider.select((device) => device.cameraPosition),
+          ),
+        ),
       );
     }
 
@@ -174,12 +189,6 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
         ),
       ),
     );
-  }
-
-  String _formatDuration(Duration d) {
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$m:$s';
   }
 
   void _confirmHangup(BuildContext context) {

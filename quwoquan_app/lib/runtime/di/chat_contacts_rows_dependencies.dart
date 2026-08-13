@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_contacts_row.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_contact_home_filter.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/contact_intersection_subtitle.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/transport/media/avatar_image_url.dart';
@@ -78,7 +79,7 @@ ChatContactsRow chatContactsRowFromContactHome(
       endpointConfig: mediaEndpointConfig,
     ),
     subtitle: kind == ChatContactsRowKind.user
-        ? dto.summaryIntersections.take(2).join(' · ')
+        ? contactIntersectionFactsSubtitle(dto.intersectionFacts)
         : dto.subtitle.trim(),
     relationState: dto.relationState ?? 'not_following',
     source: dto.kind,

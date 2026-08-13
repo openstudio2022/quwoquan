@@ -60,6 +60,12 @@ const List<ImageEditorProToolEntry> kImageEditorProCategoryEntries =
         icon: Icons.wb_sunny_outlined,
         label: MediaText.imageEditorProWhiteBalance,
       ),
+      ImageEditorProToolEntry(
+        type: 'perspective',
+        categoryIndex: kImageEditorProCategoryPerspective,
+        icon: Icons.transform_outlined,
+        label: MediaText.imageEditorProPerspective,
+      ),
     ];
 
 ImageEditorProToolEntry? imageEditorProCategoryEntryForType(String type) {
@@ -152,6 +158,12 @@ const List<ImageEditorProToolEntry> kImageEditorProBaseEntries = [
     categoryIndex: kImageEditorProCategoryOverall,
     icon: Icons.join_full_outlined,
     label: MediaText.imageEditorProTone,
+  ),
+  ImageEditorProToolEntry(
+    type: 'denoise',
+    categoryIndex: kImageEditorProCategoryOverall,
+    icon: Icons.blur_on_outlined,
+    label: MediaText.imageEditorProDenoise,
   ),
   ImageEditorProToolEntry(
     type: 'grain',

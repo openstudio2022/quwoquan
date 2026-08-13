@@ -16,6 +16,7 @@ import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -413,50 +414,33 @@ class _FollowingSubjectSkeletonStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: AppSpacing.avatarRailHeight,
-      child: ListView.separated(
-        padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-        scrollDirection: Axis.horizontal,
-        itemBuilder: (_, _) => const _FollowingSubjectSkeletonTile(),
-        separatorBuilder: (_, _) => SizedBox(width: AppSpacing.interGroupMd),
-        itemCount: 5,
-      ),
-    );
-  }
-}
-
-class _FollowingSubjectSkeletonTile extends StatelessWidget {
-  const _FollowingSubjectSkeletonTile();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
+    // 瓦片形状：大圆角头像位 + 名称行；脉动与占位视觉由统一 primitives 承载。
+    final tile = SizedBox(
       width: AppSpacing.avatarUserXl,
       child: Column(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyEight),
-            child: ColoredBox(
-              color: AppColors.gridImagePlaceholderLight.withValues(alpha: 0.5),
-              child: const SizedBox(
-                width: AppSpacing.avatarUserLg,
-                height: AppSpacing.avatarUserLg,
-              ),
+        children: const [
+          AppSkeletonBlock(
+            width: AppSpacing.avatarUserLg,
+            height: AppSpacing.avatarUserLg,
+            borderRadius: BorderRadius.all(
+              Radius.circular(AppSpacing.radiusTwentyEight),
             ),
           ),
           SizedBox(height: AppSpacing.intraGroupXs),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppSpacing.radiusTwo),
-            child: ColoredBox(
-              color: AppColors.gridImagePlaceholderLight.withValues(alpha: 0.5),
-              child: const SizedBox(
-                width: AppSpacing.minInteractiveSize,
-                height: AppSpacing.ten,
-              ),
-            ),
-          ),
+          AppSkeletonLine(width: AppSpacing.minInteractiveSize),
         ],
+      ),
+    );
+    return SizedBox(
+      height: AppSpacing.avatarRailHeight,
+      child: AppSkeletonShimmer(
+        child: ListView.separated(
+          padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+          scrollDirection: Axis.horizontal,
+          itemBuilder: (_, _) => tile,
+          separatorBuilder: (_, _) => SizedBox(width: AppSpacing.interGroupMd),
+          itemCount: 5,
+        ),
       ),
     );
   }

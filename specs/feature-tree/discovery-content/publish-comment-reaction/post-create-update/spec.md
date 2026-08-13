@@ -253,3 +253,23 @@
 - 影响或价值：尚缺实现或直接 `spec_ref`。
 - 目标：local_contract、api_integration 与 alpha package contract 均通过。
 - 完成判定：`GWT-007` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-007"></a>
+### OPEN-007 Android 与视频滤镜特效的视频编辑能力
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：尚缺 Android 真机构建与导出证据、OHOS/Web 平台裁切静音策略
+  声明；也尚缺视频滤镜与特效进入真实处理链，一键成片 `effectId` 未进合成。
+  Android 第一段已落地：`quwoquan/video_editing` channel 契约平台中立化，
+  Dart 桥 `NativeVideoEditingService` 对 iOS 与 Android 同协议且合同测试
+  覆盖参数透传与结构化不可用；Android 原生 `VideoEditingBridgePlugin` 以
+  media3 Transformer 实现裁切静音导出、以 MediaMetadataRetriever 实现帧
+  提取与封面，已在 MainActivity 注册。iOS 裁切静音为真实 AVFoundation
+  客户端烘焙导出，封面选帧跨端可用，裁切后 `durationMs` 已按导出真实
+  时长回写。
+- 完成判定：`GWT-004` 的统一视频编辑状态在非 iOS 平台同样由真实原生实现支撑——
+  视频裁切/静音有原生实现并经能力位开启，或按平台策略在
+  `cross-platform-portability` 声明长期降级；视频特效进入真实合成链，且各有
+  local_contract `spec_ref`。

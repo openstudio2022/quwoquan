@@ -18,7 +18,11 @@ class _ActionRow extends StatelessWidget {
     required this.onComment,
     required this.onShare,
     required this.onMore,
+    this.onWishlist,
   });
+
+  /// 首页卡想去动作 key（意图环 L0 氛围层：纯动作入口，无红点无动效）。
+  static const wishlistActionKey = ValueKey<String>('home-card-wishlist-action');
 
   final Key moreButtonKey;
   final ContentPostViewData item;
@@ -32,6 +36,10 @@ class _ActionRow extends StatelessWidget {
   final VoidCallback onComment;
   final VoidCallback onShare;
   final VoidCallback onMore;
+
+  /// 想去动作：仅当内容锚定到支持想去的实体主页（primaryHomepageId +
+  /// wishlistHomepageTypes 类型门）时非 null；锚点缺失不渲染、不本地推断。
+  final VoidCallback? onWishlist;
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +83,20 @@ class _ActionRow extends StatelessWidget {
           muted: actionIconColor,
           onTap: onLike,
         ),
+        if (onWishlist != null)
+          _chip(
+            context: context,
+            buttonKey: _ActionRow.wishlistActionKey,
+            semanticsLabel: ObjectHomepageText.homepageWishlistAction,
+            child: Icon(
+              CupertinoIcons.star,
+              size: _feedToolbarIconSize,
+              color: actionIconColor,
+            ),
+            label: ObjectHomepageText.homepageWishlistAction,
+            muted: actionIconColor,
+            onTap: onWishlist!,
+          ),
         _chip(
           context: context,
           semanticsLabel: FoundationText.share,

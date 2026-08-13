@@ -23,6 +23,100 @@ final class _NativeTimingHydrationCancelled implements Exception {
   const _NativeTimingHydrationCancelled();
 }
 
+/// 启动链路单个观测点的脱敏快照（typed 视图）。
+///
+/// 序列化为原生 watchdog / dev log 的 JSON payload 时保持既往稀疏键语义：
+/// 未发生的里程碑不写键，见 [toJson]。
+final class StartupPhaseSnapshot {
+  const StartupPhaseSnapshot({
+    required this.phase,
+    required this.attemptId,
+    required this.runtimeEnv,
+    required this.launchMode,
+    required this.configurationState,
+    required this.contentBindingState,
+    required this.contentReleaseId,
+    required this.contentManifestDigest,
+    required this.contentReadinessReceiptDigest,
+    required this.missingDefineKeys,
+    required this.runAppMs,
+    required this.firstFrameMs,
+    required this.welcomeShownMs,
+    required this.welcomeWindowInitMs,
+    required this.welcomeCompletedMs,
+    required this.shellFirstPaintMs,
+    required this.androidActivityOnCreateMs,
+    required this.androidFlutterEngineConfiguredMs,
+    required this.deadlineOrigin,
+    required this.attemptKind,
+    required this.elapsedSinceProcessStartMs,
+    required this.processElapsedMs,
+    required this.homeFeedWarmMs,
+    required this.homeReadyMs,
+    required this.elapsedMs,
+  });
+
+  final String phase;
+  final String attemptId;
+  final String? runtimeEnv;
+  final String? launchMode;
+  final String? configurationState;
+  final String? contentBindingState;
+  final String contentReleaseId;
+  final String contentManifestDigest;
+  final String contentReadinessReceiptDigest;
+  final String missingDefineKeys;
+  final int? runAppMs;
+  final int? firstFrameMs;
+  final int? welcomeShownMs;
+  final int? welcomeWindowInitMs;
+  final int? welcomeCompletedMs;
+  final int? shellFirstPaintMs;
+  final int? androidActivityOnCreateMs;
+  final int? androidFlutterEngineConfiguredMs;
+  final String deadlineOrigin;
+  final String attemptKind;
+  final int elapsedSinceProcessStartMs;
+  final int processElapsedMs;
+  final int? homeFeedWarmMs;
+  final int? homeReadyMs;
+  final int elapsedMs;
+
+  /// 唯一 JSON 序列化出口；键名、键序与稀疏键条件必须与既往 payload 一致。
+  Map<String, Object?> toJson() => <String, Object?>{
+    'phase': phase,
+    if (attemptId.isNotEmpty) 'attemptId': attemptId,
+    'runtimeEnv': runtimeEnv,
+    'launchMode': launchMode,
+    'configurationState': configurationState,
+    'contentBindingState': contentBindingState,
+    if (contentReleaseId.isNotEmpty) 'contentReleaseId': contentReleaseId,
+    if (contentManifestDigest.isNotEmpty)
+      'contentManifestDigest': contentManifestDigest,
+    if (contentReadinessReceiptDigest.isNotEmpty)
+      'contentReadinessReceiptDigest': contentReadinessReceiptDigest,
+    if (missingDefineKeys.isNotEmpty) 'missingDefineKeys': missingDefineKeys,
+    if (runAppMs != null) 'runAppMs': runAppMs,
+    if (firstFrameMs != null) 'firstFrameMs': firstFrameMs,
+    if (welcomeShownMs != null) 'welcomeShownMs': welcomeShownMs,
+    if (welcomeWindowInitMs != null)
+      'welcomeWindowInitMs': welcomeWindowInitMs,
+    if (welcomeCompletedMs != null) 'welcomeCompletedMs': welcomeCompletedMs,
+    if (shellFirstPaintMs != null) 'shellFirstPaintMs': shellFirstPaintMs,
+    if (androidActivityOnCreateMs != null)
+      'androidActivityOnCreateMs': androidActivityOnCreateMs,
+    if (androidFlutterEngineConfiguredMs != null)
+      'androidFlutterEngineConfiguredMs': androidFlutterEngineConfiguredMs,
+    'deadlineOrigin': deadlineOrigin,
+    'attemptKind': attemptKind,
+    'elapsedSinceProcessStartMs': elapsedSinceProcessStartMs,
+    'processElapsedMs': processElapsedMs,
+    if (homeFeedWarmMs != null) 'homeFeedWarmMs': homeFeedWarmMs,
+    if (homeReadyMs != null) 'homeReadyMs': homeReadyMs,
+    'elapsedMs': elapsedMs,
+  };
+}
+
 /// 记录冷启动关键节点，并在首帧后异步预热非关键链路。
 final class AppStartupRuntime {
   AppStartupRuntime._();
@@ -145,7 +239,7 @@ final class AppStartupRuntime {
   void markConfigurationValidated() {
     _recordPlatformStartupEvent(
       eventName: 'startup_attempt_started',
-      properties: _snapshotProperties(phase: 'startup_attempt_started'),
+      properties: _snapshot(phase: 'startup_attempt_started').toJson(),
     );
     _recordCanonicalPhase(
       StartupTelemetryPhase.configurationValidation,
@@ -153,14 +247,14 @@ final class AppStartupRuntime {
     );
     _recordPlatformStartupEvent(
       eventName: 'startup_runtime_configured',
-      properties: _snapshotProperties(phase: 'configuration_validation'),
+      properties: _snapshot(phase: 'configuration_validation').toJson(),
     );
   }
 
   /// Bootstrap 尚未装配 Provider/Analytics 时也必须留下脱敏终态。
   void recordBootstrapFailure(RuntimeFailureBase failure) {
     final properties = <String, Object?>{
-      ..._snapshotProperties(phase: 'bootstrap_failure'),
+      ..._snapshot(phase: 'bootstrap_failure').toJson(),
       'failureCode': failure.code,
       'failureKind': failure.kind.name,
       'failureOrigin': failure.origin.name,
@@ -209,7 +303,7 @@ final class AppStartupRuntime {
       recordPlatformStartupEvent(
         jsonEncode(<String, Object?>{
           'eventName': 'flutter_first_frame',
-          ..._snapshotProperties(phase: 'flutter_first_frame'),
+          ..._snapshot(phase: 'flutter_first_frame').toJson(),
         }),
       );
     } catch (_) {
@@ -490,14 +584,15 @@ final class AppStartupRuntime {
     });
   }
 
+  /// [properties] 是即将 jsonEncode 的事件附加 JSON 属性（不再向外传播）。
   void recordStartupPhase(
     ProviderReader read, {
     required String phase,
     String eventName = 'app_startup_phase',
-    Map<String, dynamic> properties = const <String, dynamic>{},
+    Map<String, Object?> properties = const <String, Object?>{},
   }) {
-    final eventProperties = <String, dynamic>{
-      ..._snapshotProperties(phase: phase),
+    final eventProperties = <String, Object?>{
+      ..._snapshot(phase: phase).toJson(),
       ...properties,
     };
     try {
@@ -510,7 +605,7 @@ final class AppStartupRuntime {
         name: 'QWQStartup',
       );
       recordPlatformStartupEvent(
-        jsonEncode(<String, dynamic>{
+        jsonEncode(<String, Object?>{
           'eventName': eventName,
           ...eventProperties,
         }),
@@ -525,14 +620,14 @@ final class AppStartupRuntime {
     }
   }
 
-  Map<String, dynamic> snapshotProperties({required String phase}) {
-    return _snapshotProperties(phase: phase);
+  StartupPhaseSnapshot phaseSnapshot({required String phase}) {
+    return _snapshot(phase: phase);
   }
 
   void _recordCanonicalPhaseFromReportedPhase({
     required String phase,
     required String outcome,
-    required Map<String, dynamic> properties,
+    required Map<String, Object?> properties,
   }) {
     if (phase == 'safe_recovery_shown') {
       _recordTerminal(
@@ -630,14 +725,14 @@ final class AppStartupRuntime {
       eventName: 'startup_safe_terminal',
       properties: <String, Object?>{
         'surface': surface,
-        ..._snapshotProperties(phase: 'startup_safe_terminal'),
+        ..._snapshot(phase: 'startup_safe_terminal').toJson(),
       },
     );
   }
 
   void _recordPlatformStartupEvent({
     required String eventName,
-    required Map<String, dynamic> properties,
+    required Map<String, Object?> properties,
   }) {
     try {
       recordPlatformStartupEvent(
@@ -691,44 +786,36 @@ final class AppStartupRuntime {
     }
   }
 
-  Map<String, dynamic> _snapshotProperties({required String phase}) {
+  StartupPhaseSnapshot _snapshot({required String phase}) {
     final runtimeSummary = CloudRuntimeConfig.runtimeDefineSummary;
-    final missingDefineKeys = runtimeSummary['missingKeys'] ?? '';
-    return <String, dynamic>{
-      'phase': phase,
-      if (_startupAttemptId.isNotEmpty) 'attemptId': _startupAttemptId,
-      'runtimeEnv': runtimeSummary['runtimeEnv'],
-      'launchMode': runtimeSummary['launchMode'],
-      'configurationState': runtimeSummary['configurationState'],
-      'contentBindingState': runtimeSummary['contentBindingState'],
-      if ((runtimeSummary['contentReleaseId'] ?? '').isNotEmpty)
-        'contentReleaseId': runtimeSummary['contentReleaseId'],
-      if ((runtimeSummary['contentManifestDigest'] ?? '').isNotEmpty)
-        'contentManifestDigest': runtimeSummary['contentManifestDigest'],
-      if ((runtimeSummary['contentReadinessReceiptDigest'] ?? '').isNotEmpty)
-        'contentReadinessReceiptDigest':
-            runtimeSummary['contentReadinessReceiptDigest'],
-      if (missingDefineKeys.isNotEmpty) 'missingDefineKeys': missingDefineKeys,
-      if (_runAppMs != null) 'runAppMs': _runAppMs,
-      if (_firstFrameMs != null) 'firstFrameMs': _firstFrameMs,
-      if (_welcomeShownMs != null) 'welcomeShownMs': _welcomeShownMs,
-      if (_welcomeWindowInitMs != null)
-        'welcomeWindowInitMs': _welcomeWindowInitMs,
-      if (_welcomeCompletedMs != null)
-        'welcomeCompletedMs': _welcomeCompletedMs,
-      if (_shellFirstPaintMs != null) 'shellFirstPaintMs': _shellFirstPaintMs,
-      if (_androidActivityOnCreateMs != null)
-        'androidActivityOnCreateMs': _androidActivityOnCreateMs,
-      if (_androidFlutterEngineConfiguredMs != null)
-        'androidFlutterEngineConfiguredMs': _androidFlutterEngineConfiguredMs,
-      'deadlineOrigin': _deadlineOrigin,
-      'attemptKind': _attemptKind,
-      'elapsedSinceProcessStartMs': elapsedSinceProcessStart.inMilliseconds,
-      'processElapsedMs': processElapsed.inMilliseconds,
-      if (_homeFeedWarmMs != null) 'homeFeedWarmMs': _homeFeedWarmMs,
-      if (_homeReadyMs != null) 'homeReadyMs': _homeReadyMs,
-      'elapsedMs': _elapsedMs,
-    };
+    return StartupPhaseSnapshot(
+      phase: phase,
+      attemptId: _startupAttemptId,
+      runtimeEnv: runtimeSummary['runtimeEnv'],
+      launchMode: runtimeSummary['launchMode'],
+      configurationState: runtimeSummary['configurationState'],
+      contentBindingState: runtimeSummary['contentBindingState'],
+      contentReleaseId: runtimeSummary['contentReleaseId'] ?? '',
+      contentManifestDigest: runtimeSummary['contentManifestDigest'] ?? '',
+      contentReadinessReceiptDigest:
+          runtimeSummary['contentReadinessReceiptDigest'] ?? '',
+      missingDefineKeys: runtimeSummary['missingKeys'] ?? '',
+      runAppMs: _runAppMs,
+      firstFrameMs: _firstFrameMs,
+      welcomeShownMs: _welcomeShownMs,
+      welcomeWindowInitMs: _welcomeWindowInitMs,
+      welcomeCompletedMs: _welcomeCompletedMs,
+      shellFirstPaintMs: _shellFirstPaintMs,
+      androidActivityOnCreateMs: _androidActivityOnCreateMs,
+      androidFlutterEngineConfiguredMs: _androidFlutterEngineConfiguredMs,
+      deadlineOrigin: _deadlineOrigin,
+      attemptKind: _attemptKind,
+      elapsedSinceProcessStartMs: elapsedSinceProcessStart.inMilliseconds,
+      processElapsedMs: processElapsed.inMilliseconds,
+      homeFeedWarmMs: _homeFeedWarmMs,
+      homeReadyMs: _homeReadyMs,
+      elapsedMs: _elapsedMs,
+    );
   }
 
   int get _elapsedMs {

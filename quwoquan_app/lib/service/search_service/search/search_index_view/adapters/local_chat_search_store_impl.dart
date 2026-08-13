@@ -461,9 +461,11 @@ class LocalChatSearchStore
     required LocalSearchNamespace namespace,
     required String query,
     String? conversationType,
+    String? conversationId,
     int limit = 20,
   }) async {
     final database = await _database;
+    final scopedConversationId = conversationId?.trim();
     final ids = await _searchIds(
       database: database,
       table: 'chat_messages',
@@ -471,7 +473,8 @@ class LocalChatSearchStore
       idColumn: 'message_id',
       namespace: namespace,
       query: query,
-      limit: limit,
+      // 会话内搜索：FTS 命中后仍按行过滤，放大候选避免截断。
+      limit: (scopedConversationId?.isNotEmpty ?? false) ? limit * 5 : limit,
       orderBy: 'timestamp DESC',
     );
     final rows = await _rowsForIds(
@@ -487,6 +490,11 @@ class LocalChatSearchStore
         row['conversation_type']?.toString(),
       );
       if (normalizedType != null && payloadConversationType != normalizedType) {
+        continue;
+      }
+      if (scopedConversationId != null &&
+          scopedConversationId.isNotEmpty &&
+          row['conversation_id']?.toString() != scopedConversationId) {
         continue;
       }
       final payload = _decodePayload(row['payload_json']);

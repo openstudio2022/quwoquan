@@ -3,6 +3,7 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
+import 'package:quwoquan_app/design_system/spacing/call_surface_motion.dart';
 
 /// Pulsating avatar animation for outgoing/incoming call screens.
 /// Shows 3 concentric rings expanding and fading around a center avatar.
@@ -29,8 +30,8 @@ class _CallerAvatarPulseState extends State<CallerAvatarPulse>
   late final List<Animation<double>> _opacityAnimations;
 
   static const _ringCount = 3;
-  static const _duration = Duration(milliseconds: 2400);
-  static const _staggerDelay = Duration(milliseconds: 600);
+  static const _duration = CallSurfaceMotion.avatarPulseCycle;
+  static const _staggerDelay = CallSurfaceMotion.avatarPulseStagger;
 
   @override
   void initState() {

@@ -12,6 +12,7 @@ import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.d
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/video_preview_track_query.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart'
     show ContentPostDetailReader;
@@ -33,9 +34,35 @@ import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/work_browser_entry_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/runtime/remote_api_path_test_harness.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
+InMemoryContentPostStore _suiteStore() {
+  final posts = <ContentPostViewData>[
+    contentPostViewDataBuilder(
+      postId: 'work-browser-article',
+      contentType: 'article',
+      title: '可读文章',
+    ),
+    contentPostViewDataBuilder(
+      postId: 'video_tokyo_midnight',
+      contentType: 'video',
+      videoUrl: testContentVideoUrl,
+    ),
+  ];
+  return InMemoryContentPostStore(
+    posts: posts,
+    details: <String, ContentPostDetailPayload>{
+      for (final post in posts)
+        post.id: contentPostDetailPayloadBuilder(
+          post: post,
+          articleMarkdown: post.isArticleLike ? '# ${post.title}\n\n正文。' : null,
+        ),
+    },
+  );
+}
 
 void main() {
   final mediaEndpoints = MediaEndpointConfig(
@@ -45,12 +72,17 @@ void main() {
     attachmentBaseUrl: 'https://example.com',
   );
 
-  Future<String> firstReadablePostId(MockContentRepository repo) async {
+  Future<String> firstReadablePostId(InMemoryContentPostStore store) async {
+    final feedQuery = InMemoryContentDiscoveryFeedQuery(store);
+    final detailReader = InMemoryContentPostDetailReader(store);
     for (final category in <String>['article', 'photo', 'video', 'moment']) {
-      final posts = await repo.listDiscoveryFeed(category: category, limit: 8);
-      for (final post in posts) {
+      final page = await feedQuery.listDiscoveryFeedPage(
+        category: category,
+        limit: 8,
+      );
+      for (final post in page.items) {
         try {
-          await repo.getPost(postId: post.id);
+          await detailReader.getPost(postId: post.id);
           return post.id;
         } catch (_) {
           // skip unreadable seed rows
@@ -61,11 +93,11 @@ void main() {
   }
 
   testWidgets('直达入口：workId 在详情不可读时呈现显式错误态而非无关内容', (tester) async {
-    final repo = MockContentRepository();
+    final store = _suiteStore();
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [...mockContentFacetOverrides(repo)],
+        overrides: [...mockContentFacetOverrides(store: store)],
         child: ScreenUtilInit(
           designSize: const Size(375, 812),
           builder: (context, _) => MaterialApp(
@@ -100,16 +132,16 @@ void main() {
   });
 
   testWidgets('直达入口：软删除内容按 410 墓碑展示删除态', (tester) async {
-    final repo = MockContentRepository();
-    final postId = await firstReadablePostId(repo);
-    await repo.deletePost(
+    final store = _suiteStore();
+    final postId = await firstReadablePostId(store);
+    await InMemoryContentPostDeleteCommandWriter(store).deletePost(
       postId: postId,
       idempotencyKey: contentPostDeleteIdempotencyKey(postId),
     );
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [...mockContentFacetOverrides(repo)],
+        overrides: [...mockContentFacetOverrides(store: store)],
         child: ScreenUtilInit(
           designSize: const Size(375, 812),
           builder: (context, _) => MaterialApp(
@@ -142,11 +174,11 @@ void main() {
   });
 
   testWidgets('直达入口：空 workId 直接进入错误态', (tester) async {
-    final repo = MockContentRepository();
+    final store = _suiteStore();
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [...mockContentFacetOverrides(repo)],
+        overrides: [...mockContentFacetOverrides(store: store)],
         child: ScreenUtilInit(
           designSize: const Size(375, 812),
           builder: (context, _) => MaterialApp(
@@ -167,7 +199,7 @@ void main() {
   });
 
   testWidgets('直达入口：环境 smoke 使用可读视频 seed 时渲染视频 stage', (tester) async {
-    final repo = MockContentRepository();
+    final store = _suiteStore();
     final runtimeLogger = RuntimeLogger(
       resource: const RuntimeLogResource(
         sourceType: 'app',
@@ -184,7 +216,7 @@ void main() {
       ProviderScope(
         overrides: <Override>[
           ...sealedCloudBoundaryOverrides(),
-          ...mockContentFacetOverrides(repo),
+          ...mockContentFacetOverrides(store: store),
           activePersonaContextProvider.overrideWith(
             (_) async => ActivePersonaContextViewData.fallback(
               personaId: 'work-browser-test-persona',
@@ -228,11 +260,11 @@ void main() {
   });
 
   testWidgets('直达入口：浅色来源的失效内容错误页不继承深色沉浸上下文', (tester) async {
-    final repo = MockContentRepository();
+    final store = _suiteStore();
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [...mockContentFacetOverrides(repo)],
+        overrides: [...mockContentFacetOverrides(store: store)],
         child: const CupertinoApp(
           theme: CupertinoThemeData(brightness: Brightness.dark),
           home: WorkBrowserEntryPage(
@@ -259,14 +291,19 @@ void main() {
   testWidgets(
     '直达入口：transient RuntimeFailure 经 Retry 后由 typed Remote reader 恢复',
     (tester) async {
-      final repo = MockContentRepository();
-      final postId = await firstReadablePostId(repo);
-      final reader = _FlakyContentPostDetailReader(delegate: repo);
+      final store = _suiteStore();
+      final postId = await firstReadablePostId(store);
+      final reader = _FlakyContentPostDetailReader(
+        delegate: InMemoryContentPostDetailReader(store),
+      );
 
       await tester.pumpWidget(
         ProviderScope(
           overrides: <Override>[
-            ...mockContentFacetOverrides(repo, workBrowserDetailReader: reader),
+            ...mockContentFacetOverrides(
+              store: store,
+              workBrowserDetailReader: reader,
+            ),
             contentRuntimeConfigProvider.overrideWithValue(
               buildAlphaContentRuntimeConfigDefaults(),
             ),
@@ -312,12 +349,12 @@ void main() {
   );
 
   testWidgets('直达入口：评论原文跳转会消费 openComments 上下文', (tester) async {
-    final repo = MockContentRepository();
-    final postId = await firstReadablePostId(repo);
+    final store = _suiteStore();
+    final postId = await firstReadablePostId(store);
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [...mockContentFacetOverrides(repo)],
+        overrides: [...mockContentFacetOverrides(store: store)],
         child: ScreenUtilInit(
           designSize: const Size(375, 812),
           builder: (context, _) => MaterialApp(
@@ -346,7 +383,7 @@ void main() {
   });
 
   testWidgets('直达入口：失效内容会展示可理解提示并可安全返回首页', (tester) async {
-    final repo = MockContentRepository();
+    final store = _suiteStore();
     final router = GoRouter(
       initialLocation: AppRoutePaths.workBrowser(
         workId: 'definitely-missing-post-id',
@@ -372,7 +409,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [...mockContentFacetOverrides(repo)],
+        overrides: [...mockContentFacetOverrides(store: store)],
         child: ScreenUtilInit(
           designSize: const Size(375, 812),
           builder: (context, _) => MaterialApp.router(

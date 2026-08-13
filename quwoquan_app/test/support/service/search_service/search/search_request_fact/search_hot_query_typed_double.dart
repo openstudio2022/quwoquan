@@ -1,9 +1,7 @@
 import 'package:quwoquan_app/service/search_service/search/search_request_fact/application/search_hot_query_reader.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
-
-/// local_contract 热词读模型：只消费 search-service canonical 场景。
+/// local_contract 热词读模型：只承载本对象所需的最小 typed example。
 final class SearchHotQueryTypedDouble implements SearchHotQueryReader {
   SearchHotQueryTypedDouble() : _items = _loadItems();
 
@@ -17,29 +15,19 @@ final class SearchHotQueryTypedDouble implements SearchHotQueryReader {
   }
 
   static List<SearchTermHeatItem> _loadItems() {
-    final decoded = objectContractExampleReader.document('search');
-    final examples = decoded['examples'] as Map<String, dynamic>? ?? const {};
-    final core = examples['search_hot_queries_core'] as Map<String, dynamic>?;
-    final rawItems = core?['hot_queries'] as List?;
-    if (rawItems == null) {
-      throw StateError(
-        'search fixture is missing search_hot_queries_core.hot_queries',
-      );
-    }
-    final items = rawItems
-        .map((item) {
-          final map = item as Map<String, dynamic>;
-          final query = map['query']?.toString().trim() ?? '';
-          final relevance = map['relevance'];
-          if (query.isEmpty || relevance is! num) {
-            throw const FormatException('invalid search hot query fixture');
-          }
-          return SearchTermHeatItem(
-            query: query,
-            relevance: relevance.toDouble(),
-          );
-        })
-        .toList(growable: false);
+    final items = <SearchTermHeatItem>[
+      const SearchTermHeatItem(query: '旅行摄影', relevance: 9.8),
+      const SearchTermHeatItem(query: '城市漫步', relevance: 9.1),
+      const SearchTermHeatItem(query: '周末徒步', relevance: 8.7),
+      const SearchTermHeatItem(query: '咖啡地图', relevance: 8.2),
+      const SearchTermHeatItem(query: '日落机位', relevance: 7.9),
+      const SearchTermHeatItem(query: '博物馆展览', relevance: 7.6),
+      const SearchTermHeatItem(query: '露营装备', relevance: 7.3),
+      const SearchTermHeatItem(query: '城市夜景', relevance: 7.0),
+      const SearchTermHeatItem(query: '古镇漫游', relevance: 6.7),
+      const SearchTermHeatItem(query: '海边骑行', relevance: 6.4),
+      const SearchTermHeatItem(query: '毕业旅行', relevance: 6.1),
+    ];
     items.sort((left, right) => right.relevance.compareTo(left.relevance));
     return items;
   }

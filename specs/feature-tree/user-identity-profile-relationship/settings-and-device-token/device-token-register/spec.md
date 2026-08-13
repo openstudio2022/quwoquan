@@ -56,15 +56,6 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 设备令牌登记结果子句尚未逐条绑定
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：缺 `GWT-001` 两条结果子句的逐条证据，未区分登记主路径与失败语义分别由哪条断言证明。
-- 完成判定：`GWT-001.t1` 与 `GWT-001.t2` 各自被真实测试 `spec_ref` 绑定。
-
 <a id="open-002"></a>
 ### OPEN-002 FCM registration token 到 Firebase Installation ID 的契约迁移
 
@@ -72,4 +63,4 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺 user-service 对 Firebase Installation ID、registration token、轮换与撤销关系的正式契约及端云验收证据；Android 当前固定 `firebase-messaging 25.0.2` 以维持既有 registration token 语义，不得把 Firebase Installation ID 静默写入旧 token 字段，否则设备替换、撤销、去重和投递回执会失去同一身份含义。
-- 完成判定：先在 user-service 设备端点 contracts 明确 installation、registration token、轮换与撤销关系，再完成 metadata/codegen、App token 刷新、服务端幂等登记、通知投递与真机前台/后台/终止态验收；全部证据引用本 Story 后方可解除 Android 依赖固定。
+- 完成判定：先在 user-service 设备端点 contracts 明确 installation、registration token、轮换与撤销关系，再完成 metadata/codegen、App token 刷新、服务端幂等登记、通知投递与真机前台/后台/终止态验收；全部证据以 `GWT-001` 的登记结果与失败语义子句为验收锚点并引用本 Story 后，方可解除 Android 依赖固定。

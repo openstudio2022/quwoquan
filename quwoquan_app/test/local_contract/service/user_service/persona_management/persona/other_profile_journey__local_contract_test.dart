@@ -22,7 +22,7 @@ import 'package:quwoquan_app/service/user_service/account/user_account/applicati
 import 'package:quwoquan_app/runtime/di/author_impact_provider.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_shell.dart';
 
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/profile_interaction_activity_view/author_impact_fixtures.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -100,7 +100,7 @@ Widget _scopedApp() {
       authorImpactQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
       ),
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       intersectionRepositoryProvider.overrideWithValue(
         const _EmptyIntersectionRepository(),
       ),

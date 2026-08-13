@@ -79,4 +79,11 @@
 
 ## 7. 开放事项
 
-- 无。
+### OPEN-001 交集周度速递官方技能包未实现
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚未落地交集飞轮的唯一主动触达通道（L3 主动层），规划为官方 Skill 包 `intersection_weekly_digest`：每周至多一次向订阅用户速递可行动交集（消费 `intersection.read_mine` 工具），可行性文案只允许模型内可证事实（时限锚点/同城粒度/交集新鲜度，禁止宣称「对方有空」），并可一键串联 `gathering.propose_create_draft` 生成预填行动草稿。无高置信可行动交集的周不投递（宁缺勿滥）。复用本 Story 既有 consent/静默/日配额/cooldown/lease 门控与授权内部 tick 验收触发，不新增第二投递通道。
+- 完成判定：技能包按官方发布链签名激活；`GWT-001` 的全部门控子句对该技能成立，且空交集周零投递的负例通过。
+- 依赖：`intersection.read_mine` 运行时绑定（tool-fabric-runtime OPEN-002）；同趣聚合读面（`intersection-unified-experience` OPEN-001）。

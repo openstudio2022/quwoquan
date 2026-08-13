@@ -8,6 +8,9 @@ enum AppForwardSubjectKind {
   userProfile,
   entityProfile,
   circle,
+
+  /// 会话文本消息转发：不构造 MessageCard，发送为普通 text 消息。
+  chatMessage,
 }
 
 extension AppForwardSubjectKindWire on AppForwardSubjectKind {
@@ -17,6 +20,8 @@ extension AppForwardSubjectKindWire on AppForwardSubjectKind {
     AppForwardSubjectKind.userProfile => 'user_profile',
     AppForwardSubjectKind.entityProfile => 'entity_profile',
     AppForwardSubjectKind.circle => 'circle',
+    // chatMessage 只在端内路由 text 发送分支，禁止进入 MessageCard wire。
+    AppForwardSubjectKind.chatMessage => 'chat_message',
   };
 }
 

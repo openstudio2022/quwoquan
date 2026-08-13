@@ -114,7 +114,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：仓内已由 User 领域实现 identity-bound `AccountAppealIntake`，Product Ops production composition 也已使用最小 scope 的真实 User HTTP claim adapter，精确认领 `{intakeRef, accountId, caseId}`，不再使用 nil/fake verifier。该内部 claim 单轨不等于用户端申诉已商用：四环境不可变官方 Web release/HTTPS URL、生产 OTP material、客服 owner/SLA、真实 PostgreSQL API integration、Provider/Widget、Gamma Android/iOS UAT 与受保护 Prod receipt 仍缺失；`OpenAccountAppealCase` 仍不得暴露给用户，匿名公共表单或 suspended access token 也不得作为替代。
-- 完成判定：[`account-suspension-and-appeal-lifecycle OPEN-004`](../../../user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#open-004) 关闭；Product Ops 仅消费其 opaque `intakeRef`，App 与 Gamma Journey 只以真实 intake receipt 认定提交成功。
+- 完成判定：[`account-suspension-and-appeal-lifecycle OPEN-004`](../../../user-identity-profile-relationship/settings-and-device-token/account-suspension-and-appeal-lifecycle/spec.md#open-004) 关闭；`GWT-002` 的正式 intake 前置校验与 `GWT-003` 的正式申诉 Journey 对应行为满足——Product Ops 仅消费其 opaque `intakeRef`，App 与 Gamma Journey 只以真实 intake receipt 认定提交成功。
 - 依赖：User 领域 canonical intake、四环境官方 HTTPS URL、隐私保留口径、客服 owner 与处置 SLA。
 
 <a id="open-003"></a>
@@ -124,4 +124,4 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：尚无受保护 Prod 账号证明双签、Suspend/Restore、terminal DLQ、同 decision replay、告警、审计导出和发布回滚在生产拓扑可用。
-- 完成判定：按审批窗口完成受保护 Prod 演练，所有 SLO/告警/readiness/审计证据可追溯，且演练账号恢复、新旧凭据语义与发布回滚通过。
+- 完成判定：`GWT-003` 的双签、跨域收敛与恢复演练按审批窗口在受保护 Prod 完成，所有 SLO/告警/readiness/审计证据可追溯，且演练账号恢复、新旧凭据语义与发布回滚通过。

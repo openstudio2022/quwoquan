@@ -478,6 +478,10 @@ extension _ProfileShellBuilders on _ProfileShellState {
           ),
           if (widget.mode == ProfileMode.mine) ...[
             widget.recommendationSlots.buildMyIntersection(isDark: isDark),
+            // 交集资产面（REQ-008）：行动入口 + 共同经历资产行（仅 mine）。
+            // 两者独立加载独立降级，任一失败或缓慢不阻塞主页首屏。
+            widget.recommendationSlots.buildMyGatherings(isDark: isDark),
+            widget.recommendationSlots.buildMyExperience(isDark: isDark),
           ] else ...[
             _buildIntersectionCard(),
           ],
@@ -485,6 +489,11 @@ extension _ProfileShellBuilders on _ProfileShellState {
             isDark,
             suppressFailure: suppressImpactFailure,
           ),
+          if (widget.mode == ProfileMode.mine)
+            // 影响力面「成行力」creator 锚点事实计数（零计数/失败不渲染）。
+            widget.recommendationSlots.buildCreatorProof(
+              personaId: widget.userId,
+            ),
           SizedBox(height: AppSpacing.interGroupSm),
         ],
       ),

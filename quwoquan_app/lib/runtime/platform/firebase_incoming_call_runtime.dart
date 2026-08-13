@@ -171,6 +171,12 @@ abstract interface class FirebasePushMessagingClient {
 
   Stream<RemoteMessage> get foregroundMessages;
 
+  /// 用户点按系统推送把应用从后台带回前台的消息流。
+  Stream<RemoteMessage> get openedMessages;
+
+  /// 应用因点按推送而冷启动时的初始消息（无则为 null）。
+  Future<RemoteMessage?> readInitialMessage();
+
   Future<bool> readNotificationAuthorization();
 }
 
@@ -194,6 +200,14 @@ final class FirebasePluginPushMessagingClient
 
   @override
   Stream<RemoteMessage> get foregroundMessages => FirebaseMessaging.onMessage;
+
+  @override
+  Stream<RemoteMessage> get openedMessages =>
+      FirebaseMessaging.onMessageOpenedApp;
+
+  @override
+  Future<RemoteMessage?> readInitialMessage() =>
+      FirebaseMessaging.instance.getInitialMessage();
 
   @override
   Future<bool> readNotificationAuthorization() async {

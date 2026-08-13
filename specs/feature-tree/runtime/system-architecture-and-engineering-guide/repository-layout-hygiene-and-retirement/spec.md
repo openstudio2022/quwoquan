@@ -94,4 +94,13 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：超过仓库行数预算的实现文件会混合多个职责，增加修改与审核风险。
-- 完成判定：动态文件预算门禁无超限项；拆分保持原 facade、契约和相关测试通过。
+- 完成判定：`GWT-002` 的最小门禁闭环子句在拆分后仍成立——动态文件预算门禁无超限项；拆分保持原 facade、契约和相关测试通过。
+
+<a id="open-003"></a>
+### OPEN-003 取证隔离区与输出布局门禁互斥，两者都无法同时成立
+
+- 类型：`risk`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：`.qwq_output/data/quarantine/unauthorized-scale022-pids4167-5219-20260808/` 是一次未授权规模化执行事件的取证隔离区，其 `QUARANTINE.json` 判定为 `decision: GATE_BLOCK/WAIT_CONTENT`、`consumption: forbidden`、`recovery: retain_for_forensics_only`，必须永久保留。但它内含 `specs/`、`quwoquan_ops/policies`、各服务 `contracts/` 与 `quwoquan_data/schema` 的源真相副本，触发 `REQ-003` 的输出边界规则，使 `verify_output_layout.py` 与 `verify_root_layout.py` 永久 FAIL。现有豁免机制 `quwoquan_data/scripts/governance/protected_quarantine_evidence.py` 只认 `local/workspace/quarantine/<child>` 路径且必须绑定一份 output-layout migration apply receipt，是为布局迁移遗留树设计的，取证隔离拿不出这种 provenance。结果是取证保留与输出布局两条规则互斥：保留证据就永远红门，清掉红门就销毁证据。这类冲突不会自己暴露——它表现为一道"反正一直红"的门，久而久之没人再看它输出什么。
+- 完成判定：`GWT-002` 对应行为满足——扩展受保护隔离的 provenance 模型，使取证隔离能以 `QUARANTINE.json` 自身为凭据被登记（同样用树摘要冻结，任何漂移即失配），`verify_output_layout.py` 与 `verify_root_layout.py` 在保留该隔离区的前提下转绿，且真实测试 `spec_ref` 断言：受保护隔离内容一旦变化即 BLOCK，未登记的隔离区不得获得豁免。

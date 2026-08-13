@@ -7,6 +7,7 @@ import 'package:quwoquan_app/service/content_service/content/post/domain/article
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_presentation_values.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_reader/templates/article_reader_template_theme.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_content_block_renderer.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/article_rich_block_chrome.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
@@ -409,6 +410,9 @@ List<ArticleLayoutFragment> _resolveReadOnlyFragments(ArticlePageData page) {
           ArticleDocumentBlockType.sectionTitle => 'sectionTitle',
           ArticleDocumentBlockType.orderedItem => 'orderedItem',
           ArticleDocumentBlockType.bulletItem => 'bulletItem',
+          ArticleDocumentBlockType.quote => 'quote',
+          ArticleDocumentBlockType.callout => 'callout',
+          ArticleDocumentBlockType.codeBlock => 'codeBlock',
           _ => 'body',
         },
         textAlign: block.textAlign,

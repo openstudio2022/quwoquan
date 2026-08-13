@@ -36,31 +36,16 @@ def _expand_source_identities(
             )
         for execution_id in execution_ids:
             normalized_id = str(execution_id or "").strip()
-            if row.get("identityKind") == "legacy_canonical_migration":
-                expanded.append(
-                    {
-                        "identityKind": "legacy_canonical_migration",
-                        "executionId": normalized_id,
-                        "sourceDigest": str(row.get("sourceDigest") or ""),
-                        "canonicalObjectDigest": str(
-                            row.get("canonicalObjectDigest") or ""
-                        ),
-                        "migrationEvidenceDigest": str(
-                            row.get("migrationEvidenceDigest") or ""
-                        ),
-                    }
-                )
-            else:
-                expanded.append(
-                    {
-                        "executionId": normalized_id,
-                        "sourceRevision": str(row.get("sourceRevision") or ""),
-                        "sourceDigest": str(row.get("sourceDigest") or ""),
-                        "entityCatalogDigest": str(
-                            row.get("entityCatalogDigest") or ""
-                        ),
-                    }
-                )
+            expanded.append(
+                {
+                    "executionId": normalized_id,
+                    "sourceRevision": str(row.get("sourceRevision") or ""),
+                    "sourceDigest": str(row.get("sourceDigest") or ""),
+                    "entityCatalogDigest": str(
+                        row.get("entityCatalogDigest") or ""
+                    ),
+                }
+            )
     return expanded
 
 

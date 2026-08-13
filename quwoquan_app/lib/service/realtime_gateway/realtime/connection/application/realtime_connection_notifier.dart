@@ -3,7 +3,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_conversation_lifecycle.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 
 typedef RealtimeCurrentUserIdResolver = String Function(Ref ref);
 typedef RealtimeConnectionDelegateFactory =

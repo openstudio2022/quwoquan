@@ -20,7 +20,7 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/conte
 import 'package:quwoquan_app/service/user_service/persona_management/persona/adapters/user_profile_cache_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
 import '../../../../../support/runtime/cache/content_cache_fixtures.dart';
 
@@ -34,7 +34,9 @@ CachedContentRepository _cachedContentRepository({
 }) {
   return CachedContentRepository(
     feedDelegate: delegate,
-    deleteDelegate: MockContentRepository(),
+    deleteDelegate: InMemoryContentPostDeleteCommandWriter(
+      InMemoryContentPostStore(),
+    ),
     postCache: postCache,
     querySnapshotStore: querySnapshotStore,
     userProfileCache: userProfileCache,
@@ -73,7 +75,7 @@ void main() {
         persistToPreferences: true,
         hydrationDeadline: const Duration(milliseconds: 20),
         persistenceBackend: backend,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       final canonicalEmpty = Completer<DiscoveryFeedPage>()
         ..complete(
@@ -126,7 +128,7 @@ void main() {
         querySnapshotStore: ContentQuerySnapshotStore(
           persistToPreferences: true,
           persistenceBackend: backend,
-          telemetrySink: const NoopCacheTelemetrySink(),
+          telemetrySink: const SilentCacheTelemetrySink(),
         ),
       );
 
@@ -441,7 +443,7 @@ void main() {
       final store = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await store.ensureHydrated();
 
@@ -469,7 +471,7 @@ void main() {
       final restored = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await restored.ensureHydrated();
       final cached = restored.get(queryKey);
@@ -553,7 +555,7 @@ void main() {
       final restored = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await restored.ensureHydrated();
 
@@ -573,7 +575,7 @@ void main() {
       var now = DateTime.utc(2026, 7, 29, 0);
       const queryKey = 'surface=discoveryFeed&category=moment&cursor=';
       final store = ContentQuerySnapshotStore(
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
         now: () => now,
       );
 
@@ -635,7 +637,7 @@ void main() {
       final store = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
         now: () => now,
       );
       await store.ensureHydrated();
@@ -649,7 +651,7 @@ void main() {
       final restored = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
         now: () => now,
       );
       await restored.ensureHydrated();
@@ -672,7 +674,7 @@ void main() {
       final store = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await store.ensureHydrated();
 
@@ -693,7 +695,7 @@ void main() {
       final restored = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await restored.ensureHydrated();
       final post = restored.get(queryKey)!.value.items.single;
@@ -713,7 +715,7 @@ void main() {
           maxUserPostSubjects: 1,
           maxFeedPagesPerQuery: 3,
         ),
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await store.ensureHydrated();
 
@@ -793,7 +795,7 @@ void main() {
           maxUserPostSubjects: 1,
           maxFeedPagesPerQuery: 3,
         ),
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await restored.ensureHydrated();
 
@@ -830,7 +832,7 @@ void main() {
       final probe = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: probeStorageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await probe.ensureHydrated();
       probe.put(key: firstFeedKey, items: firstPage, nextCursor: 'cursor_1');
@@ -862,7 +864,7 @@ void main() {
         persistToPreferences: true,
         storageKey: boundedStorageKey,
         persistencePolicy: boundedPolicy,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await bounded.ensureHydrated();
       bounded.put(
@@ -891,7 +893,7 @@ void main() {
         persistToPreferences: true,
         storageKey: boundedStorageKey,
         persistencePolicy: boundedPolicy,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await restored.ensureHydrated();
       expect(restored.get(firstFeedKey)?.value.items.single.id, 'feed_1');
@@ -916,7 +918,7 @@ void main() {
         persistencePolicy: const ContentQuerySnapshotPersistencePolicy(
           maxPersistedBytes: 512,
         ),
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await store.ensureHydrated();
 
@@ -953,7 +955,7 @@ void main() {
         persistencePolicy: const ContentQuerySnapshotPersistencePolicy(
           maxPersistedBytes: 512,
         ),
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await store.ensureHydrated();
       store.put(
@@ -975,7 +977,7 @@ void main() {
       final restored = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await restored.ensureHydrated();
       expect(restored.get(queryKey), isNull);
@@ -1003,7 +1005,7 @@ void main() {
         persistToPreferences: true,
         storageKey: storageKey,
         persistencePolicy: policy,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await store.ensureHydrated();
       store.put(
@@ -1028,7 +1030,7 @@ void main() {
         persistToPreferences: true,
         storageKey: storageKey,
         persistencePolicy: policy,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await restored.ensureHydrated();
       expect(restored.get(firstFeedKey), isNull);
@@ -1048,7 +1050,7 @@ void main() {
         persistToPreferences: true,
         storageKey: storageKey,
         persistenceBackend: backend,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await store.ensureHydrated();
 
@@ -1096,7 +1098,7 @@ void main() {
       final store = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await store.ensureHydrated();
       store.put(
@@ -1110,7 +1112,7 @@ void main() {
       final afterInvalidate = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await afterInvalidate.ensureHydrated();
       expect(afterInvalidate.get(queryKey), isNull);
@@ -1126,7 +1128,7 @@ void main() {
       final afterClear = ContentQuerySnapshotStore(
         persistToPreferences: true,
         storageKey: storageKey,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       await afterClear.ensureHydrated();
       expect(afterClear.get(queryKey), isNull);

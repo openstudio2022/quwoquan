@@ -29,6 +29,7 @@
 - 每个 capability 只拥有一个服务的公开 operation；跨领域 Journey 由请求图组合，Provider 不导入兄弟 Provider。
 - 聚焦 integration 用例在测试现场导入具体强类型 case factory；release profile 只接受 `stackctl test-data-request` 从七领域 canonical Journey composition 导出的完整请求，禁止人工拼接 JSON 或用字符串 case/capability registry 选择。
 - capability 的外部 Provider 依赖同样使用强类型 key；环境 runner 只接受 `stackctl test-data-evidence` 对当前 request/candidate 精确投影的 evidence，未选中的 Provider 不进入前置检查。
+- Alpha/Beta/Gamma 各自持有 environment/target-bound exact handoff；共享 release/package/request 身份不等于共享 `candidateBindingDigest`，三环境验收不得复用单一环境 handoff。
 - 同一强类型 case composition 的跨进程序列化必须字节稳定；进程内随机请求身份不得进入 `requestDigest`，序列化层按 case 与依赖遍历生成稳定节点身份，同时保留每个 CaseResult 的独立数据实例。
 - immutable reference release 可以是显式 `research` 或 `commercial`；控制面只按 canonical readiness receipt 声明的生命周期调用对应严格验证器，禁止环境推断与生命周期升级。
 - `local_contract` 对象示例由测试语言内的 typed builder/generator 直接构造；不得在代码或结构化资产中重建场景数据源选择、整包数据集合或重置策略。独立 benchmark/eval corpus 只保存 manifest/digest 绑定的评测输入与期望，不拥有环境 Repository、Actor 或可变状态生命周期。
@@ -45,6 +46,7 @@
 - 数据准备、测试正文和清理分别计时，并记录 operation 数量、Provider 闭包、并发度和关键路径。
 - 多个独立 CaseResult 可并行，但必须共享全局并发预算；suite wall time 使用实测 `dataPreparationMs`，分支耗时只作为 work metric。
 - 性能提升不得通过减少 CaseResult、业务断言、真实 Provider、回读或清理获得；前置失败 run 不进入基线。
+- 旧受控基线必须使用 `serial-no-cache` benchmark-only policy；候选使用正常并发与 candidate immutable single-flight。benchmark-only 报告只能用于性能比较，不得进入环境绿色 CaseResult bundle。
 - 仅完成 provision/readback/cleanup、但同一 scope 内没有通过的业务 CaseResult 时，内部 run-summary 状态必须为 `prepared` 且 `baselineEligible=false`；不得把准备成功冒充测试绿色。
 
 ## 4. 契约引用
@@ -87,5 +89,16 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 Alpha/Beta/Gamma 当前候选的完整绿色 `qwq.case_result`、Prod 首条测试 mutation 前拒绝回执，以及同候选五次绿色性能样本。源码侧强类型请求、CaseResult 生命周期、并行与限流、失败清理、七领域 Provider 依赖闭包和历史分支退役已经由本地门禁证明，但不能替代真实环境准出。
+- 影响或价值：尚缺 Alpha/Beta/Gamma 当前候选的完整绿色 `qwq.case_result`、Prod 首条测试 mutation 前拒绝回执，以及同候选五次绿色性能样本。
+  - research isolation runtime proof 的服务侧契约（`GetResearchSessionAttestation`、`ResearchReleaseReadbackView` 清单与暴露位扩展、`GetOriginalImageAccessAudit`）与环境 owner 探针 runner（`stackctl research-isolation-probe`，12 个 live 操作、create-once proof）已实现并有 local_contract 证明。
+  - App ContractGraph 固定点三门（lock/inputs/generated-manifest）已在静止窗口同窗口全绿实录（331 App-exposed operations，4752 绑定一致，clean rebuild 通过）；`viewerLiked` persisted bundle 已收口。
+  - proof 的真实执行、最新 Search readback 复验与 readiness 转绿仍等待环境恢复：service-core 启动的一号根因（legacy 物理索引 `quwoquan_objects` 占用 search read-alias）已按服务自身 operator 指引删除修复并验证 healthy；二号阻断为 assistant readiness 依赖 platform-ops 而部分启动 roster 缺失，且 `stackctl down` 对部分启动无 receipt-bound 清理路径（状态机缺陷归 stackctl owner）。
+  - gamma release 全 roster 启动已可编排至 13 容器，但 `realtime-gateway /readyz`、`rtc-service /healthz`（UNKNOWN.SYSTEM.internal_error）与 `recommendation-service`（应用启动挂起）三个就绪探测在 release 形态下持续失败导致整栈回收；单机 local 资源组约束下 alpha/gamma 只能串行占用，环境启动由并行专攻循环持有调度。
+  - 最新一轮 gamma `up` 在打包阶段即被 `runtime topology manifest fields mismatch`（`runtime_topology_package.py` 的 manifest 顶层字段集精确校验）阻断：stackctl 包化重构进行中，校验器与既有 manifest 产物字段集不一致，归 stackctl owner；15 个 canonical case 的 `stackctl verify` 执行链与 research isolation probe 在其收敛前无法产出环境 CaseResult。
+  - 期间 stackctl lib 正被并行会话渐进包化（provider_conformance、deployment_candidate_manifest），薄入口断链已补一处；包化后 args 门、探针 runner 测试与 test-data-request 回归全绿。
+  - Beta/Gamma 均无 active immutable candidate，因此不能冻结三环境 handoff。
+  - 源码侧强类型请求、CaseResult 生命周期、并行与限流、失败清理、七领域 Provider 依赖闭包和历史分支退役已经由本地门禁证明，但不能替代真实环境准出。
+  - 页面数据供给缺口已收敛：canonical case 已扩至 15（requests 39，`test_data` 192 例与架构门全绿），新增覆盖 gathering、following subject、content reaction、skill subscription、群聊治理（chat-group-governance：建群/公告/管理员/成员回读）、问候箱（user-greeting-inbox）、待审入圈（circle-pending-approval：approval 政策 pending 队列）与足迹（content-footprint：`ReportBehaviors` → `GetMyFootprint` 同步闭环）；circle 冷启动由 `circle-membership` case 的 `ListPersonaCircles` 回读断言与 circle 商用 UAT journey 的 hub 列表非空断言双向锁定。剩余缺口是真机 UAT 的 provision 产物到 `QWQ_CIRCLE_VISUAL_*` dart-define 的自动注入 wiring，当前由运行方人工提供。
+  - 交集页（跨服务异步推荐派生）、circle stats 次级子列表与 skill center 的 Activity/Connector 子面不由测试数据控制面承诺确定性 provision，裁决与验收语义分别记录于 intersection-unified-experience `OPEN-002`、kpi-reporting `OPEN-001` 与 skill-user-lifecycle `OPEN-001`；`user.blocked_users` 与 `settings.my_reports` 为合法空列表验收态。
+  - 三方解耦审计余项的 owner 归属：App push 能力位（`pushDelivery`）已落地并有 capability profile 契约测试；`location.poi.search`/`location.route.read` 已在 alpha 绑定协议替身，其三层 conformance source 缺口在 provider-adapter-conformance-suite `OPEN-002` 追踪；message transport 双端全链证据在 realtime-push-and-offline-sync `OPEN-001`（P0）追踪；支付类外部依赖当前无任何服务契约声明外部 capability，不构成解耦缺口，建模自产品立项开始。
 - 完成判定：测试数据架构门零问题，`GWT-001` 与 `GWT-002` 由真实三层测试和 Alpha/Beta/Gamma 当前候选回执共同证明，Prod 只读边界回执通过，旧执行分支与双轨引用为零，并且五次绿色运行的数据准备 median 相比旧受控基线至少下降 50%、总验证 median 至少下降 30%。

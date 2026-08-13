@@ -18,9 +18,9 @@ from .pre_acquisition_handoff_document import (
 from .pre_acquisition_handoff_identity import (
     guard_acquisition_source_identity as _guard_acquisition_source_identity,
 )
-from .pre_acquisition_handoff_phase1 import (
+from .pre_acquisition_handoff_external_inputs import (
     freeze_carrier_pre_acquisition_inputs as _freeze_carrier_pre_acquisition_inputs,
-    validate_carrier_phase1_requirements,
+    validate_carrier_external_input_requirements,
 )
 
 
@@ -88,6 +88,6 @@ __all__ = [
     "guard_acquisition_source_identity",
     "load_pre_acquisition_handoff",
     "pre_acquisition_handoff_path",
-    "validate_carrier_phase1_requirements",
+    "validate_carrier_external_input_requirements",
     "write_pre_acquisition_handoff",
 ]

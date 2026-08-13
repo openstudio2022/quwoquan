@@ -490,7 +490,7 @@ void main() {
       expect(auth.sendOtpCalls, 2);
       expect(auth.idempotencyKeys, hasLength(2));
       expect(auth.idempotencyKeys.toSet(), hasLength(1));
-      expect(find.text('验证码已发出，请查看短信'), findsOneWidget);
+      expect(find.text(FoundationText.loginOtpDeliverySent), findsOneWidget);
     });
 
     testWidgets('排队状态持续同 key 确认并在 15 秒后停止自动轮询', (tester) async {
@@ -649,7 +649,7 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey<String>('loginConsentConfirm')),
       );
-      await tester.pumpAndSettle();
+      await _pumpUntil(tester, () => find.text('输入验证码').evaluate().isNotEmpty);
       expect(auth.sendOtpCalls, 1);
       expect(auth.lastSendOtp?.phone, '+8618013819016');
       expect(find.text('输入验证码'), findsOneWidget);
@@ -839,19 +839,30 @@ void main() {
       expect(find.bySemanticsLabel('当前正在使用微信登录'), findsOneWidget);
 
       await _enterPhone(tester, '18013819016');
+      await _pumpUntilPhonePrimaryReady(tester);
       await tester.tap(find.byKey(const ValueKey<String>('loginPhonePrimary')));
-      await tester.pump();
-      await tester.pump();
+      await _pumpUntil(tester, () => auth.sendOtpCalls > 0, maxPumps: 50);
       expect(auth.lastSendOtp?.sourceOperation, 'bind_phone');
       expect(auth.lastSendOtp?.bindingTicket, 'binding-ticket-1');
       expect(auth.lastSendOtp?.phone, '+8618013819016');
 
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(const ValueKey<String>('loginOtpHiddenField'))
+            .evaluate()
+            .isNotEmpty,
+        maxPumps: 50,
+      );
       await tester.enterText(
         find.byKey(const ValueKey<String>('loginOtpHiddenField')),
         '286419',
       );
-      await tester.pump();
-      await tester.pump();
+      await _pumpUntil(
+        tester,
+        () => credential.completeCalls > 0,
+        maxPumps: 50,
+      );
       expect(credential.completeCalls, 1);
       expect(credential.lastComplete?.bindingTicket, 'binding-ticket-1');
       expect(credential.lastComplete?.challengeId, 'challenge-1');
@@ -1136,6 +1147,17 @@ Future<void> _enterPhone(WidgetTester tester, String phone) async {
   await tester.pump();
 }
 
+Future<void> _pumpUntilPhonePrimaryReady(WidgetTester tester) async {
+  await _pumpUntil(tester, () {
+    final primary = find.byKey(const ValueKey<String>('loginPhonePrimary'));
+    if (primary.evaluate().isEmpty) return false;
+    final button = tester.widget<LoginActionButton>(primary);
+    return button.enabled &&
+        !button.busy &&
+        button.label == FoundationText.loginSendOtp;
+  });
+}
+
 Future<void> _reachOtp(WidgetTester tester) async {
   await _enterPhone(tester, '18013819016');
   await tester.tap(find.byIcon(CupertinoIcons.circle));
@@ -1161,7 +1183,15 @@ Future<void> _startSocial(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
   expect(find.text('请先阅读并同意相关协议'), findsOneWidget);
   await tester.tap(find.byKey(const ValueKey<String>('loginConsentConfirm')));
-  await tester.pumpAndSettle();
+  await _pumpUntil(
+    tester,
+    () => find
+        .byKey(const ValueKey<String>('loginConsentConfirm'))
+        .evaluate()
+        .isEmpty,
+    maxPumps: 50,
+  );
+  await tester.pump(const Duration(milliseconds: 100));
 }
 
 String _resendCountdownText(WidgetTester tester) {
@@ -1395,6 +1425,19 @@ class _RecordingAuthFacets
   @override
   Future<LogoutAck> logout(LogoutCommand command) async =>
       const LogoutAck(revoked: true);
+
+  @override
+  Future<WhitelistedResearchSession> issueWhitelistedResearchSession(
+    IssueWhitelistedResearchSessionCommand command,
+  ) async {
+    return WhitelistedResearchSession(
+      // sha256("recording-research-subject")
+      subjectHash:
+          'sha256:535a5b5f0bc4cf5e7f3d140c6c3577486dc3e078f1b9c248c41cf7969605bb66',
+      attestationId: 'recording-research-attestation',
+      expiresAt: DateTime.utc(2099),
+    );
+  }
 
   @override
   Future<AlipayAuthorizationGrant> createAlipayAuthorizationRequest(

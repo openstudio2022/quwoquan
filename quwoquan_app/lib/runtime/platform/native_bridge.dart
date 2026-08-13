@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 ///  - `quwoquan/auth/one_tap`        -> [OneTapLoginClient]
 ///                                      (one_tap_login_native_bridge.dart),
 ///                                      gated by `PlatformCapabilities.oneTapLogin`.
-///  - `quwoquan/video_editing`       -> used by `IosVideoEditingService`, gated
+///  - `quwoquan/video_editing`       -> used by `NativeVideoEditingService`, gated
 ///                                      by `PlatformCapabilities.nativeVideoEditing`.
 ///  - `personal_assistant/native_api`-> abstracted here as
 ///                                      [AssistantLocalContextBridge].

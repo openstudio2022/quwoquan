@@ -1,3 +1,4 @@
+// readiness_case: greeting_request_inbox_app_uat
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-004
 /// 两个 disposable actor 经公开 User API 建立真实 GreetingRequest，随后由
 /// production App 完成回复升级、忽略、撤回与 Remote 权威读回。

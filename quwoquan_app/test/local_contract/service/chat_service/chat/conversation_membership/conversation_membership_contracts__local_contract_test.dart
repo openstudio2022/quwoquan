@@ -11,7 +11,7 @@ void main() {
           cursor: 'opaque-cursor',
           limit: 30,
           role: 'admin',
-          sort: 'display_name_asc',
+          sort: MemberListSort.displayNameAsc,
           query: '小趣',
         ),
       );

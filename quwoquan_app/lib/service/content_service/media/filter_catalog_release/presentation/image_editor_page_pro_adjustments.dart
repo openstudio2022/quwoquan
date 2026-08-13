@@ -29,6 +29,8 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     _curvesSnapshot = _curvesState;
     _wbSnapshotTemperature = _wbTemperature;
     _wbSnapshotTint = _wbTint;
+    _perspectiveSnapshotHorizontal = _perspectiveHorizontal;
+    _perspectiveSnapshotVertical = _perspectiveVertical;
     _resetHslSessionHistory();
     _resetBwSessionHistory();
     _resetLocalSessionHistory();
@@ -47,6 +49,8 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       _curvesState = _curvesSnapshot;
       _wbTemperature = _wbSnapshotTemperature;
       _wbTint = _wbSnapshotTint;
+      _perspectiveHorizontal = _perspectiveSnapshotHorizontal;
+      _perspectiveVertical = _perspectiveSnapshotVertical;
       _localAnchors
         ..clear()
         ..addAll(cloneLocalAnchors(_localSnapshotAnchors));
@@ -75,6 +79,9 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       _showProToolbox = false;
     });
     _disposeCurveSessionResources();
+    _disposeHslSessionResources();
+    _disposeBasePreviewResources();
+    _disposeLocalPreviewResources();
   }
 
   void _onProBaseValueChanged(String toolType, double value) {
@@ -106,6 +113,9 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       }
       _proBaseValues[toolType] = clamped;
     });
+    if (_isEditingOverall) {
+      _scheduleBasePreviewRecompute();
+    }
   }
 
   void _showLocalHint(String message) {
@@ -329,7 +339,6 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       ..clear()
       ..add(cloneHslValues(_proHslValues));
     _hslSessionCursor = 0;
-    _hslSessionBaselineValues = cloneHslValues(_proHslValues);
     _isComparingSessionBaseline = false;
   }
 
@@ -371,6 +380,334 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       _proHslValues[_selectedHslChannel]![axis] = clamped;
       _recordHslSessionStep();
     });
+    _scheduleHslPreviewRecompute();
+  }
+
+  /// UI 8 通道值 → 引擎分带渲染参数（页面边界唯一映射）。
+  List<ImageEditorHslBandSpec> _hslBandSpecs(
+    Map<String, Map<String, double>> values,
+  ) {
+    return <ImageEditorHslBandSpec>[
+      for (final channel in kImageEditorHslChannels)
+        ImageEditorHslBandSpec(
+          hueMin: channel.hueMin,
+          hueMax: channel.hueMax,
+          hueShift: values[channel.key]?[kHslAxisHue] ?? 0,
+          saturation: values[channel.key]?[kHslAxisSaturation] ?? 0,
+          luminance: values[channel.key]?[kHslAxisLuminance] ?? 0,
+        ),
+    ];
+  }
+
+  bool get _isEditingOverall {
+    return _selectedToolIndex == kImageEditorToolPro &&
+        _selectedProCategory == kImageEditorProCategoryOverall;
+  }
+
+  void _disposeLocalPreviewResources() {
+    _localPreviewBase?.dispose();
+    _localPreviewBase = null;
+    _localPreviewBaseRgba = null;
+    _localPreviewImage?.dispose();
+    _localPreviewImage = null;
+    _localPreviewDirty = false;
+    _localPreviewComputing = false;
+  }
+
+  /// 进入局部面板：异步准备降采样底图供 CPU 局部预览。
+  void _prepareLocalPreviewSession() {
+    _disposeLocalPreviewResources();
+    unawaited(_loadLocalPreviewBase());
+  }
+
+  Future<void> _loadLocalPreviewBase() async {
+    try {
+      final bytes = await _loadImageBytes(_currentPath);
+      if (bytes.isEmpty || !mounted) return;
+      final image = await ImageEditorExportEngine.decodeConstrained(
+        bytes,
+        maxDimension: ImageEditorExportEngine.kPreviewDecodeDimension,
+      );
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+      _setEditorState(() {
+        _localPreviewBase = image;
+        _localPreviewBaseRgba = data?.buffer.asUint8List();
+      });
+      _scheduleLocalPreviewRecompute();
+    } catch (error) {
+      _observability.recordPageState(
+        pageName: _ImageEditorPageState._kPageName,
+        phase: 'failure',
+        surface: _ImageEditorPageState._kSurfaceId,
+        copyKey: 'local_preview_load',
+        error: error is Exception ? error : null,
+      );
+    }
+  }
+
+  void _scheduleLocalPreviewRecompute() {
+    if (_localPreviewComputing) {
+      _localPreviewDirty = true;
+      return;
+    }
+    _localPreviewDirty = false;
+    _localPreviewComputing = true;
+    unawaited(_recomputeLocalPreview());
+  }
+
+  Future<void> _recomputeLocalPreview() async {
+    try {
+      final base = _localPreviewBase;
+      final baseRgba = _localPreviewBaseRgba;
+      if (base == null || baseRgba == null || !mounted) {
+        return;
+      }
+      final specs = _buildLocalRenderSpecs();
+      if (specs.isEmpty) {
+        final old = _localPreviewImage;
+        _setEditorState(() => _localPreviewImage = null);
+        old?.dispose();
+        return;
+      }
+      final pixels = Uint8List.fromList(baseRgba);
+      ImageEditorExportEngine.applyLocalAdjustmentsToRgbaPixels(
+        pixels,
+        base.width,
+        base.height,
+        specs,
+      );
+      final buffer = await ui.ImmutableBuffer.fromUint8List(pixels);
+      final descriptor = ui.ImageDescriptor.raw(
+        buffer,
+        width: base.width,
+        height: base.height,
+        pixelFormat: ui.PixelFormat.rgba8888,
+      );
+      final codec = await descriptor.instantiateCodec();
+      final frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      final old = _localPreviewImage;
+      _setEditorState(() => _localPreviewImage = frame.image);
+      if (!identical(old, frame.image)) {
+        old?.dispose();
+      }
+    } finally {
+      _localPreviewComputing = false;
+      if (_localPreviewDirty && mounted) {
+        _scheduleLocalPreviewRecompute();
+      }
+    }
+  }
+
+  void _disposeBasePreviewResources() {
+    _basePreviewBase?.dispose();
+    _basePreviewBase = null;
+    _basePreviewBaseRgba = null;
+    _basePreviewImage?.dispose();
+    _basePreviewImage = null;
+    _basePreviewDirty = false;
+    _basePreviewComputing = false;
+  }
+
+  /// 进入整体面板：异步准备降采样底图供 CPU 组合预览。
+  void _prepareBasePreviewSession() {
+    _disposeBasePreviewResources();
+    unawaited(_loadBasePreviewBase());
+  }
+
+  Future<void> _loadBasePreviewBase() async {
+    try {
+      final bytes = await _loadImageBytes(_currentPath);
+      if (bytes.isEmpty || !mounted) return;
+      final image = await ImageEditorExportEngine.decodeConstrained(
+        bytes,
+        maxDimension: ImageEditorExportEngine.kPreviewDecodeDimension,
+      );
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+      _setEditorState(() {
+        _basePreviewBase = image;
+        _basePreviewBaseRgba = data?.buffer.asUint8List();
+      });
+      _scheduleBasePreviewRecompute();
+    } catch (error) {
+      _observability.recordPageState(
+        pageName: _ImageEditorPageState._kPageName,
+        phase: 'failure',
+        surface: _ImageEditorPageState._kSurfaceId,
+        copyKey: 'base_preview_load',
+        error: error is Exception ? error : null,
+      );
+    }
+  }
+
+  void _scheduleBasePreviewRecompute() {
+    if (_basePreviewComputing) {
+      _basePreviewDirty = true;
+      return;
+    }
+    _basePreviewDirty = false;
+    _basePreviewComputing = true;
+    unawaited(_recomputeBasePreview());
+  }
+
+  Future<void> _recomputeBasePreview() async {
+    try {
+      final base = _basePreviewBase;
+      final baseRgba = _basePreviewBaseRgba;
+      if (base == null || baseRgba == null || !mounted) {
+        return;
+      }
+      if (!_hasProBaseAdjustments) {
+        final old = _basePreviewImage;
+        _setEditorState(() => _basePreviewImage = null);
+        old?.dispose();
+        return;
+      }
+      final pixels = Uint8List.fromList(baseRgba);
+      ImageEditorExportEngine.applyColorMatrixToRgbaPixels(
+        pixels,
+        _buildProBaseColorMatrix(),
+      );
+      ImageEditorExportEngine.applyDetailAdjustmentsToRgbaPixels(
+        pixels,
+        base.width,
+        base.height,
+        _buildProBaseDetailSpec(),
+      );
+      final buffer = await ui.ImmutableBuffer.fromUint8List(pixels);
+      final descriptor = ui.ImageDescriptor.raw(
+        buffer,
+        width: base.width,
+        height: base.height,
+        pixelFormat: ui.PixelFormat.rgba8888,
+      );
+      final codec = await descriptor.instantiateCodec();
+      final frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      final old = _basePreviewImage;
+      _setEditorState(() => _basePreviewImage = frame.image);
+      if (!identical(old, frame.image)) {
+        old?.dispose();
+      }
+    } finally {
+      _basePreviewComputing = false;
+      if (_basePreviewDirty && mounted) {
+        _scheduleBasePreviewRecompute();
+      }
+    }
+  }
+
+  void _disposeHslSessionResources() {
+    _hslPreviewBase?.dispose();
+    _hslPreviewBase = null;
+    _hslPreviewBaseRgba = null;
+    _hslPreviewImage?.dispose();
+    _hslPreviewImage = null;
+    _hslPreviewDirty = false;
+    _hslPreviewComputing = false;
+  }
+
+  /// 进入 HSL 面板：异步准备降采样底图供 CPU 分带预览。
+  void _prepareHslPreviewSession() {
+    _disposeHslSessionResources();
+    unawaited(_loadHslPreviewBase());
+  }
+
+  Future<void> _loadHslPreviewBase() async {
+    try {
+      final bytes = await _loadImageBytes(_currentPath);
+      if (bytes.isEmpty || !mounted) return;
+      final image = await ImageEditorExportEngine.decodeConstrained(
+        bytes,
+        maxDimension: ImageEditorExportEngine.kPreviewDecodeDimension,
+      );
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      if (!mounted) {
+        image.dispose();
+        return;
+      }
+      _setEditorState(() {
+        _hslPreviewBase = image;
+        _hslPreviewBaseRgba = data?.buffer.asUint8List();
+      });
+      _scheduleHslPreviewRecompute();
+    } catch (error) {
+      _observability.recordPageState(
+        pageName: _ImageEditorPageState._kPageName,
+        phase: 'failure',
+        surface: _ImageEditorPageState._kSurfaceId,
+        copyKey: 'hsl_preview_load',
+        error: error is Exception ? error : null,
+      );
+    }
+  }
+
+  void _scheduleHslPreviewRecompute() {
+    if (_hslPreviewComputing) {
+      _hslPreviewDirty = true;
+      return;
+    }
+    _hslPreviewDirty = false;
+    _hslPreviewComputing = true;
+    unawaited(_recomputeHslPreview());
+  }
+
+  Future<void> _recomputeHslPreview() async {
+    try {
+      final base = _hslPreviewBase;
+      final baseRgba = _hslPreviewBaseRgba;
+      if (base == null || baseRgba == null || !mounted) {
+        return;
+      }
+      if (!_hasProHslAdjustments) {
+        final old = _hslPreviewImage;
+        _setEditorState(() => _hslPreviewImage = null);
+        old?.dispose();
+        return;
+      }
+      final pixels = Uint8List.fromList(baseRgba);
+      ImageEditorExportEngine.applyHslBandsToRgbaPixels(
+        pixels,
+        _hslBandSpecs(_proHslValues),
+      );
+      final buffer = await ui.ImmutableBuffer.fromUint8List(pixels);
+      final descriptor = ui.ImageDescriptor.raw(
+        buffer,
+        width: base.width,
+        height: base.height,
+        pixelFormat: ui.PixelFormat.rgba8888,
+      );
+      final codec = await descriptor.instantiateCodec();
+      final frame = await codec.getNextFrame();
+      if (!mounted) {
+        frame.image.dispose();
+        return;
+      }
+      final old = _hslPreviewImage;
+      _setEditorState(() => _hslPreviewImage = frame.image);
+      if (!identical(old, frame.image)) {
+        old?.dispose();
+      }
+    } finally {
+      _hslPreviewComputing = false;
+      if (_hslPreviewDirty && mounted) {
+        _scheduleHslPreviewRecompute();
+      }
+    }
   }
 
   void _onBwLevelChanged({required bool isWhite, required double value}) {
@@ -426,6 +763,8 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     }
     _localSessionStack.add(snapshot);
     _localSessionCursor = _localSessionStack.length - 1;
+    // 所有局部锚点变更（值/增删/拖动）收口于此，统一驱动 CPU 预览重算。
+    _scheduleLocalPreviewRecompute();
   }
 
   bool _isProBaseSessionEdited() {
@@ -494,6 +833,8 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     final isBw = _selectedProCategory == kImageEditorProCategoryBwLevels;
     final isCurve = _selectedProCategory == kImageEditorProCategoryCurve;
     final isWb = _selectedProCategory == kImageEditorProCategoryWhiteBalance;
+    final isPerspective =
+        _selectedProCategory == kImageEditorProCategoryPerspective;
 
     ImageEditorStepPayload? payload;
     if (isOverall && _isProBaseSessionEdited() && _hasProBaseAdjustments) {
@@ -519,6 +860,11 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       payload = ImageEditorProWhiteBalanceStepPayload(
         temperature: _wbTemperature,
         tint: _wbTint,
+      );
+    } else if (isPerspective && _hasPerspectiveAdjustments) {
+      payload = ImageEditorProPerspectiveStepPayload(
+        horizontal: _perspectiveHorizontal,
+        vertical: _perspectiveVertical,
       );
     }
 
@@ -546,6 +892,9 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       _showProToolbox = false;
     });
     _disposeCurveSessionResources();
+    _disposeHslSessionResources();
+    _disposeBasePreviewResources();
+    _disposeLocalPreviewResources();
   }
 
   /// 按类别烘焙当前会话到文件；曲线走 LUT 引擎，其余走矩阵引擎。
@@ -557,27 +906,38 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       final image = await ImageEditorExportEngine.decodeConstrained(bytes);
       ui.Image adjusted;
       if (subType == 'localAdjustments') {
+        // 真局部管线：矩阵+细节逐像素，径向权重与预览同一分段渐变。
         adjusted = await ImageEditorExportEngine.applyLocalAdjustments(
           image,
-          <ImageEditorLocalRenderSpec>[
-            for (final anchor in _localAnchors)
-              if (anchor.values.values.any((value) => value.abs() > 0.001))
-                ImageEditorLocalRenderSpec(
-                  center: anchor.center,
-                  radiusOnShortSide: anchor.radius,
-                  colorMatrix: _buildLocalAnchorColorMatrix(anchor),
-                ),
-          ],
+          _buildLocalRenderSpecs(),
         );
       } else if (subType == 'curves') {
         adjusted = await ImageEditorExportEngine.applyCurves(
           image,
           _curvesState,
         );
+      } else if (subType == 'hslAdjustments') {
+        // 真 HSL 分带（与 CPU 预览同一算法），不再用取平均矩阵近似。
+        adjusted = await ImageEditorExportEngine.applyHslBands(
+          image,
+          _hslBandSpecs(_proHslValues),
+        );
+      } else if (subType == 'baseAdjustments') {
+        // 整体面板：纯色彩矩阵 + 细节/分区/颗粒逐像素，与 CPU 预览同管线。
+        adjusted = await ImageEditorExportEngine.applyBaseAdjustments(
+          image,
+          colorMatrix: _buildProBaseColorMatrix(),
+          detail: _buildProBaseDetailSpec(),
+        );
+      } else if (subType == 'perspectiveAdjustments') {
+        // 透视：预览 Transform 与烘焙共用 PerspectiveGeometry 同一矩阵。
+        adjusted = await ImageEditorExportEngine.applyPerspective(
+          image,
+          horizontalDegrees: _perspectiveDegrees(_perspectiveHorizontal),
+          verticalDegrees: _perspectiveDegrees(_perspectiveVertical),
+        );
       } else {
         final matrix = switch (subType) {
-          'baseAdjustments' => _buildProBaseColorMatrix(),
-          'hslAdjustments' => _buildProHslColorMatrix(_proHslValues),
           'bwLevelsAdjustments' => _bwLevelsMatrix(
             whiteLevel: _bwWhiteLevel,
             blackLevel: _bwBlackLevel,
@@ -612,7 +972,6 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
       case 'hslAdjustments':
         _proHslValues = createDefaultHslValues();
         _proHslSnapshotValues = createDefaultHslValues();
-        _hslSessionBaselineValues = createDefaultHslValues();
         _hslSessionStack.clear();
         _hslSessionCursor = -1;
       case 'bwLevelsAdjustments':
@@ -632,6 +991,22 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
         _wbTint = 0;
         _wbSnapshotTemperature = 0;
         _wbSnapshotTint = 0;
+      case 'perspectiveAdjustments':
+        _perspectiveHorizontal = 0;
+        _perspectiveVertical = 0;
+        _perspectiveSnapshotHorizontal = 0;
+        _perspectiveSnapshotVertical = 0;
     }
   }
+
+  bool get _hasPerspectiveAdjustments =>
+      _perspectiveHorizontal.abs() > 0.001 || _perspectiveVertical.abs() > 0.001;
+
+  bool get _isEditingPerspective =>
+      _selectedToolIndex == kImageEditorToolPro &&
+      _selectedProCategory == kImageEditorProCategoryPerspective;
+
+  /// 滑杆值（-100..100）映射透视角度（±kMaxDegrees 度）。
+  double _perspectiveDegrees(double sliderValue) =>
+      sliderValue / 100 * PerspectiveGeometry.kMaxDegrees;
 }

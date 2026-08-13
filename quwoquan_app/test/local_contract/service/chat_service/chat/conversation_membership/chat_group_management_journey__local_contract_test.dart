@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_announcement_page.dart';
@@ -19,6 +20,8 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_seed_refs.dart';
 import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
 
@@ -29,16 +32,32 @@ ChatInteractionTelemetryTracker _telemetryTracker() =>
       telemetryReporter: RecordingAppTelemetryRecorder(),
     );
 
-List<Override> _chatTestOverrides(ChatRepository repo) => [
-  chatRepositoryCompositionProvider.overrideWithValue(repo),
+List<Override> _chatTestOverrides({
+  ChatTestFacets? facets,
+  ChatMemberRepository? member,
+  ChatGroupAdminRepository? groupAdmin,
+}) => [
+  ...chatTestRepositoryOverrides(
+    facets: facets,
+    member: member,
+    groupAdmin: groupAdmin,
+  ),
   currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
 ];
 
 /// 完整路由栈：settings → manage → transfer-ownership / admins
-Widget _scopedApp({ChatRepository? mock}) {
-  final repo = mock ?? MockChatRepository();
+Widget _scopedApp({
+  ChatMemberRepository? member,
+  ChatGroupAdminRepository? groupAdmin,
+}) {
+  final facets = ChatTestFacets();
+  final resolvedGroupAdmin = groupAdmin ?? facets.groupAdmin;
   return ProviderScope(
-    overrides: _chatTestOverrides(repo),
+    overrides: _chatTestOverrides(
+      facets: facets,
+      member: member,
+      groupAdmin: resolvedGroupAdmin,
+    ),
     child: MaterialApp.router(
       routerConfig: GoRouter(
         initialLocation: '/chat/$_testConvId/settings',
@@ -57,7 +76,7 @@ Widget _scopedApp({ChatRepository? mock}) {
                     path: 'manage',
                     builder: (_, state) => GroupManagePage(
                       conversationId: state.pathParameters['id'] ?? _testConvId,
-                      conversationDissolver: repo,
+                      conversationDissolver: resolvedGroupAdmin,
                     ),
                     routes: [
                       GoRoute(
@@ -121,9 +140,7 @@ void main() {
     ) async {
       _suppressImageErrors();
       // 用 canonical fixture 验证当前用户为 owner。
-      final container = ProviderContainer(
-        overrides: _chatTestOverrides(MockChatRepository()),
-      );
+      final container = ProviderContainer(overrides: _chatTestOverrides());
       addTearDown(container.dispose);
 
       final notifier = container.read(
@@ -138,7 +155,7 @@ void main() {
       // widget 层：渲染 ChatSettingsPage，验证页面存在（UI 分离测试见 widget test）
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(MockChatRepository()),
+          overrides: _chatTestOverrides(),
           child: MaterialApp(
             home: Scaffold(body: ChatSettingsPage(conversationId: _testConvId)),
           ),
@@ -152,7 +169,7 @@ void main() {
 
     testWidgets('J-A3: 普通成员不显示群管理入口', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp(mock: _MemberRoleMockRepo()));
+      await tester.pumpWidget(_scopedApp(member: _MemberRoleMockRepo()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -162,8 +179,10 @@ void main() {
 
     testWidgets('J-A4: 群主从设置页发布公告并返回权威新值', (tester) async {
       _suppressImageErrors();
-      final repository = _OwnerRoleMockRepo();
-      await tester.pumpWidget(_scopedApp(mock: repository));
+      final state = _OwnerJourneyState();
+      await tester.pumpWidget(
+        _scopedApp(member: state.member, groupAdmin: state.facets.groupAdmin),
+      );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -208,7 +227,9 @@ void main() {
       }
       await tester.pump(const Duration(seconds: 1));
 
-      final updatedGroup = await repository.getGroupHome(_testConvId);
+      final updatedGroup = await state.facets.groupAdmin.getGroupHome(
+        _testConvId,
+      );
       expect(updatedGroup.announcement, '旅程公告：周日集合');
       expect(find.byType(ChatSettingsPage), findsOneWidget);
       expect(find.text('旅程公告：周日集合'), findsOneWidget);
@@ -219,10 +240,10 @@ void main() {
   group('旅程 B — 群管理页元素验证', () {
     testWidgets('J-B1: GroupManagePage 仅展示真实群名治理开关', (tester) async {
       _suppressImageErrors();
-      final repository = MockChatRepository();
+      final facets = ChatTestFacets();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(repository),
+          overrides: _chatTestOverrides(facets: facets),
           child: MaterialApp.router(
             routerConfig: GoRouter(
               initialLocation: '/chat/$_testConvId/settings/manage',
@@ -237,7 +258,7 @@ void main() {
                       path: 'manage',
                       builder: (_, s) => GroupManagePage(
                         conversationId: s.pathParameters['id'] ?? _testConvId,
-                        conversationDissolver: repository,
+                        conversationDissolver: facets.groupAdmin,
                       ),
                     ),
                   ],
@@ -281,15 +302,15 @@ void main() {
 
     testWidgets('J-B3: 群主可见群主管理权转让和群管理员入口', (tester) async {
       _suppressImageErrors();
-      final repository = MockChatRepository();
+      final facets = ChatTestFacets();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(repository),
+          overrides: _chatTestOverrides(facets: facets),
           child: MaterialApp(
             home: Scaffold(
               body: GroupManagePage(
                 conversationId: _testConvId,
-                conversationDissolver: repository,
+                conversationDissolver: facets.groupAdmin,
               ),
             ),
           ),
@@ -304,15 +325,15 @@ void main() {
 
     testWidgets('J-B4: 群主可见解散群聊按钮', (tester) async {
       _suppressImageErrors();
-      final repository = MockChatRepository();
+      final facets = ChatTestFacets();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(repository),
+          overrides: _chatTestOverrides(facets: facets),
           child: MaterialApp(
             home: Scaffold(
               body: GroupManagePage(
                 conversationId: _testConvId,
-                conversationDissolver: repository,
+                conversationDissolver: facets.groupAdmin,
               ),
             ),
           ),
@@ -330,7 +351,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(MockChatRepository()),
+          overrides: _chatTestOverrides(),
           child: MaterialApp(
             home: Scaffold(
               body: TransferOwnershipPage(
@@ -351,7 +372,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(MockChatRepository()),
+          overrides: _chatTestOverrides(),
           child: MaterialApp(
             home: Scaffold(
               body: TransferOwnershipPage(
@@ -375,7 +396,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(MockChatRepository()),
+          overrides: _chatTestOverrides(),
           child: MaterialApp(
             home: Scaffold(
               body: TransferOwnershipPage(
@@ -401,7 +422,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(MockChatRepository()),
+          overrides: _chatTestOverrides(),
           child: MaterialApp(
             home: Scaffold(
               body: TransferOwnershipPage(
@@ -429,7 +450,7 @@ void main() {
       final tracking = _TrackingChatRepository();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(tracking),
+          overrides: _chatTestOverrides(groupAdmin: tracking),
           child: MaterialApp(
             home: Scaffold(
               body: TransferOwnershipPage(
@@ -455,9 +476,7 @@ void main() {
 
     testWidgets('J-C7: 转让后 Provider state 中当前用户变为 member', (tester) async {
       _suppressImageErrors();
-      final container = ProviderContainer(
-        overrides: _chatTestOverrides(MockChatRepository()),
-      );
+      final container = ProviderContainer(overrides: _chatTestOverrides());
       addTearDown(container.dispose);
 
       // 触发加载
@@ -492,7 +511,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(MockChatRepository()),
+          overrides: _chatTestOverrides(),
           child: MaterialApp(
             home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
           ),
@@ -508,7 +527,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(MockChatRepository()),
+          overrides: _chatTestOverrides(),
           child: MaterialApp(
             home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
           ),
@@ -525,9 +544,11 @@ void main() {
 
     testWidgets('J-D4: 初始管理员显示管理员标签', (tester) async {
       _suppressImageErrors();
+      // 最小共享 seed 不再内置 admin 角色成员；由用例自治注入含
+      // 初始管理员的成员名册。
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(MockChatRepository()),
+          overrides: _chatTestOverrides(member: _AdminLimitMockRepo()),
           child: MaterialApp(
             home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
           ),
@@ -536,7 +557,6 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
-      // canonical fixture 中 fixture_user_weekend_1 是初始管理员。
       expect(find.text(ChatText.admin), findsWidgets);
     });
 
@@ -544,7 +564,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(_AdminLimitMockRepo()),
+          overrides: _chatTestOverrides(member: _AdminLimitMockRepo()),
           child: MaterialApp(
             home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
           ),
@@ -576,7 +596,10 @@ void main() {
       final tracking = _TrackingChatRepository();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(tracking),
+          overrides: _chatTestOverrides(
+            member: _AdminLimitMockRepo(),
+            groupAdmin: tracking,
+          ),
           child: MaterialApp(
             home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
           ),
@@ -596,9 +619,7 @@ void main() {
 
     testWidgets('J-D9: updateGroupAdmins 后 Provider state 已更新', (tester) async {
       _suppressImageErrors();
-      final container = ProviderContainer(
-        overrides: _chatTestOverrides(MockChatRepository()),
-      );
+      final container = ProviderContainer(overrides: _chatTestOverrides());
       addTearDown(container.dispose);
 
       final notifier = container.read(
@@ -638,7 +659,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(_ErrorMembersRepo()),
+          overrides: _chatTestOverrides(member: _ErrorMembersRepo()),
           child: MaterialApp(
             home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
           ),
@@ -652,9 +673,7 @@ void main() {
 
     testWidgets('J-E2: transferOwnership 失败后 state 回滚', (tester) async {
       _suppressImageErrors();
-      final container = ProviderContainer(
-        overrides: _chatTestOverrides(MockChatRepository()),
-      );
+      final container = ProviderContainer(overrides: _chatTestOverrides());
       addTearDown(container.dispose);
 
       final notifier = container.read(
@@ -669,7 +688,7 @@ void main() {
 
       // 替换为失败 repo 并尝试转让
       final failContainer = ProviderContainer(
-        overrides: _chatTestOverrides(_FailTransferRepo()),
+        overrides: _chatTestOverrides(groupAdmin: _FailTransferRepo()),
       );
       addTearDown(failContainer.dispose);
 
@@ -697,7 +716,7 @@ void main() {
     testWidgets('J-E3: updateGroupAdmins 失败后 state 回滚', (tester) async {
       _suppressImageErrors();
       final container = ProviderContainer(
-        overrides: _chatTestOverrides(_FailAdminsRepo()),
+        overrides: _chatTestOverrides(groupAdmin: _FailAdminsRepo()),
       );
       addTearDown(container.dispose);
 
@@ -735,7 +754,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(_EmptyMembersRepo()),
+          overrides: _chatTestOverrides(member: _EmptyMembersRepo()),
           child: MaterialApp(
             home: Scaffold(body: GroupAdminsPage(conversationId: _testConvId)),
           ),
@@ -752,8 +771,11 @@ void main() {
 
 // ─── Mock 辅助类 ──────────────────────────────────────────────────────────────
 
-/// 追踪型：验证方法调用次数和参数
-class _TrackingChatRepository extends MockChatRepository {
+/// 追踪型：验证方法调用次数和参数。
+/// 读方法委托共享 typed double，保证页面渲染前置（群首页/设置）可用。
+class _TrackingChatRepository extends Fake implements ChatGroupAdminRepository {
+  final ChatGroupAdminRepository _delegate = ChatTestFacets().groupAdmin;
+
   int transferCount = 0;
   String? lastNewOwnerId;
   String? lastTransferIdempotencyKey;
@@ -770,11 +792,6 @@ class _TrackingChatRepository extends MockChatRepository {
     transferCount++;
     lastNewOwnerId = newOwnerId;
     lastTransferIdempotencyKey = idempotencyKey;
-    await super.transferOwnership(
-      conversationId,
-      newOwnerId,
-      idempotencyKey: idempotencyKey,
-    );
   }
 
   @override
@@ -786,23 +803,26 @@ class _TrackingChatRepository extends MockChatRepository {
     updateAdminsCount++;
     lastAdminIds = adminIds;
     lastAdminsIdempotencyKey = idempotencyKey;
-    await super.updateGroupAdmins(
-      conversationId,
-      adminIds,
-      idempotencyKey: idempotencyKey,
-    );
   }
+
+  @override
+  Future<GroupHome> getGroupHome(String conversationId) =>
+      _delegate.getGroupHome(conversationId);
+
+  @override
+  Future<ChatGroupSettingsViewData> getGroupSettings(String conversationId) =>
+      _delegate.getGroupSettings(conversationId);
 }
 
 /// 当前用户为普通成员（验证权限隔离）
-class _MemberRoleMockRepo extends MockChatRepository {
+class _MemberRoleMockRepo extends Fake implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     return [
       ConversationMemberListRow(
@@ -829,14 +849,23 @@ class _MemberRoleMockRepo extends MockChatRepository {
   }
 }
 
-class _OwnerRoleMockRepo extends MockChatRepository {
+final class _OwnerJourneyState {
+  _OwnerJourneyState() {
+    member = _OwnerRoleMemberRepository();
+  }
+
+  final ChatTestFacets facets = ChatTestFacets();
+  late final ChatMemberRepository member;
+}
+
+class _OwnerRoleMemberRepository extends Fake implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     return <ConversationMemberListRow>[
       ConversationMemberListRow(
@@ -863,14 +892,14 @@ class _OwnerRoleMockRepo extends MockChatRepository {
   }
 }
 
-class _AdminLimitMockRepo extends MockChatRepository {
+class _AdminLimitMockRepo extends Fake implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     ConversationMemberListRow member(
       String userId,
@@ -901,21 +930,21 @@ class _AdminLimitMockRepo extends MockChatRepository {
 }
 
 /// listMembers 抛异常
-class _ErrorMembersRepo extends MockChatRepository {
+class _ErrorMembersRepo extends Fake implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     throw Exception('network error');
   }
 }
 
 /// transferOwnership 抛异常（验证乐观回滚）
-class _FailTransferRepo extends MockChatRepository {
+class _FailTransferRepo extends Fake implements ChatGroupAdminRepository {
   @override
   Future<void> transferOwnership(
     String conversationId,
@@ -927,7 +956,7 @@ class _FailTransferRepo extends MockChatRepository {
 }
 
 /// updateGroupAdmins 抛异常（验证乐观回滚）
-class _FailAdminsRepo extends MockChatRepository {
+class _FailAdminsRepo extends Fake implements ChatGroupAdminRepository {
   @override
   Future<void> updateGroupAdmins(
     String conversationId,
@@ -939,14 +968,14 @@ class _FailAdminsRepo extends MockChatRepository {
 }
 
 /// 返回空成员列表
-class _EmptyMembersRepo extends MockChatRepository {
+class _EmptyMembersRepo extends Fake implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     return [];
   }

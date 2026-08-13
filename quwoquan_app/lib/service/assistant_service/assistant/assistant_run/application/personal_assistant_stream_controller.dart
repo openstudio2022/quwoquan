@@ -10,7 +10,6 @@ import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/d
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_process_timeline.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_presentation_stream_projection.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_run_stream_event.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_assistant_turn_contract.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_answer_anchor.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_assistant_timeline_payload.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_transcript_timeline_row.dart';
@@ -514,8 +513,6 @@ class PersonalAssistantStreamController
           }
           if (streamEvent.type ==
                   AssistantRunStreamEventType.presentationSnapshot ||
-              streamEvent.type ==
-                  AssistantRunStreamEventType.presentationPatch ||
               streamEvent.type ==
                   AssistantRunStreamEventType.presentationCommit) {
             try {

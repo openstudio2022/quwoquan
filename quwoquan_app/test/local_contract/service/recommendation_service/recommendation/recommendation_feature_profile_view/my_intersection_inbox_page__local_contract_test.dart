@@ -521,7 +521,7 @@ void main() {
     );
   });
 
-  testWidgets('我的交集：紧凑 row 展示 lifecycle 弱标，但不展示 secondary/行动 pill', (
+  testWidgets('我的交集：lifecycle 弱标 + 可行动交集置顶可约分组并渲染主行动 pill', (
     tester,
   ) async {
     final repo = _LifecycleIntersectionRepository();
@@ -543,12 +543,19 @@ void main() {
 
     expect(find.textContaining('王然'), findsOneWidget);
     // 列表入口 inbox 按 spec §21.6 四槽④ 渲染 lifecycle 弱标（reactivated→重新活跃）；
-    // 弱标为独立提示（不进结论句 G2），故结论句仍无 secondary、无行动 pill。
+    // 弱标为独立提示（不进结论句 G2），结论句本身仍无 secondary、无行动词。
     expect(
       find.text(DiscoveryFeedText.intersectionLifecycleReactivated),
       findsOneWidget,
     );
-    expect(find.text('进入讨论'), findsNothing);
+    // REQ-008 可约分层：该 fixture 带未过期 actionHints，因此从时间桶抽出置顶到
+    // 「可约」分组，行尾渲染主行动 pill（label 云侧直出，不进结论句）。
+    expect(
+      find.byKey(IntersectionActionableGroupSection.sectionKey),
+      findsOneWidget,
+    );
+    expect(find.byType(IntersectionActionablePill), findsOneWidget);
+    expect(find.text('进入讨论'), findsOneWidget);
     expect(find.byType(Image), findsNothing);
     final rowSize = tester.getSize(find.byType(IntersectionCompactTimelineRow));
     expect(rowSize.height, inInclusiveRange(60, 64));

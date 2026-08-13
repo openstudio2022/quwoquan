@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../support/runtime/shell/web/web_shell_test_harness.dart';
 import '../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
 void main() {
   setUp(() {
@@ -18,10 +18,14 @@ void main() {
       WebShellTestHarness.useWideViewport(tester);
       AuthGate.resetDebounce();
 
-      await tester.pumpWidget(WebShellTestHarness.build(
-        authenticated: false,
-        businessOverrides: mockContentFacetOverrides(MockContentRepository()),
-      ));
+      await tester.pumpWidget(
+        WebShellTestHarness.build(
+          authenticated: false,
+          businessOverrides: mockContentFacetOverrides(
+            store: InMemoryContentPostStore(),
+          ),
+        ),
+      );
       await WebShellTestHarness.enterToolbar(tester);
       await WebShellTestHarness.tapPrimary(tester, 'chat');
       await tester.pump(const Duration(milliseconds: 600));
@@ -35,10 +39,14 @@ void main() {
       WebShellTestHarness.useWideViewport(tester);
       AuthGate.resetDebounce();
 
-      await tester.pumpWidget(WebShellTestHarness.build(
-        authenticated: false,
-        businessOverrides: mockContentFacetOverrides(MockContentRepository()),
-      ));
+      await tester.pumpWidget(
+        WebShellTestHarness.build(
+          authenticated: false,
+          businessOverrides: mockContentFacetOverrides(
+            store: InMemoryContentPostStore(),
+          ),
+        ),
+      );
       await WebShellTestHarness.enterToolbar(tester);
       await WebShellTestHarness.tapPrimary(tester, 'profile');
       await tester.pump(const Duration(milliseconds: 600));

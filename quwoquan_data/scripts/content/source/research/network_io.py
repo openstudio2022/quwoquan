@@ -28,11 +28,19 @@ class HttpFetchResult:
         return self.returncode == 0 and 200 <= self.status_code < 300
 
 
-def fetch_http(url: str, *, timeout: int) -> HttpFetchResult:
+def fetch_http(
+    url: str,
+    *,
+    timeout: int,
+    headers: dict[str, str] | None = None,
+) -> HttpFetchResult:
     if network_breaker.BREAKER.is_open(url) or network_breaker.wave_budget_exceeded():
         return HttpFetchResult(returncode=-1, status_code=0, final_url="", body=b"")
     effective_timeout = max(1, int(timeout))
     policy = active_runtime_policy()
+    header_arguments: list[str] = []
+    for name, value in (headers or {}).items():
+        header_arguments.extend(["-H", f"{name}: {value}"])
     proc = subprocess.run(
         [
             "curl",
@@ -40,6 +48,7 @@ def fetch_http(url: str, *, timeout: int) -> HttpFetchResult:
             "-L",
             "-A",
             USER_AGENT,
+            *header_arguments,
             "--retry",
             str(max(1, int(policy.curl_retries))),
             "--retry-delay",

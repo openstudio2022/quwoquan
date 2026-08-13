@@ -1,3 +1,4 @@
+// readiness_case: gathering_availability_watch_app_uat
 // spec_ref: specs/feature-tree/circle-community/gathering-coordination/gathering-participant-roster/spec.md#gwt-012
 /// 受管 Gamma Gathering 的 production App/Remote 名额提醒 Patrol 入口。
 ///

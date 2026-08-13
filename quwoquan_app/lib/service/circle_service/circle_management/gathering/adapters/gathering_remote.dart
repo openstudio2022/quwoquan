@@ -136,6 +136,21 @@ final class RemoteGatheringFacet
   }
 
   @override
+  Future<GatheringCommandResult> declineInvitation(
+    GatheringParticipationCommandInput input,
+  ) {
+    return _mapCommand(
+      client.circleGatheringDeclineGatheringInvitation(
+        participationCommandToWire(input),
+        context: _commandContext(
+          CircleRequestPageIds.declineGatheringInvitation,
+          input.idempotencyKey,
+        ),
+      ),
+    );
+  }
+
+  @override
   Future<GatheringCommandResult> watchAvailability(
     GatheringAvailabilityWatchCommandInput input,
   ) {
@@ -416,5 +431,97 @@ final class RemoteGatheringFacet
       publicDetail: publicSlice.publicDetail,
       privateDetail: privatePresentationFromWire(privateWire),
     );
+  }
+
+  @override
+  Future<GatheringHostCardPage> listMine(GatheringMineListQuery query) async {
+    final cursor = query.cursor.trim();
+    final wire = await client.circleGatheringListMyHostedGatherings(
+      cloud.GatheringMineListQuery(
+        cursor: cursor.isEmpty ? null : cursor,
+        limit: query.limit,
+      ),
+      context: invocationContext(CircleRequestPageIds.listMyHostedGatherings),
+    );
+    return _hostCardPageFromWire(wire);
+  }
+
+  @override
+  Future<GatheringHostCardPage> listByHost(
+    GatheringByHostListQuery query,
+  ) async {
+    final hostSubjectId = query.hostSubjectId.trim();
+    if (hostSubjectId.isEmpty) {
+      return GatheringHostCardPage.empty;
+    }
+    final cursor = query.cursor.trim();
+    final wire = await client.circleGatheringListGatheringsByHost(
+      cloud.GatheringListByHostQuery(
+        hostSubjectKind: cloud.GatheringHostSubjectKind.fromWire(
+          query.hostSubjectKind,
+          'GatheringByHostListQuery.hostSubjectKind',
+        ),
+        hostSubjectId: hostSubjectId,
+        cursor: cursor.isEmpty ? null : cursor,
+        limit: query.limit,
+      ),
+      context: invocationContext(CircleRequestPageIds.listGatheringsByHost),
+    );
+    return _hostCardPageFromWire(wire);
+  }
+
+  GatheringHostCardPage _hostCardPageFromWire(
+    cloud.GatheringByHostPageSlice wire,
+  ) {
+    return GatheringHostCardPage(
+      items: wire.items
+          .map(
+            (card) => GatheringHostCardSummary(
+              gatheringId: card.gatheringId,
+              title: card.purpose.title,
+              dateLabel: card.schedule.dateLabel,
+              startAt: card.schedule.startAt,
+              remainingSeats: card.capacity.remainingSeats,
+              full: card.capacity.full,
+              lifecycleStatusWire: card.lifecycleStatus.wireName,
+              temporalPhaseWire: card.temporal.temporalPhase.wireName,
+            ),
+          )
+          .toList(growable: false),
+      nextCursor: wire.nextCursor ?? '',
+      hasMore: wire.hasMore,
+    );
+  }
+
+  @override
+  Future<List<GatheringSourceCardSummary>> listBySource(
+    GatheringBySourceListQuery query,
+  ) async {
+    final sourceObjectId = query.sourceObjectId.trim();
+    final sourceObjectTypeRef = query.sourceObjectTypeRef.trim();
+    if (sourceObjectId.isEmpty || sourceObjectTypeRef.isEmpty) {
+      return const <GatheringSourceCardSummary>[];
+    }
+    final wire = await client.circleGatheringListGatheringsBySource(
+      cloud.GatheringListBySourceQuery(
+        sourceObjectTypeRef: sourceObjectTypeRef,
+        sourceObjectId: sourceObjectId,
+        limit: query.limit,
+      ),
+      context: invocationContext(CircleRequestPageIds.listGatheringsBySource),
+    );
+    return wire.items
+        .map(
+          (card) => GatheringSourceCardSummary(
+            gatheringId: card.gatheringId,
+            title: card.purpose.title,
+            dateLabel: card.schedule.dateLabel,
+            startAt: card.schedule.startAt,
+            remainingSeats: card.capacity.remainingSeats,
+            full: card.capacity.full,
+            lifecycleStatusWire: card.lifecycleStatus.wireName,
+          ),
+        )
+        .toList(growable: false);
   }
 }

@@ -34,10 +34,9 @@ MediaViewerExtra buildSinglePostMediaViewerExtra(
     dtoPosts: <ContentPostViewData>[dto],
     initialIndex: 0,
     source: source,
+    // fromDynamicMap 内部已做防御拷贝，这里不再重复复制。
     rawPostsById: <String, MediaViewerPostWireRow>{
-      dto.id: MediaViewerPostWireRow.fromDynamicMap(
-        Map<String, dynamic>.from(raw),
-      ),
+      dto.id: MediaViewerPostWireRow.fromDynamicMap(raw),
     },
     interactionSnapshot: snapshot,
     referralSource: referralSource,

@@ -184,7 +184,9 @@ class CreateDraftStoreController extends AsyncNotifier<CreateDraftStoreState> {
 
   Future<void> reload() async {
     state = const AsyncLoading<CreateDraftStoreState>();
-    state = AsyncData(await _repository.load());
+    // guard：加载失败进入 AsyncError 由页面错误态承接，
+    // 不向 initState/lifecycle 的 unawaited 调用泄漏 unhandled 异常。
+    state = await AsyncValue.guard(_repository.load);
   }
 
   Future<CreateDraftStoreState> saveDraft(

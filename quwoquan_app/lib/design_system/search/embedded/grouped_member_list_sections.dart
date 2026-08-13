@@ -5,19 +5,6 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 
-/// 一组群成员（展示用分组头 + 成员列表）。
-class MemberListSectionData {
-  const MemberListSectionData({required this.header, required this.members});
-
-  final String header;
-  final List<Map<String, dynamic>> members;
-}
-
-String memberDisplayName(Map<String, dynamic> m) =>
-    (m['displayName'] as String?)?.trim().isNotEmpty == true
-    ? (m['displayName'] as String).trim()
-    : (m['name'] as String?)?.trim() ?? '';
-
 /// 群成员 DTO 分组（群主一节 + 按展示名首字母分桶）。
 class MemberDtoListSectionData {
   const MemberDtoListSectionData({required this.header, required this.members});
@@ -53,34 +40,6 @@ List<MemberDtoListSectionData> buildGroupedMemberDtoSections(
     final list = buckets[k];
     if (list != null && list.isNotEmpty) {
       out.add(MemberDtoListSectionData(header: k, members: list));
-    }
-  }
-  return out;
-}
-
-/// 群主一节 + 按展示名首字母分桶（A–Z，其它为 `#`）。
-List<MemberListSectionData> buildGroupedMemberSections(
-  List<Map<String, dynamic>> members,
-) {
-  final owners = members.where((m) => m['role'] == 'owner').toList();
-  final rest = members.where((m) => m['role'] != 'owner').toList();
-  rest.sort((a, b) => memberDisplayName(a).compareTo(memberDisplayName(b)));
-
-  final buckets = <String, List<Map<String, dynamic>>>{};
-  for (final m in rest) {
-    final key = _bucketKeyForName(memberDisplayName(m));
-    buckets.putIfAbsent(key, () => <Map<String, dynamic>>[]).add(m);
-  }
-
-  final keys = buckets.keys.toList()..sort(_compareBucketKeys);
-  final out = <MemberListSectionData>[];
-  if (owners.isNotEmpty) {
-    out.add(MemberListSectionData(header: ChatText.owner, members: owners));
-  }
-  for (final k in keys) {
-    final list = buckets[k];
-    if (list != null && list.isNotEmpty) {
-      out.add(MemberListSectionData(header: k, members: list));
     }
   }
   return out;

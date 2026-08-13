@@ -5,6 +5,19 @@ import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 
+/// 已选成员 chip 的最小展示模型（头像 + 名称 + 取消选中所需的 userId）。
+class EmbeddedMemberChipData {
+  const EmbeddedMemberChipData({
+    required this.userId,
+    required this.displayName,
+    required this.avatarUrl,
+  });
+
+  final String userId;
+  final String displayName;
+  final String avatarUrl;
+}
+
 /// 已选成员头像与搜索框同处一个「搜索框」视觉容器内；头像可换行；点击头像取消选中。
 ///
 /// 使用按行排版而非 [Wrap]+[CupertinoTextField]，避免输入框按「整行 maxWidth」参与排版而误换行。
@@ -24,9 +37,9 @@ class EmbeddedMemberSearchBarWithChips extends StatelessWidget {
   final TextEditingController controller;
   final String placeholder;
   final ValueChanged<String> onChanged;
-  final List<Map<String, dynamic>> selectedMembers;
+  final List<EmbeddedMemberChipData> selectedMembers;
 
-  /// 点击已选头像时回调（通常为 `userId`，用于从选中集合移除）。
+  /// 点击已选头像时回调（回传 `userId`，用于从选中集合移除）。
   final ValueChanged<String> onSelectedMemberTap;
   final FocusNode? focusNode;
 
@@ -132,7 +145,7 @@ class _ChipsInlineSearchLayout extends StatelessWidget {
   final double chipSize;
   final double rowMinHeight;
   final bool isDark;
-  final List<Map<String, dynamic>> selectedMembers;
+  final List<EmbeddedMemberChipData> selectedMembers;
   final ValueChanged<String> onSelectedMemberTap;
   final Widget input;
 
@@ -169,9 +182,8 @@ class _ChipsInlineSearchLayout extends StatelessWidget {
           size: chipSize,
           isDark: isDark,
           onTap: () {
-            final id = m['userId'] as String? ?? '';
-            if (id.isNotEmpty) {
-              onSelectedMemberTap(id);
+            if (m.userId.isNotEmpty) {
+              onSelectedMemberTap(m.userId);
             }
           },
         ),
@@ -243,26 +255,22 @@ class _MemberChipAvatar extends StatelessWidget {
     required this.onTap,
   });
 
-  final Map<String, dynamic> member;
+  final EmbeddedMemberChipData member;
   final double size;
   final bool isDark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final avatar = member['avatarUrl'] as String? ?? '';
-    final name = member['displayName'] as String? ?? '';
-    final userId = member['userId'] as String? ?? '';
-
     return CupertinoButton(
       padding: EdgeInsets.all(AppSpacing.one),
       minimumSize: Size.zero,
       onPressed: onTap,
       child: RoundedSquareAvatar(
-        key: ValueKey<String>('chip_$userId'),
+        key: ValueKey<String>('chip_${member.userId}'),
         size: size,
-        imageUrl: avatar,
-        name: name,
+        imageUrl: member.avatarUrl,
+        name: member.displayName,
         backgroundColor: SettingsSemanticConstants.blockBackground(isDark),
       ),
     );

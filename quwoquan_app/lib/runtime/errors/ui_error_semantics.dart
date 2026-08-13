@@ -44,7 +44,8 @@ class UiErrorSemanticResolver {
   }
 
   static String _openSettingsLabel(BuildContext context) {
-    return _maybeL10n(context)?.locationOpenSettings ?? '去设置';
+    return _maybeL10n(context)?.locationOpenSettings ??
+        FoundationText.openSettings;
   }
 
   static UiErrorSemantic resolve(
@@ -751,9 +752,6 @@ class UiErrorSemanticResolver {
     }
     if (continuation is OpenHomepageReviewComposerContinuation) {
       return '登录后将继续打开当前主页的评价编辑器';
-    }
-    if (continuation is OpenHomepageOwnerConversationContinuation) {
-      return '登录后将继续联系当前主页的认领主体';
     }
     if (continuation is FollowProfileContinuation) {
       return '登录后将继续关注当前对象';

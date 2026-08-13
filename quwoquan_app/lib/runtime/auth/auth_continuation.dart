@@ -175,17 +175,6 @@ class OpenHomepageReviewComposerContinuation extends AuthContinuation {
   final String homepageId;
 }
 
-/// 续接「打开实体主页已认领主体的正式私信会话」。
-class OpenHomepageOwnerConversationContinuation extends AuthContinuation {
-  const OpenHomepageOwnerConversationContinuation({
-    required this.homepageId,
-    required this.ownerPersonaId,
-  });
-
-  final String homepageId;
-  final String ownerPersonaId;
-}
-
 /// 续接「关注用户主页」。
 class FollowProfileContinuation extends AuthContinuation {
   const FollowProfileContinuation({required this.personaId});

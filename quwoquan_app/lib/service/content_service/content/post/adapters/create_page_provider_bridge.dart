@@ -1,5 +1,7 @@
 import 'dart:convert';
-import 'dart:developer' as developer;
+import 'dart:async';
+
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -106,11 +108,13 @@ Future<void> _reportCreateEditorSurfaceEvent(
           : 'create',
     );
   } catch (error, stackTrace) {
-    developer.log(
-      'reportCreateEditorSurfaceEvent failed: event=$event',
-      name: 'CreateEditor',
-      error: error,
-      stackTrace: stackTrace,
+    // 发布漏斗埋点丢失影响运营漏斗完整性，必须结构化上报。
+    unawaited(
+      AppExceptionTelemetryService.instance.recordHandledException(
+        source: 'content.create_editor.surface_event_report',
+        error: error,
+        stackTrace: stackTrace,
+      ),
     );
   }
 }

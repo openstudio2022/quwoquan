@@ -24,6 +24,9 @@ from content.source.research.homepage_article_source_ready_mediawiki import (
 from content.source.research.homepage_article_source_attribution import (
     encyclopedia_source_attribution,
 )
+from content.source.research.homepage_structured_fact_text import (
+    extract_structured_fact_from_text,
+)
 from content.source.research.homepage_text_quality import (
     assess_homepage_text_quality,
 )
@@ -38,12 +41,6 @@ from content.source.research.text_match import (
 _PROVIDER_NAMES = {
     "baidu_baike": "百度百科",
     "toutiao_baike": "今日头条百科",
-}
-_SEASON_TAGS = {
-    "春季": "Topic/时间/四季/春季",
-    "夏季": "Topic/时间/四季/夏季",
-    "秋季": "Topic/时间/四季/秋季",
-    "冬季": "Topic/时间/四季/冬季",
 }
 _OFFICIAL_LABEL = re.compile(r"政府官方网站|官方网站|官网")
 _HTTPS_URL = re.compile(r"https://[^\s\"'<>\\]+", re.IGNORECASE)
@@ -80,10 +77,6 @@ def _resolved_html_title(body: bytes, source_kind: str) -> str:
     return re.sub(rf"\s*[-_|—]\s*{suffix}.*$", "", title).strip()
 
 
-def _time_minutes(hour: str, minute: str) -> int:
-    return int(hour) * 60 + int(minute)
-
-
 def _official_website_from_html(body: bytes) -> str:
     raw = html.unescape(body.decode("utf-8", errors="replace"))
     normalized = (
@@ -118,81 +111,9 @@ def _structured_fact_from_text(
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     field = ""
     value: object = None
-    altitude = re.search(r"海拔(?:约|为|高度为)?\s*([0-9]{1,4})(?:\.[0-9]+)?\s*米", text)
-    if altitude and -500 <= int(altitude.group(1)) <= 9000:
-        field = "altitudeMeters"
-        value = int(altitude.group(1))
-    if not field:
-        duration = re.search(
-            r"(?:建议|推荐)?(?:游玩|游览|参观)(?:时间|时长)?[^。\n]{0,12}?"
-            r"([0-9]{1,2})(?:\s*[-—至到]\s*([0-9]{1,2}))?\s*(?:小时|钟头)",
-            text,
-        )
-        if duration:
-            lower = int(duration.group(1)) * 60
-            upper = int(duration.group(2) or duration.group(1)) * 60
-            if 1 <= lower <= upper <= 1440:
-                field = "recommendedDurationMinutes"
-                value = {"minMinutes": lower, "maxMinutes": upper}
-    if not field:
-        opening = re.search(
-            r"(?:开放|营业)(?:时间)?[^。\n]{0,20}?"
-            r"([01]?\d|2[0-3]):([0-5]\d)\s*[-—至到]\s*"
-            r"([01]?\d|2[0-3]):([0-5]\d)",
-            text,
-        )
-        if opening:
-            open_minute = _time_minutes(opening.group(1), opening.group(2))
-            close_minute = _time_minutes(opening.group(3), opening.group(4))
-            if close_minute > open_minute:
-                field = "openingHours"
-                value = [
-                    {
-                        "openMinuteOfDay": open_minute,
-                        "closeMinuteOfDay": close_minute,
-                    }
-                ]
-    if not field:
-        free = re.search(r"(?:门票|票价)[^。\n]{0,12}?(?:免费|免票)", text)
-        price = re.search(
-            r"(?:门票|票价)[^。\n]{0,20}?([0-9]{1,4})"
-            r"(?:\s*[-—至到]\s*([0-9]{1,4}))?\s*元",
-            text,
-        )
-        if free:
-            field = "ticketPriceRange"
-            value = {
-                "currency": "CNY",
-                "minAmountCents": 0,
-                "maxAmountCents": 0,
-                "free": True,
-            }
-        elif price:
-            lower = int(price.group(1)) * 100
-            upper = int(price.group(2) or price.group(1)) * 100
-            if lower <= upper <= 1_000_000:
-                field = "ticketPriceRange"
-                value = {
-                    "currency": "CNY",
-                    "minAmountCents": lower,
-                    "maxAmountCents": upper,
-                    "free": False,
-                }
-    if not field:
-        season = re.search(
-            r"(?:最佳|适宜)(?:游览|旅游|旅行|观赏|参观)?"
-            r"(?:季节|时间)[^。\n]{0,32}",
-            text,
-        )
-        season_window = season.group(0) if season else ""
-        seasons = [
-            tag for name, tag in _SEASON_TAGS.items() if name in season_window
-        ]
-        if "四季皆宜" in text:
-            seasons = list(_SEASON_TAGS.values())
-        if seasons:
-            field = "bestSeasonTagRefs"
-            value = seasons
+    extracted = extract_structured_fact_from_text(text)
+    if extracted is not None:
+        field, value = extracted
     if not field:
         official_website = _official_website_from_html(raw_html)
         if official_website:

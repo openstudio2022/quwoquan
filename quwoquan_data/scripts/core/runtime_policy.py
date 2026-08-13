@@ -130,7 +130,7 @@ class RuntimePolicy:
 
     @property
     def semantic_agent_provider(self) -> AgentProvider:
-        """Primary author provider used by legacy-neutral orchestration call sites."""
+        """Primary author provider used by provider-neutral orchestration call sites."""
         return self.semantic_author.provider
 
     @property

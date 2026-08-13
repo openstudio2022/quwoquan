@@ -9,11 +9,11 @@ import 'package:quwoquan_app/design_system/navigation/centered_scrollable_tab_ba
 import 'package:quwoquan_app/design_system/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/design_system/navigation/tab_swipe_switch_region.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
-import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
 import 'package:quwoquan_app/service/notification_service/notification_delivery/notification/application/notification_facets.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
@@ -49,6 +49,7 @@ import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 import '../../../../../support/service/user_service/relationship/greeting_request/user_typed_facet_test_support.dart';
 import '../../../../../support/service/chat_service/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 
 const _primaryAvatarDataUri =
     'data:image/png;base64,'
@@ -107,6 +108,8 @@ ContactHomeRow _contactHomeRow({
   String avatarUrl = '',
   String? relationState,
   bool? isStarred,
+  List<ContactIntersectionFact> intersectionFacts =
+      const <ContactIntersectionFact>[],
 }) => ContactHomeRow(
   id: id,
   kind: kind,
@@ -121,7 +124,7 @@ ContactHomeRow _contactHomeRow({
   subtitle: subtitle,
   avatarUrl: avatarUrl,
   relationState: relationState,
-  summaryIntersections: const <String>[],
+  intersectionFacts: intersectionFacts,
   contactCount: 0,
   sortKey: id,
   isStarred: isStarred,
@@ -146,19 +149,24 @@ ConversationMemberListRow _conversationMember({
 );
 
 Widget _scopedApp({
-  ChatRepository? mock,
+  ChatConversationRepository? conversation,
+  ChatContactRepository? contact,
+  ChatMemberRepository? member,
   Iterable<GreetingRequestRecord> greetingInbox =
       const <GreetingRequestRecord>[],
   bool isDark = false,
   VisitRecorderService? visitRecorder,
   _EmptyAppMessageFacet? appMessageFacet,
 }) {
-  final repo = mock ?? MockChatRepository();
   final appMessages = appMessageFacet ?? _EmptyAppMessageFacet();
   return ProviderScope(
     retry: (_, _) => null,
     overrides: [
-      chatRepositoryCompositionProvider.overrideWithValue(repo),
+      ...chatTestRepositoryOverrides(
+        conversation: conversation,
+        contact: contact,
+        member: member,
+      ),
       greetingRepositoryProvider.overrideWithValue(
         alphaGreetingRepository(seedInbox: greetingInbox),
       ),
@@ -364,7 +372,7 @@ void main() {
 
     testWidgets('星标朋友保留分组标题但不再渲染行尾星标', (tester) async {
       await tester.pumpWidget(
-        _scopedApp(mock: _StarredContactsChatRepository()),
+        _scopedApp(contact: _StarredContactsChatRepository()),
       );
       await tester.pumpAndSettle();
 
@@ -382,7 +390,7 @@ void main() {
     testWidgets('联系人数不超过 20 时隐藏索引，超过阈值后显示', (tester) async {
       for (final count in <int>[20, 21]) {
         await tester.pumpWidget(
-          _scopedApp(mock: _ContactIndexThresholdChatRepository(count)),
+          _scopedApp(contact: _ContactIndexThresholdChatRepository(count)),
         );
         await tester.pumpAndSettle();
 
@@ -410,7 +418,11 @@ void main() {
     testWidgets('列表表面与分割线对齐更多功能语义 token', (tester) async {
       for (final isDark in <bool>[false, true]) {
         await tester.pumpWidget(
-          _scopedApp(mock: _NavigationChatRepository(), isDark: isDark),
+          _scopedApp(
+            conversation: _NavigationChatRepository(),
+            contact: _NavigationContactRepository(),
+            isDark: isDark,
+          ),
         );
         await tester.pumpAndSettle();
 
@@ -507,7 +519,8 @@ void main() {
         );
         expect(contactSubtitleFinder, findsOneWidget);
         final contactSubtitle = tester.widget<Text>(contactSubtitleFinder);
-        expect(contactSubtitle.data?.isNotEmpty ?? false, isTrue);
+        // 端只透传云侧交集主句，不拼接、不改写，也不混入 bio 资料字段。
+        expect(contactSubtitle.data, '你们都关注了摄影师阿舟');
         expect(contactSubtitle.style?.fontSize, AppTypography.iosFootnote);
         expect(contactSubtitle.style?.height, AppTypography.lineHeightCompact);
         expect(tester.getTopLeft(contactRowFinder.first).dx, 0);
@@ -594,7 +607,12 @@ void main() {
 
   group('ChatPage — 交互契约', () {
     testWidgets('tap 会话列表项触发导航', (tester) async {
-      await tester.pumpWidget(_scopedApp(mock: _NavigationChatRepository()));
+      await tester.pumpWidget(
+        _scopedApp(
+          conversation: _NavigationChatRepository(),
+          contact: _NavigationContactRepository(),
+        ),
+      );
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('产品共创群').first);
@@ -607,7 +625,7 @@ void main() {
       //（ListAppMessages），不再从 chat repo 的 notification filter 拼行。
       await tester.pumpWidget(
         _scopedApp(
-          mock: _XiaoquDeliveryChatRepository(),
+          conversation: _XiaoquDeliveryChatRepository(),
           appMessageFacet: _HomepageReminderAppMessageFacet(),
         ),
       );
@@ -622,7 +640,7 @@ void main() {
 
     testWidgets('未读胶囊数与未读筛选 read model 保持一致', (tester) async {
       await tester.pumpWidget(
-        _scopedApp(mock: _UnreadBadgeConsistencyChatRepository()),
+        _scopedApp(conversation: _UnreadBadgeConsistencyChatRepository()),
       );
       await tester.pumpAndSettle();
 
@@ -752,7 +770,7 @@ void main() {
 
   group('ChatPage — 错误态渲染', () {
     testWidgets('Repository 返回空列表时安全渲染', (tester) async {
-      await tester.pumpWidget(_scopedApp(mock: _EmptyChatRepository()));
+      await tester.pumpWidget(_scopedApp(conversation: _EmptyChatRepository()));
       await tester.pumpAndSettle();
 
       expect(find.byType(ChatPage), findsOneWidget);
@@ -762,7 +780,9 @@ void main() {
     testWidgets('群头像 URL 缺失时显示稳定群占位且不拉成员', (tester) async {
       _suppressImageErrors();
       final repo = _GroupAvatarFallbackChatRepository();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(
+        _scopedApp(conversation: repo, member: repo.member),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('默认群头像兜底'), findsOneWidget);
@@ -777,7 +797,7 @@ void main() {
     testWidgets('群会话使用 avatarUrl 作为预渲染群头像', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(
-        _scopedApp(mock: _RenderedGroupAvatarChatRepository()),
+        _scopedApp(conversation: _RenderedGroupAvatarChatRepository()),
       );
       await tester.pumpAndSettle();
 
@@ -791,7 +811,9 @@ void main() {
     testWidgets('群会话 version 为 0 时仍使用会话 avatarUrl 单图', (tester) async {
       _suppressImageErrors();
       final repo = _NonAuthoritativeGroupAvatarChatRepository();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(
+        _scopedApp(conversation: repo, member: repo.member),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('非权威群头像'), findsOneWidget);
@@ -805,7 +827,9 @@ void main() {
     testWidgets('conv_grid_12 使用云侧预合成 avatarUrl 且不拉成员', (tester) async {
       _suppressImageErrors();
       final repo = _ConvGrid12GroupAvatarChatRepository();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(
+        _scopedApp(conversation: repo, member: repo.member),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('12人测试群'), findsOneWidget);
@@ -819,7 +843,7 @@ void main() {
     testWidgets('主列表会话头像使用共享边长 token', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(
-        _scopedApp(mock: _RenderedGroupAvatarChatRepository()),
+        _scopedApp(conversation: _RenderedGroupAvatarChatRepository()),
       );
       await tester.pumpAndSettle();
 
@@ -834,7 +858,9 @@ void main() {
     testWidgets('群会话缺失 avatarUrl 时不再端侧拼九宫格', (tester) async {
       _suppressImageErrors();
       final repo = _GroupAvatarCompositeChatRepository();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(
+        _scopedApp(conversation: repo, member: repo.member),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('组合群头像兜底'), findsOneWidget);
@@ -856,7 +882,9 @@ void main() {
       });
 
       final repo = _PrefetchedGroupAvatarChatRepository();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(
+        _scopedApp(conversation: repo, member: repo.member),
+      );
       await tester.pumpAndSettle();
 
       expect(repo.memberRequestCount, 0);
@@ -875,8 +903,9 @@ void main() {
 
     testWidgets('单聊头像 URL 缺失时回退到对方头像而不是标题首字', (tester) async {
       _suppressImageErrors();
+      final repo = _DirectAvatarFallbackChatRepository();
       await tester.pumpWidget(
-        _scopedApp(mock: _DirectAvatarFallbackChatRepository()),
+        _scopedApp(conversation: repo, member: repo.member),
       );
       await tester.pumpAndSettle();
 
@@ -890,8 +919,9 @@ void main() {
 
     testWidgets('单聊会话头像优先与联系人头像保持一致', (tester) async {
       _suppressImageErrors();
+      final repo = _DirectAvatarConsistencyChatRepository();
       await tester.pumpWidget(
-        _scopedApp(mock: _DirectAvatarConsistencyChatRepository()),
+        _scopedApp(conversation: repo, member: repo.member),
       );
       await tester.pumpAndSettle();
 
@@ -904,7 +934,10 @@ void main() {
   });
 }
 
-abstract class _ListInboxDrivenChatRepository extends MockChatRepository {
+abstract class _ListInboxDrivenChatRepository extends Fake
+    implements ChatConversationRepository {
+  Future<List<ChatInboxViewData>> listInbox({String? cursor, int limit = 20});
+
   @override
   Future<List<MessageHomeRow>> listMessageHome({
     String filter = 'all',
@@ -984,6 +1017,51 @@ class _NavigationChatRepository extends _ListInboxDrivenChatRepository {
   }) async {
     return listInbox(cursor: cursor, limit: limit);
   }
+}
+
+class _NavigationContactRepository extends Fake
+    implements ChatContactRepository {
+  @override
+  Future<List<ContactHomeRow>> listContactHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return <ContactHomeRow>[
+      _contactHomeRow(
+        id: 'user_navigation_contact',
+        kind: 'user',
+        objectId: 'user_navigation_contact',
+        userId: 'user_navigation_contact',
+        // 「李」映射 'L'，排在下方 'M' 填充联系人之前，保证是列表首行。
+        title: '李明',
+        // user 行副标题只能来自云侧 typed 交集事实；bio 等资料字段不得伪装成交集
+        //（intersection-native-messaging REQ-003）。
+        subtitle: '篮球爱好者',
+        avatarUrl: 'https://example.com/contact.jpg',
+        relationState: 'mutual',
+        intersectionFacts: const <ContactIntersectionFact>[
+          ContactIntersectionFact(
+            intersectionId: 'ix_navigation_contact',
+            kind: 'coFollowedCreator',
+            dimension: 'interest',
+            intersectionClass: 'fact',
+            primaryText: '你们都关注了摄影师阿舟',
+          ),
+        ],
+      ),
+      // 超过 20 人的索引阈值，让字母索引条参与本用例的语义 token 断言。
+      for (var index = 0; index < 20; index++)
+        _contactHomeRow(
+          id: 'user_navigation_filler_$index',
+          kind: 'user',
+          objectId: 'user_navigation_filler_$index',
+          userId: 'user_navigation_filler_$index',
+          title: 'M Contact ${index.toString().padLeft(2, '0')}',
+          relationState: 'mutual',
+        ),
+    ];
+  }
 
   @override
   Future<CursorPage<ChatContactRowViewData>> listContacts({
@@ -1004,7 +1082,8 @@ class _NavigationChatRepository extends _ListInboxDrivenChatRepository {
   }
 }
 
-class _StarredContactsChatRepository extends MockChatRepository {
+class _StarredContactsChatRepository extends Fake
+    implements ChatContactRepository {
   @override
   Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
@@ -1037,7 +1116,8 @@ class _StarredContactsChatRepository extends MockChatRepository {
   }
 }
 
-class _ContactIndexThresholdChatRepository extends MockChatRepository {
+class _ContactIndexThresholdChatRepository extends Fake
+    implements ChatContactRepository {
   _ContactIndexThresholdChatRepository(this.count);
 
   final int count;
@@ -1062,7 +1142,8 @@ class _ContactIndexThresholdChatRepository extends MockChatRepository {
   }
 }
 
-class _XiaoquDeliveryChatRepository extends MockChatRepository {
+class _XiaoquDeliveryChatRepository extends Fake
+    implements ChatConversationRepository {
   @override
   Future<List<MessageHomeRow>> listMessageHome({
     String filter = 'all',
@@ -1096,7 +1177,6 @@ class _XiaoquDeliveryChatRepository extends MockChatRepository {
     ];
   }
 
-  @override
   Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
     int limit = 20,
@@ -1139,7 +1219,8 @@ class _XiaoquDeliveryChatRepository extends MockChatRepository {
   }
 }
 
-class _UnreadBadgeConsistencyChatRepository extends MockChatRepository {
+class _UnreadBadgeConsistencyChatRepository extends Fake
+    implements ChatConversationRepository {
   @override
   Future<List<MessageHomeRow>> listMessageHome({
     String filter = 'all',
@@ -1188,7 +1269,6 @@ class _UnreadBadgeConsistencyChatRepository extends MockChatRepository {
     return unreadRows;
   }
 
-  @override
   Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
     int limit = 20,
@@ -1214,9 +1294,45 @@ class _UnreadBadgeConsistencyChatRepository extends MockChatRepository {
   }
 }
 
+final class _RecordingChatMemberRepository extends Fake
+    implements ChatMemberRepository {
+  _RecordingChatMemberRepository(this._rows);
+
+  final List<ConversationMemberListRow> Function(String conversationId) _rows;
+  int requestCount = 0;
+
+  @override
+  Future<List<ConversationMemberListRow>> listMembers({
+    required String conversationId,
+    String? cursor,
+    int limit = 20,
+    String? role,
+    MemberListSort? sort,
+  }) async {
+    requestCount += 1;
+    return _rows(conversationId);
+  }
+}
+
 class _GroupAvatarFallbackChatRepository
     extends _ListInboxDrivenChatRepository {
-  int memberRequestCount = 0;
+  late final _RecordingChatMemberRepository member =
+      _RecordingChatMemberRepository(
+        (_) => <ConversationMemberListRow>[
+          _conversationMember(
+            userId: 'user_002',
+            displayName: '李明',
+            avatarUrl: 'https://example.com/user_002.jpg',
+          ),
+          _conversationMember(
+            userId: 'user_003',
+            displayName: '张华',
+            avatarUrl: '',
+          ),
+        ],
+      );
+
+  int get memberRequestCount => member.requestCount;
 
   @override
   Future<List<ChatInboxViewData>> listInbox({
@@ -1239,25 +1355,6 @@ class _GroupAvatarFallbackChatRepository
     int limit = 20,
   }) async {
     return listInbox(cursor: cursor, limit: limit);
-  }
-
-  @override
-  Future<List<ConversationMemberListRow>> listMembers({
-    required String conversationId,
-    String? cursor,
-    int limit = 20,
-    String? role,
-    String? sort,
-  }) async {
-    memberRequestCount += 1;
-    return <ConversationMemberListRow>[
-      _conversationMember(
-        userId: 'user_002',
-        displayName: '李明',
-        avatarUrl: 'https://example.com/user_002.jpg',
-      ),
-      _conversationMember(userId: 'user_003', displayName: '张华', avatarUrl: ''),
-    ];
   }
 }
 
@@ -1290,7 +1387,12 @@ class _RenderedGroupAvatarChatRepository
 
 class _ConvGrid12GroupAvatarChatRepository
     extends _ListInboxDrivenChatRepository {
-  int memberRequestCount = 0;
+  late final _RecordingChatMemberRepository member =
+      _RecordingChatMemberRepository(
+        (_) => const <ConversationMemberListRow>[],
+      );
+
+  int get memberRequestCount => member.requestCount;
 
   @override
   Future<List<ChatInboxViewData>> listInbox({
@@ -1315,23 +1417,32 @@ class _ConvGrid12GroupAvatarChatRepository
   }) async {
     return listInbox(cursor: cursor, limit: limit);
   }
-
-  @override
-  Future<List<ConversationMemberListRow>> listMembers({
-    required String conversationId,
-    String? cursor,
-    int limit = 20,
-    String? role,
-    String? sort,
-  }) async {
-    memberRequestCount += 1;
-    return const <ConversationMemberListRow>[];
-  }
 }
 
 class _NonAuthoritativeGroupAvatarChatRepository
     extends _ListInboxDrivenChatRepository {
-  int memberRequestCount = 0;
+  late final _RecordingChatMemberRepository member =
+      _RecordingChatMemberRepository(
+        (_) => <ConversationMemberListRow>[
+          _conversationMember(
+            userId: 'user_002',
+            displayName: '李明',
+            avatarUrl: 'https://example.com/wrong-single.jpg',
+          ),
+          _conversationMember(
+            userId: 'user_003',
+            displayName: '张华',
+            avatarUrl: 'https://example.com/user_003.jpg',
+          ),
+          _conversationMember(
+            userId: 'user_004',
+            displayName: '王芳',
+            avatarUrl: 'https://example.com/user_004.jpg',
+          ),
+        ],
+      );
+
+  int get memberRequestCount => member.requestCount;
 
   @override
   Future<List<ChatInboxViewData>> listInbox({
@@ -1356,39 +1467,32 @@ class _NonAuthoritativeGroupAvatarChatRepository
   }) async {
     return listInbox(cursor: cursor, limit: limit);
   }
-
-  @override
-  Future<List<ConversationMemberListRow>> listMembers({
-    required String conversationId,
-    String? cursor,
-    int limit = 20,
-    String? role,
-    String? sort,
-  }) async {
-    memberRequestCount += 1;
-    return <ConversationMemberListRow>[
-      _conversationMember(
-        userId: 'user_002',
-        displayName: '李明',
-        avatarUrl: 'https://example.com/wrong-single.jpg',
-      ),
-      _conversationMember(
-        userId: 'user_003',
-        displayName: '张华',
-        avatarUrl: 'https://example.com/user_003.jpg',
-      ),
-      _conversationMember(
-        userId: 'user_004',
-        displayName: '王芳',
-        avatarUrl: 'https://example.com/user_004.jpg',
-      ),
-    ];
-  }
 }
 
 class _GroupAvatarCompositeChatRepository
     extends _ListInboxDrivenChatRepository {
-  int memberRequestCount = 0;
+  late final _RecordingChatMemberRepository member =
+      _RecordingChatMemberRepository(
+        (_) => <ConversationMemberListRow>[
+          _conversationMember(
+            userId: 'user_002',
+            displayName: '李明',
+            avatarUrl: 'https://example.com/user_002.jpg',
+          ),
+          _conversationMember(
+            userId: 'user_003',
+            displayName: '张华',
+            avatarUrl: 'https://example.com/user_003.jpg',
+          ),
+          _conversationMember(
+            userId: 'user_004',
+            displayName: '王芳',
+            avatarUrl: 'https://example.com/user_004.jpg',
+          ),
+        ],
+      );
+
+  int get memberRequestCount => member.requestCount;
 
   @override
   Future<List<ChatInboxViewData>> listInbox({
@@ -1412,38 +1516,27 @@ class _GroupAvatarCompositeChatRepository
   }) async {
     return listInbox(cursor: cursor, limit: limit);
   }
-
-  @override
-  Future<List<ConversationMemberListRow>> listMembers({
-    required String conversationId,
-    String? cursor,
-    int limit = 20,
-    String? role,
-    String? sort,
-  }) async {
-    memberRequestCount += 1;
-    return <ConversationMemberListRow>[
-      _conversationMember(
-        userId: 'user_002',
-        displayName: '李明',
-        avatarUrl: 'https://example.com/user_002.jpg',
-      ),
-      _conversationMember(
-        userId: 'user_003',
-        displayName: '张华',
-        avatarUrl: 'https://example.com/user_003.jpg',
-      ),
-      _conversationMember(
-        userId: 'user_004',
-        displayName: '王芳',
-        avatarUrl: 'https://example.com/user_004.jpg',
-      ),
-    ];
-  }
 }
 
 class _DirectAvatarFallbackChatRepository
     extends _ListInboxDrivenChatRepository {
+  late final _RecordingChatMemberRepository member =
+      _RecordingChatMemberRepository(
+        (_) => <ConversationMemberListRow>[
+          _conversationMember(
+            userId: 'user_me',
+            displayName: '我',
+            avatarUrl: 'https://example.com/user_me.jpg',
+            isCurrentUser: true,
+          ),
+          _conversationMember(
+            userId: 'user_002',
+            displayName: '契约撰稿人',
+            avatarUrl: _primaryAvatarDataUri,
+          ),
+        ],
+      );
+
   @override
   Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
@@ -1466,33 +1559,27 @@ class _DirectAvatarFallbackChatRepository
   }) async {
     return listInbox(cursor: cursor, limit: limit);
   }
-
-  @override
-  Future<List<ConversationMemberListRow>> listMembers({
-    required String conversationId,
-    String? cursor,
-    int limit = 20,
-    String? role,
-    String? sort,
-  }) async {
-    return <ConversationMemberListRow>[
-      _conversationMember(
-        userId: 'user_me',
-        displayName: '我',
-        avatarUrl: 'https://example.com/user_me.jpg',
-        isCurrentUser: true,
-      ),
-      _conversationMember(
-        userId: 'user_002',
-        displayName: '契约撰稿人',
-        avatarUrl: _primaryAvatarDataUri,
-      ),
-    ];
-  }
 }
 
 class _DirectAvatarConsistencyChatRepository
     extends _ListInboxDrivenChatRepository {
+  late final _RecordingChatMemberRepository member =
+      _RecordingChatMemberRepository(
+        (_) => <ConversationMemberListRow>[
+          _conversationMember(
+            userId: 'user_me',
+            displayName: '我',
+            avatarUrl: 'https://example.com/me.jpg',
+            isCurrentUser: true,
+          ),
+          _conversationMember(
+            userId: 'user_contact',
+            displayName: '手机端头像一致性',
+            avatarUrl: _primaryAvatarDataUri,
+          ),
+        ],
+      );
+
   @override
   Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
@@ -1515,34 +1602,28 @@ class _DirectAvatarConsistencyChatRepository
   }) async {
     return listInbox(cursor: cursor, limit: limit);
   }
-
-  @override
-  Future<List<ConversationMemberListRow>> listMembers({
-    required String conversationId,
-    String? cursor,
-    int limit = 20,
-    String? role,
-    String? sort,
-  }) async {
-    return <ConversationMemberListRow>[
-      _conversationMember(
-        userId: 'user_me',
-        displayName: '我',
-        avatarUrl: 'https://example.com/me.jpg',
-        isCurrentUser: true,
-      ),
-      _conversationMember(
-        userId: 'user_contact',
-        displayName: '手机端头像一致性',
-        avatarUrl: _primaryAvatarDataUri,
-      ),
-    ];
-  }
 }
 
 class _PrefetchedGroupAvatarChatRepository
     extends _ListInboxDrivenChatRepository {
-  int memberRequestCount = 0;
+  late final _RecordingChatMemberRepository member =
+      _RecordingChatMemberRepository((conversationId) {
+        final suffix = conversationId.replaceFirst('conv_prefetch_', '');
+        return <ConversationMemberListRow>[
+          _conversationMember(
+            userId: 'user_$suffix',
+            displayName: '用户$suffix',
+            avatarUrl: 'https://example.com/user_$suffix.jpg',
+          ),
+          _conversationMember(
+            userId: 'user_${suffix}_b',
+            displayName: '成员$suffix',
+            avatarUrl: 'https://example.com/user_${suffix}_b.jpg',
+          ),
+        ];
+      });
+
+  int get memberRequestCount => member.requestCount;
 
   @override
   Future<List<ChatInboxViewData>> listInbox({
@@ -1566,29 +1647,5 @@ class _PrefetchedGroupAvatarChatRepository
     int limit = 20,
   }) async {
     return listInbox(cursor: cursor, limit: limit);
-  }
-
-  @override
-  Future<List<ConversationMemberListRow>> listMembers({
-    required String conversationId,
-    String? cursor,
-    int limit = 20,
-    String? role,
-    String? sort,
-  }) async {
-    memberRequestCount += 1;
-    final suffix = conversationId.replaceFirst('conv_prefetch_', '');
-    return <ConversationMemberListRow>[
-      _conversationMember(
-        userId: 'user_$suffix',
-        displayName: '用户$suffix',
-        avatarUrl: 'https://example.com/user_$suffix.jpg',
-      ),
-      _conversationMember(
-        userId: 'user_${suffix}_b',
-        displayName: '成员$suffix',
-        avatarUrl: 'https://example.com/user_${suffix}_b.jpg',
-      ),
-    ];
   }
 }

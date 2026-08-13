@@ -41,7 +41,7 @@ _NEXT_WAVE_SIZE = 12
 _USAGE_SCOPES = {"research", "commercial"}
 _REASON_MESSAGES = {
     "DATA.POOL.EMPTY": "池中还没有可发布的 Homepage 或 Post",
-    "DATA.POOL.LEGACY_ADMISSION_REQUIRED": "历史对象需要追加显式准入结果",
+    "DATA.POOL.EXPLICIT_ADMISSION_MISSING": "对象缺少显式准入记录，需要补录",
     "DATA.POOL.OBJECT_NOT_ADMITTED": "对象尚未完成生成、质量或授权准入",
     "DATA.POOL.AUTHOR_NOT_ADMITTED": "对象引用的作者尚未准入",
     "DATA.POOL.REFERENCE_MISSING": "对象缺少可交付引用",
@@ -73,6 +73,8 @@ def _resolved_admission(
     except (OSError, RuntimeError, TypeError, ValueError):
         # Malformed explicit or historical evidence stays one object-level
         # eligibility failure and is never hidden by another fallback.
+        # 占位 evidenceDigest 故意保持非 canonical 形态（无 sha256: 前缀），
+        # 使 `_evidence_bound` 与 admitted 判定都无法把它当作合法证据。
         return EffectiveAdmission(
             record={
                 "status": "active",
@@ -82,7 +84,7 @@ def _resolved_admission(
                 "eligibilityResult": "failed",
                 "usageScope": None,
                 "evidenceRef": "invalid-pool-record",
-                "evidenceDigest": "sha256:invalid",
+                "evidenceDigest": "invalid-pool-record-digest",
             },
             source="invalid",
         )
@@ -167,14 +169,14 @@ def _not_admitted_issue(
     issues: list[dict[str, str]],
     *,
     record: Mapping[str, Any] | None,
-    legacy: bool,
+    admission_missing: bool,
     ref: str,
 ) -> None:
-    if legacy:
+    if admission_missing:
         _issue(
             issues,
             gate="eligibility",
-            code="DATA.POOL.LEGACY_ADMISSION_REQUIRED",
+            code="DATA.POOL.EXPLICIT_ADMISSION_MISSING",
             ref=ref,
         )
         return
@@ -283,7 +285,7 @@ def inspect_pool(
                 _not_admitted_issue(
                     issues,
                     record=record,
-                    legacy=record is None or bool(record.get("_legacyRecord")),
+                    admission_missing=record is None,
                     ref=f"creators/{creator_root.name}",
                 )
 
@@ -291,7 +293,7 @@ def inspect_pool(
     admitted = Counter()
     publishable = Counter()
     scopes = Counter()
-    legacy = Counter()
+    admission_missing = Counter()
     pending_delivery: list[dict[str, Any]] = []
     if output_root is not None:
         pending_delivery, intent_issues = inspect_pool_delivery_intents(
@@ -312,15 +314,14 @@ def inspect_pool(
         )
         record = entity_admission.record
         if not _content_admitted(record):
-            is_legacy = bool(
-                (record is None and (path.parent / "attestation.json").is_file())
-                or (isinstance(record, Mapping) and record.get("_legacyRecord"))
+            record_missing = bool(
+                record is None and (path.parent / "attestation.json").is_file()
             )
-            legacy["homepage"] += int(is_legacy)
+            admission_missing["homepage"] += int(record_missing)
             _not_admitted_issue(
                 issues,
                 record=record,
-                legacy=is_legacy,
+                admission_missing=record_missing,
                 ref=f"entities/{entity_ref}",
             )
             continue
@@ -384,15 +385,14 @@ def inspect_pool(
         )
         record = post_admission.record
         if not _content_admitted(record):
-            is_legacy = bool(
-                (record is None and manifest.get("reviewDecision") == "approved")
-                or (isinstance(record, Mapping) and record.get("_legacyRecord"))
+            record_missing = bool(
+                record is None and manifest.get("reviewDecision") == "approved"
             )
-            legacy[carrier] += int(is_legacy)
+            admission_missing[carrier] += int(record_missing)
             _not_admitted_issue(
                 issues,
                 record=record,
-                legacy=is_legacy,
+                admission_missing=record_missing,
                 ref=f"posts/{post_ref}",
             )
             continue
@@ -498,7 +498,7 @@ def inspect_pool(
                 - (superseded[supply_type] if strict_delivery else 0),
             )
             + pending_by_carrier[supply_type],
-            "legacyPending": legacy[supply_type],
+            "explicitAdmissionPending": admission_missing[supply_type],
             "target": targets[supply_type],
             "gap": max(0, targets[supply_type] - publishable[supply_type]),
         }

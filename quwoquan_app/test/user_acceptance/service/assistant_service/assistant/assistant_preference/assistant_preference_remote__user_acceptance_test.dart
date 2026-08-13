@@ -1,3 +1,4 @@
+// readiness_case: assistant_preference_management_app_uat
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/session-preference-memory-control/spec.md#gwt-003
 /// Disposable owner 在 production App 中设置、遗忘并恢复长期回答偏好，每次动作后
 /// 都通过离页重入触发 production Remote 权威读取。

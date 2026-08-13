@@ -41,7 +41,7 @@ void main() {
             return http.Response.bytes(<int>[1, 2, 3, 4], 200);
           })),
           cacheDirectoryPathProvider: () async => tempDir.path,
-          telemetrySink: const NoopCacheTelemetrySink(),
+          telemetrySink: const SilentCacheTelemetrySink(),
         );
 
         final firstPath = await firstCache.getFile(url);
@@ -56,7 +56,7 @@ void main() {
             return http.Response.bytes(<int>[], 500);
           })),
           cacheDirectoryPathProvider: () async => tempDir.path,
-          telemetrySink: const NoopCacheTelemetrySink(),
+          telemetrySink: const SilentCacheTelemetrySink(),
         );
 
         final restartedPath = await restartedCache.getCachedFilePath(url);
@@ -112,7 +112,7 @@ void main() {
           return http.Response.bytes(<int>[1, 1, 2, 3], 200);
         })),
         cacheDirectoryPathProvider: () async => tempDir.path,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       const url = 'https://cdn.example.com/video/post_1/clip.mp4';
 
@@ -148,7 +148,7 @@ void main() {
             return http.Response.bytes(<int>[4, 5, 6], 200);
           })),
           cacheDirectoryPathProvider: () async => tempDir.path,
-          telemetrySink: const NoopCacheTelemetrySink(),
+          telemetrySink: const SilentCacheTelemetrySink(),
         );
 
         final active = cache.getFile(

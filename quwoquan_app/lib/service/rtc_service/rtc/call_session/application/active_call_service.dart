@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_cloud_contracts/generated/rtc_contracts.dart'
     show CallParticipant;
 
@@ -67,7 +68,13 @@ class ActiveCallNotifier extends Notifier<ActiveCallState> {
 
   @override
   ActiveCallState build() {
-    ref.onDispose(_stopTimer);
+    final screenWake = ref.read(screenWakeGatewayProvider);
+    ref.onDispose(() {
+      _stopTimer();
+      // notifier 被回收时不得让屏幕停留在常亮态（onDispose 内禁止 ref.read，
+      // 构造期捕获 gateway 引用）。
+      unawaited(screenWake.release());
+    });
     return const ActiveCallState();
   }
 
@@ -86,11 +93,14 @@ class ActiveCallNotifier extends Notifier<ActiveCallState> {
       participants: participants,
     );
     _startTimer();
+    // 通话期间保持屏幕常亮；PiP 最小化仍处于通话中，不释放。
+    unawaited(ref.read(screenWakeGatewayProvider).acquire());
   }
 
   void endCall() {
     _stopTimer();
     state = const ActiveCallState();
+    unawaited(ref.read(screenWakeGatewayProvider).release());
   }
 
   void enterPipMode() {

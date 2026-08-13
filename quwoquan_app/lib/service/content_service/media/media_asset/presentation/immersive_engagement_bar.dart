@@ -43,6 +43,9 @@ class ImmersiveEngagementBar extends StatelessWidget {
     this.onRevealSystemNav,
     this.isSelfPost = false,
     this.showFollowButton = true,
+    this.showWishlistButton = false,
+    this.isWishlisted = false,
+    this.onWishlistTap,
     this.layoutSpec = ImmersiveViewerStageLayoutSpec.feedRail,
   });
 
@@ -60,6 +63,13 @@ class ImmersiveEngagementBar extends StatelessWidget {
   final bool isFollowing;
   final bool isSelfPost;
   final bool showFollowButton;
+
+  /// 想去（wishlist）动作格：仅当当前作品锚定到支持想去的实体主页
+  /// （detail/list wire 的 primaryHomepageId + wishlistHomepageTypes 类型门）
+  /// 时显示；诚实呈现当前状态，不做本地伪造。
+  final bool showWishlistButton;
+  final bool isWishlisted;
+  final VoidCallback? onWishlistTap;
   final ImmersiveViewerStageLayoutSpec layoutSpec;
 
   final VoidCallback onUserTap;
@@ -68,6 +78,10 @@ class ImmersiveEngagementBar extends StatelessWidget {
   final VoidCallback? onCommentTap;
   final VoidCallback? onShareTap;
   final VoidCallback? onRevealSystemNav;
+
+  static const wishlistActionKey = ValueKey<String>(
+    'immersive-wishlist-action',
+  );
 
   static const double _kFollowBtnWidth = AppSpacing.followButtonWidthCompact;
 
@@ -133,8 +147,9 @@ class ImmersiveEngagementBar extends StatelessWidget {
   static double _actionClusterWidth({
     required double actionCellWidth,
     required double actionGroupGap,
+    required int cellCount,
   }) {
-    return (actionCellWidth * 3) + (actionGroupGap * 2);
+    return (actionCellWidth * cellCount) + (actionGroupGap * (cellCount - 1));
   }
 
   static const int _kAuthorDisplayMaxChars = 12;
@@ -345,6 +360,27 @@ class ImmersiveEngagementBar extends StatelessWidget {
       key: const ValueKey('immersive-actions-group'),
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (showWishlistButton) ...[
+          SizedBox(
+            width: actionCellWidth,
+            child: _action(
+              key: ImmersiveEngagementBar.wishlistActionKey,
+              icon: Icon(
+                isWishlisted ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                color: isWishlisted
+                    ? AppColors.worksAccent
+                    : AppColors.worksTitle,
+                size: AppSpacing.bottomNavItemIconSize,
+              ),
+              label: isWishlisted
+                  ? ObjectHomepageText.homepageWishlistedAction
+                  : ObjectHomepageText.homepageWishlistAction,
+              onTap: onWishlistTap,
+              alignment: Alignment.centerLeft,
+            ),
+          ),
+          SizedBox(width: actionGroupGap),
+        ],
         SizedBox(
           width: actionCellWidth,
           child: _action(
@@ -355,7 +391,9 @@ class ImmersiveEngagementBar extends StatelessWidget {
             ),
             label: formatCompactActionCount(likeCount),
             onTap: onLikeTap,
-            alignment: Alignment.centerLeft,
+            alignment: showWishlistButton
+                ? Alignment.center
+                : Alignment.centerLeft,
           ),
         ),
         SizedBox(width: actionGroupGap),
@@ -452,6 +490,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
                   final actionClusterWidth = _actionClusterWidth(
                     actionCellWidth: actionCellWidth,
                     actionGroupGap: actionInnerGap,
+                    cellCount: showWishlistButton ? 4 : 3,
                   );
 
                   final visibleFollowLaneWidth = showFollowLane
@@ -576,6 +615,22 @@ class ImmersiveEngagementBar extends StatelessWidget {
     return Row(
       key: const ValueKey('immersive-self-actions-group'),
       children: [
+        if (showWishlistButton)
+          Expanded(
+            child: _compactAction(
+              icon: Icon(
+                isWishlisted ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                color: isWishlisted
+                    ? AppColors.worksAccent
+                    : AppColors.worksTitle,
+                size: AppSpacing.bottomNavItemIconSize,
+              ),
+              label: isWishlisted
+                  ? ObjectHomepageText.homepageWishlistedAction
+                  : ObjectHomepageText.homepageWishlistAction,
+              onTap: onWishlistTap,
+            ),
+          ),
         Expanded(
           child: _compactAction(
             icon: AppMediaHeartIcon(
@@ -650,8 +705,10 @@ class ImmersiveEngagementBar extends StatelessWidget {
     required String label,
     required Alignment alignment,
     VoidCallback? onTap,
+    Key? key,
   }) {
     return GestureDetector(
+      key: key,
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: SizedBox(

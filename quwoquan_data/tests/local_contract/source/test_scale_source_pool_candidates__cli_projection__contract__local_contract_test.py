@@ -209,9 +209,9 @@ def test_four_carrier_projection_is_deterministic_and_plan_consumable(tmp_path):
     frozen = write_create_once_scale_source_pool_candidates(destination, first)
     assert write_create_once_scale_source_pool_candidates(destination, second) == frozen
 
-    from content.source.research.handler_cli import _load_candidates
+    from content.source.research.handler_cli_io import load_candidates
 
-    assert _load_candidates(str(destination)) == first["candidates"]
+    assert load_candidates(str(destination)) == first["candidates"]
 
 
 def test_projection_rejects_cross_carrier_identity_and_duplicate_content():

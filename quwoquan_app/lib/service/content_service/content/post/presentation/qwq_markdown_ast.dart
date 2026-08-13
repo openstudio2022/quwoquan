@@ -195,6 +195,7 @@ class QwqMarkdownBlock {
     this.text = '',
     this.level = 0,
     this.language = '',
+    this.listDepth = 0,
     this.inlines = const <QwqMarkdownInline>[],
     this.assetRef,
     this.assetRefs = const <QwqMarkdownAssetRef>[],
@@ -209,6 +210,9 @@ class QwqMarkdownBlock {
   final String text;
   final int level;
   final String language;
+
+  /// 列表嵌套级别（0 = 顶层；两空格缩进为一级，最多 2 级）。
+  final int listDepth;
   final List<QwqMarkdownInline> inlines;
   final QwqMarkdownAssetRef? assetRef;
   final List<QwqMarkdownAssetRef> assetRefs;

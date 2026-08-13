@@ -250,13 +250,13 @@ def test_explicit_sidecar_cannot_supply_missing_manifest_content_identity(
     tmp_path: Path,
 ) -> None:
     publish_root = tmp_path / "publish"
-    post_ref = "image/legacy-sidecar/1"
+    post_ref = "image/pre-sequence-sidecar/1"
     root = publish_root / "posts" / post_ref
     write_json(
         root / "manifest.json",
         {
             "contentType": "image",
-            "authorId": "legacy-author",
+            "authorId": "pre-sequence-author",
             "version": 1,
         },
     )
@@ -287,7 +287,7 @@ def test_explicit_sidecar_cannot_supply_missing_manifest_content_identity(
 
     assert selection.post_refs == ()
     assert [row.code for row in selection.excluded] == [
-        "DATA.POOL.PAYLOAD_DIGEST_DRIFT"
+        "DATA.POOL.RECORD_SEQUENCE_MISSING"
     ]
 
 

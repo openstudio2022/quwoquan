@@ -4,8 +4,6 @@ import 'package:crypto/crypto.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/canonical_search_query_facet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
-
 /// canonical Search 对象级替身：仅消费 metadata fixture bundle，不调用 content
 /// repository，也不在端侧合成 related terms。
 final class CanonicalSearchTypedDouble implements CanonicalSearchQueryFacet {
@@ -99,34 +97,60 @@ final class CanonicalSearchTypedDouble implements CanonicalSearchQueryFacet {
     final digest = sha256.convert(
       utf8.encode('${query.mode.wireValue}:$normalized'),
     );
-    return SearchResponseView(
-      hits: hits,
-      provenance: CanonicalSearchProvenance(
-        provider: 'alpha-typed-double',
-        generatedAt: DateTime.utc(2026, 7, 31),
-      ),
-      requestId: 'alpha_${digest.toString().substring(0, 16)}',
+    final provenance = CanonicalSearchProvenance(
+      provider: 'alpha-typed-double',
+      generatedAt: DateTime.utc(2026, 7, 31),
     );
+    return SearchResponseView.fromMap(<String, dynamic>{
+      'interpretedQuery': <String, dynamic>{
+        'normalized': normalized,
+        'tokens': normalized.isEmpty ? const <String>[] : <String>[normalized],
+        'variants': const <String>[],
+        'detectedEntities': const <String>[],
+        'detectedTags': const <String>[],
+        'selectedObjectTypes': query.objectTypes,
+      },
+      'hits': hits.map((hit) => hit.toMap()).toList(growable: false),
+      'citations': const <Map<String, dynamic>>[],
+      'facets': const <Map<String, dynamic>>[],
+      'degradeSignals': const <Map<String, dynamic>>[],
+      'provenance': provenance.toMap(),
+      'relatedTerms': const <String>[],
+      'requestId': 'alpha_${digest.toString().substring(0, 16)}',
+    });
   }
 
   static List<Map<String, Object?>> _contentPosts() {
-    final decoded = objectContractExampleReader.document('content');
-    final examples = decoded['examples'];
-    if (examples is! Map) {
-      return const <Map<String, Object?>>[];
-    }
-    final discovery = examples['content_discovery_core'];
-    if (discovery is! Map || discovery['posts'] is! List) {
-      return const <Map<String, Object?>>[];
-    }
-    return (discovery['posts'] as List)
-        .whereType<Map>()
-        .map(
-          (post) => post.map(
-            (key, value) => MapEntry(key.toString(), value as Object?),
-          ),
-        )
-        .toList(growable: false);
+    return const <Map<String, Object?>>[
+      <String, Object?>{
+        'postId': 'search-photo-1',
+        'contentType': 'image',
+        'contentIdentity': 'work',
+        'title': '西湖晨光摄影测试详情',
+        'summary': '杭州旅行摄影样本',
+        'body': '清晨在西湖记录光影',
+        'authorId': 'search-author-1',
+        'authorDisplayName': '契约摄影师',
+        'coverUrl':
+            'media/image/s/archived-image/post/search-photo-1/v1/cover.png',
+        'likeCount': 12,
+        'publishedAt': '2026-07-31T00:00:00Z',
+      },
+      <String, Object?>{
+        'postId': 'search-article-1',
+        'contentType': 'article',
+        'contentIdentity': 'work',
+        'title': '旅行摄影路线',
+        'summary': '城市漫游文章',
+        'body': '路线与器材建议',
+        'authorId': 'search-author-2',
+        'authorDisplayName': '契约旅行家',
+        'coverUrl':
+            'media/image/s/archived-image/post/search-article-1/v1/cover.png',
+        'likeCount': 8,
+        'publishedAt': '2026-07-30T00:00:00Z',
+      },
+    ];
   }
 }
 

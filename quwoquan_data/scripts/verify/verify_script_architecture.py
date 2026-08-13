@@ -60,7 +60,7 @@ _MILESTONE_NAME_FRAGMENTS = (
     "m6",
     "m7",
     "b" + "10",
-    "ph" + "ase" + "0",
+    "ph" + "ase" + "[0-9]+",
     "p" + "art" + "[0-9]+",
 )
 MILESTONE_NAME_RE = re.compile(

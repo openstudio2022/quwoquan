@@ -1,5 +1,9 @@
 /// 官方来电铃声目录：铃声 id（`official.*` 命名空间，与 user_settings 契约同源）
 /// 到平台呈现资源路径的唯一映射。
+///
+/// 本目录是设置页可选项与 CallKit 呈现资源的单一真相源；设置页禁止另造 ID。
+/// v1 策略：官方铃声尚未提供差异化音频资产，全部条目映射系统默认铃；
+/// 引入真实音频资产时只需更新本目录的 callkitPath，选项与持久化 ID 不变。
 library;
 
 final class OfficialCallRingtone {

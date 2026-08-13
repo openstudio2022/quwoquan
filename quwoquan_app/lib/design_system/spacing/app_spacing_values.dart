@@ -29,6 +29,14 @@ class AppSpacing {
   static const double markdownCompactBreakpoint = 420.0;
   static const double expandedBreakpoint = 600.0, wideBreakpoint = 1024.0;
 
+  /// 语义间距密度档位的平板断点（mobile / tablet / desktop 三档）
+  static const double tabletBreakpoint = 768.0;
+
+  /// 文章/沉浸式阅读的 wrap 图文断点与图宽（唯一断点真相源，禁止页面手写 430）
+  static const double articleWrapImageBreakpoint = 430.0;
+  static const double articleWrapImageMaxWidthWide = 156.0;
+  static const double articleWrapImageMaxWidthCompact = 144.0;
+
   /// Web/桌面公开内容入口布局语义尺寸。
   static const double webContentMaxWidth = 1120.0;
   static const double webInstallBannerCompactHeight = 72.0;

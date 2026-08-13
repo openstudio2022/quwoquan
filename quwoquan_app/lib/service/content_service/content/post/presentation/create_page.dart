@@ -14,12 +14,13 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/application/post_publication_status_reader.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
     show ReferralSource, ReferralSourceExt;
-import 'package:quwoquan_app/runtime/platform/ios_video_editing_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/native_video_editing_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/startup_deferred_plugins.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/media_creation_launch_models.dart';
 import 'package:quwoquan_app/runtime/di/presentation/image_editor_page_factory.dart';
+import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/application/public/image_editor_page_params.dart';
 import 'package:quwoquan_app/runtime/di/presentation/content_media_creation_composition.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/desktop_picker_ports.dart';
 import 'package:quwoquan_app/design_system/media/media_reorderable_view.dart';
@@ -66,7 +67,7 @@ import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_typography_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/publish_settings_models.dart';
-import 'package:quwoquan_app/service/content_service/content/post/application/content_publication_epoch.dart';
+import 'package:quwoquan_app/runtime/di/content_publication_epoch.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/create_draft_store_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/create_editor_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/publish_capture_metadata_writer.dart';
@@ -76,6 +77,7 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/creat
 import 'package:quwoquan_app/service/content_service/content/post/adapters/create_page_remote_helpers.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/create_page_provider_bridge.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/publish_circle_services.dart';
+import 'package:quwoquan_app/service/content_service/content/post/domain/generated/content_publication_policy.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_editor.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_publish_result_sheet.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_publish_confirm_sheet.dart';
@@ -139,6 +141,8 @@ class CreatePage extends ConsumerStatefulWidget {
     this.initialHomepage,
     this.initialCircleId,
     this.initialCircleName,
+    this.initialGatheringId,
+    this.initialGatheringTitle,
     this.initialDraftId,
     this.mediaPickerPort,
     this.mediaPickerLauncher,
@@ -153,6 +157,10 @@ class CreatePage extends ConsumerStatefulWidget {
 
   final String? initialCircleId;
   final String? initialCircleName;
+
+  /// 从行动入口进入创作时的共同经历回流引用（可在创作页移除）。
+  final String? initialGatheringId;
+  final String? initialGatheringTitle;
 
   final String? initialDraftId;
   final MediaPickerPort? mediaPickerPort;

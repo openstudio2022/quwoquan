@@ -103,6 +103,7 @@ class ArticleMarkdownCodec {
           orderedIndex += 1;
           if (node.text.trim().isNotEmpty) {
             buffer
+              ..write(_listIndent(node.listDepth))
               ..write('$orderedIndex. ')
               ..writeln(_serializeInlineText(node.text.trim(), node.spans))
               ..writeln();
@@ -112,8 +113,43 @@ class ArticleMarkdownCodec {
           orderedIndex = 0;
           if (node.text.trim().isNotEmpty) {
             buffer
+              ..write(_listIndent(node.listDepth))
               ..write('- ')
               ..writeln(_serializeInlineText(node.text.trim(), node.spans))
+              ..writeln();
+          }
+          break;
+        case ArticleDocumentNodeType.quote:
+          // 富块原样写回（GWT-003）：编辑器加载不降级、序列化不改写。
+          orderedIndex = 0;
+          if (node.text.trim().isNotEmpty) {
+            for (final line
+                in _serializeInlineText(
+                  node.text.trim(),
+                  node.spans,
+                ).split('\n')) {
+              buffer.writeln('> $line');
+            }
+            buffer.writeln();
+          }
+          break;
+        case ArticleDocumentNodeType.callout:
+          orderedIndex = 0;
+          if (node.text.trim().isNotEmpty) {
+            buffer
+              ..writeln(':::callout')
+              ..writeln(_serializeInlineText(node.text.trim(), node.spans))
+              ..writeln(':::')
+              ..writeln();
+          }
+          break;
+        case ArticleDocumentNodeType.codeBlock:
+          orderedIndex = 0;
+          if (node.text.trim().isNotEmpty) {
+            buffer
+              ..writeln('```${node.codeLanguage.trim()}')
+              ..writeln(node.text.trimRight())
+              ..writeln('```')
               ..writeln();
           }
           break;
@@ -137,7 +173,7 @@ class ArticleMarkdownCodec {
 
   static ArticleDocumentData parseDocument(
     String markdown, {
-    Map<String, dynamic>? assetManifest,
+    Map<String, Object?>? assetManifest,
     MediaAssetManifestResolver assetManifestResolver =
         _articleAssetManifestResolver,
   }) {
@@ -183,8 +219,6 @@ class ArticleMarkdownCodec {
           );
           break;
         case QwqMarkdownBlockKind.paragraph:
-        case QwqMarkdownBlockKind.quote:
-        case QwqMarkdownBlockKind.callout:
         case QwqMarkdownBlockKind.card:
           final inline = _parseInlineMentions(block.text);
           if (inline.text.trim().isNotEmpty) {
@@ -198,6 +232,35 @@ class ArticleMarkdownCodec {
             );
           }
           break;
+        // 富块不做有损压缩（GWT-003）：quote/callout/codeBlock 保留块语义。
+        case QwqMarkdownBlockKind.quote:
+        case QwqMarkdownBlockKind.callout:
+          final inline = _parseInlineMentions(block.text);
+          if (inline.text.trim().isNotEmpty) {
+            nodes.add(
+              ArticleDocumentNode(
+                id: block.id.isNotEmpty ? block.id : 'rich_${seed++}',
+                type: block.kind == QwqMarkdownBlockKind.quote
+                    ? ArticleDocumentNodeType.quote
+                    : ArticleDocumentNodeType.callout,
+                text: inline.text,
+                spans: inline.spans,
+              ),
+            );
+          }
+          break;
+        case QwqMarkdownBlockKind.codeBlock:
+          if (block.text.trim().isNotEmpty) {
+            nodes.add(
+              ArticleDocumentNode(
+                id: block.id.isNotEmpty ? block.id : 'code_${seed++}',
+                type: ArticleDocumentNodeType.codeBlock,
+                text: block.text,
+                codeLanguage: block.language,
+              ),
+            );
+          }
+          break;
         case QwqMarkdownBlockKind.orderedItem:
           final inline = _parseInlineMentions(block.text);
           nodes.add(
@@ -205,6 +268,7 @@ class ArticleMarkdownCodec {
               id: block.id.isNotEmpty ? block.id : 'ordered_${seed++}',
               type: ArticleDocumentNodeType.orderedItem,
               text: inline.text,
+              listDepth: block.listDepth,
               spans: inline.spans,
             ),
           );
@@ -216,6 +280,7 @@ class ArticleMarkdownCodec {
               id: block.id.isNotEmpty ? block.id : 'bullet_${seed++}',
               type: ArticleDocumentNodeType.bulletItem,
               text: inline.text,
+              listDepth: block.listDepth,
               spans: inline.spans,
             ),
           );
@@ -233,7 +298,6 @@ class ArticleMarkdownCodec {
           }
           break;
         case QwqMarkdownBlockKind.section:
-        case QwqMarkdownBlockKind.codeBlock:
         case QwqMarkdownBlockKind.spacer:
         case QwqMarkdownBlockKind.horizontalRule:
           break;
@@ -264,55 +328,166 @@ class ArticleMarkdownCodec {
     );
   }
 
+  static final RegExp _inlineMentionPattern = RegExp(
+    r'@\[(.+?)\]\((entity|tag):([A-Za-z0-9_:/-]+)\)',
+  );
+
+  static final RegExp _inlineLinkPattern = RegExp(r'\[([^\]]+)\]\(([^)\s]+)\)');
+
+  /// 行内解析（GWT-002）：单遍扫描 mention/link 记号与成对样式记号
+  /// （`***`/`**`/`*`/`++`/`~~`），还原为等价 span；未闭合记号按字面量
+  /// 处理不吞字，病态输入降级为纯文本，不得 crash。链接只接受白名单
+  /// scheme（https/http），恶意 scheme 按字面量输出不产生 span。
   static _InlineMentionParseResult _parseInlineMentions(String source) {
-    final pattern = RegExp(r'@\[(.+?)\]\((entity|tag):([A-Za-z0-9_:/-]+)\)');
-    final buffer = StringBuffer();
-    final spans = <ArticleInlineSpan>[];
-    var cursor = 0;
-    for (final match in pattern.allMatches(source)) {
-      buffer.write(source.substring(cursor, match.start));
-      final label = match.group(1) ?? '';
-      final kind = match.group(2) ?? '';
-      final target = match.group(3) ?? '';
-      final prefix = '$kind:';
-      final targetId = target.startsWith(prefix) ? target : '$prefix$target';
-      final start = buffer.length;
-      buffer.write(label);
-      final end = buffer.length;
-      if (label.isNotEmpty && kind.isNotEmpty && targetId.isNotEmpty) {
-        spans.add(
-          ArticleInlineSpan(
-            start: start,
-            end: end,
-            kind: kind,
-            targetType: kind,
-            targetId: targetId,
-            displayText: label,
-          ),
-        );
-      }
-      cursor = match.end;
-    }
-    if (cursor == 0) {
+    if (!source.contains('@[') &&
+        !source.contains('[') &&
+        !source.contains('*') &&
+        !source.contains('++') &&
+        !source.contains('~~')) {
       return _InlineMentionParseResult(text: source, spans: const []);
     }
-    buffer.write(source.substring(cursor));
+    const styleTokens = <String>['***', '**', '*', '++', '~~'];
+    final buffer = StringBuffer();
+    final spans = <ArticleInlineSpan>[];
+    // token -> (plain-text 开启偏移)。同一 token 不嵌套（qwq dialect 语义）。
+    final openTokens = <String, int>{};
+    var i = 0;
+    while (i < source.length) {
+      final mention = _inlineMentionPattern.matchAsPrefix(source, i);
+      if (mention != null) {
+        final label = mention.group(1) ?? '';
+        final kind = mention.group(2) ?? '';
+        final target = mention.group(3) ?? '';
+        final prefix = '$kind:';
+        final targetId = target.startsWith(prefix) ? target : '$prefix$target';
+        final start = buffer.length;
+        buffer.write(label);
+        if (label.isNotEmpty && kind.isNotEmpty && targetId.isNotEmpty) {
+          spans.add(
+            ArticleInlineSpan(
+              start: start,
+              end: buffer.length,
+              kind: kind,
+              targetType: kind,
+              targetId: targetId,
+              displayText: label,
+            ),
+          );
+        }
+        i = mention.end;
+        continue;
+      }
+      // 链接 [text](url)：mention 记号（@[...]）优先，其后才尝试 link。
+      if (source.startsWith('[', i)) {
+        final link = _inlineLinkPattern.matchAsPrefix(source, i);
+        if (link != null) {
+          final label = (link.group(1) ?? '').trim();
+          final url = (link.group(2) ?? '').trim();
+          if (label.isNotEmpty && isArticleLinkTargetAllowed(url)) {
+            final start = buffer.length;
+            buffer.write(label);
+            spans.add(
+              ArticleInlineSpan(
+                start: start,
+                end: buffer.length,
+                kind: 'link',
+                targetId: url,
+                displayText: label,
+              ),
+            );
+            i = link.end;
+            continue;
+          }
+        }
+      }
+      String? token;
+      for (final candidate in styleTokens) {
+        if (source.startsWith(candidate, i)) {
+          token = candidate;
+          break;
+        }
+      }
+      if (token != null) {
+        final openedAt = openTokens.remove(token);
+        if (openedAt != null) {
+          if (buffer.length > openedAt) {
+            spans.add(
+              ArticleInlineSpan(
+                start: openedAt,
+                end: buffer.length,
+                bold: token == '***' || token == '**',
+                italic: token == '***' || token == '*',
+                underline: token == '++',
+                strikethrough: token == '~~',
+              ),
+            );
+          }
+          i += token.length;
+          continue;
+        }
+        // 只有后文存在同记号闭合时才视为开启；否则按字面量输出，不吞字。
+        if (source.indexOf(token, i + token.length) != -1) {
+          openTokens[token] = buffer.length;
+        } else {
+          buffer.write(token);
+        }
+        i += token.length;
+        continue;
+      }
+      buffer.write(source[i]);
+      i++;
+    }
+    if (spans.isEmpty && openTokens.isEmpty) {
+      return _InlineMentionParseResult(text: source, spans: const []);
+    }
+    // 未闭合的开启记号（闭合被 mention 等结构消费的病态输入）：按字面量
+    // 插回原开启位置，并平移其后的 span 偏移，保证不吞字。
+    if (openTokens.isNotEmpty) {
+      var text = buffer.toString();
+      final pending = openTokens.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      for (final entry in pending) {
+        final offset = entry.value.clamp(0, text.length);
+        text = text.substring(0, offset) + entry.key + text.substring(offset);
+        for (var index = 0; index < spans.length; index++) {
+          final span = spans[index];
+          if (span.end <= offset) {
+            continue;
+          }
+          spans[index] = ArticleInlineSpan(
+            start: span.start >= offset
+                ? span.start + entry.key.length
+                : span.start,
+            end: span.end + entry.key.length,
+            bold: span.bold,
+            italic: span.italic,
+            underline: span.underline,
+            strikethrough: span.strikethrough,
+            kind: span.kind,
+            targetType: span.targetType,
+            targetId: span.targetId,
+            displayText: span.displayText,
+          );
+        }
+      }
+      spans.sort((a, b) => a.start.compareTo(b.start));
+      return _InlineMentionParseResult(text: text, spans: spans);
+    }
+    spans.sort((a, b) => a.start.compareTo(b.start));
     return _InlineMentionParseResult(text: buffer.toString(), spans: spans);
   }
 
   static Map<String, String> resolveArticleAssetManifestUrls(
-    Map<String, dynamic>? manifest,
+    Map<String, Object?>? manifest,
   ) {
-    return _articleAssetManifestResolver.resolveManifestUrls(
-      manifest?.cast<String, Object?>(),
-    );
+    return _articleAssetManifestResolver.resolveManifestUrls(manifest);
   }
 
   static Map<String, MediaAssetVariants> resolveArticleAssetManifestVariants(
-    Map<String, dynamic>? manifest, {
+    Map<String, Object?>? manifest, {
     MediaAssetManifestResolver resolver = _articleAssetManifestResolver,
   }) {
-    return resolver.resolveManifestVariants(manifest?.cast<String, Object?>());
+    return resolver.resolveManifestVariants(manifest);
   }
 
   static ArticleDocumentNode _figureNodeFromAssetRef(
@@ -395,38 +570,65 @@ class ArticleMarkdownCodec {
       ..writeln();
   }
 
+  /// 行内序列化（GWT-002）：消费 [resolveArticleInlineSegments] 的唯一分段
+  /// 真相源——mention 段写 `@[label](kind:id)`，样式段按「删除线→下划线→
+  /// 粗/斜」固定包裹顺序写成对记号，普通段原样输出。
   static String _serializeInlineText(
     String text,
     List<ArticleInlineSpan> spans,
   ) {
-    final mentionSpans = spans.where((span) => span.isInlineMention).toList()
-      ..sort((a, b) => a.start.compareTo(b.start));
-    if (mentionSpans.isEmpty) return text;
+    if (spans.isEmpty) return text;
+    final segments = resolveArticleInlineSegments(text, spans);
+    if (segments.isEmpty) return text;
     final buffer = StringBuffer();
-    var cursor = 0;
-    for (final span in mentionSpans) {
-      final start = span.start.clamp(0, text.length);
-      final end = span.end.clamp(start, text.length);
-      if (start < cursor) continue;
-      buffer.write(text.substring(cursor, start));
-      final label = (span.displayText ?? text.substring(start, end)).trim();
-      final targetId = span.targetId?.trim() ?? '';
-      final prefix = '${span.kind}:';
-      if (label.isEmpty || targetId.isEmpty) {
-        buffer.write(text.substring(start, end));
-      } else {
+    for (final segment in segments) {
+      final raw = text.substring(segment.start, segment.end);
+      final mention = segment.mention;
+      if (mention != null) {
+        final label = (mention.displayText ?? raw).trim();
+        if (mention.isLink) {
+          final url = mention.targetId?.trim() ?? '';
+          if (label.isEmpty || url.isEmpty) {
+            buffer.write(raw);
+          } else {
+            buffer.write('[$label]($url)');
+          }
+          continue;
+        }
+        final targetId = mention.targetId?.trim() ?? '';
+        final prefix = '${mention.kind}:';
         final wireTarget = targetId.startsWith(prefix)
             ? targetId.substring(prefix.length)
             : targetId;
-        if (wireTarget.isEmpty) {
-          buffer.write(text.substring(start, end));
+        if (label.isEmpty || wireTarget.isEmpty) {
+          buffer.write(raw);
         } else {
           buffer.write('@[$label]($prefix$wireTarget)');
         }
+        continue;
       }
-      cursor = end;
+      if (!segment.hasStyle || raw.trim().isEmpty) {
+        buffer.write(raw);
+        continue;
+      }
+      final emphasisToken = segment.bold && segment.italic
+          ? '***'
+          : segment.bold
+          ? '**'
+          : segment.italic
+          ? '*'
+          : '';
+      final wrapped = StringBuffer();
+      if (segment.strikethrough) wrapped.write('~~');
+      if (segment.underline) wrapped.write('++');
+      wrapped
+        ..write(emphasisToken)
+        ..write(raw)
+        ..write(emphasisToken);
+      if (segment.underline) wrapped.write('++');
+      if (segment.strikethrough) wrapped.write('~~');
+      buffer.write(wrapped);
     }
-    buffer.write(text.substring(cursor));
     return buffer.toString();
   }
 
@@ -443,6 +645,12 @@ class ArticleMarkdownCodec {
       ..writeln('asset://$assetId')
       ..writeln(':::')
       ..writeln();
+  }
+
+  /// 嵌套列表缩进（GWT-004）：两空格 = 一级，最多 2 级，与 parser 同一约定。
+  static String _listIndent(int listDepth) {
+    final depth = listDepth.clamp(0, 2);
+    return depth <= 0 ? '' : '  ' * depth;
   }
 
   static String _canonicalLayout(String value) {

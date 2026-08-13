@@ -285,15 +285,15 @@ def test_author_append_is_independent_and_avatar_is_optional(
     assert latest_pool_record(projected, "author")["objectId"] == "author-a"
 
 
-def test_author_backfill_preserves_legacy_v1_and_appends_modern_v2(
+def test_author_backfill_excludes_pre_sequence_sidecar_without_rewrite(
     tmp_path: Path, monkeypatch
 ) -> None:
     creator_pool, publish, profile_path, evidence = _creator_fixture(
         tmp_path, monkeypatch
     )
     projected = publish / "creators/creator-a"
-    legacy_path = projected / "_pool/versions/1.json"
-    legacy = {
+    stale_path = projected / "_pool/versions/1.json"
+    stale_record = {
         "schema": POOL_RECORD_SCHEMA,
         "objectType": "author",
         "objectId": "author-a",
@@ -308,37 +308,23 @@ def test_author_backfill_preserves_legacy_v1_and_appends_modern_v2(
         "evidenceDigest": _digest(evidence),
         "payloadDigest": _digest(profile_path),
     }
-    write_json(legacy_path, legacy)
-    legacy_bytes = legacy_path.read_bytes()
+    write_json(stale_path, stale_record)
+    stale_bytes = stale_path.read_bytes()
 
     plan = plan_pool_backfill(
         publish_root=publish, creator_pool_root=creator_pool
     )
 
-    [item] = plan["batch"]["items"]
-    assert item["record"]["recordSequence"] == 2
-    assert item["record"]["contentVersion"] == 1
-    assert plan["counts"]["ready"] == 1
-    batch = tmp_path / "author-migration.json"
-    write_json(batch, plan["batch"])
-    report = append_pool_batch(
-        input_path=batch,
-        publish_root=publish,
-        creator_pool_root=creator_pool,
-        apply=True,
-    )
-    assert report["result"] == "ready"
-    assert legacy_path.read_bytes() == legacy_bytes
-    records = iter_pool_records(projected, object_type="author")
-    assert [row["recordSequence"] for row in records] == [1, 2]
-    assert is_pool_record_admitted(records[-1])
+    assert plan["batch"]["items"] == []
+    assert "DATA.POOL.AUTHOR_IDENTITY_INVALID" in plan["reasons"]
+    assert stale_path.read_bytes() == stale_bytes
 
     replay_plan = plan_pool_backfill(
         publish_root=publish, creator_pool_root=creator_pool
     )
     assert replay_plan["batch"]["items"] == []
-    assert replay_plan["counts"]["ready"] == 1
-    assert replay_plan["counts"]["alreadyAdmitted"] == 1
+    assert "DATA.POOL.AUTHOR_IDENTITY_INVALID" in replay_plan["reasons"]
+    assert stale_path.read_bytes() == stale_bytes
 
 
 def test_pool_append_preflights_entire_batch_before_any_mutation(
@@ -601,9 +587,9 @@ def test_backfill_excludes_legacy_identity_instead_of_inferring_from_path(
     assert plan["reasons"] == ["DATA.POOL.IDENTITY_INVALID"]
 
 
-def test_governed_migration_appends_record_sequence_without_new_content_version(
-    tmp_path: Path,
-) -> None:
+def test_pre_sequence_record_shape_blocks_backfill(tmp_path: Path) -> None:
+    """A sidecar without recordSequence is rejected instead of being upgraded."""
+
     publish = tmp_path / "publish"
     post = publish / "posts/article/攻略/旧对象/1"
     write_json(
@@ -612,7 +598,7 @@ def test_governed_migration_appends_record_sequence_without_new_content_version(
             "contentType": "article",
             "authorId": "author-a",
             "reviewDecision": "approved",
-            "executionId": "legacy-execution-a",
+            "executionId": "pre-contract-execution-a",
             "sourceDigest": SourceDigest("sha256:" + "2" * 64).to_document(),
             "sourceAttribution": _source_attribution(),
         },
@@ -631,10 +617,10 @@ def test_governed_migration_appends_record_sequence_without_new_content_version(
         },
     )
     object_ref = post.relative_to(publish / "posts").as_posix()
-    legacy_record = {
+    pre_sequence_record = {
         "schema": POOL_RECORD_SCHEMA,
         "objectType": "content",
-        "objectId": "content-legacy-explicit",
+        "objectId": "content-pre-contract-explicit",
         "objectRef": object_ref,
         "version": 1,
         "status": "active",
@@ -646,43 +632,13 @@ def test_governed_migration_appends_record_sequence_without_new_content_version(
         "evidenceDigest": _digest(evidence),
         "payloadDigest": pool_payload_digest(post),
     }
-    write_json(post / "_pool/versions/1.json", legacy_record)
+    write_json(post / "_pool/versions/1.json", pre_sequence_record)
 
-    plan = plan_pool_backfill(
-        publish_root=publish,
-        creator_pool_root=tmp_path / "empty-creators",
-    )
-
-    [item] = plan["batch"]["items"]
-    record = item["record"]
-    assert record["recordSequence"] == 2
-    assert record["contentVersion"] == 1
-    assert record["objectId"] == "content-legacy-explicit"
-    assert record["sourceIdentity"]["identityKind"] == (
-        "legacy_canonical_migration"
-    )
-    batch = tmp_path / "migration.json"
-    write_json(batch, plan["batch"])
-    first = append_pool_batch(
-        input_path=batch,
-        publish_root=publish,
-        creator_pool_root=tmp_path / "empty-creators",
-        apply=True,
-    )
-    replay = append_pool_batch(
-        input_path=batch,
-        publish_root=publish,
-        creator_pool_root=tmp_path / "empty-creators",
-        apply=True,
-    )
-    assert first["items"][0]["status"] == "appended"
-    assert replay["items"][0]["status"] == "replayed"
-    assert latest_pool_record(post, "content")["contentVersion"] == 1
-
-    conflicting = dict(record)
-    conflicting["qualityResult"] = "failed"
-    with pytest.raises(Exception, match="VERSION_CONFLICT"):
-        append_pool_record(object_root=post, record=conflicting)
+    with pytest.raises(Exception, match="RECORD_SEQUENCE_MISSING"):
+        plan_pool_backfill(
+            publish_root=publish,
+            creator_pool_root=tmp_path / "empty-creators",
+        )
 
 
 def test_backfill_emits_typed_attribution_repair_requirement(tmp_path: Path) -> None:
@@ -808,7 +764,7 @@ def test_video_migration_reprobes_motion_and_access_safety(
     assert ready["counts"]["ready"] == 1
 
 
-def test_repair_producer_appends_exact_seq2_and_rejects_different_repair(
+def test_repair_producer_rejects_pre_sequence_sidecar_without_rewrite(
     tmp_path: Path, monkeypatch
 ) -> None:
     publish = tmp_path / "publish"
@@ -895,39 +851,14 @@ def test_repair_producer_appends_exact_seq2_and_rejects_different_repair(
     bindings = tmp_path / "repair-bindings.json"
     write_json(bindings, binding_document)
 
-    first = repair_pool_attribution(
-        publish_root=publish,
-        output_root=tmp_path / "output",
-        bindings_path=bindings,
-        source_pool_ref="data/source-pool.json",
-        evidence_root_ref="data/evidence",
-        apply=True,
-    )
-    replay = repair_pool_attribution(
-        publish_root=publish,
-        output_root=tmp_path / "output",
-        bindings_path=bindings,
-        source_pool_ref="data/source-pool.json",
-        evidence_root_ref="data/evidence",
-        apply=True,
-    )
-    record = latest_pool_record(post, "content")
-    assert first["items"][0]["status"] == "appended"
-    assert replay["items"][0]["status"] == "replayed"
-    assert record["recordSequence"] == 2
-    assert record["contentVersion"] == 1
-    assert record["sourceAttribution"] == _source_attribution()
-
-    candidate["sourceAttribution"] = {
-        **_source_attribution(),
-        "originalCreatorName": "different-author",
-    }
-    with pytest.raises(Exception, match="REPAIR_MIGRATION_COLLISION"):
+    sidecar_bytes = (post / "_pool/versions/1.json").read_bytes()
+    with pytest.raises(Exception, match="RECORD_SEQUENCE_MISSING"):
         repair_pool_attribution(
             publish_root=publish,
             output_root=tmp_path / "output",
             bindings_path=bindings,
             source_pool_ref="data/source-pool.json",
             evidence_root_ref="data/evidence",
-            apply=False,
+            apply=True,
         )
+    assert (post / "_pool/versions/1.json").read_bytes() == sidecar_bytes

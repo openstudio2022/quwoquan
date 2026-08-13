@@ -145,7 +145,7 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：当前测试树仍包含旧技术大桶和不完整的对象路径校验，静态 evidence 也尚未把 App、服务、Ops 的入口与 runner CaseResult 分侧承载，无法证明每个受影响对象的三层测试与真实结果完整。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+- 完成判定：`SIT-001` 的 12 条 THEN 组全部具备子句级 `spec_ref`（`sit-001.t1..t12`）绑定的真实测试或可执行门证据。
 - 依赖：[`three-layer-evidence`](./three-layer-evidence/spec.md) 与 [`branch-coverage-governance`](./branch-coverage-governance/spec.md) 的开放事项关闭。
 
 <a id="open-002"></a>
@@ -168,6 +168,6 @@
 - 准出影响：`track`
 - 影响或价值：当前存量对象、页面与旅程的非功能覆盖大面积缺失（全仓 `__performance__` 用例个位数、a11y 实质断言仅 1 处、golden/visual 覆盖极窄、无告警演练证据），在压测与故障注入 harness、覆盖棘轮门禁落地并按派生热力图铺开前，性能/可靠性/体验回归不可被门禁发现。
 - privacy 维度残量：`__privacy__` facet 在多数服务为零（实扫仅 integration 3、search/recommendation/user 各 1）；账号关闭清除与可见性边界已有部分覆盖但多以 `__data_consistency__` 或无 facet 形态存在，circle/chat/content 等持有用户数据的服务缺以 privacy facet 声明的删除传播、可见性收敛与数据导出边界用例，随非功能轴按服务铺开。
-- 异常路径断言残量：服务侧声明错误码的测试断言缺口由 `verify_error_code_assertion_coverage.py` 每服务棘轮圈住（建门时全仓 567 声明/352 缺失，首批 tag/rtc/api-edge/entity 已锁零）；App 侧 generated 错误码断言率约 34%，消化路径同型（对象级错误映射负例 + 依赖失败 typed double 路径），随批次下调各服务基线。
+- 异常路径断言残量：服务侧声明错误码的测试断言缺口由 `verify_error_code_assertion_coverage.py` 每服务棘轮圈住（建门时全仓 567 声明/352 缺失，已锁零 8 服务：tag/rtc/api-edge/entity/chat/search/notification/realtime-gateway，剩余缺口 282 集中在 assistant 68、user 54、content 52、circle 43、product-ops 29、integration 19、recommendation 17）；App 侧 generated 错误码断言率约 34%，消化路径同型（对象级错误映射负例 + 依赖失败 typed double 路径），随批次下调各服务基线。
 - 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效；错误码断言棘轮各服务基线归零。
 - 依赖：[`runtime-testinfra`](../runtime-testinfra/spec.md) 的 `performance-load-harness` 与 `fault-injection-harness` 开放事项、[`observability-and-alerting`](../../platform-ops-governance/observability-and-alerting/spec.md) 的 `alert-drill-closure` 开放事项关闭。

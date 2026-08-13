@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_message_display_item.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_view_data.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart'
-    show MessageCard;
+    show MessageCard, MessageCardKind;
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/design_system/typography/app_font_families.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
@@ -152,6 +153,47 @@ void main() {
       expect(find.byType(ChatMessageBubble), findsOneWidget);
     });
 
+    // spec_ref: specs/feature-tree/chat-conversation/intersection-native-messaging/spec.md#sit-004
+    testWidgets('破冰卡渲染云侧交集主句原文且无跳转 chevron', (tester) async {
+      final message = _message(
+        type: 'card',
+        senderId: 'user_002',
+        senderName: '新同行者',
+        card: const MessageCard(
+          kind: MessageCardKind.intersectionIcebreaker,
+          title: '你们都想去贡嘎雪山',
+          subtitle: '你们都参加过城市观星夜',
+          attributes: [],
+        ),
+      );
+      await tester.pumpWidget(_wrapBubble(message: message));
+      await tester.pump();
+
+      expect(find.text(ChatText.chatIcebreakerCardLabel), findsOneWidget);
+      expect(find.text('你们都想去贡嘎雪山'), findsOneWidget);
+      expect(find.text('你们都参加过城市观星夜'), findsOneWidget);
+      // 破冰卡无跳转语义：不渲染通用卡片的 chevron 行动指示。
+      expect(find.byIcon(CupertinoIcons.chevron_forward), findsNothing);
+      expect(find.byIcon(CupertinoIcons.sparkles), findsOneWidget);
+    });
+
+    testWidgets('破冰卡副句为空时不渲染空行占位', (tester) async {
+      final message = _message(
+        type: 'card',
+        senderId: 'user_002',
+        card: const MessageCard(
+          kind: MessageCardKind.intersectionIcebreaker,
+          title: '你们都关注了摄影师阿舟',
+          attributes: [],
+        ),
+      );
+      await tester.pumpWidget(_wrapBubble(message: message));
+      await tester.pump();
+
+      expect(find.text('你们都关注了摄影师阿舟'), findsOneWidget);
+      expect(find.text(''), findsNothing);
+    });
+
     testWidgets('语音消息按时长映射气泡宽度', (tester) async {
       final shortVoice = _message(
         type: 'audio',
@@ -173,6 +215,72 @@ void main() {
       final longWidth = tester.getSize(find.byType(VoiceMessageBubble)).width;
 
       expect(longWidth, greaterThan(shortWidth));
+    });
+
+    // spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/voice-message/spec.md#gwt-004.t4
+    testWidgets('接收语音消息渲染云侧真实时长与波形', (tester) async {
+      // wire → ChatMessageViewData → toDisplayItem 真链：接收端不再是 0 时长。
+      final wire = ChatMessageViewData(
+        id: 'msg_audio_wire',
+        conversationId: 'conv_audio',
+        seq: 9,
+        clientMsgId: 'client_audio',
+        senderId: 'peer_1',
+        type: 'audio',
+        content: '',
+        mediaDeliveryUrl: 'https://cdn.example.com/voice.m4a',
+        audioDurationMs: 5000,
+        audioWaveform: const <double>[0.2, 0.9, 0.5, 0.7],
+        status: 'sent',
+      );
+      final item = wire.toDisplayItem(currentUserId: 'me', peerReadSeq: 0);
+      expect(item.audioDurationMs, 5000);
+      expect(item.audioWaveform, hasLength(4));
+
+      await tester.pumpWidget(_wrapBubble(message: item, isRight: false));
+      await tester.pump();
+
+      expect(find.text('5″'), findsOneWidget, reason: '语音气泡显示云侧真实时长');
+      final bubble = tester.widget<VoiceMessageBubble>(
+        find.byType(VoiceMessageBubble),
+      );
+      expect(bubble.waveform, hasLength(4), reason: '波形透传到语音气泡');
+      expect(bubble.waveform[1], 0.9);
+    });
+
+    // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/list-detail-message-delivery/spec.md
+    testWidgets('文件与视频气泡点击触发消费动作', (tester) async {
+      var fileTapped = 0;
+      final fileMessage = _message(type: 'file', content: '会议纪要.pdf');
+      await tester.pumpWidget(
+        _wrapBubble(
+          message: fileMessage,
+          isRight: true,
+          onTap: () => fileTapped += 1,
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(ValueKey('chat_file_open_${fileMessage.id}')));
+      expect(fileTapped, 1, reason: '文件气泡点击必须绑定打开动作');
+
+      var videoTapped = 0;
+      final videoMessage = _message(
+        id: 'msg_video',
+        type: 'video',
+        content: '滑雪合集',
+      );
+      await tester.pumpWidget(
+        _wrapBubble(
+          message: videoMessage,
+          isRight: true,
+          onTap: () => videoTapped += 1,
+        ),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(ValueKey('chat_video_open_${videoMessage.id}')),
+      );
+      expect(videoTapped, 1, reason: '视频气泡点击必须绑定播放动作');
     });
 
     testWidgets('文件消息展示文件卡片', (tester) async {

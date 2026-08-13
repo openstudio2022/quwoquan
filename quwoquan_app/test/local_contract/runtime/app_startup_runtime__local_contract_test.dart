@@ -251,13 +251,10 @@ void main() {
 
   test('首页内容首帧与欢迎遮罩移除必须同时成立才记录真实可用', () {
     runtime.markHomeFeedContentPainted();
-    expect(runtime.snapshotProperties(phase: 'assert')['homeReadyMs'], isNull);
+    expect(runtime.phaseSnapshot(phase: 'assert').homeReadyMs, isNull);
 
     runtime.markWelcomeOverlayRemoved();
-    expect(
-      runtime.snapshotProperties(phase: 'assert')['homeReadyMs'],
-      isA<int>(),
-    );
+    expect(runtime.phaseSnapshot(phase: 'assert').homeReadyMs, isA<int>());
   });
 }
 

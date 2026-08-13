@@ -7,7 +7,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle/pre
 import 'package:quwoquan_app/design_system/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
-import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/home_circles_hub_page.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circles_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/circle_service/circle_management/circle/typed_circle_query_test_double.dart';
@@ -67,7 +67,9 @@ Widget _scopedApp({
         routes: [
           GoRoute(
             path: '/circles',
-            builder: (_, _) => const Scaffold(body: CirclesHubPage()),
+            // 名实一致：挂载路由真实入口 CirclesPage（CirclesHubPage 的薄别名），
+            // 保证本套件真正覆盖 circles_page.dart 而非只测底层 hub。
+            builder: (_, _) => const Scaffold(body: CirclesPage()),
           ),
           GoRoute(path: '/circle/:id', builder: (_, _) => const SizedBox()),
           GoRoute(
@@ -86,7 +88,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await tester.pump();
 
-      expect(find.byType(CirclesHubPage), findsOneWidget);
+      expect(find.byType(CirclesPage), findsOneWidget);
     });
 
     testWidgets('Tab 导航栏存在', (tester) async {
@@ -145,7 +147,7 @@ void main() {
       await tester.pumpWidget(_scopedApp());
       await _circlesPumpSettled(tester);
 
-      expect(find.byType(CirclesHubPage), findsOneWidget);
+      expect(find.byType(CirclesPage), findsOneWidget);
     });
 
     testWidgets('窄屏大字号下保持自适应不溢出', (tester) async {
@@ -189,7 +191,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(CirclesHubPage), findsOneWidget);
+      expect(find.byType(CirclesPage), findsOneWidget);
     });
   });
 }

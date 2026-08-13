@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
-import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 
 /// 聊天助手旅程：邀请助手 → @小趣 → 收到回复
 ///
@@ -17,9 +16,7 @@ void main() {
       final mock = _TrackingAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(mock),
-          ],
+          overrides: [...chatTestRepositoryOverrides(member: mock)],
           child: MaterialApp(
             home: _AssistantTestPage(repo: mock, writer: mock.writer),
           ),
@@ -39,9 +36,7 @@ void main() {
       final mock = _TrackingAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(mock),
-          ],
+          overrides: [...chatTestRepositoryOverrides(member: mock)],
           child: MaterialApp(
             home: _AssistantTestPage(repo: mock, writer: mock.writer),
           ),
@@ -67,9 +62,7 @@ void main() {
       final mock = _TrackingAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(mock),
-          ],
+          overrides: [...chatTestRepositoryOverrides(member: mock)],
           child: MaterialApp(home: _AssistantTestPage(repo: mock)),
         ),
       );
@@ -91,9 +84,7 @@ void main() {
       final mock = _ErrorAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(mock),
-          ],
+          overrides: [...chatTestRepositoryOverrides(member: mock)],
           child: MaterialApp(home: _AssistantTestPage(repo: mock)),
         ),
       );
@@ -109,9 +100,7 @@ void main() {
       final mock = _ErrorRemoveAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(mock),
-          ],
+          overrides: [...chatTestRepositoryOverrides(member: mock)],
           child: MaterialApp(home: _AssistantTestPage(repo: mock)),
         ),
       );
@@ -134,9 +123,7 @@ void main() {
       final mock = _TrackingAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(mock),
-          ],
+          overrides: [...chatTestRepositoryOverrides(member: mock)],
           child: MaterialApp(home: _AssistantTestPage(repo: mock)),
         ),
       );
@@ -157,9 +144,7 @@ void main() {
       final mock = _TrackingAssistantRepo();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(mock),
-          ],
+          overrides: [...chatTestRepositoryOverrides(member: mock)],
           child: MaterialApp(home: _AssistantTestPage(repo: mock)),
         ),
       );
@@ -184,7 +169,7 @@ class _AssistantTestPage extends StatefulWidget {
     this.writer = const _NoopWriter(),
   });
 
-  final ChatRepository repo;
+  final ChatMemberRepository repo;
   final ChatMessageCommandWriter writer;
 
   @override
@@ -319,7 +304,7 @@ class _AssistantTestPageState extends State<_AssistantTestPage> {
 // Mock 变体
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class _TrackingAssistantRepo extends MockChatRepository {
+class _TrackingAssistantRepo extends Fake implements ChatMemberRepository {
   final _TrackingAssistantMessageWriter writer =
       _TrackingAssistantMessageWriter();
   int inviteCallCount = 0;
@@ -362,14 +347,19 @@ class _NoopWriter implements ChatMessageCommandWriter {
   }
 }
 
-class _ErrorAssistantRepo extends MockChatRepository {
+class _ErrorAssistantRepo extends Fake implements ChatMemberRepository {
   @override
   Future<void> inviteAssistant({required String conversationId}) async {
     throw Exception('邀请助手失败');
   }
 }
 
-class _ErrorRemoveAssistantRepo extends MockChatRepository {
+class _ErrorRemoveAssistantRepo extends Fake implements ChatMemberRepository {
+  @override
+  Future<void> inviteAssistant({required String conversationId}) async {
+    // 邀请成功，让用例真实走到「移除失败」错误路径。
+  }
+
   @override
   Future<void> removeAssistant({required String conversationId}) async {
     throw Exception('移除助手失败');

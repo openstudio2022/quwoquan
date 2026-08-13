@@ -132,17 +132,6 @@ def write_homepage_source_asset_receipt(
     )
     path = entity_dir / HOMEPAGE_SOURCE_ASSET_RECEIPT_REF
     write_json(path, receipt)
-    for row in receipt["sourceAssetCounts"]:
-        print(
-            "[homepage] Source assets: "
-            f"displayName={row['displayName']} provider={row['provider']} "
-            f"assets={row['acceptedAssetCount']} planned={row['plannedAssetCount']} "
-            f"discovered={row['discoveredAssetCount']} downloaded={row['downloadedAssetCount']} "
-            f"accepted={row['acceptedAssetCount']} rejected={row['rejectedAssetCount']} "
-            f"verified={row['verifiedAssetCount']} unverified={row['unverifiedAssetCount']} "
-            f"restricted={row['restrictedAssetCount']} unknown={row['unknownAssetCount']}",
-            flush=True,
-        )
     return receipt, HOMEPAGE_SOURCE_ASSET_RECEIPT_REF
 
 

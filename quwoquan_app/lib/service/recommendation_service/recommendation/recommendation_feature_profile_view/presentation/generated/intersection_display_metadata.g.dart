@@ -18,6 +18,7 @@ final class IntersectionKindDisplayMetadata {
 const Map<String, IntersectionKindDisplayMetadata>
     intersectionKindDisplayMetadata = <String, IntersectionKindDisplayMetadata>{
   "coCommented": IntersectionKindDisplayMetadata(iconKey: "discussion"),
+  "coExperiencedGathering": IntersectionKindDisplayMetadata(iconKey: "experience"),
   "coLiked": IntersectionKindDisplayMetadata(iconKey: "like"),
   "coSharedContent": IntersectionKindDisplayMetadata(iconKey: "share"),
   "coVisitedEntity": IntersectionKindDisplayMetadata(iconKey: "place"),
@@ -40,6 +41,7 @@ const Map<String, String> intersectionVisualToneByIconKey = <String, String>{
     'attention': 'stone',
     'circle': 'sage',
     'discussion': 'clay',
+    'experience': 'sage',
     'followHere': 'sage',
     'interest': 'stone',
     'like': 'clay',

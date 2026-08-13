@@ -19,8 +19,8 @@ import 'package:quwoquan_cloud_contracts/generated/content_contracts.dart'
         IntersectionTextSpan;
 
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
+import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_wire_test_builder.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
-import '../../../../../support/runtime/fixtures/object_contract_example_reader.dart';
 
 final class _NoopIntersectionVisitWriter implements IntersectionVisitWriter {
   const _NoopIntersectionVisitWriter();
@@ -309,9 +309,7 @@ void main() {
 // ---------------------------------------------------------------------------
 
 Map<String, dynamic> _loadIntersectionCoreSeed() {
-  return objectContractExampleReader
-      .requireExample('content', 'intersection_core')
-      .cast<String, dynamic>();
+  return intersectionWireExample().cast<String, dynamic>();
 }
 
 IntersectionReason _reason(String id, {required String lifecycleState}) {

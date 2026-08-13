@@ -4,15 +4,14 @@ import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/d
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         AssistantPresentationDocumentWire,
-        AssistantPresentationNodeWire,
         AssistantStreamEventType,
         AssistantStreamEventWire;
 
 /// Reduces ordered presentation SSE items into one immutable document.
 ///
 /// Replayed items are idempotent only when their complete payload matches.
-/// Gaps, conflicts, post-commit writes and invalid tree patches fail closed so
-/// the renderer can show the document's Markdown/plain-text fallback.
+/// Gaps, conflicts and post-commit writes fail closed so the renderer can
+/// show the document's Markdown/plain-text fallback.
 class AssistantPresentationStreamProjection {
   AssistantPresentationDocumentWire? _document;
   int _revision = 0;
@@ -94,18 +93,6 @@ class AssistantPresentationStreamProjection {
         _document = parsed;
         _committed = false;
         break;
-      case AssistantStreamEventType.presentationPatch:
-        final current = _document;
-        final rawPatches = payload['patches'];
-        if (_revision == 0 || current == null || rawPatches is! List) {
-          throw const FormatException('invalid presentation patch');
-        }
-        _document = _copyDocument(
-          current,
-          revision: revision,
-          nodes: _applyPatches(current, rawPatches),
-        );
-        break;
       case AssistantStreamEventType.presentationCommit:
         final current = _document;
         if (_revision == 0 || current == null) {
@@ -145,114 +132,17 @@ class AssistantPresentationStreamProjection {
     return DateTime.tryParse(value) == null ? null : value;
   }
 
-  List<AssistantPresentationNodeWire> _applyPatches(
-    AssistantPresentationDocumentWire document,
-    List<dynamic> rawPatches,
-  ) {
-    if (rawPatches.isEmpty) {
-      throw const FormatException('presentation patch list is empty');
-    }
-    final nodes = <AssistantPresentationNodeWire>[...document.nodes];
-    for (final rawPatch in rawPatches) {
-      if (rawPatch is! Map) {
-        throw const FormatException('presentation patch must be an object');
-      }
-      final patch = rawPatch.cast<String, dynamic>();
-      final operation = (patch['operation'] as String?)?.trim() ?? '';
-      final nodeId = (patch['nodeId'] as String?)?.trim() ?? '';
-      final index = nodes.indexWhere((node) => node.nodeId == nodeId);
-      final rawNode = patch['node'];
-      switch (operation) {
-        case 'add':
-          if (nodeId.isEmpty || index >= 0 || rawNode is! Map) {
-            throw const FormatException('invalid presentation add patch');
-          }
-          final node = AssistantPresentationNodeWire.fromJson(
-            rawNode.cast<String, dynamic>(),
-          );
-          if (node.nodeId != nodeId) {
-            throw const FormatException('presentation add node id mismatch');
-          }
-          nodes.add(node);
-          break;
-        case 'replace':
-          if (index < 0 || rawNode is! Map) {
-            throw const FormatException('invalid presentation replace patch');
-          }
-          final node = AssistantPresentationNodeWire.fromJson(
-            rawNode.cast<String, dynamic>(),
-          );
-          if (node.nodeId != nodeId) {
-            throw const FormatException(
-              'presentation replace node id mismatch',
-            );
-          }
-          nodes[index] = node;
-          break;
-        case 'remove':
-          if (index < 0 || rawNode != null || nodeId == document.rootNodeId) {
-            throw const FormatException('invalid presentation remove patch');
-          }
-          if (nodes.any((node) => node.parentNodeId == nodeId)) {
-            throw const FormatException(
-              'presentation parent cannot be removed',
-            );
-          }
-          nodes.removeAt(index);
-          break;
-        default:
-          throw const FormatException('unknown presentation patch operation');
-      }
-    }
-    _validateTree(document.rootNodeId, nodes);
-    return List<AssistantPresentationNodeWire>.unmodifiable(nodes);
-  }
 }
 
 bool _isPresentationEvent(AssistantStreamEventType type) => switch (type) {
   AssistantStreamEventType.presentationSnapshot ||
-  AssistantStreamEventType.presentationPatch ||
   AssistantStreamEventType.presentationCommit => true,
   _ => false,
 };
 
-void _validateTree(
-  String rootNodeId,
-  List<AssistantPresentationNodeWire> nodes,
-) {
-  final byId = <String, AssistantPresentationNodeWire>{};
-  for (final node in nodes) {
-    if (node.nodeId.isEmpty || byId.containsKey(node.nodeId)) {
-      throw const FormatException('presentation tree has duplicate node ids');
-    }
-    byId[node.nodeId] = node;
-  }
-  final root = byId[rootNodeId];
-  if (root == null || root.parentNodeId.isNotEmpty) {
-    throw const FormatException('presentation tree root is invalid');
-  }
-  for (final node in nodes) {
-    if (node.nodeId == rootNodeId) continue;
-    if (!byId.containsKey(node.parentNodeId)) {
-      throw const FormatException('presentation tree parent is missing');
-    }
-    var cursor = node;
-    final visited = <String>{node.nodeId};
-    var depth = 1;
-    while (cursor.parentNodeId.isNotEmpty) {
-      if (!visited.add(cursor.parentNodeId) || depth > 12) {
-        throw const FormatException('presentation tree is cyclic or too deep');
-      }
-      cursor = byId[cursor.parentNodeId]!;
-      depth++;
-    }
-  }
-}
-
 AssistantPresentationDocumentWire _copyDocument(
   AssistantPresentationDocumentWire document, {
   required int revision,
-  List<AssistantPresentationNodeWire>? nodes,
   String? committedAt,
 }) {
   return AssistantPresentationDocumentWire(
@@ -260,7 +150,7 @@ AssistantPresentationDocumentWire _copyDocument(
     templateDigest: document.templateDigest,
     revision: revision,
     rootNodeId: document.rootNodeId,
-    nodes: nodes ?? document.nodes,
+    nodes: document.nodes,
     dataDigest: document.dataDigest,
     selectedVariant: document.selectedVariant,
     fallbackMarkdown: document.fallbackMarkdown,

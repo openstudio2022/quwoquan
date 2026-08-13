@@ -14,15 +14,11 @@ import 'package:quwoquan_app/design_system/navigation/tab_swipe_switch_region.da
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/page_context/application/public/assistant_open_context.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
-import 'package:quwoquan_app/runtime/models/visit_models.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
-    show visitRecorderServiceProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
     show journeyEventTrackerProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
@@ -39,7 +35,6 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/application/home_feed_post_open_action.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_multi_form_feed.dart';
-import 'package:quwoquan_app/runtime/di/presentation/content_viewer_composition.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 class HomePage extends ConsumerStatefulWidget {
@@ -330,7 +325,7 @@ class _HomePageState extends ConsumerState<HomePage>
     switch (location) {
       case AppRoutePaths.home:
         return _defaultChannelId;
-      case '/following':
+      case homeFollowingChannelLocation:
         return HomePrimaryTabStrip.followingChannelId;
       default:
         return null;
@@ -648,71 +643,5 @@ class _HomePageState extends ConsumerState<HomePage>
   }
 }
 
-class HomeFeaturedImmersivePage extends ConsumerWidget {
-  const HomeFeaturedImmersivePage({super.key, required this.onExitToHome});
-
-  final VoidCallback onExitToHome;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final safeTop = MediaQuery.viewPaddingOf(context).top;
-    final effectiveTopInset = AppSpacing.appChromeTopSafeInset(
-      safeTop,
-      context,
-    );
-    return CupertinoPageScaffold(
-      backgroundColor: AppColors.black,
-      child: Material(
-        type: MaterialType.transparency,
-        child: ContentViewerComposition.featuredWorks(
-          topChromeSafeInset: effectiveTopInset,
-          onUserTap: (userId, {avatarUrl, displayName, backgroundUrl}) =>
-              _openUserProfile(
-                context,
-                userId,
-                avatarUrl: avatarUrl,
-                displayName: displayName,
-                backgroundUrl: backgroundUrl,
-              ),
-          onAssistantTap: () => _openAssistantHalfSheet(context, ref),
-          onTapBack: onExitToHome,
-          onSwitchToFollowing: onExitToHome,
-          onSwitchToCircles: onExitToHome,
-        ),
-      ),
-    );
-  }
-
-  void _openUserProfile(
-    BuildContext context,
-    String userId, {
-    String? avatarUrl,
-    String? displayName,
-    String? backgroundUrl,
-  }) {
-    context.push(
-      AppRoutePaths.userProfile(userHandle: userId),
-      extra: UserProfileRouteExtra(
-        personaId: userId,
-        avatarUrl: avatarUrl,
-        displayName: displayName,
-        backgroundImage: backgroundUrl,
-      ),
-    );
-  }
-
-  void _openAssistantHalfSheet(BuildContext context, WidgetRef ref) {
-    final target = VisitTarget.page('home_featured');
-    final service = ref.read(visitRecorderServiceProvider);
-    final ctx = AssistantOpenContext(
-      source: AssistantSource.discovery,
-      tab: HomePrimaryTabStrip.featuredChannelId,
-      experienceLevel: switch (service.getExperience(target)) {
-        ExperienceLevel.firstTime => AssistantExperienceLevel.firstTime,
-        ExperienceLevel.returning => AssistantExperienceLevel.returning,
-        ExperienceLevel.frequent => AssistantExperienceLevel.frequent,
-      },
-    );
-    unawaited(ContentViewerComposition.showAssistantHalfSheet(context, ctx));
-  }
-}
+// HomeFeaturedImmersivePage 已迁移至 home_featured_immersive_page.dart
+// （页面契约 content.home_featured_immersive 唯一拥有）。

@@ -336,6 +336,82 @@ final class GatheringPrivateDetailSlice {
   final int admissionControlVersion;
 }
 
+/// 来源对象（实体主页等）「近期公开行动」卡的最小展示投影。
+///
+/// 只透传云侧 PublicCard 可枚举事实：标题、档期标签、名额与生命周期；
+/// 不本地推断到场/成行，计数语义由服务端 disclosure 裁剪。
+final class GatheringSourceCardSummary {
+  const GatheringSourceCardSummary({
+    required this.gatheringId,
+    required this.title,
+    this.dateLabel,
+    this.startAt,
+    required this.remainingSeats,
+    required this.full,
+    required this.lifecycleStatusWire,
+  });
+
+  final String gatheringId;
+  final String title;
+
+  /// 云侧档期标签（如「本周六下午」）；缺失时由调用方按 startAt 本地化格式。
+  final String? dateLabel;
+  final DateTime? startAt;
+  final int remainingSeats;
+  final bool full;
+  final String lifecycleStatusWire;
+}
+
+/// Host 本人的公开行动卡摘要（「我的行动」入口与分组页；REQ-008）。
+///
+/// 数据来自 `ListGatheringsByHost` 公开披露读面（仅 audiencePolicy=public 的
+/// published/cancelled/completed 行动）；分组事实只由云侧 `lifecycleStatus` 与
+/// `temporalPhase` 派生，端不做时间推断。
+final class GatheringHostCardSummary {
+  const GatheringHostCardSummary({
+    required this.gatheringId,
+    required this.title,
+    this.dateLabel,
+    this.startAt,
+    required this.remainingSeats,
+    required this.full,
+    required this.lifecycleStatusWire,
+    required this.temporalPhaseWire,
+  });
+
+  final String gatheringId;
+  final String title;
+
+  /// 云侧档期标签；缺失时由调用方按 startAt 本地化格式。
+  final String? dateLabel;
+  final DateTime? startAt;
+  final int remainingSeats;
+  final bool full;
+  final String lifecycleStatusWire;
+
+  /// 云侧评估的时态（upcoming / in_progress / ended）。
+  final String temporalPhaseWire;
+}
+
+/// Host 公开行动 typed page（cursor 分页）。
+final class GatheringHostCardPage {
+  const GatheringHostCardPage({
+    required this.items,
+    required this.nextCursor,
+    required this.hasMore,
+  });
+
+  static const GatheringHostCardPage empty = GatheringHostCardPage(
+    items: <GatheringHostCardSummary>[],
+    nextCursor: '',
+    hasMore: false,
+  );
+
+  final List<GatheringHostCardSummary> items;
+  final String nextCursor;
+  final bool hasMore;
+}
+
 final class GatheringDetailPresentationSlice {
   const GatheringDetailPresentationSlice({
     required this.publicDetail,

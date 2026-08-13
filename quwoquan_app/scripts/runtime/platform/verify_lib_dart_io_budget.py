@@ -91,20 +91,19 @@ def _load_allowed() -> set[str]:
     }
 
 
-def _write_baseline(importers: set[str]) -> None:
+def _write_baseline(importers: set[str]) -> tuple[int, list[str]]:
+    """退役后 ``--write-baseline`` 只能删除陈旧文件，不能重建豁免。
+
+    规则 14 对这条门禁的措辞是「存量已清零、allowlist 已退役，命中即 BLOCK，不接受
+    豁免登记」。只要脚本还能重建 allowlist，任何人新加一个 ``dart:io`` 导入再跑一次
+    ``--write-baseline`` 就能把它固化成豁免、让门禁转绿——那条规则也就名存实亡。
+
+    返回未被边界豁免的违规条目，由调用方决定退出码。
+    """
     entries = sorted(r for r in importers if not _is_boundary(r))
     if not entries:
         ALLOWLIST.unlink(missing_ok=True)
-        return
-    ALLOWLIST.parent.mkdir(parents=True, exist_ok=True)
-    lines = [
-        "# Baseline of quwoquan_app/lib files importing dart:io directly.",
-        "# Managed by verify_lib_dart_io_budget.py (rule 14-cross-platform-portability).",
-        "# Only-decrease: do not add entries without migrating behind the platform ACL.",
-        "allowed:",
-    ]
-    lines += [f"  - {e}" for e in entries]
-    ALLOWLIST.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return len(entries), entries
 
 
 def main() -> int:
@@ -115,18 +114,21 @@ def main() -> int:
     importers = _scan_importers()
 
     if args.write_baseline:
-        _write_baseline(importers)
-        kept = sum(1 for r in importers if not _is_boundary(r))
+        kept, entries = _write_baseline(importers)
         if kept == 0:
             print(
                 "verify_lib_dart_io_budget: retired empty baseline "
                 f"(removed {ALLOWLIST})"
             )
-        else:
-            print(
-                f"verify_lib_dart_io_budget: wrote baseline count={kept} -> {ALLOWLIST}"
-            )
-        return 0
+            return 0
+        print(
+            "verify_lib_dart_io_budget: BLOCK: allowlist is retired and cannot be "
+            f"rebuilt; migrate these {kept} importer(s) behind the platform ACL",
+            file=sys.stderr,
+        )
+        for path in entries:
+            print(f"  {path}", file=sys.stderr)
+        return 2
 
     if not ALLOWLIST.is_file():
         current = sorted(r for r in importers if not _is_boundary(r))

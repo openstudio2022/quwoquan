@@ -133,7 +133,10 @@ final class _NoopPostInteractionStateNotifier
   PostInteractionState build() => const PostInteractionState();
 
   @override
-  void applyConfirmedPosts(Iterable<ContentPostViewData> posts) {}
+  void applyConfirmedPosts(
+    Iterable<ContentPostViewData> posts, {
+    Set<String> pendingLikePostIds = const <String>{},
+  }) {}
 }
 
 final class _WidgetPagedDiscoveryFeedQuery

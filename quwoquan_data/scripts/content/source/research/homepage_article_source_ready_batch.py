@@ -303,7 +303,6 @@ def validate_source_ready_candidate_capsule(
         )
         builder(
             catalog_id=f"capsule-validation-{candidate.get('candidateId')}",
-            catalog_version="capsule",
             created_at="immutable-capsule",
             minimum_candidate_count=1,
             source_revision=_identity(capsule)[0],
@@ -548,7 +547,6 @@ def freeze_homepage_article_source_ready_batch(
         )
     identity = _identity(batch)
     common = {
-        "catalog_version": str(batch["targetScale"]).lower(),
         "created_at": str(batch["createdAt"]),
         "source_revision": identity[0],
         "source_digest": identity[1],

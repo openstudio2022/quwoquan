@@ -1,9 +1,9 @@
 /// L1c Journey Test: 发现页 Feed 加载旅程
 ///
-/// 守护：用户打开发现页 → DiscoveryFeedMapNotifier 调用 MockContentRepository
+/// 守护：用户打开发现页 → DiscoveryFeedMapNotifier 调用 typed feed query
 ///       → feed 状态正确填充 → Widget 树重建
 ///
-/// Mock Wall：Content facets（MockContentRepository 不发 HTTP）
+/// Mock Wall：Content facets（typed feed query 不发 HTTP）
 ///
 /// 规则：L1c Journey 测试必须使用 testWidgets()；禁止在 journeys/ 目录下
 ///       使用 test() + 仅操作 ProviderContainer 的形式。
@@ -11,18 +11,20 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart'
-    show kFeedSortRecommend;
+    show ContentDiscoveryFeedQuery, kFeedSortRecommend;
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/feed_session_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
 // ── 测试辅助 ─────────────────────────────────────────────────────────────────
 
@@ -30,11 +32,16 @@ import '../../../../../support/service/content_service/content/post/mock_content
 ///
 /// 使用 [ProviderContainer] 直接操作 Provider，Widget 树保证渲染 context 存在。
 Widget _scopedApp({
-  required MockContentRepository mock,
+  required ContentDiscoveryFeedQuery feedQuery,
   Widget home = const SizedBox.shrink(),
 }) {
   return ProviderScope(
-    overrides: [...mockContentFacetOverrides(mock)],
+    overrides: [
+      ...mockContentFacetOverrides(
+        store: InMemoryContentPostStore(),
+        feedQuery: feedQuery,
+      ),
+    ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),
       builder: (context, _) => MaterialApp(home: home),
@@ -42,10 +49,30 @@ Widget _scopedApp({
   );
 }
 
+InMemoryContentDiscoveryFeedQuery _suiteQuery() {
+  return InMemoryContentDiscoveryFeedQuery(
+    InMemoryContentPostStore(
+      posts: <ContentPostViewData>[
+        contentPostViewDataBuilder(
+          postId: 'journey-photo',
+          contentType: 'image',
+          mediaUrls: const <String>[testContentImageUrl],
+        ),
+        contentPostViewDataBuilder(
+          postId: 'journey-video',
+          contentType: 'video',
+          videoUrl: testContentVideoUrl,
+        ),
+      ],
+    ),
+  );
+}
+
 // ── 错误用 Repository ─────────────────────────────────────────────────────────
 
-class _ErrorContentRepository extends MockContentRepository {
-  _ErrorContentRepository(this._errorMessage);
+class _ErrorContentRepository extends InMemoryContentDiscoveryFeedQuery {
+  _ErrorContentRepository(this._errorMessage)
+    : super(InMemoryContentPostStore());
   final String _errorMessage;
 
   @override
@@ -63,20 +90,21 @@ class _ErrorContentRepository extends MockContentRepository {
     CloudOperationCancellationSignal? cancellation,
     DateTime? deadlineAt,
   }) async => throw Exception(_errorMessage);
-
-  @override
-  Future<List<ContentPostViewData>> listDiscoveryFeed({
-    required String category,
-    String? identity,
-    String? type,
-    String? subCategory,
-    int limit = 20,
-    String? cursor,
-    String sort = kFeedSortRecommend,
-  }) async => throw Exception(_errorMessage);
 }
 
-class _RecordingContentRepository extends MockContentRepository {
+class _RecordingContentRepository extends InMemoryContentDiscoveryFeedQuery {
+  _RecordingContentRepository()
+    : super(
+        InMemoryContentPostStore(
+          posts: <ContentPostViewData>[
+            contentPostViewDataBuilder(
+              postId: 'recorded-photo',
+              contentType: 'image',
+              mediaUrls: const <String>[testContentImageUrl],
+            ),
+          ],
+        ),
+      );
   String? lastCategory;
   String? lastChannelId;
   String? lastIdentity;
@@ -130,10 +158,10 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('旅程正常路径', () {
     testWidgets(
-      '旅程 A1：切换到美图 Tab → Provider 调用 MockRepo → 返回 canonical image ViewData',
+      '旅程 A1：切换到美图 Tab → Provider 调用 typed query → 返回 canonical image ViewData',
       (tester) async {
-        final mock = MockContentRepository();
-        await tester.pumpWidget(_scopedApp(mock: mock));
+        final query = _suiteQuery();
+        await tester.pumpWidget(_scopedApp(feedQuery: query));
 
         final container = ProviderScope.containerOf(
           tester.element(find.byType(MaterialApp)),
@@ -150,7 +178,11 @@ void main() {
         );
 
         final feed = feedAsync!.value!;
-        expect(feed.items, isNotEmpty, reason: 'MockRepo 应返回 seeded photo 数据');
+        expect(
+          feed.items,
+          isNotEmpty,
+          reason: 'typed query 应返回 seeded photo 数据',
+        );
         expect(
           feed.items,
           everyElement(
@@ -169,8 +201,8 @@ void main() {
     testWidgets('旅程 A2：切换到视频 Tab → 返回 canonical video ViewData', (
       tester,
     ) async {
-      final mock = MockContentRepository();
-      await tester.pumpWidget(_scopedApp(mock: mock));
+      final query = _suiteQuery();
+      await tester.pumpWidget(_scopedApp(feedQuery: query));
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MaterialApp)),
@@ -192,7 +224,7 @@ void main() {
       tester,
     ) async {
       final repo = _RecordingContentRepository();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(_scopedApp(feedQuery: repo));
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MaterialApp)),
@@ -225,7 +257,12 @@ void main() {
       final failRepo = _ErrorContentRepository('NETWORK_TIMEOUT');
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [...mockContentFacetOverrides(failRepo)],
+          overrides: [
+            ...mockContentFacetOverrides(
+              store: InMemoryContentPostStore(),
+              feedQuery: failRepo,
+            ),
+          ],
           child: const MaterialApp(home: SizedBox.shrink()),
         ),
       );
@@ -251,7 +288,12 @@ void main() {
       final failRepo = _ErrorContentRepository('SERVER_500');
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [...mockContentFacetOverrides(failRepo)],
+          overrides: [
+            ...mockContentFacetOverrides(
+              store: InMemoryContentPostStore(),
+              feedQuery: failRepo,
+            ),
+          ],
           child: const MaterialApp(home: SizedBox.shrink()),
         ),
       );
@@ -272,8 +314,8 @@ void main() {
   // ──────────────────────────────────────────────────────────────────
   group('旅程边界/幂等', () {
     testWidgets('旅程 C1：连续加载两个 tab → 状态互相独立', (tester) async {
-      final mock = MockContentRepository();
-      await tester.pumpWidget(_scopedApp(mock: mock));
+      final query = _suiteQuery();
+      await tester.pumpWidget(_scopedApp(feedQuery: query));
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MaterialApp)),
@@ -299,8 +341,8 @@ void main() {
     });
 
     testWidgets('旅程 C2：同一 tab 重复加载 → 状态稳定，不崩溃', (tester) async {
-      final mock = MockContentRepository();
-      await tester.pumpWidget(_scopedApp(mock: mock));
+      final query = _suiteQuery();
+      await tester.pumpWidget(_scopedApp(feedQuery: query));
 
       final container = ProviderScope.containerOf(
         tester.element(find.byType(MaterialApp)),

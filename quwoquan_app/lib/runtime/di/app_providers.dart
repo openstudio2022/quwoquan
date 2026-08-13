@@ -27,6 +27,7 @@ export 'package:quwoquan_app/runtime/di/app_providers_circle_facets.dart';
 export 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart';
 export 'package:quwoquan_app/runtime/di/client_state_sync_dependencies.dart';
 export 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart';
+export 'package:quwoquan_app/runtime/di/content_publication_epoch.dart';
 export 'package:quwoquan_app/runtime/di/app_providers_content_facets.dart';
 export 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart';
 export 'package:quwoquan_app/runtime/di/app_providers_content_runtime_defaults.dart';

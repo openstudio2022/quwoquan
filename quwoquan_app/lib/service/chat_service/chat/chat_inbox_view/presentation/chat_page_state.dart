@@ -575,6 +575,24 @@ class _ChatPageState extends ConsumerState<ChatPage>
           itemCount: messages.length,
           itemBuilder: (context, index) {
             final message = messages[index];
+            // Gathering 邀请专卡：pending 邀请直接在收件箱 accept/decline
+            // （circle 域组件，动作携带消息 action intent 的 owner versions）。
+            final invitation = message.gatheringInvitation;
+            if (invitation != null && invitation.actionIntents.isNotEmpty) {
+              return buildChatInboxGatheringInvitationSlot(
+                message: message,
+                invitation: invitation,
+                fgPrimary: fgPrimary,
+                fgSecondary: fgSecondary,
+                backgroundColor: listItemBackground,
+                onResolved: () async {
+                  if (!message.read) {
+                    await markAppMessageReadAndRefresh(ref, message.messageId);
+                  }
+                  ref.invalidate(notificationInboxProvider);
+                },
+              );
+            }
             return _NotificationInboxTile(
               message: message,
               fgPrimary: fgPrimary,
@@ -604,6 +622,20 @@ class _ChatPageState extends ConsumerState<ChatPage>
             targetKey: message.messageId,
           ),
     );
+    // 促成通知打开（漏斗③体验辅证：域事实只见续发结果，看不到打开行为）。
+    if (message.source.trim() == 'intersection_facilitation') {
+      unawaited(
+        ref
+            .read(journeyEventTrackerProvider)
+            .trackAction(
+              journey: 'gathering_flywheel',
+              action: 'notification_facilitation_open',
+              pageName: 'chat_list',
+              targetType: 'gathering',
+              targetKey: message.target.targetId,
+            ),
+      );
+    }
     final navigation = AppMessageNavigationTarget.fromMessage(message);
     if (navigation != null && context.mounted) {
       context.push(navigation.location);
@@ -612,11 +644,15 @@ class _ChatPageState extends ConsumerState<ChatPage>
       try {
         await markAppMessageReadAndRefresh(ref, message.messageId);
       } catch (error, stackTrace) {
-        developer.log(
-          'mark app message read failed',
-          name: 'notification_inbox',
-          error: error,
-          stackTrace: stackTrace,
+        // 已读标记失败会让红点不消失且不可观测，必须结构化上报。
+        unawaited(
+          ref
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'chat.notification_inbox.mark_read',
+                error: error,
+                stackTrace: stackTrace,
+              ),
         );
       }
     }

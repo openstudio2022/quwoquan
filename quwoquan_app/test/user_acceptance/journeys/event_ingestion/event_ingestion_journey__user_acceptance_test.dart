@@ -1,3 +1,8 @@
+/// 分工声明（防「空壳绿灯」误读）：本旅程的角色是**事件触发器**——在真实
+/// production Remote 会话下执行创作入口动作，产生行为事件流量；事件是否
+/// 真实落入观测管道由绑定它的 ES provider conformance runner
+/// （`ext_obs_elasticsearch_provider_conformance.py`）在服务侧断言。
+/// 本用例自身承诺的是：动作旅程不产生错误终态且首页壳可恢复。
 library;
 
 import 'package:flutter_test/flutter_test.dart';

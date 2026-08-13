@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
@@ -329,7 +330,11 @@ class _BlockedKeywordsPageState extends ConsumerState<BlockedKeywordsPage> {
         ),
         SizedBox(height: SettingsSemanticConstants.insetFormSectionVerticalGap),
         if (_keywords.isEmpty)
-          const _BlockedKeywordsEmptyState()
+          const AppEmptyState(
+            icon: CupertinoIcons.text_badge_xmark,
+            title: ContentText.blockedKeywordsEmptyTitle,
+            subtitle: ContentText.blockedKeywordsEmptySubtitle,
+          )
         else
           SettingsInsetGroupedSection(
             isDark: isDark,
@@ -434,38 +439,6 @@ class _BlockedKeywordRow extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
             onPressed: busy ? null : onRemove,
             child: const Text(ContentText.blockedKeywordsRemove),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _BlockedKeywordsEmptyState extends StatelessWidget {
-  const _BlockedKeywordsEmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: AppSpacing.interGroupLg),
-      child: Column(
-        children: <Widget>[
-          Text(
-            ContentText.blockedKeywordsEmptyTitle,
-            style: TextStyle(
-              color: AppColors.iosLabel(context),
-              fontSize: AppTypography.iosTitle3,
-              fontWeight: AppTypography.semiBold,
-            ),
-          ),
-          SizedBox(height: AppSpacing.intraGroupSm),
-          Text(
-            ContentText.blockedKeywordsEmptySubtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: AppColors.iosSecondaryLabel(context),
-              fontSize: AppTypography.iosSubheadline,
-            ),
           ),
         ],
       ),

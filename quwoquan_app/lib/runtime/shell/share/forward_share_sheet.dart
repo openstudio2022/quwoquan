@@ -245,7 +245,14 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
       ForwardExternalShareDelivery.unavailable =>
         ChatText.forwardExternalShareUnavailable,
     };
-    AppToast.show(context, message);
+    AppToast.show(
+      context,
+      message,
+      // 分享通道不可用是失败反馈，与成功/进行中提示保持可辨识差异。
+      tone: result.delivery == ForwardExternalShareDelivery.unavailable
+          ? UiErrorTone.caution
+          : UiErrorTone.neutral,
+    );
   }
 }
 

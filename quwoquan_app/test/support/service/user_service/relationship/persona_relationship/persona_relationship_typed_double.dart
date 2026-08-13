@@ -1,7 +1,5 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
-
 /// Alpha-only PersonaRelationship 拉黑 Facet。
 /// production 依赖图不可达本文件；命令与列表共享一份有状态集合。
 final class InMemoryPersonaRelationshipFacet
@@ -11,9 +9,9 @@ final class InMemoryPersonaRelationshipFacet
         RelationshipCapabilityQuery {
   InMemoryPersonaRelationshipFacet({
     this.viewerPersonaId = 'fixture_user_current',
-    ObjectContractExampleReader? fixtures,
+    Map<String, Object?>? relationshipWireExample,
   }) : _relationshipRows = _loadRelationships(
-         fixtures ?? objectContractExampleReader,
+         relationshipWireExample ?? _relationshipWireExample(),
        );
 
   final String viewerPersonaId;
@@ -22,9 +20,8 @@ final class InMemoryPersonaRelationshipFacet
       <String, BlockedListItemView>{};
 
   static Map<String, Map<String, Object?>> _loadRelationships(
-    ObjectContractExampleReader fixtures,
+    Map<String, Object?> seed,
   ) {
-    final seed = fixtures.requireExample('user', 'relationship_core');
     final rows = seed['relationships'];
     if (rows is! List<Object?>) {
       throw const FormatException(
@@ -140,3 +137,24 @@ final class InMemoryPersonaRelationshipFacet
     );
   }
 }
+
+Map<String, Object?> _relationshipWireExample() => <String, Object?>{
+  'relationships':
+      const <String>[
+            'fixture_user_photo',
+            'fixture_user_friend',
+            'fixture_user_weekend_1',
+          ]
+          .map(
+            (target) => <String, Object?>{
+              'sourceUserId': 'fixture_user_current',
+              'targetUserId': target,
+              'following': true,
+              'mutualFollow': true,
+              'blocked': false,
+              'canChat': true,
+              'canCall': true,
+            },
+          )
+          .toList(growable: false),
+};

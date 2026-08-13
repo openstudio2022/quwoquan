@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/platform/call_audio_session_gateway.dart';
+import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_session_provider.dart';
 
 enum AudioOutput {
@@ -19,6 +23,15 @@ enum CameraPosition {
   CameraPosition toggle() =>
       this == CameraPosition.front ? CameraPosition.back : CameraPosition.front;
 }
+
+/// 本地视频预览镜像决策的单一真相源。
+///
+/// 业界默认预期：本地前置摄像头预览水平镜像（照镜子）；翻转到后摄或
+/// 渲染远端参与者画面时不镜像。所有本地预览渲染必须消费本函数。
+bool shouldMirrorLocalPreview({
+  required bool isLocal,
+  required CameraPosition cameraPosition,
+}) => isLocal && cameraPosition == CameraPosition.front;
 
 class MediaDeviceState {
   final AudioOutput audioOutput;
@@ -72,7 +85,21 @@ class MediaDeviceState {
 
 class MediaDeviceNotifier extends Notifier<MediaDeviceState> {
   @override
-  MediaDeviceState build() => const MediaDeviceState();
+  MediaDeviceState build() {
+    // 耳机拔出（becomingNoisy）防外放：立即切回听筒。路由归本 notifier
+    // 收口，保证 UI 的 AudioOutput 状态与实际输出一致。
+    final sub = ref
+        .read(callAudioSessionGatewayProvider)
+        .events
+        .listen((event) {
+          if (event == CallAudioSessionEvent.becameNoisy &&
+              state.audioOutput == AudioOutput.speaker) {
+            unawaited(setAudioOutput(AudioOutput.earpiece));
+          }
+        });
+    ref.onDispose(sub.cancel);
+    return const MediaDeviceState();
+  }
 
   Future<void> setAudioOutput(AudioOutput output) async {
     final applied = await ref

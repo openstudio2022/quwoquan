@@ -417,7 +417,6 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         .indexWhere((p) => p.id == post.id)
         .clamp(0, filtered.length - 1);
     final postViews = filtered.map(ContentSurfaceViewMapper.fromDto).toList();
-    final isMoment = post.identity == 'moment';
     final interactionSnapshot = buildMediaViewerInteractionSnapshot(
       ref: ref,
       posts: filtered,
@@ -433,7 +432,9 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         filter: post.isVideoLike
             ? 'video'
             : (post.isArticleLike ? 'article' : 'image'),
-        source: isMoment ? 'profile_moment' : 'profile',
+        // SIT-001：主页创作链路仅 文章/图片/视频 三类，无 moment 概念分支；
+        // 'profile_moment' source 无任何下游消费者，属已退役概念残留。
+        source: 'profile',
         index: '$initialIndex',
       ),
       extra: MediaViewerExtra(
@@ -441,7 +442,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         dtoPosts: filtered,
         initialIndex: initialIndex,
         initialImageIndex: 0,
-        source: isMoment ? 'profile_moment' : 'profile',
+        source: 'profile',
         interactionSnapshot: interactionSnapshot,
         referralSource: ReferralSource.authorProfile,
         feedRequestId: navFeedRequestId,

@@ -5,6 +5,7 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/active_call_service.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_timer_provider.dart';
 
 /// Top blue bar shown when navigating away from an active call.
 /// Tap to return to the call page.
@@ -18,9 +19,7 @@ class ActiveCallBar extends ConsumerWidget {
     final callState = ref.watch(activeCallProvider);
     if (!callState.isInCall) return const SizedBox.shrink();
 
-    final elapsed = callState.elapsed;
-    final minutes = elapsed.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final seconds = elapsed.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final formattedElapsed = formatCallDuration(callState.elapsed);
 
     return GestureDetector(
       onTap: onTap,
@@ -30,7 +29,7 @@ class ActiveCallBar extends ConsumerWidget {
         color: AppColors.primaryColor,
         child: Center(
           child: Text(
-            '${CallText.callOngoing} $minutes:$seconds '
+            '${CallText.callOngoing} $formattedElapsed '
             '${CallText.callBarTapToReturn}',
             style: TextStyle(
               color: AppColors.white,

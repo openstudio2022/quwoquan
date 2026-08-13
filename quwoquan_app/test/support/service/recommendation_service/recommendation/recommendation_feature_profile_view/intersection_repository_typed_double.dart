@@ -8,8 +8,8 @@ import 'package:quwoquan_app/service/content_service/content/intersection_visit_
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_visit_writer.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 import 'intersection_fixtures.dart';
+import 'intersection_wire_test_builder.dart' as wire_fixture;
 
 /// local_contract 交集读写替身。
 ///
@@ -17,10 +17,12 @@ import 'intersection_fixtures.dart';
 /// 不可达本文件。
 class InMemoryIntersectionRepository
     implements IntersectionRepository, IntersectionVisitWriter {
-  InMemoryIntersectionRepository({ObjectContractExampleReader? fixtures})
-    : _fixtures = fixtures ?? objectContractExampleReader;
+  InMemoryIntersectionRepository({
+    Map<String, Object?>? intersectionWireExample,
+  }) : _intersectionSeed =
+           intersectionWireExample ?? wire_fixture.intersectionWireExample();
 
-  final ObjectContractExampleReader _fixtures;
+  final Map<String, Object?> _intersectionSeed;
   final Map<String, DateTime> _watermark = <String, DateTime>{};
 
   @override
@@ -167,13 +169,14 @@ class InMemoryIntersectionRepository
     );
     // 对象页合同与云侧 Reader 输出口同构（host_plain）：seed 是 canonical
     // explicit_link 形态，直出会被端侧宿主 self-link 校验整批淘汰。
+    final hostKind = _intersectionKindFromWireOrPerson(
+      reasons.first.objectKind,
+    );
     final hostTarget = intersectionTargetFixture(
       objectType: _objectTypeForHost(objectType),
       objectId: objectId,
-      objectKind: _objectKindWireForObjectType(objectType),
-      routeId: intersectionRouteIdForObjectKind(
-        _intersectionKindForObjectType(objectType),
-      ),
+      objectKind: reasons.first.objectKind,
+      routeId: intersectionRouteIdForObjectKind(hostKind),
     );
     final projected = reasons
         .map((reason) => _projectHostPlainFixture(reason, hostTarget))
@@ -195,9 +198,6 @@ class InMemoryIntersectionRepository
         return 'homepage';
     }
   }
-
-  Map<String, Object?> get _intersectionSeed =>
-      _fixtures.requireExample('content', 'intersection_core');
 
   List<IntersectionReason> get _inboxReasons => _decodeReasons(
     _intersectionSeed['inboxReasons'],
@@ -759,21 +759,6 @@ List<Map<String, Object?>> _seedObjectList(Object? value) {
 Map<String, Object?>? _seedObject(Object? value) {
   if (value is! Map<Object?, Object?>) return null;
   return value.map((key, item) => MapEntry(key.toString(), item));
-}
-
-String _objectKindWireForObjectType(String objectType) {
-  return _intersectionKindForObjectType(objectType).wireName;
-}
-
-IntersectionObjectKind _intersectionKindForObjectType(String objectType) {
-  final hostType = switch (objectType.trim()) {
-    'user' || 'person' => 'user',
-    'circle' => 'circle',
-    'post' || 'content' => 'post',
-    _ => 'homepage',
-  };
-  return intersectionObjectKindForObjectType(hostType) ??
-      IntersectionObjectKind.place;
 }
 
 IntersectionObjectKind _intersectionKindFromWireOrPerson(String wire) {

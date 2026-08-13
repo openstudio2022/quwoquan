@@ -10,7 +10,6 @@ from typing import Any
 
 from content.release.canonical.content_pool_record import (
     append_pool_record,
-    build_legacy_migration_source_identity,
     iter_pool_records,
     pool_payload_digest,
 )
@@ -180,15 +179,7 @@ def _repair_item(
             reason or "DATA.POOL.ELIGIBILITY_EVIDENCE_PENDING"
         )
     evidence_digest = _digest_file(evidence_path)
-    try:
-        identity = validate_object_source_identity(manifest)
-    except ObjectTransactionError:
-        identity = build_legacy_migration_source_identity(
-            manifest=manifest,
-            canonical_object_digest=payload_digest,
-            source_attribution=attribution,
-            admission_evidence_digest=evidence_digest,
-        )
+    identity = validate_object_source_identity(manifest)
     sequence = int(latest["recordSequence"]) + 1 if latest else 1
     record = build_pool_record(
         object_type=object_type,
@@ -206,11 +197,9 @@ def _repair_item(
         source_identity=identity,
         source_attribution=attribution,
     )
-    if latest is not None and not latest.get("_legacyRecord"):
-        comparable = dict(latest)
-        comparable.pop("_legacyRecord", None)
+    if latest is not None:
         replay = {**record, "recordSequence": latest["recordSequence"]}
-        if comparable != replay:
+        if dict(latest) != replay:
             raise ObjectTransactionError("DATA.POOL.REPAIR_MIGRATION_COLLISION")
         record = replay
     repair_evidence = {

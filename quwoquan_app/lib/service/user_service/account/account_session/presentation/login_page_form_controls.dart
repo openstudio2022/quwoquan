@@ -142,8 +142,8 @@ class LoginActionButton extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
                 if (busy) ...<Widget>[
-                  CupertinoActivityIndicator(
-                    color: outlined ? accent : AppColors.white,
+                  AppRequestFeedback.inline(
+                    indicatorColor: outlined ? accent : AppColors.white,
                   ),
                   const SizedBox(width: AppSpacing.sm),
                 ],

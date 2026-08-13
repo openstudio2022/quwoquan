@@ -70,5 +70,9 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺少能够证明“富媒体消息（Rich Media Message）”已满足当前规格的真实测试证据。
+- 影响或价值：尚缺图片查看器旅程与 api_integration 层富媒体交付证据。
+  文件与视频消费入口已闭环并有 widget 证据：文件气泡点击经平台能力打开交付 URL（无本地文件系统平台走 platform default）；
+  交付 URL 缺失时给结构化不可用提示；
+  视频气泡点击经 `MediaDeliveryResolver` 校验交付引用后进入全屏 `VideoPlayerWidget` 播放；
+  动作绑定与失败提示证据见 `chat_message_bubble_widget__local_contract_test.dart` 与 `message_paging_scroll_anchor__local_contract_test.dart`。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

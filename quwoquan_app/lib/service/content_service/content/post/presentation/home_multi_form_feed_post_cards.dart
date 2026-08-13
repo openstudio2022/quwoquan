@@ -71,26 +71,18 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
     final profileSubjectId = item.personaId.trim().isNotEmpty
         ? item.personaId
         : item.authorId;
+    // 互动事实只读全局投影 postInteractionStateProvider；帖子原始计数只作
+    // 未操作时的展示兜底，禁止再引入页面级第二副本。
     final postInteraction = ref.watch(
       postInteractionStateProvider.select(
         (state) => (
-          hasLikeState: state.hasLikeStateFor(item.id),
           isLiked: state.isLiked(item.id),
-          likeCount: state.likeCounts[item.id],
-          shareCount: state.confirmedShareCounts[item.id],
+          likeCount: state.likeCountFor(item.id, fallback: item.likeCount),
+          shareCount: state.shareCountFor(item.id, fallback: item.shareCount),
           commentCount: state.commentCountFor(
             item.id,
             fallback: item.commentCount,
           ),
-        ),
-      ),
-    );
-    final discoveryInteraction = ref.watch(
-      discoveryStateProvider.select(
-        (state) => (
-          isLiked: state.likedPosts.contains(item.id),
-          likeCount: state.getPostLikesCount(item.id),
-          shareCount: state.getPostSharesCount(item.id),
         ),
       ),
     );
@@ -99,19 +91,9 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
         (state) => state.isFollowing(profileSubjectId),
       ),
     );
-    final isLiked = postInteraction.hasLikeState
-        ? postInteraction.isLiked
-        : discoveryInteraction.isLiked;
-    final likeCount =
-        postInteraction.likeCount ??
-        (discoveryInteraction.likeCount > 0
-            ? discoveryInteraction.likeCount
-            : item.likeCount);
-    final shareCount =
-        postInteraction.shareCount ??
-        (discoveryInteraction.shareCount > 0
-            ? discoveryInteraction.shareCount
-            : item.shareCount);
+    final isLiked = postInteraction.isLiked;
+    final likeCount = postInteraction.likeCount;
+    final shareCount = postInteraction.shareCount;
     return LayoutBuilder(
       builder: (context, constraints) {
         final isDark = widget.isDark;
@@ -215,8 +197,11 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                       ),
                     ),
                     const SizedBox(width: AppSpacing.intraGroupMd),
-                    _FollowPillButton(
+                    AppFollowButton(
                       isFollowing: isFollowing,
+                      pillKey: const ValueKey<String>(
+                        'home-post-author-follow-button',
+                      ),
                       onPressed: () {
                         runWhenLoggedIn(
                           ref,
@@ -252,6 +237,16 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                   contextObjectTarget: feedHostTarget,
                 ))
                   const SizedBox(height: AppSpacing.intraGroupSm),
+                // 经历溯源轻标（L0）：回顾内容回链共同行动；与交集主句
+                // 互斥占位（同屏最多一处交集类模块），无关联不渲染。
+                if (primaryReason == null &&
+                    (item.gatheringRef?.trim().isNotEmpty ?? false)) ...[
+                  _HomeFeedProvenanceBadge(
+                    gatheringRef: item.gatheringRef!.trim(),
+                    color: muted,
+                  ),
+                  const SizedBox(height: AppSpacing.intraGroupSm),
+                ],
                 if (item.isArticleLike)
                   _HomeArticlePostCard(
                     item: item,
@@ -336,6 +331,9 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                   shareCount: shareCount,
                   commentCount: postInteraction.commentCount,
                   likeCtrl: _likeCtrl,
+                  onWishlist: _wishlistHomepageIdForItem(item) == null
+                      ? null
+                      : () => _onWishlistTap(item),
                   onLike: () {
                     HapticFeedback.lightImpact();
                     // 任务 A · 动效尊重「减少动态效果」无障碍设置：仅在未禁用动画时播放点赞缩放。
@@ -358,6 +356,36 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
 
   String _buildMetaLine(BuildContext context) {
     return _timeAgo(context, widget.item.createdAt);
+  }
+
+  /// 想去锚点门控：内容经 list wire 的 primaryHomepageId/Type 绑定到支持想去
+  /// 的实体主页时才提供动作；锚点缺失不渲染、不做本地推断（与沉浸栏同门）。
+  String? _wishlistHomepageIdForItem(ContentPostViewData item) {
+    final homepageId = item.primaryHomepageId?.trim() ?? '';
+    final homepageType = item.primaryHomepageType?.trim() ?? '';
+    if (homepageId.isEmpty ||
+        !HomepageUIConfig.wishlistHomepageTypes.contains(homepageType)) {
+      return null;
+    }
+    return homepageId;
+  }
+
+  void _onWishlistTap(ContentPostViewData item) {
+    final homepageId = _wishlistHomepageIdForItem(item);
+    if (homepageId == null) {
+      return;
+    }
+    HapticFeedback.lightImpact();
+    unawaited(
+      runEntityWishlistAddAction(
+        context,
+        ref,
+        homepageId: homepageId,
+        sourceSurfaceId: AppUiSurfaces.homeFeed.id,
+        continuationOwnerToken: 'home-feed-wishlist:$homepageId',
+        referralSource: ReferralSource.organicFeed,
+      ),
+    );
   }
 
   void _openSpanIntersection(
@@ -571,6 +599,52 @@ class _FollowingArticleCard extends StatelessWidget {
   }
 }
 
+/// 经历溯源轻标（feed 卡，L0 氛围层）：回顾内容按作者关联的 gatheringRef
+/// 回链 Gathering 公开详情；只在无交集主句时占位，可完全忽略。
+class _HomeFeedProvenanceBadge extends StatelessWidget {
+  const _HomeFeedProvenanceBadge({
+    required this.gatheringRef,
+    required this.color,
+  });
+
+  final String gatheringRef;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: CupertinoButton(
+        key: const ValueKey<String>('home-feed-provenance-badge'),
+        padding: EdgeInsets.zero,
+        minimumSize: Size.zero,
+        onPressed: () =>
+            context.push(AppRoutePaths.gatheringDetail(id: gatheringRef)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              CupertinoIcons.person_2,
+              size: AppSpacing.iconSmall,
+              color: color,
+            ),
+            const SizedBox(width: AppSpacing.intraGroupXs),
+            Text(
+              GatheringText.provenanceRecapBadge,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.iosCaption1,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _HomeConnectionBadgesRow extends StatelessWidget {
   const _HomeConnectionBadgesRow({
     required this.primaryReason,
@@ -754,47 +828,6 @@ class _AuthorMetaLine extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _FollowPillButton extends StatelessWidget {
-  const _FollowPillButton({required this.isFollowing, required this.onPressed});
-
-  final bool isFollowing;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppColors.iosAccent(context);
-    final bg = isFollowing
-        ? AppColors.iosSecondaryFill(context)
-        : accent.withValues(alpha: 0.12);
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: onPressed,
-      child: Container(
-        key: const ValueKey<String>('home-post-author-follow-button'),
-        width: AppSpacing.followButtonWidthCompact,
-        height: AppSpacing.buttonHeightXs,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-        ),
-        child: Text(
-          isFollowing ? FoundationText.following : FoundationText.follow,
-          maxLines: 1,
-          overflow: TextOverflow.fade,
-          softWrap: false,
-          style: TextStyle(
-            fontSize: AppTypography.xs,
-            fontWeight: AppTypography.semiBold,
-            color: isFollowing ? AppColors.iosSecondaryLabel(context) : accent,
-          ),
-        ),
-      ),
     );
   }
 }

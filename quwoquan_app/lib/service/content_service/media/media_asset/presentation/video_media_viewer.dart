@@ -35,7 +35,6 @@ class VideoMediaViewer extends ConsumerStatefulWidget {
   final Function(dynamic)? getPostLikesCount;
   final bool isBlocked;
   final String? source;
-  final Map<String, dynamic>? userProfileData;
   final bool isCommentsOpen;
   final double commentsHeight;
 
@@ -58,7 +57,6 @@ class VideoMediaViewer extends ConsumerStatefulWidget {
     this.getPostLikesCount,
     this.isBlocked = false,
     this.source,
-    this.userProfileData,
     this.isCommentsOpen = false,
     this.commentsHeight = 0.0,
   });
@@ -248,14 +246,16 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                         child: AppCircularAvatar(
                           imageUrl: currentPost['avatar'],
                           size: AppSpacing.avatarSize.w,
-                          backgroundColor: isDark
-                              ? AppColors.dark.backgroundTertiary
-                              : AppColors.light.backgroundTertiary,
+                          backgroundColor: AppColorsFunctional.getColor(
+                            isDark,
+                            ColorType.backgroundTertiary,
+                          ),
                           fallback: Icon(
                             CupertinoIcons.person_fill,
-                            color: isDark
-                                ? AppColors.dark.foregroundTertiary
-                                : AppColors.light.foregroundTertiary,
+                            color: AppColorsFunctional.getColor(
+                              isDark,
+                              ColorType.foregroundTertiary,
+                            ),
                             size: AppSpacing.iconMedium.sp,
                           ),
                         ),
@@ -305,9 +305,10 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                           ),
                           decoration: BoxDecoration(
                             color: isFollowing
-                                ? (isDark
-                                      ? AppColors.dark.backgroundTertiary
-                                      : AppColors.light.backgroundTertiary)
+                                ? AppColorsFunctional.getColor(
+                                    isDark,
+                                    ColorType.backgroundTertiary,
+                                  )
                                 : AppColors.primaryColor,
                             borderRadius: BorderRadius.circular(
                               AppSpacing.largeBorderRadius,
@@ -319,9 +320,10 @@ class _VideoMediaViewerState extends ConsumerState<VideoMediaViewer> {
                                 : FoundationText.follow,
                             style: TextStyle(
                               color: isFollowing
-                                  ? (isDark
-                                        ? AppColors.dark.foregroundPrimary
-                                        : AppColors.light.foregroundPrimary)
+                                  ? AppColorsFunctional.getColor(
+                                      isDark,
+                                      ColorType.foregroundPrimary,
+                                    )
                                   : AppColors.white,
                               fontSize: AppTypography.xs.sp,
                               fontWeight: FontWeight.w600,

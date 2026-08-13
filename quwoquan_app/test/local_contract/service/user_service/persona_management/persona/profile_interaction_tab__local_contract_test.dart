@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/conversation_dto.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/link_templates.g.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/profile_interaction_activity_view_data.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/relationship_capability_repository.dart';
@@ -31,9 +33,11 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/pre
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/user_service/persona_management/persona/profile_shell_scroll_utils.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/comment/in_memory_content_comment_facet.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
 
@@ -96,8 +100,14 @@ class _InteractionContractRepository
 }
 
 /// 记录型 chat 仓库桩：断言内联「私信」真实调用 chat 仓库发送预置感谢私信（T2）。
-class _RecordingChatRepository extends MockChatRepository {
+class _RecordingChatRepository {
+  _RecordingChatRepository() {
+    final facets = ChatTestFacets();
+    conversation = _RecordingConversationRepository(this, facets.conversation);
+  }
+
   final _RecordingMessageWriter writer = _RecordingMessageWriter();
+  late final ChatConversationRepository conversation;
   int createConversationCalls = 0;
   String? lastConversationType;
   List<String>? lastInitialMemberIds;
@@ -105,6 +115,27 @@ class _RecordingChatRepository extends MockChatRepository {
   String? get lastSentConversationId => writer.lastCommand?.conversationId;
   String? get lastSentType => writer.lastCommand?.type;
   String? get lastSentContent => writer.lastCommand?.content;
+}
+
+final class _RecordingConversationRepository
+    implements ChatConversationRepository {
+  const _RecordingConversationRepository(this._state, this._delegate);
+
+  final _RecordingChatRepository _state;
+  final ChatConversationRepository _delegate;
+
+  @override
+  Future<List<MessageHomeRow>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listMessageHome(filter: filter, cursor: cursor, limit: limit);
+
+  @override
+  Future<List<ChatInboxViewData>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listConversations(cursor: cursor, limit: limit);
 
   @override
   Future<ChatConversationCreatedViewData> createConversation({
@@ -114,10 +145,10 @@ class _RecordingChatRepository extends MockChatRepository {
     List<String>? initialMemberIds,
     String? idempotencyKey,
   }) {
-    createConversationCalls++;
-    lastConversationType = type;
-    lastInitialMemberIds = initialMemberIds;
-    return super.createConversation(
+    _state.createConversationCalls++;
+    _state.lastConversationType = type;
+    _state.lastInitialMemberIds = initialMemberIds;
+    return _delegate.createConversation(
       type: type,
       title: title,
       maxGroupSize: maxGroupSize,
@@ -125,6 +156,33 @@ class _RecordingChatRepository extends MockChatRepository {
       idempotencyKey: idempotencyKey,
     );
   }
+
+  @override
+  Future<ConversationViewData> getConversation(String conversationId) =>
+      _delegate.getConversation(conversationId);
+
+  @override
+  Future<void> updateConversationTitle(String conversationId, String title) =>
+      _delegate.updateConversationTitle(conversationId, title);
+
+  @override
+  Future<void> updateConversationSettings({
+    required String conversationId,
+    bool? muted,
+    bool? pinned,
+  }) => _delegate.updateConversationSettings(
+    conversationId: conversationId,
+    muted: muted,
+    pinned: pinned,
+  );
+
+  @override
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() =>
+      _delegate.getConversationTimestamps();
+
+  @override
+  Future<List<ConversationViewData>> batchGetConversations(List<String> ids) =>
+      _delegate.batchGetConversations(ids);
 }
 
 class _RecordingMessageWriter implements ChatMessageCommandWriter {
@@ -164,11 +222,13 @@ Widget _interactionTabActionsApp(
       ),
       if (commentFacet != null)
         ...mockContentFacetOverrides(
-          MockContentRepository(),
+          store: InMemoryContentPostStore(),
           commentFacet: commentFacet,
         ),
       if (chatRepository != null)
-        chatRepositoryCompositionProvider.overrideWithValue(chatRepository),
+        ...chatTestRepositoryOverrides(
+          conversation: chatRepository.conversation,
+        ),
       if (chatRepository != null)
         chatMessageCommandWriterProvider.overrideWithValue(
           chatRepository.writer,
@@ -206,7 +266,7 @@ Widget _scopedApp() {
   );
   return ProviderScope(
     overrides: [
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       intersectionRepositoryProvider.overrideWithValue(
         InMemoryIntersectionRepository(),
       ),

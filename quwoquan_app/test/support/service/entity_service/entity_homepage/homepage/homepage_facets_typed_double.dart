@@ -7,8 +7,6 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_entity_contracts.dart'
     as wire;
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
-
 /// 由不可变 Entity 场景数据驱动的 local_contract typed adapter。
 ///
 /// 该替身只实现 canonical generated ports，环境 App 与生产 composition 不可达。
@@ -22,14 +20,11 @@ final class InMemoryHomepageFacet
         HomepageStatusReportCommandWriter,
         HomepageStatusReportQueryReader {
   InMemoryHomepageFacet({
-    ObjectContractExampleReader? seedReader,
+    Map<String, Object?>? homepageWireExample,
     DateTime Function()? clock,
   }) : _clock = clock ?? (() => DateTime.now().toUtc()),
        _records = _recordsFromFixture(
-         (seedReader ?? objectContractExampleReader).requireExample(
-           'entity',
-           'entity_homepage_core',
-         ),
+         homepageWireExample ?? _minimalHomepageWireExample(),
        );
 
   final DateTime Function() _clock;
@@ -441,6 +436,146 @@ final class InMemoryHomepageFacet
     }
     throw HomepageQueryNotFoundException(lookup);
   }
+}
+
+Map<String, Object?> _minimalHomepageWireExample() {
+  Map<String, Object?> homepage(
+    String id,
+    String type,
+    String title, {
+    String? subtitle,
+    String city = '',
+    String canonicalEntityId = '',
+    List<String> categoryTags = const <String>[],
+    String coverUrl = '',
+    Map<String, Object?>? reviewSummary,
+    List<Map<String, Object?>> contentPreview = const <Map<String, Object?>>[],
+    List<Map<String, Object?>> relatedGroups = const <Map<String, Object?>>[],
+    Map<String, Object?>? introduction,
+  }) => <String, Object?>{
+    'homepageId': id,
+    'homepageType': type,
+    'canonicalEntityId': canonicalEntityId,
+    'title': title,
+    'subtitle': subtitle ?? title,
+    'city': city,
+    'status': 'published',
+    'categoryTags': categoryTags,
+    'coverUrl': coverUrl,
+    'reviewSummary': ?reviewSummary,
+    'contentPreview': contentPreview,
+    'questionPreview': const <Map<String, Object?>>[],
+    'relatedGroups': relatedGroups,
+    'introduction': ?introduction,
+  };
+
+  final westLakeIntroduction = <String, Object?>{
+    'homepageId': 'homepage_sight_west_lake',
+    'displayName': '西湖景区',
+    'homepageType': 'sight',
+    'summary': '杭州西湖核心游览区',
+    'sections': const <Map<String, Object?>>[
+      <String, Object?>{
+        'kind': 'overview',
+        'title': '概况',
+        'bodyMarkdown': '西湖景区位于浙江省杭州市。',
+        'assets': <Map<String, Object?>>[],
+        'timelineItems': <Map<String, Object?>>[],
+      },
+    ],
+    'relatedObjects': const <Map<String, Object?>>[],
+    'sourceUrls': const <String>[],
+    'updatedAt': '2026-06-12T00:00:00Z',
+  };
+  return <String, Object?>{
+    'homepages': <Map<String, Object?>>[
+      homepage('fixture_homepage_author', 'author', '契约摄影师主页'),
+      homepage(
+        'homepage_sight_west_lake',
+        'sight',
+        '西湖景区',
+        city: '杭州',
+        canonicalEntityId: 'entity:sight:west_lake',
+        categoryTags: const <String>['景点', '城市地标', '赏景'],
+        coverUrl:
+            'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
+        reviewSummary: const <String, Object?>{
+          'averageRating': 4.7,
+          'ratingCount': 328,
+          'highlightTags': <String>['湖景', '适合散步'],
+        },
+        contentPreview: const <Map<String, Object?>>[
+          <String, Object?>{
+            'postId': 'west_lake_record_1',
+            'title': '西湖日落散步路线',
+            'summary': '黄昏慢走路线',
+            'contentType': 'article',
+          },
+        ],
+        relatedGroups: const <Map<String, Object?>>[
+          <String, Object?>{
+            'circleId': 'fixture_circle_photo',
+            'name': '契约摄影社',
+            'memberCount': 128,
+          },
+        ],
+        introduction: westLakeIntroduction,
+      ),
+      homepage(
+        'homepage_sight_dongqian_lake',
+        'sight',
+        '东钱湖',
+        subtitle: '宁波湖泊景区',
+        city: '宁波',
+        canonicalEntityId: 'entity:sight:dongqian_lake',
+        categoryTags: const <String>['景点', '湖泊', '宁波'],
+      ),
+      homepage(
+        'fixture_homepage_university_pku',
+        'university',
+        '北京大学',
+        city: '北京',
+        canonicalEntityId: 'entity:university:pku',
+        categoryTags: const <String>['校园', '大学', '北京'],
+      ),
+      homepage(
+        'fixture_homepage_travel_photo_west_lake',
+        'travel_photo',
+        '西湖旅行摄影机位',
+        city: '杭州',
+        canonicalEntityId: 'entity:travel_photo:west_lake',
+        categoryTags: const <String>['旅行摄影', '机位', '杭州'],
+      ),
+      homepage(
+        'fixture_homepage_school_neworiental',
+        'school',
+        '新东方',
+        city: '北京',
+        canonicalEntityId: 'entity:school:neworiental',
+        categoryTags: const <String>['教育培训', '语言学习', '校友'],
+        coverUrl:
+            'media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png',
+      ),
+      homepage(
+        'fixture_homepage_photo_spot_hengshu_studio',
+        'photo_spot',
+        '横竖影像馆取景地',
+        city: '上海',
+        canonicalEntityId: 'entity:photo_spot:hengshu_studio',
+        categoryTags: const <String>['摄影取景地', '城市影像', '胶片'],
+        coverUrl:
+            'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
+      ),
+      homepage(
+        'homepage_sight_emeishan',
+        'sight',
+        '峨眉山',
+        city: '乐山',
+        canonicalEntityId: 'entity:sight:emeishan',
+        categoryTags: const <String>['景点', '山地旅行', '乐山'],
+      ),
+    ],
+  };
 }
 
 final class _InMemoryHomepageRecord {

@@ -113,7 +113,8 @@
 ### REQ-010 公开发现与内容回流不转移 owner
 
 - Circle 签发 Gathering 公开投影；首页、内容、Persona/Circle 主页、Search 与 Chat wrapper 只持 canonical reference/placement/rank reason，Recommendation 只排序，不保存可写活动事实。
-- 未加入者进入公开详情，有效参与者再次打开活动默认进入群聊。完成后用户可创建回顾草稿，只有确认发布后 Content owner 才创建 Post/Media 并关联原 Gathering、Host 与来源内容。
+- 未加入者进入公开详情，有效参与者再次打开活动默认进入群聊。完成后用户可创建回顾草稿，只有确认发布后 Content owner 才创建 Post/Media 并以 `content.post.gatheringRef` 关联原 Gathering、Host 与来源内容；Content 写入该关联前必须经 Circle owner 校验作者持有有效 Participation，校验不成立 fail-closed。
+- 回流内容驱动的经历交集（`coExperiencedGathering`）与四锚点社会证明计数由 recommendation 投影消费 Circle/Content 公开事件派生（口径见 [`intersection-unified-experience` REQ-009](../../object-homepage-network/intersection-unified-experience/spec.md#req-009)）；Circle 拥有发起人事实统计（发起 N/成形 M/经历 K）投影进公开详情发起人卡，计数只由「成形」「经历」两级诚实事实派生，不做对人评分。
 - Report 继续由 Content Trust Safety owner 接收和治理；Circle 只保存安全退出、即时撤权与必要证据 reference，不复制 Report 生命周期。
 
 <a id="req-011"></a>
@@ -184,7 +185,12 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 C 位三动作、内容/主页发起、公开详情、动态主动作、Host console、登录 continuation 与公开发现的同一 production Remote composer 和真实 UAT；缺 route/surface/operation contract 时不得下发可行动 CTA。
+- 影响或价值：尚缺内容/主页发起入口全覆盖与真实 UAT，缺 route/surface/operation contract 时不得下发可行动 CTA。发起链生产可用性与最小公开发现面已闭合：实体主页「近期行动」区块经 `ListGatheringsBySource` 渲染公开行动卡并带实体锚点成形计数小字（「N 次行动从这里成行」，零成形与读取失败不渲染）；「附近的行动」仍依赖坐标语料回填（intersection OPEN-007）。以下各点均有生产装配（无 override）widget 与 Go 契约测试。
+  - `gatheringCreateInitialValueProvider` 真实 composer 落地（persona host 授权用 canonical 自引用 `persona:{id}:self` + 快照版本，交集导航上下文预填标题/公开地点/可导航 sourceRefs）。
+  - 创建页产品化（隐藏 host/授权/风控/ISO 内部字段、DateTime picker、安全默认模板）。
+  - publish 义务（policyDecisionRef/policyDigest/obligationDigest）由 Circle owner 侧对实际 policy 内容确定性派生（端不再伪造治理证据）。
+  - 行动详情/Board 已有「发布回顾」入口。
+  - 双人邀约（1对1 同好邀约，DEC-001 同一 Gathering 形态）：人对人交集发起时导航请求携带受邀者，composer 预设收紧为 capacity=2 + audience/admission=invite_only 且不套对象名标题模板，发布成功后经 `InviteToGathering` 自动发出披露安全邀请（失败不阻断发布、可在 Host 控制台重发）。
 - 完成判定：`SIT-001` 由 local_contract、api_integration、user_acceptance 直接覆盖，游客关闭登录不循环、成功续接原发起/响应动作。
 - 依赖：[`creation-mode-and-surface-ia-unification`](../../discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md) 及后续 contracts/metadata 准入。
 
@@ -197,6 +203,16 @@
 - 影响或价值：尚缺唯一 contextual room 的 Publish 前置、Participation/Organizer membership 投影、Board typed projection、Announcement/AssetIndex、取消/完成 access mode 与退出/Block/移除撤权的同一候选证据；消息离线可靠性仍是上层准出前置。
 - 完成判定：`SIT-001`、`SIT-003` 与 [`gathering-conversation-binding`](./gathering-conversation-binding/spec.md) 的 GWT 在杀进程、重连、重复事件和依赖恢复下通过。
 - 依赖：Chat message reliability、Circle outbox/reconciler、Calendar/Plan capability。
+
+<a id="open-005"></a>
+### OPEN-005 发起人事实统计与回流链端云证据未闭合
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺 `GatheringOutcomeCalculated` 的下游 consumer 与真实环境 user_acceptance 证据。回流校验链与发起人事实统计已闭合并有 local_contract + api_integration 证据：`GatheringPublished` 携带 organizer 与 canonical `sourceRefs` 供 recommendation 四锚点读时聚合（归属修订见 [`intersection-unified-experience` DEC-004](../../object-homepage-network/intersection-unified-experience/design.md#dec-004)），并携带发布时冻结的公开政策维度事实 `maxParticipants`/`admissionPolicy`（创建必填、不带名单或私密答案），供北极星漏斗按活动特征（duo/group）诚实切片（消费口径见 [`intersection-unified-experience` REQ-009](../../object-homepage-network/intersection-unified-experience/spec.md#req-009)。旧事件缺字段按空处理归 unclassified）。公开详情发起人卡按 organizer 锚点渲染「发起/成形/经历」三级诚实计数，零发起与读取失败不渲染并有 widget 契约测试。
+- 完成判定：`SIT-003` 回流分支的 user_acceptance 层在真实环境验证发起人卡计数随成行/经历递增（跨域口径见 [`intersection-unified-experience` 的经历回流与社会证明验收](../../object-homepage-network/intersection-unified-experience/spec.md#sit-008)）。
+- 依赖：真实环境验证（stackctl 与 alpha 完整栈可用性）。
 
 <a id="open-004"></a>
 ### OPEN-004 风险运营、SLO 与四环境回滚证据未完成

@@ -248,19 +248,27 @@ class GlobalTopBarIconButton extends StatelessWidget {
           AppSpacing.appChromeActionButtonSize,
           AppSpacing.appChromeActionButtonSize,
         ),
-        child: SizedBox(
-          width: AppSpacing.appChromeActionButtonSize,
-          height: AppSpacing.appChromeActionButtonSize,
-          child: Center(
-            child: Icon(
-              icon,
-              size: AppSpacing.appChromeActionIconSize,
-              color:
-                  foregroundColor ??
-                  AppNavigationSemanticConstants.chromeActionIconColor(
-                    isDark,
-                    surface: surface,
-                  ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppNavigationSemanticConstants.chromeActionBackground(
+              surface: surface,
+            ),
+            shape: BoxShape.circle,
+          ),
+          child: SizedBox(
+            width: AppSpacing.appChromeActionButtonSize,
+            height: AppSpacing.appChromeActionButtonSize,
+            child: Center(
+              child: Icon(
+                icon,
+                size: AppSpacing.appChromeActionIconSize,
+                color:
+                    foregroundColor ??
+                    AppNavigationSemanticConstants.chromeActionIconColor(
+                      isDark,
+                      surface: surface,
+                    ),
+              ),
             ),
           ),
         ),

@@ -38,6 +38,11 @@ class GatheringCreatePage extends ConsumerStatefulWidget {
   static const submitKey = ValueKey<String>('gathering-create-submit');
   static const retryKey = ValueKey<String>('gathering-create-retry');
   static const statusKey = ValueKey<String>('gathering-create-status');
+  static const startAtFieldKey = ValueKey<String>('gathering-create-start-at');
+  static const endAtFieldKey = ValueKey<String>('gathering-create-end-at');
+  static const admissionClosesFieldKey = ValueKey<String>(
+    'gathering-create-admission-closes',
+  );
 
   final GatheringCreatePageCopy copy;
   final GatheringCreateInitialValue initialValue;
@@ -48,21 +53,15 @@ class GatheringCreatePage extends ConsumerStatefulWidget {
       _GatheringCreatePageState();
 }
 
+enum _GatheringDatePickerSlot { none, startAt, endAt, admissionClosesAt }
+
 class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
   late final TextEditingController _titleController;
   late final TextEditingController _summaryController;
-  late final TextEditingController _timezoneController;
-  late final TextEditingController _startAtController;
-  late final TextEditingController _endAtController;
-  late final TextEditingController _admissionClosesAtController;
   late final TextEditingController _coarsePlaceController;
   late final TextEditingController _exactMeetingPointController;
   late final TextEditingController _onlineLocationController;
   late final TextEditingController _capacityController;
-  late final TextEditingController _riskControlController;
-  late final TextEditingController _hostSubjectController;
-  late final TextEditingController _authorityEvidenceController;
-  late final TextEditingController _authorityVersionController;
 
   late GatheringPlaceMode _placeMode;
   late GatheringAudiencePolicy _audience;
@@ -70,8 +69,11 @@ class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
   late GatheringTimeDisclosure _timeDisclosure;
   late GatheringPlaceDisclosure _placeDisclosure;
   late GatheringRosterDisclosure _rosterDisclosure;
-  late GatheringHostSubjectKind _hostKind;
   late bool _creatorParticipates;
+  late DateTime _startAt;
+  late DateTime _endAt;
+  DateTime? _admissionClosesAt;
+  _GatheringDatePickerSlot _expandedPicker = _GatheringDatePickerSlot.none;
 
   GatheringCreateSubmissionStep _step = GatheringCreateSubmissionStep.ready;
   GatheringCommandResult? _draftResult;
@@ -91,18 +93,6 @@ class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
     final initial = widget.initialValue;
     _titleController = TextEditingController(text: initial.purpose.title);
     _summaryController = TextEditingController(text: initial.purpose.summary);
-    _timezoneController = TextEditingController(
-      text: initial.schedule.timezone,
-    );
-    _startAtController = TextEditingController(
-      text: initial.schedule.startAt.toIso8601String(),
-    );
-    _endAtController = TextEditingController(
-      text: initial.schedule.endAt.toIso8601String(),
-    );
-    _admissionClosesAtController = TextEditingController(
-      text: initial.schedule.admissionClosesAt?.toIso8601String(),
-    );
     _coarsePlaceController = TextEditingController(
       text: initial.place.coarsePlaceLabel,
     );
@@ -115,25 +105,15 @@ class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
     _capacityController = TextEditingController(
       text: initial.policy.maxParticipants.toString(),
     );
-    _riskControlController = TextEditingController(
-      text: initial.policy.riskControlPolicyRef,
-    );
-    _hostSubjectController = TextEditingController(
-      text: initial.host.subjectId,
-    );
-    _authorityEvidenceController = TextEditingController(
-      text: initial.host.authorityEvidenceRef,
-    );
-    _authorityVersionController = TextEditingController(
-      text: initial.host.authorityVersion.toString(),
-    );
+    _startAt = initial.schedule.startAt;
+    _endAt = initial.schedule.endAt;
+    _admissionClosesAt = initial.schedule.admissionClosesAt;
     _placeMode = initial.place.mode;
     _audience = initial.policy.audience;
     _admission = initial.policy.admission;
     _timeDisclosure = initial.policy.disclosure.time;
     _placeDisclosure = initial.policy.disclosure.place;
     _rosterDisclosure = initial.policy.disclosure.roster;
-    _hostKind = initial.host.subjectKind;
     _creatorParticipates = initial.creatorParticipates;
     _intentKey =
         'gathering-create-${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}';
@@ -143,32 +123,17 @@ class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
   void dispose() {
     _titleController.dispose();
     _summaryController.dispose();
-    _timezoneController.dispose();
-    _startAtController.dispose();
-    _endAtController.dispose();
-    _admissionClosesAtController.dispose();
     _coarsePlaceController.dispose();
     _exactMeetingPointController.dispose();
     _onlineLocationController.dispose();
     _capacityController.dispose();
-    _riskControlController.dispose();
-    _hostSubjectController.dispose();
-    _authorityEvidenceController.dispose();
-    _authorityVersionController.dispose();
     super.dispose();
   }
 
   GatheringCreateDraftInput? _buildInput() {
-    final startAt = DateTime.tryParse(_startAtController.text.trim());
-    final endAt = DateTime.tryParse(_endAtController.text.trim());
-    final admissionClosesRaw = _admissionClosesAtController.text.trim();
-    final admissionClosesAt = admissionClosesRaw.isEmpty
-        ? null
-        : DateTime.tryParse(admissionClosesRaw);
+    // 发起身份、授权凭证与安全策略由生产 composer 注入，不再暴露为表单字段。
+    final host = widget.initialValue.host;
     final capacity = int.tryParse(_capacityController.text.trim());
-    final authorityVersion = int.tryParse(
-      _authorityVersionController.text.trim(),
-    );
     final hasPhysicalPlace =
         _placeMode == GatheringPlaceMode.physical ||
         _placeMode == GatheringPlaceMode.hybrid;
@@ -178,16 +143,8 @@ class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
     final valid =
         _titleController.text.trim().isNotEmpty &&
         _summaryController.text.trim().isNotEmpty &&
-        _timezoneController.text.trim().isNotEmpty &&
-        startAt != null &&
-        endAt != null &&
-        endAt.isAfter(startAt) &&
-        (admissionClosesRaw.isEmpty || admissionClosesAt != null) &&
+        _endAt.isAfter(_startAt) &&
         (capacity ?? 0) > 0 &&
-        (authorityVersion ?? 0) > 0 &&
-        _hostSubjectController.text.trim().isNotEmpty &&
-        _authorityEvidenceController.text.trim().isNotEmpty &&
-        _riskControlController.text.trim().isNotEmpty &&
         (!hasPhysicalPlace ||
             (_coarsePlaceController.text.trim().isNotEmpty &&
                 _exactMeetingPointController.text.trim().isNotEmpty)) &&
@@ -197,12 +154,7 @@ class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
     }
     return GatheringCreateDraftInput(
       idempotencyKey: _intentKey,
-      host: GatheringHostInput(
-        subjectKind: _hostKind,
-        subjectId: _hostSubjectController.text.trim(),
-        authorityEvidenceRef: _authorityEvidenceController.text.trim(),
-        authorityVersion: authorityVersion!,
-      ),
+      host: host,
       creatorParticipates: _creatorParticipates,
       purpose: GatheringPurposeDraft(
         title: _titleController.text.trim(),
@@ -212,10 +164,10 @@ class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
         requirementRefs: widget.initialValue.purpose.requirementRefs,
       ),
       schedule: GatheringScheduleDraft(
-        timezone: _timezoneController.text.trim(),
-        startAt: startAt,
-        endAt: endAt,
-        admissionClosesAt: admissionClosesAt,
+        timezone: widget.initialValue.schedule.timezone,
+        startAt: _startAt,
+        endAt: _endAt,
+        admissionClosesAt: _admissionClosesAt,
       ),
       place: GatheringPlaceDraft(
         mode: _placeMode,
@@ -233,7 +185,7 @@ class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
           place: _placeDisclosure,
           roster: _rosterDisclosure,
         ),
-        riskControlPolicyRef: _riskControlController.text.trim(),
+        riskControlPolicyRef: widget.initialValue.policy.riskControlPolicyRef,
       ),
     );
   }
@@ -379,8 +331,6 @@ class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
           SizedBox(height: AppSpacing.interGroupMd),
           _policySection(),
           SizedBox(height: AppSpacing.interGroupMd),
-          _hostSection(),
-          SizedBox(height: AppSpacing.interGroupMd),
           _submissionStatus(),
         ],
       ),
@@ -414,39 +364,170 @@ class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
     );
   }
 
+  String _formatDateTime(DateTime value) {
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '${value.month}月${value.day}日 $hour:$minute';
+  }
+
+  void _togglePicker(_GatheringDatePickerSlot slot) {
+    setState(() {
+      _expandedPicker = _expandedPicker == slot
+          ? _GatheringDatePickerSlot.none
+          : slot;
+    });
+  }
+
+  Widget _dateTimeField({
+    required Key key,
+    required String label,
+    required _GatheringDatePickerSlot slot,
+    required DateTime value,
+    required ValueChanged<DateTime> onChanged,
+  }) {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final foreground = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final secondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final expanded = _expandedPicker == slot;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Semantics(
+          button: true,
+          label: label,
+          value: _formatDateTime(value),
+          child: CupertinoButton(
+            key: key,
+            padding: EdgeInsets.zero,
+            onPressed: () => _togglePicker(slot),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: foreground,
+                      fontSize: AppTypography.base,
+                    ),
+                  ),
+                ),
+                Text(
+                  _formatDateTime(value),
+                  style: TextStyle(
+                    color: expanded ? AppColors.primaryColor : secondary,
+                    fontSize: AppTypography.base,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (expanded)
+          SizedBox(
+            height: AppSpacing.oneHundredSixty + AppSpacing.twenty,
+            child: CupertinoDatePicker(
+              mode: CupertinoDatePickerMode.dateAndTime,
+              use24hFormat: true,
+              initialDateTime: value,
+              onDateTimeChanged: onChanged,
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _scheduleSection() {
     return GatheringSectionCard(
       title: widget.copy.scheduleSection,
       child: Column(
         children: <Widget>[
-          GatheringLabeledTextField(
-            label: widget.copy.timezoneLabel,
-            controller: _timezoneController,
-            placeholder: widget.copy.timezoneLabel,
-          ),
-          _gap(),
-          GatheringLabeledTextField(
+          _dateTimeField(
+            key: GatheringCreatePage.startAtFieldKey,
             label: widget.copy.startAtLabel,
-            controller: _startAtController,
-            placeholder: widget.copy.dateTimePlaceholder,
-            keyboardType: TextInputType.datetime,
+            slot: _GatheringDatePickerSlot.startAt,
+            value: _startAt,
+            onChanged: (value) => setState(() {
+              _startAt = value;
+              if (!_endAt.isAfter(_startAt)) {
+                _endAt = _startAt.add(const Duration(hours: 2));
+              }
+            }),
           ),
           _gap(),
-          GatheringLabeledTextField(
+          _dateTimeField(
+            key: GatheringCreatePage.endAtFieldKey,
             label: widget.copy.endAtLabel,
-            controller: _endAtController,
-            placeholder: widget.copy.dateTimePlaceholder,
-            keyboardType: TextInputType.datetime,
+            slot: _GatheringDatePickerSlot.endAt,
+            value: _endAt,
+            onChanged: (value) => setState(() => _endAt = value),
           ),
           _gap(),
-          GatheringLabeledTextField(
-            label: widget.copy.admissionClosesAtLabel,
-            controller: _admissionClosesAtController,
-            placeholder: widget.copy.dateTimePlaceholder,
-            keyboardType: TextInputType.datetime,
-          ),
+          _admissionClosesField(),
         ],
       ),
+    );
+  }
+
+  Widget _admissionClosesField() {
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final foreground = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final admissionClosesAt = _admissionClosesAt;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Semantics(
+          toggled: admissionClosesAt != null,
+          label: widget.copy.admissionClosesAtLabel,
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  widget.copy.admissionClosesAtLabel,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: AppTypography.base,
+                  ),
+                ),
+              ),
+              CupertinoSwitch(
+                key: GatheringCreatePage.admissionClosesFieldKey,
+                value: admissionClosesAt != null,
+                onChanged: (enabled) => setState(() {
+                  _admissionClosesAt = enabled
+                      ? _startAt.subtract(const Duration(hours: 1))
+                      : null;
+                  if (!enabled &&
+                      _expandedPicker ==
+                          _GatheringDatePickerSlot.admissionClosesAt) {
+                    _expandedPicker = _GatheringDatePickerSlot.none;
+                  }
+                }),
+              ),
+            ],
+          ),
+        ),
+        if (admissionClosesAt != null) ...<Widget>[
+          _gap(),
+          _dateTimeField(
+            key: const ValueKey<String>(
+              'gathering-create-admission-closes-at-picker',
+            ),
+            label: widget.copy.admissionClosesAtLabel,
+            slot: _GatheringDatePickerSlot.admissionClosesAt,
+            value: admissionClosesAt,
+            onChanged: (value) => setState(() => _admissionClosesAt = value),
+          ),
+        ],
+      ],
     );
   }
 
@@ -573,80 +654,35 @@ class _GatheringCreatePageState extends ConsumerState<GatheringCreatePage> {
             onChanged: (value) => setState(() => _rosterDisclosure = value),
           ),
           _gap(),
-          GatheringLabeledTextField(
-            label: widget.copy.riskControlPolicyLabel,
-            controller: _riskControlController,
-            placeholder: widget.copy.riskControlPolicyLabel,
-          ),
+          _creatorParticipatesField(),
         ],
       ),
     );
   }
 
-  Widget _hostSection() {
+  Widget _creatorParticipatesField() {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final foreground = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
     );
-    return GatheringSectionCard(
-      title: widget.copy.hostSection,
-      child: Column(
+    return Semantics(
+      toggled: _creatorParticipates,
+      label: widget.copy.creatorParticipatesLabel,
+      child: Row(
         children: <Widget>[
-          GatheringChoiceField<GatheringHostSubjectKind>(
-            label: widget.copy.hostKindLabel,
-            value: _hostKind,
-            choices: GatheringHostSubjectKind.values
-                .map(
-                  (value) => GatheringChoice<GatheringHostSubjectKind>(
-                    value: value,
-                    label: widget.copy.hostKind(value),
-                  ),
-                )
-                .toList(growable: false),
-            onChanged: (value) => setState(() => _hostKind = value),
-          ),
-          _gap(),
-          GatheringLabeledTextField(
-            label: widget.copy.hostSubjectIdLabel,
-            controller: _hostSubjectController,
-            placeholder: widget.copy.hostSubjectIdLabel,
-          ),
-          _gap(),
-          GatheringLabeledTextField(
-            label: widget.copy.authorityEvidenceLabel,
-            controller: _authorityEvidenceController,
-            placeholder: widget.copy.authorityEvidenceLabel,
-          ),
-          _gap(),
-          GatheringLabeledTextField(
-            label: widget.copy.authorityVersionLabel,
-            controller: _authorityVersionController,
-            placeholder: widget.copy.authorityVersionLabel,
-            keyboardType: TextInputType.number,
-          ),
-          _gap(),
-          Semantics(
-            toggled: _creatorParticipates,
-            label: widget.copy.creatorParticipatesLabel,
-            child: Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    widget.copy.creatorParticipatesLabel,
-                    style: TextStyle(
-                      color: foreground,
-                      fontSize: AppTypography.base,
-                    ),
-                  ),
-                ),
-                CupertinoSwitch(
-                  value: _creatorParticipates,
-                  onChanged: (value) =>
-                      setState(() => _creatorParticipates = value),
-                ),
-              ],
+          Expanded(
+            child: Text(
+              widget.copy.creatorParticipatesLabel,
+              style: TextStyle(
+                color: foreground,
+                fontSize: AppTypography.base,
+              ),
             ),
+          ),
+          CupertinoSwitch(
+            value: _creatorParticipates,
+            onChanged: (value) => setState(() => _creatorParticipates = value),
           ),
         ],
       ),

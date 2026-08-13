@@ -1,5 +1,5 @@
 schema: quwoquan_data.professional_image_discovery_catalog
-catalogRevision: research-professional-image-v2
+catalogRevision: research-professional-image-v3
 providerOrder: [pinterest, tuchong, wikimedia_commons, openverse]
 supportedAxes: [entity, category, season, style, viewpoint, popularity]
 providers:
@@ -49,7 +49,7 @@ providers:
     searchUrlTemplate: "https://commons.wikimedia.org/w/index.php?search={query}&title=Special:MediaSearch&type=image"
     queryTemplates:
       - "{entity} {category} {season} {style} {viewpoint} {popularity}"
-      - "{entity} travel landscape"
+      - "{entity}"
     acquisitionPaths: [supported_api, manual_file]
     termsUrl: https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use
     accessPolicy:
@@ -67,7 +67,7 @@ providers:
     searchUrlTemplate: "https://openverse.org/search/image?q={query}"
     queryTemplates:
       - "{entity} {category} {season} {style} {viewpoint} {popularity}"
-      - "{entity} travel landscape"
+      - "{entity}"
     acquisitionPaths: [supported_api]
     termsUrl: https://docs.openverse.org/terms_of_use.html
     accessPolicy:

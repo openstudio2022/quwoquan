@@ -4,26 +4,36 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart'
+    show GroupHome;
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/presentation/group_manage_page.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_seed_refs.dart';
 
 const _testConvId = 'fixture_conv_group';
 const _unsupportedJoinGovernanceLabels = <String>['二维码进群', '进群需要群主/群管理员确认'];
 
-List<Override> _chatTestOverrides(ChatRepository repo) => [
-  chatRepositoryCompositionProvider.overrideWithValue(repo),
+List<Override> _chatTestOverrides({
+  required ChatTestFacets facets,
+  ChatGroupAdminRepository? groupAdmin,
+}) => [
+  ...chatTestRepositoryOverrides(facets: facets, groupAdmin: groupAdmin),
   currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
 ];
 
-Widget _scopedApp({ChatRepository? mock}) {
-  final repo = mock ?? MockChatRepository();
+Widget _scopedApp({ChatGroupAdminRepository? groupAdmin}) {
+  final facets = ChatTestFacets();
+  final resolvedGroupAdmin = groupAdmin ?? facets.groupAdmin;
   return ProviderScope(
-    overrides: _chatTestOverrides(repo),
+    overrides: _chatTestOverrides(
+      facets: facets,
+      groupAdmin: resolvedGroupAdmin,
+    ),
     child: MaterialApp.router(
       routerConfig: GoRouter(
         initialLocation: '/chat/$_testConvId/manage',
@@ -32,7 +42,7 @@ Widget _scopedApp({ChatRepository? mock}) {
             path: '/chat/:id/manage',
             builder: (_, state) => GroupManagePage(
               conversationId: state.pathParameters['id'] ?? _testConvId,
-              conversationDissolver: repo,
+              conversationDissolver: resolvedGroupAdmin,
             ),
           ),
           GoRoute(
@@ -125,7 +135,7 @@ void main() {
     testWidgets('圈群绑定会话不显示 Chat 侧治理动作', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(
-        _scopedApp(mock: _CircleGroupManagedSettingsRepo()),
+        _scopedApp(groupAdmin: _CircleGroupManagedSettingsRepo()),
       );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
@@ -142,7 +152,7 @@ void main() {
     testWidgets('切换群名治理开关提交真实设置', (tester) async {
       _suppressImageErrors();
       final repo = _TrackingSettingsRepo();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(_scopedApp(groupAdmin: repo));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -176,7 +186,7 @@ void main() {
     testWidgets('确认解散只调用注入的 ConversationDissolver', (tester) async {
       _suppressImageErrors();
       final repo = _TrackingDissolveRepo();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(_scopedApp(groupAdmin: repo));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -207,7 +217,7 @@ void main() {
   group('GroupManagePage — 错误态渲染', () {
     testWidgets('getGroupSettings 异常时页面不崩溃', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp(mock: _ErrorSettingsRepo()));
+      await tester.pumpWidget(_scopedApp(groupAdmin: _ErrorSettingsRepo()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -216,7 +226,7 @@ void main() {
   });
 }
 
-class _ErrorSettingsRepo extends MockChatRepository {
+class _ErrorSettingsRepo extends Fake implements ChatGroupAdminRepository {
   @override
   Future<ChatGroupSettingsViewData> getGroupSettings(
     String conversationId,
@@ -225,7 +235,8 @@ class _ErrorSettingsRepo extends MockChatRepository {
   }
 }
 
-class _CircleGroupManagedSettingsRepo extends MockChatRepository {
+class _CircleGroupManagedSettingsRepo extends Fake
+    implements ChatGroupAdminRepository {
   @override
   Future<ChatGroupSettingsViewData> getGroupSettings(
     String conversationId,
@@ -238,7 +249,9 @@ class _CircleGroupManagedSettingsRepo extends MockChatRepository {
   }
 }
 
-class _TrackingSettingsRepo extends MockChatRepository {
+class _TrackingSettingsRepo extends Fake implements ChatGroupAdminRepository {
+  final ChatGroupAdminRepository _delegate = ChatTestFacets().groupAdmin;
+
   ChatGroupSettingsViewData? lastSettings;
   String? lastIdempotencyKey;
 
@@ -250,21 +263,36 @@ class _TrackingSettingsRepo extends MockChatRepository {
   }) async {
     lastSettings = settings;
     lastIdempotencyKey = idempotencyKey;
-    await super.updateGroupSettings(
-      conversationId,
-      settings,
-      idempotencyKey: idempotencyKey,
-    );
   }
+
+  // 读方法委托共享 typed double：Fake 默认抛 UnimplementedError 会把页面
+  // 推入错误态，掩盖被验证的追踪断言。
+  @override
+  Future<GroupHome> getGroupHome(String conversationId) =>
+      _delegate.getGroupHome(conversationId);
+
+  @override
+  Future<ChatGroupSettingsViewData> getGroupSettings(String conversationId) =>
+      _delegate.getGroupSettings(conversationId);
 }
 
-class _TrackingDissolveRepo extends MockChatRepository {
+class _TrackingDissolveRepo extends Fake implements ChatGroupAdminRepository {
+  final ChatGroupAdminRepository _delegate = ChatTestFacets().groupAdmin;
+
   final List<String> dissolvedConversationIds = <String>[];
 
   @override
   Future<void> dissolveConversation(String conversationId) async {
     dissolvedConversationIds.add(conversationId);
   }
+
+  @override
+  Future<GroupHome> getGroupHome(String conversationId) =>
+      _delegate.getGroupHome(conversationId);
+
+  @override
+  Future<ChatGroupSettingsViewData> getGroupSettings(String conversationId) =>
+      _delegate.getGroupSettings(conversationId);
 }
 
 // spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-003

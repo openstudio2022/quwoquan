@@ -121,15 +121,6 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 公共场景不可删减且能力专项语义可扩展
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：success、validation、auth、network/DNS、timeout、throttle、retry、idempotency、 callback ordering、redaction、observability 均被同一 Adapter 执行。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
-
 <a id="open-002"></a>
 ### OPEN-002 三环境三层测试九格均有真实执行结果
 
@@ -139,7 +130,9 @@
 - 影响或价值：由当前 generated Binding 动态派生的全部 executable source 必须被覆盖且 `sourceCoverageIssues=[]`，不得在规格中固化会随 Capability/Adapter 变更而漂移的 source 数量；当前覆盖 14 个 Capability 的 selected Binding × 三层。Prod `user_acceptance` 均有真实 harness，push/message/RTC 另含 Provider two-device native readback。当前真正缺口是 Alpha/Beta/Gamma 尚未在同一 active candidate 上分别执行出 42 格 Debug-local functional evidence，正式 provider-release 也尚未执行出 140 格 CI-attested evidence，且没有 Prod Remote receipt，因此 local Green 与 `gate-release` 均必须阻断。source/harness 存在不得冒充执行通过。
 - PublicProvider 的本地 TLS conformance 只证明 Nominatim/OSRM compatible wire，不构成真实公网或 Prod probe。
 - Open-Meteo 继续复用 Assistant owner 的 canonical `assistant.weather.forecast` binding，不在 Integration 复制 Adapter。
-- `location.poi.search` 与 `location.route.read` 四环境保持 `not_required`、`probe_passed=false`。启用前必须由人工确认自托管/商用 endpoint、Nominatim 使用政策与可识别 User-Agent/联系策略、OSRM 容量与限流政策，并生成绑定 active candidate/config digest 的 Remote receipt。
+- `location.poi.search` 与 `location.route.read` 的**真实公网 Provider**（`ext.map.nominatim` / `ext.route.osrm`）在四环境保持未绑定。绑定真实 endpoint 前必须由人工确认自托管/商用 endpoint、Nominatim 使用政策与可识别 User-Agent/联系策略、OSRM 容量与限流政策，并生成绑定 active candidate/config digest 的 Remote receipt。
+- Alpha 已将 `location.poi.search` 绑定到受管非生产协议替身 `ext.map.nominatim.protocol_substitute`（endpoint 为 `local_topology:provider-protocol-substitute` 的 `/nominatim` 协议兼容面），其三层自描述 conformance source 已登记且 `sourceCoverageIssues=[]`；UAT 层复用发布选点页真实 journey（`SearchLocations` 公开路径经 `LocationPoiSearchPort`）。替身启用不豁免上一条真实 Provider 政策。
+- `location.route.read` 四环境保持 `not_required`：App 当前无路线消费页面，`user_acceptance` 层无法提供真实 user journey，三层 source 无法闭环；替身 `/osrm` 协议兼容面与 `ext.route.osrm.protocol_substitute` adapter 契约已就绪，待 App 路线消费点落地后再启用并补齐三层 source。Beta/Gamma/Prod 的 POI 亦为 `not_required`。
 - Open-Meteo 的真实 Remote receipt 同样由其 owner 环境人工政策确认后生成，禁止把公共 demo endpoint 或本地 conformance 结果写成 `passed`。
 - 完成判定：`GWT-002` 对应行为满足；每个实际 Capability/Adapter/layer 都有自描述原生 harness，14 个 Capability 在同一候选版本完成 Alpha/Beta/Gamma 九格 evidence 与 Prod Remote receipt，并通过 `--require-ready gamma` 与 `--require-ready prod`。
 - 依赖：不可变候选镜像 digest、CI attestation key、Alpha/Beta/Gamma 受管非生产 Provider 材料、Prod 生产厂商材料、受控测试数据与 cleanup/observability 回执，以及 Prod health/switch/rollback 回执。

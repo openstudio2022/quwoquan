@@ -193,6 +193,92 @@ def _prior_physical_identities(
     return identities
 
 
+def _prior_rebindable_physical_inputs(
+    *, output_root: Path, current_root: Path,
+) -> dict[str, tuple[Path, Mapping[str, Any], Mapping[str, Any]]]:
+    """Load immutable raw bytes that may be rebound only to matching provenance."""
+    resolved_current = current_root.resolve()
+    roots = {SOURCE_ACQUISITION_ROOT.resolve(), output_root.resolve()}
+    records: dict[str, tuple[Path, Mapping[str, Any], Mapping[str, Any]]] = {}
+    for root in roots:
+        if not root.is_dir() or root.is_symlink():
+            continue
+        for evidence_path in sorted(
+            root.rglob(
+                "professional-image-supported-api-*/candidates/*/evidence/*.json"
+            )
+        ):
+            if evidence_path.is_symlink() or resolved_current in evidence_path.resolve().parents:
+                continue
+            try:
+                evidence = load_document(
+                    evidence_path,
+                    group="source",
+                    name="professional_image_supported_api_evidence",
+                )
+                preparation_root = evidence_path.parents[3]
+                asset_path = preparation_root / str(evidence["originalAssetRef"])
+                request_path = preparation_root / str(evidence["reviewRequestRef"])
+                if (
+                    asset_path.is_symlink()
+                    or request_path.is_symlink()
+                    or not asset_path.is_file()
+                    or not request_path.is_file()
+                    or file_sha256(asset_path) != evidence["contentSha256"]
+                ):
+                    continue
+                request = load_document(
+                    request_path,
+                    group="source",
+                    name="professional_image_supported_api_review_request",
+                )
+                if (
+                    request["contentSha256"] != evidence["contentSha256"]
+                    or request["originalAssetSha256"] != file_sha256(asset_path)
+                ):
+                    continue
+                provider_asset_id = str(evidence["providerAssetId"])
+                previous = records.get(provider_asset_id)
+                if previous is not None and file_sha256(previous[0]) != file_sha256(asset_path):
+                    continue
+                records[provider_asset_id] = (asset_path, evidence, request)
+            except (FileNotFoundError, OSError, TypeError, ValueError):
+                continue
+    return records
+
+
+def _assert_rebindable_provenance(
+    *,
+    candidate: Mapping[str, Any],
+    meta: Mapping[str, Any],
+    evidence: Mapping[str, Any],
+    request: Mapping[str, Any],
+) -> None:
+    """Fail closed when a matching provider asset changed source, rights, or entity."""
+    checks = {
+        "provider": (candidate["provider"], evidence["provider"]),
+        "providerAssetId": (candidate["providerAssetId"], evidence["providerAssetId"]),
+        "entityId": (candidate["entityId"], request["entityId"]),
+        "observedEntityId": (candidate["observedEntityId"], request["observedEntityId"]),
+        "sourcePageUrl": (meta["sourcePageUrl"], evidence["sourcePageUrl"]),
+        "originalAssetUrl": (meta["originalAssetUrl"], evidence["originalAssetUrl"]),
+        "creator": (meta["creator"], evidence["creator"]),
+        "license": (meta["license"], evidence["license"]),
+        "licenseVersion": (meta["licenseVersion"], evidence["licenseVersion"]),
+        "attributionText": (meta["attributionText"], evidence["attributionText"]),
+        "termsUrl": (meta["termsUrl"], evidence["termsUrl"]),
+    }
+    drifted = [
+        field for field, (current, prior) in checks.items() if str(current) != str(prior)
+    ]
+    if drifted:
+        raise ProfessionalImageSupportedApiInputError(
+            "DATA.SOURCE.REBIND_IDENTITY_DRIFT",
+            "source rebind requires matching source, rights, entity, and asset identity: "
+            + ", ".join(sorted(drifted)),
+        )
+
+
 def _validated_transport(
     fetched: Mapping[str, Any], *, body: bytes,
 ) -> dict[str, Any]:
@@ -322,9 +408,20 @@ def prepare_supported_api_inputs(
             "sourceDigest": str(handoff["sourceDigest"]["digest"]),
             "entityCatalogDigest": str(handoff["entityCatalogDigest"]),
         }
+        resolved_handoff_ref = handoff_ref.expanduser().resolve()
+        source_review_identity = (
+            {
+                **execution_identity,
+                "executionBundleDigest": str(handoff["executionBundle"]["digest"]),
+                "handoffDigest": file_sha256(resolved_handoff_ref),
+            }
+            if resolved_handoff_ref.is_file()
+            else None
+        )
         reviewers = load_reviewer_results(
             reviewer_result_refs, root=reviewer_root.resolve(), catalog=catalog,
             digest=_digest, execution_source_identity=execution_identity,
+            source_review_identity=source_review_identity,
         )
     except ProfessionalImageSupportedApiInputError:
         raise
@@ -347,6 +444,9 @@ def prepare_supported_api_inputs(
     manifest_items: list[dict[str, Any]] = []
     seen = _prior_physical_identities(output_root=output_root, current_root=root)
     prior_provider_asset_ids = {row[3] for row in seen}
+    prior_rebinds = _prior_rebindable_physical_inputs(
+        output_root=output_root, current_root=root
+    )
     for candidate in catalog["candidates"]:
         candidate_id = str(candidate["candidateId"])
         token = _safe_token(candidate_id)
@@ -370,33 +470,6 @@ def prepare_supported_api_inputs(
                 "evidenceSha256": file_sha256(block_path),
                 "failureCode": "DATA.SOURCE.WATERMARK_BLOCKED",
             })
-            continue
-        if str(candidate["providerAssetId"]) in prior_provider_asset_ids:
-            block = {
-                "schema": "quwoquan_data.professional_image_supported_api_block",
-                "candidateId": candidate_id,
-                "status": "blocked",
-                "failureCode": "DATA.SOURCE.DUPLICATE_ASSET",
-                "reason": "providerAssetId already has frozen physical evidence",
-            }
-            assert_valid(
-                block,
-                "source",
-                "professional_image_supported_api_block",
-                label=f"supported API block:{candidate_id}",
-            )
-            block_path = _write_json(
-                root / f"candidates/{token}/block.json", block
-            )
-            items.append(
-                {
-                    "candidateId": candidate_id,
-                    "status": "blocked",
-                    "evidenceRef": _safe_ref(block_path, root),
-                    "evidenceSha256": file_sha256(block_path),
-                    "failureCode": "DATA.SOURCE.DUPLICATE_ASSET",
-                }
-            )
             continue
         try:
             request_url = (
@@ -436,25 +509,60 @@ def prepare_supported_api_inputs(
                 )
             asset_path_root = root / f"candidates/{token}/original"
             existing = next(asset_path_root.glob("asset.*"), None) if asset_path_root.is_dir() else None
+            rebound_physical_input = prior_rebinds.get(
+                str(candidate["providerAssetId"])
+            )
+            if (
+                rebound_physical_input is None
+                and str(candidate["providerAssetId"]) in prior_provider_asset_ids
+            ):
+                raise ProfessionalImageSupportedApiInputError(
+                    "DATA.SOURCE.REBIND_ASSET_SHA_DRIFT",
+                    "prior physical evidence for providerAssetId is not integrity-valid",
+                )
             if existing is None:
-                fetched = image_fetcher(
-                    str(meta["originalAssetUrl"]), supported_api=True,
-                    min_bytes=_MIN_IMAGE_BYTES, max_bytes=_MAX_IMAGE_BYTES,
-                )
-                if fetched is None:
-                    raise ProfessionalImageSupportedApiInputError(
-                        PREPARATION_INVALID, "original image fetch returned no image"
+                if rebound_physical_input is not None:
+                    prior_asset, prior_evidence, prior_request = rebound_physical_input
+                    _assert_rebindable_provenance(
+                        candidate=candidate,
+                        meta=meta,
+                        evidence=prior_evidence,
+                        request=prior_request,
                     )
-                asset_path = _write_once(
-                    asset_path_root / f"asset{fetched['ext']}", bytes(fetched["bytes"])
-                )
-                original_transport = _validated_transport(
-                    fetched, body=bytes(fetched["bytes"])
-                )
-                original_transport_path = _write_json(
-                    root / f"candidates/{token}/original-https-transport.json",
-                    original_transport,
-                )
+                    asset_path = _write_once(
+                        asset_path_root / f"asset{prior_asset.suffix}",
+                        prior_asset.read_bytes(),
+                    )
+                    prior_transport = prior_evidence["originalTransportEvidenceRef"]
+                    prior_root = prior_asset.parents[3]
+                    original_transport = load_document(
+                        prior_root / str(prior_transport),
+                        group="source",
+                        name="professional_image_https_transport_evidence",
+                    )
+                    original_transport_path = _write_json(
+                        root / f"candidates/{token}/original-https-transport.json",
+                        original_transport,
+                    )
+                else:
+                    fetched = image_fetcher(
+                        str(meta["originalAssetUrl"]), supported_api=True,
+                        min_bytes=_MIN_IMAGE_BYTES, max_bytes=_MAX_IMAGE_BYTES,
+                    )
+                    if fetched is None:
+                        raise ProfessionalImageSupportedApiInputError(
+                            PREPARATION_INVALID, "original image fetch returned no image"
+                        )
+                    asset_path = _write_once(
+                        asset_path_root / f"asset{fetched['ext']}", bytes(fetched["bytes"])
+                    )
+                    original_transport = _validated_transport(
+                        fetched, body=bytes(fetched["bytes"])
+                    )
+                    original_transport_path = _write_json(
+                        root / f"candidates/{token}/original-https-transport.json",
+                        original_transport,
+                    )
             else:
                 asset_path = existing
                 original_transport_path = (
@@ -481,7 +589,7 @@ def prepare_supported_api_inputs(
                 content_sha == sha
                 or perceptual_hash_distance(phash, peer) <= NEAR_DUP_HAMMING
                 for sha, peer, _, _ in seen
-            ):
+            ) and rebound_physical_input is None:
                 raise ProfessionalImageSupportedApiInputError(
                     "DATA.SOURCE.DUPLICATE_ASSET",
                     "global exact/pHash duplicate across supported-API preparations",
@@ -708,6 +816,7 @@ def prepare_supported_api_inputs(
                 json.dumps(row["executionBundle"], sort_keys=True),
             )
             for row in reviewers.values()
+            if row.get("executionId")
         }
     ):
         execution_id, manifest_ref_value, manifest_sha_value, bundle_json = binding
@@ -717,6 +826,15 @@ def prepare_supported_api_inputs(
             "executionManifestRef": manifest_ref_value,
             "executionManifestSha256": manifest_sha_value,
         })
+    review_source_bindings = [
+        {
+            "sourceReview": dict(row["sourceIdentity"]),
+            "reviewerResultRef": str(row["evidenceRef"]),
+            "reviewerResultSha256": file_sha256(row["evidencePath"]),
+        }
+        for row in reviewers.values()
+        if row.get("sourceIdentity") and not row.get("executionId")
+    ]
     if manifest_items:
         manifest = {
             "schema": "quwoquan_data.professional_image_acquisition_manifest",
@@ -725,6 +843,7 @@ def prepare_supported_api_inputs(
             "executionBundle": handoff["executionBundle"],
             "frozenPhysicalInput": frozen_physical_input,
             "reviewExecutionBindings": review_execution_bindings,
+            "reviewSourceBindings": review_source_bindings,
             "discoveryPlanRef": "inputs/discovery-plan.json",
             "discoveryPlanDigest": plan["planDigest"], "items": manifest_items,
         }
@@ -732,7 +851,19 @@ def prepare_supported_api_inputs(
             manifest, "source", "professional_image_acquisition_manifest",
             label="prepared professional image acquisition manifest",
         )
-        manifest_path = _write_json(root / "manifests/acquisition.json", manifest)
+        # The manifest grows as blocked/pending candidates become accepted on
+        # later resumes.  The first record owns the canonical fixed path; any
+        # different manifest content is frozen as a content-addressed
+        # create-once record so historical receipts keep validating.
+        manifest_body = (
+            json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
+        )
+        manifest_path = root / "manifests/acquisition.json"
+        if manifest_path.is_file() and manifest_path.read_bytes() != manifest_body:
+            manifest_path = (
+                root / f"manifests/acquisition-{_digest(manifest)[7:23]}.json"
+            )
+        manifest_path = _write_json(manifest_path, manifest)
         manifest_ref, manifest_sha = _safe_ref(manifest_path, root), file_sha256(manifest_path)
     accepted = sum(row["status"] == "accepted" for row in items)
     pending = sum(row["status"] == "review_pending" for row in items)

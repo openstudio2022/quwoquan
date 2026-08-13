@@ -88,3 +88,20 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：离线 replay 指标、在线 AB 显著性和真实流量训练晋升均有规格与验收。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 画像重算生产端与观测指标未实现
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：缺飞轮上游画像重算生产端——content 侧不发布
+  `events.content.UserInterestRecomputed`，user-service 投影消费端
+  （InterestProfileProjector 与 quwoquan_interest_projection_* 指标）空转；
+  重算吞吐、画像丰富度、兴趣熵、人群命中、assistant 主动个性化覆盖率
+  这些观测指标均无 emitter。飞轮看板只保留投影消费端与引擎归因的
+  真实面板，无来源指标的面板已裁剪，禁止空面板伪装观测。
+- 完成判定：`SIT-001` 覆盖的飞轮链路中画像重算生产端落地——content 侧
+  发布 UserInterestRecomputed 且重算/丰富度/人群指标有真实 emitter，
+  飞轮看板恢复对应面板并有 local_contract 投影正负例。
+- 依赖：content-service 画像派生（InterestProfileAggregator）实现窗口。

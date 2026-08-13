@@ -25,7 +25,7 @@ from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
 import re
 
 ROOT = REPO_ROOT
-VALUES = ROOT / "quwoquan_app" / "lib" / "core" / "constants" / "ui_text_constants_values.dart"
+COPY_DIR = ROOT / "quwoquan_app" / "lib" / "l10n" / "copy"
 
 FORBIDDEN = re.compile(r"请点[「\"]允许[」\"]")
 PRIMER_MESSAGE = re.compile(
@@ -34,24 +34,32 @@ PRIMER_MESSAGE = re.compile(
 
 
 def main() -> int:
-    if not VALUES.is_file():
-        print(f"FAIL: missing {VALUES}")
+    if not COPY_DIR.is_dir():
+        print(f"FAIL: missing copy dir {COPY_DIR}")
         return 1
-    text = VALUES.read_text(encoding="utf-8")
     violations: list[str] = []
-    for name, body in PRIMER_MESSAGE.findall(text):
-        if FORBIDDEN.search(body) and "继续" not in body:
-            violations.append(f"{name}: {body!r}")
-        if FORBIDDEN.search(body) and "系统弹窗" not in body:
-            violations.append(
-                f"{name}: uses 请点允许 without 系统弹窗 context: {body!r}"
-            )
+    primer_count = 0
+    for dart_file in sorted(COPY_DIR.rglob("*.dart")):
+        text = dart_file.read_text(encoding="utf-8")
+        for name, body in PRIMER_MESSAGE.findall(text):
+            primer_count += 1
+            if FORBIDDEN.search(body) and "继续" not in body:
+                violations.append(f"{dart_file.name}:{name}: {body!r}")
+            if FORBIDDEN.search(body) and "系统弹窗" not in body:
+                violations.append(
+                    f"{dart_file.name}:{name}: "
+                    f"uses 请点允许 without 系统弹窗 context: {body!r}"
+                )
+    if primer_count == 0:
+        # 零匹配意味着扫描目标失效（常量迁移/改名），门禁必须显式红而非静默通过。
+        print(f"FAIL: no *PrimerMessage* constants found under {COPY_DIR}")
+        return 1
     if violations:
         print("FAIL: primer copy contradicts Continue / system sheet flow:")
         for line in violations:
             print(f"  - {line}")
         return 1
-    print("OK: permission primer copy")
+    print(f"OK: permission primer copy ({primer_count} constants)")
     return 0
 
 

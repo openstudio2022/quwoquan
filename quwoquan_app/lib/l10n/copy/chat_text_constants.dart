@@ -94,6 +94,28 @@ abstract final class ChatText {
   static const String chatPreviewVoice = '[语音]';
   static const String chatPreviewCall = '[通话]';
   static const String chatPreviewCard = '[卡片]';
+
+  /// 活动群一次性破冰卡的框架标签（交集主句本身来自云侧，端不拼句）。
+  static const String chatIcebreakerCardLabel = '破冰时刻';
+
+  /// 发送失败气泡的手动重发行动点（语义标签与可达性文案）。
+  static const String chatRetrySendMessage = '重新发送';
+
+  /// 手动重发仍失败时的提示。
+  static const String chatRetrySendFailed = '重发失败，请稍后再试';
+
+  /// 免打扰/置顶等会话设置更新失败时的提示（开关回滚）。
+  static const String settingUpdateFailed = '设置更新失败，请稍后再试';
+
+  /// 文件消息打开失败 / 媒体不可用的结构化提示。
+  static const String chatFileOpenFailed = '文件打开失败，请稍后再试';
+  static const String chatMediaUnavailable = '媒体暂不可用，请稍后再试';
+
+  /// 会话内查找聊天记录（设置页入口与面板标题）。
+  static const String searchInConversation = '查找聊天记录';
+  static const String searchInConversationTitle = '查找聊天记录';
+  static const String searchInConversationPlaceholder = '搜索本会话消息';
+  static const String searchInConversationEmpty = '没有匹配的聊天记录';
   static const String chatPreviewRecalled = '[消息已撤回]';
   static const String contactsTabAll = '全部', chatPrimaryContacts = '联系';
   static const String contactsTabCircles = '圈子';
@@ -199,6 +221,9 @@ abstract final class ChatText {
   static const String chatGreetingInboxTitle = '新的打招呼';
   static const String chatGreetingInboxEmpty = '暂时没有待处理的打招呼';
   static const String chatConversationNoMessages = '还没有消息，发一条开始聊天吧';
+  static const String chatTimelineOfflineReadOnlyHint = '暂时无法刷新，正在展示本机保存的消息';
+  static const String messageActionReply = '回复';
+  static const String chatReplyOriginalUnavailable = '原消息不可用';
   static const String chatGreetingCenterTitle = '打招呼';
   static const String chatGreetingReceived = '收到的';
   static const String chatGreetingSentTab = '发出的';
@@ -282,8 +307,6 @@ abstract final class ChatText {
   static const String chatVoiceRecordUnavailable = '暂时无法录音，请稍后重试';
   static const String chatVoicePendingRetry = '语音没发出去，已保存，点重试';
   static const String chatVoiceUploadFailed = '语音上传失败，请重试';
-  static const String chatVoiceSendFailedTitle = '语音发送失败';
-  static const String chatVoiceSendFailed = '语音发送失败，请重试';
   static const String chatVoicePlayUnavailable = '语音暂不可播放';
 
   /// 应用内统一转发旅程。

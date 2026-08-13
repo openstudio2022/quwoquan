@@ -7,6 +7,7 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
@@ -99,8 +100,8 @@ class _HomepageIntroductionPageState
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
       navigationBar: CupertinoNavigationBar(
         middle: const Text(ObjectHomepageText.objectIntroNavigationTitle),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.chevron_back,
           onPressed: () {
             if (context.canPop()) {
               context.pop();
@@ -108,7 +109,6 @@ class _HomepageIntroductionPageState
               context.go(AppRoutePaths.homepageDetail(id: widget.homepageId));
             }
           },
-          child: const Icon(CupertinoIcons.chevron_back),
         ),
       ),
       child: SafeArea(
@@ -135,8 +135,12 @@ class _HomepageIntroductionPageState
             if (introduction == null ||
                 introduction.summary.trim().isEmpty ||
                 introduction.sections.isEmpty) {
-              return _IntroductionEmptyState(
-                onBack: () {
+              return AppEmptyState(
+                icon: CupertinoIcons.doc_text_search,
+                title: ObjectHomepageText.objectIntroEmptyTitle,
+                subtitle: ObjectHomepageText.objectIntroEmptyMessage,
+                actionLabel: ObjectHomepageText.objectIntroBackToHomepage,
+                onAction: () {
                   context.go(
                     AppRoutePaths.homepageDetail(id: widget.homepageId),
                   );

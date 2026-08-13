@@ -29,10 +29,20 @@ class VideoEditExportResult {
 }
 
 /// 防腐封装 `quwoquan/video_editing`，让页面只依赖平台能力。
-class IosVideoEditingService {
-  IosVideoEditingService();
+///
+/// channel 契约平台中立：iOS（AVFoundation）与 Android（media3 Transformer）
+/// 共用同一 channel、方法名与参数；其余平台走帧图降级或结构化不可用。
+class NativeVideoEditingService {
+  /// [supportsNativeChannelOverride] 仅供测试注入；生产按运行平台判定
+  /// （与 CapabilityProfile.mobile 的 nativeVideoEditing 能力位对齐）。
+  NativeVideoEditingService({bool? supportsNativeChannelOverride})
+    : _supportsNativeChannel =
+          supportsNativeChannelOverride ?? (Platform.isIOS || Platform.isAndroid);
 
   static const MethodChannel _channel = videoEditingMethodChannel;
+
+  /// 原生编辑 channel 是否可用（iOS AVFoundation / Android media3）。
+  final bool _supportsNativeChannel;
   static const int _kMinDenseFrameCount = 24;
   static const int _kMaxCacheEntries = 18;
   static final LinkedHashMap<String, List<VideoFrameCandidate>> _frameCache =
@@ -61,7 +71,7 @@ class IosVideoEditingService {
       math.max(cachedFrames?.length ?? 0, _kMinDenseFrameCount),
     );
     late final List<VideoFrameCandidate> denseFrames;
-    if (Platform.isIOS) {
+    if (_supportsNativeChannel) {
       try {
         final response = await _channel.invokeMethod<List<dynamic>>(
           'extractVideoFrames',
@@ -109,7 +119,7 @@ class IosVideoEditingService {
     required bool muted,
     required int coverTimeMs,
   }) async {
-    if (Platform.isIOS) {
+    if (_supportsNativeChannel) {
       try {
         final response = await _channel.invokeMapMethod<String, dynamic>(
           'exportVideoEdit',

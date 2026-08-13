@@ -1,6 +1,8 @@
+// spec_ref: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/spec.md#gwt-003
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/article_markdown_codec.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_reader/content/article_reader_pagination.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_reader/pageflip/host/article_read_only_book_deck.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
@@ -66,6 +68,61 @@ void main() {
     expect(
       resolvedPages.any((page) => page.id.startsWith('fallback_')),
       isFalse,
+    );
+  });
+
+  testWidgets('富块经分页管道进入阅读渲染，不被压缩为段落（GWT-003）', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(430, 932));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final document = ArticleMarkdownCodec.parseDocument('''
+---
+title: 富块渲染
+---
+# 富块渲染
+
+> 引用一句诗。
+
+:::callout
+出发前确认预约。
+:::
+
+```dart
+print('hi');
+```
+''');
+    late List<ArticlePageData> pages;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            pages = resolvePaginatedArticlePages(
+              context: context,
+              constraints: const BoxConstraints.tightFor(
+                width: 430,
+                height: 620,
+              ),
+              document: document,
+              template: ArticleTemplatePreset.gentle,
+              fontPreset: ArticleFontPreset.clean,
+              fallbackPages: const <ArticlePageData>[],
+              variant: ArticleCanvasVariant.preview,
+              paperTexture: ArticlePaperTexture.darkPaper,
+            );
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    final styleKeys = pages
+        .expand((page) => page.fragments)
+        .map((fragment) => fragment.textStyleKey)
+        .toSet();
+    expect(
+      styleKeys,
+      containsAll(<String>['quote', 'callout', 'codeBlock']),
+      reason: '富块必须以自身语义进入分页 fragments，不得压成 body。',
     );
   });
 

@@ -311,21 +311,51 @@ extension AuthGateReasonX on AuthGateReason {
   List<String> get requiredOperations => entry.requiredOperations;
 }
 
+/// 首页「关注」频道的内部状态标识：不是可直达的真实路由，仅用于登录关闭
+/// 兜底判断，不得进入路由级守卫。
+const String homeFollowingChannelLocation = '/following';
+
+/// 判断 location 是否命中带 `{param}` 的路径模板（按模板静态前缀匹配）。
+bool _matchesParameterizedTemplate(String loc, String template) {
+  final braceIndex = template.indexOf('{');
+  if (braceIndex < 0) {
+    return loc == template;
+  }
+  final prefix = template.substring(0, braceIndex);
+  return loc.startsWith(prefix) && loc.length > prefix.length;
+}
+
+/// 契约 `auth_requirement: required` 的设置子页（/settings 首页保持游客可浏览，
+/// 屏蔽用户/屏蔽词/我的举报另有更精确的 reason，见 [requiredRouteGateForLocation]）。
+const Set<String> _requiredSettingsSubPages = <String>{
+  AppRoutePaths.settingsAbout,
+  AppRoutePaths.settingsAccountSecurity,
+  AppRoutePaths.settingsCalls,
+  AppRoutePaths.settingsDarkMode,
+  AppRoutePaths.settingsNotifications,
+  AppRoutePaths.settingsPermissions,
+  AppRoutePaths.settingsPrivacy,
+};
+
 /// 受限「直达路由」守卫的唯一真相源：把路由位置映射到对应的 [AuthGateReason]，
 /// 返回 `null` 表示该位置游客可浏览、不得整页拦截。
 ///
-/// 与 [authGateMatrix] 配合，覆盖底栏入口之外的深链。务必保证「我的」tab
-/// （/profile 本体）可被游客浏览：MyProfilePage 在未登录时渲染占位页 + 内嵌
-/// 登录按钮。一旦整页拦截 /profile，登录页关闭 / 稍后登录会原路返回到 /profile
-/// 再次被守卫拦截，形成「关闭→又弹登录」的死循环。
+/// 与 [authGateMatrix] 配合，覆盖底栏入口之外的深链。覆盖集合必须与
+/// `page_object_contract.yaml` 中 `page_kind: routed` 且
+/// `auth_requirement: required` 的页面集合保持零漂移（由
+/// `route_auth_contract_parity__local_contract_test.dart` 双向核对）。
 ///
-/// 注意：`/following` 只是首页内部频道状态，不是可直达的真实受限页面。
-/// 若把它误接到路由级守卫，登录页关闭后极易再次命中守卫形成回环。
+/// 务必保证「我的」tab（/profile 本体）可被游客浏览：MyProfilePage 在未登录时
+/// 渲染占位页 + 内嵌登录按钮。一旦整页拦截 /profile，登录页关闭 / 稍后登录会
+/// 原路返回到 /profile 再次被守卫拦截，形成「关闭→又弹登录」的死循环。
+///
+/// 注意：[homeFollowingChannelLocation] 只是首页内部频道状态，不是可直达的
+/// 真实受限页面。若把它误接到路由级守卫，登录页关闭后极易再次命中守卫形成回环。
 AuthGateReason? requiredRouteGateForLocation(String loc) {
   if (loc == AppRoutePaths.profile) {
     return null;
   }
-  if (loc.startsWith('/profile/')) {
+  if (loc.startsWith('${AppRoutePaths.profile}/')) {
     return AuthGateReason.personaManage;
   }
   // createEntry 是「添加入口动作面板」，游客必须能先看到面板；真正的发布/
@@ -349,7 +379,8 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
   if (loc == AppRoutePaths.myReports) {
     return AuthGateReason.report;
   }
-  if (loc == AppRoutePaths.chat || loc.startsWith('/chat/')) {
+  if (loc == AppRoutePaths.chat ||
+      loc.startsWith('${AppRoutePaths.chat}/')) {
     return AuthGateReason.openChat;
   }
   // 添加联系人是「先开面板、动作再登录」的强入口：主页及其全部子页（扫一扫/
@@ -358,6 +389,19 @@ AuthGateReason? requiredRouteGateForLocation(String loc) {
       loc.startsWith('${AppRoutePaths.addContact}/') ||
       loc == AppRoutePaths.myQrCode) {
     return AuthGateReason.addContact;
+  }
+  // RTC 通话页族（来电/去电/语音/视频/选择参与人）全部是账号态：深链直达
+  // 无账号无法建立会话，先登录、关闭兜底回首页。
+  if (_matchesParameterizedTemplate(loc, AppRoutePaths.rtcIncomingPathTemplate) ||
+      _matchesParameterizedTemplate(loc, AppRoutePaths.rtcOutgoingPathTemplate) ||
+      _matchesParameterizedTemplate(loc, AppRoutePaths.rtcVoicePathTemplate) ||
+      _matchesParameterizedTemplate(loc, AppRoutePaths.rtcVideoPathTemplate) ||
+      loc == AppRoutePaths.rtcPickParticipants) {
+    return AuthGateReason.startCall;
+  }
+  // 账号态设置子页：读取/修改的都是账号维度配置，深链直达先登录。
+  if (_requiredSettingsSubPages.contains(loc)) {
+    return AuthGateReason.settingsAccount;
   }
   return null;
 }
@@ -695,14 +739,15 @@ String? _trimmedOrNull(String? value) {
 
 String _normalizedGuestDismissFallback(String location) {
   final path = _pathFromLocation(location);
-  if (path == AppRoutePaths.profile || path.startsWith('/profile/')) {
+  if (path == AppRoutePaths.profile ||
+      path.startsWith('${AppRoutePaths.profile}/')) {
     return AppRoutePaths.profile;
   }
   if (requiredRouteGateForLocation(path) != null) {
     return AppRoutePaths.home;
   }
-  // `/following` 属于首页内部频道，不是可直达路由；游客关闭登录后回首页。
-  if (path == '/following') {
+  // 关注频道属于首页内部状态，不是可直达路由；游客关闭登录后回首页。
+  if (path == homeFollowingChannelLocation) {
     return AppRoutePaths.home;
   }
   final parsed = Uri.tryParse(location);

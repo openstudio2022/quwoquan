@@ -173,39 +173,6 @@ def _supported_queries(
     return queries
 
 
-def _prior_provider_asset_ids(root: Path) -> set[tuple[str, str]]:
-    """Return exact provider identities already frozen as physical evidence."""
-
-    identities: set[tuple[str, str]] = set()
-    resolved_root = root.expanduser().resolve()
-    if not resolved_root.is_dir() or resolved_root.is_symlink():
-        return identities
-    for path in sorted(
-        resolved_root.rglob(
-            "professional-image-supported-api-*/candidates/*/evidence/*.json"
-        )
-    ):
-        if path.is_symlink() or not path.is_file():
-            continue
-        try:
-            evidence = read_json(path)
-            if not isinstance(evidence, dict):
-                continue
-            assert_valid(
-                evidence,
-                "source",
-                "professional_image_supported_api_evidence",
-                label=f"prior supported API evidence:{path}",
-            )
-        except (FileNotFoundError, OSError, TypeError, ValueError):
-            continue
-        provider = str(evidence.get("provider") or "")
-        provider_asset_id = str(evidence.get("providerAssetId") or "")
-        if provider and provider_asset_id:
-            identities.add((provider, provider_asset_id))
-    return identities
-
-
 def _transport_evidence(
     fetched: Mapping[str, Any], *, body: bytes,
 ) -> dict[str, Any]:
@@ -359,7 +326,13 @@ def _project_response(
     if query["provider"] == "openverse":
         raw_pages = payload.get("results")
     else:
-        raw_pages = (payload.get("query") or {}).get("pages")
+        raw_query = payload.get("query")
+        # MediaWiki 搜索无命中时会合法省略 ``query``（例如受治理地点尚未
+        # 收录在 Commons）。这是已完成的零候选查询，不是畸形的 provider
+        # 元数据；外层 receipt 必须保留 shortfall 以便重试或替换来源。
+        raw_pages = [] if raw_query is None else (
+            raw_query.get("pages") if isinstance(raw_query, Mapping) else None
+        )
     if not isinstance(raw_pages, list):
         raise TypeError("Commons search response lacks query.pages")
     pages = sorted(
@@ -483,6 +456,7 @@ def discover_supported_api_metadata(
     clock: Callable[[], str] = _now,
 ) -> tuple[dict[str, Any], Path, Path | None]:
     """Create or resume a source-bound metadata catalog and checkpoint receipt."""
+    del physical_evidence_root  # raw identity is admitted by governed preparation.
     if (
         isinstance(candidate_target, bool)
         or candidate_target < 1
@@ -576,7 +550,6 @@ def discover_supported_api_metadata(
     failures: list[dict[str, Any]] = []
     items: list[dict[str, Any]] = []
     seen_sources: set[tuple[str, str]] = set()
-    prior_provider_assets = _prior_provider_asset_ids(physical_evidence_root)
     for query in queries:
         if len(candidates) >= candidate_target:
             break
@@ -601,21 +574,6 @@ def discover_supported_api_metadata(
             )
             accepted_before = len(candidates)
             for row in projected:
-                provider_asset_identity = (
-                    str(row["provider"]), str(row["providerAssetId"])
-                )
-                if provider_asset_identity in prior_provider_assets:
-                    query_exclusions.append(
-                        {
-                            "queryId": query["queryId"],
-                            "fileTitle": row["fileTitle"],
-                            "failureCode": "DATA.SOURCE.DUPLICATE",
-                            "detail": (
-                                "providerAssetId already has frozen physical evidence"
-                            ),
-                        }
-                    )
-                    continue
                 source_identity = (
                     str(row["sourcePageUrl"]), str(row["originalAssetUrl"])
                 )

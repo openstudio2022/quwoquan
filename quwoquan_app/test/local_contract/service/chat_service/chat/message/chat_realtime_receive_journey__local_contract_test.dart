@@ -6,7 +6,7 @@ import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
 import '../../../../../support/service/realtime_gateway/realtime/connection/connection_typed_double.dart';
 
@@ -30,9 +30,7 @@ void main() {
           // 被测行为是 realtime 事件如何进入可见消息列表；会话与身份只作为前置输入，
           // 用对象级 typed double 提供，App↔Cloud 出站边界保持封死。
           ...sealedCloudBoundaryOverrides(),
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           activePersonaContextProvider.overrideWith(
             (ref) async => _testPersonaContext,
           ),

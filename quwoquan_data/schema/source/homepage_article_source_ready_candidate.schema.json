@@ -51,7 +51,7 @@
         "seedSelectionRef": {"$ref": "#/$defs/ref"},
         "seedSelectionDigest": {"$ref": "#/$defs/sha256"},
         "seedSelectionFileSha256": {"$ref": "#/$defs/sha256"},
-        "seedOrigin": {"enum": ["legacy_hint", "current_coverage"]},
+        "seedOrigin": {"enum": ["historical_capsule_hint", "current_coverage"]},
         "seedId": {"$ref": "#/$defs/sha256"},
         "coverageKey": {"$ref": "homepage_article_seed_selection.schema.json#/$defs/seed/properties/coverageKey"},
         "sourceSelectionOrigin": {"const": "site_frontier"},
@@ -76,7 +76,7 @@
   },
   "allOf": [
     {
-      "if": {"properties": {"provenance": {"properties": {"seedOrigin": {"const": "legacy_hint"}}}}},
+      "if": {"properties": {"provenance": {"properties": {"seedOrigin": {"const": "historical_capsule_hint"}}}}},
       "then": {"properties": {"provenance": {"required": ["historicalComparison"]}}},
       "else": {"properties": {"provenance": {"not": {"required": ["historicalComparison"]}}}}
     }

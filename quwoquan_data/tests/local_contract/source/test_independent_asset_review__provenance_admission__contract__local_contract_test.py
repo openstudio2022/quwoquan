@@ -516,8 +516,13 @@ def test_supported_api_reviewer_keeps_distinct_frozen_execution_identity(
         acquisition_root
         / "receipts/903bcfd8dc2ed0d38aa23f1d07e57107bec1365920d817f42f2038a7a5b0d393.json",
     )
-    if not all(path.is_file() for path in required):
-        pytest.skip("live frozen Image evidence is not present")
+    missing = [str(path) for path in required if not path.is_file()]
+    if missing:
+        pytest.fail(
+            "live frozen Image evidence is required by this contract test; "
+            "rebuild the frozen execution work packages before running: "
+            + ", ".join(missing)
+        )
 
     # This test exercises only the contract helper against copied, immutable
     # fixture bytes; it must never mutate or trust the real output tree.

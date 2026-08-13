@@ -19,7 +19,8 @@ import 'package:quwoquan_app/runtime/platform/media/app_image_cache_controller.d
 import 'package:quwoquan_app/runtime/di/app_providers.dart'
     show
         accountSessionLifecycleCommandWriterProvider,
-        accountSessionLoginCommandWriterProvider;
+        accountSessionLoginCommandWriterProvider,
+        exceptionTelemetryPortProvider;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

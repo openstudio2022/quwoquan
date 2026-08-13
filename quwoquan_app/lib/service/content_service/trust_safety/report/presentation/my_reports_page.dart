@@ -8,6 +8,7 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/design_system/formatters/content_time_label.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
@@ -86,6 +87,7 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
       }
     });
     _recordPageState(phase: 'onlineLoading');
+    final loadStartedAt = DateTime.now();
     try {
       final page = await ref
           .read(myReportsContentReportQueryProvider)
@@ -121,6 +123,9 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
               payload: <String, Object?>{
                 'result': 'success',
                 'resultCount': page.items.length,
+                'durationMs': DateTime.now()
+                    .difference(loadStartedAt)
+                    .inMilliseconds,
               },
             ),
       );
@@ -140,6 +145,9 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
                 'failReasonCode': error is CloudException
                     ? (error.code ?? error.type.name)
                     : error.runtimeType.toString(),
+                'durationMs': DateTime.now()
+                    .difference(loadStartedAt)
+                    .inMilliseconds,
               },
             ),
       );
@@ -229,7 +237,11 @@ class _MyReportsPageState extends ConsumerState<MyReportsPage> {
       );
     }
     if (_items.isEmpty) {
-      return const _MyReportsEmptyState();
+      return const AppEmptyState(
+        icon: CupertinoIcons.flag,
+        title: ContentText.myReportsEmptyTitle,
+        subtitle: ContentText.myReportsEmptySubtitle,
+      );
     }
     return ListView(
       padding: EdgeInsets.only(
@@ -417,46 +429,5 @@ class _MyReportRow extends StatelessWidget {
       ReportStatus.resolved => CupertinoIcons.check_mark_circled,
       ReportStatus.dismissed => CupertinoIcons.info_circle,
     };
-  }
-}
-
-class _MyReportsEmptyState extends StatelessWidget {
-  const _MyReportsEmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerLg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(
-              CupertinoIcons.flag,
-              size: AppSpacing.iconLarge,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-            SizedBox(height: AppSpacing.interGroupMd),
-            Text(
-              ContentText.myReportsEmptyTitle,
-              style: TextStyle(
-                color: AppColors.iosLabel(context),
-                fontSize: AppTypography.iosTitle3,
-                fontWeight: AppTypography.semiBold,
-              ),
-            ),
-            SizedBox(height: AppSpacing.intraGroupSm),
-            Text(
-              ContentText.myReportsEmptySubtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.iosSecondaryLabel(context),
-                fontSize: AppTypography.iosSubheadline,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

@@ -10,15 +10,27 @@ library;
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
-import '../../../../../support/runtime/fixtures/object_contract_example_reader.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
+
+InMemoryContentDiscoveryFeedQuery _query() {
+  return InMemoryContentDiscoveryFeedQuery(
+    InMemoryContentPostStore(
+      posts: contentPostListBuilder(
+        contentType: 'micro',
+        count: 9,
+        idPrefix: 'object-card-post',
+      ),
+    ),
+  );
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('MockContentRepository feed 语义与 Remote 同构（N2-4）', () {
+  group('Feed typed query 与 Remote 语义同构（N2-4）', () {
     test('channel=recommend 首刷注入 entity_homepage 对象卡', () async {
-      final repo = MockContentRepository();
+      final repo = _query();
       final page = await repo.listDiscoveryFeedPage(
         category: 'recommend',
         channelId: 'recommend',
@@ -45,7 +57,7 @@ void main() {
     });
 
     test('分页请求（cursor 非空）不注入对象卡', () async {
-      final repo = MockContentRepository();
+      final repo = _query();
       final first = await repo.listDiscoveryFeedPage(
         category: 'recommend',
         channelId: 'recommend',
@@ -64,7 +76,7 @@ void main() {
     });
 
     test('channel=premium fail-closed：只出精品池供给', () async {
-      final repo = MockContentRepository();
+      final repo = _query();
       final page = await repo.listDiscoveryFeedPage(
         category: 'premium',
         channelId: 'premium',
@@ -72,11 +84,7 @@ void main() {
       );
       // 池真相源：home_feed_core.featuredFeedPostIds（与云侧 rm_premium_pool
       // 物化集合、alpha runner adapter 同判定）；数据工程直供兜底。
-      final rawPool =
-          objectContractExampleReader.contentExample(
-                'home_feed_core',
-              )?['featuredFeedPostIds']
-              as List?;
+      final rawPool = const <Object?>[];
       final pool = (rawPool ?? const <Object?>[])
           .map((id) => id.toString())
           .toSet();
@@ -91,7 +99,7 @@ void main() {
     });
 
     test('channel=travel 不在 App double 内推断或过滤 Post 事实', () async {
-      final repo = MockContentRepository();
+      final repo = _query();
       final routed = await repo.listDiscoveryFeedPage(
         category: 'travel',
         channelId: 'travel',

@@ -7,6 +7,7 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
@@ -330,7 +331,11 @@ class _BlockedUsersPageState extends ConsumerState<BlockedUsersPage> {
       );
     }
     if (_items.isEmpty) {
-      return _BlockedUsersEmptyState(isDark: isDark);
+      return const AppEmptyState(
+        icon: CupertinoIcons.person_crop_circle_badge_checkmark,
+        title: ContentText.blockedUsersEmptyTitle,
+        subtitle: ContentText.blockedUsersEmptySubtitle,
+      );
     }
     return ListView(
       padding: EdgeInsets.only(
@@ -495,49 +500,6 @@ class _BlockedUserRow extends StatelessWidget {
                 : const Text(ContentText.blockedUsersUnblock),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BlockedUsersEmptyState extends StatelessWidget {
-  const _BlockedUsersEmptyState({required this.isDark});
-
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerLg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(
-              CupertinoIcons.person_crop_circle_badge_checkmark,
-              size: AppSpacing.iconLarge,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-            SizedBox(height: AppSpacing.interGroupMd),
-            Text(
-              ContentText.blockedUsersEmptyTitle,
-              style: TextStyle(
-                color: SettingsSemanticConstants.labelColor(isDark),
-                fontSize: AppTypography.iosTitle3,
-                fontWeight: AppTypography.semiBold,
-              ),
-            ),
-            SizedBox(height: AppSpacing.intraGroupSm),
-            Text(
-              ContentText.blockedUsersEmptySubtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.iosSecondaryLabel(context),
-                fontSize: AppTypography.iosSubheadline,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

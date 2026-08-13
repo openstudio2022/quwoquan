@@ -1,3 +1,4 @@
+// readiness_case: recent_search_lifecycle_app_uat
 // spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md#gwt-001
 /// Patrol UAT：最近搜索通过 production UI 完成写入、回读、删除与清空。
 ///

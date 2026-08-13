@@ -434,6 +434,18 @@ class AppColors {
   static Color iosOpaqueSeparator(BuildContext context) =>
       CupertinoDynamicColor.resolve(CupertinoColors.opaqueSeparator, context);
 
+  /// 卡片描边色。
+  ///
+  /// 深色下描边需要明显更高的不透明度才看得见，浅色下同样的值又会显得脏。这个
+  /// 明暗差本身是设计语义，不是调用点的临时判断，所以收在这里；页面直接写
+  /// `isDark ? 0.24 : 0.08` 会让同一条描边在四个地方各自演化。
+  static Color iosCardBorder(BuildContext context) => iosSeparator(
+    context,
+  ).withValues(alpha: _isDarkMode(context) ? 0.24 : 0.08);
+
+  static bool _isDarkMode(BuildContext context) =>
+      CupertinoTheme.of(context).brightness == Brightness.dark;
+
   static Color iosLabel(BuildContext context) =>
       CupertinoDynamicColor.resolve(CupertinoColors.label, context);
 
@@ -478,6 +490,28 @@ class AppColors {
   }
 
   static Color errorBorder(BuildContext context) => errorForeground(context);
+
+  /// 次级说明文字的无障碍达标变体（WCAG AA 正文 4.5:1）。
+  ///
+  /// 系统 `secondaryLabel` 在浅色底实测约 3.4:1，不满足正文对比度；本 token
+  /// 浅色用 iOS systemGray 实色（白底约 6.3:1、系统灰底约 5.7:1），深色沿用
+  /// 系统 secondaryLabel（深底对比充足）。空态副标题等正文级次级说明使用本
+  /// token，装饰性/大字号场景仍可用 [iosSecondaryLabel]。
+  static Color secondaryLabelAccessible(BuildContext context) =>
+      CupertinoDynamicColor.resolve(
+        CupertinoDynamicColor.withBrightness(
+          color: const Color(0xFF636366),
+          darkColor: CupertinoColors.secondaryLabel.darkColor,
+        ),
+        context,
+      );
+
+  /// 深色沉浸面（视频书、媒体查看器、通话等恒深底）上的前景色。
+  ///
+  /// 双模式恒为白系——沉浸面不随系统主题反色，但前景必须经本 token 声明
+  /// 语义，禁止在沉浸失败面/等待指示上裸写 white 固定色。层级差异由调用方
+  /// 以 `withValues(alpha:)` 表达。
+  static const Color immersiveForeground = Colors.white;
 
   static Color iosTintedFill(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
@@ -799,6 +833,22 @@ class AppColorsFunctional {
       /// 创作页媒体格按压/遮罩基色（深色模式白、浅色模式黑，再叠 alpha）
       case ColorType.createMediaOverlayBase:
         return isDark ? AppColors.white : AppColors.black;
+
+      /// 聊天会话（含私助会话）主题化表面：浅色沿用聊天专用常量，深色映射
+      /// 到系统深色面。incoming 气泡深色下必须用 elevated 深面，禁止白底
+      /// 浅字不可读组合。
+      case ColorType.chatListBackground:
+        return isDark
+            ? getColor(isDark, ColorType.backgroundPrimary)
+            : AppColors.chatBackground;
+      case ColorType.chatBubbleIncoming:
+        return isDark
+            ? AppColors.iosGroupedSurfaceDark
+            : AppColors.chatBubbleIncoming;
+      case ColorType.chatToolbarBackground:
+        return isDark
+            ? getColor(isDark, ColorType.backgroundPrimary)
+            : AppColors.chatToolbarBackground;
     }
   }
 
@@ -887,4 +937,13 @@ enum ColorType {
 
   /// 创作流媒体 tile 遮罩基色
   createMediaOverlayBase,
+
+  /// 聊天会话列表区背景（浅色聊天灰 / 深色系统底）
+  chatListBackground,
+
+  /// 聊天 incoming 气泡面（浅色白 / 深色 elevated 面）
+  chatBubbleIncoming,
+
+  /// 聊天输入工具栏背景
+  chatToolbarBackground,
 }

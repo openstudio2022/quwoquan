@@ -28,6 +28,12 @@ class AppMessageNavigationTarget {
         AppRoutePaths.homepageDetail(id: targetId),
       );
     }
+    // 行动类通知（创作者促成等）：回链 Gathering 公开详情。
+    if (targetType == 'gathering' && targetId.isNotEmpty) {
+      return AppMessageNavigationTarget._(
+        AppRoutePaths.gatheringDetail(id: targetId),
+      );
+    }
     if (routeId == 'myIntersections' ||
         routePath == AppRoutePaths.myIntersectionsPathTemplate ||
         targetId == 'myIntersections') {

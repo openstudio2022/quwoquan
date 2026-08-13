@@ -21,7 +21,8 @@
 
 ### Out of Scope
 
-- 消除笔/透视校正/涂鸦/贴纸/美颜（M3 规划）。
+- 消除笔/涂鸦/贴纸/美颜（M3 规划）。透视校正已升格为现行能力，见 REQ-005
+  与 GWT-008。
 - FilterCatalogRelease 云目录与 MediaAsset 图片 variants（独立 M2 Story）。
 - EditRecipe/FilterUsageFact/FilterUsageStatsView 上云与圈子交集（独立 M3 Story）。
 - 媒体上传/发布链路（归属 post-create-update）。
@@ -52,7 +53,25 @@
 ### REQ-005 所有可见编辑工具必须产生真实像素结果
 
 - 所有对用户可见的编辑工具必须产生真实像素结果，禁止占位面板或确认后无效果的空壳工具。
-- 唯一像素真相源 `ImageEditorExportEngine`：解码（`decodeConstrained`，长边上限 4096 防 OOM；预览降采样 1440）、裁剪、旋转/翻转、矩阵应用、局部径向锚点、曲线 LUT、马赛克化与笔画合成、文字合成、PNG/JPEG 编码。预览与导出共用同一几何/参数，禁止第二坐标链或把局部调整退化为全图平均矩阵。
+- 唯一像素真相源 `ImageEditorExportEngine`：解码（`decodeConstrained`，长边上限 4096 防 OOM；预览降采样 1440）、裁剪、旋转/翻转、矩阵应用、局部径向锚点、曲线 LUT、HSL 分带（`applyHslBands`）、马赛克化与笔画合成、文字合成、PNG/JPEG 编码。预览与导出共用同一几何/参数，禁止第二坐标链或把局部调整退化为全图平均矩阵。
+- HSL 八通道必须是真实分色相带算法：逐像素 RGB↔HSL，按色相带（±10° 平滑过渡）
+  与饱和度门控（灰阶像素不参与）选择性调节 hue/saturation/luminance；禁止把
+  各通道取平均后进全局矩阵冒充分带。编辑会话预览用降采样 CPU 同算法渲染，
+  确认烘焙与预览不得跳变。
+- 整体面板的锐化/纹理/结构必须是 luma 通道 unsharp mask，采用分离 box blur 与
+  三档半径；高光/阴影必须按亮度分区加权调节；颗粒必须是确定性 hash 噪声层，三者
+  同走 `applyDetailAdjustmentsToRgbaPixels`。禁止折算为对比度/亮度矩阵系数冒充。
+- 局部径向锚点必须走真算法管线（`applyLocalAdjustmentsToRgbaPixels`）：每锚点
+  纯色彩矩阵与细节类逐像素调节按径向权重混合回原图；CPU 权重与预览
+  ShaderMask 共用同一分段渐变（`kLocalRadialStops`），编辑会话预览由 CPU
+  同管线渲染，确认烘焙不跳变。
+- 自然饱和度（vibrance）必须逐像素按当前饱和度反比施加增益：低饱和像素提升多、
+  已饱和像素受保护不削顶、肤色带（hue 15°–50°）衰减、灰阶不动；禁止折算为
+  全局饱和度矩阵系数。降噪必须是亮度边缘引导的保边平滑：平坦区向模糊值收敛
+  去噪、边缘权重衰减保细节，RGB 三通道同权重抑制色噪。
+- 透视校正必须由 `PerspectiveGeometry` 作为唯一几何真相源：预览 Transform 与
+  导出烘焙共用同一 Matrix4 透视核与填充缩放（二分内接测试），禁止预览/导出
+  各自构造矩阵形成第二坐标链。
 
 <a id="req-006"></a>
 ### REQ-006 真实 FilterCatalog 读取与发布职责交接
@@ -82,7 +101,7 @@
 - GIVEN 用户从图片选择器/相机/创作页进入图片编辑器
 - WHEN 用户遍历底部工具栏与专业工具箱的全部入口并逐一确认
 - THEN 底部工具栏为滤镜/裁剪/旋转/专业工具/文字/马赛克 6 项；不存在相框入口。
-- THEN 专业工具箱为调整图片/局部/HSL/黑白色阶/曲线/白平衡 6 项；不存在透视/修复/色调对比度/魅力光晕占位项。
+- THEN 专业工具箱为调整图片/局部/HSL/黑白色阶/曲线/白平衡/透视 7 项；不存在修复/色调对比度/魅力光晕占位项。
 - THEN 任何面板不出现「操作模版或内容」「即将支持」类占位文案。
 - THEN 每个工具确认后当前图片文件被真实烘焙（文件路径变更且像素变化）。
 
@@ -120,6 +139,35 @@
 - AND 无修改时直接退出。
 - THEN 顶栏「完成」提交编辑结果并上报 submit 埋点。
 
+<a id="gwt-007"></a>
+### GWT-007 细节/分区/颗粒真算法
+
+- GIVEN 一张含边缘与明暗分区的图片进入专业工具整体面板。
+- WHEN 用户调节锐化/纹理/结构、高光/阴影或颗粒并确认烘焙。
+- THEN 锐化以 unsharp mask 增强边缘对比，远离边缘的平坦区不被全局改变。
+- THEN 高光调节只作用亮部像素、阴影调节只作用暗部像素，越区像素逐字节不变。
+- THEN 颗粒产生真实噪声方差且同 seed 逐字节可复现；预览与烘焙同一管线不跳变。
+
+<a id="gwt-006"></a>
+### GWT-006 HSL 分色相带真算法
+
+- GIVEN 一张含多个色相区域的图片进入专业工具 HSL 面板。
+- WHEN 用户只调节某一个色相通道（如橙色饱和度）并确认烘焙。
+- THEN 仅该色相带（含 ±10° 平滑过渡）内的像素被调节，非目标带像素逐字节不变。
+- THEN 灰阶像素（低饱和度）不被任何通道调节。
+- THEN 色相带跨 0°（红带 345°–15°）时环绕两侧均生效。
+
+<a id="gwt-008"></a>
+### GWT-008 透视校正预览烘焙同源
+
+- GIVEN 用户进入专业工具箱透视面板。
+- WHEN 用户调节水平/垂直透视轴（±30°）并确认烘焙。
+- THEN 预览 Transform 与导出烘焙共用 `PerspectiveGeometry` 的同一矩阵构造与
+  填充缩放，同参数下角点投影一致，禁止第二坐标链。
+- THEN 水平透视使左右边缘沿深度方向产生对称梯形位移，垂直透视同理作用上下
+  边缘；填充缩放保证变换后画面完整覆盖原范围框（无露底）。
+- THEN 确认后入撤销栈；取消恢复面板打开前的参数。
+
 <a id="gwt-005"></a>
 ### GWT-005 production Remote FilterCatalog 到编辑结果交接
 
@@ -145,3 +193,12 @@
 - 准出影响：`block`
 - 影响或价值：Data/content media sourceDigest 与发布物当前仍冻结，本场景保持 `WAIT_CONTENT`；尚缺绑定同一候选的 active FilterCatalog production Remote readback、真实创作交接以及 Android/iPhone 双物理设备结果，现有像素 local_contract、Widget 或 App Remote 代码不得替代。
 - 完成判定：`GWT-005` 的每条结果均由职责匹配的 production user_acceptance runner 直接 `spec_ref`，且 Android 与 iPhone 物理设备 `ReadinessResultBundle` 绑定同一 commit、ContractGraph、candidate、environment 与真实 Provider 并全部为 passed。
+
+<a id="open-002"></a>
+### OPEN-002 细节管线预览烘焙一致与透视撤销取消缺测试
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 `GWT-007` 的锐化、分区、颗粒三段真算法与 `GWT-008` 的同源矩阵、梯形位移、填充缩放均已有像素级断言；仍缺细节管线「预览与烘焙同一管线不跳变」以及透视「确认入撤销栈、取消恢复面板打开前参数」的测试证据。
+- 完成判定：`GWT-007` 的 `gwt-007.t4` 与 `GWT-008` 的 `gwt-008.t4`、`gwt-008.t5` 各自被真实测试 `spec_ref` 绑定。

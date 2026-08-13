@@ -3,25 +3,32 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_announcement_page.dart';
 
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_seed_refs.dart';
 
-List<Override> _overrides(ChatRepository repo) => [
-  chatRepositoryCompositionProvider.overrideWithValue(repo),
+List<Override> _overrides({
+  ChatMemberRepository? member,
+  ChatGroupAdminRepository? groupAdmin,
+}) => [
+  ...chatTestRepositoryOverrides(member: member, groupAdmin: groupAdmin),
   currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
 ];
 
-Widget _scopedApp({ChatRepository? mock}) {
-  final repo = mock ?? MockChatRepository();
+Widget _scopedApp({
+  ChatMemberRepository? member,
+  ChatGroupAdminRepository? groupAdmin,
+}) {
   return ProviderScope(
-    overrides: _overrides(repo),
+    overrides: _overrides(member: member, groupAdmin: groupAdmin),
     child: MaterialApp.router(
       routerConfig: GoRouter(
         initialLocation: '/chat/fixture_conv_group/announcement',
@@ -64,7 +71,7 @@ void main() {
 
     testWidgets('发布公告经确认后调用 UpdateAnnouncement 契约', (tester) async {
       final repo = _RecordingAnnouncementRepository();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(_scopedApp(groupAdmin: repo));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -92,7 +99,7 @@ void main() {
 
     testWidgets('普通成员只读呈现且不可见发布按钮', (tester) async {
       await tester.pumpWidget(
-        _scopedApp(mock: _MemberRoleAnnouncementRepository()),
+        _scopedApp(member: _MemberRoleAnnouncementRepository()),
       );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
@@ -110,7 +117,7 @@ void main() {
 
     testWidgets('取消确认不调用发布契约', (tester) async {
       final repo = _RecordingAnnouncementRepository();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(_scopedApp(groupAdmin: repo));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -130,7 +137,8 @@ void main() {
   });
 }
 
-class _RecordingAnnouncementRepository extends MockChatRepository {
+class _RecordingAnnouncementRepository extends Fake
+    implements ChatGroupAdminRepository {
   final List<(String, String)> published = <(String, String)>[];
 
   @override
@@ -140,23 +148,53 @@ class _RecordingAnnouncementRepository extends MockChatRepository {
     String? idempotencyKey,
   }) async {
     published.add((conversationId, announcement));
-    await super.updateAnnouncement(
-      conversationId,
-      announcement,
-      idempotencyKey: idempotencyKey,
-    );
   }
+
+  /// 成员角色加载与公告水合都经同一 admin repository；Fake 缺任一读面都会
+  /// 让页面落入错误/只读分支，编辑器不渲染。
+  @override
+  Future<ChatGroupSettingsViewData> getGroupSettings(
+    String conversationId,
+  ) async => const ChatGroupSettingsViewData(
+    nameEditableByAdminOnly: false,
+    conversationType: 'group',
+    circleId: '',
+    circleGroupId: '',
+  );
+
+  @override
+  Future<GroupHome> getGroupHome(String conversationId) async => GroupHome(
+    conversationId: conversationId,
+    title: '产品共创群',
+    avatarUrl: '',
+    groupAvatarVersion: 0,
+    circleId: '',
+    circleGroupId: '',
+    gatheringId: '',
+    entityId: '',
+    sourceEntityTitle: '',
+    sourceCircleTitle: '',
+    memberCount: 3,
+    announcement: '',
+    capabilities: const <String>[],
+    originType: 'group',
+    accessMode: ConversationAccessMode.active,
+    postingPolicy: ConversationPostingPolicy.memberChat,
+    canManageMembers: true,
+    canDissolve: false,
+  );
 }
 
 /// 当前用户为普通成员：公告只读。
-class _MemberRoleAnnouncementRepository extends MockChatRepository {
+class _MemberRoleAnnouncementRepository extends Fake
+    implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     return [
       ConversationMemberListRow(

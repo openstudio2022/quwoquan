@@ -19,7 +19,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show AssistantUsePolicy, ContentPostProjection, FeedObjectCard;
 
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 
@@ -79,8 +79,9 @@ class _ObjectCardsFeedMapNotifier extends DiscoveryFeedMapNotifier {
 /// 内层传输故意直接抛错，把「意外发起真实下载」变成显式测试失败。
 CloudHttpClient _unreachableDataPlaneClient() => CloudHttpClient(
   client: MockClient(
-    (request) async =>
-        throw StateError('MediaDownloadCache double must not perform network IO'),
+    (request) async => throw StateError(
+      'MediaDownloadCache double must not perform network IO',
+    ),
   ),
 );
 
@@ -94,7 +95,7 @@ class _NoopMediaDownloadCache extends MediaDownloadCache {
 Widget _buildFeed(List<ContentPostViewData> posts, List<FeedObjectCard> cards) {
   return ProviderScope(
     overrides: [
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       discoveryFeedMapProvider.overrideWith(
         () => _ObjectCardsFeedMapNotifier(posts, cards),
       ),

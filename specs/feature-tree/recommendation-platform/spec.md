@@ -101,8 +101,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前 `recommendation.ranked_recommendation_window` 的窗口创建与稳定续页已具备打真实 redis-server 与真实 mongod 副本集的端云集成证据并转为 ready，剩余缺口只有缺用户验收证据与缺 alpha/beta/gamma/prod 四环境证据两项。
-- 这两个 operation 的可见性为 internal 且 principal 为 service，由 content-service 消费而端侧没有直接页面，因此用户验收锚点只能挂在 content feed 旅程上。
-- 该对象唯一那条 HTTP 集成测试仍使用进程内替身，按三层测试的依赖真实度口径替换为真实传输前不得计为端云集成证据。
-- 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效
-- 依赖：content feed 旅程的用户验收锚点与同一候选四环境证据产物。
+- 影响或价值：当前 `recommendation.ranked_recommendation_window` 的窗口创建与稳定续页已具备打真实 redis-server 与真实 mongod 副本集的端云集成证据并转为 ready，剩余缺口只有缺用户验收执行证据与缺 alpha/beta/gamma/prod 四环境证据两项。
+- 这两个 operation 的可见性为 internal 且 principal 为 service，由 content-service 消费而端侧没有直接页面，因此用户验收锚点只能挂在 content feed 旅程上。锚点已落地：`ranked_window_feed_journey_probe_ops_env`（`quwoquan_ops/tests/acceptance/user_acceptance/service_ops/recommendation-service/smoke/run_ranked_window_feed_journey_probe.py`，经 `GET /content/feed?channelId=recommend` 验证首刷创建、稳定续页与 previousCursor 回翻），尚缺 gamma 真实执行 CaseResult。
+- 该对象的 HTTP 集成测试已从进程内 ASGI 替身替换为真实 uvicorn 服务器 + 真实网络传输（`test_ranked_window_runtime__api_integration_test.py`），按三层测试的依赖真实度口径可计为端云集成证据。
+- 完成判定：`DOM-001` 的 4 条 THEN 组全部具备子句级 `spec_ref`（`dom-001.t1..t4`）绑定的真实测试证据，且用户验收与四环境证据来自 `ranked_window_feed_journey_probe_ops_env` 同一候选的执行产物。
+- 依赖：`ranked_window_feed_journey_probe_ops_env` 的 gamma 执行证据与同一候选四环境证据产物。

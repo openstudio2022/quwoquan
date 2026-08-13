@@ -2,7 +2,7 @@ part of 'video_editor_page.dart';
 
 class _VideoEditorPageState extends ConsumerState<VideoEditorPage> {
   VideoPlayerController? _controller;
-  late final IosVideoEditingService _editingService;
+  late final NativeVideoEditingService _editingService;
 
   Timer? _frameReloadDebounce;
   Timer? _previewSeekDebounce;
@@ -38,7 +38,7 @@ class _VideoEditorPageState extends ConsumerState<VideoEditorPage> {
   @override
   void initState() {
     super.initState();
-    _editingService = widget.editingService ?? IosVideoEditingService();
+    _editingService = widget.editingService ?? NativeVideoEditingService();
     _selectedCoverPath = widget.initialThumbnailPath.trim();
     _bootstrap();
   }
@@ -320,6 +320,7 @@ class _VideoEditorPageState extends ConsumerState<VideoEditorPage> {
           : widget.initialVideoPath.trim();
       var nextVideoPath = currentVideoPath;
       var nextCoverPath = _selectedCoverPath.trim();
+      var nextDurationMs = _durationMs;
       if (_hasMediaEdits) {
         final export = await _editingService.exportEdit(
           sourcePath: widget.sourceVideoPath,
@@ -334,6 +335,13 @@ class _VideoEditorPageState extends ConsumerState<VideoEditorPage> {
         if (export.coverPath.trim().isNotEmpty) {
           nextCoverPath = export.coverPath.trim();
         }
+        // 裁切后必须回写导出文件的真实时长，不得沿用原片时长。
+        nextDurationMs = resolveEditedVideoDurationMs(
+          exportDurationMs: export.durationMs,
+          trimStartMs: _trimStartMs,
+          trimEndMs: _trimEndMs,
+          fallbackDurationMs: _durationMs,
+        );
       }
       if (!mounted) {
         return;
@@ -344,7 +352,7 @@ class _VideoEditorPageState extends ConsumerState<VideoEditorPage> {
           videoPath: nextVideoPath,
           originalVideoPath: widget.sourceVideoPath,
           thumbnailPath: nextCoverPath,
-          durationMs: _durationMs,
+          durationMs: nextDurationMs,
           trimStartMs: _trimStartMs.round(),
           trimEndMs: _trimEndMs.round(),
           coverTimeMs: _coverTimeMs.round(),

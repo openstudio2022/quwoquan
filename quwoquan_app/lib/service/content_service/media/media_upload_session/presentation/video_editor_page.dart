@@ -7,7 +7,7 @@ import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constan
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/local_video_file_readiness.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/local_video_playability.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/media_creation_launch_models.dart';
-import 'package:quwoquan_app/runtime/platform/ios_video_editing_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/native_video_editing_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/local_image_provider.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
@@ -26,6 +26,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 part 'video_editor_page_state.dart';
 part 'video_editor_page_state_cover.dart';
+
+/// 导出后回写的视频时长：优先导出文件真实时长，缺失时按 trim 区间推导，
+/// 两者都不可用才回退原片时长。禁止裁切后仍回写原片时长（元数据失真）。
+int resolveEditedVideoDurationMs({
+  required int exportDurationMs,
+  required double trimStartMs,
+  required double trimEndMs,
+  required int fallbackDurationMs,
+}) {
+  if (exportDurationMs > 0) {
+    return exportDurationMs;
+  }
+  if (trimEndMs > trimStartMs) {
+    return (trimEndMs - trimStartMs).round();
+  }
+  return fallbackDurationMs;
+}
 
 /// 本地视频剪辑；持久草稿在父链 `CreateEditorState`（`ContentPublishDraftComposite`）。
 /// 剪辑结果回写草稿后，发布确认页的帖子元数据预览与 `publish_draft_projection_bridge`
@@ -53,7 +70,7 @@ class VideoEditorPage extends ConsumerStatefulWidget {
   final int initialTrimEndMs;
   final int initialCoverTimeMs;
   final bool initialMuted;
-  final IosVideoEditingService? editingService;
+  final NativeVideoEditingService? editingService;
   final LocalVideoFileReadyProbe? videoFileReadyProbe;
 
   @override

@@ -1,7 +1,12 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-001.t4
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart' show CreationText;
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/create_page_remote_helpers.dart';
+import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
+import 'package:quwoquan_app/service/content_service/content/post/domain/generated/content_publication_policy.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/publish_settings_models.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/create_publish_result_sheet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// L1a 契约测试：创作入口发布 payload 与 content/content/post metadata 对齐
@@ -315,6 +320,241 @@ void main() {
         ),
         throwsArgumentError,
       );
+    });
+  });
+
+  group('PublishPayload — 显式形态确认（GWT-001）', () {
+    test('用户确认 micro 优先于长文建议，提交阶段不再静默推导', () {
+      final state = CreateEditorState.initial().copyWith(
+        body: '这是一段足够长的正文内容，用来触发系统的文章形态建议。' * 8,
+        settings: const PublishSettings(textContentType: 'micro'),
+      );
+      // 系统建议是 article，但用户确认了 micro。
+      expect(shouldPublishAsArticleForPayload(state), isTrue);
+      expect(resolveTextPublishAsArticle(state), isFalse);
+      final payload = buildPostPublicationPayloadMap(state);
+      expect(payload['contentType'], 'micro');
+    });
+
+    test('用户确认 article 优先于短文建议', () {
+      final state = CreateEditorState.initial().copyWith(
+        body: '短句',
+        settings: const PublishSettings(textContentType: 'article'),
+      );
+      expect(shouldPublishAsArticleForPayload(state), isFalse);
+      expect(resolveTextPublishAsArticle(state), isTrue);
+      final payload = buildPostPublicationPayloadMap(state);
+      expect(payload['contentType'], 'article');
+    });
+
+    test('textContentType 只进草稿持久化，不进发布 payload 字段', () {
+      const settings = PublishSettings(textContentType: 'micro');
+      expect(
+        settings.toPayloadFields().containsKey('textContentType'),
+        isFalse,
+      );
+      expect(PublishSettings.fromMap(settings.toMap()).textContentType, 'micro');
+      // 非法草稿值不得被迁移成确认态。
+      expect(
+        PublishSettings.fromMap(<String, dynamic>{
+          'textContentType': 'video',
+        }).textContentType,
+        isEmpty,
+      );
+    });
+  });
+
+  // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-002.t1
+  // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-002.t3
+  group('PublishPolicy — 长度合同端云同源（GWT-002）', () {
+    test('编辑器消费的上限与建议阈值均来自 codegen 契约常量，无第二份边界', () {
+      // codegen 值与 publication_policy.yaml 声明一致（云侧 Go 常量同源生成）。
+      expect(ContentPublicationPolicy.titleMaxRunes, 80);
+      expect(ContentPublicationPolicy.microBodyMaxRunes, 5000);
+      expect(ContentPublicationPolicy.articleMarkdownMaxRunes, 20000);
+      expect(ContentPublicationPolicy.articleBodyMinRunes, 140);
+      expect(ContentPublicationPolicy.articleParagraphMinCount, 2);
+      // 契约声明「最终形态由用户确认」，端侧确认页行为以此为据（GWT-001）。
+      expect(ContentPublicationPolicy.userConfirmationRequired, isTrue);
+    });
+
+    test('形态建议在契约阈值边界上翻转', () {
+      final belowThreshold = CreateEditorState.initial().copyWith(
+        body: '短' * (ContentPublicationPolicy.articleBodyMinRunes - 1),
+      );
+      expect(shouldPublishAsArticleForPayload(belowThreshold), isFalse);
+
+      final atThreshold = CreateEditorState.initial().copyWith(
+        body: '长' * ContentPublicationPolicy.articleBodyMinRunes,
+      );
+      expect(shouldPublishAsArticleForPayload(atThreshold), isTrue);
+
+      final titled = CreateEditorState.initial().copyWith(
+        title: '有标题即建议文章',
+        body: '短',
+      );
+      expect(shouldPublishAsArticleForPayload(titled), isTrue);
+    });
+  });
+
+  // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-006.t1
+  // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-006.t2
+  // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-006.t3
+  group('PublishPayload — semantic mention 唯一 grounding 通道（GWT-006）', () {
+    test('picker 选择项写入 semanticMentions，published 状态与 targetRef 同源', () {
+      final state = CreateEditorState.initial().copyWith(
+        body: '去黄龙看五彩池',
+        settings: const PublishSettings(
+          entityRefs: <String>['entity:sight:huanglong'],
+          entityNames: <String>['黄龙'],
+          tagRefs: <String>['Topic/地理/行政区/四川省'],
+          tagLabels: <String>['四川'],
+        ),
+      );
+      final mentions = semanticMentionsForPayload(state);
+      expect(mentions, hasLength(2));
+      final entityMention = mentions.singleWhere((m) => m.kind == 'entity');
+      expect(entityMention.targetRef, 'entity:sight:huanglong');
+      expect(entityMention.surface, '黄龙');
+      expect(entityMention.status, 'published');
+      expect(entityMention.location, 'publicationSettings');
+      final tagMention = mentions.singleWhere((m) => m.kind == 'tag');
+      expect(tagMention.targetRef, 'Topic/地理/行政区/四川省');
+      expect(tagMention.surface, '四川');
+
+      final payload = buildPostPublicationPayloadMap(state);
+      expect(payload['semanticMentions'], hasLength(2));
+    });
+
+    test('无选择时 payload 不含 semanticMentions 键，不合成空 grounding', () {
+      final state = CreateEditorState.initial().copyWith(body: '纯文字无任何提及');
+      expect(semanticMentionsForPayload(state), isEmpty);
+      expect(
+        buildPostPublicationPayloadMap(
+          state,
+        ).containsKey('semanticMentions'),
+        isFalse,
+      );
+    });
+
+    test('candidate 与畸形 targetRef 被防御性过滤，自由字符串不得伪装事实标签', () {
+      final state = CreateEditorState.initial().copyWith(
+        body: '包含非法提及的正文',
+        settings: const PublishSettings(
+          entityRefs: <String>[
+            'entity:candidate:pending-1',
+            'homepage_valid_1',
+          ],
+          entityNames: <String>['候选实体', '有效主页'],
+          tagRefs: <String>['自由字符串', 'Topic/摄影/风光'],
+          tagLabels: <String>['乱写', '风光'],
+        ),
+      );
+      final mentions = semanticMentionsForPayload(state);
+      // candidate ref 与不满足层级口径的自由字符串均不得进入 grounding。
+      expect(
+        mentions.map((m) => m.targetRef),
+        unorderedEquals(<String>['homepage_valid_1', 'Topic/摄影/风光']),
+      );
+      expect(isSemanticTargetRefValid('tag', '自由字符串'), isFalse);
+      expect(
+        isSemanticTargetRefValid('entity', 'entity:candidate:x'),
+        isFalse,
+      );
+    });
+  });
+
+  group('PublishResult — 分发去向摘要（GWT-005）', () {
+    test('摘要只陈述真实选择的去向，未选择的维度不出现', () {
+      const bare = PublishSettings();
+      expect(
+        buildPublishDestinationSummary(bare),
+        CreationText.publishDestinationPublic,
+      );
+
+      const full = PublishSettings(
+        circleNames: <String>['川西摄影'],
+        locationName: '黄龙五彩池',
+        tagLabels: <String>['秋色'],
+        gatheringTitle: '一起去黄龙',
+      );
+      final summary = buildPublishDestinationSummary(full);
+      expect(summary, contains(CreationText.publishDestinationPublic));
+      expect(summary, contains('川西摄影'));
+      expect(summary, contains('黄龙五彩池'));
+      expect(summary, contains('秋色'));
+      expect(summary, contains('一起去黄龙'));
+
+      const private = PublishSettings(isPublic: false);
+      expect(
+        buildPublishDestinationSummary(private),
+        CreationText.publishDestinationPrivate,
+      );
+    });
+  });
+
+  group('PublishPayload — 共同经历回流引用（gatheringRef）', () {
+    test('保留关联时 gatheringRef 进入 payload 与发布命令 wire', () {
+      const settings = PublishSettings(
+        gatheringRef: 'gathering-1',
+        gatheringTitle: '一起去黄龙',
+      );
+      final payload = <String, Object?>{
+        'contentType': 'image',
+        ...settings.toPayloadFields(),
+      };
+      expect(payload['gatheringRef'], 'gathering-1');
+      // 展示用标题不进 payload。
+      expect(payload.containsKey('gatheringTitle'), isFalse);
+
+      final command = submitContentPostPublicationCommandFromPreparedPayload(
+        payload,
+        localDraftId: 'draft-gathering-recap',
+        mediaAssetIds: const <String>['asset-image'],
+      );
+      final body = Map<String, Object?>.from(
+        encodeContentPostSubmitPostPublicationGeneratedRequest(command).body!
+            as Map,
+      );
+      expect(command.gatheringRef, 'gathering-1');
+      expect(body['gatheringRef'], 'gathering-1');
+      expect(
+        SubmitContentPostPublicationCommand.fromWire(body).gatheringRef,
+        'gathering-1',
+      );
+    });
+
+    test('移除关联后 payload 与发布命令都不携带 gatheringRef', () {
+      const anchored = PublishSettings(
+        gatheringRef: 'gathering-1',
+        gatheringTitle: '一起去黄龙',
+      );
+      final cleared = anchored.copyWith(clearGatheringRef: true);
+      expect(cleared.gatheringRef, isEmpty);
+      expect(cleared.gatheringTitle, isEmpty);
+
+      final payload = <String, Object?>{
+        'contentType': 'image',
+        ...cleared.toPayloadFields(),
+      };
+      expect(payload.containsKey('gatheringRef'), isFalse);
+
+      final command = submitContentPostPublicationCommandFromPreparedPayload(
+        payload,
+        localDraftId: 'draft-gathering-cleared',
+        mediaAssetIds: const <String>[],
+      );
+      expect(command.gatheringRef, isNull);
+    });
+
+    test('gatheringRef 在草稿 map 往返中保持', () {
+      const settings = PublishSettings(
+        gatheringRef: 'gathering-1',
+        gatheringTitle: '一起去黄龙',
+      );
+      final restored = PublishSettings.fromMap(settings.toMap());
+      expect(restored.gatheringRef, 'gathering-1');
+      expect(restored.gatheringTitle, '一起去黄龙');
     });
   });
 

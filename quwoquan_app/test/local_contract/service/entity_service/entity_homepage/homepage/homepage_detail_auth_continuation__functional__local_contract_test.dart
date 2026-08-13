@@ -7,10 +7,10 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
-import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
@@ -27,10 +27,7 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
     show currentUserIdProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
-    show
-        activePersonaContextProvider,
-        chatConversationRepositoryProvider,
-        intersectionRepositoryProvider;
+    show activePersonaContextProvider, intersectionRepositoryProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
     show homepageFacetSetProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
@@ -193,6 +190,13 @@ void main() {
     expect(container.read(authContinuationProvider), isNull);
     await tester.pump();
     expect(reporter.events, hasLength(1), reason: '想去续接必须 one-shot');
+    // 想去即时反馈（诚实态 toast）自动消隐计时器走完，避免尾部 pending timer。
+    expect(
+      find.text(ObjectHomepageText.wishlistAddedFeedback),
+      findsOneWidget,
+      reason: '无交集时只确认动作本身，不伪造同行者',
+    );
+    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('登录成功后切换到口碑子页并续接评价编辑器', (tester) async {
@@ -253,8 +257,8 @@ void main() {
     expect(container.read(authContinuationProvider), isNull);
   });
 
-  testWidgets('登录成功后续接已认领实体主页正式私信', (tester) async {
-    final conversations = _RecordingConversationRepository();
+  testWidgets('在这里发起以实体为来源引用进入行动创建', (tester) async {
+    GatheringCreateNavigationRequest? captured;
     final router = GoRouter(
       initialLocation: AppRoutePaths.homepageDetail(id: _homepageId),
       routes: <RouteBase>[
@@ -267,11 +271,81 @@ void main() {
               HomepageDetailPage(homepageId: state.pathParameters['id'] ?? ''),
         ),
         GoRoute(
-          path: AppRoutePaths.chatDetailPathTemplate.replaceAll('{id}', ':id'),
-          builder: (_, state) => Text(
-            '会话:${state.pathParameters['id']}',
-            textDirection: TextDirection.ltr,
+          path: AppRoutePaths.gatheringCreate,
+          builder: (_, state) {
+            captured = state.extra as GatheringCreateNavigationRequest?;
+            return const Text('CREATE', textDirection: TextDirection.ltr);
+          },
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          ..._homepageShellBoundaryOverrides(),
+          authSessionControllerProvider.overrideWith(
+            _FlippableHomepageSession.new,
           ),
+          homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
+          homepageIntroductionRepositoryProvider.overrideWithValue(
+            const MockHomepageIntroductionRepository(),
+          ),
+          currentUserIdProvider.overrideWithValue(''),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(ObjectHomepageText.entityActionStartGathering),
+      findsOneWidget,
+      reason: '可到访地点类主页提供「在这里发起」（发起不依赖交集存在）',
+    );
+    await tester.tap(find.text(ObjectHomepageText.entityActionStartGathering));
+    await tester.pumpAndSettle();
+
+    expect(find.text('CREATE'), findsOneWidget);
+    expect(captured, isNotNull);
+    expect(captured!.actionKey, 'start_gathering');
+    expect(captured!.sourceRefs, hasLength(1));
+    expect(captured!.sourceRefs.single.objectId, _homepageId);
+    expect(captured!.sourceRefs.single.objectKind, 'homepage');
+    expect(captured!.targetObject.objectId, _homepageId);
+    expect(captured!.targetObject.routeId, 'homepageDetail');
+  });
+
+  testWidgets('私信认领主体进入 owner 主页并携带私信分流意图', (tester) async {
+    // 私信 Owner 不再直建会话：统一进入 owner 主页并由主页既有的
+    // 关系能力位分流（canOpen→会话 / canGreet→打招呼），避免绕过
+    // conversation-entry 矩阵撞 greeting_required。
+    String? capturedHandle;
+    UserProfileRouteExtra? capturedExtra;
+    final router = GoRouter(
+      initialLocation: AppRoutePaths.homepageDetail(id: _homepageId),
+      routes: <RouteBase>[
+        GoRoute(
+          path: AppRoutePaths.homepageDetailPathTemplate.replaceAll(
+            '{id}',
+            ':id',
+          ),
+          builder: (_, state) =>
+              HomepageDetailPage(homepageId: state.pathParameters['id'] ?? ''),
+        ),
+        GoRoute(
+          path: AppRoutePaths.userProfilePathTemplate.replaceAll(
+            '{userHandle}',
+            ':userHandle',
+          ),
+          builder: (_, state) {
+            capturedHandle = state.pathParameters['userHandle'];
+            capturedExtra = state.extra as UserProfileRouteExtra?;
+            return const Text(
+              'OWNER_PROFILE',
+              textDirection: TextDirection.ltr,
+            );
+          },
         ),
       ],
     );
@@ -297,7 +371,6 @@ void main() {
           homepageIntroductionRepositoryProvider.overrideWithValue(
             const MockHomepageIntroductionRepository(),
           ),
-          chatConversationRepositoryProvider.overrideWithValue(conversations),
           currentUserIdProvider.overrideWithValue(''),
         ],
         child: MaterialApp.router(routerConfig: router),
@@ -305,27 +378,14 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text(ProfileText.profileDirectMessage), findsOneWidget);
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(HomepageDetailPage)),
-    );
-    container
-        .read(authContinuationProvider.notifier)
-        .set(
-          const OpenHomepageOwnerConversationContinuation(
-            homepageId: _homepageId,
-            ownerPersonaId: 'owner-persona-1',
-          ),
-        );
 
-    (container.read(authSessionControllerProvider.notifier)
-            as _FlippableHomepageSession)
-        .loginNow();
+    await tester.tap(find.text(ProfileText.profileDirectMessage));
     await tester.pumpAndSettle();
 
-    expect(conversations.createCalls, 1);
-    expect(conversations.lastInitialMemberIds, <String>['owner-persona-1']);
-    expect(find.text('会话:conversation-homepage-1'), findsOneWidget);
-    expect(container.read(authContinuationProvider), isNull);
+    expect(find.text('OWNER_PROFILE'), findsOneWidget);
+    expect(capturedHandle, 'owner-persona-1');
+    expect(capturedExtra?.safePersonaId, 'owner-persona-1');
+    expect(capturedExtra?.openMessageComposer, isTrue);
   });
 
   testWidgets('游客关闭地点主页想去登录后留在公开详情且清除续接', (tester) async {
@@ -495,27 +555,6 @@ final class _ClaimedHomepageRepository extends MockHomepageRepository {
       claimStatus: 'claimed',
       ownerUserId: 'owner-user-1',
       ownerPersonaId: 'owner-persona-1',
-    );
-  }
-}
-
-final class _RecordingConversationRepository extends Fake
-    implements ChatConversationRepository {
-  int createCalls = 0;
-  List<String>? lastInitialMemberIds;
-
-  @override
-  Future<ChatConversationCreatedViewData> createConversation({
-    required String type,
-    String? title,
-    int? maxGroupSize,
-    List<String>? initialMemberIds,
-    String? idempotencyKey,
-  }) async {
-    createCalls += 1;
-    lastInitialMemberIds = initialMemberIds;
-    return ChatConversationCreatedViewData(
-      conversationId: 'conversation-homepage-1',
     );
   }
 }

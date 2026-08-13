@@ -79,7 +79,16 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     applyConfirmedCounters(postId, commentCount: commentCount);
   }
 
-  void applyConfirmedPosts(Iterable<ContentPostViewData> posts) {
+  /// 以服务端权威投影收敛本地互动态。
+  ///
+  /// - share/comment 计数：无条件采纳权威值。
+  /// - 点赞态：仅当 wire 附着了 viewer 态（`viewerLiked != null`）且该 post
+  ///   没有待同步 like 意图（[pendingLikePostIds]）时 hydrate；null 表示本次
+  ///   响应未附着 viewer 态，不得据此回滚本地状态；本地 pending 意图优先。
+  void applyConfirmedPosts(
+    Iterable<ContentPostViewData> posts, {
+    Set<String> pendingLikePostIds = const <String>{},
+  }) {
     final nextConfirmedShareCounts = Map<String, int>.from(
       state.confirmedShareCounts,
     );
@@ -89,6 +98,8 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
     final nextPendingCommentDeltas = Map<String, int>.from(
       state.pendingCommentDeltas,
     );
+    final nextLiked = Set<String>.from(state.likedPostIds);
+    var likedChanged = false;
     for (final post in posts) {
       if (post.id.trim().isEmpty) {
         continue;
@@ -96,11 +107,19 @@ class PostInteractionStateNotifier extends Notifier<PostInteractionState> {
       nextConfirmedShareCounts[post.id] = post.shareCount;
       nextConfirmedCommentCounts[post.id] = post.commentCount;
       nextPendingCommentDeltas.remove(post.id);
+      final viewerLiked = post.viewerLiked;
+      if (viewerLiked != null && !pendingLikePostIds.contains(post.id)) {
+        final changed = viewerLiked
+            ? nextLiked.add(post.id)
+            : nextLiked.remove(post.id);
+        likedChanged = likedChanged || changed;
+      }
     }
     state = state.copyWith(
       confirmedShareCounts: nextConfirmedShareCounts,
       confirmedCommentCounts: nextConfirmedCommentCounts,
       pendingCommentDeltas: nextPendingCommentDeltas,
+      likedPostIds: likedChanged ? nextLiked : null,
     );
     unawaited(_persistState());
   }

@@ -8,7 +8,7 @@ import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/adapters/remote_realtime_connection_delegate.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/adapters/realtime_config.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/adapters/longpoll_transport.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/adapters/websocket_transport.dart';
 

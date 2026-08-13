@@ -62,12 +62,31 @@ CHECKS: list[tuple[str, re.Pattern[str]]] = [
         re.compile(r"\.width\s*(?:>=|>|<=|<)\s*\d{2,4}(?:\.\d+)?"),
     ),
     (
+        # 裸变量断点（如 `width >= 430` / `maxWidth < 360`）同样是第二套断点；
+        # 必须使用 AppSpacing.* breakpoint token。只匹配屏幕/视口宽度语义变量，
+        # 元素级宽度阶梯（tileWidth 等）不属于断点治理范围。
+        "private_breakpoint_bare",
+        re.compile(
+            r"\b(?:width|maxWidth|minWidth|screenWidth|viewportWidth|"
+            r"availableWidth)\s*(?:>=|>|<=|<)\s*\d{2,4}(?:\.\d+)?\b"
+        ),
+    ),
+    (
         "platform_sdk_import",
         re.compile(
             r"package:(?:livekit_client|flutter_callkit_incoming|video_thumbnail)/"
         ),
     ),
 ]
+
+# 体验分叉检查（R-XP1）：业务层禁止用 AppPlatform 比较做体验分支；
+# 平台标识仅允许装配（runtime/di、runtime/shell/startup）与 observability
+# wire 投影（platformWireName）。
+APP_PLATFORM_COMPARE = re.compile(r"[=!]=\s*AppPlatform\.")
+ASSEMBLY_PREFIXES = (
+    "runtime/di/",
+    "runtime/shell/startup/",
+)
 
 
 def _scan() -> set[tuple[str, str]]:
@@ -80,6 +99,9 @@ def _scan() -> set[tuple[str, str]]:
         for kind, rx in CHECKS:
             if rx.search(text):
                 hits.add((rel, kind))
+        if not any(rel.startswith(p) for p in ASSEMBLY_PREFIXES):
+            if APP_PLATFORM_COMPARE.search(text):
+                hits.add((rel, "app_platform_experience_branch"))
     return hits
 
 

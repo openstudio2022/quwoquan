@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/generated/homepage_ui_config.g.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/generated/homepage_ui_config.g.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/design_system/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/design_system/navigation/tab_navigation.dart';
@@ -30,6 +30,7 @@ import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/design_system/formatters/compact_count_formatter.dart';
 import 'package:quwoquan_app/service/tag_service/tag/tag_node_view/application/public/tag_ref_label.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
@@ -71,6 +72,8 @@ class HomepageDetailShell extends StatefulWidget {
     required this.onOpenIntroduction,
     required this.onOpenRecord,
     required this.onAttach,
+    this.onStartGathering,
+    this.buildRecentGatherings,
     this.onReviewsChanged,
     this.requireReviewAuth,
     this.reviewContinuationResumeToken = 0,
@@ -102,6 +105,14 @@ class HomepageDetailShell extends StatefulWidget {
   final VoidCallback onOpenIntroduction;
   final ValueChanged<HomepageContentPreview> onOpenRecord;
   final ValueChanged<HomepageCanonicalReference> onAttach;
+
+  /// 「在这里发起」：以本实体为来源引用进入 Gathering 创建（persona host）。
+  /// null 表示该主页类型不提供发起入口（非地点类）。
+  final VoidCallback? onStartGathering;
+
+  /// 「近期行动」L0 区块（Circle participant，由 runtime/di 绑定）。
+  /// null 表示不渲染；区块自身独立加载独立降级。
+  final Widget Function({required bool isDark})? buildRecentGatherings;
 
   /// 评价写/改/删成功后回调（宿主刷新评分摘要）。
   final VoidCallback? onReviewsChanged;
@@ -375,10 +386,10 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       return _buildMessageCard(
         context,
         title: ObjectHomepageText.homepageContentSectionTitle,
-        child: _HomepageEmptyState(
+        child: AppEmptyState(
           icon: CupertinoIcons.square_stack_3d_up,
           title: ObjectHomepageText.homepageContentEmptyTitle,
-          description: ObjectHomepageText.homepageContentEmptyDescription,
+          subtitle: ObjectHomepageText.homepageContentEmptyDescription,
         ),
       );
     }
@@ -415,10 +426,10 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
             _buildReviewSection(context)
           else if (filtered.isEmpty)
             ProfileIosSectionCard(
-              child: _HomepageEmptyState(
+              child: AppEmptyState(
                 icon: CupertinoIcons.square_stack_3d_up,
                 title: ObjectHomepageText.homepageContentEmptyTitle,
-                description: ObjectHomepageText.homepageContentEmptyDescription,
+                subtitle: ObjectHomepageText.homepageContentEmptyDescription,
               ),
             )
           else
@@ -446,10 +457,10 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     final homepageId = (widget.detail?.id ?? _reference?.id ?? '').trim();
     if (homepageId.isEmpty) {
       return ProfileIosSectionCard(
-        child: _HomepageEmptyState(
+        child: AppEmptyState(
           icon: CupertinoIcons.star,
           title: ObjectHomepageText.homepageReviewEmptyTitle,
-          description: ObjectHomepageText.homepageReviewEmptyDescription,
+          subtitle: ObjectHomepageText.homepageReviewEmptyDescription,
         ),
       );
     }
@@ -559,10 +570,10 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       return _buildMessageCard(
         context,
         title: sectionTitle,
-        child: _HomepageEmptyState(
+        child: AppEmptyState(
           icon: CupertinoIcons.chat_bubble_2_fill,
           title: ObjectHomepageText.homepageDiscussionEmptyTitle,
-          description: ObjectHomepageText.homepageDiscussionEmptyDescription,
+          subtitle: ObjectHomepageText.homepageDiscussionEmptyDescription,
         ),
       );
     }
@@ -591,11 +602,10 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       return _buildMessageCard(
         context,
         title: ObjectHomepageText.homepageInterestCircleSectionTitle,
-        child: _HomepageEmptyState(
+        child: AppEmptyState(
           icon: CupertinoIcons.person_3_fill,
           title: ObjectHomepageText.homepageInterestCircleEmptyTitle,
-          description:
-              ObjectHomepageText.homepageInterestCircleEmptyDescription,
+          subtitle: ObjectHomepageText.homepageInterestCircleEmptyDescription,
         ),
       );
     }

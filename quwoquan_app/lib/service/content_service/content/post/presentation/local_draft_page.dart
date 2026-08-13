@@ -6,7 +6,11 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_presenter.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
@@ -91,9 +95,17 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
           data: (snapshot) =>
               _buildLoadedState(context, snapshot, publicationIntents),
           loading: () => AppRequestFeedback.section(),
-          error: (error, _) => _LocalDraftEmptyState(
-            title: MediaText.noDraft,
-            subtitle: CreationText.localDraftEmptySubtitle,
+          error: (error, _) => AppSectionErrorState(
+            semantic: ensureRetryUiErrorSemantic(
+              runtimeErrorSemantic(
+                context,
+                error: error,
+                category: UiErrorCategory.sectionLoad,
+                scope: UiErrorScope.section,
+              ),
+            ),
+            onAction: (_) =>
+                ref.read(createDraftStoreProvider.notifier).reload(),
           ),
         ),
       ),
@@ -156,8 +168,9 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
         if (drafts.isEmpty)
           const SliverFillRemaining(
             hasScrollBody: false,
-            child: _LocalDraftEmptyState(
+            child: AppEmptyState(
               key: TestKeys.localDraftEmptyState,
+              icon: CupertinoIcons.doc_plaintext,
               title: MediaText.noDraft,
               subtitle: CreationText.localDraftEmptySubtitle,
             ),
@@ -391,55 +404,6 @@ class _LocalDraftNoticeBanner extends StatelessWidget {
                   fontWeight: AppTypography.medium,
                   height: AppTypography.bodyLineHeight,
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LocalDraftEmptyState extends StatelessWidget {
-  const _LocalDraftEmptyState({
-    super.key,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.containerLg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              CupertinoIcons.doc_plaintext,
-              size: AppSpacing.iconLarge * 1.5,
-              color: AppColors.iosTertiaryLabel(context),
-            ),
-            const SizedBox(height: AppSpacing.containerMd),
-            Text(
-              title,
-              style: TextStyle(
-                color: AppColors.iosLabel(context),
-                fontSize: AppTypography.iosTitle3,
-                fontWeight: AppTypography.semiBold,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: AppColors.iosSecondaryLabel(context),
-                fontSize: AppTypography.body,
-                height: AppTypography.lineHeightRelaxed,
               ),
             ),
           ],

@@ -60,7 +60,7 @@ ALLOWED_PREFIXES = (
     "lib/service/content_service/content/post/presentation/generated/",
     "lib/service/content_service/media/media_asset/application/generated/",
     "lib/service/content_service/media/media_upload_session/application/generated/",
-    "lib/service/entity_service/entity_homepage/homepage/presentation/generated/",
+    "lib/service/entity_service/entity_homepage/homepage/application/public/generated/",
     "lib/service/recommendation_service/recommendation/"
     "recommendation_feature_profile_view/application/generated/",
     "lib/service/recommendation_service/recommendation/"
@@ -87,6 +87,8 @@ ALLOWED_EXACT_PATHS = frozenset(
 )
 RETIRED_GENERATED_PATHS = frozenset(
     {
+        "lib/service/entity_service/entity_homepage/homepage/presentation/generated/"
+        "homepage_ui_config.g.dart",
         "lib/service/content_service/content/post/adapters/generated/"
         "content_post_immersive_wire_keys.g.dart",
         "lib/service/content_service/content/post/application/generated/"

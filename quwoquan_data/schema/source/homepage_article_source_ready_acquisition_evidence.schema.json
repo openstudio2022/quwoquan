@@ -27,7 +27,7 @@
       "additionalProperties": false,
       "required": ["seedOrigin", "seedId", "coverageKey"],
       "properties": {
-        "seedOrigin": {"enum": ["legacy_hint", "current_coverage"]},
+        "seedOrigin": {"enum": ["historical_capsule_hint", "current_coverage"]},
         "seedId": {"$ref": "#/$defs/sha256"},
         "coverageKey": {"$ref": "homepage_article_seed_selection.schema.json#/$defs/seed/properties/coverageKey"},
         "articleCategory": {"const": "photography"},
@@ -191,7 +191,7 @@
   },
   "allOf": [
     {
-      "if": {"properties": {"seed": {"properties": {"seedOrigin": {"const": "legacy_hint"}}}}},
+      "if": {"properties": {"seed": {"properties": {"seedOrigin": {"const": "historical_capsule_hint"}}}}},
       "then": {"required": ["historicalComparison"]},
       "else": {"not": {"required": ["historicalComparison"]}}
     },

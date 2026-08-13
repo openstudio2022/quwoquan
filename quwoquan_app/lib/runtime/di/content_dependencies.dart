@@ -80,12 +80,16 @@ final class AppProductionContentPostReaderFacets {
     required this.authorPosts,
     required this.publicationStatus,
     required this.wishlistState,
+    required this.gatheringPosts,
+    required this.gatheringSocialProof,
   });
 
   final ContentPostDetailReader detail;
   final ContentAuthorPostsReader authorPosts;
   final ContentPostPublicationStatusReader publicationStatus;
   final ContentEntityWishlistStateReader wishlistState;
+  final ContentGatheringPostsReader gatheringPosts;
+  final ContentGatheringSocialProofReader gatheringSocialProof;
 }
 
 final class AppProductionBehaviorRepository {
@@ -287,6 +291,8 @@ final class ContentProductionComposition {
       authorPosts: cached,
       publicationStatus: remote,
       wishlistState: remote,
+      gatheringPosts: remote,
+      gatheringSocialProof: remote,
     );
   }
 

@@ -43,10 +43,21 @@ cleanup_active_child() {
     fi
     if declare -p compose_cmd >/dev/null 2>&1; then
       "${compose_cmd[@]}" ps -a >&2 || true
-      "${compose_cmd[@]}" logs --tail 80 integration-service >&2 || true
-      "${compose_cmd[@]}" logs --tail 120 \
-        user-service recommendation-service content-service entity-service product-ops-service \
-        api-edge gamma-proxy >&2 || true
+      # candidate topology 投影后一方服务收敛为 service-core,dev topology 仍是
+      # 每服务 compose;`docker compose logs` 对任一未知服务名整体拒绝执行,
+      # 一次性多服务名单会把唯一的失败证据全部丢掉(no such service)。
+      # 以 config --services 为服务名真相源,逐服务 dump。
+      teardown_available_services="$("${compose_cmd[@]}" config --services 2>/dev/null || true)"
+      for teardown_log_service in \
+        service-core api-edge content-service user-service entity-service \
+        integration-service recommendation-service product-ops-service \
+        platform-ops-service realtime-gateway rtc-service gamma-proxy; do
+        if [[ -n "$teardown_available_services" ]] \
+          && ! grep -qx "$teardown_log_service" <<<"$teardown_available_services"; then
+          continue
+        fi
+        "${compose_cmd[@]}" logs --tail 120 "$teardown_log_service" >&2 || true
+      done
       "${compose_cmd[@]}" down --remove-orphans || cleanup_status=$?
     else
       cleanup_status=1
@@ -216,7 +227,7 @@ write_startup_attempt() {
     )
   fi
   PYTHONDONTWRITEBYTECODE=1 python3 \
-    "$ROOT/quwoquan_ops/cli/lib/startup_attempt_receipt.py" \
+    "$ROOT/quwoquan_ops/cli/lib/startup_attempt_receipt/startup_attempt_receipt.py" \
     "${receipt_args[@]}"
 }
 COMPOSE_FILES=()
@@ -490,6 +501,17 @@ export_service_compose_environment() {
   done < <(compgen -A variable LOCAL_GAMMA_ | sort)
 }
 first_party_image_owners() {
+  # 镜像 env 校验必须与 stackctl 注入的部署镜像集合同源:核心服务模块
+  # 已合并为单一 service-core 镜像,不能再按逻辑服务全集要求每服务镜像。
+  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.immutable_image_composition import runtime_image_owner_names
+
+print("\n".join(runtime_image_owner_names()))
+PY
+}
+first_party_config_package_owners() {
+  # 服务配置包仍按逻辑服务自治打包(packages/services/<service>),
+  # 与镜像 owner 集合(service-core 合并)是两个不同的集合。
   PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
 from quwoquan_ops.cli.lib.immutable_image_composition import first_party_service_names
 
@@ -1175,7 +1197,7 @@ PY
   local service
   while IFS= read -r service; do
     copy_service_package_config "$service" || return $?
-  done < <(first_party_image_owners)
+  done < <(first_party_config_package_owners)
 
   if [[ ! -f "$package_root/runtime-shared/module_catalog.yaml" \
      || ! -f "$package_root/runtime-shared/retention_policy.yaml" \
@@ -1298,23 +1320,26 @@ ensure_local_gamma_base_images() {
 }
 
 expected_local_gamma_built_image_ref() {
+  # service-core 合并后部分逻辑服务不再有独立镜像 env;set -u 下必须用
+  # 默认空展开,由调用方对空值跳过。
   case "$1" in
-    api-edge) printf '%s\n' "$LOCAL_GAMMA_API_EDGE_IMAGE" ;;
-    recommendation-service) printf '%s\n' "$LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE" ;;
-    content-service) printf '%s\n' "$LOCAL_GAMMA_CONTENT_SERVICE_IMAGE" ;;
-    chat-service) printf '%s\n' "$LOCAL_GAMMA_CHAT_SERVICE_IMAGE" ;;
-    user-service) printf '%s\n' "$LOCAL_GAMMA_USER_SERVICE_IMAGE" ;;
-    assistant-service) printf '%s\n' "$LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE" ;;
-    product-ops-service) printf '%s\n' "$LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE" ;;
-    platform-ops-service) printf '%s\n' "$LOCAL_GAMMA_PLATFORM_OPS_SERVICE_IMAGE" ;;
-    tag-service) printf '%s\n' "$LOCAL_GAMMA_TAG_SERVICE_IMAGE" ;;
-    search-service) printf '%s\n' "$LOCAL_GAMMA_SEARCH_SERVICE_IMAGE" ;;
-    entity-service) printf '%s\n' "$LOCAL_GAMMA_ENTITY_SERVICE_IMAGE" ;;
-    circle-service) printf '%s\n' "$LOCAL_GAMMA_CIRCLE_SERVICE_IMAGE" ;;
-    integration-service) printf '%s\n' "$LOCAL_GAMMA_INTEGRATION_SERVICE_IMAGE" ;;
-    notification-service) printf '%s\n' "$LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE" ;;
-    realtime-gateway) printf '%s\n' "$LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE" ;;
-    rtc-service) printf '%s\n' "$LOCAL_GAMMA_RTC_SERVICE_IMAGE" ;;
+    service-core) printf '%s\n' "${LOCAL_GAMMA_SERVICE_CORE_IMAGE:-}" ;;
+    api-edge) printf '%s\n' "${LOCAL_GAMMA_API_EDGE_IMAGE:-}" ;;
+    recommendation-service) printf '%s\n' "${LOCAL_GAMMA_RECOMMENDATION_SERVICE_IMAGE:-}" ;;
+    content-service) printf '%s\n' "${LOCAL_GAMMA_CONTENT_SERVICE_IMAGE:-}" ;;
+    chat-service) printf '%s\n' "${LOCAL_GAMMA_CHAT_SERVICE_IMAGE:-}" ;;
+    user-service) printf '%s\n' "${LOCAL_GAMMA_USER_SERVICE_IMAGE:-}" ;;
+    assistant-service) printf '%s\n' "${LOCAL_GAMMA_ASSISTANT_SERVICE_IMAGE:-}" ;;
+    product-ops-service) printf '%s\n' "${LOCAL_GAMMA_PRODUCT_OPS_SERVICE_IMAGE:-}" ;;
+    platform-ops-service) printf '%s\n' "${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_IMAGE:-}" ;;
+    tag-service) printf '%s\n' "${LOCAL_GAMMA_TAG_SERVICE_IMAGE:-}" ;;
+    search-service) printf '%s\n' "${LOCAL_GAMMA_SEARCH_SERVICE_IMAGE:-}" ;;
+    entity-service) printf '%s\n' "${LOCAL_GAMMA_ENTITY_SERVICE_IMAGE:-}" ;;
+    circle-service) printf '%s\n' "${LOCAL_GAMMA_CIRCLE_SERVICE_IMAGE:-}" ;;
+    integration-service) printf '%s\n' "${LOCAL_GAMMA_INTEGRATION_SERVICE_IMAGE:-}" ;;
+    notification-service) printf '%s\n' "${LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE:-}" ;;
+    realtime-gateway) printf '%s\n' "${LOCAL_GAMMA_REALTIME_GATEWAY_IMAGE:-}" ;;
+    rtc-service) printf '%s\n' "${LOCAL_GAMMA_RTC_SERVICE_IMAGE:-}" ;;
     *) return 1 ;;
   esac
 }
@@ -1551,6 +1576,41 @@ if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose
   exit 2
 fi
 compose_cmd=(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}")
+# candidate topology 投影后 core 逻辑服务合并为 service-core；显式服务名单必须
+# 映射到当前 compose 拓扑的真实服务名，否则 docker compose 对任一未知服务名
+# 整体拒绝执行（no such service）。core 模块集合以
+# quwoquan_ops.cli.lib.service_core_composition 为唯一真相源。
+SERVICE_CORE_MODULE_NAMES="$(
+  PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+from quwoquan_ops.cli.lib.service_core_composition import SERVICE_CORE_MODULE_SET
+
+print("\n".join(sorted(SERVICE_CORE_MODULE_SET)))
+PY
+)"
+AVAILABLE_COMPOSE_SERVICES="$("${compose_cmd[@]}" config --services 2>/dev/null || true)"
+
+project_first_party_service_selection() {
+  # 入参：逻辑服务名列表；输出：当前拓扑下的真实服务名（core 模块在投影
+  # 形态映射为 service-core，去重保序）。不存在且不可映射的名字原样保留，
+  # 交由 compose 显式报错，避免静默吞掉真实配置缺陷。
+  local requested=""
+  local resolved=""
+  local emitted=" "
+  for requested in "$@"; do
+    resolved="$requested"
+    if [[ -n "$AVAILABLE_COMPOSE_SERVICES" ]] \
+      && ! grep -qx "$requested" <<<"$AVAILABLE_COMPOSE_SERVICES" \
+      && grep -qx "$requested" <<<"$SERVICE_CORE_MODULE_NAMES" \
+      && grep -qx "service-core" <<<"$AVAILABLE_COMPOSE_SERVICES"; then
+      resolved="service-core"
+    fi
+    if [[ "$emitted" == *" $resolved "* ]]; then
+      continue
+    fi
+    emitted="${emitted}${resolved} "
+    printf '%s\n' "$resolved"
+  done
+}
 compose_up_args=(up -d --remove-orphans)
 if [[ "$skip_build" == "1" ]]; then
   compose_up_args+=(--no-build)
@@ -1570,17 +1630,22 @@ if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]
   # Start only the canonical import/public-read role set. Compose adds the
   # declared Mongo, Redis, Postgres, object-storage and Elasticsearch
   # dependencies; unrelated full-workload services and their Providers remain
-  # outside this diagnostic runtime.
-  compose_up_args+=(
+  # outside this diagnostic runtime. 名单按逻辑服务表达，经投影映射得到当前
+  # 拓扑（dev 每服务 / candidate service-core 合并）的真实服务名。
+  content_slice_up_services=(
     recommendation-service
     content-service
     user-service
     entity-service
   )
   if [[ "$WORKLOAD" == "content-commercial" ]]; then
-    compose_up_args+=(product-ops-service)
+    content_slice_up_services+=(product-ops-service)
   fi
-  compose_up_args+=(api-edge gamma-proxy)
+  content_slice_up_services+=(api-edge gamma-proxy)
+  while IFS= read -r projected_up_service; do
+    [[ -n "$projected_up_service" ]] || continue
+    compose_up_args+=("$projected_up_service")
+  done < <(project_first_party_service_selection "${content_slice_up_services[@]}")
 fi
 
 prepare_local_gamma_mongosh() {
@@ -1702,6 +1767,14 @@ if [[ -n "$build_services_csv" ]]; then
   fi
   compose_build_services=("${selected_build_services[@]}")
 fi
+# 名单以逻辑服务表达；candidate 投影拓扑中 core 模块必须映射为 service-core，
+# 否则 compose build / 镜像校验对未知服务名整体失败（no such service）。
+projected_build_services=()
+while IFS= read -r projected_build_service; do
+  [[ -n "$projected_build_service" ]] || continue
+  projected_build_services+=("$projected_build_service")
+done < <(project_first_party_service_selection "${compose_build_services[@]}")
+compose_build_services=("${projected_build_services[@]}")
 
 if [[ "$FORCE_CLEAN_RECREATE" == "1" ]]; then
   echo "[local-gamma] forcing clean recreate of existing gamma containers"
@@ -2348,6 +2421,132 @@ else
       return "$compose_status"
     fi
   }
+  bootstrap_experiment_policy_owner() {
+    # Gamma 冷启动 policy 死锁：candidate 投影拓扑中 product-ops 依赖
+    # service-core healthy，service-core 依赖 recommendation healthy，而
+    # recommendation 的 full runtime 又硬性要求 Product Ops 已激活
+    # rec_model_vs_rule；首次全栈 up 必死。因此全栈 up 前先起最小基础设施
+    # 与 policy owner，经 Product Ops 公开 command 在 loopback published port
+    # 激活 canonical 政策（与 up 之后的 activation 同 idempotency 身份，
+    # 暖启动是纯 reuse），再进行全栈 up。与 test_live 的 policy owner
+    # bootstrap 同构；禁止直写 Mongo/Redis、禁止 fixture。
+    local bootstrap_services=""
+    local bootstrap_service=""
+    local cid=""
+    local state=""
+    local deadline=0
+    bootstrap_services="$("${compose_cmd[@]}" config --services 2>/dev/null || true)"
+    if [[ -z "$bootstrap_services" ]] \
+      || ! grep -qx "product-ops-service" <<<"$bootstrap_services"; then
+      echo "[local-gamma] FAIL: policy owner bootstrap requires product-ops-service in the compose topology" >&2
+      return 1
+    fi
+    # product-ops 启动即 fail-fast 的网络依赖闭包：Postgres/Redis/Mongo(+init)
+    # 与 Elasticsearch（telemetry ILM/index 初始化重试耗尽后 exit 1）。
+    # AccountSecurityAuthority 只影响 healthz、OTel/Prometheus/app-release
+    # 均为降级路径，不进入最小集。
+    local -a bootstrap_infra=()
+    for bootstrap_service in mongodb mongo-init postgres redis elasticsearch; do
+      if grep -qx "$bootstrap_service" <<<"$bootstrap_services"; then
+        bootstrap_infra+=("$bootstrap_service")
+      fi
+    done
+    echo "[local-gamma] policy owner bootstrap: starting infrastructure (${bootstrap_infra[*]})"
+    if ! "${compose_cmd[@]}" up -d --no-build "${bootstrap_infra[@]}"; then
+      echo "[local-gamma] FAIL: policy owner bootstrap infrastructure up failed" >&2
+      return 1
+    fi
+    # product-ops 需要可写 replica-set primary；等待 mongo-init one-shot 完成。
+    deadline=$((SECONDS + 180))
+    while true; do
+      cid="$("${compose_cmd[@]}" ps -aq mongo-init 2>/dev/null | head -n 1)"
+      state="$(docker inspect --format '{{.State.Status}} {{.State.ExitCode}}' "$cid" 2>/dev/null || true)"
+      if [[ "$state" == "exited 0" ]]; then
+        break
+      fi
+      if [[ "$state" == exited* ]]; then
+        echo "[local-gamma] FAIL: mongo-init exited abnormally during policy owner bootstrap ($state)" >&2
+        docker logs --tail 40 "$cid" >&2 || true
+        return 1
+      fi
+      if (( SECONDS >= deadline )); then
+        echo "[local-gamma] FAIL: mongo-init did not complete within the policy owner bootstrap deadline" >&2
+        return 1
+      fi
+      sleep 2
+    done
+    # product-ops 进程启动即探 Postgres schema、Redis ping 与 Elasticsearch
+    # telemetry 索引初始化，failure 是 fatal；必须等全部 healthy 再启动 owner。
+    # Elasticsearch 冷启动在受限本地 VM 可超 8 分钟，等待期限沿用 compose up
+    # 的有界超时而不是通用 180s。
+    for bootstrap_service in postgres redis elasticsearch; do
+      if ! grep -qx "$bootstrap_service" <<<"$bootstrap_services"; then
+        continue
+      fi
+      if [[ "$bootstrap_service" == "elasticsearch" ]]; then
+        deadline=$((SECONDS + ${LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS:?LOCAL_GAMMA_COMPOSE_UP_TIMEOUT_SECONDS is required}))
+      else
+        deadline=$((SECONDS + 180))
+      fi
+      while true; do
+        cid="$("${compose_cmd[@]}" ps -q "$bootstrap_service" 2>/dev/null | head -n 1)"
+        state="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$cid" 2>/dev/null || true)"
+        if [[ "$state" == "healthy" ]]; then
+          break
+        fi
+        if (( SECONDS >= deadline )); then
+          echo "[local-gamma] FAIL: $bootstrap_service did not become healthy during policy owner bootstrap (state=${state:-missing})" >&2
+          return 1
+        fi
+        sleep 2
+      done
+    done
+    # --no-deps：候选拓扑把 product-ops 的启动依赖投影为 service-core healthy，
+    # 该依赖正是 bootstrap 要打破的死锁环。operator 凭据的公开 command 请求
+    # 不经过 AccountSecurityAuthority，healthz unhealthy 不阻塞策略激活。
+    echo "[local-gamma] policy owner bootstrap: starting product-ops-service (--no-deps)"
+    if ! "${compose_cmd[@]}" up -d --no-build --no-deps product-ops-service; then
+      echo "[local-gamma] FAIL: policy owner bootstrap could not start product-ops-service" >&2
+      return 1
+    fi
+    local bootstrap_receipt="${QWQ_RUN_ROOT}/attachments/experiment-policy-owner-bootstrap.json"
+    mkdir -p "$(dirname "$bootstrap_receipt")"
+    if ! QWQ_BOOTSTRAP_RECEIPT_PATH="$bootstrap_receipt" \
+      PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+from quwoquan_ops.cli.lib.experiment_policy_activation import (
+    activate_search_experiment_policy_via_published_port,
+)
+
+receipt = activate_search_experiment_policy_via_published_port(
+    environment=os.environ["QWQ_LOCAL_RELEASE_ENV"],
+    target=os.environ["QWQ_LOCAL_RELEASE_TARGET"],
+)
+path = Path(os.environ["QWQ_BOOTSTRAP_RECEIPT_PATH"])
+path.write_text(
+    json.dumps(receipt, ensure_ascii=False, indent=2) + "\n",
+    encoding="utf-8",
+)
+print(
+    "[local-gamma] policy owner bootstrap: "
+    f"{receipt['operation']} (receipt={path})"
+)
+PY
+    then
+      echo "[local-gamma] FAIL: policy owner bootstrap activation failed" >&2
+      "${compose_cmd[@]}" logs --tail 80 product-ops-service >&2 || true
+      return 1
+    fi
+  }
+  if [[ "$PRODUCT_OPS_REQUIRED" == "1" ]]; then
+    if ! bootstrap_experiment_policy_owner; then
+      echo "[local-gamma] FAIL: experiment policy owner bootstrap failed; a cold full-stack startup would deadlock on the authored policy" >&2
+      exit 1
+    fi
+  fi
   if ! run_compose_up_with_timeout "${compose_up_args[@]}"; then
     if [[ "$compose_up_timed_out" == "1" ]]; then
       echo "[local-gamma] FAIL: compose start exceeded its bounded timeout; run stackctl inspect before an explicit restart" >&2
@@ -2404,9 +2603,10 @@ gamma_full_workload_dependencies_ready() {
   if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
     return 0
   fi
-  curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_INTEGRATION_PORT:-19310}/healthz" >/dev/null 2>&1 \
-    && curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}/healthz" >/dev/null 2>&1 \
-    && curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_TAG_PORT:-19270}/healthz" >/dev/null 2>&1
+  # service-core 共享端口经 VirtualHTTPRouter 按 Host 头分流，必须携带模块主机名。
+  curl -fsS -H "Host: integration-service" "http://127.0.0.1:${LOCAL_GAMMA_INTEGRATION_PORT:-19310}/healthz" >/dev/null 2>&1 \
+    && curl -fsS -H "Host: notification-service" "http://127.0.0.1:${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}/healthz" >/dev/null 2>&1 \
+    && curl -fsS -H "Host: tag-service" "http://127.0.0.1:${LOCAL_GAMMA_TAG_PORT:-19270}/healthz" >/dev/null 2>&1
 }
 
 wait_local_gamma_host_ready() {
@@ -2437,7 +2637,7 @@ wait_local_gamma_host_ready() {
       && curl -fsS "https://${video_host}:${media_edge_port}/healthz" >/dev/null 2>&1 \
       && { [[ "$PRODUCT_OPS_REQUIRED" != "1" ]] || curl -fsS "http://127.0.0.1:${po_port}/healthz" >/dev/null 2>&1; } \
       && gamma_platform_ops_ready \
-      && curl -fsS "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1 \
+      && curl -fsS -H "Host: user-service" "http://127.0.0.1:${user_port}/healthz" >/dev/null 2>&1 \
       && gamma_full_workload_dependencies_ready
     then
       return 0
@@ -2474,22 +2674,34 @@ wait_local_gamma_host_ready() {
   else
     probe_one platform-ops-service curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_PLATFORM_OPS_SERVICE_PORT:-19260}/healthz" || true
   fi
-  probe_one user-service curl -fsS "http://127.0.0.1:${user_port}/healthz" || true
+  # service-core 的共享端口经 VirtualHTTPRouter 按 Host 头分流；裸 IP 直连
+  # 会命中 421 misdirected_request，探测必须携带模块逻辑主机名。
+  probe_one user-service curl -fsS -H "Host: user-service" "http://127.0.0.1:${user_port}/healthz" || true
   if [[ "$WORKLOAD" == "content-release" || "$WORKLOAD" == "content-commercial" ]]; then
     echo "[local-gamma] probe integration/notification/tag: SKIP" >&2
   else
-    probe_one integration-service curl -fsS "http://127.0.0.1:${integration_port}/healthz" || true
-    probe_one notification-service curl -fsS "http://127.0.0.1:${notification_port}/healthz" || true
-    probe_one tag-service curl -fsS "http://127.0.0.1:${tag_port}/healthz" || true
+    probe_one integration-service curl -fsS -H "Host: integration-service" "http://127.0.0.1:${integration_port}/healthz" || true
+    probe_one notification-service curl -fsS -H "Host: notification-service" "http://127.0.0.1:${notification_port}/healthz" || true
+    probe_one tag-service curl -fsS -H "Host: tag-service" "http://127.0.0.1:${tag_port}/healthz" || true
   fi
   docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" ps >&2 || true
   # Dump failed-first-party services before transactional teardown so deep
   # /readyz and crash exits remain inspectable in the up receipt.
-  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" logs --tail 120 \
-    gamma-proxy api-edge content-service entity-service product-ops-service platform-ops-service \
-    user-service integration-service notification-service search-service assistant-service \
-    chat-service recommendation-service realtime-gateway rtc-service tag-service >&2 || true
-  for svc in search-service assistant-service user-service integration-service notification-service tag-service platform-ops-service product-ops-service; do
+  # candidate topology 投影后一方服务收敛为 service-core;一次性多服务名单会因
+  # 任一未知服务名让 `docker compose logs` 整体拒绝执行并丢掉全部证据,
+  # 因此以 config --services 为真相源逐服务 dump。
+  diagnostic_available_services="$(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" config --services 2>/dev/null || true)"
+  for diagnostic_log_service in \
+    gamma-proxy service-core api-edge content-service entity-service product-ops-service \
+    platform-ops-service user-service integration-service notification-service search-service \
+    assistant-service chat-service recommendation-service realtime-gateway rtc-service tag-service; do
+    if [[ -n "$diagnostic_available_services" ]] \
+      && ! grep -qx "$diagnostic_log_service" <<<"$diagnostic_available_services"; then
+      continue
+    fi
+    docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" logs --tail 120 "$diagnostic_log_service" >&2 || true
+  done
+  for svc in service-core recommendation-service realtime-gateway rtc-service search-service assistant-service user-service integration-service notification-service tag-service platform-ops-service product-ops-service; do
     cname=$(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}" ps -q "$svc" 2>/dev/null | head -1 || true)
     if [[ -n "$cname" ]]; then
       echo "[local-gamma] inspect Health ${svc}:" >&2

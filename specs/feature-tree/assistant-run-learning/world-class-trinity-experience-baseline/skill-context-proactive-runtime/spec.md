@@ -75,5 +75,5 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前仍缺 Gamma/Prod Provider readiness 证据、Alpha 受保护 Provider material、旅行主动 Skill 的真实投递收据，以及 Android/iPhone 真机撤权收据。Skill activation/context/capability/presentation/evaluation/replay 已绑定不可变 release digest，Catalog 原子 activate/rollback、Context Resolver/Consent fail-closed、渠道隐私上限、Trigger→canonical AssistantRun、Mongo Subscription、Redis lease 去重和真实 Run Worker API integration 已有 direct 证据；Skill Center 撤权/恢复 Patrol UAT 已定义。
-- 完成判定：在受管候选身份和同一 baseline 上执行 release→consent→subscription→trigger→context→run→delivery→unsubscribe；重复 tick 不重复投递、撤权下一次运行生效、public/shared 私密记忆泄漏为 0，并由 Android/iPhone 真机 UAT 直接引用本 GWT。
+- 影响或价值：当前仍缺 Gamma/Prod Provider readiness 证据、Alpha Provider conformance 执行收据（material 已以 protocol substitute 登记进 alpha `externalBindings`）、旅行主动 Skill 的真实投递收据，以及 Android/iPhone 真机撤权收据。Skill activation/context/capability/presentation/evaluation/replay 已绑定不可变 release digest，Catalog 原子 activate/rollback、Context Resolver/Consent fail-closed、渠道隐私上限、Trigger→canonical AssistantRun、Mongo Subscription、Redis lease 去重和真实 Run Worker API integration 已有 direct 证据；Skill Center 撤权/恢复 Patrol UAT 已定义。
+- 完成判定：`GWT-001` 与 `GWT-002` 在受管候选身份和同一 baseline 上成立——执行 release→consent→subscription→trigger→context→run→delivery→unsubscribe；重复 tick 不重复投递、撤权下一次运行生效、public/shared 私密记忆泄漏为 0，并由 Android/iPhone 真机 UAT 直接引用这两条 GWT。

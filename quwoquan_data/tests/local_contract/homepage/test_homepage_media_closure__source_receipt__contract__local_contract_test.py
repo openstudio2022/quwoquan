@@ -83,8 +83,7 @@ def test_homepage_receipt_manifest_and_cli_read_back_same_source_counts(
     assert receipt["sourceAssetCounts"][0]["provider"] == "Pinterest"
     assert receipt["sourceAssetCounts"][0]["acceptedAssetCount"] == 2
     assert receipt["sourceAssetCounts"][0]["rejectedAssetCount"] == 1
-    output = capsys.readouterr().out
-    assert "displayName=实体主页摄影素材 provider=Pinterest assets=2" in output
+    assert capsys.readouterr().out == ""
 
 
 def test_homepage_media_closure_rejects_empty_assets(tmp_path: Path) -> None:

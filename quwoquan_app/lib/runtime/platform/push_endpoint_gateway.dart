@@ -136,6 +136,31 @@ abstract interface class PushEndpointGateway {
   Future<void> purgeForTerminalAccountClosure();
 }
 
+/// `pushDelivery` 能力关闭平台（web / 初始 ohos / desktop）的 fail-safe 装配。
+///
+/// 注册、登出反注册与账号注销清理全部结构化跳过：无本地 queue、无安全存储
+/// 读写、不构造也不触达任何原生通道；同时绝不抛错，避免阻断登录/登出/注销
+/// 主流程（R-XP4/R-XP5）。
+final class UnsupportedPushEndpointGateway implements PushEndpointGateway {
+  const UnsupportedPushEndpointGateway();
+
+  @override
+  Future<void> recordUpsert(DevicePushEndpoint endpoint) async {}
+
+  @override
+  Future<List<PushEndpointMutation>> readPendingMutations() async =>
+      const <PushEndpointMutation>[];
+
+  @override
+  Future<void> acknowledgeMutation(String mutationId) async {}
+
+  @override
+  Future<void> queueActiveEndpointRemovals() async {}
+
+  @override
+  Future<void> purgeForTerminalAccountClosure() async {}
+}
+
 abstract interface class PushEndpointSecretStore {
   Future<String?> read(String key);
 

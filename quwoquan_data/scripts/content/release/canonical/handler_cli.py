@@ -228,21 +228,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     identity_incident.add_argument("--output-root")
     identity_incident.set_defaults(handler=owner.handle_release_identity_incident)
 
-    legacy_incident_migration = commands.add_parser(
-        "identity-incident-migrate-legacy",
-        help="将前 provenance 合同的原始 incident 投影为 source-bound 当前契约",
-    )
-    legacy_incident_migration.add_argument("--incident", required=True)
-    legacy_incident_migration.add_argument(
-        "--incident-sha256",
-        required=True,
-        help="迁移前人工核对的原始 incident 精确文件摘要",
-    )
-    legacy_incident_migration.add_argument("--output-root")
-    legacy_incident_migration.set_defaults(
-        handler=owner.handle_release_identity_incident_legacy_migration
-    )
-
     identity_recovery = commands.add_parser(
         "identity-recovery",
         help="按冻结 JSON 序列化合同写确定性 attestation 恢复物与 provenance",
@@ -389,36 +374,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     commercial_transition.add_argument("--release-root")
     commercial_transition.add_argument("--output-root")
     commercial_transition.set_defaults(handler=owner.handle_commercial_transition)
-
-    cleanup = commands.add_parser(
-        "publish-intermediate-cleanup",
-        help="将 legacy publish-local review receipt 迁到受保护 evidence 引用",
-    )
-    cleanup_actions = cleanup.add_subparsers(
-        dest="release_cleanup_action",
-        required=True,
-    )
-    cleanup_plan = cleanup_actions.add_parser(
-        "plan",
-        help="冻结 rights ref 迁移与 receipt quarantine 的单一增量计划",
-    )
-    cleanup_plan.add_argument("--cleanup-id", required=True)
-    cleanup_plan.add_argument("--output-root")
-    cleanup_plan.add_argument("--publish-root")
-    cleanup_plan.set_defaults(
-        handler=owner.handle_publish_intermediate_cleanup_plan
-    )
-    cleanup_apply = cleanup_actions.add_parser(
-        "apply",
-        help="按精确 plan digest 原子迁移 rights 并隔离中间 receipt",
-    )
-    cleanup_apply.add_argument("--cleanup-id", required=True)
-    cleanup_apply.add_argument("--plan-digest", required=True)
-    cleanup_apply.add_argument("--output-root")
-    cleanup_apply.add_argument("--publish-root")
-    cleanup_apply.set_defaults(
-        handler=owner.handle_publish_intermediate_cleanup_apply
-    )
 
     gc = commands.add_parser(
         "gc",

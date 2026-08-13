@@ -1,3 +1,4 @@
+// readiness_case: intersection_projection_app_uat
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/user-profile-intersection-redesign/spec.md#gwt-004
 /// viewer 通过公开 User command 关注 disposable actor；actor 再经公开 Content
 /// command 发布 Post 并写入行为事实。Recommendation 只能从这些真实事件 materialize

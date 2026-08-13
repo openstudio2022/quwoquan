@@ -1,5 +1,18 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness/spec.md#gwt-002
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-001.t1
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-001.t2
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-001.t3
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-002.t1
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-002.t3
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t1
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t2
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t3
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t4
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t5
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t8
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md#gwt-003
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-001.t4
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -7,11 +20,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:quwoquan_app/service/content_service/content/post/application/public/author_impact_query.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/public/rtc_call_entry_coordinator.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/profile_query.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart'
+    show ContentAuthorPostsReader;
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_profile_view_data.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/adapters/persona_management_view_data_mapper.dart';
@@ -21,11 +37,15 @@ import 'package:quwoquan_app/service/user_service/account/user_account/applicati
 import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
 import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/rtc_call_entry_presenter.dart';
+import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
+import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -39,17 +59,27 @@ import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_surface.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_app/runtime/di/author_impact_provider.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/my_gatherings_entry_card.dart'
+    show MyGatheringsEntryCard;
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/author_impact_card.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_card.dart'
+    show MyIntersectionInboxCard;
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/other_profile_intersection_card.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_shell.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_state_provider.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_permission_guard.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/user_service/persona_management/persona/profile_shell_scroll_utils.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/public/profile_interaction_selection.dart'
+    show InteractionSubTab;
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/presentation/profile_interaction_tab.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_interaction_tab_host.dart'
+    show ProfileInteractionTabHost;
 import 'package:quwoquan_app/design_system/navigation/secondary_tab_bar.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
 import '../../../../../support/service/content_service/content/profile_interaction_activity_view/test_profile_interaction_facets.dart';
 import '../../../../../support/service/content_service/content/profile_interaction_activity_view/author_impact_fixtures.dart';
@@ -91,6 +121,44 @@ class _StaticCapabilityRepository extends RelationshipCapabilityRepository {
       canStartVideoCall: false,
       isBlocked: false,
       isBlockedBy: false,
+    );
+  }
+}
+
+/// bundle 直接携带 mutual 通话能力位：让语音/视频入口在首屏渲染，
+/// 用于游客登录门与续接 journey。
+class _MutualBundleProfileQuery extends MockUserProfileRepository {
+  const _MutualBundleProfileQuery();
+
+  @override
+  Future<UserHomepageBundleViewData> getUserHomepageBundle(
+    String personaId,
+  ) async {
+    final bundle = await super.getUserHomepageBundle(personaId);
+    return UserHomepageBundleViewData(
+      profile: bundle.profile,
+      stats: bundle.stats,
+      relationshipCapability: RelationshipCapabilityViewData(
+        viewerPersonaId: 'viewer-profile',
+        targetPersonaId: bundle.profile.personaId,
+        relationState: 'mutual',
+        canFollow: false,
+        canUnfollow: true,
+        canFollowBack: false,
+        canGreet: false,
+        canOpenConversation: true,
+        canCreateDirectConversation: true,
+        canSendMessage: true,
+        hasPendingGreeting: false,
+        hasFormalConversation: true,
+        canStartVoiceCall: true,
+        canStartVideoCall: true,
+        isBlocked: false,
+        isBlockedBy: false,
+      ),
+      tabCounts: bundle.tabCounts,
+      viewerContext: bundle.viewerContext,
+      cacheVersion: bundle.cacheVersion,
     );
   }
 }
@@ -359,10 +427,7 @@ PersonaProfileViewData _profileView({
   );
 }
 
-class _NoUserPostsContentRepository extends MockContentRepository {
-  _NoUserPostsContentRepository()
-    : super(seedPosts: const <ContentPostViewData>[]);
-
+class _NoUserPostsContentRepository implements ContentAuthorPostsReader {
   @override
   Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
@@ -423,6 +488,63 @@ const IntersectionPoint _sharedFolloweesPoint = IntersectionPoint(
   sampleVisuals: <IntersectionVisual>[],
 );
 
+List<Override> _profileScopeOverrides({
+  required String userId,
+  RelationshipCapabilityRepository? capabilityRepository,
+  ProfileQuery profileQuery = const MockUserProfileRepository(),
+  AuthorImpactQuery authorImpactQuery = const MockUserProfileRepository(),
+  ContentAuthorPostsReader? authorPostsReader,
+  List overrides = const [],
+}) {
+  final profilePosts = <ContentPostViewData>[
+    contentPostViewDataBuilder(
+      postId: '$userId-profile-image',
+      contentType: 'image',
+      authorId: userId,
+      mediaUrls: const <String>[testContentImageUrl],
+    ),
+    contentPostViewDataBuilder(
+      postId: '$userId-profile-video',
+      contentType: 'video',
+      authorId: userId,
+      videoUrl: testContentVideoUrl,
+    ),
+    contentPostViewDataBuilder(
+      postId: '$userId-profile-article',
+      contentType: 'article',
+      authorId: userId,
+      title: '主页长文',
+    ),
+  ];
+  return <Override>[
+    profileQueryProvider.overrideWith((ref, surface) => profileQuery),
+    authorImpactQueryProvider.overrideWith(
+      (ref, surface) => authorImpactQuery,
+    ),
+    ...mockContentFacetOverrides(
+      store: InMemoryContentPostStore(),
+      authorPostsReader:
+          authorPostsReader ??
+          InMemoryContentAuthorPostsReader(
+            InMemoryContentPostStore(posts: profilePosts),
+          ),
+    ),
+    profileInteractionQueryFacetProvider.overrideWithValue(
+      const TestProfileInteractionFacets(),
+    ),
+    profileInteractionReadFactAppendFacetProvider.overrideWithValue(
+      const TestProfileInteractionFacets(),
+    ),
+    relationshipCapabilityRepositoryProvider.overrideWithValue(
+      capabilityRepository ?? _ThrowingCapabilityRepository(),
+    ),
+    intersectionRepositoryProvider.overrideWithValue(
+      const _EmptyIntersectionRepository(),
+    ),
+    ...overrides.cast<Override>(),
+  ];
+}
+
 Widget _scopedApp({
   required ProfileMode mode,
   String userId = 'nature_photographer',
@@ -434,33 +556,19 @@ Widget _scopedApp({
   RelationshipCapabilityRepository? capabilityRepository,
   ProfileQuery profileQuery = const MockUserProfileRepository(),
   AuthorImpactQuery authorImpactQuery = const MockUserProfileRepository(),
-  MockContentRepository? contentRepository,
+  ContentAuthorPostsReader? authorPostsReader,
   VoidCallback? onBack,
   List overrides = const [],
 }) {
   return ProviderScope(
-    overrides: [
-      profileQueryProvider.overrideWith((ref, surface) => profileQuery),
-      authorImpactQueryProvider.overrideWith(
-        (ref, surface) => authorImpactQuery,
-      ),
-      ...mockContentFacetOverrides(
-        contentRepository ?? MockContentRepository(),
-      ),
-      profileInteractionQueryFacetProvider.overrideWithValue(
-        const TestProfileInteractionFacets(),
-      ),
-      profileInteractionReadFactAppendFacetProvider.overrideWithValue(
-        const TestProfileInteractionFacets(),
-      ),
-      relationshipCapabilityRepositoryProvider.overrideWithValue(
-        capabilityRepository ?? _ThrowingCapabilityRepository(),
-      ),
-      intersectionRepositoryProvider.overrideWithValue(
-        const _EmptyIntersectionRepository(),
-      ),
-      ...overrides,
-    ],
+    overrides: _profileScopeOverrides(
+      userId: userId,
+      capabilityRepository: capabilityRepository,
+      profileQuery: profileQuery,
+      authorImpactQuery: authorImpactQuery,
+      authorPostsReader: authorPostsReader,
+      overrides: overrides,
+    ),
     child: MaterialApp(
       builder: (context, child) {
         final mediaQuery = MediaQuery.of(context);
@@ -548,7 +656,7 @@ void main() {
           mode: ProfileMode.mine,
           userId: 'fixture_user_current',
           profileQuery: const _DefaultNicknameProfileRepository(),
-          contentRepository: _NoUserPostsContentRepository(),
+          authorPostsReader: _NoUserPostsContentRepository(),
         ),
       );
       await _pumpFrames(tester);
@@ -684,10 +792,12 @@ void main() {
           mode: ProfileMode.mine,
           userId: 'fixture_user_current',
           profileQuery: const _DefaultNicknameProfileRepository(),
-          contentRepository: MockContentRepository(
-            seedPosts: <ContentPostViewData>[
-              _profileBackgroundPost('fixture_user_current'),
-            ],
+          authorPostsReader: InMemoryContentAuthorPostsReader(
+            InMemoryContentPostStore(
+              posts: <ContentPostViewData>[
+                _profileBackgroundPost('fixture_user_current'),
+              ],
+            ),
           ),
         ),
       );
@@ -706,7 +816,7 @@ void main() {
           mode: ProfileMode.mine,
           userId: 'fixture_user_current',
           profileQuery: const _DefaultNicknameProfileRepository(),
-          contentRepository: _NoUserPostsContentRepository(),
+          authorPostsReader: _NoUserPostsContentRepository(),
         ),
       );
       await _pumpFrames(tester, count: 20);
@@ -913,6 +1023,89 @@ void main() {
       await tester.pump();
       expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
       expect(find.text(SearchText.reload), findsNothing);
+    });
+
+    testWidgets('交集请求并发挂起或失败不阻塞打动摘要，交集可独立恢复', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final firstIntersection = Completer<List<IntersectionReason>>();
+      var intersectionAttempts = 0;
+
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.other,
+          userId: 'u_selective_failure',
+          capabilityRepository: _StaticCapabilityRepository(),
+          overrides: [
+            currentUserIdProvider.overrideWithValue('viewer-profile'),
+            objectSharedReasonsProvider.overrideWith((ref, query) {
+              intersectionAttempts++;
+              if (intersectionAttempts == 1) {
+                return firstIntersection.future;
+              }
+              return Future<List<IntersectionReason>>.value(
+                <IntersectionReason>[
+                  intersectionReasonFixture(
+                    dimension: 'relationship',
+                    primaryText: '你们都关注胶片摄影',
+                    intersectionPoints: const <IntersectionPoint>[
+                      _sharedFolloweesPoint,
+                    ],
+                  ),
+                ],
+              );
+            }),
+            authorImpactProvider.overrideWith((ref, request) async {
+              return AuthorImpactSummary(
+                authorId: request.personaId,
+                total: 2,
+                items: <AuthorImpactItem>[
+                  authorImpactItemFixture(
+                    helpType: 'community',
+                    action: 'join',
+                    intersectionDimension: 'interest',
+                    tagRef: 'interest/film-photography',
+                    source: 'source:circle_join',
+                    count: 2,
+                    primaryText: '2人加入相关圈子',
+                    subtitleText: '来自胶片摄影圈',
+                  ),
+                ],
+              );
+            }),
+          ],
+        ),
+      );
+      await _pumpFrames(tester);
+
+      expect(
+        find.text('2人加入相关圈子'),
+        findsOneWidget,
+        reason: '交集 Future 未完成时，独立打动摘要必须先完成，不能被 Future.wait 串行死锁',
+      );
+      expect(find.byKey(AuthorImpactCard.cardKey), findsOneWidget);
+
+      firstIntersection.completeError(
+        StateError('intersection temporarily unavailable'),
+      );
+      await _pumpFrames(tester);
+
+      expect(find.byType(AppSectionErrorCard), findsOneWidget);
+      expect(find.text('2人加入相关圈子'), findsOneWidget);
+
+      final retry = find.descendant(
+        of: find.byType(AppSectionErrorCard),
+        matching: find.text(SearchText.reload),
+      );
+      expect(retry, findsOneWidget);
+      await tester.tap(retry);
+      await _pumpFrames(tester);
+
+      expect(intersectionAttempts, 2);
+      expect(find.byType(AppSectionErrorCard), findsNothing);
+      expect(find.text('你们都关注胶片摄影'), findsOneWidget);
+      expect(find.text('2人加入相关圈子'), findsOneWidget);
     });
 
     testWidgets('other 模式四段式文案不串入 mine 口径', (tester) async {
@@ -1430,6 +1623,110 @@ void main() {
       expect(startedIntents, hasLength(1), reason: '续接必须 one-shot，不能重复发起');
     });
 
+    // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-001
+    testWidgets('游客点视频通话进入登录门且关闭登录回主页不再自动弹登录', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final startedIntents = <RtcCallEntryIntent>[];
+      final profilePath = AppRoutePaths.userProfile(userHandle: 'u_lin');
+      final router = GoRouter(
+        initialLocation: profilePath,
+        routes: [
+          GoRoute(
+            path: AppRoutePaths.userProfilePathTemplate.replaceFirst(
+              '{userHandle}',
+              ':userHandle',
+            ),
+            builder: (context, state) => ProfileShell(
+              recommendationSlots: profileRecommendationSlots,
+              participantSlots: profileParticipantSlots,
+              mode: ProfileMode.other,
+              userId: 'u_lin',
+            ),
+          ),
+          GoRoute(
+            path: AppRoutePaths.loginPathTemplate,
+            builder: (context, state) =>
+                const Scaffold(body: Center(child: Text('login-stub'))),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _profileScopeOverrides(
+            userId: 'u_lin',
+            capabilityRepository: _MutualCallCapabilityRepository(),
+            profileQuery: const _MutualBundleProfileQuery(),
+            overrides: [
+              authSessionControllerProvider.overrideWith(
+                _FlippableProfileAuthSession.new,
+              ),
+              rtcCallEntryPresenterProvider.overrideWithValue(
+                RtcCallEntryPresenter(
+                  permissionRequest: (_, _) async =>
+                      CallPermissionOutcome.granted,
+                  callStarter: (_, intent, _, _) async {
+                    startedIntents.add(intent);
+                    return 'fixture-call-id';
+                  },
+                  outgoingNavigator: (_, _) {},
+                ),
+              ),
+            ],
+          ),
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await _pumpFrames(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ProfileShell)),
+      );
+
+      expect(
+        container
+            .read(profileNotifierProvider('u_lin'))
+            .displayCapability
+            ?.canStartVideoCall,
+        isTrue,
+        reason: 'mutual 能力位必须让通话入口在首屏渲染',
+      );
+
+      await tester.tap(find.text(CallText.callVideo));
+      await _pumpFrames(tester, count: 3);
+
+      // 双目标契约第一半：进入登录门，携带 startCall reason、safeFallback
+      // 关闭安全态与续接意图；未登录不得直接发起通话。
+      final loginUri = router.state.uri;
+      expect(loginUri.path, AppRoutePaths.loginPathTemplate);
+      expect(loginUri.queryParameters['reason'], AuthGateReason.startCall.name);
+      expect(
+        loginUri.queryParameters[loginGuestDismissPopQueryParam],
+        LoginDismissPolicy.safeFallback.name,
+      );
+      expect(
+        loginUri.queryParameters[loginDismissFallbackQueryParam],
+        profilePath,
+      );
+      final pending = container.read(authContinuationProvider);
+      expect(pending, isA<StartDirectCallContinuation>());
+      expect(
+        (pending as StartDirectCallContinuation).callType,
+        RtcCallEntryMediaType.video.wireValue,
+      );
+      expect(startedIntents, isEmpty, reason: '游客不得越过登录门直接发起通话');
+
+      // 双目标契约第二半（关闭分支）：放弃登录回到安全态后，不得再次自动
+      // 弹出登录门形成死循环。
+      router.go(profilePath);
+      await _pumpFrames(tester, count: 5);
+      expect(router.state.uri.path, profilePath);
+      expect(find.text('login-stub'), findsNothing);
+      expect(startedIntents, isEmpty);
+    });
+
     testWidgets('互动二级 Tab 跟随内容滚动并可回显', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
@@ -1643,6 +1940,133 @@ void main() {
 
       // 首屏失败不被乐观壳层静默吞掉：结构化错误态可见 + 重试入口（R17/R20）。
       expect(find.text(SearchText.reload), findsOneWidget);
+    });
+  });
+
+  group('ProfileShell — 首屏模块顺序（SIT-004）', () {
+    testWidgets('mine 摘要区顺序：身份卡→我的交集→我的行动→打动，无旧版数据面板', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
+      await _pumpFrames(tester);
+
+      // 摘要区是同一 Column 一次布局：四个模块都在树上，按纵向坐标断言顺序。
+      final identityTop = tester
+          .getTopLeft(
+            find.byKey(const ValueKey<String>('profile-shell-profile-card')),
+          )
+          .dy;
+      final inboxTop = tester
+          .getTopLeft(find.byKey(MyIntersectionInboxCard.cardKey))
+          .dy;
+      final gatheringsTop = tester
+          .getTopLeft(find.byKey(MyGatheringsEntryCard.cardKey))
+          .dy;
+      final impactTop = tester
+          .getTopLeft(find.byKey(AuthorImpactCard.cardKey))
+          .dy;
+      expect(
+        identityTop < inboxTop &&
+            inboxTop < gatheringsTop &&
+            gatheringsTop < impactTop,
+        isTrue,
+        reason: '首屏模块顺序必须为 身份区→交集→行动资产面→打动（SIT-004.t2）',
+      );
+      // 旧版数据面板（独立粉丝/浏览/点赞大数字面板）不再出现：统计只存在于
+      // 身份卡内的单行四项统计行（REQ-002 保留项）。
+      expect(
+        find.byKey(const ValueKey<String>('profile-stats-inline-row')),
+        findsOneWidget,
+      );
+    });
+  });
+
+  group('ProfileShell — 统计下钻与创作直出（SIT-002）', () {
+    testWidgets('点击获赞统计进入互动 Tab 并选中点赞子维度', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(_scopedApp(mode: ProfileMode.mine));
+      await _pumpFrames(tester);
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ProfileShell)),
+      );
+      // 先把子维度拨离默认值（likes），让"获赞→点赞子维度"的收敛有鉴别力。
+      container
+          .read(profileNotifierProvider('nature_photographer').notifier)
+          .setInteractionSubTab(InteractionSubTab.comments);
+      await _pumpFrames(tester, count: 2);
+
+      final likesStat = find.descendant(
+        of: find.byKey(const ValueKey<String>('profile-stats-inline-row')),
+        matching: find.text(CommunityText.circleLikes),
+      );
+      expect(likesStat, findsOneWidget, reason: '统计行必须包含获赞项');
+      await tester.tap(likesStat);
+      await _pumpFrames(tester);
+
+      final state = container.read(
+        profileNotifierProvider('nature_photographer'),
+      );
+      expect(
+        state.interactionSubTab,
+        InteractionSubTab.likes,
+        reason: '获赞下钻必须收敛到互动 Tab 的点赞子维度（SIT-002.t3）',
+      );
+      expect(
+        find.byType(ProfileInteractionTabHost),
+        findsOneWidget,
+        reason: '获赞下钻必须切换到互动一级 Tab，而非新增第四个统计详情 Tab',
+      );
+    });
+
+    testWidgets('创作流直出 reader 全量条目：端侧不做可见性二次过滤', (tester) async {
+      _setPhoneSize(tester);
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      // 可见性裁剪的唯一真相源在云侧 ListUserPosts（owner 含私密/draft、
+      // non-owner 拒绝，见 content-service post_query_facet local_contract）。
+      // 端侧展示模型不含 visibility 字段，本用例锁定端侧合同：reader 返回的
+      // 全部条目（含 owner 请求得到的私密作品）都进入创作流 state，不被二次过滤。
+      final ownerPosts = <ContentPostViewData>[
+        contentPostViewDataBuilder(
+          postId: 'owner-public-article',
+          contentType: 'article',
+          authorId: 'nature_photographer',
+          title: '公开长文',
+        ),
+        contentPostViewDataBuilder(
+          postId: 'owner-private-article',
+          contentType: 'article',
+          authorId: 'nature_photographer',
+          title: '私密草稿作品',
+        ),
+      ];
+      await tester.pumpWidget(
+        _scopedApp(
+          mode: ProfileMode.mine,
+          authorPostsReader: InMemoryContentAuthorPostsReader(
+            InMemoryContentPostStore(posts: ownerPosts),
+          ),
+        ),
+      );
+      await _pumpFrames(tester);
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ProfileShell)),
+      );
+      final state = container.read(
+        profileNotifierProvider('nature_photographer'),
+      );
+      expect(
+        state.creations.map((post) => post.id).toSet(),
+        <String>{'owner-public-article', 'owner-private-article'},
+        reason: '端侧必须直出 reader 全量条目，不得二次过滤（SIT-002.t1）',
+      );
     });
   });
 }

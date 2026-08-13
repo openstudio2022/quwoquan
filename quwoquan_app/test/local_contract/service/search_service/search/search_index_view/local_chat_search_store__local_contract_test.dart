@@ -9,7 +9,7 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/application/
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_contact_record.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_message_record.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_store.dart';
-import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_search_namespace.dart';
+import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/local_search_namespace.dart';
 
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
 import '../../../../../support/runtime/platform/explicit_test_local_database_path_resolver.dart';
@@ -102,6 +102,62 @@ void main() {
         query: '布光',
       );
       expect(afterRecall, isEmpty);
+    });
+
+    // spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/local-search-lifecycle-and-account-isolation/spec.md#gwt-001
+    test('conversationId scoped search only returns messages of that conversation', () async {
+      Future<void> seedMessage({
+        required String conversationId,
+        required String messageId,
+        required String content,
+      }) {
+        return store.upsertMessages(
+          namespace: namespace,
+          conversation: ConversationCacheRecord.fromCacheMap(<String, dynamic>{
+            'conversationId': conversationId,
+            'title': '会话$conversationId',
+            'type': 'group',
+          }),
+          messages: <LocalChatSearchMessageRecord>[
+            LocalChatSearchMessageRecord(
+              messageId: messageId,
+              conversationId: conversationId,
+              contentPreview: content,
+              senderDisplayName: '发送者',
+              senderPersonaId: 'u_1',
+              messageType: 'text',
+              seq: 1,
+              timestamp: '2026-08-13T10:00:00.000Z',
+            ),
+          ],
+        );
+      }
+
+      await seedMessage(
+        conversationId: 'conv_scope_a',
+        messageId: 'msg_scope_a',
+        content: '观星聚会带三脚架',
+      );
+      await seedMessage(
+        conversationId: 'conv_scope_b',
+        messageId: 'msg_scope_b',
+        content: '观星聚会改到下周',
+      );
+
+      final global = await store.searchMessages(
+        namespace: namespace,
+        query: '观星',
+      );
+      expect(global, hasLength(2), reason: '不带会话过滤时命中两个会话');
+
+      final scoped = await store.searchMessages(
+        namespace: namespace,
+        query: '观星',
+        conversationId: 'conv_scope_a',
+      );
+      expect(scoped, hasLength(1), reason: '会话内搜索只返回该会话的消息');
+      expect(scoped.single.messageId, 'msg_scope_a');
+      expect(scoped.single.conversationId, 'conv_scope_a');
     });
 
     test('isolates contacts and messages by namespace', () async {

@@ -132,5 +132,22 @@
 - 影响或价值：标签目录、发布导入、资料页和 object_tag_index 已有分层测试；
   Gamma-local 已装配 canonical observability capability，不需要外部日志租户；当前仍
   缺可用物理设备上的 production Remote Patrol CaseResult，静态编译不能冒充真机 UAT。
-- 完成判定：`career_interest_reads_remote_tag_catalog` 在 Gamma-local 真机会话中通过并
+- 完成判定：`GWT-001` 的页面加载与标签同源查询子句在真机 Remote 下成立——
+  `career_interest_reads_remote_tag_catalog` 在 Gamma-local 真机会话中通过并
   产出 CaseResult，页面叶子标签可回溯到 tag-service taxonomy release。
+
+<a id="open-002"></a>
+### OPEN-002 TagFeedbackRecorded 的 content 侧消费者未实现
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺 [GWT-003](#gwt-003) 声明的消费实现——content-service
+  须以 durable inbox 幂等消费 `TagFeedbackRecorded` 并写显式标签亲和度，
+  但 content-service 内无任何消费实现；tag-service 生产端事实链已就绪。
+  监控面禁止先于实现挂该链 lag/failure 的死告警，无 emitter 的两条
+  告警已从告警文件删除，待实现落地时与真实 emitter 一同恢复。
+- 完成判定：[GWT-003](#gwt-003) 的消费子句由 content-service 实现并有
+  local_contract 幂等/DLQ 负例；消费者 lag/failure 指标有真实 emitter
+  后恢复对应告警并登记 overlay manifest。
+- 依赖：content-service 特征提交面（显式亲和度写入）的实现窗口。

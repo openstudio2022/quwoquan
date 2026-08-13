@@ -1,4 +1,7 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/group-call/spec.md#gwt-001
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_participant.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_state.dart';
@@ -20,14 +23,17 @@ List<CallParticipantViewData> _makeParticipants(int count) {
 }
 
 Widget _buildGrid({required int count, String? activeSpeakerId}) {
-  return MaterialApp(
-    home: Scaffold(
-      body: SizedBox(
-        width: 400,
-        height: 600,
-        child: VideoGridLayout(
-          participants: _makeParticipants(count),
-          activeSpeakerId: activeSpeakerId,
+  // ParticipantTile 读取 mediaDeviceProvider（本地预览镜像决策），需要 scope。
+  return ProviderScope(
+    child: MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 400,
+          height: 600,
+          child: VideoGridLayout(
+            participants: _makeParticipants(count),
+            activeSpeakerId: activeSpeakerId,
+          ),
         ),
       ),
     ),
@@ -132,13 +138,15 @@ void main() {
   group('VideoGridLayout — 错误态渲染', () {
     testWidgets('空参与者列表 → SizedBox.shrink', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: SizedBox(
-              width: 400,
-              height: 600,
-              child: VideoGridLayout(
-                participants: const [],
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 400,
+                height: 600,
+                child: VideoGridLayout(
+                  participants: const [],
+                ),
               ),
             ),
           ),

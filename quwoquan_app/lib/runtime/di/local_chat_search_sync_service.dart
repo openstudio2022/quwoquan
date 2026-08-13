@@ -12,7 +12,7 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/ada
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_message_record.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/adapters/conversation_cache_service.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_store.dart';
-import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_search_namespace.dart';
+import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/local_search_namespace.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/local_chat_search_sync.dart';
 
 class LocalChatSearchSyncService implements LocalChatSearchSynchronizer {

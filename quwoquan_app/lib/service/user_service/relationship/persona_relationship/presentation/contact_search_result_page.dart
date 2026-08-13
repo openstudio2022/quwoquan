@@ -228,6 +228,10 @@ class _ContactSearchResultPageState
           'FollowUser did not converge in authoritative relationship state',
         );
       }
+      // 权威确认后回写共享关系投影，其他 watch 该投影的页面即时一致。
+      ref
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowing(targetPersonaId, confirmed.viewerFollowsTarget);
       if (!mounted ||
           !_isCurrentFollowAttempt(
             targetPersonaId,

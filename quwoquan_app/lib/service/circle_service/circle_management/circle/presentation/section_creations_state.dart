@@ -6,6 +6,12 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   List<CircleHubFeedPostEntry> _feedEntries = const [];
   String? _circleCategoryId;
 
+  // 连续分页：owner cursor 只由服务端裁定；端侧只保存并携带 nextCursor 追加，
+  // 不重排、不重新过滤。加载更多失败保留已加载内容并提供 canonical 重试。
+  String? _nextCursor;
+  bool _isLoadingMore = false;
+  UiErrorSemantic? _loadMoreErrorSemantic;
+
   static const List<CircleCreationSubTab> _creationFilters =
       CircleCreationSubTab.values;
 
@@ -286,7 +292,10 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   int _entryLikeCount(CircleHubFeedPostEntry entry) {
-    return entry.likeCount;
+    // 点赞数以全局互动投影为准；entry 会话内快照只作未命中兜底。
+    return ref
+        .watch(postInteractionStateProvider)
+        .likeCountFor(entry.postId, fallback: entry.likeCount);
   }
 
   String _entryAuthorDisplayName(CircleHubFeedPostEntry entry) {

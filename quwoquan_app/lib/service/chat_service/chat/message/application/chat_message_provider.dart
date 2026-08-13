@@ -28,6 +28,12 @@ class ChatMessageState {
   final bool isLoadingOlder;
   final bool hasMore;
   final int nextBeforeSeq;
+  final ChatTimelineContentSource source;
+
+  /// 对端已读水位（1v1 双勾真相源）：由 `ConversationReadWatermarkAdvanced`
+  /// 实时事件单调推进；0 表示尚未观测到对端读位（历史已读态无读面，
+  /// 见 delivery-and-read-receipt OPEN）。
+  final int peerReadSeq;
   final String? error;
 
   const ChatMessageState({
@@ -37,6 +43,8 @@ class ChatMessageState {
     this.isLoadingOlder = false,
     this.hasMore = true,
     this.nextBeforeSeq = 0,
+    this.source = ChatTimelineContentSource.none,
+    this.peerReadSeq = 0,
     this.error,
   });
 
@@ -47,6 +55,8 @@ class ChatMessageState {
     bool? isLoadingOlder,
     bool? hasMore,
     int? nextBeforeSeq,
+    ChatTimelineContentSource? source,
+    int? peerReadSeq,
     String? error,
   }) {
     return ChatMessageState(
@@ -56,6 +66,8 @@ class ChatMessageState {
       isLoadingOlder: isLoadingOlder ?? this.isLoadingOlder,
       hasMore: hasMore ?? this.hasMore,
       nextBeforeSeq: nextBeforeSeq ?? this.nextBeforeSeq,
+      source: source ?? this.source,
+      peerReadSeq: peerReadSeq ?? this.peerReadSeq,
       error: error,
     );
   }
@@ -70,6 +82,8 @@ class ChatMessageState {
             other.isLoadingOlder == isLoadingOlder &&
             other.hasMore == hasMore &&
             other.nextBeforeSeq == nextBeforeSeq &&
+            other.source == source &&
+            other.peerReadSeq == peerReadSeq &&
             other.error == error;
   }
 
@@ -81,6 +95,8 @@ class ChatMessageState {
     isLoadingOlder,
     hasMore,
     nextBeforeSeq,
+    source,
+    peerReadSeq,
     error,
   );
 
@@ -91,6 +107,8 @@ class ChatMessageState {
       isRefreshing: isRefreshing,
       isLoadingOlder: isLoadingOlder,
       hasMore: hasMore,
+      source: source,
+      peerReadSeq: peerReadSeq,
       error: error,
     );
   }
@@ -156,6 +174,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
             isLoading: false,
             isRefreshing: true,
             nextBeforeSeq: _oldestConfirmedSeq(cached),
+            source: ChatTimelineContentSource.localHydrated,
           );
         }
       } catch (error, stackTrace) {
@@ -182,6 +201,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
         isRefreshing: false,
         hasMore: loaded.length >= _pageSize,
         nextBeforeSeq: _oldestConfirmedSeq(merged),
+        source: ChatTimelineContentSource.remoteSynced,
       );
       unawaited(_persistMessages(hydrated, cacheScope: cacheScope));
       if (maxSeq != null && maxSeq > 0) {
@@ -189,10 +209,16 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
       }
     } catch (e) {
       if (!ref.mounted) return;
+      // 区分「本地命中且远端失败＝离线只读」与「无内容远端失败＝可重试失败态」，
+      // 不得把两者混为同一态（message-reliability REQ-001/REQ-003）。
+      final hasLocalContent = state.messages.isNotEmpty;
       state = state.copyWith(
         isLoading: false,
         isRefreshing: false,
-        error: runtimeErrorDisplayMessage(e),
+        source: hasLocalContent
+            ? ChatTimelineContentSource.offlineReadOnly
+            : ChatTimelineContentSource.none,
+        error: hasLocalContent ? null : runtimeErrorDisplayMessage(e),
       );
     }
   }
@@ -309,6 +335,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
     String? senderName,
     String? senderAvatar,
     List<String>? mentions,
+    String? replyToMessageId,
   }) async {
     final activeContext = await _resolveActivePersonaContext();
     final clientMsgId = _uuid.v4();
@@ -330,6 +357,11 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
       mediaType: media?.mediaType,
       mediaContentType: media?.mimeType,
       mediaFileSizeBytes: media?.fileSizeBytes,
+      audioDurationMs: type == 'audio' ? media?.durationMs : null,
+      audioWaveform: type == 'audio' && (media?.waveform.isNotEmpty ?? false)
+          ? media?.waveform
+          : null,
+      replyToMessageId: replyToMessageId,
       status: 'sending',
     );
     final command = ChatSendMessageCommand(
@@ -338,6 +370,12 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
       content: content,
       clientMsgId: clientMsgId,
       mediaAssetId: media?.assetId,
+      // 语音元数据仅 audio 合法（契约 FORBIDDEN_UNLESS_type_audio）。
+      audioDurationMs: type == 'audio' ? media?.durationMs : null,
+      audioWaveform: type == 'audio' && (media?.waveform.isNotEmpty ?? false)
+          ? media?.waveform
+          : null,
+      replyToMessageId: replyToMessageId,
       mentions: mentions ?? const <String>[],
       senderDisplayNameSnapshot: senderName ?? activeContext.displayName,
       senderAvatarUrlSnapshot: senderAvatar ?? activeContext.avatarUrl,
@@ -373,7 +411,24 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
         startedAt: sendStartedAt,
         failReasonCode: e is CloudException ? e.code : e.runtimeType.toString(),
       );
-      await ref.read(chatSendOutboxProvider.notifier).enqueueCommand(command);
+      final queued = await ref
+          .read(chatSendOutboxProvider.notifier)
+          .enqueueCommand(command);
+      if (!queued && ref.mounted) {
+        // 队列拒收（Hive 不可用/队列满）意味着失去跨重启自动重发兜底，
+        // 必须可观测；气泡 failed 态与手动重试（重建命令直发）仍然可用。
+        unawaited(
+          ref
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'chat.send_outbox.enqueue_rejected',
+                error: StateError(
+                  'send outbox rejected command ${command.clientMsgId}',
+                ),
+                stackTrace: StackTrace.current,
+              ),
+        );
+      }
       return false;
     }
   }
@@ -414,22 +469,46 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
 
   /// 重试发送失败的消息：触发持久化 outbox 按原 clientMsgId 顺序重放，
   /// 服务端唯一约束保证不产生第二条消息。
+  /// 命令若不在队列（曾被 Hive 不可用/队列满拒收）则以原 clientMsgId 直发
+  /// 兜底，避免手动重试后 failed 气泡被 loadMessages 静默吞掉。
   @override
   Future<void> retrySendMessage(String clientMsgId) async {
-    final hasFailed = state.messages.any(
-      (m) => m.clientMsgId == clientMsgId && m.status == 'failed',
-    );
-    if (!hasFailed) {
+    final failedMessage = state.messages
+        .where((m) => m.clientMsgId == clientMsgId && m.status == 'failed')
+        .firstOrNull;
+    if (failedMessage == null) {
       throw StateError('Message not found or not failed');
     }
-    await _resolveActivePersonaContext();
+    final activeContext = await _resolveActivePersonaContext();
     final retrying = state.messages.map((m) {
       return m.clientMsgId == clientMsgId ? m.copyWith(status: 'sending') : m;
     }).toList();
     state = state.copyWith(messages: _sorted(retrying));
     try {
-      await ref.read(chatSendOutboxProvider.notifier).drain();
-      // drain 成功后从服务端确认视角刷新该会话消息（重放结果含 seq）。
+      final outbox = ref.read(chatSendOutboxProvider.notifier);
+      final command = ChatSendMessageCommand(
+        conversationId: conversationId,
+        type: failedMessage.type,
+        content: failedMessage.content ?? '',
+        clientMsgId: clientMsgId,
+        mediaAssetId: failedMessage.mediaAssetId,
+        replyToMessageId: failedMessage.replyToMessageId,
+        mentions: failedMessage.mentions ?? const <String>[],
+        senderDisplayNameSnapshot:
+            failedMessage.senderName ?? activeContext.displayName,
+        senderAvatarUrlSnapshot: activeContext.avatarUrl,
+        personaContextVersion: activeContext.contextVersion > 0
+            ? activeContext.contextVersion
+            : null,
+      );
+      // 重复入队安全：服务端幂等冲突在 drain 时折叠为已送达出队。
+      final queued = await outbox.enqueueCommand(command);
+      if (queued) {
+        await outbox.drain();
+      } else {
+        await _writer.sendMessage(command);
+      }
+      // 重放成功后从服务端确认视角刷新该会话消息（结果含 seq）。
       await loadMessages();
     } catch (error, stackTrace) {
       // 重试失败回落 failed 气泡供再次手动重试，并结构化上报。
@@ -464,6 +543,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
             : m;
       }).toList();
       state = state.copyWith(messages: _sorted(updated));
+      unawaited(_persistRecalledPlaceholder(messageId));
     } catch (e) {
       state = state.copyWith(error: runtimeErrorDisplayMessage(e));
     }
@@ -514,7 +594,19 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
           : m;
     }).toList();
     state = state.copyWith(messages: _sorted(updated));
-    unawaited(_removePersistedMessage(messageId));
+    // 本地副本写 recalled 占位而非物理删除：离线重开必须仍能看到
+    // 「消息已撤回」占位（reliability 离线可读语义），物理删除会让
+    // 占位在下次远端同步前凭空消失。
+    unawaited(_persistRecalledPlaceholder(messageId));
+  }
+
+  /// 实时事件：对端已读水位单调推进（1v1 双勾真相源）。
+  @override
+  void advancePeerReadSeq(int readSeq) {
+    if (readSeq <= state.peerReadSeq) {
+      return;
+    }
+    state = state.copyWith(peerReadSeq: readSeq);
   }
 
   @override
@@ -538,7 +630,7 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
       final members = await _memberRepo.listMembers(
         conversationId: conversationId,
         limit: 200,
-        sort: 'joined_asc',
+        sort: MemberListSort.joinedAsc,
       );
       final memberByUserId = {
         for (final member in members)
@@ -679,16 +771,24 @@ class ChatMessageNotifier extends Notifier<ChatMessageState>
     }
   }
 
-  Future<void> _removePersistedMessage(String messageId) async {
+  /// 撤回后把 recalled 占位写回本地副本（覆盖同 id 的原文），
+  /// 离线冷启动读回仍能展示「消息已撤回」占位。
+  Future<void> _persistRecalledPlaceholder(String messageId) async {
+    final recalled = state.messages
+        .where((m) => m.id == messageId)
+        .toList(growable: false);
+    if (recalled.isEmpty) {
+      return;
+    }
     try {
       final cacheScope = await _resolveTimelineScope();
       if (cacheScope == null || !ref.mounted) return;
       await ref
           .read(chatMessageTimelineCacheProvider)
-          .removeCachedMessage(scope: cacheScope, messageId: messageId);
+          .writeMessages(scope: cacheScope, messages: recalled);
     } catch (error, stackTrace) {
       _recordLocalTimelineFailure(
-        operation: 'remove',
+        operation: 'recall_placeholder',
         error: error,
         stackTrace: stackTrace,
       );

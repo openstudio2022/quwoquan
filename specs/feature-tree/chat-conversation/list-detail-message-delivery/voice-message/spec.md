@@ -104,6 +104,8 @@
 - GIVEN 用户录制并发送一条语音消息。
 - WHEN App 与服务端写入、读取该消息。
 - THEN audio Message 只通过强类型 MediaAsset 引用同一音频资产，且不依赖临时 URL。
+- AND `audioDurationMs` 与 `audioWaveform` 仅 `type=audio` 合法，非 audio 携带返回 canonical MessageInvalid。
+- AND 落库、MessageSent 事件、List/Sync 读面与接收端语音气泡渲染同一真实时长与波形。
 
 ## 6. 依赖
 
@@ -122,11 +124,3 @@
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：录音、上传、发送、消息展示、播放闭环在 Widget/Provider 测试和 user_acceptance 记录中均有证据。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
 
-<a id="open-002"></a>
-### OPEN-002 audio Message 与 MediaAsset 强类型引用端云一致
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：local_contract contract 和端云契约测试覆盖 audio 消息字段。
-- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。

@@ -39,7 +39,7 @@
         "additionalProperties": false,
         "required": ["seedOrigin", "seedId", "coverageKey", "reason"],
         "properties": {
-          "seedOrigin": {"enum": ["legacy_hint", "current_coverage"]},
+          "seedOrigin": {"enum": ["historical_capsule_hint", "current_coverage"]},
           "seedId": {"$ref": "#/$defs/sha256"},
           "coverageKey": {"$ref": "homepage_article_seed_selection.schema.json#/$defs/seed/properties/coverageKey"},
           "reason": {"const": "fresh coverage intersection missing or changed"}

@@ -8,7 +8,7 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/ada
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/conversation_cache_record.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/cache_read_result.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_message_record.dart';
-import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_search_namespace.dart';
+import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/local_search_namespace.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/search_local_hit_views.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/conversation_avatar_search_index.dart';
 import 'package:sqflite/sqflite.dart';
@@ -34,6 +34,7 @@ abstract interface class LocalChatSearchReader {
     required LocalSearchNamespace namespace,
     required String query,
     String? conversationType,
+    String? conversationId,
     int limit = 20,
   });
 

@@ -6,6 +6,7 @@ import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_font_stack.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/article_rich_block_chrome.dart';
 
 class ArticlePaginationEngine {
   const ArticlePaginationEngine._();
@@ -40,6 +41,8 @@ class ArticlePaginationEngine {
                   block.type == ArticleDocumentBlockType.heading2 ||
                   block.type == ArticleDocumentBlockType.heading3 ||
                   block.type == ArticleDocumentBlockType.sectionTitle ||
+                  // 富块以语义块进入分页（GWT-003），不再从 body 流走。
+                  ArticleRichBlockChrome.isRichBlockType(block.type) ||
                   (block.type == ArticleDocumentBlockType.paragraph &&
                       block.spans.any((span) => span.isInlineMention)),
             )
@@ -245,11 +248,16 @@ class ArticlePaginationEngine {
       final spacingBefore = (titleRange == null && pageBlocks.isEmpty)
           ? 0.0
           : spec.spacingBefore;
-      final textHeight = _measureTextHeight(
-        text: block.text.trim(),
-        style: spec.style,
-        maxWidth: contentWidth,
-      );
+      // 富块容器几何与渲染同源（GWT-003）：内缩与内边距计入测量。
+      final textHeight =
+          ArticleRichBlockChrome.verticalPaddingFor(block.type) +
+          _measureTextHeight(
+            text: block.text.trim(),
+            style: spec.style,
+            maxWidth:
+                contentWidth -
+                ArticleRichBlockChrome.horizontalInsetFor(block.type),
+          );
       final blockHeight = spacingBefore + textHeight + spec.spacingAfter;
       if (blockHeight > remainingHeight &&
           (titleRange != null || pageBlocks.isNotEmpty)) {
@@ -261,7 +269,10 @@ class ArticlePaginationEngine {
         remainingHeight -= spec.spacingAfter;
       }
       pageBlocks.add(block);
-      if (block.type == ArticleDocumentBlockType.paragraph) {
+      // 语义块文本同时进入 body 可搜索流的类型（paragraph 与富块），
+      // 消费后推进 body 偏移跳过重复文本。
+      if (block.type == ArticleDocumentBlockType.paragraph ||
+          ArticleRichBlockChrome.isRichBlockType(block.type)) {
         nextBodyOffset = math.max(
           nextBodyOffset,
           (block.offset + block.text.length).clamp(0, body.length),
@@ -489,6 +500,13 @@ class ArticlePaginationEngine {
         spacingBefore: spacing.before(ArticleSpacingSemantic.headingMajor),
         spacingAfter: spacing.after(ArticleSpacingSemantic.headingMajor),
       ),
+      ArticleDocumentBlockType.quote ||
+      ArticleDocumentBlockType.callout ||
+      ArticleDocumentBlockType.codeBlock => _SemanticBlockSpec(
+        style: ArticleRichBlockChrome.textStyleFor(block.type, bodyStyle),
+        spacingBefore: spacing.before(ArticleSpacingSemantic.paragraph),
+        spacingAfter: spacing.after(ArticleSpacingSemantic.paragraph),
+      ),
       _ => _SemanticBlockSpec(
         style: bodyStyle,
         spacingBefore: 0,
@@ -529,6 +547,9 @@ class ArticlePaginationEngine {
             ArticleDocumentBlockType.sectionTitle => 'sectionTitle',
             ArticleDocumentBlockType.orderedItem => 'orderedItem',
             ArticleDocumentBlockType.bulletItem => 'bulletItem',
+            ArticleDocumentBlockType.quote => 'quote',
+            ArticleDocumentBlockType.callout => 'callout',
+            ArticleDocumentBlockType.codeBlock => 'codeBlock',
             _ => 'body',
           },
           textAlign: block.textAlign,

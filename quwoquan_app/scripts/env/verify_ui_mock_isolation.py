@@ -37,6 +37,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 APP = ROOT / "quwoquan_app"
 APP_LIB = APP / "lib"
+APP_TEST_SUPPORT = APP / "test" / "support"
 RETIRED_AGGREGATE_MOCK_PACKAGE = APP / "packages/quwoquan_cloud_mock"
 RETIRED_PRODUCTION_FIXTURE_TOKENS = (
     "contract_fixture_runtime_loader",
@@ -83,6 +84,17 @@ IMPORT_MOCK = re.compile(
 PROTOTYPE_RE = re.compile(
     r"\bprototype(Circles|Groups)\b",
 )
+TEST_SUPPORT_FIXTURE_READER_TOKENS = (
+    "object_contract_example_reader",
+    "ObjectContractExampleReader",
+    "objectContractExampleReader",
+    "requireExample(",
+)
+TEST_SUPPORT_DOMAIN_DOCUMENT_RE = re.compile(
+    r"""\.document\(\s*['"](?:assistant|chat|circle|content|entity|gateway|"""
+    r"""integration|notification|ops|realtime|recommendation|rtc|search|tag|user)['"]"""
+)
+DART_IO_IMPORT_RE = re.compile(r"""(?m)^\s*import\s+['"]dart:io['"]\s*;""")
 
 def test_library_imports(text: str) -> list[str]:
     """该 Dart 源文件 import 了哪些测试框架/替身库。类名长什么样与判定无关。"""
@@ -97,6 +109,20 @@ def scan_dart_files(base: Path) -> list[Path]:
     if not base.is_dir():
         return []
     return sorted(base.rglob("*.dart"))
+
+
+def test_support_fixture_reader_violations(path: Path, text: str) -> list[str]:
+    """返回 test/support 中跨域 fixture reader 的结构性违规。"""
+    violations = [
+        f"禁止 test/support 跨域 fixture reader token {token!r}"
+        for token in TEST_SUPPORT_FIXTURE_READER_TOKENS
+        if token in text
+    ]
+    if TEST_SUPPORT_DOMAIN_DOCUMENT_RE.search(text):
+        violations.append("禁止 test/support 通过 document(domain) 选择跨域场景")
+    if "fixtures" in path.parts and DART_IO_IMPORT_RE.search(text):
+        violations.append("test/support fixture builder 禁止 import dart:io 读取运行时 JSON")
+    return violations
 
 
 def main() -> int:
@@ -159,6 +185,12 @@ def main() -> int:
             f"{stale}: 已不再 import 测试框架/替身库，必须同步删除基线条目，"
             "否则基线退化成永久豁免"
         )
+
+    for path in scan_dart_files(APP_TEST_SUPPORT):
+        rel = path.relative_to(APP).as_posix()
+        text = path.read_text(encoding="utf-8")
+        for violation in test_support_fixture_reader_violations(path, text):
+            errors.append(f"{rel}: {violation}")
 
     if errors:
         print("ui_mock_isolation 校验失败:", file=sys.stderr)

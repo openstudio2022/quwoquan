@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/application/public/image_editor_filter_models.dart';
+import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/application/public/image_editor_page_params.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/adapters/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/presentation/create_media_picker_page.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/presentation/create_media_picker_presentation.dart';
@@ -552,12 +553,12 @@ void main() {
                           mediaPickerPort: service,
                           imageEditorBuilder: (context, request) =>
                               _FakeImageEditorPage(
-                                result: <String, Object>{
-                                  'index': request.index,
-                                  'path': request.imagePaths[request.index],
-                                  'paths': request.imagePaths,
-                                  'action': 'continueToCreate',
-                                },
+                                result: ImageEditorMultiImageDoneResult(
+                                  index: request.index,
+                                  path: request.imagePaths[request.index],
+                                  paths: request.imagePaths,
+                                  action: 'continueToCreate',
+                                ),
                               ),
                         ),
                       ),
@@ -668,12 +669,12 @@ void main() {
                           mediaPickerPort: service,
                           imageEditorBuilder: (context, request) =>
                               _FakeImageEditorPage(
-                                result: <String, Object>{
-                                  'index': request.index,
-                                  'path': request.imagePaths[request.index],
-                                  'paths': request.imagePaths,
-                                  'action': 'continueToCreate',
-                                },
+                                result: ImageEditorMultiImageDoneResult(
+                                  index: request.index,
+                                  path: request.imagePaths[request.index],
+                                  paths: request.imagePaths,
+                                  action: 'continueToCreate',
+                                ),
                               ),
                         ),
                       ),
@@ -877,10 +878,10 @@ void main() {
                           imageEditorBuilder: (context, request) {
                             editorRequest = request;
                             return const _FakeImageEditorPage(
-                              result: <String, Object>{
-                                'index': 1,
-                                'path': '/tmp/a2-edited.jpg',
-                              },
+                              result: ImageEditorMultiImageDoneResult(
+                                index: 1,
+                                path: '/tmp/a2-edited.jpg',
+                              ),
                             );
                           },
                         ),
@@ -936,12 +937,12 @@ Widget _pickerApp({
       imageEditorBuilder:
           imageEditorBuilder ??
           (context, request) => _FakeImageEditorPage(
-            result: <String, Object>{
-              'index': request.index,
-              'path': request.imagePaths[request.index],
-              'paths': request.imagePaths,
-              'action': 'continueToCreate',
-            },
+            result: ImageEditorMultiImageDoneResult(
+              index: request.index,
+              path: request.imagePaths[request.index],
+              paths: request.imagePaths,
+              action: 'continueToCreate',
+            ),
           ),
     ),
   );

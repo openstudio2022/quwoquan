@@ -3,7 +3,7 @@ import 'package:quwoquan_app/service/user_service/account/authentication_challen
 import 'package:quwoquan_app/service/user_service/account/credential_binding/application/public/credential_binding_ports.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/fixture_user_resolver.dart';
+import '../../../../runtime/identity/fixture_identity.dart';
 
 /// local_contract 专用对象级身份 Facet 组合，仅用于 Provider override。
 ///
@@ -15,12 +15,11 @@ class TestAuthFacets
         AuthenticationChallengeWriter,
         CredentialBindingWriter,
         CredentialBindingReader {
-  /// 身份单一真相源是 user-service canonical 场景，不在此处再抄一份常量：
-  /// persona 与 user 是两个对象，硬编码同值会让「登录返回 metadata 当前身份」
-  /// 这条契约在 persona 拆分后失真。
-  static String get ownerId => FixtureUserResolver.currentUserVariantUserId;
-  static String get personaId =>
-      FixtureUserResolver.currentUserVariantPersonaId;
+  /// 身份单一真相源在 runtime harness 的 fixture_identity,与 user_account
+  /// 的 profile builder 共用;对象 support 之间禁止互相 import,persona 拆分
+  /// 时只改 runtime 常量即可,不会形成第二份硬编码。
+  static String get ownerId => fixtureCurrentUserVariantUserId;
+  static String get personaId => fixtureCurrentUserVariantPersonaId;
 
   @override
   Future<OtpDeliveryReadinessSnapshot> getOtpDeliveryReadiness() async {
@@ -129,6 +128,19 @@ class TestAuthFacets
   @override
   Future<LogoutAck> logout(LogoutCommand command) async {
     return const LogoutAck(revoked: true);
+  }
+
+  @override
+  Future<WhitelistedResearchSession> issueWhitelistedResearchSession(
+    IssueWhitelistedResearchSessionCommand command,
+  ) async {
+    return WhitelistedResearchSession(
+      // sha256("test-research-subject")
+      subjectHash:
+          'sha256:5f16cfd181c9de0e103333f577c519608414fd967b59760b46e0dc17ec2a801f',
+      attestationId: 'test-research-attestation',
+      expiresAt: DateTime.utc(2099),
+    );
   }
 
   @override

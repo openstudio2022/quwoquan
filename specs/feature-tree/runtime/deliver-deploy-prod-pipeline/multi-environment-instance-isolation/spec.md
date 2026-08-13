@@ -41,6 +41,8 @@
   JWT secret、CA、候选、release、run/report 均必须包含并验证 target identity。
 - package、up、health、release verify、feed readback 与 down 必须绑定同一 baselineId、
   runtime identity 和 immutable release；跨 target 回执或数据命中必须 `GATE_BLOCK`。
+- service-core 候选必须同时绑定 11-module manifest 与组合镜像 identity；Alpha、Beta、Gamma
+  只可串行运行该候选的一种核心 topology，切换或回滚时不得与原 split-services workload 并存。
 - matrix 结果只能来自唯一 run 目录内的 live 子报告；测试替身不得写入 canonical live
   report 根，缺 `exitCode`、子报告、状态、environment 或 runtime identity 一律失败。
 - matrix 的设备覆盖必须显式选择 `full` 或 `emulator_only`。`emulator_only` 仅覆盖 iOS

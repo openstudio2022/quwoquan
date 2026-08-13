@@ -4,12 +4,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[5]
 SCRIPTS = ROOT / "quwoquan_data" / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from content.release.canonical.object_source_identity import source_identity_set
+from content.release.canonical.object_transaction_contract import (
+    ObjectTransactionError,
+)
 from content.release.canonical.release_attestation import (
     ReleaseAttestation,
     ReleaseAttestationError,
@@ -144,32 +149,23 @@ def test_release_attestation__rejects_historical_inputs_for_scalar_identity__con
         raise AssertionError("scalar source identity must bind current repository inputs")
 
 
-def test_release_attestation__accepts_object_level_legacy_identity_set__contract() -> None:
+def test_release_attestation__rejects_retired_migration_identity_rows__contract() -> None:
     document = _receipt().to_document()
-    document["sourceDigests"][0]["inputs"] = [
-        "quwoquan_data/historical/pre-contract-source"
-    ]
     execution_id = str(document["executionIds"][0])
-    document["executionIds"] = [execution_id]
-    source_digest = str(document.pop("sourceDigest"))
-    document.pop("sourceRevision")
-    document.pop("entityCatalogDigest")
-    identities, identity_set_digest = source_identity_set(
-        [
-            {
-                "identityKind": "legacy_canonical_migration",
-                "executionId": execution_id,
-                "sourceDigest": source_digest,
-                "canonicalObjectDigest": "sha256:" + digit * 64,
-                "migrationEvidenceDigest": "sha256:" + evidence * 64,
-            }
-            for digit, evidence in (("1", "2"), ("3", "4"))
-        ]
-    )
-    document["sourceIdentities"] = identities
-    document["sourceIdentitySetDigest"] = identity_set_digest
+    source_digest = str(document["sourceDigest"])
 
-    assert ReleaseAttestation.from_document(document).to_document() == document
+    with pytest.raises(ObjectTransactionError, match="SOURCE_IDENTITY_INVALID"):
+        source_identity_set(
+            [
+                {
+                    "identityKind": "retired_migration_kind",
+                    "executionId": execution_id,
+                    "sourceDigest": source_digest,
+                    "canonicalObjectDigest": "sha256:" + "1" * 64,
+                    "migrationEvidenceDigest": "sha256:" + "2" * 64,
+                }
+            ]
+        )
 
 
 def test_release_attestation__rejects_scalar_and_set_identity_together__contract() -> None:

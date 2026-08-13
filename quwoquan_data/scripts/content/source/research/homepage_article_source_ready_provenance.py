@@ -64,15 +64,15 @@ def verify_source_ready_provenance(
     seed = matching_seeds[0]
     baseline = seed.get("historicalBaseline")
     comparison = provenance.get("historicalComparison")
-    if seed.get("seedOrigin") == "legacy_hint":
+    if seed.get("seedOrigin") == "historical_capsule_hint":
         if not isinstance(baseline, Mapping) or not isinstance(comparison, Mapping):
-            reject(f"{label}.legacy historical comparison is missing")
+            reject(f"{label}.historical capsule comparison is missing")
         if (
             baseline.get("candidateId") != comparison.get("candidateId")
             or baseline.get("bodyContentSha256")
             != comparison.get("bodyContentSha256")
         ):
-            reject(f"{label}.legacy historical comparison is not seed-bound")
+            reject(f"{label}.historical capsule comparison is not seed-bound")
     elif comparison is not None:
         reject(f"{label}.current seed has manufactured historical comparison")
 

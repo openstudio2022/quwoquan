@@ -3,15 +3,15 @@ import 'package:flutter/material.dart';
 
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/immersive_viewer_layout.dart';
+import 'package:quwoquan_app/design_system/actions/app_follow_button.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/formatters/compact_count_formatter.dart';
 import 'package:quwoquan_app/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/design_system/semantics/design_semantic_constants.dart';
+import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/spacing/spacing_extensions.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
-
 /// 'full'：作品模式，含作者/关注/位置；'backOnly'：微趣模式，仅返回+更多
 typedef ToolbarMode = String;
 
@@ -225,7 +225,12 @@ class MediaViewerTopBar extends StatelessWidget {
           ),
           Positioned(
             right: 0,
-            child: _buildFollowButton(context, height: height),
+            child: AppFollowButton(
+              isFollowing: isFollowing,
+              onPressed: onFollow,
+              style: AppFollowButtonStyle.onMedia,
+              height: height,
+            ),
           ),
         ],
       ),
@@ -241,42 +246,6 @@ class MediaViewerTopBar extends StatelessWidget {
       borderRadius: avatarSize / 2,
       backgroundColor: AppColors.overlayMedium,
       fallbackIcon: Icons.person,
-    );
-  }
-
-  Widget _buildFollowButton(BuildContext context, {required double height}) {
-    final buttonText = isFollowing
-        ? FoundationText.following
-        : FoundationText.follow;
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.zero,
-      onPressed: onFollow,
-      child: Container(
-        constraints: BoxConstraints(
-          maxWidth: AppSpacing.followButtonWidthCompact,
-        ),
-        padding: AppSpacing.buttonPaddingCompact(
-          context,
-          DesignSemanticConstants.sm,
-        ),
-        height: height,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isFollowing
-              ? AppColors.followingButtonOnDark
-              : AppColors.primaryColor,
-          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        ),
-        child: Text(
-          buttonText,
-          style: TextStyle(
-            color: AppColors.white,
-            fontSize: AppTypography.sm,
-            fontWeight: AppTypography.semiBold,
-          ),
-        ),
-      ),
     );
   }
 
@@ -310,7 +279,13 @@ class ImmersiveToolbarIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fill = backgroundColor ?? AppColors.transparent;
+    // 默认半透明暗圆底（immersive chrome 语义）：白色图标在浅色媒体、
+    // 媒体加载失败退到浅色背景时仍然可见，返回出路永不消失。
+    final fill =
+        backgroundColor ??
+        AppNavigationSemanticConstants.chromeActionBackground(
+          surface: AppChromeSurface.immersive,
+        );
     final outline = borderColor ?? AppColors.transparent;
 
     return CupertinoButton(

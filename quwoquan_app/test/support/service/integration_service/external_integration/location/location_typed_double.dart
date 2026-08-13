@@ -1,12 +1,10 @@
 import 'package:quwoquan_app/service/integration_service/external_integration/location/application/public/location_query_contracts.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
-
 final class LocationQueryTypedDouble
     implements NearbyLocationReader, LocationSearchReader {
-  LocationQueryTypedDouble({ObjectContractExampleReader? fixtures})
-    : _items = _readItems(fixtures ?? objectContractExampleReader);
+  LocationQueryTypedDouble({List<LocationPoi>? items})
+    : _items = List<LocationPoi>.unmodifiable(items ?? _defaultItems);
 
   final List<LocationPoi> _items;
 
@@ -34,42 +32,20 @@ final class LocationQueryTypedDouble
     );
   }
 
-  static List<LocationPoi> _readItems(ObjectContractExampleReader fixtures) {
-    final decoded = fixtures.document('integration');
-    final examples = decoded['examples'];
-    if (examples is! Map) {
-      throw FormatException(
-        'Integration location contract examples are missing',
-      );
-    }
-    final locationSeed = examples['location_poi_core'];
-    if (locationSeed is! Map || locationSeed['pois'] is! List) {
-      throw FormatException('Integration location_poi_core fixture is missing');
-    }
-    final items = <LocationPoi>[];
-    for (final raw in locationSeed['pois'] as List) {
-      if (raw is! Map) {
-        throw FormatException('Integration POI fixture must be an object');
-      }
-      final map = Map<String, dynamic>.from(raw);
-      final id = (map['poiId'] ?? '').toString().trim();
-      final name = (map['name'] ?? '').toString().trim();
-      final latitude = map['lat'];
-      final longitude = map['lng'];
-      if (id.isEmpty || name.isEmpty || latitude is! num || longitude is! num) {
-        throw FormatException('Integration POI fixture is incomplete');
-      }
-      items.add(
-        LocationPoi(
-          id: id,
-          name: name,
-          latitude: latitude.toDouble(),
-          longitude: longitude.toDouble(),
-          address: map['address']?.toString(),
-          distanceMeters: (map['distanceMeters'] as num?)?.toInt(),
-        ),
-      );
-    }
-    return List<LocationPoi>.unmodifiable(items);
-  }
+  static const List<LocationPoi> _defaultItems = <LocationPoi>[
+    LocationPoi(
+      id: 'fixture_poi_west_lake',
+      name: '杭州西湖',
+      latitude: 30.2431,
+      longitude: 120.1505,
+      address: '浙江省杭州市西湖区',
+    ),
+    LocationPoi(
+      id: 'fixture_poi_coffee',
+      name: '契约咖啡馆',
+      latitude: 30.25,
+      longitude: 120.16,
+      address: '杭州市测试路 1 号',
+    ),
+  ];
 }

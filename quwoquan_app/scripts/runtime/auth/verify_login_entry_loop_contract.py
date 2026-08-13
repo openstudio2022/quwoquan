@@ -7,6 +7,9 @@
 3. Web/宽屏创作主入口未登录直接显示登录面板。
 4. 活动/群聊具体动作绕过 gate，或登录成功后没有 typed continuation 精确续接。
 5. 缺少「关闭不回环」与「登录成功进目标态」回归测试。
+6. 鉴权双真相源回归：`page_object_contract.yaml` 的 auth_requirement 与
+   `requiredRouteGateForLocation` 漂移（缺 parity 测试、守卫丢 RTC/settings
+   分支、auth_gate 重新引入裸路径前缀字面量）。
 """
 
 from __future__ import annotations
@@ -327,6 +330,53 @@ def main() -> int:
         )
         is not None,
         "required_route_gate_test 必须断言 gatheringCreate 使用 startGathering 强登录门",
+        errors,
+    )
+
+    # ---- 鉴权声明 ↔ 路由守卫零漂移（契约 required 深链不得绕过登录门）----
+    parity_test_path = (
+        ROOT
+        / "quwoquan_app/test/local_contract/runtime/auth/"
+        / "route_auth_contract_parity__local_contract_test.dart"
+    )
+    require(
+        parity_test_path.is_file(),
+        "缺少 route_auth_contract_parity__local_contract_test.dart："
+        "契约 auth_requirement 与 requiredRouteGateForLocation 的零漂移测试",
+        errors,
+    )
+    if parity_test_path.is_file():
+        parity_test = parity_test_path.read_text(encoding="utf-8")
+        require(
+            "page_object_contract.yaml" in parity_test
+            and "app_routes.yaml" in parity_test,
+            "parity 测试必须直接消费 page_object_contract.yaml 与 app_routes.yaml，"
+            "禁止手抄第二份 required 路由清单",
+            errors,
+        )
+        require(
+            "required 的 routed 页深链必须被路由守卫拦截" in parity_test
+            and "禁止被守卫整页拦截" in parity_test,
+            "parity 测试必须双向断言：required 拦截 + optional/public 不拦截",
+            errors,
+        )
+    require(
+        "AuthGateReason.startCall;" in auth_gate
+        and "rtcIncomingPathTemplate" in auth_gate
+        and "rtcPickParticipants" in auth_gate,
+        "RTC 通话页族（契约 required）必须由 requiredRouteGateForLocation 映射到 startCall",
+        errors,
+    )
+    require(
+        "_requiredSettingsSubPages" in auth_gate
+        and "settingsAccountSecurity" in auth_gate
+        and "settingsPrivacy" in auth_gate,
+        "账号态设置子页（契约 required）必须由 requiredRouteGateForLocation 拦截",
+        errors,
+    )
+    require(
+        "'/chat/'" not in auth_gate and "'/profile/'" not in auth_gate,
+        "auth_gate 禁止裸路径前缀字面量，必须从 AppRoutePaths 常量拼接",
         errors,
     )
 

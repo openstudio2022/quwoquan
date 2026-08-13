@@ -62,5 +62,11 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺少能够证明“投递与读取回执”已满足当前规格的真实测试证据。
+- 影响或价值：尚缺进入会话时对端历史已读态的读面。当前 peer 读位仅由
+  `ConversationReadWatermarkAdvanced` 实时事件推进，冷进入会话时自己的历史消息
+  在对端再次已读前显示单勾，需契约演进补对端水位查询。尚缺群聊逐人已读的
+  production Remote UAT。1v1 双勾真链已落地：App 消费对端水位事件单调推进
+  `peerReadSeq`（读者为自己时只收敛多设备未读、不伪造对端已读），自己消息按
+  `seq <= peerReadSeq` 判定双勾（`isRead` 硬编码已移除），证据见
+  `chat_read_watermark_receipt__local_contract_test.dart`。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

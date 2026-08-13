@@ -83,4 +83,4 @@
   - `notification_outbox`（`internal/platform/reliabletaskmongo/store.go`）：通用可靠任务队列的任务表，被 chat-service 与 integration-service 两个服务共用。命名含 `outbox` 但语义是任务队列而非事件发布，属既存命名缺陷；改名需要生产数据迁移，当前不改，只如实记录。
   - `product_control_plane_outbox`、`platform_control_plane_outbox`、`generic_control_plane_outbox`（`internal/platform/controlplane/persistence/postgres_store.go`）：发布配置证明的控制面事件表，按 scope 参数化，被 8 个以上服务的 `controlplane.StartReleaseConfigAttestation` 共用。
   - `reliable_task_outbox`（由 `external_integration/external_interaction` 声明）与 `post_import_task_outbox`（由 `content/post` 声明）：已有对象归属，但与 `notification_outbox` 同属命名缺陷——名为 outbox 实为可靠任务队列，待存储 `role` 字段落地后应标为非发布型，避免按名字工作的判定把它们当成事件发件箱。
-- 完成判定：storage 映射能表达平台级共用存储的归属（或显式声明其无对象归属），上述存储各自获得可引用的归属或排除出处，且按对象归属的判定不再依赖对它们的隐性缺席。
+- 完成判定：storage 映射能表达平台级共用存储的归属（或显式声明其无对象归属），上述存储各自获得可引用的归属或排除出处，从而进入 `GWT-001` 的统一 Source 生成与 orphan fail-closed 判定，按对象归属的判定不再依赖对它们的隐性缺席。

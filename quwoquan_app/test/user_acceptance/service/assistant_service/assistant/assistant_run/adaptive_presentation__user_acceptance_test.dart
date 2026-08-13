@@ -1,3 +1,4 @@
+// readiness_case: assistant_run_adaptive_presentation_app_uat
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/adaptive-presentation-runtime/spec.md#gwt-001
 library;
 

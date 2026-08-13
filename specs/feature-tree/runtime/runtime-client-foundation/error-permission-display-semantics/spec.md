@@ -63,6 +63,7 @@
 - 沉浸式或跨页面入口的首屏错误必须保留来源 `sourceAppearanceMode`，错误页不继承错误的深色沉浸上下文。
 - 聊天语音发送失败仅 status bar（`chatVoicePendingRetry`），禁止 actionDialog 叠加。
 - 表单发送/提交/依赖失败在操作点附近使用 `AppFormErrorCard`，字段校验使用 `AppInlineFieldError`；二者必须复用同一无图标错误行，同一失败不得再叠加 Toast、dialog 或第二段弱提示。
+- 轻提示错误可辨识：失败类 toast 必须以 `UiErrorTone` 驱动的警示呈现（胶囊内前置 token 色圆点，非图标），与成功/进行中提示保持视觉差异；错误语义入口统一走 `AppToast.showError` 或显式 tone，且宣告 liveRegion。
 - 错误标题只说明状态；页面名称和业务对象不得覆盖恢复组标题、说明或动作。
 
 <a id="req-006"></a>
@@ -108,8 +109,17 @@
 - 页面加载恢复必须返回 generation-bound typed 终态 `content|canonicalEmpty|retainedContent|stillBlocked|superseded|cancelled`；共享错误组件将其收敛为 `recovered|stillBlocked|handedOff|superseded|cancelled`。Widget 不得在 await 后重读共享状态猜测恢复成功。
 - `stillBlocked` 是正常恢复终态：保持原错误页并记录 `still_blocked`，不得抛出异常或进入 bootstrap zone。只有 typed `recovered` 可记录恢复成功；未分类程序错误只记录 `recovery_unexpected_failure`，错误组件不重抛。
 - 成功空结果只有在 Remote envelope 明确携带 canonical empty outcome/reason 时使用空态，不伪装成失败；首页推荐、垂类与视频书内容区只显示次级灰色小字“内容加载完毕”，不得显示图标、错误标题或重试按钮。Following 保留独立“还没有关注动态”业务空态。
+- 空态只有三类语义：canonical 空结果陈述事实、业务引导空态提供单个 CTA、失败必须走错误态组件。
+- 业务空态全站共用 `design_system/feedback/app_empty_state.dart` 的统一空态组件，结构固定为图标、标题、可选说明与可选单 CTA；页面不得再自绘私有空态 widget，存量由组件复用棘轮只减不增。
+- 空态 CTA 只引导用户创造首条数据或前往真实入口；空态不得出现重试、错误语气或技术字段。
+- 首页推荐内容区完成态小字与 Following 独立业务空态按本节既有条款保留，不并入统一空态组件。
 - 已有缓存时保留内容，并使用非阻断“内容未更新”提示。
+- 加载失败不得渲染业务空态伪装成无数据；本地存储读取失败同样必须进入错误态并提供重试入口。
 - 整页错误只允许一个真实可执行的主操作；没有 handler 的动作不得显示。
+- 可 pop 页面的整页错误必须有离开出路：semantic 未声明任何 dismiss 动作时由共享错误组件内建补位，有恢复回调时补为次动作，无恢复回调时作为唯一动作。
+- 出路文案按容器语境适配：push 页面显示「返回」，modal/全屏 sheet 容器显示「关闭」，两者均经 Navigator pop 语义离开。
+- 错误内容区的离开出路只允许文字动作；「×」图标关闭仅属 modal chrome 层（导航栏），禁止在错误内容区引入图标关闭钮替代文字出路。
+- 根页面（不可 pop）不注入内建返回；已声明 dismiss 语义的页面不重复注入第二个返回。
 - 整页错误不得显示图标、插画、诊断折叠区或技术卡片；表单局部错误行同样不得显示错误图标，该限制仅不覆盖 `REQ-011` 的权限/登录门禁图标。所有 build mode 的用户 widget 与 semantics tree 均不得出现 operation、canonical error code、route、requestId、traceId、端口、内部域名、证书路径或堆栈。
 - operation、canonical error code、route、surface、requestId 与 traceId 只进入脱敏日志与遥测，不得以 debug build 作为向用户界面暴露技术字段的授权边界。
 - 整页错误、健康空内容和业务空态必须在扣除顶部/底部固定 chrome 与安全区后的真实可见内容区内居中；覆盖式底栏不得参与中心点计算，也不得以页面私有负偏移修正。无覆盖 chrome 的详情页继续按自身完整 body 居中。
@@ -212,6 +222,31 @@
 - THEN 只显示当前范围允许的一个等待或错误状态，6 秒内进入终态，旧 generation 不回写，媒体槽位被释放。
 - AND 两个以上区块失败时页面只显示一个最高优先级恢复组提示。
 
+<a id="gwt-015"></a>
+### GWT-015 可 pop 页面整页错误始终有「返回」出路
+
+- GIVEN 用户进入非根页面且页面进入整页错误态。
+- WHEN 页面 semantic 未声明任何 dismiss 动作。
+- THEN 共享错误组件自动补「返回」动作，点按可真实离开当前页面回到来源上下文。
+- AND 根页面（不可 pop）不注入返回；已声明 dismiss 语义的页面不出现第二个返回。
+- AND 加载失败不以业务空态呈现；本地存储读取失败进入错误态并提供重试。
+
+<a id="gwt-016"></a>
+### GWT-016 业务空态使用统一组件且不承载失败
+
+- GIVEN 页面或区块确认收到 canonical 空结果或用户尚未创造首条数据。
+- WHEN 页面呈现该空态。
+- THEN 空态由设计系统统一空态组件渲染，结构为图标、标题、可选说明与可选单 CTA，深浅双模式与触控热区合规。
+- AND 无 CTA 时不渲染死按钮；CTA 点按进入真实引导入口。
+- AND 空态不出现重试按钮、错误语气或技术字段；失败场景不进入空态组件。
+
+<a id="gwt-017"></a>
+### GWT-017 沉浸深色上下文失败呈现仍走统一组件与语义 token
+
+- GIVEN 用户在沉浸式深色上下文（视频书、通话、媒体查看器）遇到加载或播放失败。
+- WHEN 页面呈现该失败或其等待态。
+- THEN 沉浸失败内容由共享沉浸失败组件渲染且前景与等待指示色全部经 `AppColors.immersiveForeground` 语义 token 声明，不存在裸写固定白色的旁路失败面。
+
 ## 6. 依赖
 
 - 前置要求：[`runtime-client-foundation`](../spec.md) 的范围、要求与 SIT。
@@ -220,29 +255,11 @@
 
 ## 7. 开放事项
 
-<a id="open-003"></a>
-### OPEN-003 JIT 麦克风权限 — 无冗余 App modal
+<a id="open-001"></a>
+### OPEN-001 沉浸深色语境仍有固定白 indicator 残量待 token 化
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：同一次手势无 2+ App modal。
-- 完成判定：`GWT-006` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-004"></a>
-### OPEN-004 语音发送失败 — 单一低打扰载体
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：modal 与 status bar 不同时出现。
-- 完成判定：`GWT-007` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-005"></a>
-### OPEN-005 Page L2 primer 文案与继续按钮一致
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：verify_permission_primer_copy.py 通过。
-- 完成判定：`GWT-008` 对应行为满足且真实测试 `spec_ref` 有效。
+- 影响或价值：当前并行热点文件中尚有固定白 indicator 未经语义 token 声明，缺对应实现与验收证据。共享沉浸失败组件 `ImmersiveMediaFailureContent`、media_asset 沉浸 loading 面（image_book_canvas、video_player_surface_builder）与 rtc 沉浸面（video_call_screen_share_surface、call_stage_banner）已全部经 `AppColors.immersiveForeground` 声明前景并纳入 `GWT-017` 绑定测试扫描清单；经语境核实，assistant_skill_lifecycle_sheet_sections、circle_group_membership_panel、circle_edit_settings_page_state 三处为 accent 填充按钮内前景白（合理惯例，与 section_storage 上传按钮同类），剔除出范围。残量仅剩并行占据的 gathering（gathering_detail_page 两处、gathering_create_page）与 works_immersive_viewer_build、video_editor_page_state 的固定深色壳。
+- 完成判定：`GWT-017` 对应行为满足且残量文件的沉浸语境 indicator 全部改为 `AppColors.immersiveForeground` 并纳入既有 token 契约测试的扫描清单。

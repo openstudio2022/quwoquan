@@ -751,7 +751,7 @@ void main() {
   });
 
   // P3b 数据契约：mock 对象页 bundle 的 highlightItems 必须透传记录卡 footer
-  // 所需的 authorName / likeCount（contract seed = entity_scenarios.lite.json）。
+  // 所需的 authorName / likeCount 由本用例的对象级最小输入显式给出。
   // 与 widget 测试一体：UI 断言作者名/赞数结构，此处锁定字段数值。
   test('mock 对象页 bundle highlightItems 透传记录卡 footer 作者名与赞数', () async {
     final repository = MockHomepageRepository();

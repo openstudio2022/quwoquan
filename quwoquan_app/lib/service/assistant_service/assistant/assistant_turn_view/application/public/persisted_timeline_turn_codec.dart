@@ -1,4 +1,6 @@
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_answer_anchor.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_citation.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_assistant_timeline_payload.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_transcript_timeline_row.dart';
 
@@ -10,6 +12,7 @@ class PersistedTimelineTurnCodec {
     ...kTranscriptEnvelopeKeys,
     ...kTranscriptAnchorKeys,
     ...kTranscriptAssistantBlobKeys,
+    ...kTranscriptRetiredKeys,
     ...kPersistedAssistantTimelinePayloadKeys,
   };
 
@@ -22,11 +25,17 @@ class PersistedTimelineTurnCodec {
     return out;
   }
 
-  static List<Map<String, dynamic>> _decodeUiReferencesList(dynamic refs) {
-    if (refs is! List) return const <Map<String, dynamic>>[];
+  /// 解析失败的引用被丢弃（fail-closed，与 UI 只渲染有效引用一致）。
+  static List<AssistantCitation> _decodeUiReferencesList(dynamic refs) {
+    if (refs is! List) return const <AssistantCitation>[];
     return refs
         .whereType<Map>()
-        .map((e) => e.cast<String, dynamic>())
+        .map(
+          (e) => AssistantCitation.tryFromReferenceMap(
+            e.cast<String, dynamic>(),
+          ),
+        )
+        .whereType<AssistantCitation>()
         .toList(growable: false);
   }
 
@@ -85,15 +94,6 @@ class PersistedTimelineTurnCodec {
       heuristicFallbackUsed: m['heuristicFallbackUsed'] as bool? ?? false,
       domainId: (m['domainId'] as String?) ?? '',
     );
-    final uiActionsRaw = m['uiActions'];
-    final uiActionsList = uiActionsRaw is List
-        ? uiActionsRaw
-              .whereType<Map>()
-              .map((e) => e.cast<String, dynamic>())
-              .toList(growable: false)
-        : uiActionsRaw is Map
-        ? <Map<String, dynamic>>[uiActionsRaw.cast<String, dynamic>()]
-        : const <Map<String, dynamic>>[];
     return AssistantAnswerTranscriptRow(
       id: (m['id'] as String?) ?? '',
       sessionId: (m['sessionId'] as String?) ?? '',
@@ -107,17 +107,14 @@ class PersistedTimelineTurnCodec {
       streaming: m['streaming'] as bool? ?? false,
       anchor: anchor,
       persisted: PersistedAssistantTimelinePayload.fromMap(m),
-      dialogueState:
-          (m['dialogueState'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
       uiReferences: _decodeUiReferencesList(m['uiReferences']),
-      uiActions: uiActionsList,
       runArtifacts:
           (m['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
           const <String, dynamic>{},
-      uiUsageStats:
-          (m['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
+      uiUsageStats: AssistantUiUsageStatsViewData.fromProtocolMap(
+        (m['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{},
+      ),
       extra: extra,
     );
   }
@@ -175,11 +172,11 @@ class PersistedTimelineTurnCodec {
         'qualityMetrics': r.anchor.qualityMetrics,
         'heuristicFallbackUsed': r.anchor.heuristicFallbackUsed,
         'domainId': r.anchor.domainId,
-        'dialogueState': r.dialogueState,
-        'uiReferences': r.uiReferences,
-        'uiActions': r.uiActions,
+        'uiReferences': r.uiReferences
+            .map((citation) => citation.toReferenceMap())
+            .toList(growable: false),
         'runArtifacts': r.runArtifacts,
-        'uiUsageStats': r.uiUsageStats,
+        'uiUsageStats': r.uiUsageStats.toProtocolMap(),
         ...r.persisted.toMap(),
       },
     };

@@ -14,6 +14,7 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/runtime/platform/official_call_ringtone_catalog.dart';
 import 'package:quwoquan_app/service/user_service/account/user_settings/application/user_settings_provider.dart';
 
 class SettingsCallsPage extends ConsumerStatefulWidget {
@@ -24,10 +25,6 @@ class SettingsCallsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
-  static const String _defaultRingtone = 'official.default';
-  static const String _classicRingtone = 'official.classic';
-  static const String _softRingtone = 'official.soft';
-
   @override
   void initState() {
     super.initState();
@@ -67,26 +64,20 @@ class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
                       header: SettingsText.settingsCallRingtone,
                       child: Column(
                         children: <Widget>[
-                          _ringtoneRow(
-                            isDark: isDark,
-                            label: SettingsText.settingsCallRingtoneDefault,
-                            ringtoneId: _defaultRingtone,
-                            selected: settings.defaultIncomingCallRingtoneId,
-                          ),
-                          SettingsInsetFormSectionDivider(isDark: isDark),
-                          _ringtoneRow(
-                            isDark: isDark,
-                            label: SettingsText.settingsCallRingtoneClassic,
-                            ringtoneId: _classicRingtone,
-                            selected: settings.defaultIncomingCallRingtoneId,
-                          ),
-                          SettingsInsetFormSectionDivider(isDark: isDark),
-                          _ringtoneRow(
-                            isDark: isDark,
-                            label: SettingsText.settingsCallRingtoneSoft,
-                            ringtoneId: _softRingtone,
-                            selected: settings.defaultIncomingCallRingtoneId,
-                          ),
+                          for (
+                            var index = 0;
+                            index < OfficialCallRingtoneCatalog.items.length;
+                            index++
+                          ) ...<Widget>[
+                            if (index > 0)
+                              SettingsInsetFormSectionDivider(isDark: isDark),
+                            _ringtoneRow(
+                              isDark: isDark,
+                              ringtone: OfficialCallRingtoneCatalog
+                                  .items[index],
+                              selected: settings.defaultIncomingCallRingtoneId,
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -153,18 +144,19 @@ class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
 
   Widget _ringtoneRow({
     required bool isDark,
-    required String label,
-    required String ringtoneId,
+    required OfficialCallRingtone ringtone,
     required String? selected,
   }) => SettingsInsetChoiceRow(
     isDark: isDark,
-    label: label,
-    isSelected: selected == ringtoneId,
+    label: ringtone.label,
+    isSelected:
+        selected == ringtone.id ||
+        (selected == null && ringtone.id == OfficialCallRingtoneCatalog.defaultId),
     onTap: () => unawaited(
       _update(
         ref
             .read(userSettingsSectionsProvider.notifier)
-            .setDefaultRingtone(ringtoneId),
+            .setDefaultRingtone(ringtone.id),
       ),
     ),
   );
@@ -195,7 +187,7 @@ class _SettingsCallsPageState extends ConsumerState<SettingsCallsPage> {
 
   Future<void> _update(Future<bool> operation) async {
     if (!await operation && mounted) {
-      final error = ref.read(userSettingsSectionsProvider).rawError;
+      final error = ref.read(userSettingsSectionsProvider).actionError;
       await AppActionErrorFeedback.show(
         context,
         semantic: runtimeErrorSemantic(

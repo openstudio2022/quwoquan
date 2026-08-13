@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import tempfile
 from itertools import pairwise
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import cv2
 from content.source.sourced_video_admission import (
     probe_audio_stream,
     probe_sourced_video,
+    sample_video_frame_files,
 )
 
 _MIN_DURATION_MS = 3_000
@@ -22,30 +24,28 @@ _SAMPLE_COUNT = 18
 _MOTION_DELTA_THRESHOLD = 0.012
 
 
-def _sample_frames(path: Path, *, frame_count: int) -> list[object]:
-    positions = sorted(
-        {
-            round(index * (frame_count - 1) / max(1, _SAMPLE_COUNT - 1))
-            for index in range(_SAMPLE_COUNT)
-        }
-    )
-    capture = cv2.VideoCapture(str(path))
-    samples: list[object] = []
-    try:
-        if not capture.isOpened():
-            raise ValueError("professional video sample decoder did not open")
-        for position in positions:
-            capture.set(cv2.CAP_PROP_POS_FRAMES, position)
-            ok, frame = capture.read()
-            if not ok or frame is None:
+def _sample_frames(path: Path) -> list[object]:
+    """Load motion-probe samples via the shared direction-safe frame sampler.
+
+    Container frame counts for Commons WebM/VP8/VP9 are estimates: seeking to
+    an estimated CAP_PROP_POS_FRAMES position can fail on files that decode
+    cleanly end to end.  The shared sampler retries by ffmpeg timestamp before
+    declaring a frame unreadable, so real motion videos are not misblocked.
+    """
+    with tempfile.TemporaryDirectory(prefix="qwq_professional_video_probe_") as temp:
+        files = sample_video_frame_files(
+            path, sample_count=_SAMPLE_COUNT, output_dir=Path(temp)
+        )
+        samples: list[object] = []
+        for file in files:
+            frame = cv2.imread(str(file))
+            if frame is None:
                 raise ValueError(
-                    f"professional video sample frame is unreadable: {position}"
+                    f"professional video sample frame is unreadable: {file.name}"
                 )
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             samples.append(cv2.resize(gray, (64, 36), interpolation=cv2.INTER_AREA))
-    finally:
-        capture.release()
-    return samples
+        return samples
 
 
 def _motion_facts(samples: list[object]) -> dict[str, object]:
@@ -88,7 +88,7 @@ def probe_professional_video(path: Path) -> dict[str, object]:
     frame_count = int(base["frameCount"])
     frames_per_second = float(base["framesPerSecond"])
     duration_ms = int(base["durationMs"])
-    samples = _sample_frames(path, frame_count=frame_count)
+    samples = _sample_frames(path)
     motion = _motion_facts(samples)
     has_audio = probe_audio_stream(path).get("hasAudio") is True
     playable = (

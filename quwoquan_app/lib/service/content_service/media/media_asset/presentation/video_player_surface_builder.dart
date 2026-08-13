@@ -50,7 +50,7 @@ final class VideoPlayerSurfaceBuilder {
                   dimension: AppSpacing.iconMedium,
                   child: FittedBox(
                     child: AppRequestFeedback.inline(
-                      indicatorColor: AppColors.white,
+                      indicatorColor: AppColors.immersiveForeground,
                     ),
                   ),
                 )

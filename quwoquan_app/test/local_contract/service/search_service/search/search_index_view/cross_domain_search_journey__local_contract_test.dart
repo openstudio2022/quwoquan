@@ -9,7 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/search_service/search/search_feedback_fact/application/public/search_feedback_fact_appender.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_ports.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
 import 'package:quwoquan_app/design_system/navigation/secondary_capsule_tab_bar.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
@@ -106,7 +106,7 @@ Widget _buildApp({
       assistantSearchRunFacetProvider.overrideWithValue(
         assistantXiaoquSearch ?? _FakeAssistantRepository(),
       ),
-      chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
+      ...chatTestRepositoryOverrides(),
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
       homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
     ],
@@ -131,7 +131,7 @@ Widget _buildResultsPage({
       assistantSearchRunFacetProvider.overrideWithValue(
         assistantXiaoquSearch ?? _FakeAssistantRepository(),
       ),
-      chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
+      ...chatTestRepositoryOverrides(),
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
     ],
     child: MaterialApp(

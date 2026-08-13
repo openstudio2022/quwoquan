@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -75,15 +76,12 @@ void main() {
   });
 
   testWidgets('趣聊页使用微信式 composer：空态显示 emoji 和更多，输入后切发送', (tester) async {
-    final repository = MockChatRepository();
+    final facets = ChatTestFacets();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           ...sealedCloudBoundaryOverrides(),
-          chatInboxRepositoryProvider.overrideWithValue(repository),
-          chatConversationRepositoryProvider.overrideWithValue(repository),
-          chatMessageRepositoryProvider.overrideWithValue(repository),
-          chatMemberRepositoryProvider.overrideWithValue(repository),
+          ...chatTestRepositoryOverrides(facets: facets),
           personaQueryProvider(
             AppUiSurfaces.appShell,
           ).overrideWithValue(_ComposerPersonaQuery()),

@@ -26,6 +26,7 @@ import 'package:quwoquan_app/service/assistant_service/assistant/skill_consent/a
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_consent/application/skill_consent_facet.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_data_control_request/adapters/skill_data_control_remote.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_subscription/adapters/skill_subscription_remote.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/skill_surface_placement/adapters/skill_surface_placement_remote.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_user_setting/adapters/skill_user_setting_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -39,6 +40,7 @@ enum AssistantProductionAdapter {
   skillConsent,
   skillDataControl,
   skillSubscription,
+  skillSurfacePlacement,
   skillUserSetting,
 }
 
@@ -197,6 +199,11 @@ final class AssistantProductionComposition {
         ),
       AssistantProductionAdapter.skillSubscription =>
         RemoteAssistantSkillSubscriptionAdapter(
+          client: client,
+          invocationContext: context,
+        ),
+      AssistantProductionAdapter.skillSurfacePlacement =>
+        RemoteAssistantSkillSurfacePlacementAdapter(
           client: client,
           invocationContext: context,
         ),

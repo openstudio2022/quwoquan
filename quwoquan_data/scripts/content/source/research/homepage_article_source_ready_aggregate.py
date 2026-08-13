@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
+from core.io import read_json
 from core.schema import assert_valid
 
 from content.source.research.homepage_article_source_ready_batch import (
@@ -100,6 +101,7 @@ def merge_homepage_article_source_ready_batches(
     member_digests: set[str] = set()
     counts = {"homepage": 0, "article": 0}
     aggregate_seeds: list[dict[str, Any]] = []
+    aggregate_seed_ids: set[str] = set()
     for index, manifest in enumerate(batch_manifests):
         path, ref = _relative_file(root, manifest, label=f"memberBatches[{index}]")
         member_root, member_root_ref = _member_evidence_root(path, output_root=root)
@@ -142,9 +144,57 @@ def merge_homepage_article_source_ready_batches(
             label=f"memberBatches[{index}].seedSelection",
         )
         seed_selection = load_homepage_article_seed_selection(seed_path)
-        aggregate_seeds.extend(
-            dict(row) for row in seed_selection["seeds"] if isinstance(row, Mapping)
-        )
+        accepted_seed_ids: set[str] = set()
+        for binding_index, raw_binding in enumerate(batch["candidateCapsules"]):
+            assert isinstance(raw_binding, Mapping)
+            candidate_root = _safe_directory(
+                member_root,
+                raw_binding.get("evidenceRootRef"),
+                label=(
+                    f"memberBatches[{index}].candidateCapsules"
+                    f"[{binding_index}].evidenceRootRef"
+                ),
+            )
+            capsule_path = _safe_file(
+                candidate_root,
+                raw_binding.get("ref"),
+                label=(
+                    f"memberBatches[{index}].candidateCapsules"
+                    f"[{binding_index}]"
+                ),
+            )
+            capsule = read_json(capsule_path)
+            if not isinstance(capsule, Mapping):
+                raise _invalid(
+                    f"memberBatches[{index}] candidate capsule must be an object"
+                )
+            provenance = capsule.get("provenance")
+            seed_id = (
+                str(provenance.get("seedId") or "")
+                if isinstance(provenance, Mapping)
+                else ""
+            )
+            if not seed_id or seed_id in accepted_seed_ids:
+                raise _invalid(
+                    f"memberBatches[{index}] candidate seed binding is invalid"
+                )
+            accepted_seed_ids.add(seed_id)
+        selected_seeds = [
+            dict(row)
+            for row in seed_selection["seeds"]
+            if isinstance(row, Mapping)
+            and str(row.get("seedId") or "") in accepted_seed_ids
+        ]
+        if len(selected_seeds) != len(accepted_seed_ids):
+            raise _invalid(
+                f"memberBatches[{index}] accepted seed selection is incomplete"
+            )
+        for seed in selected_seeds:
+            seed_id = str(seed["seedId"])
+            if seed_id in aggregate_seed_ids:
+                raise _invalid("member batches overlap on accepted seed identity")
+            aggregate_seed_ids.add(seed_id)
+            aggregate_seeds.append(seed)
     members.sort(key=lambda row: (str(row["digest"]), str(row["ref"])))
     candidate_bindings.sort(
         key=lambda row: (str(row["carrier"]), str(row["candidateId"]), str(row["digest"]))

@@ -10,24 +10,7 @@ CircleStatsMemberRowViewData circleStatsMemberRowFromMembership(
   worksCountLabel: '—',
   fansCountLabel: '—',
   likesCountLabel: '—',
-  isFollowed: false,
 );
-
-CircleStatsMemberRowViewData circleStatsMemberRowFromWireMap(
-  Map<String, Object?> m,
-) {
-  final dm = Map<String, dynamic>.from(m);
-  final id = (dm['userId'] ?? '').toString();
-  return CircleStatsMemberRowViewData(
-    id: id.isNotEmpty ? id : 'unknown',
-    name: (dm['displayName'] ?? id).toString(),
-    avatarUrl: (dm['avatarUrl'] ?? '').toString(),
-    worksCountLabel: (dm['worksCountLabel'] ?? '—').toString(),
-    fansCountLabel: (dm['fansCountLabel'] ?? '—').toString(),
-    likesCountLabel: (dm['likesCountLabel'] ?? '—').toString(),
-    isFollowed: dm['isFollowed'] as bool? ?? false,
-  );
-}
 
 CircleStatsGroupRowViewData circleStatsGroupRowFromGroupSlice(
   CircleGroupSlice group,
@@ -35,4 +18,7 @@ CircleStatsGroupRowViewData circleStatsGroupRowFromGroupSlice(
   id: group.groupId,
   name: group.name,
   memberCountLabel: group.memberCount.toString(),
+  conversationId: (group.conversationId ?? '').trim().isEmpty
+      ? null
+      : group.conversationId,
 );

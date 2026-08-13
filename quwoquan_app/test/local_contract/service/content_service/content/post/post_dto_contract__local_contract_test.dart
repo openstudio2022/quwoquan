@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../../support/service/content_service/content/post/content_mock_data.dart';
 import '../../../../../support/service/content_service/content/post/content_post_contract_fixture.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 
 ContentPostViewData _decodeView(Map<String, Object?> wire) =>
     ContentPostViewData.fromWire(ContentPostProjection.fromWire(wire));
@@ -293,8 +293,20 @@ void main() {
 
     test('canonical fixture 的 image/video 尺寸均有效', () {
       for (final item in <ContentPostViewData>[
-        ...ContentMockData.discoveryPhotoData,
-        ...ContentMockData.discoveryVideoData,
+        contentPostViewDataBuilder(
+          postId: 'image-sized',
+          contentType: 'image',
+          mediaUrls: const <String>[testContentImageUrl],
+          width: 1200,
+          height: 800,
+        ),
+        contentPostViewDataBuilder(
+          postId: 'video-sized',
+          contentType: 'video',
+          videoUrl: testContentVideoUrl,
+          width: 1080,
+          height: 1920,
+        ),
       ]) {
         expect(item.width, isNotNull, reason: 'postId=${item.id} width');
         expect(item.height, isNotNull, reason: 'postId=${item.id} height');

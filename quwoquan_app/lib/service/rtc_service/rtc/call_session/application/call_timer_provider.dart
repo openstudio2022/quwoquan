@@ -2,25 +2,31 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+/// 通话时长展示格式的单一真相源：>1h 显示 HH:MM:SS，否则 MM:SS。
+///
+/// 通话页、ActiveCallBar、PiP 浮窗必须消费本函数；禁止在 presentation
+/// 内自写 `_formatDuration`（历史缺陷：丢弃小时位导致长通话显示错误）。
+String formatCallDuration(Duration elapsed) {
+  final hours = elapsed.inHours;
+  final minutes = elapsed.inMinutes.remainder(60);
+  final seconds = elapsed.inSeconds.remainder(60);
+
+  if (hours > 0) {
+    return '${hours.toString().padLeft(2, '0')}:'
+        '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
+  }
+  return '${minutes.toString().padLeft(2, '0')}:'
+      '${seconds.toString().padLeft(2, '0')}';
+}
+
 class CallTimerState {
   final Duration elapsed;
   final bool isRunning;
 
   const CallTimerState({this.elapsed = Duration.zero, this.isRunning = false});
 
-  String get formattedTime {
-    final hours = elapsed.inHours;
-    final minutes = elapsed.inMinutes.remainder(60);
-    final seconds = elapsed.inSeconds.remainder(60);
-
-    if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:'
-          '${minutes.toString().padLeft(2, '0')}:'
-          '${seconds.toString().padLeft(2, '0')}';
-    }
-    return '${minutes.toString().padLeft(2, '0')}:'
-        '${seconds.toString().padLeft(2, '0')}';
-  }
+  String get formattedTime => formatCallDuration(elapsed);
 
   CallTimerState copyWith({Duration? elapsed, bool? isRunning}) {
     return CallTimerState(

@@ -1,8 +1,24 @@
 part of 'image_editor_page.dart';
 
 extension _ImageEditorPageLocalPreviewLayers on _ImageEditorPageState {
+  /// 锚点纯色彩矩阵（细节类参数由 [_buildLocalAnchorDetailSpec] 走逐像素
+  /// 管线，不再折算进矩阵）。
   List<double> _buildLocalAnchorColorMatrix(LocalAnchor anchor) {
     return _buildBaseColorMatrixFromValues(anchor.values);
+  }
+
+  /// 锚点 → 引擎渲染参数（预览重算与烘焙共用的唯一映射）。
+  List<ImageEditorLocalRenderSpec> _buildLocalRenderSpecs() {
+    return <ImageEditorLocalRenderSpec>[
+      for (final anchor in _localAnchors)
+        if (anchor.values.values.any((value) => value.abs() > 0.001))
+          ImageEditorLocalRenderSpec(
+            center: anchor.center,
+            radiusOnShortSide: anchor.radius,
+            colorMatrix: _buildLocalAnchorColorMatrix(anchor),
+            detail: _buildLocalAnchorDetailSpec(anchor.values),
+          ),
+    ];
   }
 
   List<Widget> _buildLocalPreviewLayers(Widget content, Rect imageRect) {

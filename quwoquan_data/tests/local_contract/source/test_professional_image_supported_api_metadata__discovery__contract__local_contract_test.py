@@ -16,6 +16,7 @@ from content.execution.planning.discover_image_supported_api_metadata import (
 from content.source.professional_image_discovery import (
     create_professional_image_discovery_plan,
 )
+from content.source.professional_image_supported_api_contract import verify_plan
 from content.source.professional_image_supported_api_metadata import (
     METADATA_INVALID,
     RATE_LIMITED,
@@ -28,6 +29,12 @@ _D_REVISION = "sha256:" + "1" * 64
 _D_SOURCE = "sha256:" + "2" * 64
 _D_ENTITY = "sha256:" + "3" * 64
 _D_HANDOFF = "sha256:" + "4" * 64
+_D_PLAN = (  # sha256("plan")
+    "sha256:64879f7d6b960a01909762d911a32d4582c20010c5641ee90278b644a9e3b525"
+)
+_D_CATALOG = (  # sha256("catalog")
+    "sha256:652f55016243bf1b9f1bbea46d5749ef892dbe394e46de9d66ab1aacf0b4af57"
+)
 
 
 def _plan(tmp_path: Path) -> tuple[dict, Path]:
@@ -251,6 +258,68 @@ def test_discovery_excludes_eleven_panoramio_and_create_once_replays(
         )
     assert collision.value.code == METADATA_INVALID
     assert "create-once collision" in str(collision.value)
+
+
+def test_commons_empty_search_is_completed_zero_candidate_query(
+    tmp_path: Path,
+) -> None:
+    options = _options(tmp_path, target=1)
+    options["providers"] = ("wikimedia_commons",)
+    calls: list[str] = []
+
+    def fetch(url: str) -> dict:
+        calls.append(url)
+        payload = {"batchcomplete": True}
+        body = json.dumps(payload).encode("utf-8")
+        return {
+            "bytes": body,
+            "payload": payload,
+            "transportEvidence": _transport(url, body),
+        }
+
+    with pytest.raises(ProfessionalImageSupportedApiMetadataError) as captured:
+        discover_supported_api_metadata(**options, api_fetcher=fetch)
+
+    assert captured.value.code == SOURCE_POOL_SHORTFALL
+    receipt = _checkpoint(options["output_root"], captured.value)
+    assert len(calls) == 2
+    assert receipt["completedQueryCount"] == 2
+    assert receipt["candidateCount"] == 0
+    assert receipt["failures"] == []
+    assert [row["status"] for row in receipt["items"]] == ["completed", "completed"]
+
+
+def test_verify_plan_binds_requested_alias_to_metadata_observation() -> None:
+    plan = {
+        "planId": "plan-alias",
+        "planDigest": _D_PLAN,
+        "catalogRef": "catalog",
+        "catalogDigest": _D_CATALOG,
+        "dimensions": {},
+        "candidateCount": 1,
+        "providerCandidateCounts": [],
+        "candidates": [{
+            "candidateId": "wikimedia_commons:plan-alias",
+            "provider": "wikimedia_commons",
+            "entity": "West Lake Hangzhou",
+            "acquisitionPaths": ["supported_api"],
+        }],
+    }
+    catalog = {
+        "discoveryPlanId": "plan-alias",
+        "discoveryPlanDigest": _D_PLAN,
+        "candidates": [{
+            "candidateId": "wikimedia_commons:asset",
+            "discoveryCandidateId": "wikimedia_commons:plan-alias",
+            "provider": "wikimedia_commons",
+            "entityId": "杭州西湖",
+            "observedEntityId": "West Lake Hangzhou",
+        }],
+    }
+
+    assert verify_plan(plan, catalog, digest=lambda _value: _D_PLAN) == {
+        "wikimedia_commons:plan-alias": plan["candidates"][0]
+    }
 
 
 def test_discovery_projects_openverse_asset_identity_and_rights(tmp_path: Path) -> None:

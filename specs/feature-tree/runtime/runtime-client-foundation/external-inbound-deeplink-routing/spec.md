@@ -155,4 +155,4 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：微信未安装/UL 未就绪/口令失效/解析失败为 MODULE.KIND.REASON + recovery，端侧消费结构化 RuntimeFailure。
-- 完成判定：微信未安装/UL 未就绪/口令失效/解析失败为 MODULE.KIND.REASON + recovery，端侧消费结构化 RuntimeFailure。
+- 完成判定：`GWT-001` 的“无静默失败、返回 canonical failure”与 `GWT-002` 的确定性兜底对应行为满足——微信未安装/UL 未就绪/口令失效/解析失败为 MODULE.KIND.REASON + recovery，端侧消费结构化 RuntimeFailure。

@@ -61,8 +61,8 @@ extension _ImageEditorPageCompletion on _ImageEditorPageState {
       );
       final Object? result;
       if (_isMultiImage || action == 'continueToCreate') {
-        result = imageEditorMultiImageDonePopPayload(
-          currentIndex: _currentIndex,
+        result = ImageEditorMultiImageDoneResult(
+          index: _currentIndex,
           path: _currentPath,
           paths: List<String>.from(_paths),
           action: action,

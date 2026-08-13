@@ -55,7 +55,8 @@ CLIENT_DOMAINS = {
             "quwoquan_service/services/content-service/contracts/content/profile_interaction_read_fact/errors.yaml",
             "quwoquan_service/services/content-service/contracts/media/filter_catalog_release/errors.yaml",
             "quwoquan_service/services/content-service/contracts/media/media_asset/errors.yaml",
-            "quwoquan_service/services/content-service/contracts/media/media_original_access_fact/errors.yaml",
+            # 对象归属重构后原图访问错误面归属 original_access_quota（原 media_original_access_fact）。
+            "quwoquan_service/services/content-service/contracts/media/original_access_quota/errors.yaml",
             "quwoquan_service/services/content-service/contracts/media/media_upload_session/errors.yaml",
             "quwoquan_service/services/content-service/contracts/content/outbound_share_fact/errors.yaml",
             "quwoquan_service/services/content-service/contracts/trust_safety/post_moderation_case/errors.yaml",
@@ -109,9 +110,13 @@ CLIENT_DOMAINS = {
 SERVER_INTERNAL_DOMAINS = {
     "integration/external_integration/external_interaction": "外部交互 provider 中间件错误，服务间使用，不直接回客户端",
     "integration/external_integration/push_delivery": "推送投递 provider 错误，服务内编排，不直接回客户端",
+    "content/media/media_image_reprocess_run": "图片重处理 internal publish plane（/internal 路由、service principal），不直接回客户端",
 }
 
 CLOUD_CODE_RE = re.compile(r"^\s*-?\s*code:\s*([A-Z][A-Z0-9_]*\.[A-Z][A-Z0-9_]*\.[a-z0-9_]+)\s*$")
+# 客户端可见性与 codegen_app_metadata 同源：条目声明 dart_const 才生成客户端枚举；
+# 仅 go_const 的 control-plane/server 码（如 USER.AUTH.mfa_required）不参与端云 parity。
+CLOUD_DART_CONST_RE = re.compile(r"^\s*dart_const:\s*\S+")
 # 生成的客户端枚举有两种风格：构造参数式 name('CODE', ...) 与裸枚举 + fromCode/code
 # switch 中的 'CODE' case。两者都把 code 以字符串字面量形式出现，故直接收集文件内
 # 全部形如 'MODULE.KIND.reason' 的字面量即可（生成文件仅含本域 code）。
@@ -126,11 +131,16 @@ def read_cloud_codes(rel_paths: list[str]) -> tuple[set[str], list[str]]:
         if not os.path.isfile(path):
             missing.append(rel)
             continue
+        pending_code: str | None = None
         with open(path, encoding="utf-8") as handle:
             for line in handle:
                 m = CLOUD_CODE_RE.match(line)
                 if m:
-                    codes.add(m.group(1))
+                    pending_code = m.group(1)
+                    continue
+                if pending_code and CLOUD_DART_CONST_RE.match(line):
+                    codes.add(pending_code)
+                    pending_code = None
     return codes, missing
 
 

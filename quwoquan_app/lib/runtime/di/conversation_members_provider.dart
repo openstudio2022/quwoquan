@@ -47,7 +47,7 @@ class ConversationMembersNotifier extends Notifier<ConversationMembersState> {
         _memberRepo.listMembers(
           conversationId: _conversationId,
           limit: 200,
-          sort: 'joined_asc',
+          sort: MemberListSort.joinedAsc,
         ),
         _adminRepo.getGroupSettings(_conversationId),
       ]);

@@ -170,7 +170,7 @@ final class ComposedChatRepository implements ChatRepository {
     String? cursor,
     int limit = ChatListConversationMembersQuery.defaultLimit,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) => _member.listMembers(
     conversationId: conversationId,
     cursor: cursor,

@@ -11,12 +11,32 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/ada
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/runtime/business_contract_fixture_server.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_state_seed_builder.dart';
+import '../../../../../support/service/circle_service/circle_management/circle/circle_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_wire_test_builder.dart';
+import '../../../../../support/service/notification_service/notification_delivery/notification/app_message_test_builder.dart';
+import '../../../../../support/service/user_service/account/user_account/user_profile_test_builder.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
+
+BusinessFixtureSeeds businessFixtureSeeds() {
+  final chatSeed = minimalChatStateSeed();
+  return BusinessFixtureSeeds(
+    content: contentDiscoveryWireExample(),
+    chatTimeline: chatStateSeedTimelineWire(chatSeed),
+    chatContacts: chatStateSeedContactsWire(chatSeed),
+    circle: businessCircleWireExample(),
+    user: userProfileWireExample(),
+    notificationMessages: appMessageWireExamples(),
+  );
+}
+
 void main() {
   test('user account facet decodes active persona and profile', () async {
-    final server = await BusinessContractFixtureServer.start();
+    final server = await BusinessContractFixtureServer.start(
+      seeds: businessFixtureSeeds(),
+    );
     addTearDown(server.close);
     final userProfileQuery = RemoteUserProfileQueryFacet(
       client: server.buildGeneratedClient(),

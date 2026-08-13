@@ -7,32 +7,48 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentDiscoveryFeedQuery;
 
+import 'content_post_typed_doubles.dart';
+
 /// 测试注入 Content 的窄 Facet。Comment 已从聚合 Repository 彻底拆除，
 /// 只有评论用例可显式传入强类型 [commentFacet]。
 ///
-/// 这是测试容器 wiring，不是业务 Repository 聚合或 App 运行时 Provider。
-List<Override> mockContentFacetOverrides(
-  Object adapter, {
+/// 调用方必须显式持有 suite-local [store]；不需要业务数据时传入空 store。
+/// 每个命名 port 只覆盖该 suite 确实需要定制的边界。
+List<Override> mockContentFacetOverrides({
+  required InMemoryContentPostStore store,
+  ContentDiscoveryFeedQuery? feedQuery,
+  ContentPostDetailReader? detailReader,
+  ContentAuthorPostsReader? authorPostsReader,
+  ContentPostDeleteCommandWriter? deleteWriter,
+  ContentConfigRepository? configRepository,
   ContentPostDetailReader? workBrowserDetailReader,
   ContentCommentFacet? commentFacet,
   ContentPostReactionPort? postReactionFacet,
   ContentBehaviorFactAppender? behaviorWriter,
 }) {
+  final resolvedFeedQuery =
+      feedQuery ?? InMemoryContentDiscoveryFeedQuery(store);
+  final resolvedDetailReader =
+      detailReader ?? InMemoryContentPostDetailReader(store);
+  final resolvedAuthorPostsReader =
+      authorPostsReader ?? InMemoryContentAuthorPostsReader(store);
+  final resolvedDeleteWriter =
+      deleteWriter ?? InMemoryContentPostDeleteCommandWriter(store);
+  final resolvedConfigRepository =
+      configRepository ?? InMemoryContentConfigRepository();
   return <Override>[
-    contentDiscoveryFeedQueryProvider.overrideWithValue(
-      adapter as ContentDiscoveryFeedQuery,
-    ),
+    contentDiscoveryFeedQueryProvider.overrideWithValue(resolvedFeedQuery),
     workBrowserContentPostDetailReaderProvider.overrideWithValue(
-      workBrowserDetailReader ?? adapter as ContentPostDetailReader,
+      workBrowserDetailReader ?? resolvedDetailReader,
     ),
     globalSearchContentPostDetailReaderProvider.overrideWithValue(
-      adapter as ContentPostDetailReader,
+      resolvedDetailReader,
     ),
     userProfileContentAuthorPostsReaderProvider.overrideWithValue(
-      adapter as ContentAuthorPostsReader,
+      resolvedAuthorPostsReader,
     ),
     contentPostDeleteCommandWriterProvider.overrideWithValue(
-      adapter as ContentPostDeleteCommandWriter,
+      resolvedDeleteWriter,
     ),
     contentBehaviorCommandWriterProvider.overrideWithValue(
       behaviorWriter ?? const _TestContentBehaviorFactAppender(),
@@ -40,9 +56,7 @@ List<Override> mockContentFacetOverrides(
     contentPostReactionFacetProvider.overrideWithValue(
       postReactionFacet ?? InMemoryContentPostReactionPort(),
     ),
-    contentConfigRepositoryProvider.overrideWithValue(
-      adapter as ContentConfigRepository,
-    ),
+    contentConfigRepositoryProvider.overrideWithValue(resolvedConfigRepository),
     if (commentFacet != null) ...<Override>[
       workBrowserContentCommentFacetProvider.overrideWithValue(commentFacet),
       profileCommentsContentCommentFacetProvider.overrideWithValue(

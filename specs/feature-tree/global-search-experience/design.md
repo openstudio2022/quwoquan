@@ -36,6 +36,14 @@
 - 关联要求：`REQ-001`
 - 关联能力：[`cross-domain-search`](./cross-domain-search/spec.md)、[`search-provider-routing-and-storage-topology`](./search-provider-routing-and-storage-topology/spec.md)
 
+<a id="dec-002"></a>
+### DEC-002 中文检索采用 Elasticsearch + IK/pinyin 插件，放弃 OpenSearch 可移植假设
+- 决策：统一搜索读库锁定 Elasticsearch 发行版，索引 analyzer 链采用 `analysis-ik`（`ik_max_word` 索引 / `ik_smart` 查询）与 `analysis-pinyin`（仅 title/name 类短字段子字段）；自建含插件的 ES 镜像并 digest pin。
+- 理由：内置 `cjk_bigram` 只能提供二元组召回，无语义分词、无拼音、精度不满足商用中文检索；IK 语义分词同时减少 term 数量、降低索引体积。搜索引擎级中文体验的价值高于保留 OpenSearch 可移植性的期权价值。
+- 被否决方案：继续使用无插件 `cjk_bigram` 保持 ES/OpenSearch 双兼容；对正文字段启用 edge_ngram 前缀索引（索引体积膨胀约 15-17 倍，成本不可接受）。
+- 约束与影响：analyzer 变更无法原地生效，索引必须经 read/write alias 分离的零停机重建流程切换；IK 需保留 `remote_ext_dict` 远程词典热更新入口。ES 镜像升级路径与插件版本必须同步 pin。
+- 关联要求：[`search-provider-routing-and-storage-topology`](./search-provider-routing-and-storage-topology/spec.md) 的存储拓扑 REQ。
+
 ## 6. 质量与运行约束
 
 - 不设计细粒度灰度，保留整版回滚与观测。

@@ -59,3 +59,13 @@
 - 准出影响：`track`
 - 影响或价值：尚缺少能够证明“App 语言区域基础设施”已满足当前规格的真实测试证据。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+
+<a id="open-002"></a>
+### OPEN-002 英文本地化只有骨架，切到 en 后近九成文案仍是中文
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：当前 `app_en.arb` 的 590 个 key 中 528 个仍是 `TODO: translate`（89.49%），对应生成的 `app_localizations_en.dart` 逐条一致；中文侧 0 处 TODO，完整。这意味着 `GWT-001` 声称的「locale 切换后保持页面文案一致」在 en 下并不成立——切到英文后绝大多数界面仍显示中文，不是缺翻译的观感问题，而是本地化能力事实上只有中文一条腿。这是面向英文市场的发布阻断项，不是代码整洁度债务。
+- 完成判定：`GWT-001` 在 `en` locale 下成立——`app_en.arb` 不再包含任何 `TODO: translate`，且 user_acceptance 层有真实测试 `spec_ref` 断言切换到 en 后关键路径页面不出现中文字面量。翻译缺口清零前不得把本 OPEN 降级为 `track`。
+- 度量口径：`rg -c 'TODO: translate' quwoquan_app/lib/l10n/app_en.arb` 与 arb 的 key 总数相比；生成物 `app_localizations_en.dart` 必须与 arb 同步，不得单独改生成物充数。

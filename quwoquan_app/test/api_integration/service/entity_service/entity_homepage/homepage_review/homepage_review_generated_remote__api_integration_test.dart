@@ -6,45 +6,27 @@
 // readiness_case: homepage_review_get_my_homepage_review_app_api
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
-import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
-import 'package:quwoquan_app/runtime/di/entity_dependencies.dart';
-import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
-import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
-import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_operation_ports.dart';
-import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../../support/runtime/api_contract/api_contract_anonymous_session.dart';
-import '../../../../../support/runtime/api_contract/production_cloud_operation_telemetry_evidence.dart';
+import '../../../../../support/runtime/api_contract/entity_api_contract_harness.dart';
 
-const _apiContractEnv = String.fromEnvironment(
-  'API_CONTRACT_ENV',
-  defaultValue: 'gamma',
-);
-const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
-
-_HomepageReviewApiActor? _authorActor;
-_HomepageReviewApiActor? _otherActor;
+EntityHomepageReviewApiActor? _authorActor;
+EntityHomepageReviewApiActor? _otherActor;
 late HomepageSearchItemView _publishedHomepage;
 
-_HomepageReviewApiActor get _author => _authorActor!;
-_HomepageReviewApiActor get _other => _otherActor!;
+EntityHomepageReviewApiActor get _author => _authorActor!;
+EntityHomepageReviewApiActor get _other => _otherActor!;
 
 void main() {
   setUpAll(() async {
     final runId = DateTime.now().toUtc().microsecondsSinceEpoch.toString();
-    final author = await _HomepageReviewApiActor.signIn(
+    final author = await EntityHomepageReviewApiActor.create(
       label: 'author',
       runId: runId,
     );
-    _HomepageReviewApiActor? other;
+    EntityHomepageReviewApiActor? other;
     try {
-      other = await _HomepageReviewApiActor.signIn(
+      other = await EntityHomepageReviewApiActor.create(
         label: 'other',
         runId: runId,
       );
@@ -111,7 +93,7 @@ void main() {
       _expectActiveReview(
         created,
         homepageId: homepageId,
-        authorPersonaId: _author.session.personaId,
+        authorPersonaId: _author.session.activePersona!.personaId,
         rating: 5,
         body: createCommand.body,
       );
@@ -191,7 +173,7 @@ void main() {
       _expectActiveReview(
         updated,
         homepageId: homepageId,
-        authorPersonaId: _author.session.personaId,
+        authorPersonaId: _author.session.activePersona!.personaId,
         rating: 4,
         body: updateCommand.body,
       );
@@ -321,330 +303,4 @@ void _expectActiveReview(
   expect(value.body, body);
   expect(value.createdAt.isUtc, isTrue);
   expect(value.updatedAt.isUtc, isTrue);
-}
-
-final class _HomepageReviewApiActor {
-  _HomepageReviewApiActor._({
-    required this.label,
-    required this.runId,
-    required this.session,
-    required Uri gatewayBaseUri,
-    required this.telemetry,
-  }) : _deviceId = 'homepage-review-api-$runId-$label-device',
-       _tokenProvider = _MutableAccessTokenProvider(session.accessToken) {
-    _httpClient = CloudHttpClient(authTokenProvider: _tokenProvider);
-    _client = buildGeneratedCloudOperationClient(
-      httpClient: _httpClient,
-      clientContextProvider: _HomepageReviewApiClientContext(_deviceId),
-      telemetrySink: telemetry.sink,
-      environment: CloudRuntimeEnvironment(
-        environment: CloudEnvironment.values.firstWhere(
-          (candidate) => candidate.name == _apiContractEnv,
-          orElse: () => throw StateError(
-            'Unsupported API_CONTRACT_ENV: $_apiContractEnv',
-          ),
-        ),
-        gatewayBaseUri: gatewayBaseUri,
-      ),
-    );
-    final homepageFacets = EntityProductionComposition.homepageQueryFacets(
-      client: _client,
-      detailInvocationContext: (clientPageId, {cancellation, deadlineAt}) =>
-          _invocationContext(
-            surface: AppUiSurfaces.homepageDetail,
-            clientPageId: clientPageId,
-          ),
-      introductionInvocationContext:
-          (clientPageId, {cancellation, deadlineAt}) => _invocationContext(
-            surface: AppUiSurfaces.homepageIntroduction,
-            clientPageId: clientPageId,
-          ),
-      searchInvocationContext: (clientPageId, {cancellation, deadlineAt}) =>
-          _invocationContext(
-            surface: AppUiSurfaces.homepagePicker,
-            clientPageId: clientPageId,
-          ),
-    );
-    homepage = homepageFacets.query;
-    reviews = EntityProductionComposition.homepageReviewFacets(
-      client: _client,
-      invocationContext: (clientPageId, {required command}) =>
-          _invocationContext(
-            surface: AppUiSurfaces.homepageDetail,
-            clientPageId: clientPageId,
-            idempotencyKey: command
-                ? _activeIdempotencyKey ??
-                      (throw StateError(
-                        '$clientPageId requires an explicit idempotency scope',
-                      ))
-                : null,
-          ),
-    );
-    _accountLifecycle = RemoteAccountLifecycleCommandWriter(
-      client: _client,
-      invocationContext: (clientPageId) => _invocationContext(
-        surface: AppUiSurfaces.settingsAccountSecurity,
-        clientPageId: clientPageId,
-        idempotencyKey: 'homepage-review-api-$runId-$label-cleanup',
-      ),
-    );
-  }
-
-  final String label;
-  final String runId;
-  final ApiContractAnonymousSession session;
-  final String _deviceId;
-  final _MutableAccessTokenProvider _tokenProvider;
-  final ProductionCloudOperationTelemetryEvidence telemetry;
-
-  late final CloudHttpClient _httpClient;
-  late final GeneratedCloudOperationClient _client;
-  late final HomepageQueryFacet homepage;
-  late final AppProductionHomepageReviewFacets reviews;
-  late final RemoteAccountLifecycleCommandWriter _accountLifecycle;
-  String? _activeIdempotencyKey;
-  var _observedEventCount = 0;
-  var _idempotencyScopeActive = false;
-
-  static Future<_HomepageReviewApiActor> signIn({
-    required String label,
-    required String runId,
-  }) async {
-    if (_apiBase.isEmpty) {
-      throw StateError('L3: API_CONTRACT_BASE_URL not set');
-    }
-    final gatewayBaseUri = Uri.parse(_apiBase);
-    if (!gatewayBaseUri.isAbsolute || gatewayBaseUri.scheme != 'https') {
-      throw StateError(
-        'L3: API_CONTRACT_BASE_URL must be an absolute first-party HTTPS URL',
-      );
-    }
-    final loginClient = http.Client();
-    late ApiContractAnonymousSession session;
-    try {
-      session = await ApiContractAnonymousSession.login(
-        client: loginClient,
-        baseUrl: _apiBase,
-        subject: 'homepage-review-$runId-$label',
-      );
-    } finally {
-      loginClient.close();
-    }
-    final deviceId = 'homepage-review-api-$runId-$label-device';
-    final telemetry = await ProductionCloudOperationTelemetryEvidence.start(
-      clientContextProvider: _HomepageReviewApiClientContext(deviceId),
-    );
-    return _HomepageReviewApiActor._(
-      label: label,
-      runId: runId,
-      session: session,
-      gatewayBaseUri: gatewayBaseUri,
-      telemetry: telemetry,
-    );
-  }
-
-  Future<HomepageSearchItemView> acquirePublishedHomepage() async {
-    final slice = await expectSuccess(
-      operationId: AppCloudOperationIds.entityHomepageSearchHomepages,
-      statusCode: 200,
-      invoke: () => homepage.searchHomepages(
-        HomepageSearchQuery(
-          query: '北京',
-          status: HomepageStatus.published.wireName,
-          limit: 50,
-        ),
-      ),
-    );
-    final candidates = slice.items.where(
-      (item) =>
-          item.status == HomepageStatus.published &&
-          item.homepageId.isNotEmpty &&
-          item.canonicalEntityId.isNotEmpty &&
-          item.title.isNotEmpty &&
-          item.ratingCount > 0,
-    );
-    if (candidates.isEmpty) {
-      throw StateError(
-        'L3: production Search returned no authoritative published homepage',
-      );
-    }
-    return candidates.first;
-  }
-
-  Future<T> withIdempotencyKey<T>(
-    String idempotencyKey,
-    Future<T> Function() operation,
-  ) async {
-    final normalized = idempotencyKey.trim();
-    if (normalized.isEmpty) {
-      throw ArgumentError.value(idempotencyKey, 'idempotencyKey');
-    }
-    if (_idempotencyScopeActive) {
-      throw StateError('nested homepage review idempotency scope is forbidden');
-    }
-    _idempotencyScopeActive = true;
-    _activeIdempotencyKey = normalized;
-    try {
-      return await operation();
-    } finally {
-      _activeIdempotencyKey = null;
-      _idempotencyScopeActive = false;
-    }
-  }
-
-  Future<T> expectSuccess<T>({
-    required String operationId,
-    required int statusCode,
-    required Future<T> Function() invoke,
-  }) async {
-    final result = await invoke();
-    await _expectTelemetry(
-      operationId,
-      succeeded: true,
-      statusCode: statusCode,
-    );
-    return result;
-  }
-
-  Future<CloudException> expectFailure({
-    required String operationId,
-    required int statusCode,
-    required String code,
-    required Future<Object?> Function() invoke,
-  }) async {
-    CloudException? captured;
-    try {
-      await invoke();
-    } on CloudException catch (error) {
-      captured = error;
-    }
-    expect(captured, isNotNull, reason: '$operationId must fail canonically');
-    expect(captured!.statusCode, statusCode);
-    expect(captured.code, code);
-    expect(captured.requestId, isNotEmpty);
-    expect(captured.traceId, isNotEmpty);
-    expect(captured.sourceOperationId, operationId);
-    final event = await _expectTelemetry(
-      operationId,
-      succeeded: false,
-      statusCode: statusCode,
-    );
-    expect(event.requestId, captured.requestId);
-    expect(event.traceId, captured.traceId);
-    return captured;
-  }
-
-  Future<HomepageReviewSummaryView> waitForSummary(
-    String homepageId, {
-    required HomepageReviewSummaryView baseline,
-    int? activeRating,
-  }) async {
-    final expectedCount = baseline.ratingCount + (activeRating == null ? 0 : 1);
-    final expectedAverage = activeRating == null
-        ? baseline.averageRating!
-        : ((baseline.averageRating! * baseline.ratingCount) + activeRating) /
-              expectedCount;
-    final deadline = DateTime.now().add(const Duration(seconds: 10));
-    HomepageReviewSummaryView? latest;
-    while (DateTime.now().isBefore(deadline)) {
-      final current = await expectSuccess<HomepageReviewSummaryView>(
-        operationId:
-            AppCloudOperationIds.entityHomepageGetHomepageReviewSummary,
-        statusCode: 200,
-        invoke: () => homepage.getHomepageReviewSummary(homepageId),
-      );
-      latest = current;
-      if (current.ratingCount == expectedCount &&
-          current.averageRating != null &&
-          (current.averageRating! - expectedAverage).abs() < 0.02) {
-        return current;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-    }
-    throw StateError(
-      'L3: review summary did not converge for $homepageId: '
-      'count=${latest?.ratingCount}, average=${latest?.averageRating}, '
-      'expectedCount=$expectedCount, expectedAverage=$expectedAverage',
-    );
-  }
-
-  Future<ProductionCloudOperationTelemetryEvent> _expectTelemetry(
-    String operationId, {
-    required bool succeeded,
-    required int statusCode,
-  }) async {
-    final events = await telemetry.waitForEvents(
-      minimumCount: _observedEventCount + 1,
-    );
-    final matching = events
-        .skip(_observedEventCount)
-        .where((event) => event.canonicalOperationId == operationId)
-        .toList(growable: false);
-    _observedEventCount = events.length;
-    if (matching.isEmpty) {
-      throw StateError(
-        'production telemetry did not emit a fresh $operationId event',
-      );
-    }
-    final event = matching.last;
-    expect(event.succeeded, succeeded);
-    expect(event.statusCode, statusCode);
-    expect(event.requestId, isNotEmpty);
-    expect(event.traceId, isNotEmpty);
-    return event;
-  }
-
-  Future<void> close() async {
-    try {
-      await _accountLifecycle.closeAccount(
-        CloseAccountCommand(
-          clientRequestId: 'homepage-review-api-$runId-$label-cleanup',
-        ),
-      );
-    } finally {
-      _httpClient.close();
-      await telemetry.dispose();
-    }
-  }
-
-  CloudOperationInvocationContext _invocationContext({
-    required AppUiSurface surface,
-    required String clientPageId,
-    String? idempotencyKey,
-  }) => CloudOperationInvocationContext(
-    surfaceId: surface.id,
-    routeId: surface.routeId,
-    clientPageId: clientPageId,
-    idempotencyKey: idempotencyKey,
-    actor: CloudOperationActorContext(
-      accountId: session.ownerId,
-      personaId: session.personaId,
-      deviceActorId: _deviceId,
-    ),
-  );
-}
-
-final class _MutableAccessTokenProvider implements CloudAuthTokenProvider {
-  const _MutableAccessTokenProvider(this.accessToken);
-
-  final String accessToken;
-
-  @override
-  Future<String?> getAccessToken() async => accessToken;
-}
-
-final class _HomepageReviewApiClientContext
-    implements CloudClientContextProvider {
-  const _HomepageReviewApiClientContext(this._deviceActorId);
-
-  final String _deviceActorId;
-
-  @override
-  CloudClientContextSnapshot snapshot() => CloudClientContextSnapshot(
-    sessionId: 'homepage-review-api-$_deviceActorId',
-    deviceActorId: _deviceActorId,
-    platform: 'app',
-    appVersion: 'api-integration',
-    locale: 'zh-CN',
-  );
 }

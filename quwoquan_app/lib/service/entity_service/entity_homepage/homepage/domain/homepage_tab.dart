@@ -1,4 +1,4 @@
-import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/presentation/generated/homepage_ui_config.g.dart';
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/generated/homepage_ui_config.g.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 
 enum HomepageDetailTabTarget { record, discussion, relatedCircles }

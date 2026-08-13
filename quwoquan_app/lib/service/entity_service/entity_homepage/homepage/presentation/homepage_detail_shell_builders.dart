@@ -413,6 +413,10 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           _buildIntersectionCard(isDark),
           SizedBox(height: AppSpacing.containerSm),
           _buildEntityImpactCard(isDark),
+          // 「近期行动」L0 区块：地点锚 → 可加入的公开行动；区块自身
+          // 独立加载独立降级（为空/失败整块不渲染）。
+          if (widget.buildRecentGatherings case final buildRecentGatherings?)
+            buildRecentGatherings(isDark: isDark),
         ],
       ],
     );
@@ -477,6 +481,18 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           foregroundColor: neutralForeground,
           borderColor: separator,
         ),
+        // 在这里发起：地点锚 → 行动（persona host + 实体来源引用）；
+        // 发起不依赖交集存在，交集只是撮合加速器。
+        if (widget.onStartGathering != null)
+          ObjectAction(
+            label: ObjectHomepageText.entityActionStartGathering,
+            icon: CupertinoIcons.calendar_badge_plus,
+            onPressed: widget.onStartGathering,
+            style: ProfileIosActionStyle.outlined,
+            backgroundColor: neutralFill,
+            foregroundColor: neutralForeground,
+            borderColor: separator,
+          ),
         if (_canMessageOwner)
           ObjectAction(
             label: ProfileText.profileDirectMessage,

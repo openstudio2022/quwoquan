@@ -2,7 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
-import '../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/conversation_dto.dart';
+import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
@@ -23,6 +26,8 @@ import 'package:quwoquan_app/runtime/shell/share/forward_share_sheet.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/service/chat_service/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
+import '../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 
 const _payload = AppForwardPayload(
   kind: AppForwardSubjectKind.profileQr,
@@ -39,7 +44,10 @@ Widget _wrap({
 }) {
   return ProviderScope(
     overrides: [
-      chatRepositoryCompositionProvider.overrideWithValue(repository),
+      ...chatTestRepositoryOverrides(
+        conversation: repository.conversation,
+        contact: repository.contact,
+      ),
       chatMessageCommandWriterProvider.overrideWithValue(repository.writer),
       if (externalShareService != null)
         forwardExternalShareServiceProvider.overrideWithValue(
@@ -62,7 +70,12 @@ Widget _wrap({
 void main() {
   test('AppForwardPayload 对所有转发对象类型保持同一卡片 payload 契约', () {
     for (final kind in AppForwardSubjectKind.values) {
+      // chatMessage 只在端内 text 发送分支，禁止进入 MessageCard wire。
+      if (kind == AppForwardSubjectKind.chatMessage) {
+        continue;
+      }
       final objectRef = switch (kind) {
+        AppForwardSubjectKind.chatMessage => null,
         AppForwardSubjectKind.profileQr => null,
         AppForwardSubjectKind.contentPost => MessageCardObjectRef(
           objectTypeRef: 'post',
@@ -398,21 +411,47 @@ void main() {
   });
 }
 
-class _ForwardSheetChatRepository extends MockChatRepository {
+class _ForwardSheetChatRepository {
+  _ForwardSheetChatRepository() {
+    final facets = ChatTestFacets();
+    conversation = _ForwardSheetConversationRepository(
+      this,
+      facets.conversation,
+    );
+    contact = _ForwardSheetContactRepository(facets.contact);
+  }
+
   final _ForwardSheetMessageWriter writer = _ForwardSheetMessageWriter();
+  late final ChatConversationRepository conversation;
+  late final ChatContactRepository contact;
   bool failListConversations = false;
   int get sendCallCount => writer.sendCallCount;
   String? get lastConversationId => writer.lastCommand?.conversationId;
   String? get lastType => writer.lastCommand?.type;
   String? get lastContent => writer.lastCommand?.content;
   MessageCard? get lastCard => writer.lastCommand?.card;
+}
+
+final class _ForwardSheetConversationRepository
+    implements ChatConversationRepository {
+  const _ForwardSheetConversationRepository(this._state, this._delegate);
+
+  final _ForwardSheetChatRepository _state;
+  final ChatConversationRepository _delegate;
+
+  @override
+  Future<List<MessageHomeRow>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listMessageHome(filter: filter, cursor: cursor, limit: limit);
 
   @override
   Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
     int limit = 500,
   }) async {
-    if (failListConversations) {
+    if (_state.failListConversations) {
       throw StateError('recent conversations unavailable');
     }
     final base = DateTime.utc(2026, 6, 27, 12);
@@ -427,6 +466,60 @@ class _ForwardSheetChatRepository extends MockChatRepository {
       ),
     ).take(limit).toList(growable: false);
   }
+
+  @override
+  Future<ChatConversationCreatedViewData> createConversation({
+    required String type,
+    String? title,
+    int? maxGroupSize,
+    List<String>? initialMemberIds,
+    String? idempotencyKey,
+  }) => _delegate.createConversation(
+    type: type,
+    title: title,
+    maxGroupSize: maxGroupSize,
+    initialMemberIds: initialMemberIds,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
+  Future<ConversationViewData> getConversation(String conversationId) =>
+      _delegate.getConversation(conversationId);
+
+  @override
+  Future<void> updateConversationTitle(String conversationId, String title) =>
+      _delegate.updateConversationTitle(conversationId, title);
+
+  @override
+  Future<void> updateConversationSettings({
+    required String conversationId,
+    bool? muted,
+    bool? pinned,
+  }) => _delegate.updateConversationSettings(
+    conversationId: conversationId,
+    muted: muted,
+    pinned: pinned,
+  );
+
+  @override
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() =>
+      _delegate.getConversationTimestamps();
+
+  @override
+  Future<List<ConversationViewData>> batchGetConversations(List<String> ids) =>
+      _delegate.batchGetConversations(ids);
+}
+
+final class _ForwardSheetContactRepository implements ChatContactRepository {
+  const _ForwardSheetContactRepository(this._delegate);
+
+  final ChatContactRepository _delegate;
+
+  @override
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listContacts(cursor: cursor, limit: limit);
 
   @override
   Future<List<ContactHomeRow>> listContactHome({
@@ -444,7 +537,7 @@ class _ForwardSheetChatRepository extends MockChatRepository {
         title: '联系人 A',
         subtitle: '互相关注',
         avatarUrl: '',
-        summaryIntersections: const <String>[],
+        intersectionFacts: const <ContactIntersectionFact>[],
         contactCount: 1,
         lastActiveAt: DateTime.utc(2026, 6, 27, 11),
         sortKey: '2026-06-27T11:00:00Z:user_a',
@@ -458,7 +551,7 @@ class _ForwardSheetChatRepository extends MockChatRepository {
         title: '群聊 A',
         subtitle: '',
         avatarUrl: '',
-        summaryIntersections: const <String>[],
+        intersectionFacts: const <ContactIntersectionFact>[],
         memberCount: 8,
         contactCount: 0,
         lastActiveAt: DateTime.utc(2026, 6, 27, 10),
@@ -473,12 +566,21 @@ class _ForwardSheetChatRepository extends MockChatRepository {
         title: '圈子行',
         subtitle: '',
         avatarUrl: '',
-        summaryIntersections: const <String>[],
+        intersectionFacts: const <ContactIntersectionFact>[],
         contactCount: 0,
         sortKey: 'circle_a',
       ),
     ].take(limit).toList(growable: false);
   }
+
+  @override
+  Future<List<ChatContactRowViewData>> listGroupCandidates({
+    String? conversationId,
+    int limit = 100,
+  }) => _delegate.listGroupCandidates(
+    conversationId: conversationId,
+    limit: limit,
+  );
 }
 
 class _ForwardSheetMessageWriter implements ChatMessageCommandWriter {

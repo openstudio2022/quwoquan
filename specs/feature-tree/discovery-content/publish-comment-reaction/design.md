@@ -36,6 +36,22 @@
 - 影响 Story：[`comment-thread`](./comment-thread/spec.md)、[`filter-catalog-release`](./filter-catalog-release/spec.md)、[`image-editing`](./image-editing/spec.md)、[`post-create-update`](./post-create-update/spec.md)、[`reaction-state-counter`](./reaction-state-counter/spec.md)、[`text-post-commercial-publication`](./text-post-commercial-publication/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-002"></a>
+### DEC-002 不恢复 Post 级收藏，实体意图统一由「想去」承载
+
+- 决策：`favorited` 已从 reaction 契约退场，不恢复 Post 级收藏；内容表面的意图动作
+  统一为实体级「想去」（`wishlist_add/remove` 行为事实 + `GetEntityWishlistState`），
+  意图对象是内容锚定的 canonical 实体（`primaryHomepageId`），不是 Post 本身。
+- 理由：交集飞轮的意图信号源是 `coWishlistedEntity`（都想去同一实体），Post 级收藏
+  没有任何消费闭环（无收藏夹场景、无推荐消费、无交集派生），只会稀释「想去」这个
+  唯一意图信号的语义；「稍后再看」类内容收藏在出现真实闭环场景（生产者→消费者→用户价值三点齐备）之前不立项。
+- 被否决方案：恢复 `favorited` reaction（无消费方的第二意图轨道）；把想去实现为
+  Post 级事实（意图锚点错位，无法聚合到实体供给）。
+- 约束与影响：涉及「赞+收藏」的历史规格文案按本决策修正为「赞+想去（有实体锚点时）」；想去按钮只在内容锚定到 `wishlistHomepageTypes` 支持的实体时渲染，不做本地推断。
+- 关联要求：`REQ-001`
+- 影响 Story：[`reaction-state-counter`](./reaction-state-counter/spec.md)、[`text-post-commercial-publication`](./text-post-commercial-publication/spec.md)
+- 关联验收：`SIT-001`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

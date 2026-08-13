@@ -188,31 +188,37 @@ class _CallActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: AppSpacing.iconButtonMinSizeMd,
-            height: AppSpacing.iconButtonMinSizeMd,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            child: Icon(
-              icon,
-              color: AppColors.callStageForeground,
-              size: AppSpacing.xl,
+    // 接听/拒接合并为单一可点击语义节点，读屏用户可直接寻址关键动作。
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: AppSpacing.iconButtonMinSizeMd,
+              height: AppSpacing.iconButtonMinSizeMd,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              child: Icon(
+                icon,
+                color: AppColors.callStageForeground,
+                size: AppSpacing.xl,
+              ),
             ),
-          ),
-          SizedBox(height: AppSpacing.sm),
-          Text(
-            label,
-            style: TextStyle(
-              color: AppColors.callStageForeground,
-              fontSize: AppTypography.sm,
-              fontWeight: AppTypography.normal,
+            SizedBox(height: AppSpacing.sm),
+            Text(
+              label,
+              style: TextStyle(
+                color: AppColors.callStageForeground,
+                fontSize: AppTypography.sm,
+                fontWeight: AppTypography.normal,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

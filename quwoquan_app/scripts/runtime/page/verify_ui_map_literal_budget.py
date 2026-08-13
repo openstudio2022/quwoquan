@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 """
-lib/ui 内 `Map<String, dynamic>` 字面量出现次数预算（防回退）。
+App UI 层 `Map<String, dynamic>` 字面量出现次数预算（防回退）。
+
+UI 层由三处组成，页面、壳层与设计系统都不得用弱类型 Map 承载展示模型：
+  lib/service/**/presentation/**  对象级页面与展示模型
+  lib/runtime/shell/**            应用壳
+  lib/design_system/**            设计系统
 
 预算文件：quwoquan_ops/policies/gates/ui_map_literal_budget.json
   { "max_ui_map_string_dynamic_occurrences": <int> }
 
-当前计数 > 预算 → exit 1。
+当前计数 > 预算 → exit 1。任一扫描根缺失 → exit 2：目录被搬走而计数静默归零，
+会让门禁在债务仍然存在时显示为绿。
 
 更新预算（刻意放宽时）：
   python3 quwoquan_app/scripts/runtime/page/verify_ui_map_literal_budget.py --write-baseline
@@ -35,18 +41,39 @@ from pathlib import Path
 
 ROOT = REPO_ROOT
 BUDGET_PATH = ROOT / "quwoquan_ops" / "policies" / "gates" / "ui_map_literal_budget.json"
-UI_LIB = ROOT / "quwoquan_app" / "lib" / "ui"
+APP_LIB = ROOT / "quwoquan_app" / "lib"
+UI_SCAN_ROOTS = (
+    APP_LIB / "service",
+    APP_LIB / "runtime" / "shell",
+    APP_LIB / "design_system",
+)
+PRESENTATION_SEGMENT = "presentation"
 MAP_RE = re.compile(r"Map<String,\s*dynamic>")
 
 
+def missing_scan_roots() -> list[Path]:
+    return [root for root in UI_SCAN_ROOTS if not root.is_dir()]
+
+
+def _is_ui_file(path: Path) -> bool:
+    if path.name.endswith(".g.dart"):
+        return False
+    # service/ 下只有对象的 presentation 层属于 UI；application/domain/adapters
+    # 的弱类型由各自的分层门禁负责。
+    if path.is_relative_to(APP_LIB / "service"):
+        return PRESENTATION_SEGMENT in path.parts
+    return True
+
+
 def count_ui() -> int:
-    n = 0
-    for path in UI_LIB.rglob("*.dart"):
-        if path.name.endswith(".g.dart"):
-            continue
-        text = path.read_text(encoding="utf-8", errors="replace")
-        n += len(MAP_RE.findall(text))
-    return n
+    total = 0
+    for root in UI_SCAN_ROOTS:
+        for path in root.rglob("*.dart"):
+            if not _is_ui_file(path):
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+            total += len(MAP_RE.findall(text))
+    return total
 
 
 def main() -> int:
@@ -57,6 +84,16 @@ def main() -> int:
         help="Write quwoquan_ops/policies/gates/ui_map_literal_budget.json from current count",
     )
     args = ap.parse_args()
+
+    missing = missing_scan_roots()
+    if missing:
+        joined = ", ".join(str(path.relative_to(ROOT)) for path in missing)
+        print(
+            f"verify_ui_map_literal_budget: BLOCK: missing UI scan root(s) {joined} "
+            f"(update UI_SCAN_ROOTS after moving UI code; a silent zero count hides debt)",
+            file=sys.stderr,
+        )
+        return 2
 
     current = count_ui()
 

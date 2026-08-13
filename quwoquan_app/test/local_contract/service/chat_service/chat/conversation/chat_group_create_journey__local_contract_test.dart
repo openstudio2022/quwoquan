@@ -9,13 +9,16 @@ import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/start_group_chat_page.dart';
 
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_seed_refs.dart';
 
 void main() {
   testWidgets('从圈子来源选择互关成员后原子建群并进入新会话', (tester) async {
-    final baseline = MockChatRepository();
-    final candidate = (await baseline.listGroupCandidates(limit: 1)).single;
+    final baseline = ChatTestFacets();
+    final candidate = (await baseline.contact.listGroupCandidates(
+      limit: 1,
+    )).single;
     final currentUserId = chatCurrentUserProfileId();
     final circleConversationId = 'fixture_circle_source_conversation';
 
@@ -39,7 +42,7 @@ void main() {
       },
     ];
 
-    final repository = MockChatRepository(
+    final facets = ChatTestFacets(
       seedConversations: <Map<String, dynamic>>[
         <String, dynamic>{
           'id': circleConversationId,
@@ -81,7 +84,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
-          chatRepositoryCompositionProvider.overrideWithValue(repository),
+          ...chatTestRepositoryOverrides(facets: facets),
           currentUserIdProvider.overrideWithValue(currentUserId),
         ],
         child: MaterialApp.router(routerConfig: router),
@@ -118,7 +121,7 @@ void main() {
       find.textContaining('conversation:fixture_conv_created_'),
       findsOneWidget,
     );
-    final inbox = await repository.listInbox(limit: 100);
+    final inbox = await facets.inbox.listInbox(limit: 100);
     expect(
       inbox.any((item) => item.id.startsWith('fixture_conv_created_')),
       isTrue,

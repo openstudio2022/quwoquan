@@ -164,9 +164,9 @@ double _appSpacingGetSpacingForScreenType(
 }
 
 String _appSpacingDetectScreenType(double screenWidth) {
-  if (screenWidth < 768) {
+  if (screenWidth < AppSpacing.tabletBreakpoint) {
     return 'mobile';
-  } else if (screenWidth < 1024) {
+  } else if (screenWidth < AppSpacing.wideBreakpoint) {
     return 'tablet';
   } else {
     return 'desktop';

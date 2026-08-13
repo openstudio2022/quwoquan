@@ -38,9 +38,11 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/app
 import 'package:quwoquan_app/service/search_service/search/search_index_view/presentation/search_network_results_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/runtime/remote_api_path_test_harness.dart';
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_state_seed_builder.dart';
 import '../../../../../support/service/chat_service/chat/conversation/conversation_state_typed_double.dart';
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
 
@@ -178,7 +180,7 @@ final class _SearchJourneyHarness {
     required this.tempDirectory,
     required this.searchRepository,
     required this.feedback,
-    required this.chatRepository,
+    required this.chatFacets,
     required this.assistantSearch,
   });
 
@@ -186,7 +188,7 @@ final class _SearchJourneyHarness {
   final Directory tempDirectory;
   final HybridSearchRepository searchRepository;
   final SearchFeedbackTypedDouble feedback;
-  final MockChatRepository chatRepository;
+  final ChatTestFacets chatFacets;
   final AssistantSearchRunFacade assistantSearch;
 
   static Future<_SearchJourneyHarness> create({
@@ -212,29 +214,46 @@ final class _SearchJourneyHarness {
       avatarUrl: '',
       contextVersion: 1,
     );
-    final alphaChatState = InMemoryChatStateEngine();
-    final photoConversation = alphaChatState.conversationSeeds.singleWhere(
-      (row) => row['id'] == 'fixture_conv_photo_group',
-    );
-    final chatRepository = MockChatRepository(
-      seedConversations: <Map<String, dynamic>>[
-        Map<String, dynamic>.from(photoConversation),
+    final chatSeed = minimalChatStateSeed(
+      contacts: const <ChatSeedObject>[
+        <String, Object?>{
+          'userId': 'fixture_user_photo',
+          'displayName': '契约摄影师',
+          'avatarUrl':
+              'media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png',
+          'avatarObjectKey':
+              'media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png',
+          'userHandle': 'fixture_user_photo',
+          'relationState': 'mutual',
+          'source': 'follow',
+          'bio': '旅行与城市摄影',
+        },
       ],
+    );
+    final alphaChatState = InMemoryChatStateEngine(seed: chatSeed);
+    final groupConversation = Map<String, dynamic>.from(
+      alphaChatState.conversationSeeds.singleWhere(
+        (row) => row['id'] == 'fixture_conv_group',
+      ),
+    )..['title'] = _localConversationTitle;
+    final chatFacets = ChatTestFacets(
+      seed: chatSeed,
+      seedConversations: <Map<String, dynamic>>[groupConversation],
       seedMembers: <String, List<Map<String, dynamic>>>{
-        'fixture_conv_photo_group': <Map<String, dynamic>>[],
+        'fixture_conv_group': <Map<String, dynamic>>[],
       },
       seedMessages: <String, List<Map<String, dynamic>>>{
-        'fixture_conv_photo_group': <Map<String, dynamic>>[],
+        'fixture_conv_group': <Map<String, dynamic>>[],
       },
     );
     final sync = LocalChatSearchSyncService(
-      contactRepository: chatRepository,
-      conversationRepository: chatRepository,
-      messageRepository: chatRepository,
+      contactRepository: chatFacets.contact,
+      conversationRepository: chatFacets.conversation,
+      messageRepository: chatFacets.message,
       conversationCache: ConversationCacheService(),
       store: store,
       personaContextLoader: () async => persona,
-      telemetrySink: const NoopCacheTelemetrySink(),
+      telemetrySink: const SilentCacheTelemetrySink(),
     );
     final synced = await sync.sync(force: true);
     if (!synced) {
@@ -255,10 +274,10 @@ final class _SearchJourneyHarness {
         sync,
         _EmptyCircleGroupSearchIndex(),
         () async => persona,
-        const NoopCacheTelemetrySink(),
+        const SilentCacheTelemetrySink(),
       ),
       feedback: SearchFeedbackTypedDouble(),
-      chatRepository: chatRepository,
+      chatFacets: chatFacets,
       assistantSearch: assistantSearch ?? _AssistantSearchFacet(),
     );
   }
@@ -286,7 +305,7 @@ final class _SearchJourneyHarness {
         recentSearchCommandWriterProvider.overrideWithValue(recentSearches),
         searchFeedbackFactAppenderProvider.overrideWithValue(feedback),
         assistantSearchRunFacetProvider.overrideWithValue(assistantSearch),
-        chatRepositoryCompositionProvider.overrideWithValue(chatRepository),
+        ...chatTestRepositoryOverrides(facets: chatFacets),
         circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
         homepageFacetSetProvider.overrideWithValue(MockHomepageRepository()),
         behaviorRepositoryProvider.overrideWithValue(

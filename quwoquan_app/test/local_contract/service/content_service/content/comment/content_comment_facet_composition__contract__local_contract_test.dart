@@ -5,14 +5,14 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/comment/in_memory_content_comment_facet.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
 void main() {
   test('组合根按 Comment facet 装配直连 adapter', () {
     final container = ProviderContainer(
       overrides: [
         ...mockContentFacetOverrides(
-          MockContentRepository(),
+          store: InMemoryContentPostStore(),
           commentFacet: InMemoryContentCommentFacet(),
         ),
       ],

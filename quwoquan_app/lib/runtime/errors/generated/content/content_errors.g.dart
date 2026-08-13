@@ -5,6 +5,7 @@ enum ContentErrorCode {
   contentDeleted('CONTENT.USER.content_deleted', 'surface', 0, 410),
   postNotFound('CONTENT.USER.post_not_found', 'surface', 0, 404),
   forbiddenEdit('CONTENT.USER.forbidden_edit', 'surface', 0, 403),
+  gatheringParticipationRequired('CONTENT.USER.gathering_participation_required', 'surface', 0, 403),
   forbiddenDelete('CONTENT.USER.forbidden_delete', 'surface', 0, 403),
   unauthorized('CONTENT.USER.unauthorized', 'surface', 0, 401),
   researchIdentityInvalid('CONTENT.USER.research_identity_invalid', 'surface', 0, 403),
@@ -85,6 +86,8 @@ enum ContentErrorCode {
         return ContentErrorCode.postNotFound;
       case 'CONTENT.USER.forbidden_edit':
         return ContentErrorCode.forbiddenEdit;
+      case 'CONTENT.USER.gathering_participation_required':
+        return ContentErrorCode.gatheringParticipationRequired;
       case 'CONTENT.USER.forbidden_delete':
         return ContentErrorCode.forbiddenDelete;
       case 'CONTENT.USER.unauthorized':
@@ -225,6 +228,7 @@ class ContentErrorMessages {
     ContentErrorCode.contentDeleted: '内容已删除',
     ContentErrorCode.postNotFound: '内容不存在或已删除',
     ContentErrorCode.forbiddenEdit: '无权编辑此内容',
+    ContentErrorCode.gatheringParticipationRequired: '只有这次行动的有效参与者才能关联共同经历',
     ContentErrorCode.forbiddenDelete: '无权删除此内容',
     ContentErrorCode.unauthorized: '请先登录',
     ContentErrorCode.researchIdentityInvalid: '当前研究态身份无效或已过期',
@@ -294,6 +298,7 @@ class ContentErrorMessages {
     ContentErrorCode.contentDeleted: 'Content has been deleted',
     ContentErrorCode.postNotFound: 'Post not found or deleted',
     ContentErrorCode.forbiddenEdit: 'Not allowed to edit this post',
+    ContentErrorCode.gatheringParticipationRequired: 'Only an active participant of this gathering can attach it to a post',
     ContentErrorCode.forbiddenDelete: 'Not allowed to delete this post',
     ContentErrorCode.unauthorized: 'Please sign in to continue',
     ContentErrorCode.researchIdentityInvalid: 'The research identity is invalid or expired',

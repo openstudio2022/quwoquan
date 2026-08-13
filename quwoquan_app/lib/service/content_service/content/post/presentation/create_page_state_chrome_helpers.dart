@@ -195,6 +195,70 @@ extension _CreatePageStateChromeHelpers on _CreatePageState {
     );
   }
 
+  /// 共同经历回流上下文条：从行动入口进入创作时展示，作者可移除关联。
+  /// 关联是否最终写入由 PublishSettings.gatheringRef 唯一决定。
+  Widget _buildGatheringContextBar(CreateEditorState state) {
+    final gatheringRef = state.settings.gatheringRef.trim();
+    if (gatheringRef.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final foreground = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final title = state.settings.gatheringTitle.trim().isEmpty
+        ? CreatePageText.gatheringContextFallbackTitle
+        : state.settings.gatheringTitle.trim();
+    return Container(
+      key: TestKeys.createGatheringContextBar,
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerMd,
+        vertical: AppSpacing.intraGroupSm,
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(
+            CupertinoIcons.person_2,
+            size: AppTypography.base,
+            color: AppColors.primaryColor,
+          ),
+          SizedBox(width: AppSpacing.intraGroupSm),
+          Expanded(
+            child: Text(
+              '${CreatePageText.gatheringContextPrefix}$title'
+              '${CreatePageText.gatheringContextSuffix}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: foreground, fontSize: AppTypography.sm),
+            ),
+          ),
+          CupertinoButton(
+            key: TestKeys.createGatheringContextRemove,
+            padding: EdgeInsets.zero,
+            minimumSize: const Size.square(AppSpacing.buttonHeightSm),
+            onPressed: () {
+              final notifier = ref.read(createEditorProvider.notifier);
+              notifier.setSettings(
+                ref
+                    .read(createEditorProvider)
+                    .settings
+                    .copyWith(clearGatheringRef: true),
+              );
+            },
+            child: Text(
+              CreatePageText.gatheringContextRemove,
+              style: TextStyle(
+                color: foreground,
+                fontSize: AppTypography.sm,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPublishActionLabel(Color onAccentLabel) {
     if (_isPublishing && _publicationCancellationSignal == null) {
       return AppRequestFeedback.inline(indicatorColor: onAccentLabel);

@@ -1,8 +1,10 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/platform/platform_target.dart';
+import 'package:quwoquan_app/runtime/platform/push_endpoint_gateway.dart';
 
 /// Example "behavior contract" decided purely from capabilities (not platform).
 ///
@@ -35,6 +37,8 @@ bool canUseDeviceCalendar(PlatformCapabilities caps) => caps.deviceCalendar;
 bool canUseAdaptiveVideoPlayback(PlatformCapabilities caps) =>
     caps.adaptiveVideoPlayback;
 
+bool canRegisterPushEndpoints(PlatformCapabilities caps) => caps.pushDelivery;
+
 PlatformCapabilities _resolve(PlatformCapabilities profile) {
   final container = ProviderContainer(
     overrides: [platformCapabilitiesProvider.overrideWithValue(profile)],
@@ -44,6 +48,8 @@ PlatformCapabilities _resolve(PlatformCapabilities profile) {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('capability-first behavior contract (profile-driven)', () {
     // Same contract, three platform profiles — no duplicated test bodies.
     final profiles = <String, PlatformCapabilities>{
@@ -76,6 +82,11 @@ void main() {
         );
         expect(canUseDeviceCalendar(caps), caps.deviceCalendar);
         expect(canUseAdaptiveVideoPlayback(caps), caps.adaptiveVideoPlayback);
+        expect(
+          canRegisterPushEndpoints(caps),
+          caps.pushDelivery,
+          reason: 'push endpoint registration must mirror pushDelivery',
+        );
       });
     }
 
@@ -142,6 +153,76 @@ void main() {
       expect(androidCaps.systemShareSheet, isTrue);
       expect(iosCaps.wechatTargetedShare, isFalse);
       expect(iosCaps.systemShareSheet, isTrue);
+    });
+
+    test('只有 mobile 注册设备推送 endpoint，web/ohos/desktop 结构化跳过', () {
+      expect(canRegisterPushEndpoints(CapabilityProfile.mobile), isTrue);
+      expect(canRegisterPushEndpoints(CapabilityProfile.web), isFalse);
+      expect(canRegisterPushEndpoints(CapabilityProfile.ohos), isFalse);
+      expect(canRegisterPushEndpoints(CapabilityProfile.desktop), isFalse);
+      expect(
+        platformCapabilitiesFor(AppPlatform.android).pushDelivery,
+        isTrue,
+      );
+      expect(platformCapabilitiesFor(AppPlatform.ios).pushDelivery, isTrue);
+    });
+  });
+
+  group('pushEndpointGatewayProvider — pushDelivery 能力门控装配', () {
+    test('mobile 装配持久化推送 gateway（注册路径可达）', () {
+      final container = ProviderContainer(
+        overrides: [
+          platformCapabilitiesProvider.overrideWithValue(
+            CapabilityProfile.mobile,
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      expect(
+        container.read(pushEndpointGatewayProvider),
+        isA<PersistentPushEndpointGateway>(),
+      );
+    });
+
+    test('web/ohos fail-safe：全部操作结构化跳过且无原生通道调用', () async {
+      final nativeCalls = <String>[];
+      const nativeChannel = MethodChannel('quwoquan/rtc/incoming_call');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(nativeChannel, (call) async {
+            nativeCalls.add(call.method);
+            return null;
+          });
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(nativeChannel, null);
+      });
+
+      for (final profile in <PlatformCapabilities>[
+        CapabilityProfile.web,
+        CapabilityProfile.ohos,
+      ]) {
+        final container = ProviderContainer(
+          overrides: [platformCapabilitiesProvider.overrideWithValue(profile)],
+        );
+        addTearDown(container.dispose);
+
+        final gateway = container.read(pushEndpointGatewayProvider);
+        expect(gateway, isA<UnsupportedPushEndpointGateway>());
+        await gateway.recordUpsert(
+          DevicePushEndpoint(kind: PushEndpointKind.fcm, token: 'fcm-token'),
+        );
+        expect(await gateway.readPendingMutations(), isEmpty);
+        await gateway.acknowledgeMutation('mutation-1');
+        await gateway.queueActiveEndpointRemovals();
+        await gateway.purgeForTerminalAccountClosure();
+      }
+
+      expect(
+        nativeCalls,
+        isEmpty,
+        reason: '能力关闭平台的推送 gateway 不得触达原生通道（R-XP4/R-XP5）',
+      );
     });
   });
 }

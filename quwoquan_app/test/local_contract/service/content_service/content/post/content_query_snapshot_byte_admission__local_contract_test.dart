@@ -22,7 +22,7 @@ void main() {
     final store = ContentQuerySnapshotStore(
       persistToPreferences: true,
       storageKey: storageKey,
-      telemetrySink: const NoopCacheTelemetrySink(),
+      telemetrySink: const SilentCacheTelemetrySink(),
     );
     await store.ensureHydrated();
     store.put(
@@ -44,7 +44,7 @@ void main() {
     final restored = ContentQuerySnapshotStore(
       persistToPreferences: true,
       storageKey: storageKey,
-      telemetrySink: const NoopCacheTelemetrySink(),
+      telemetrySink: const SilentCacheTelemetrySink(),
     );
     await restored.ensureHydrated();
     expect(restored.get(queryKey), isNull);

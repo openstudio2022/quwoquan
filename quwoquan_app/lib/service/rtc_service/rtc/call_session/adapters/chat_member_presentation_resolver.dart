@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_participant_presentation.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 /// 以 chat.ConversationMember 具名 Reader 组合 RTC 参与者展示资料。
 ///
@@ -21,7 +22,7 @@ final class ChatMemberCallParticipantPresentationResolver
     final rows = await members.listMembers(
       conversationId: conversationId,
       limit: 200,
-      sort: 'joined_asc',
+      sort: MemberListSort.joinedAsc,
     );
     return <String, CallParticipantPresentation>{
       for (final row in rows)

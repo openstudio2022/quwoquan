@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/runtime/platform/official_call_ringtone_catalog.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/state/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/account_closure_local_data_purger.dart';
@@ -241,7 +242,9 @@ void main() {
     await tester.pumpWidget(host(SettingsCallsPage()));
     await tester.pumpAndSettle();
 
-    expect(find.text(SettingsText.settingsCallRingtoneDefault), findsOneWidget);
+    for (final ringtone in OfficialCallRingtoneCatalog.items) {
+      expect(find.text(ringtone.label), findsOneWidget);
+    }
     expect(find.text(SettingsText.settingsEnableGroupCallRing), findsOneWidget);
   });
 

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-001.t3
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-001.t4
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -15,6 +17,7 @@ import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/create_editor_provider.dart';
@@ -26,7 +29,7 @@ import '../../../../../support/service/content_service/content/post/content_face
 import '../../../../../support/runtime/transport/recording_content_media_facet.dart';
 import '../../../../../support/service/content_service/content/post/recording_content_post_publication_writer.dart';
 import '../../../../../support/service/circle_service/circle_management/circle_post_placement/circle_post_placement_recording_typed_double.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/integration_service/external_integration/location/fake_location_readers.dart';
 import '../../../../../support/runtime/platform/location/fake_location_gateway.dart';
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
@@ -149,11 +152,11 @@ class _CreateHostApp extends StatelessWidget {
 }
 
 List<Override> _createPublishOverrides(
-  MockContentRepository repository,
+  InMemoryContentPostStore store,
   RecordingContentPostPublicationWriter postPublication,
   RecordingContentMediaFacet media,
 ) => <Override>[
-  ...mockContentFacetOverrides(repository),
+  ...mockContentFacetOverrides(store: store),
   createLocationNearbyReaderProvider.overrideWithValue(
     FakeLocationQueryAdapter(),
   ),
@@ -176,7 +179,7 @@ List<Override> _createPublishOverrides(
 ];
 
 Widget _buildApp(
-  MockContentRepository repository,
+  InMemoryContentPostStore store,
   RecordingContentPostPublicationWriter postPublication, {
   RecordingCirclePostPlacementWriter? placements,
   RecordingContentMediaFacet? media,
@@ -188,7 +191,7 @@ Widget _buildApp(
       activePersonaContextProvider.overrideWith(
         (_) async => _resolvedActivePersona,
       ),
-      ..._createPublishOverrides(repository, postPublication, mediaFacet),
+      ..._createPublishOverrides(store, postPublication, mediaFacet),
       if (placements != null)
         createWorkspaceCirclePostPlacementWriterProvider.overrideWithValue(
           placements,
@@ -213,7 +216,7 @@ Widget _buildApp(
 }
 
 Widget _buildRouterApp(
-  MockContentRepository repository,
+  InMemoryContentPostStore store,
   RecordingContentPostPublicationWriter postPublication,
 ) {
   final router = GoRouter(
@@ -240,7 +243,7 @@ Widget _buildRouterApp(
         (_) async => _resolvedActivePersona,
       ),
       ..._createPublishOverrides(
-        repository,
+        store,
         postPublication,
         RecordingContentMediaFacet(),
       ),
@@ -293,10 +296,10 @@ void main() {
   });
 
   testWidgets('短文本直接按 micro 契约发布，且不暴露旧 taxonomy', (tester) async {
-    final repository = MockContentRepository();
+    final store = InMemoryContentPostStore();
     final postPublication = RecordingContentPostPublicationWriter();
 
-    await tester.pumpWidget(_buildApp(repository, postPublication));
+    await tester.pumpWidget(_buildApp(store, postPublication));
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开创作'));
     await tester.pumpAndSettle();
@@ -334,10 +337,10 @@ void main() {
   });
 
   testWidgets('长文本直接进入下一步并按 article 契约发布，且不暴露旧 taxonomy', (tester) async {
-    final repository = MockContentRepository();
+    final store = InMemoryContentPostStore();
     final postPublication = RecordingContentPostPublicationWriter();
 
-    await tester.pumpWidget(_buildApp(repository, postPublication));
+    await tester.pumpWidget(_buildApp(store, postPublication));
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开创作'));
     await tester.pumpAndSettle();
@@ -418,16 +421,62 @@ void main() {
     expect(find.text('打开创作'), findsOneWidget);
   });
 
+  testWidgets('长文本在确认页把建议 article 改为 micro 后按用户确认发布（GWT-001）', (tester) async {
+    final store = InMemoryContentPostStore();
+    final postPublication = RecordingContentPostPublicationWriter();
+
+    await tester.pumpWidget(_buildApp(store, postPublication));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开创作'));
+    await tester.pumpAndSettle();
+
+    final longText = '准备升级为作品的长文案' * 16;
+    await tester.enterText(find.byKey(TestKeys.createMomentInput), longText);
+    await tester.pump();
+
+    await tester.tap(find.byKey(TestKeys.createPublishButton));
+    await tester.pumpAndSettle();
+
+    // 确认页显示系统建议的最终形态（文章），允许用户修改。
+    expect(find.byKey(TestKeys.createPublishConfirmSheet), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('publish-confirm-form-row')),
+      findsOneWidget,
+    );
+    expect(find.text(CreationText.publishFormArticle), findsOneWidget);
+
+    await tester.tap(find.text(CreationText.publishFormLabel));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(CreationText.publishFormMicro).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(FoundationText.confirm));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
+    await tester.pump();
+    for (var i = 0; i < 20 && postPublication.submitCommands.isEmpty; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+
+    // 最终 typed command 的 contentType 与用户确认一致，未再静默推导。
+    expect(postPublication.submitCommands, hasLength(1));
+    expect(postPublication.lastSubmitPayload?['contentType'], 'micro');
+    expect(postPublication.lastSubmitPayload?['body'], longText);
+    expect(
+      postPublication.lastSubmitPayload?.containsKey('articleMarkdown'),
+      isFalse,
+    );
+    await _closePublishResult(tester);
+  });
+
   testWidgets('媒体编辑器对图片使用首图预览并写入 payload', (tester) async {
-    final repository = MockContentRepository();
+    final store = InMemoryContentPostStore();
     final postPublication = RecordingContentPostPublicationWriter();
     final media = RecordingContentMediaFacet();
     const coverA = 'asset://image_asset_a';
     const coverB = 'asset://image_asset_b';
 
-    await tester.pumpWidget(
-      _buildApp(repository, postPublication, media: media),
-    );
+    await tester.pumpWidget(_buildApp(store, postPublication, media: media));
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开创作'));
     await tester.pumpAndSettle();
@@ -475,13 +524,13 @@ void main() {
   });
 
   testWidgets('圈子锚点在 Post 发布后通过 CirclePostPlacement Facade 放置', (tester) async {
-    final repository = MockContentRepository();
+    final store = InMemoryContentPostStore();
     final postPublication = RecordingContentPostPublicationWriter();
     final placements = RecordingCirclePostPlacementWriter();
 
     await tester.pumpWidget(
       _buildApp(
-        repository,
+        store,
         postPublication,
         placements: placements,
         initialCircleId: 'circle-west-sichuan',
@@ -517,10 +566,10 @@ void main() {
   });
 
   testWidgets('发布设置页可进入统一返回页风格的主页与圈子选择', (tester) async {
-    final repository = MockContentRepository();
+    final store = InMemoryContentPostStore();
     final postPublication = RecordingContentPostPublicationWriter();
 
-    await tester.pumpWidget(_buildRouterApp(repository, postPublication));
+    await tester.pumpWidget(_buildRouterApp(store, postPublication));
     await tester.pumpAndSettle();
     await tester.tap(find.text('打开创作'));
     await tester.pumpAndSettle();

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 
 class AppTypography {
   /// Minimum legible caption size used for compressed toolbar states.
@@ -175,8 +176,8 @@ class AppTypography {
     required double expanded,
   }) {
     final width = MediaQuery.sizeOf(context).width;
-    if (width < 360) return compact;
-    if (width >= 600) return expanded;
+    if (width < AppSpacing.compactBreakpoint) return compact;
+    if (width >= AppSpacing.expandedBreakpoint) return expanded;
     return regular;
   }
 }

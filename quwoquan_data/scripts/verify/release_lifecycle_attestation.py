@@ -14,7 +14,6 @@ from core.paths import RELEASE_ROOT
 from core.release_layout import attestation_root, payload_digest, payload_file
 from core.schema import assert_valid
 from core.source_digest import (
-    FrozenSourceDigest,
     SourceDigest,
     SourceDigestError,
     parse_source_digest_document,
@@ -60,7 +59,7 @@ def _source_digests(
     *,
     path: Path,
     issues: list[str],
-) -> tuple[SourceDigest | FrozenSourceDigest, ...] | None:
+) -> tuple[SourceDigest, ...] | None:
     raw_value = document.get("sourceDigests")
     if not isinstance(raw_value, list):
         issues.append(f"{path}: sourceDigests must be an array")
@@ -69,19 +68,9 @@ def _source_digests(
     if not isinstance(raw_identities, list):
         issues.append(f"{path}: sourceIdentities must be an array")
         return None
-    legacy_digests = frozenset(
-        str(item.get("sourceDigest") or "")
-        for item in raw_identities
-        if isinstance(item, dict)
-        and item.get("identityKind") == "legacy_canonical_migration"
-    )
     try:
         source_digests = tuple(
-            parse_source_digest_document(
-                item,
-                frozen_digest_allowlist=legacy_digests,
-            )
-            for item in raw_value
+            parse_source_digest_document(item) for item in raw_value
         )
     except SourceDigestError as exc:
         issues.append(f"{path}: {exc}")

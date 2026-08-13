@@ -25,6 +25,7 @@ import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
     show contentFeatureFlagProvider;
 import 'package:quwoquan_app/l10n/app_localizations_zh.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/home_circles_hub_page.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/runtime/di/post_interaction_state_dependencies.dart';
@@ -37,11 +38,39 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
+
+InMemoryContentPostStore _homeStore() {
+  return InMemoryContentPostStore(
+    posts: <ContentPostViewData>[
+      ...contentPostListBuilder(
+        contentType: 'image',
+        count: 2,
+        idPrefix: 'home-image',
+      ),
+      ...contentPostListBuilder(
+        contentType: 'video',
+        count: 2,
+        idPrefix: 'home-video',
+      ),
+      ...contentPostListBuilder(
+        contentType: 'micro',
+        count: 2,
+        idPrefix: 'home-micro',
+      ),
+      ...contentPostListBuilder(
+        contentType: 'article',
+        count: 2,
+        idPrefix: 'home-article',
+      ),
+    ],
+  );
+}
 
 Widget _buildApp() {
   return ProviderScope(
-    overrides: [...mockContentFacetOverrides(MockContentRepository())],
+    overrides: [...mockContentFacetOverrides(store: _homeStore())],
     child: ScreenUtilInit(
       designSize: const Size(393, 852),
       child: MaterialApp.router(
@@ -92,7 +121,7 @@ Widget _buildApp() {
 Widget _buildDarkApp() {
   return ProviderScope(
     overrides: [
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: _homeStore()),
       isDarkProvider.overrideWith((ref) => true),
     ],
     child: ScreenUtilInit(
@@ -137,7 +166,7 @@ Widget _buildAppWithStableFollowingArticles() {
         ),
       ),
       followingSubjectsProvider.overrideWith((_) async => const []),
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: _homeStore()),
       contentFeatureFlagProvider(
         'enable_article_distribution_profiles',
       ).overrideWith((ref) => true),
@@ -200,9 +229,9 @@ Widget _buildAppWithStableFollowingFeed({bool stableArticles = false}) {
       ),
       followingSubjectsProvider.overrideWith((_) async => const []),
       if (!stableArticles)
-        ...mockContentFacetOverrides(MockContentRepository())
+        ...mockContentFacetOverrides(store: _homeStore())
       else ...[
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: _homeStore()),
         contentFeatureFlagProvider(
           'enable_article_distribution_profiles',
         ).overrideWith((ref) => true),
@@ -378,7 +407,7 @@ class _SingleRecommendPostFeedMapNotifier extends DiscoveryFeedMapNotifier {
 Widget _buildAppWithSingleRecommendPost() {
   return ProviderScope(
     overrides: [
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: _homeStore()),
       discoveryFeedMapProvider.overrideWith(
         _SingleRecommendPostFeedMapNotifier.new,
       ),
@@ -933,10 +962,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(
-          of: textOnlyCard,
-          matching: find.text('晨间复盘的十分钟礼记'),
-        ),
+        find.descendant(of: textOnlyCard, matching: find.text('晨间复盘的十分钟礼记')),
         findsOneWidget,
       );
       expect(
@@ -1137,7 +1163,7 @@ void main() {
       var exited = false;
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [...mockContentFacetOverrides(MockContentRepository())],
+          overrides: [...mockContentFacetOverrides(store: _homeStore())],
           child: MaterialApp(
             home: Scaffold(
               body: HomeFeaturedImmersivePage(

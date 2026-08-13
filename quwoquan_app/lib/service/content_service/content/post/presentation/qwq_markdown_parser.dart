@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:yaml/yaml.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_page_text_constants.dart';
 
@@ -137,6 +139,10 @@ class QwqMarkdownParser {
         continue;
       }
 
+      // 嵌套列表：两空格缩进为一级，最多 2 级（qwq dialect 约定）。
+      final listIndent = line.length - line.trimLeft().length;
+      final listDepth = math.min(2, listIndent ~/ 2);
+
       final orderedMatch = RegExp(r'^\d+\.\s+(.+)$').firstMatch(trimmed);
       if (orderedMatch != null) {
         final text = orderedMatch.group(1)!.trim();
@@ -145,6 +151,7 @@ class QwqMarkdownParser {
             id: nextId('ordered'),
             kind: QwqMarkdownBlockKind.orderedItem,
             text: text,
+            listDepth: listDepth,
             inlines: _parseInlines(text),
             sourceStartLine: lineNumber,
             sourceEndLine: lineNumber,
@@ -162,6 +169,7 @@ class QwqMarkdownParser {
             id: nextId('bullet'),
             kind: QwqMarkdownBlockKind.bulletItem,
             text: text,
+            listDepth: listDepth,
             inlines: _parseInlines(text),
             sourceStartLine: lineNumber,
             sourceEndLine: lineNumber,

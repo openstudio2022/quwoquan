@@ -141,36 +141,93 @@ def pytest_configure(config):
     config._qwq_publish_baseline = _snapshot_files(DATA_ROOT / "publish")
 
 
+_PATHS_ROOT_CONSTANTS = ("DATA_ROOT", "OUTPUT_ROOT", "PUBLISH_ROOT")
+
+
+def _snapshot_diff(now: dict, before: object) -> list[str]:
+    if not isinstance(before, dict):
+        before = {}
+    added = sorted(set(now) - set(before))
+    modified = sorted(
+        key for key in set(now) & set(before) if now[key] != before[key]
+    )
+    if not added and not modified:
+        return []
+    return [f"+{item}" for item in added[:5]] + [f"~{item}" for item in modified[:5]]
+
+
+def _isolation_breach_evidence(paths_module, isolated_env: dict) -> list[str]:
+    """测试进程自证：隔离 env 与 ``core.paths`` root 常量必须仍指向隔离根。
+
+    这是「常量冻结在真实根」历史缺陷的直接检测，与并行进程写入无关，
+    因此没有并发误报。
+    """
+    breaches: list[str] = []
+    isolated_root = isolated_env.get("QWQ_DATA_ROOT")
+    if not isolated_root:
+        return ["isolated QWQ_DATA_ROOT declaration is missing"]
+    for key in _ROOT_ENV_KEYS:
+        expected = isolated_env.get(key)
+        actual = os.environ.get(key)
+        if actual != expected:
+            breaches.append(f"env {key} drifted: expected={expected} actual={actual}")
+    isolated_base = Path(isolated_root).resolve()
+    for name in _PATHS_ROOT_CONSTANTS:
+        value = Path(getattr(paths_module, name)).resolve()
+        if not value.is_relative_to(isolated_base):
+            breaches.append(f"core.paths.{name} escaped the isolated root: {value}")
+    return breaches
+
+
 def pytest_unconfigure(config):
-    """pytest 落盘隔离门：session 结束时真实输出根与仓内 publish 不得新增文件。"""
+    """pytest 落盘隔离门。
+
+    判定分三级：
+    1. 隔离机制自证失败（env/paths 常量逃出隔离根）→ FAIL，这是测试进程
+       自己的强证据；
+    2. 仓内 ``quwoquan_data/publish`` 出现 diff → FAIL，数据任务按契约不写
+       仓内 publish，diff 只能来自测试进程；
+    3. 真实 ``.qwq_output/data`` 根出现 diff 而隔离自证完好 → 降级 WARNING：
+       文件系统快照无法区分写入者，并行数据任务运行期的写入会命中这里。
+       残余漏检（测试硬编码绝对路径写真实根且隔离常量完好）已知且接受——
+       并发误报会训练所有人忽略红灯，代价远大于该残余风险。
+    """
     if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") == "1":
         return
-    leaks: list[str] = []
+    failures: list[str] = []
+    warnings: list[str] = []
+
+    breaches = _isolation_breach_evidence(_paths, _ISOLATED_ROOT_ENV)
+    failures.extend(f"isolation breach: {item}" for item in breaches)
+
     baseline = getattr(config, "_qwq_output_baseline", {})
     for root in _REAL_DATA_OUTPUT_ROOTS:
-        output_now = _snapshot_files(root)
         before = baseline.get(str(root), {}) if isinstance(baseline, dict) else {}
-        if not isinstance(before, dict):
-            before = {}
-        added = sorted(set(output_now) - set(before))
-        modified = sorted(key for key in set(output_now) & set(before) if output_now[key] != before[key])
-        if added or modified:
-            details = [f"+{item}" for item in added[:5]] + [f"~{item}" for item in modified[:5]]
-            leaks.append(f"{root} changed files={len(added) + len(modified)} ({', '.join(details)})")
-    publish_now = _snapshot_files(DATA_ROOT / "publish")
-    publish_baseline = getattr(config, "_qwq_publish_baseline", {})
-    if not isinstance(publish_baseline, dict):
-        publish_baseline = {}
-    added = sorted(set(publish_now) - set(publish_baseline))
-    modified = sorted(key for key in set(publish_now) & set(publish_baseline) if publish_now[key] != publish_baseline[key])
-    if added or modified:
-        details = [f"+{item}" for item in added[:5]] + [f"~{item}" for item in modified[:5]]
-        leaks.append(
-            f"{DATA_ROOT / 'publish'} changed files={len(added) + len(modified)} ({', '.join(details)})"
+        details = _snapshot_diff(_snapshot_files(root), before)
+        if not details:
+            continue
+        message = f"{root} changed files ({', '.join(details)})"
+        if breaches:
+            failures.append(message)
+        else:
+            warnings.append(message)
+
+    publish_details = _snapshot_diff(
+        _snapshot_files(DATA_ROOT / "publish"),
+        getattr(config, "_qwq_publish_baseline", {}),
+    )
+    if publish_details:
+        failures.append(
+            f"{DATA_ROOT / 'publish'} changed files ({', '.join(publish_details)})"
         )
-    if leaks:
+
+    for message in warnings:
+        print(
+            "[qwq-isolation-gate] WARNING: 真实输出根在测试期间出现写入但隔离"
+            f"自证完好，可能来自并行数据任务：{message}"
+        )
+    if failures:
         raise RuntimeError(
-            "pytest 落盘隔离门 FAIL：测试进程向真实输出根/仓内 publish 泄漏了文件（"
-            + "; ".join(leaks)
-            + "）。单元/合约测试必须只写 tempfile 临时根。"
+            "pytest 落盘隔离门 FAIL：" + "; ".join(failures) + "。"
+            "单元/合约测试必须只写 tempfile 临时根。"
         )

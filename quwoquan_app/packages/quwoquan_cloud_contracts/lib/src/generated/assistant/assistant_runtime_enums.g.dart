@@ -158,7 +158,6 @@ enum AssistantStreamEventType {
   taskGraphPatch,
   checkpointCommitted,
   presentationSnapshot,
-  presentationPatch,
   presentationCommit,
   waitingInput,
   waitingApproval,
@@ -189,8 +188,6 @@ AssistantStreamEventType parseAssistantStreamEventTypeStrict(String raw) {
       return AssistantStreamEventType.checkpointCommitted;
     case "presentation_snapshot":
       return AssistantStreamEventType.presentationSnapshot;
-    case "presentation_patch":
-      return AssistantStreamEventType.presentationPatch;
     case "presentation_commit":
       return AssistantStreamEventType.presentationCommit;
     case "waiting_input":
@@ -228,8 +225,6 @@ AssistantStreamEventType parseAssistantStreamEventType(String raw) {
       return AssistantStreamEventType.checkpointCommitted;
     case "presentation_snapshot":
       return AssistantStreamEventType.presentationSnapshot;
-    case "presentation_patch":
-      return AssistantStreamEventType.presentationPatch;
     case "presentation_commit":
       return AssistantStreamEventType.presentationCommit;
     case "waiting_input":
@@ -270,8 +265,6 @@ extension AssistantStreamEventTypeX on AssistantStreamEventType {
         return "checkpoint_committed";
       case AssistantStreamEventType.presentationSnapshot:
         return "presentation_snapshot";
-      case AssistantStreamEventType.presentationPatch:
-        return "presentation_patch";
       case AssistantStreamEventType.presentationCommit:
         return "presentation_commit";
       case AssistantStreamEventType.waitingInput:
@@ -4528,6 +4521,423 @@ extension AssistantResponseTypeX on AssistantResponseType {
         return "stream";
       case AssistantResponseType.unknown:
         return "";
+    }
+  }
+}
+
+enum ContextGranularity {
+  hidden,
+  coarse,
+  precise,
+}
+
+ContextGranularity parseContextGranularityStrict(String raw) {
+  switch (raw.trim()) {
+    case "hidden":
+      return ContextGranularity.hidden;
+    case "coarse":
+      return ContextGranularity.coarse;
+    case "precise":
+      return ContextGranularity.precise;
+    default:
+      throw AssistantRuntimeEnumParseFailure("ContextGranularity", raw.trim());
+  }
+}
+
+extension ContextGranularityX on ContextGranularity {
+  String get wireName {
+    switch (this) {
+      case ContextGranularity.hidden:
+        return "hidden";
+      case ContextGranularity.coarse:
+        return "coarse";
+      case ContextGranularity.precise:
+        return "precise";
+    }
+  }
+}
+
+enum NextTurnMode {
+  answer,
+  continueExecution,
+  askUser,
+  blocked,
+}
+
+NextTurnMode parseNextTurnModeStrict(String raw) {
+  switch (raw.trim()) {
+    case "answer":
+      return NextTurnMode.answer;
+    case "continue_execution":
+      return NextTurnMode.continueExecution;
+    case "ask_user":
+      return NextTurnMode.askUser;
+    case "blocked":
+      return NextTurnMode.blocked;
+    default:
+      throw AssistantRuntimeEnumParseFailure("NextTurnMode", raw.trim());
+  }
+}
+
+NextTurnMode parseNextTurnMode(String raw) {
+  switch (raw.trim()) {
+    case "answer":
+      return NextTurnMode.answer;
+    case "continue_execution":
+      return NextTurnMode.continueExecution;
+    case "ask_user":
+      return NextTurnMode.askUser;
+    case "blocked":
+      return NextTurnMode.blocked;
+    default:
+      return NextTurnMode.answer;
+  }
+}
+
+extension NextTurnModeX on NextTurnMode {
+  String get wireName {
+    switch (this) {
+      case NextTurnMode.answer:
+        return "answer";
+      case NextTurnMode.continueExecution:
+        return "continue_execution";
+      case NextTurnMode.askUser:
+        return "ask_user";
+      case NextTurnMode.blocked:
+        return "blocked";
+    }
+  }
+}
+
+enum LocationGranularity {
+  none,
+  city,
+  region,
+  precise,
+}
+
+LocationGranularity parseLocationGranularityStrict(String raw) {
+  switch (raw.trim()) {
+    case "none":
+      return LocationGranularity.none;
+    case "city":
+      return LocationGranularity.city;
+    case "region":
+      return LocationGranularity.region;
+    case "precise":
+      return LocationGranularity.precise;
+    default:
+      throw AssistantRuntimeEnumParseFailure("LocationGranularity", raw.trim());
+  }
+}
+
+extension LocationGranularityX on LocationGranularity {
+  String get wireName {
+    switch (this) {
+      case LocationGranularity.none:
+        return "none";
+      case LocationGranularity.city:
+        return "city";
+      case LocationGranularity.region:
+        return "region";
+      case LocationGranularity.precise:
+        return "precise";
+    }
+  }
+}
+
+enum AssistantPolicyRolloutStatus {
+  active,
+}
+
+AssistantPolicyRolloutStatus parseAssistantPolicyRolloutStatusStrict(String raw) {
+  switch (raw.trim()) {
+    case "active":
+      return AssistantPolicyRolloutStatus.active;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantPolicyRolloutStatus", raw.trim());
+  }
+}
+
+extension AssistantPolicyRolloutStatusX on AssistantPolicyRolloutStatus {
+  String get wireName {
+    switch (this) {
+      case AssistantPolicyRolloutStatus.active:
+        return "active";
+    }
+  }
+}
+
+enum AssistantSessionState {
+  active,
+  archived,
+}
+
+AssistantSessionState parseAssistantSessionStateStrict(String raw) {
+  switch (raw.trim()) {
+    case "active":
+      return AssistantSessionState.active;
+    case "archived":
+      return AssistantSessionState.archived;
+    default:
+      throw AssistantRuntimeEnumParseFailure("AssistantSessionState", raw.trim());
+  }
+}
+
+extension AssistantSessionStateX on AssistantSessionState {
+  String get wireName {
+    switch (this) {
+      case AssistantSessionState.active:
+        return "active";
+      case AssistantSessionState.archived:
+        return "archived";
+    }
+  }
+}
+
+enum DomainReaderArtifactPolicy {
+  inlineBounded,
+  inlineOrArtifact,
+  artifactRequired,
+}
+
+DomainReaderArtifactPolicy parseDomainReaderArtifactPolicyStrict(String raw) {
+  switch (raw.trim()) {
+    case "inline_bounded":
+      return DomainReaderArtifactPolicy.inlineBounded;
+    case "inline_or_artifact":
+      return DomainReaderArtifactPolicy.inlineOrArtifact;
+    case "artifact_required":
+      return DomainReaderArtifactPolicy.artifactRequired;
+    default:
+      throw AssistantRuntimeEnumParseFailure("DomainReaderArtifactPolicy", raw.trim());
+  }
+}
+
+extension DomainReaderArtifactPolicyX on DomainReaderArtifactPolicy {
+  String get wireName {
+    switch (this) {
+      case DomainReaderArtifactPolicy.inlineBounded:
+        return "inline_bounded";
+      case DomainReaderArtifactPolicy.inlineOrArtifact:
+        return "inline_or_artifact";
+      case DomainReaderArtifactPolicy.artifactRequired:
+        return "artifact_required";
+    }
+  }
+}
+
+enum DomainReaderCitationPolicy {
+  none,
+  sourceReference,
+  entityReference,
+}
+
+DomainReaderCitationPolicy parseDomainReaderCitationPolicyStrict(String raw) {
+  switch (raw.trim()) {
+    case "none":
+      return DomainReaderCitationPolicy.none;
+    case "source_reference":
+      return DomainReaderCitationPolicy.sourceReference;
+    case "entity_reference":
+      return DomainReaderCitationPolicy.entityReference;
+    default:
+      throw AssistantRuntimeEnumParseFailure("DomainReaderCitationPolicy", raw.trim());
+  }
+}
+
+extension DomainReaderCitationPolicyX on DomainReaderCitationPolicy {
+  String get wireName {
+    switch (this) {
+      case DomainReaderCitationPolicy.none:
+        return "none";
+      case DomainReaderCitationPolicy.sourceReference:
+        return "source_reference";
+      case DomainReaderCitationPolicy.entityReference:
+        return "entity_reference";
+    }
+  }
+}
+
+enum SkillActivationMode {
+  reactive,
+  proactive,
+  hybrid,
+}
+
+SkillActivationMode parseSkillActivationModeStrict(String raw) {
+  switch (raw.trim()) {
+    case "reactive":
+      return SkillActivationMode.reactive;
+    case "proactive":
+      return SkillActivationMode.proactive;
+    case "hybrid":
+      return SkillActivationMode.hybrid;
+    default:
+      throw AssistantRuntimeEnumParseFailure("SkillActivationMode", raw.trim());
+  }
+}
+
+extension SkillActivationModeX on SkillActivationMode {
+  String get wireName {
+    switch (this) {
+      case SkillActivationMode.reactive:
+        return "reactive";
+      case SkillActivationMode.proactive:
+        return "proactive";
+      case SkillActivationMode.hybrid:
+        return "hybrid";
+    }
+  }
+}
+
+enum SkillPackageAssetKind {
+  manifest,
+  catalog,
+  activation,
+  input,
+  inputSchema,
+  context,
+  capability,
+  orchestration,
+  trigger,
+  memory,
+  presentation,
+  presentationTemplate,
+  evaluation,
+  prompt,
+  replay,
+}
+
+SkillPackageAssetKind parseSkillPackageAssetKindStrict(String raw) {
+  switch (raw.trim()) {
+    case "manifest":
+      return SkillPackageAssetKind.manifest;
+    case "catalog":
+      return SkillPackageAssetKind.catalog;
+    case "activation":
+      return SkillPackageAssetKind.activation;
+    case "input":
+      return SkillPackageAssetKind.input;
+    case "input_schema":
+      return SkillPackageAssetKind.inputSchema;
+    case "context":
+      return SkillPackageAssetKind.context;
+    case "capability":
+      return SkillPackageAssetKind.capability;
+    case "orchestration":
+      return SkillPackageAssetKind.orchestration;
+    case "trigger":
+      return SkillPackageAssetKind.trigger;
+    case "memory":
+      return SkillPackageAssetKind.memory;
+    case "presentation":
+      return SkillPackageAssetKind.presentation;
+    case "presentation_template":
+      return SkillPackageAssetKind.presentationTemplate;
+    case "evaluation":
+      return SkillPackageAssetKind.evaluation;
+    case "prompt":
+      return SkillPackageAssetKind.prompt;
+    case "replay":
+      return SkillPackageAssetKind.replay;
+    default:
+      throw AssistantRuntimeEnumParseFailure("SkillPackageAssetKind", raw.trim());
+  }
+}
+
+extension SkillPackageAssetKindX on SkillPackageAssetKind {
+  String get wireName {
+    switch (this) {
+      case SkillPackageAssetKind.manifest:
+        return "manifest";
+      case SkillPackageAssetKind.catalog:
+        return "catalog";
+      case SkillPackageAssetKind.activation:
+        return "activation";
+      case SkillPackageAssetKind.input:
+        return "input";
+      case SkillPackageAssetKind.inputSchema:
+        return "input_schema";
+      case SkillPackageAssetKind.context:
+        return "context";
+      case SkillPackageAssetKind.capability:
+        return "capability";
+      case SkillPackageAssetKind.orchestration:
+        return "orchestration";
+      case SkillPackageAssetKind.trigger:
+        return "trigger";
+      case SkillPackageAssetKind.memory:
+        return "memory";
+      case SkillPackageAssetKind.presentation:
+        return "presentation";
+      case SkillPackageAssetKind.presentationTemplate:
+        return "presentation_template";
+      case SkillPackageAssetKind.evaluation:
+        return "evaluation";
+      case SkillPackageAssetKind.prompt:
+        return "prompt";
+      case SkillPackageAssetKind.replay:
+        return "replay";
+    }
+  }
+}
+
+enum SkillPackageEvaluationConclusion {
+  passed,
+  failed,
+}
+
+SkillPackageEvaluationConclusion parseSkillPackageEvaluationConclusionStrict(String raw) {
+  switch (raw.trim()) {
+    case "passed":
+      return SkillPackageEvaluationConclusion.passed;
+    case "failed":
+      return SkillPackageEvaluationConclusion.failed;
+    default:
+      throw AssistantRuntimeEnumParseFailure("SkillPackageEvaluationConclusion", raw.trim());
+  }
+}
+
+extension SkillPackageEvaluationConclusionX on SkillPackageEvaluationConclusion {
+  String get wireName {
+    switch (this) {
+      case SkillPackageEvaluationConclusion.passed:
+        return "passed";
+      case SkillPackageEvaluationConclusion.failed:
+        return "failed";
+    }
+  }
+}
+
+enum SkillPackageReleaseStatus {
+  staged,
+  active,
+  retired,
+}
+
+SkillPackageReleaseStatus parseSkillPackageReleaseStatusStrict(String raw) {
+  switch (raw.trim()) {
+    case "staged":
+      return SkillPackageReleaseStatus.staged;
+    case "active":
+      return SkillPackageReleaseStatus.active;
+    case "retired":
+      return SkillPackageReleaseStatus.retired;
+    default:
+      throw AssistantRuntimeEnumParseFailure("SkillPackageReleaseStatus", raw.trim());
+  }
+}
+
+extension SkillPackageReleaseStatusX on SkillPackageReleaseStatus {
+  String get wireName {
+    switch (this) {
+      case SkillPackageReleaseStatus.staged:
+        return "staged";
+      case SkillPackageReleaseStatus.active:
+        return "active";
+      case SkillPackageReleaseStatus.retired:
+        return "retired";
     }
   }
 }

@@ -1,7 +1,6 @@
 // ignore_for_file: unnecessary_underscores
 
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -28,6 +27,8 @@ import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart'
+    show exceptionTelemetryPortProvider;
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/di/navigation/app_message_navigation.dart';
@@ -46,6 +47,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 import 'package:quwoquan_app/design_system/chat/chat_conversation_avatar_tokens.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentation/chat_page_visit_recorder.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_contact_initials.dart';
+import 'package:quwoquan_app/runtime/di/chat_circle_presentation_slots.dart';
 part 'chat_page_state.dart';
 
 class ChatPage extends ConsumerStatefulWidget {

@@ -606,7 +606,9 @@ class _OtpStatusRegion extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
           if (presentation.showDeliveryProgress) ...<Widget>[
-            CupertinoActivityIndicator(color: AppColors.iosAccent(context)),
+            AppRequestFeedback.inline(
+              indicatorColor: AppColors.iosAccent(context),
+            ),
             const SizedBox(width: AppSpacing.sm),
           ],
           Flexible(

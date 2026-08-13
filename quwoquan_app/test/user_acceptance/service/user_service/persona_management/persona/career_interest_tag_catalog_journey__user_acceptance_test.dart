@@ -1,3 +1,4 @@
+// readiness_case: persona_career_interest_app_uat
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-006
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md#gwt-001
 /// user_acceptance Patrol：职业与兴趣页读取真实 Gamma 标签目录。

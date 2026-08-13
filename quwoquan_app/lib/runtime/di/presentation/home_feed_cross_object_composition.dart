@@ -66,6 +66,7 @@ abstract final class HomeFeedCrossObjectComposition {
     IntersectionTarget? contextObjectTarget,
     void Function(IntersectionTextSpan span)? onSpanTap,
     VoidCallback? onFallbackTap,
+    void Function(IntersectionActionHint hint)? onActionHintTap,
   }) {
     return ImmersiveIntersectionStatement(
       key: key,
@@ -74,6 +75,7 @@ abstract final class HomeFeedCrossObjectComposition {
       contextObjectTarget: contextObjectTarget,
       onSpanTap: onSpanTap,
       onFallbackTap: onFallbackTap,
+      onActionHintTap: onActionHintTap,
     );
   }
 

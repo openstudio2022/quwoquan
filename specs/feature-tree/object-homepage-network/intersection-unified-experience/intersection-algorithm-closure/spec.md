@@ -104,7 +104,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：尚缺的实现与验收证据：生产 App 的地点/时间采集接线、canonical 旅行内容供给与真实非生产主体公开行为。`coVisitedEntity` / `followeeVisited` 已 active，但 `coldStartSupply` 要求 `post_declared_visit` 至少覆盖 5 个不同可导航对象。当前 canonical 三篇内容的 `visitedAt`、`geoTagRef` 与 `locationName` 全为空，真实供给仍为 0。作品画面相似性应进入推荐与内容理解，不为它新增不可导航交集 kind。器材与参数也不得因已有 EXIF 解析能力被提升为可见交集。
-- 完成判定：至少 5 个不同可导航地点或 photo spot 经 canonical release 和真实非生产主体公开行为形成非零 `post_declared_visit` 供给，画面语义能进入推荐解释，且器材/参数不出现在搜索筛选、Creator chip 或可见交集句中
+- 完成判定：`REQ-004` 的 travel_photography 零新 kind 实例化在真实供给上成立——至少 5 个不同可导航地点或 photo spot 经 canonical release 和真实非生产主体公开行为形成非零 `post_declared_visit` 供给，画面语义能进入推荐解释，且器材/参数不出现在搜索筛选、Creator chip 或可见交集句中
 
 <a id="open-003"></a>
 ### OPEN-003 route 与 photo_spot 已有 binding 但无派生来源
@@ -113,4 +113,4 @@
 - 优先级：`P2`
 - 准出影响：`track`
 - 影响或价值：尚缺的实现与验收证据：`route` 与 `photo_spot` 的对象派生来源。二者虽已在 `intersection_kind_registry.yaml` 声明 binding，但路线应由同一用户 `declaredVisit` 的时序串联生成，大众拍照点应由同一实体下高频共现的画面标签与高互动作品聚合产生；两条派生都依赖 `OPEN-002` 的 `post_declared_visit` 供给先非零，在供给为 0 时建对象只会得到空集合。
-- 完成判定：`post_declared_visit` 供给非零后，两类对象具备可复跑的派生任务与非空产出；拍照点不引入人工维护的机位库，也不产出器材与参数建议。
+- 完成判定：`post_declared_visit` 供给非零后，两类对象具备可复跑的派生任务与非空产出，且仍满足 `REQ-004` 的注册表与可导航性约束——拍照点不引入人工维护的机位库，也不产出器材与参数建议。

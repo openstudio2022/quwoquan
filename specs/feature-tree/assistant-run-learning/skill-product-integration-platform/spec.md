@@ -80,6 +80,6 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺 Skill Center 对 Setting/Consent/Subscription/Placement 的完整分轨体验、Connector grant 与受管 package 环境收据。服务端对象、active/frozen package Catalog/Router/Context/Presentation 和许可交集已经单轨，源码扫描器只用于 builder/test；App 当前仍把 Subscription toggle 当作总开关。
-- 完成判定：`SIT-001` 具有 SkillPackage/UserSetting/Consent/Subscription/Placement local_contract、端到端 api_integration 与 App Skill Center user_acceptance 直接 `spec_ref`；受管环境取得 activate/readback/rollback 收据，App 不再把 Subscription/Consent 当启用状态。
+- 影响或价值：尚缺 Connector grant、受管 package 环境收据与群聊/圈子管理面的 Placement 入口挂载。服务端对象、active/frozen package Catalog/Router/Context/Presentation 和许可交集已经单轨，源码扫描器只用于 builder/test。App Skill Center 已按 Setting（个人启用/配置）、Consent（数据授权）、Subscription（主动触达）分轨消费，技能启用状态只读 `SkillUserSetting`，不再把 Subscription/Consent 当启用状态。`SkillSurfacePlacement` 已有 App 对象级 typed facet、generated Remote adapter、共享放置管理面板与 local_contract 覆盖。
+- 完成判定：`SIT-001` 具有 SkillPackage/UserSetting/Consent/Subscription/Placement 端到端 api_integration 与 App Skill Center user_acceptance 直接 `spec_ref`；受管环境取得 activate/readback/rollback 收据。UserSetting/Consent/Subscription/Placement 的 App local_contract 与「不把 Subscription/Consent 当启用状态」已由 `quwoquan_app/test/local_contract/service/assistant_service/assistant/` 下测试承载。
 - 依赖：Assistant contracts/codegen、Integration Connector、Chat/Circle placement event 与 Flutter Skill Center。

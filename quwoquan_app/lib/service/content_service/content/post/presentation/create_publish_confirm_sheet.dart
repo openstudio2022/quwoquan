@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/page_access_internal_routes.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/create_location_coordinator.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/geo_tag_ref_resolver.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/media_capture_metadata.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/layout/ios_selection_page_components.dart';
@@ -15,6 +19,7 @@ import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/publish_settings_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/publish_circle_select_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/publish_location_selector_page.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/publish_tag_chip_picker_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_publish_confirm_sheet_widgets.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_route_models.dart';
 
@@ -31,6 +36,7 @@ class CreatePublishConfirmSheet extends ConsumerStatefulWidget {
     required this.joinedCircles,
     required this.recommendedCircles,
     this.circleLoadUnavailable = false,
+    this.suggestedTextContentType,
   });
 
   final PublishSettings initialSettings;
@@ -38,6 +44,11 @@ class CreatePublishConfirmSheet extends ConsumerStatefulWidget {
   final List<CreateCircleOption> joinedCircles;
   final List<CreateCircleOption> recommendedCircles;
   final bool circleLoadUnavailable;
+
+  /// 系统建议的文字形态（`micro` | `article`）；null 表示非文字创作，不显示
+  /// 形态行。确认页打开时把建议固化为 [PublishSettings.textContentType]，
+  /// 用户可在此修改；提交阶段以确认值为准（GWT-001）。
+  final String? suggestedTextContentType;
 
   @override
   ConsumerState<CreatePublishConfirmSheet> createState() =>
@@ -54,6 +65,12 @@ class _CreatePublishConfirmSheetState
   void initState() {
     super.initState();
     _settings = widget.initialSettings;
+    // 形态确认单一真相：建议值只在尚未确认时固化一次；已确认（含草稿恢复）
+    // 保留用户选择，不被建议覆盖。
+    final suggested = widget.suggestedTextContentType?.trim() ?? '';
+    if (suggested.isNotEmpty && _settings.textContentType.trim().isEmpty) {
+      _settings = _settings.copyWith(textContentType: suggested);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
@@ -100,19 +117,40 @@ class _CreatePublishConfirmSheetState
     );
   }
 
+  bool get _showsPublishFormRow =>
+      (widget.suggestedTextContentType?.trim() ?? '').isNotEmpty;
+
+  String get _publishFormValueLabel =>
+      _settings.textContentType.trim() == 'article'
+      ? CreationText.publishFormArticle
+      : CreationText.publishFormMicro;
+
   Widget _buildSettingsCard(BuildContext context) {
+    final topRadius = BorderRadius.vertical(
+      top: Radius.circular(AppSpacing.radiusTwentyEight),
+    );
     return IosSelectionSection(
       child: Column(
         children: <Widget>[
+          // 发布形态（GWT-001）：系统建议已固化为当前值，用户可修改；
+          // 提交阶段只消费该确认值，不再静默推导。
+          if (_showsPublishFormRow) ...<Widget>[
+            PublishConfirmSettingRow(
+              key: const ValueKey<String>('publish-confirm-form-row'),
+              title: CreationText.publishFormLabel,
+              value: _publishFormValueLabel,
+              onTap: _pickPublishForm,
+              borderRadius: topRadius,
+            ),
+            const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
+          ],
           PublishConfirmSettingRow(
             title: CreationText.whoCanSeeLabel,
             value: _settings.isPublic
                 ? CreationText.visibilityPublic
                 : CreationText.visibilityPrivate,
             onTap: _pickVisibility,
-            borderRadius: BorderRadius.vertical(
-              top: Radius.circular(AppSpacing.radiusTwentyEight),
-            ),
+            borderRadius: _showsPublishFormRow ? BorderRadius.zero : topRadius,
           ),
           const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
           PublishConfirmSettingRow(
@@ -149,6 +187,20 @@ class _CreatePublishConfirmSheetState
               borderRadius: BorderRadius.zero,
             ),
           ],
+          // creator_chip 采集通道：创作者主动声明内容语义标签（同行人/预算/
+          // 体能/后期风格/摄影主题），写入 tagRefs 供推荐召回与交集消费。
+          const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
+          PublishConfirmSettingRow(
+            key: const ValueKey<String>('publish-confirm-content-tags-row'),
+            title: CreationText.contentTagsLabel,
+            value: _settings.tagRefs.isEmpty
+                ? CreationText.contentTagsNone
+                : _settings.tagRefs
+                      .map((ref) => ref.split('/').last)
+                      .join('、'),
+            onTap: _pickContentTags,
+            borderRadius: BorderRadius.zero,
+          ),
           const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
           PublishConfirmSettingRow(
             title: CreationText.attachHomepageTitle,
@@ -188,6 +240,39 @@ class _CreatePublishConfirmSheetState
       confirmLabel: CreationText.createPublishConfirmButton,
       onConfirm: () => Navigator.of(context).pop(_settings),
     );
+  }
+
+  Future<void> _pickPublishForm() async {
+    final nextValue = await showAppActionSheetForConfirm<String>(
+      context,
+      title: CreationText.publishFormSheetTitle,
+      message: CreationText.publishFormSheetHint,
+      sections: [
+        AppActionSheetSection<String>(
+          items: [
+            AppActionSheetItem<String>(
+              value: 'micro',
+              label: CreationText.publishFormMicro,
+              icon: CupertinoIcons.text_bubble,
+              isSelected: _settings.textContentType.trim() != 'article',
+            ),
+            AppActionSheetItem<String>(
+              value: 'article',
+              label: CreationText.publishFormArticle,
+              icon: CupertinoIcons.doc_text,
+              isSelected: _settings.textContentType.trim() == 'article',
+            ),
+          ],
+        ),
+      ],
+      initialValue: _settings.textContentType.trim() == 'article'
+          ? 'article'
+          : 'micro',
+    );
+    if (nextValue == null) return;
+    setState(() {
+      _settings = _settings.copyWith(textContentType: nextValue);
+    });
   }
 
   Future<void> _pickVisibility() async {
@@ -245,6 +330,45 @@ class _CreatePublishConfirmSheetState
         clearLocationPoi: option == CreateLocationOption.hidden,
         locationPoi: option == CreateLocationOption.hidden ? null : option,
       );
+    });
+    if (option != CreateLocationOption.hidden) {
+      // poi 采集通道：把选中 POI 解析成行政区标签写入 geoTagRef。解析是
+      // 尽力而为的异步补全（候选不存在或网络失败时保持为空，绝不阻断发布）。
+      unawaited(_resolveGeoTagRef(option));
+    }
+  }
+
+  Future<void> _pickContentTags() async {
+    final result = await Navigator.of(context).push<List<String>>(
+      CupertinoPageRoute<List<String>>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.createPageTagChipPicker,
+        ),
+        builder: (_) => PublishTagChipPickerPage(
+          initialTagRefs: _settings.tagRefs,
+        ),
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      _settings = _settings.copyWith(tagRefs: result);
+    });
+  }
+
+  Future<void> _resolveGeoTagRef(CreateLocationOption option) async {
+    final resolver = GeoTagRefResolver(ref.read(tagCatalogQueryProvider));
+    final resolved = await resolver.resolveFromPoi(
+      address: option.address,
+      name: option.name,
+    );
+    if (!mounted) return;
+    // 解析期间用户可能已换 POI 或隐藏位置：只有当前选择仍是该 POI 时才回填。
+    final current = _settings.locationPoi;
+    if (current == null || current.id != option.id || current.name != option.name) {
+      return;
+    }
+    setState(() {
+      _settings = _settings.copyWith(geoTagRef: resolved ?? '');
     });
   }
 

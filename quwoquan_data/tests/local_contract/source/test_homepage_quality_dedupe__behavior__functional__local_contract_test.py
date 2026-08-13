@@ -15,13 +15,13 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from core.factual_compression import compression_policy, factual_compress_text  # noqa: E402
-from content.source.handler_fetch import (  # noqa: E402
-    _canonicalize_source_url,
-    _is_non_open_baike_source,
-    _publishable_homepage_source_image_count,
-    _source_fetch_failure_issue,
+from content.source.handler_fetch_contract import (  # noqa: E402
+    canonicalize_source_url as _canonicalize_source_url,
+    homepage_base_draft_admission,
+    is_non_open_baike_source as _is_non_open_baike_source,
+    publishable_homepage_source_image_count as _publishable_homepage_source_image_count,
+    source_fetch_failure_issue as _source_fetch_failure_issue,
 )
-from content.source.handler_fetch_contract import homepage_base_draft_admission  # noqa: E402
 from content.source.research.homepage_text_quality import homepage_text_quality_issue  # noqa: E402
 from content.source.source_inputs import _normalize_image_specs  # noqa: E402
 from governance.content_supply_policy import load_content_supply_policy  # noqa: E402

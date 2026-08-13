@@ -56,9 +56,12 @@ bool _hasCitationHost(
   final host = expectedCitationHost.trim().toLowerCase();
   if (host.isEmpty) return true;
   return row.uiReferences.any(
-    (reference) => reference.values.any(
-      (value) => value.toString().toLowerCase().contains(host),
-    ),
+    (citation) => <String>[
+      citation.title,
+      citation.source,
+      citation.snippet,
+      citation.externalUrl,
+    ].any((value) => value.toLowerCase().contains(host)),
   );
 }
 

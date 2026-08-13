@@ -22,7 +22,7 @@ import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_timeline_cache.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/message_home_cache.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message_receipt_fact/application/public/message_receipt_fact_query.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/runtime/di/realtime_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/chat_dependencies.dart';
@@ -44,7 +44,7 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/adapters/con
 import 'package:quwoquan_app/runtime/di/cache_management_service.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_cache_services.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_store.dart';
-import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_search_namespace.dart';
+import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/local_search_namespace.dart';
 import 'package:quwoquan_app/runtime/di/local_chat_search_sync_service.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/adapters/local_circle_group_search_index.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/adapters/local_circle_group_snapshot_store.dart';
@@ -293,7 +293,8 @@ final cacheManagementServiceProvider = Provider<CacheManagementService>((ref) {
 /// 会话同步引擎
 final conversationSyncProvider = Provider<ConversationSyncService>((ref) {
   return ConversationSyncService(
-    repo: ref.watch(chatRepositoryCompositionProvider),
+    // 对象级 typed port：sync 只消费 Conversation facet，不依赖聚合组合。
+    repo: ref.watch(chatConversationRepositoryProvider),
     cache: ref.watch(conversationCacheProvider),
     userSyncRepository: ref.watch(userSyncRepositoryProvider),
     store: ref.watch(localChatSearchStoreProvider),

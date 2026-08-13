@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
+// ContractGraph SHA256: ba2dde9a203e9d9979e42aa34fc1994593f88f10ce159c4e37a42f66497c1ef9
 
 library;
 
@@ -1743,12 +1743,14 @@ final class ContentPostDetailSlice {
     this.canonicalEntityId,
     this.primaryHomepageType,
     this.primaryHomepageSnapshot,
+    this.gatheringRef,
     required this.status,
     required this.visibility,
     required this.likeCount,
     required this.commentCount,
     required this.shareCount,
     required this.viewCount,
+    this.viewerLiked,
     required this.createdAt,
     required this.updatedAt,
     this.publishedAt,
@@ -1796,18 +1798,20 @@ final class ContentPostDetailSlice {
   final String? canonicalEntityId;
   final String? primaryHomepageType;
   final PostHomepageSnapshot? primaryHomepageSnapshot;
+  final String? gatheringRef;
   final String status;
   final String visibility;
   final int likeCount;
   final int commentCount;
   final int shareCount;
   final int viewCount;
+  final bool? viewerLiked;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? publishedAt;
 
   factory ContentPostDetailSlice.fromWire(Map<String, Object?> map, [String path = "ContentPostDetailSlice"]) {
-    _rejectUnknownFields(map, const <String>{"postId", "contentType", "contentIdentity", "assistantUsePolicy", "authorId", "authorDisplayName", "authorAvatarUrl", "title", "body", "summary", "tagRefs", "entityRefs", "semanticMentions", "mediaAssetIds", "mediaUrls", "mediaItems", "coverUrl", "thumbnailUrl", "videoUrl", "sourceAttribution", "width", "height", "durationMs", "articleMarkdown", "markdownDialect", "articleMarkdownDigest", "articleAssetManifest", "articleRenderProfile", "contentVertical", "entityMentions", "articleTemplate", "articleFontPreset", "coverStrategy", "coverFrameTimeMs", "location", "locationName", "geoTagRef", "visitedAt", "primaryHomepageId", "canonicalEntityId", "primaryHomepageType", "primaryHomepageSnapshot", "status", "visibility", "likeCount", "commentCount", "shareCount", "viewCount", "createdAt", "updatedAt", "publishedAt"}, path);
+    _rejectUnknownFields(map, const <String>{"postId", "contentType", "contentIdentity", "assistantUsePolicy", "authorId", "authorDisplayName", "authorAvatarUrl", "title", "body", "summary", "tagRefs", "entityRefs", "semanticMentions", "mediaAssetIds", "mediaUrls", "mediaItems", "coverUrl", "thumbnailUrl", "videoUrl", "sourceAttribution", "width", "height", "durationMs", "articleMarkdown", "markdownDialect", "articleMarkdownDigest", "articleAssetManifest", "articleRenderProfile", "contentVertical", "entityMentions", "articleTemplate", "articleFontPreset", "coverStrategy", "coverFrameTimeMs", "location", "locationName", "geoTagRef", "visitedAt", "primaryHomepageId", "canonicalEntityId", "primaryHomepageType", "primaryHomepageSnapshot", "gatheringRef", "status", "visibility", "likeCount", "commentCount", "shareCount", "viewCount", "viewerLiked", "createdAt", "updatedAt", "publishedAt"}, path);
     return ContentPostDetailSlice(
       postId: _requiredString(map["postId"], '$path.postId'),
       contentType: _requiredString(map["contentType"], '$path.contentType'),
@@ -1851,12 +1855,14 @@ final class ContentPostDetailSlice {
       canonicalEntityId: map["canonicalEntityId"] == null ? null : _requiredString(map["canonicalEntityId"], '$path.canonicalEntityId'),
       primaryHomepageType: map["primaryHomepageType"] == null ? null : _requiredString(map["primaryHomepageType"], '$path.primaryHomepageType'),
       primaryHomepageSnapshot: map["primaryHomepageSnapshot"] == null ? null : PostHomepageSnapshot.fromWire(_requiredObject(map["primaryHomepageSnapshot"], '$path.primaryHomepageSnapshot'), '$path.primaryHomepageSnapshot'),
+      gatheringRef: map["gatheringRef"] == null ? null : _requiredString(map["gatheringRef"], '$path.gatheringRef'),
       status: _requiredString(map["status"], '$path.status'),
       visibility: _requiredString(map["visibility"], '$path.visibility'),
       likeCount: _requiredInt(map["likeCount"], '$path.likeCount'),
       commentCount: _requiredInt(map["commentCount"], '$path.commentCount'),
       shareCount: _requiredInt(map["shareCount"], '$path.shareCount'),
       viewCount: _requiredInt(map["viewCount"], '$path.viewCount'),
+      viewerLiked: map["viewerLiked"] == null ? null : _requiredBool(map["viewerLiked"], '$path.viewerLiked'),
       createdAt: _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
       publishedAt: map["publishedAt"] == null ? null : _requiredTimestamp(map["publishedAt"], '$path.publishedAt'),
@@ -1906,12 +1912,14 @@ final class ContentPostDetailSlice {
     if (canonicalEntityId != null) "canonicalEntityId": canonicalEntityId!,
     if (primaryHomepageType != null) "primaryHomepageType": primaryHomepageType!,
     if (primaryHomepageSnapshot != null) "primaryHomepageSnapshot": primaryHomepageSnapshot!.toWire(),
+    if (gatheringRef != null) "gatheringRef": gatheringRef!,
     "status": status,
     "visibility": visibility,
     "likeCount": likeCount,
     "commentCount": commentCount,
     "shareCount": shareCount,
     "viewCount": viewCount,
+    if (viewerLiked != null) "viewerLiked": viewerLiked!,
     "createdAt": createdAt.toUtc().toIso8601String(),
     "updatedAt": updatedAt.toUtc().toIso8601String(),
     if (publishedAt != null) "publishedAt": publishedAt!.toUtc().toIso8601String(),
@@ -1950,6 +1958,10 @@ final class ContentPostProjection {
     required this.likeCount,
     required this.commentCount,
     required this.shareCount,
+    this.viewerLiked,
+    this.primaryHomepageId,
+    this.primaryHomepageType,
+    this.gatheringRef,
     this.createdAt,
     this.updatedAt,
     this.publishedAt,
@@ -1989,6 +2001,10 @@ final class ContentPostProjection {
   final int likeCount;
   final int commentCount;
   final int shareCount;
+  final bool? viewerLiked;
+  final String? primaryHomepageId;
+  final String? primaryHomepageType;
+  final String? gatheringRef;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? publishedAt;
@@ -1998,7 +2014,7 @@ final class ContentPostProjection {
   final List<IntersectionReason>? intersectionReasons;
 
   factory ContentPostProjection.fromWire(Map<String, Object?> map, [String path = "ContentPostProjection"]) {
-    _rejectUnknownFields(map, const <String>{"postId", "contentType", "contentIdentity", "assistantUsePolicy", "authorId", "authorDisplayName", "authorAvatarUrl", "authorBackgroundUrl", "authorRoleLabel", "authorIdentityTags", "authorVerified", "title", "body", "summary", "coverUrl", "articleTemplate", "articleFontPreset", "mediaUrls", "videoUrl", "mediaAssetId", "mediaAssetVersion", "hlsCmafMasterManifestUrl", "hlsCmafDescriptorVersion", "thumbnailUrl", "width", "height", "durationMs", "likeCount", "commentCount", "shareCount", "createdAt", "updatedAt", "publishedAt", "contentVertical", "recallPath", "supplySource", "intersectionReasons"}, path);
+    _rejectUnknownFields(map, const <String>{"postId", "contentType", "contentIdentity", "assistantUsePolicy", "authorId", "authorDisplayName", "authorAvatarUrl", "authorBackgroundUrl", "authorRoleLabel", "authorIdentityTags", "authorVerified", "title", "body", "summary", "coverUrl", "articleTemplate", "articleFontPreset", "mediaUrls", "videoUrl", "mediaAssetId", "mediaAssetVersion", "hlsCmafMasterManifestUrl", "hlsCmafDescriptorVersion", "thumbnailUrl", "width", "height", "durationMs", "likeCount", "commentCount", "shareCount", "viewerLiked", "primaryHomepageId", "primaryHomepageType", "gatheringRef", "createdAt", "updatedAt", "publishedAt", "contentVertical", "recallPath", "supplySource", "intersectionReasons"}, path);
     return ContentPostProjection(
       postId: _requiredString(map["postId"], '$path.postId'),
       contentType: _requiredString(map["contentType"], '$path.contentType'),
@@ -2030,6 +2046,10 @@ final class ContentPostProjection {
       likeCount: _requiredInt(map["likeCount"], '$path.likeCount'),
       commentCount: _requiredInt(map["commentCount"], '$path.commentCount'),
       shareCount: _requiredInt(map["shareCount"], '$path.shareCount'),
+      viewerLiked: map["viewerLiked"] == null ? null : _requiredBool(map["viewerLiked"], '$path.viewerLiked'),
+      primaryHomepageId: map["primaryHomepageId"] == null ? null : _requiredString(map["primaryHomepageId"], '$path.primaryHomepageId'),
+      primaryHomepageType: map["primaryHomepageType"] == null ? null : _requiredString(map["primaryHomepageType"], '$path.primaryHomepageType'),
+      gatheringRef: map["gatheringRef"] == null ? null : _requiredString(map["gatheringRef"], '$path.gatheringRef'),
       createdAt: map["createdAt"] == null ? null : _requiredTimestamp(map["createdAt"], '$path.createdAt'),
       updatedAt: map["updatedAt"] == null ? null : _requiredTimestamp(map["updatedAt"], '$path.updatedAt'),
       publishedAt: map["publishedAt"] == null ? null : _requiredTimestamp(map["publishedAt"], '$path.publishedAt'),
@@ -2071,6 +2091,10 @@ final class ContentPostProjection {
     "likeCount": likeCount,
     "commentCount": commentCount,
     "shareCount": shareCount,
+    if (viewerLiked != null) "viewerLiked": viewerLiked!,
+    if (primaryHomepageId != null) "primaryHomepageId": primaryHomepageId!,
+    if (primaryHomepageType != null) "primaryHomepageType": primaryHomepageType!,
+    if (gatheringRef != null) "gatheringRef": gatheringRef!,
     if (createdAt != null) "createdAt": createdAt!.toUtc().toIso8601String(),
     if (updatedAt != null) "updatedAt": updatedAt!.toUtc().toIso8601String(),
     if (publishedAt != null) "publishedAt": publishedAt!.toUtc().toIso8601String(),
@@ -2442,6 +2466,68 @@ final class FilterPresetDefinition {
     "enabled": enabled,
     "defaultStrength": defaultStrength,
     "adjustments": adjustments.toWire(),
+  };
+}
+
+final class GatheringPostPageSlice {
+  const GatheringPostPageSlice({
+    required this.items,
+    this.nextCursor,
+    required this.hasMore,
+  });
+
+  final List<ContentPostProjection> items;
+  final String? nextCursor;
+  final bool hasMore;
+
+  factory GatheringPostPageSlice.fromWire(Map<String, Object?> map, [String path = "GatheringPostPageSlice"]) {
+    _rejectUnknownFields(map, const <String>{"items", "nextCursor", "hasMore"}, path);
+    return GatheringPostPageSlice(
+      items: List<ContentPostProjection>.unmodifiable(_requiredList(map["items"], '$path.items').asMap().entries.map((entry) => ContentPostProjection.fromWire(_requiredObject(entry.value, '$path.items' + '[${entry.key}]'), '$path.items' + '[${entry.key}]'))),
+      nextCursor: map["nextCursor"] == null ? null : _requiredString(map["nextCursor"], '$path.nextCursor'),
+      hasMore: _requiredBool(map["hasMore"], '$path.hasMore'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "items": items.map((value) => value.toWire()).toList(growable: false),
+    if (nextCursor != null) "nextCursor": nextCursor!,
+    "hasMore": hasMore,
+  };
+}
+
+final class GatheringSocialProofSummary {
+  const GatheringSocialProofSummary({
+    required this.anchorKind,
+    required this.objectId,
+    required this.publishedCount,
+    required this.formedCount,
+    required this.experiencedCount,
+  });
+
+  final String anchorKind;
+  final String objectId;
+  final int publishedCount;
+  final int formedCount;
+  final int experiencedCount;
+
+  factory GatheringSocialProofSummary.fromWire(Map<String, Object?> map, [String path = "GatheringSocialProofSummary"]) {
+    _rejectUnknownFields(map, const <String>{"anchorKind", "objectId", "publishedCount", "formedCount", "experiencedCount"}, path);
+    return GatheringSocialProofSummary(
+      anchorKind: _requiredNonBlankString(map["anchorKind"], '$path.anchorKind'),
+      objectId: _requiredNonBlankString(map["objectId"], '$path.objectId'),
+      publishedCount: _requiredInt(map["publishedCount"], '$path.publishedCount'),
+      formedCount: _requiredInt(map["formedCount"], '$path.formedCount'),
+      experiencedCount: _requiredInt(map["experiencedCount"], '$path.experiencedCount'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "anchorKind": anchorKind,
+    "objectId": objectId,
+    "publishedCount": publishedCount,
+    "formedCount": formedCount,
+    "experiencedCount": experiencedCount,
   };
 }
 
@@ -3800,6 +3886,11 @@ final class ResearchReleaseReadbackView {
     required this.attestationIdHash,
     required this.signatureVerified,
     required this.researchBadgeVisible,
+    required this.postIds,
+    required this.entityRefs,
+    required this.mediaAssetIds,
+    required this.publicCdnDetected,
+    required this.anonymousMediaUrlDetected,
   });
 
   final String releaseId;
@@ -3808,9 +3899,14 @@ final class ResearchReleaseReadbackView {
   final String attestationIdHash;
   final bool signatureVerified;
   final bool researchBadgeVisible;
+  final List<String> postIds;
+  final List<String> entityRefs;
+  final List<String> mediaAssetIds;
+  final bool publicCdnDetected;
+  final bool anonymousMediaUrlDetected;
 
   factory ResearchReleaseReadbackView.fromWire(Map<String, Object?> map, [String path = "ResearchReleaseReadbackView"]) {
-    _rejectUnknownFields(map, const <String>{"releaseId", "manifestDigest", "subjectHash", "attestationIdHash", "signatureVerified", "researchBadgeVisible"}, path);
+    _rejectUnknownFields(map, const <String>{"releaseId", "manifestDigest", "subjectHash", "attestationIdHash", "signatureVerified", "researchBadgeVisible", "postIds", "entityRefs", "mediaAssetIds", "publicCdnDetected", "anonymousMediaUrlDetected"}, path);
     return ResearchReleaseReadbackView(
       releaseId: _requiredNonBlankString(map["releaseId"], '$path.releaseId'),
       manifestDigest: _requiredNonBlankString(map["manifestDigest"], '$path.manifestDigest'),
@@ -3818,6 +3914,11 @@ final class ResearchReleaseReadbackView {
       attestationIdHash: _requiredNonBlankString(map["attestationIdHash"], '$path.attestationIdHash'),
       signatureVerified: _requiredBool(map["signatureVerified"], '$path.signatureVerified'),
       researchBadgeVisible: _requiredBool(map["researchBadgeVisible"], '$path.researchBadgeVisible'),
+      postIds: List<String>.unmodifiable(_requiredList(map["postIds"], '$path.postIds').asMap().entries.map((entry) => _requiredString(entry.value, '$path.postIds' + '[${entry.key}]'))),
+      entityRefs: List<String>.unmodifiable(_requiredList(map["entityRefs"], '$path.entityRefs').asMap().entries.map((entry) => _requiredString(entry.value, '$path.entityRefs' + '[${entry.key}]'))),
+      mediaAssetIds: List<String>.unmodifiable(_requiredList(map["mediaAssetIds"], '$path.mediaAssetIds').asMap().entries.map((entry) => _requiredString(entry.value, '$path.mediaAssetIds' + '[${entry.key}]'))),
+      publicCdnDetected: _requiredBool(map["publicCdnDetected"], '$path.publicCdnDetected'),
+      anonymousMediaUrlDetected: _requiredBool(map["anonymousMediaUrlDetected"], '$path.anonymousMediaUrlDetected'),
     );
   }
 
@@ -3828,6 +3929,11 @@ final class ResearchReleaseReadbackView {
     "attestationIdHash": attestationIdHash,
     "signatureVerified": signatureVerified,
     "researchBadgeVisible": researchBadgeVisible,
+    "postIds": postIds.map((value) => value).toList(growable: false),
+    "entityRefs": entityRefs.map((value) => value).toList(growable: false),
+    "mediaAssetIds": mediaAssetIds.map((value) => value).toList(growable: false),
+    "publicCdnDetected": publicCdnDetected,
+    "anonymousMediaUrlDetected": anonymousMediaUrlDetected,
   };
 }
 
@@ -3973,6 +4079,12 @@ EntityWishlistState decodeEntityWishlistState(Object? response) =>
 
 FilterCatalogSlice decodeFilterCatalogSlice(Object? response) =>
     FilterCatalogSlice.fromWire(_requiredObject(response, "FilterCatalogSlice"), "FilterCatalogSlice");
+
+GatheringPostPageSlice decodeGatheringPostPageSlice(Object? response) =>
+    GatheringPostPageSlice.fromWire(_requiredObject(response, "GatheringPostPageSlice"), "GatheringPostPageSlice");
+
+GatheringSocialProofSummary decodeGatheringSocialProofSummary(Object? response) =>
+    GatheringSocialProofSummary.fromWire(_requiredObject(response, "GatheringSocialProofSummary"), "GatheringSocialProofSummary");
 
 IntersectionInboxSummary decodeIntersectionInboxSummary(Object? response) =>
     IntersectionInboxSummary.fromWire(_requiredObject(response, "IntersectionInboxSummary"), "IntersectionInboxSummary");

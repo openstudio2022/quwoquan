@@ -10,6 +10,7 @@ import 'package:quwoquan_app/design_system/surfaces/app_action_sheet.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_state.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_session_provider.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/media_device_provider.dart';
+import 'package:quwoquan_app/design_system/spacing/call_surface_motion.dart';
 
 class CallControlsBar extends ConsumerStatefulWidget {
   const CallControlsBar({
@@ -52,7 +53,7 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
   void _resetHideTimer() {
     if (!widget.autoHide) return;
     _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 3), () {
+    _hideTimer = Timer(CallSurfaceMotion.videoControlsAutoHide, () {
       if (mounted) setState(() => _visible = false);
     });
   }
@@ -72,7 +73,7 @@ class _CallControlsBarState extends ConsumerState<CallControlsBar> {
       behavior: HitTestBehavior.translucent,
       child: AnimatedOpacity(
         opacity: _visible ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 250),
+        duration: CallSurfaceMotion.surfaceTransition,
         child: IgnorePointer(
           ignoring: !_visible,
           child: Container(
@@ -269,41 +270,48 @@ class _ControlButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: AppSpacing.iconButtonMinSizeMd,
-        height: AppSpacing.iconButtonMinSizeMd,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: AppSpacing.minInteractiveSize,
-              height: AppSpacing.minInteractiveSize,
-              decoration: BoxDecoration(
-                color: isActive
-                    ? AppColors.white.withValues(alpha: 0.9)
-                    : AppColors.white.withValues(alpha: 0.15),
-                shape: BoxShape.circle,
+    // 图标+文案合并为单一可点击语义节点，读屏用户按 label 寻址与激活。
+    return Semantics(
+      button: true,
+      selected: isActive,
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: SizedBox(
+          width: AppSpacing.iconButtonMinSizeMd,
+          height: AppSpacing.iconButtonMinSizeMd,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: AppSpacing.minInteractiveSize,
+                height: AppSpacing.minInteractiveSize,
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? AppColors.white.withValues(alpha: 0.9)
+                      : AppColors.white.withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: isActive ? AppColors.black : AppColors.white,
+                  size: AppSpacing.iconMedium,
+                ),
               ),
-              child: Icon(
-                icon,
-                color: isActive ? AppColors.black : AppColors.white,
-                size: AppSpacing.iconMedium,
+              SizedBox(height: AppSpacing.xs),
+              Text(
+                label,
+                style: TextStyle(
+                  color: AppColors.white,
+                  fontSize: AppTypography.xs,
+                  fontWeight: AppTypography.normal,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            SizedBox(height: AppSpacing.xs),
-            Text(
-              label,
-              style: TextStyle(
-                color: AppColors.white,
-                fontSize: AppTypography.xs,
-                fontWeight: AppTypography.normal,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -317,37 +325,42 @@ class _HangupButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: AppSpacing.iconButtonMinSizeMd,
-        height: AppSpacing.iconButtonMinSizeMd,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: AppSpacing.minInteractiveSize,
-              height: AppSpacing.minInteractiveSize,
-              decoration: const BoxDecoration(
-                color: AppColors.error,
-                shape: BoxShape.circle,
+    return Semantics(
+      button: true,
+      label: CallText.callHangup,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: SizedBox(
+          width: AppSpacing.iconButtonMinSizeMd,
+          height: AppSpacing.iconButtonMinSizeMd,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: AppSpacing.minInteractiveSize,
+                height: AppSpacing.minInteractiveSize,
+                decoration: const BoxDecoration(
+                  color: AppColors.error,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  CupertinoIcons.phone_down_fill,
+                  color: AppColors.white,
+                  size: AppSpacing.iconMedium,
+                ),
               ),
-              child: Icon(
-                CupertinoIcons.phone_down_fill,
-                color: AppColors.white,
-                size: AppSpacing.iconMedium,
+              SizedBox(height: AppSpacing.xs),
+              Text(
+                CallText.callHangup,
+                style: TextStyle(
+                  color: AppColors.white,
+                  fontSize: AppTypography.xs,
+                  fontWeight: AppTypography.normal,
+                ),
               ),
-            ),
-            SizedBox(height: AppSpacing.xs),
-            Text(
-              CallText.callHangup,
-              style: TextStyle(
-                color: AppColors.white,
-                fontSize: AppTypography.xs,
-                fontWeight: AppTypography.normal,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

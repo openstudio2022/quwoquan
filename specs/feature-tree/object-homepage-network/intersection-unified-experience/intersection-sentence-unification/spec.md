@@ -76,7 +76,7 @@
 ## 4. 契约引用
 
 - canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_reason.yaml`
-- local_contract 对象构造器：`quwoquan_app/test/support/runtime/fixtures/object_contract_example_builders.dart#buildObjectContractExampleDocument(content)`；环境交集证据通过 typed capability 和公开 operation 构造。
+- local_contract 对象构造器：`quwoquan_app/test/support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_wire_test_builder.dart#intersectionWireExample`；环境交集证据通过 typed capability 和公开 operation 构造。
 - canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_actor_evidence.yaml`
 - canonical：`recommendation/recommendation/recommendation_feature_profile_view/projections/intersection_target.yaml`
 - canonical：`recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml`
@@ -118,6 +118,6 @@
   `REQ-005` 的覆盖 key 已按 locale 分片、控制面可以为 `en` 备好整套文案，但交集句由数十个
   片段在 application 层深处合成，把 `X-Client-Locale` 送到每个片段需要贯穿约 60 个渲染函数。
   在此之前，非 zh 客户端仍会收到 zh 文案。
-- 完成判定：`rterr` 的请求语言解析贯穿到 `intersection` 渲染层，
+- 完成判定：`REQ-005` 的覆盖取值与 fail-safe 回落按请求语言成立——`rterr` 的请求语言解析贯穿到 `intersection` 渲染层，
   同一请求内所有片段用同一 locale 取覆盖；契约测试断言 `en` 请求命中 `en` 覆盖、
   未下发条目回落 zh 基线。

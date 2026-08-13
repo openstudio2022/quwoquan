@@ -1,4 +1,8 @@
 // 多对象媒体交互的唯一 runtime/di 组合门面。
+//
+// 点赞/分享/评论计数的唯一真相源是 `postInteractionStateProvider`，关注关系的
+// 唯一真相源是 `userRelationshipStateProvider`；本门面不得再叠加 discovery 等
+// 页面级副本（历史双写已收敛，禁止回归）。
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
@@ -6,13 +10,11 @@ import 'package:quwoquan_app/runtime/di/media_viewer_interaction_state_bridge.da
     as interaction_state_bridge;
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
-import 'package:quwoquan_app/service/content_service/content/post/application/discovery_state_provider.dart';
 
 MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
   required WidgetRef ref,
   required Iterable<ContentPostViewData> posts,
 }) {
-  final discoveryState = ref.read(discoveryStateProvider);
   final relationshipState = ref.read(userRelationshipStateProvider);
   final postInteractionState = ref.read(postInteractionStateProvider);
   final scopedPosts = posts.toList(growable: false);
@@ -32,21 +34,16 @@ MediaViewerInteractionSnapshot buildMediaViewerInteractionSnapshot({
 
   for (final post in scopedPosts) {
     final id = post.id;
-    if (postInteractionState.isLiked(id) ||
-        discoveryState.likedPosts.contains(id)) {
+    if (postInteractionState.isLiked(id)) {
       likedPosts.add(id);
     }
     postLikesCount[id] = postInteractionState.likeCountFor(
       id,
-      fallback: discoveryState.getPostLikesCount(id) > 0
-          ? discoveryState.getPostLikesCount(id)
-          : post.likeCount,
+      fallback: post.likeCount,
     );
     postSharesCount[id] = postInteractionState.shareCountFor(
       id,
-      fallback: discoveryState.getPostSharesCount(id) > 0
-          ? discoveryState.getPostSharesCount(id)
-          : post.shareCount,
+      fallback: post.shareCount,
     );
     postCommentCount[id] = postInteractionState.commentCountFor(
       id,
@@ -74,16 +71,10 @@ void primeMediaViewerInteractionSnapshot(
   MediaViewerInteractionSnapshot snapshot,
 ) {
   interaction_state_bridge.primeMediaViewerInteractionSnapshot(ref, snapshot);
-  ref
-      .read(discoveryStateProvider.notifier)
-      .applyMediaViewerResult(MediaViewerResult.fromSnapshot(snapshot));
 }
 
 void applyConfirmedInteractionPost(WidgetRef ref, ContentPostViewData post) {
   interaction_state_bridge.applyConfirmedInteractionPost(ref, post);
-  ref
-      .read(discoveryStateProvider.notifier)
-      .setShareCount(post.id, post.shareCount);
 }
 
 void applyConfirmedInteractionPosts(
@@ -91,10 +82,6 @@ void applyConfirmedInteractionPosts(
   Iterable<ContentPostViewData> posts,
 ) {
   interaction_state_bridge.applyConfirmedInteractionPosts(ref, posts);
-  final discoveryNotifier = ref.read(discoveryStateProvider.notifier);
-  for (final post in posts) {
-    discoveryNotifier.setShareCount(post.id, post.shareCount);
-  }
 }
 
 void applyMediaViewerResultToInteractionState(
@@ -105,15 +92,10 @@ void applyMediaViewerResultToInteractionState(
     ref,
     result,
   );
-  ref.read(discoveryStateProvider.notifier).applyMediaViewerResult(result);
 }
 
 bool effectivePostLiked(WidgetRef ref, String postId) {
-  final postInteraction = ref.read(postInteractionStateProvider);
-  if (postInteraction.hasLikeStateFor(postId)) {
-    return postInteraction.isLiked(postId);
-  }
-  return ref.read(discoveryStateProvider).likedPosts.contains(postId);
+  return ref.read(postInteractionStateProvider).isLiked(postId);
 }
 
 bool effectiveProfileFollowing(WidgetRef ref, String personaId) {
@@ -125,14 +107,9 @@ int effectivePostLikeCount(
   String postId, {
   required int fallback,
 }) {
-  final postInteraction = ref.read(postInteractionStateProvider);
-  final discoveryState = ref.read(discoveryStateProvider);
-  return postInteraction.likeCountFor(
-    postId,
-    fallback: discoveryState.getPostLikesCount(postId) > 0
-        ? discoveryState.getPostLikesCount(postId)
-        : fallback,
-  );
+  return ref
+      .read(postInteractionStateProvider)
+      .likeCountFor(postId, fallback: fallback);
 }
 
 int effectivePostShareCount(
@@ -140,14 +117,9 @@ int effectivePostShareCount(
   String postId, {
   required int fallback,
 }) {
-  final postInteraction = ref.read(postInteractionStateProvider);
-  final discoveryState = ref.read(discoveryStateProvider);
-  return postInteraction.shareCountFor(
-    postId,
-    fallback: discoveryState.getPostSharesCount(postId) > 0
-        ? discoveryState.getPostSharesCount(postId)
-        : fallback,
-  );
+  return ref
+      .read(postInteractionStateProvider)
+      .shareCountFor(postId, fallback: fallback);
 }
 
 int effectivePostCommentCount(
@@ -176,9 +148,6 @@ void syncPostLikeIntent(
     isLiked: isLiked,
     likeCount: likeCount,
   );
-  ref
-      .read(discoveryStateProvider.notifier)
-      .setLikeState(postId, isLiked, likeCount: likeCount);
 }
 
 void syncProfileFollowIntent(

@@ -1,3 +1,10 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-002.t2
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-002.t4
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-002.t5
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-002.t6
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-002.t7
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-002.t8
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-002.t9
 import 'dart:async';
 import 'dart:io';
 
@@ -7,6 +14,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/conversation_dto.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/persona_relationship_facets.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
@@ -23,7 +33,8 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/design_system/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/presentation/profile_stats_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
 
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/spec.md#gwt-002
@@ -420,14 +431,68 @@ final class _RecordingRelationshipCommandWriter
   }
 }
 
-final class _ReadbackChatRepository extends MockChatRepository {
+final class _ReadbackChatRepository implements ChatConversationRepository {
+  _ReadbackChatRepository() : _delegate = ChatTestFacets().conversation;
+
+  final ChatConversationRepository _delegate;
   var getConversationCalls = 0;
+
+  @override
+  Future<List<MessageHomeRow>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listMessageHome(filter: filter, cursor: cursor, limit: limit);
+
+  @override
+  Future<List<ChatInboxViewData>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listConversations(cursor: cursor, limit: limit);
+
+  @override
+  Future<ChatConversationCreatedViewData> createConversation({
+    required String type,
+    String? title,
+    int? maxGroupSize,
+    List<String>? initialMemberIds,
+    String? idempotencyKey,
+  }) => _delegate.createConversation(
+    type: type,
+    title: title,
+    maxGroupSize: maxGroupSize,
+    initialMemberIds: initialMemberIds,
+    idempotencyKey: idempotencyKey,
+  );
 
   @override
   Future<ConversationViewData> getConversation(String conversationId) async {
     getConversationCalls += 1;
-    return super.getConversation(conversationId);
+    return _delegate.getConversation(conversationId);
   }
+
+  @override
+  Future<void> updateConversationTitle(String conversationId, String title) =>
+      _delegate.updateConversationTitle(conversationId, title);
+
+  @override
+  Future<void> updateConversationSettings({
+    required String conversationId,
+    bool? muted,
+    bool? pinned,
+  }) => _delegate.updateConversationSettings(
+    conversationId: conversationId,
+    muted: muted,
+    pinned: pinned,
+  );
+
+  @override
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() =>
+      _delegate.getConversationTimestamps();
+
+  @override
+  Future<List<ConversationViewData>> batchGetConversations(List<String> ids) =>
+      _delegate.batchGetConversations(ids);
 }
 
 final class _TestCircleMembershipQuery implements CircleMembershipQueries {
@@ -634,7 +699,7 @@ Widget _buildTestApp({
           (ref, surface) => relationshipCommandWriter,
         ),
       if (chatRepository != null)
-        chatConversationRepositoryProvider.overrideWithValue(chatRepository),
+        ...chatTestRepositoryOverrides(conversation: chatRepository),
       authSessionControllerProvider.overrideWith(
         authenticated
             ? _AuthenticatedAuthSessionController.new

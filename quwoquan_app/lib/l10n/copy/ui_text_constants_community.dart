@@ -20,6 +20,11 @@ abstract final class CommunityText {
   static const String joinCircle = '加入圈子';
   static const String joinedCircle = '已加入圈子';
   static const String joinPending = '加入审批中';
+  static const String leaveCircleAction = '退出圈子';
+  static const String circleLeaveConfirmTitle = '退出这个圈子？';
+  static const String circleLeaveConfirmMessage =
+      '退出后将不再是圈子成员，并同时退出圈子群聊；你可以随时重新加入。';
+  static const String circleLeaveSuccessToast = '已退出圈子';
   static const String circleMembers = '成员', circleGroups = '讨论';
   static const String circleFans = '粉丝', circleLikes = '获赞';
   static const String circlePosts = '创作', circleWeeklyActive = '活跃';
@@ -38,7 +43,11 @@ abstract final class CommunityText {
   static const String circleSubMicro = '点滴', circleSortLatest = '最新';
   static const String circleSortHot = '最热', circleSortFeatured = '精选';
   static const String circleNoCreations = '暂无创作内容';
+  static const String circleCreationsLoadMore = '加载更多';
+  static const String circleCreationsLoadMoreFailed = '加载更多失败，点按重试';
   static const String circleNoChatEnabled = '讨论尚未开启';
+  static const String circleChatBindingPendingTitle = '群聊开通中';
+  static const String circleChatBindingPendingHint = '圈子群聊正在创建，稍后可刷新重试';
   static const String circleChatEntryTitle = '圈子讨论';
   static const String circleChatEntrySubtitle = '最近消息与未读会话统一在趣信中查看';
   static const String circleGroupMembershipTitle = '默认群聊';

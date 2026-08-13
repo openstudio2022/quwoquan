@@ -1,14 +1,16 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-001
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-001.t1
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-001.t2
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_view_data.dart';
-import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
@@ -20,6 +22,8 @@ import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_conversation_page.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_message_command_writer_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import '../../../../../support/service/chat_service/chat/message/message_timeline_cache_double.dart';
 
 final class _ChatPersonaQuery extends Fake implements PersonaQuery {
@@ -37,18 +41,15 @@ final class _ChatPersonaQuery extends Fake implements PersonaQuery {
 }
 
 Widget _scopedApp({
-  ChatRepository? mock,
+  ChatMessageRepository? message,
   RelationshipCapabilityRepository? capabilityRepository,
   VoidCallback? onBack,
 }) {
-  final repo = mock ?? MockChatRepository();
+  final facets = ChatTestFacets();
   return ProviderScope(
     overrides: [
       ...sealedCloudBoundaryOverrides(),
-      chatInboxRepositoryProvider.overrideWithValue(repo),
-      chatConversationRepositoryProvider.overrideWithValue(repo),
-      chatMessageRepositoryProvider.overrideWithValue(repo),
-      chatMemberRepositoryProvider.overrideWithValue(repo),
+      ...chatTestRepositoryOverrides(facets: facets, message: message),
       personaQueryProvider(
         AppUiSurfaces.appShell,
       ).overrideWithValue(_ChatPersonaQuery()),
@@ -194,7 +195,7 @@ void main() {
   group('ChatConversationPage — 错误态渲染', () {
     testWidgets('加载失败时展示可重试错误面', (tester) async {
       addTearDown(() => _disposeChatConversationWidget(tester));
-      await tester.pumpWidget(_scopedApp(mock: _ErrorChatRepository()));
+      await tester.pumpWidget(_scopedApp(message: _ErrorChatRepository()));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -205,7 +206,9 @@ void main() {
 
     testWidgets('空消息列表展示语义空态', (tester) async {
       addTearDown(() => _disposeChatConversationWidget(tester));
-      await tester.pumpWidget(_scopedApp(mock: _EmptyMessagesChatRepository()));
+      await tester.pumpWidget(
+        _scopedApp(message: _EmptyMessagesChatRepository()),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
@@ -216,7 +219,7 @@ void main() {
   });
 }
 
-class _ErrorChatRepository extends MockChatRepository {
+class _ErrorChatRepository extends Fake implements ChatMessageRepository {
   @override
   Future<List<ChatMessageViewData>> listMessages({
     required String conversationId,
@@ -227,7 +230,8 @@ class _ErrorChatRepository extends MockChatRepository {
   }
 }
 
-class _EmptyMessagesChatRepository extends MockChatRepository {
+class _EmptyMessagesChatRepository extends Fake
+    implements ChatMessageRepository {
   @override
   Future<List<ChatMessageViewData>> listMessages({
     required String conversationId,

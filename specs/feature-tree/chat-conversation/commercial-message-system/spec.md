@@ -236,7 +236,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：MessageHome、ContactHome、GroupHome、IntersectionSummary、AppMessage 均有 metadata 真相源。
-- 完成判定：MessageHome、ContactHome、GroupHome、IntersectionSummary、AppMessage 均有 metadata 真相源。
+- 完成判定：`SIT-006` 对应行为满足——MessageHome、ContactHome、GroupHome、IntersectionSummary、AppMessage 均有 metadata 真相源。
 - App RemoteRepository 只使用 codegen path/operation/surface/header。
 - 对象级 typed double 仅存在测试树，并与 Remote 返回同结构 DTO；环境 artifact 不可达。
 
@@ -247,4 +247,16 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：业务事件、持久 inbox 和设备 push 任一断点都会造成用户看不到或重复看到通知。
-- 完成判定：代表性业务事件经 notification-service 幂等投影、未读更新和真实设备 provider 投递，并具有打开目标对象的验收证据。
+- 完成判定：`SIT-002` 对应通知 inbox 行为满足，且 [`message-reliability-foundation` SIT-003](../message-reliability-foundation/spec.md#sit-003) 的真实设备投递与打开直达证据有效。
+
+<a id="open-008"></a>
+### OPEN-008 群空间首页四宫格未实施
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：尚缺相册/文件宫格的真实承接——普通群的 Chat AssetIndex 读面尚无 operation（现有 `GetGatheringChatBoard.assets` 仅活动群可用），
+  需 contracts 演进后接线，宫格当前保持禁用态诚实展示；尚缺共享 Skill 挂载入口的群空间接线。
+  已闭合部分（证据见 `chat_group_space_entries__local_contract_test.dart`）：活动群（gatheringId 绑定）能力宫格展示「活动」格直达 Gathering Board；
+  普通群不展示活动格（三类群差异化）；成员网格新增搜索入口格直达成员搜索页；`gatheringBoard` 与 `chatMemberSearch` 两个无入口路由已消灭。
+- 完成判定：`SIT-004` 对应行为满足（含相册/文件承接与三类群差异化展示）且真实测试 `spec_ref` 有效。

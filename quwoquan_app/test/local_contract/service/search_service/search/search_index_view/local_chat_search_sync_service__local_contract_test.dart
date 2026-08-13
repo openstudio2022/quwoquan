@@ -2,10 +2,12 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/conversation_dto.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_view_data.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/conversation_cache_record.dart';
@@ -15,11 +17,12 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/ada
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_contact_record.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_store.dart';
 import 'package:quwoquan_app/runtime/di/local_chat_search_sync_service.dart';
-import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_search_namespace.dart';
+import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/local_search_namespace.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
 import '../../../../../support/runtime/platform/explicit_test_local_database_path_resolver.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 
 void main() {
   setUpAll(ensureSqfliteFfiInitialized);
@@ -60,13 +63,13 @@ void main() {
     test('sync is throttled per namespace instead of globally', () async {
       final repo = _CountingChatRepository();
       final service = LocalChatSearchSyncService(
-        contactRepository: repo,
-        conversationRepository: repo,
-        messageRepository: repo,
+        contactRepository: repo.contact,
+        conversationRepository: repo.conversation,
+        messageRepository: repo.message,
         conversationCache: cache,
         store: store,
         personaContextLoader: () async => currentContext,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
 
       expect(await service.sync(), isTrue);
@@ -115,9 +118,9 @@ void main() {
       final repo = _FlakyChatRepository();
       final telemetry = _RecordingCacheTelemetrySink();
       final service = LocalChatSearchSyncService(
-        contactRepository: repo,
-        conversationRepository: repo,
-        messageRepository: repo,
+        contactRepository: repo.contact,
+        conversationRepository: repo.conversation,
+        messageRepository: repo.message,
         conversationCache: cache,
         store: store,
         personaContextLoader: () async => currentContext,
@@ -153,13 +156,13 @@ void main() {
     test('markMessageRecalled removes message from local index', () async {
       final repo = _StableChatRepository();
       final service = LocalChatSearchSyncService(
-        contactRepository: repo,
-        conversationRepository: repo,
-        messageRepository: repo,
+        contactRepository: repo.contact,
+        conversationRepository: repo.conversation,
+        messageRepository: repo.message,
         conversationCache: cache,
         store: store,
         personaContextLoader: () async => currentContext,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       final namespace = LocalSearchNamespace.fromActivePersonaContext(
         currentContext,
@@ -214,13 +217,13 @@ void main() {
     test('removeConversation deletes conversation and its messages', () async {
       final repo = _StableChatRepository();
       final service = LocalChatSearchSyncService(
-        contactRepository: repo,
-        conversationRepository: repo,
-        messageRepository: repo,
+        contactRepository: repo.contact,
+        conversationRepository: repo.conversation,
+        messageRepository: repo.message,
         conversationCache: cache,
         store: store,
         personaContextLoader: () async => currentContext,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       final namespace = LocalSearchNamespace.fromActivePersonaContext(
         currentContext,
@@ -282,13 +285,13 @@ void main() {
     test('sync removes orphan conversations beyond first 200 rows', () async {
       final repo = _EmptyTimelineChatRepository();
       final service = LocalChatSearchSyncService(
-        contactRepository: repo,
-        conversationRepository: repo,
-        messageRepository: repo,
+        contactRepository: repo.contact,
+        conversationRepository: repo.conversation,
+        messageRepository: repo.message,
         conversationCache: cache,
         store: store,
         personaContextLoader: () async => currentContext,
-        telemetrySink: const NoopCacheTelemetrySink(),
+        telemetrySink: const SilentCacheTelemetrySink(),
       );
       final namespace = LocalSearchNamespace.fromActivePersonaContext(
         currentContext,
@@ -324,13 +327,13 @@ void main() {
       () async {
         final repo = _PagedContactsChatRepository();
         final service = LocalChatSearchSyncService(
-          contactRepository: repo,
-          conversationRepository: repo,
-          messageRepository: repo,
+          contactRepository: repo.contact,
+          conversationRepository: repo.conversation,
+          messageRepository: repo.message,
           conversationCache: cache,
           store: store,
           personaContextLoader: () async => currentContext,
-          telemetrySink: const NoopCacheTelemetrySink(),
+          telemetrySink: const SilentCacheTelemetrySink(),
         );
         final namespace = LocalSearchNamespace.fromActivePersonaContext(
           currentContext,
@@ -372,17 +375,205 @@ void main() {
   });
 }
 
-class _CountingChatRepository extends MockChatRepository {
-  int listContactsCalls = 0;
+final class _ChatContactAdapter implements ChatContactRepository {
+  const _ChatContactAdapter(this._delegate, {this.listContactsOverride});
+
+  final ChatContactRepository _delegate;
+  final Future<CursorPage<ChatContactRowViewData>> Function(
+    String? cursor,
+    int limit,
+  )?
+  listContactsOverride;
 
   @override
   Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = 20,
-  }) async {
-    listContactsCalls += 1;
-    return super.listContacts(cursor: cursor, limit: limit);
+  }) {
+    final override = listContactsOverride;
+    return override == null
+        ? _delegate.listContacts(cursor: cursor, limit: limit)
+        : override(cursor, limit);
   }
+
+  @override
+  Future<List<ContactHomeRow>> listContactHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listContactHome(filter: filter, cursor: cursor, limit: limit);
+
+  @override
+  Future<List<ChatContactRowViewData>> listGroupCandidates({
+    String? conversationId,
+    int limit = 100,
+  }) => _delegate.listGroupCandidates(
+    conversationId: conversationId,
+    limit: limit,
+  );
+}
+
+final class _ChatConversationAdapter implements ChatConversationRepository {
+  const _ChatConversationAdapter(
+    this._delegate, {
+    this.getConversationOverride,
+    this.getConversationTimestampsOverride,
+  });
+
+  final ChatConversationRepository _delegate;
+  final Future<ConversationViewData> Function(String conversationId)?
+  getConversationOverride;
+  final Future<List<ChatConversationTimestamp>> Function()?
+  getConversationTimestampsOverride;
+
+  @override
+  Future<List<MessageHomeRow>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listMessageHome(filter: filter, cursor: cursor, limit: limit);
+
+  @override
+  Future<List<ChatInboxViewData>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listConversations(cursor: cursor, limit: limit);
+
+  @override
+  Future<ChatConversationCreatedViewData> createConversation({
+    required String type,
+    String? title,
+    int? maxGroupSize,
+    List<String>? initialMemberIds,
+    String? idempotencyKey,
+  }) => _delegate.createConversation(
+    type: type,
+    title: title,
+    maxGroupSize: maxGroupSize,
+    initialMemberIds: initialMemberIds,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
+  Future<ConversationViewData> getConversation(String conversationId) {
+    final override = getConversationOverride;
+    return override == null
+        ? _delegate.getConversation(conversationId)
+        : override(conversationId);
+  }
+
+  @override
+  Future<void> updateConversationTitle(String conversationId, String title) =>
+      _delegate.updateConversationTitle(conversationId, title);
+
+  @override
+  Future<void> updateConversationSettings({
+    required String conversationId,
+    bool? muted,
+    bool? pinned,
+  }) => _delegate.updateConversationSettings(
+    conversationId: conversationId,
+    muted: muted,
+    pinned: pinned,
+  );
+
+  @override
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() {
+    final override = getConversationTimestampsOverride;
+    return override == null
+        ? _delegate.getConversationTimestamps()
+        : override();
+  }
+
+  @override
+  Future<List<ConversationViewData>> batchGetConversations(List<String> ids) =>
+      _delegate.batchGetConversations(ids);
+}
+
+final class _ChatMessageAdapter implements ChatMessageRepository {
+  const _ChatMessageAdapter(this._delegate, {this.syncMessagesOverride});
+
+  final ChatMessageRepository _delegate;
+  final Future<ChatMessageSyncViewData> Function(
+    String conversationId,
+    int lastSeq,
+    int limit,
+  )?
+  syncMessagesOverride;
+
+  @override
+  Future<List<ChatMessageViewData>> listMessages({
+    required String conversationId,
+    String? before,
+    int limit = 20,
+  }) => _delegate.listMessages(
+    conversationId: conversationId,
+    before: before,
+    limit: limit,
+  );
+
+  @override
+  Future<void> recallMessage({
+    required String conversationId,
+    required String messageId,
+  }) => _delegate.recallMessage(
+    conversationId: conversationId,
+    messageId: messageId,
+  );
+
+  @override
+  Future<ChatMessageSyncViewData> syncMessages({
+    required String conversationId,
+    required int lastSeq,
+    int limit = 200,
+  }) {
+    final override = syncMessagesOverride;
+    return override == null
+        ? _delegate.syncMessages(
+            conversationId: conversationId,
+            lastSeq: lastSeq,
+            limit: limit,
+          )
+        : override(conversationId, lastSeq, limit);
+  }
+
+  @override
+  Future<void> markAsRead({
+    required String conversationId,
+    required String messageId,
+  }) => _delegate.markAsRead(
+    conversationId: conversationId,
+    messageId: messageId,
+  );
+
+  @override
+  Future<List<ChatMessageReceipt>> getReceipts({
+    required String conversationId,
+    required String messageId,
+  }) => _delegate.getReceipts(
+    conversationId: conversationId,
+    messageId: messageId,
+  );
+}
+
+class _CountingChatRepository {
+  _CountingChatRepository() {
+    final facets = ChatTestFacets();
+    contact = _ChatContactAdapter(
+      facets.contact,
+      listContactsOverride: (cursor, limit) {
+        listContactsCalls += 1;
+        return facets.contact.listContacts(cursor: cursor, limit: limit);
+      },
+    );
+    conversation = facets.conversation;
+    message = facets.message;
+  }
+
+  late final ChatContactRepository contact;
+  late final ChatConversationRepository conversation;
+  late final ChatMessageRepository message;
+  int listContactsCalls = 0;
 }
 
 class _RecordingCacheTelemetrySink implements CacheTelemetrySink {
@@ -394,29 +585,51 @@ class _RecordingCacheTelemetrySink implements CacheTelemetrySink {
   }
 }
 
-class _FlakyChatRepository extends MockChatRepository {
+class _FlakyChatRepository {
+  _FlakyChatRepository() {
+    final facets = ChatTestFacets();
+    contact = _ChatContactAdapter(
+      facets.contact,
+      listContactsOverride: (cursor, limit) {
+        listContactsCalls += 1;
+        if (_shouldFail) {
+          _shouldFail = false;
+          throw StateError('weak network');
+        }
+        return facets.contact.listContacts(cursor: cursor, limit: limit);
+      },
+    );
+    conversation = facets.conversation;
+    message = facets.message;
+  }
+
+  late final ChatContactRepository contact;
+  late final ChatConversationRepository conversation;
+  late final ChatMessageRepository message;
   int listContactsCalls = 0;
   bool _shouldFail = true;
-
-  @override
-  Future<CursorPage<ChatContactRowViewData>> listContacts({
-    String? cursor,
-    int limit = 20,
-  }) async {
-    listContactsCalls += 1;
-    if (_shouldFail) {
-      _shouldFail = false;
-      throw StateError('weak network');
-    }
-    return super.listContacts(cursor: cursor, limit: limit);
-  }
 }
 
-class _StableChatRepository extends MockChatRepository {
+class _StableChatRepository {
+  _StableChatRepository() {
+    final facets = ChatTestFacets();
+    contact = facets.contact;
+    conversation = _ChatConversationAdapter(
+      facets.conversation,
+      getConversationOverride: _getConversation,
+    );
+    message = _ChatMessageAdapter(
+      facets.message,
+      syncMessagesOverride: _syncMessages,
+    );
+  }
+
+  late final ChatContactRepository contact;
+  late final ChatConversationRepository conversation;
+  late final ChatMessageRepository message;
   int getConversationCalls = 0;
 
-  @override
-  Future<ConversationViewData> getConversation(String id) async {
+  Future<ConversationViewData> _getConversation(String id) async {
     getConversationCalls += 1;
     final timestamp = DateTime.utc(2026, 3, 27, 10);
     return ConversationViewData(
@@ -437,42 +650,63 @@ class _StableChatRepository extends MockChatRepository {
     );
   }
 
-  @override
-  Future<ChatMessageSyncViewData> syncMessages({
-    required String conversationId,
-    required int lastSeq,
-    int limit = 200,
-  }) async {
+  Future<ChatMessageSyncViewData> _syncMessages(
+    String conversationId,
+    int lastSeq,
+    int limit,
+  ) async {
     return ChatMessageSyncViewData(messages: [], hasMore: false);
   }
 }
 
-class _EmptyTimelineChatRepository extends MockChatRepository {
-  @override
-  Future<CursorPage<ChatContactRowViewData>> listContacts({
-    String? cursor,
-    int limit = 20,
-  }) async {
-    return const CursorPage<ChatContactRowViewData>(
-      items: <ChatContactRowViewData>[],
+class _EmptyTimelineChatRepository {
+  _EmptyTimelineChatRepository() {
+    final facets = ChatTestFacets();
+    contact = _ChatContactAdapter(
+      facets.contact,
+      listContactsOverride: (cursor, limit) async =>
+          const CursorPage<ChatContactRowViewData>(
+            items: <ChatContactRowViewData>[],
+          ),
     );
+    conversation = _ChatConversationAdapter(
+      facets.conversation,
+      getConversationTimestampsOverride: () async =>
+          const <ChatConversationTimestamp>[],
+    );
+    message = facets.message;
   }
 
-  @override
-  Future<List<ChatConversationTimestamp>> getConversationTimestamps() async {
-    return const <ChatConversationTimestamp>[];
-  }
+  late final ChatContactRepository contact;
+  late final ChatConversationRepository conversation;
+  late final ChatMessageRepository message;
 }
 
-class _PagedContactsChatRepository extends MockChatRepository {
+class _PagedContactsChatRepository {
+  _PagedContactsChatRepository() {
+    final facets = ChatTestFacets();
+    contact = _ChatContactAdapter(
+      facets.contact,
+      listContactsOverride: _listContacts,
+    );
+    conversation = _ChatConversationAdapter(
+      facets.conversation,
+      getConversationTimestampsOverride: () async =>
+          const <ChatConversationTimestamp>[],
+    );
+    message = facets.message;
+  }
+
+  late final ChatContactRepository contact;
+  late final ChatConversationRepository conversation;
+  late final ChatMessageRepository message;
   final List<String?> requestedCursors = <String?>[];
   final List<int> requestedLimits = <int>[];
 
-  @override
-  Future<CursorPage<ChatContactRowViewData>> listContacts({
+  Future<CursorPage<ChatContactRowViewData>> _listContacts(
     String? cursor,
-    int limit = 20,
-  }) async {
+    int limit,
+  ) async {
     requestedCursors.add(cursor);
     requestedLimits.add(limit);
     return switch (cursor) {
@@ -512,10 +746,5 @@ class _PagedContactsChatRepository extends MockChatRepository {
       ),
       _ => throw StateError('unexpected contacts cursor: $cursor'),
     };
-  }
-
-  @override
-  Future<List<ChatConversationTimestamp>> getConversationTimestamps() async {
-    return const <ChatConversationTimestamp>[];
   }
 }

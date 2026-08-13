@@ -12,7 +12,7 @@ from content.release.canonical.campaign_release import (
     CampaignReleaseError,
     CampaignReleaseRoots,
 )
-from local_contract.release.test_campaign_release__selector__contract__local_contract_test import (
+from support.campaign_release_selector_fixture import (
     CARRIERS,
     _execution_id,
     _fixture,

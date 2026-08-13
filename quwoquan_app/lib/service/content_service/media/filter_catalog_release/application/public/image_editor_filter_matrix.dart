@@ -214,63 +214,70 @@ List<double> _exposureMatrix(double value) {
   ];
 }
 
+/// 褪色（fade）满值的黑场抬升比例与去饱和比例。
+///
+/// 黑场抬升是精确线性重映射 `[0,255] -> [lift*255, 255]`（白点不动），
+/// 由矩阵精确表达，非近似；语义显式声明为「黑场抬升 + 轻度去饱和」。
+const double kImageEditorFadeMaxLift = 0.22;
+const double kImageEditorFadeDesaturate = 0.18;
+
+List<double> _fadeMatrix(double fade) {
+  final lift = (fade / 100).clamp(0.0, 1.0) * kImageEditorFadeMaxLift;
+  final scale = 1 - lift;
+  final offset = 255 * lift;
+  return <double>[
+    scale, 0, 0, 0, offset, //
+    0, scale, 0, 0, offset, //
+    0, 0, scale, 0, offset, //
+    0, 0, 0, 1, 0, //
+  ];
+}
+
+/// 细节类参数（走 `ImageEditorDetailSpec` 逐像素管线，禁止折算进矩阵）。
+const Set<String> kImageEditorDetailParamKeys = <String>{
+  'vibrance',
+  'texture',
+  'sharpen',
+  'structure',
+  'highlight',
+  'shadow',
+  'grain',
+  'lightSense',
+  'denoise',
+  'vignette',
+};
+
+/// 纯色彩参数矩阵：只承载业界标准线性调节（曝光/亮度/对比/饱和/色温/色调）
+/// 与显式声明的 fade 黑场抬升；细节类参数一律不进矩阵（由调用方经
+/// `ImageEditorDetailSpec` 走逐像素管线），禁止系数折算冒充。
 List<double> buildImageEditorBaseColorMatrix(Map<String, double> values) {
-  final lightSense = values['lightSense'] ?? 0;
   final brightness = values['brightness'] ?? 0;
   final exposure = values['exposure'] ?? 0;
   final contrast = values['contrast'] ?? 0;
   final saturation = values['saturation'] ?? 0;
-  final vibrance = values['vibrance'] ?? 0;
-  final texture = values['texture'] ?? 0;
-  final sharpen = values['sharpen'] ?? 0;
-  final structure = values['structure'] ?? 0;
-  final highlights = values['highlight'] ?? 0;
-  final shadows = values['shadow'] ?? 0;
   final temperature = values['temperature'] ?? 0;
   final tint = values['tint'] ?? 0;
-  final grain = values['grain'] ?? 0;
   final fade = values['fade'] ?? 0;
-  final lightSenseBrightness = lightSense * 0.09;
-  final lightSenseContrast = lightSense * 0.18;
-  final vibranceSaturation = vibrance * 0.65;
-  final textureContrast = texture * 0.14;
-  final sharpenContrast = sharpen * 0.12;
-  final structureContrast = structure * 0.24;
-  final highlightBrightness = highlights * 0.20;
-  final shadowBrightness = shadows * 0.25;
-  final grainContrast = grain * 0.10;
-  final fadeLift = fade * 0.22;
 
   var matrix = imageEditorIdentityColorMatrix();
   matrix = multiplyImageEditorColorMatrices(_exposureMatrix(exposure), matrix);
   matrix = multiplyImageEditorColorMatrices(
-    _brightnessMatrix(
-      brightness +
-          lightSenseBrightness +
-          highlightBrightness +
-          shadowBrightness +
-          fadeLift,
-    ),
+    _brightnessMatrix(brightness),
     matrix,
   );
   matrix = multiplyImageEditorColorMatrices(
-    _contrastMatrix(
-      contrast +
-          lightSenseContrast +
-          textureContrast +
-          sharpenContrast +
-          structureContrast +
-          grainContrast +
-          highlights * 0.10 -
-          shadows * 0.10 -
-          fade * 0.30,
-    ),
+    _contrastMatrix(contrast),
     matrix,
   );
   matrix = multiplyImageEditorColorMatrices(
-    _saturationMatrix(saturation + vibranceSaturation - fade * 0.18),
+    _saturationMatrix(
+      saturation - fade.clamp(0.0, 100.0) * kImageEditorFadeDesaturate,
+    ),
     matrix,
   );
+  if (fade.abs() > 0.001) {
+    matrix = multiplyImageEditorColorMatrices(_fadeMatrix(fade), matrix);
+  }
   matrix = multiplyImageEditorColorMatrices(
     _temperatureMatrix(temperature),
     matrix,
@@ -279,17 +286,50 @@ List<double> buildImageEditorBaseColorMatrix(Map<String, double> values) {
   return matrix;
 }
 
-List<double> buildImageEditorFilterColorMatrix(
+/// 滤镜预设按强度缩放后的全参数表（矩阵与细节共用同一缩放）。
+Map<String, double> scaledImageEditorFilterValues(
   ImageEditorFilterPreset preset,
   double strength,
 ) {
   final ratio = (strength / 100).clamp(0.0, 1.0);
-  final scaledValues = <String, double>{
+  return <String, double>{
     for (final entry in preset.adjustments.entries)
       entry.key: _boostFilterParam(entry.key, entry.value) * ratio,
   };
-  var matrix = buildImageEditorBaseColorMatrix(scaledValues);
-  return matrix;
+}
+
+/// 滤镜纯色彩矩阵（细节类参数由 [buildImageEditorFilterDetailValues]
+/// 承载，经逐像素管线应用，与整体面板同源）。
+List<double> buildImageEditorFilterColorMatrix(
+  ImageEditorFilterPreset preset,
+  double strength,
+) {
+  return buildImageEditorBaseColorMatrix(
+    scaledImageEditorFilterValues(preset, strength),
+  );
+}
+
+/// 滤镜细节类参数（缩放后），供页面边界转 `ImageEditorDetailSpec`。
+Map<String, double> buildImageEditorFilterDetailValues(
+  ImageEditorFilterPreset preset,
+  double strength,
+) {
+  final scaled = scaledImageEditorFilterValues(preset, strength);
+  return <String, double>{
+    for (final entry in scaled.entries)
+      if (kImageEditorDetailParamKeys.contains(entry.key)) ...{
+        entry.key: entry.value,
+      },
+  };
+}
+
+/// 滤镜是否含细节类参数（决定预览/烘焙是否需要逐像素管线）。
+bool imageEditorFilterHasDetailParams(ImageEditorFilterPreset preset) {
+  return preset.adjustments.entries.any(
+    (entry) =>
+        kImageEditorDetailParamKeys.contains(entry.key) &&
+        entry.value.abs() > 0.001,
+  );
 }
 
 double _boostFilterParam(String key, double value) {

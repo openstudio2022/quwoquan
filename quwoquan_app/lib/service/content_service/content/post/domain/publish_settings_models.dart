@@ -17,6 +17,9 @@ class PublishSettings {
     this.circleIds = const <String>[],
     this.circleNames = const <String>[],
     this.homepage,
+    this.gatheringRef = '',
+    this.gatheringTitle = '',
+    this.textContentType = '',
     this.summary = '',
     this.tagRefs = const <String>[],
     this.tagLabels = const <String>[],
@@ -50,6 +53,21 @@ class PublishSettings {
   final List<String> circleIds;
   final List<String> circleNames;
   final HomepageCanonicalReference? homepage;
+
+  /// 作者主动关联的 canonical Gathering ID（共同经历回流引用）。
+  /// 只在作者从行动入口进入创作并保留关联时写入 payload；服务端会校验
+  /// 作者持有该 Gathering 的有效 Participation，校验不成立 fail-closed。
+  final String gatheringRef;
+
+  /// 关联行动标题，仅用于创作页上下文条展示，不进 payload。
+  final String gatheringTitle;
+
+  /// 用户在发布确认页显式确认的文字形态（`micro` | `article`；空 = 尚未确认）。
+  ///
+  /// 系统只能「建议」形态；确认页打开时把建议值固化到此字段并允许用户修改，
+  /// 提交阶段以此为唯一真相，不得再次静默推导（GWT-001）。不进
+  /// [toPayloadFields]——payload 的 `contentType` 由 payload builder 顶层写入。
+  final String textContentType;
   final String summary;
   final List<String> tagRefs;
   final List<String> tagLabels;
@@ -105,6 +123,14 @@ class PublishSettings {
           ? List<String>.from(map['circleNames'] as List? ?? const <String>[])
           : const <String>[],
       homepage: _homepageReferenceFromDraftMap(map['homepage']),
+      gatheringRef: (map['gatheringRef'] as String? ?? '').trim(),
+      gatheringTitle: (map['gatheringTitle'] as String? ?? '').trim(),
+      textContentType: switch ((map['textContentType'] as String? ?? '')
+          .trim()) {
+        'micro' => 'micro',
+        'article' => 'article',
+        _ => '',
+      },
       summary: (map['summary'] as String? ?? '').trim(),
       tagRefs: List<String>.from(map['tagRefs'] as List? ?? const <String>[]),
       tagLabels: List<String>.from(
@@ -157,6 +183,9 @@ class PublishSettings {
     'circleIds': circleIds,
     'circleNames': circleNames,
     'homepage': _homepageReferenceToDraftMap(homepage),
+    'gatheringRef': gatheringRef,
+    'gatheringTitle': gatheringTitle,
+    'textContentType': textContentType,
     'summary': summary,
     'tagRefs': tagRefs,
     'tagLabels': tagLabels,
@@ -203,6 +232,9 @@ class PublishSettings {
     if (homepage != null) {
       payload.addAll(_homepageReferenceToPublicationFields(homepage!));
     }
+    if (gatheringRef.trim().isNotEmpty) {
+      payload['gatheringRef'] = gatheringRef.trim();
+    }
     if (summary.trim().isNotEmpty) payload['summary'] = summary.trim();
     if (tagRefs.isNotEmpty) payload['tagRefs'] = tagRefs;
     if (entityRefs.isNotEmpty) payload['entityRefs'] = entityRefs;
@@ -219,6 +251,9 @@ class PublishSettings {
     List<String>? circleIds,
     List<String>? circleNames,
     HomepageCanonicalReference? homepage,
+    String? gatheringRef,
+    String? gatheringTitle,
+    String? textContentType,
     String? summary,
     List<String>? tagRefs,
     List<String>? tagLabels,
@@ -230,6 +265,7 @@ class PublishSettings {
     bool clearHomepage = false,
     bool clearLocationPoi = false,
     bool clearVisitedAt = false,
+    bool clearGatheringRef = false,
   }) => PublishSettings(
     isPublic: isPublic ?? this.isPublic,
     locationName: locationName ?? this.locationName,
@@ -239,6 +275,11 @@ class PublishSettings {
     circleIds: circleIds ?? this.circleIds,
     circleNames: circleNames ?? this.circleNames,
     homepage: clearHomepage ? null : (homepage ?? this.homepage),
+    gatheringRef: clearGatheringRef ? '' : (gatheringRef ?? this.gatheringRef),
+    gatheringTitle: clearGatheringRef
+        ? ''
+        : (gatheringTitle ?? this.gatheringTitle),
+    textContentType: textContentType ?? this.textContentType,
     summary: summary ?? this.summary,
     tagRefs: tagRefs ?? this.tagRefs,
     tagLabels: tagLabels ?? this.tagLabels,

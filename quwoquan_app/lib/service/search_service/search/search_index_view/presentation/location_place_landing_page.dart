@@ -8,6 +8,7 @@ import 'package:quwoquan_app/service/content_service/content/content_behavior_fa
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
@@ -176,10 +177,9 @@ class _LocationPlaceLandingPageState extends State<LocationPlaceLandingPage> {
       return CupertinoPageScaffold(
         navigationBar: CupertinoNavigationBar(
           middle: const Text(CreationText.locationPlaceLandingTitle),
-          leading: CupertinoButton(
-            padding: EdgeInsets.zero,
+          leading: AppNavigationBarIconButton(
+            icon: CupertinoIcons.chevron_back,
             onPressed: _handleClose,
-            child: const Icon(CupertinoIcons.chevron_back),
           ),
         ),
         child: SafeArea(
@@ -209,10 +209,9 @@ class _LocationPlaceLandingPageState extends State<LocationPlaceLandingPage> {
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
       navigationBar: CupertinoNavigationBar(
         middle: const Text(CreationText.locationPlaceLandingTitle),
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
+        leading: AppNavigationBarIconButton(
+          icon: CupertinoIcons.chevron_back,
           onPressed: _handleClose,
-          child: const Icon(CupertinoIcons.chevron_back),
         ),
       ),
       child: SafeArea(

@@ -378,16 +378,22 @@ class _ReplyPreviewItem extends ConsumerWidget {
           likeCount: reply.likeCount,
           dislikeCount: reply.dislikeCount,
           onLike: () => runWhenLoggedIn(ref, context, AuthGateReason.like, () {
-            ref
-                .read(commentProviderFamily(postId).notifier)
-                .toggleLike(reply.id);
+            return runCommentReactionWithFeedback(
+              context,
+              () => ref
+                  .read(commentProviderFamily(postId).notifier)
+                  .toggleLike(reply.id),
+            );
           }),
           onDislike: reply.canDelete
               ? null
               : () => runWhenLoggedIn(ref, context, AuthGateReason.like, () {
-                  ref
-                      .read(commentProviderFamily(postId).notifier)
-                      .toggleDislike(reply.id);
+                  return runCommentReactionWithFeedback(
+                    context,
+                    () => ref
+                        .read(commentProviderFamily(postId).notifier)
+                        .toggleDislike(reply.id),
+                  );
                 }),
           onDelete: reply.canDelete
               ? () => unawaited(

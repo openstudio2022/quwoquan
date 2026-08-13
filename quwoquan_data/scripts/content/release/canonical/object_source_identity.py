@@ -42,24 +42,6 @@ def _canonical_digest(value: object) -> str:
 
 
 def source_identity_digest(identity: Mapping[str, Any]) -> str:
-    if identity.get("identityKind") == "legacy_canonical_migration":
-        values = {
-            field: str(identity.get(field) or "").strip()
-            for field in (
-                "sourceDigest",
-                "canonicalObjectDigest",
-                "migrationEvidenceDigest",
-            )
-        }
-        if any(not _SHA256.fullmatch(value) for value in values.values()):
-            raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_INVALID")
-        return _canonical_digest(
-            {
-                "schema": "quwoquan_data.legacy_canonical_migration_identity",
-                "identityKind": "legacy_canonical_migration",
-                **values,
-            }
-        )
     values = {
         field: str(identity.get(field) or "").strip()
         for field in _IDENTITY_FIELDS
@@ -181,50 +163,26 @@ def source_identity_set(
         execution_id = str(raw.get("executionId") or "").strip()
         if not execution_id:
             raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_INVALID")
-        is_legacy = raw.get("identityKind") == "legacy_canonical_migration"
-        if not is_legacy:
-            previous = executions.get(execution_id)
-            if previous is not None and previous != identity_digest:
-                raise ObjectTransactionError(
-                    f"DATA.POOL.SOURCE_IDENTITY_DRIFT: executionId={execution_id}"
-                )
-            executions[execution_id] = identity_digest
-        key = (
-            (
-                "legacy_canonical_migration",
-                str(raw["sourceDigest"]),
-                str(raw["canonicalObjectDigest"]),
-                str(raw["migrationEvidenceDigest"]),
+        previous = executions.get(execution_id)
+        if previous is not None and previous != identity_digest:
+            raise ObjectTransactionError(
+                f"DATA.POOL.SOURCE_IDENTITY_DRIFT: executionId={execution_id}"
             )
-            if is_legacy
-            else ("modern_execution",) + tuple(
-                str(raw[field]) for field in _IDENTITY_FIELDS
-            )
-        )
+        executions[execution_id] = identity_digest
+        key = tuple(str(raw[field]) for field in _IDENTITY_FIELDS)
         grouped.setdefault(key, set()).add(execution_id)
     if not grouped:
         raise ObjectTransactionError("DATA.POOL.SOURCE_IDENTITY_MISSING")
     rows: list[dict[str, object]] = []
     for key, execution_ids in sorted(grouped.items()):
-        if key[0] == "legacy_canonical_migration":
-            rows.append(
-                {
-                    "identityKind": key[0],
-                    "sourceDigest": key[1],
-                    "canonicalObjectDigest": key[2],
-                    "migrationEvidenceDigest": key[3],
-                    "executionIds": sorted(execution_ids),
-                }
-            )
-        else:
-            rows.append(
-                {
-                    "sourceRevision": key[1],
-                    "sourceDigest": key[2],
-                    "entityCatalogDigest": key[3],
-                    "executionIds": sorted(execution_ids),
-                }
-            )
+        rows.append(
+            {
+                "sourceRevision": key[0],
+                "sourceDigest": key[1],
+                "entityCatalogDigest": key[2],
+                "executionIds": sorted(execution_ids),
+            }
+        )
     set_digest = _canonical_digest(
         {"schema": "quwoquan_data.source_identity_set", "sourceIdentities": rows}
     )

@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
+// ContractGraph SHA256: ba2dde9a203e9d9979e42aa34fc1994593f88f10ce159c4e37a42f66497c1ef9
 
 part of '../../../chat/chat_operation_contracts.g.dart';
 
@@ -52,6 +52,12 @@ String _generatedRequestString(Object? value, String path) {
 int _generatedRequestInt(Object? value, String path) {
   if (value is int) return value;
   throw FormatException('$path must be an integer');
+}
+
+
+double _generatedRequestDouble(Object? value, String path) {
+  if (value is num) return value.toDouble();
+  throw FormatException('$path must be a number');
 }
 
 
@@ -371,7 +377,7 @@ final class ChatListConversationMembersQuery {
     String? cursor,
     int limit = 20,
     String? role,
-    String sort = 'joined_asc',
+    MemberListSort sort = MemberListSort.joinedAsc,
     String? query,
   }) : conversationId = conversationId.trim(),
        cursor = cursor,
@@ -388,16 +394,13 @@ final class ChatListConversationMembersQuery {
     if (this.limit > 50) {
       throw ArgumentError.value(this.limit, "limit", "must not exceed 50");
     }
-    if (!const <String>{"joined_asc", "display_name_asc"}.contains(this.sort)) {
-      throw ArgumentError.value(this.sort, "sort", 'unsupported canonical enum value');
-    }
   }
 
   final String conversationId;
   final String? cursor;
   final int limit;
   final String? role;
-  final String sort;
+  final MemberListSort sort;
   final String? query;
 
   factory ChatListConversationMembersQuery.fromWire(Map<String, Object?> map, [String path = "ChatListConversationMembersQuery"]) {
@@ -407,7 +410,7 @@ final class ChatListConversationMembersQuery {
       cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
       limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
       role: map["role"] == null ? null : _generatedRequestString(map["role"], '$path.role'),
-      sort: map.containsKey("sort") ? _generatedRequestString(map["sort"], '$path.sort') : 'joined_asc',
+      sort: map.containsKey("sort") ? switch (map["sort"]) { "joined_asc" => MemberListSort.joinedAsc, "display_name_asc" => MemberListSort.displayNameAsc, _ => throw FormatException('$path.sort' + ' has an invalid enum value'), } : MemberListSort.joinedAsc,
       query: map["query"] == null ? null : _generatedRequestString(map["query"], '$path.query'),
     );
   }
@@ -417,7 +420,7 @@ final class ChatListConversationMembersQuery {
     if (this.cursor != null) "cursor": this.cursor!,
     "limit": this.limit,
     if (this.role != null) "role": this.role!,
-    "sort": this.sort,
+    "sort": this.sort.wireName,
     if (this.query != null) "query": this.query!,
   };
 }
@@ -800,6 +803,8 @@ final class ChatSendMessageCommand {
     required String clientMsgId,
     String? mediaAssetId,
     MessageCard? card,
+    int? audioDurationMs,
+    List<double>? audioWaveform,
     String? replyToMessageId,
     Iterable<String> mentions = const <String>[],
     String? senderDisplayNameSnapshot,
@@ -811,6 +816,8 @@ final class ChatSendMessageCommand {
        clientMsgId = clientMsgId.trim(),
        mediaAssetId = _normalizeGeneratedOptionalText(mediaAssetId),
        card = card,
+       audioDurationMs = audioDurationMs,
+       audioWaveform = audioWaveform == null ? null : List.unmodifiable(audioWaveform),
        replyToMessageId = _normalizeGeneratedOptionalText(replyToMessageId),
        mentions = _normalizeGeneratedTextList(mentions, deduplicate: false),
        senderDisplayNameSnapshot = _normalizeGeneratedOptionalText(senderDisplayNameSnapshot),
@@ -824,6 +831,12 @@ final class ChatSendMessageCommand {
     }
     if (this.clientMsgId.isEmpty) {
       throw ArgumentError.value(this.clientMsgId, "clientMsgId", 'must not be blank');
+    }
+    if (this.audioDurationMs != null && this.audioDurationMs! <= 0) {
+      throw ArgumentError.value(this.audioDurationMs, "audioDurationMs", "must be positive");
+    }
+    if (this.audioWaveform != null && this.audioWaveform!.length > 128) {
+      throw ArgumentError.value(this.audioWaveform, "audioWaveform", "item count exceeds 128");
     }
     if (this.type == "image" && this.mediaAssetId == null) {
       throw ArgumentError.value(this.mediaAssetId, "mediaAssetId", "is required when type is image");
@@ -855,6 +868,12 @@ final class ChatSendMessageCommand {
     if (this.type != "card" && this.card != null) {
       throw ArgumentError.value(this.card, "card", "is forbidden unless type is card");
     }
+    if (this.type != "audio" && this.audioDurationMs != null) {
+      throw ArgumentError.value(this.audioDurationMs, "audioDurationMs", "is forbidden unless type is audio");
+    }
+    if (this.type != "audio" && this.audioWaveform != null) {
+      throw ArgumentError.value(this.audioWaveform, "audioWaveform", "is forbidden unless type is audio");
+    }
   }
 
   final String conversationId;
@@ -863,6 +882,8 @@ final class ChatSendMessageCommand {
   final String clientMsgId;
   final String? mediaAssetId;
   final MessageCard? card;
+  final int? audioDurationMs;
+  final List<double>? audioWaveform;
   final String? replyToMessageId;
   final List<String> mentions;
   final String? senderDisplayNameSnapshot;
@@ -870,7 +891,7 @@ final class ChatSendMessageCommand {
   final int? personaContextVersion;
 
   factory ChatSendMessageCommand.fromWire(Map<String, Object?> map, [String path = "ChatSendMessageCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "type", "content", "clientMsgId", "mediaAssetId", "card", "replyToMessageId", "mentions", "senderDisplayNameSnapshot", "senderAvatarUrlSnapshot", "personaContextVersion"}, path);
+    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "type", "content", "clientMsgId", "mediaAssetId", "card", "audioDurationMs", "audioWaveform", "replyToMessageId", "mentions", "senderDisplayNameSnapshot", "senderAvatarUrlSnapshot", "personaContextVersion"}, path);
     return ChatSendMessageCommand(
       conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
       type: _generatedRequestString(map["type"], '$path.type'),
@@ -878,6 +899,8 @@ final class ChatSendMessageCommand {
       clientMsgId: _generatedRequestString(map["clientMsgId"], '$path.clientMsgId'),
       mediaAssetId: map["mediaAssetId"] == null ? null : _generatedRequestString(map["mediaAssetId"], '$path.mediaAssetId'),
       card: map["card"] == null ? null : MessageCard.fromWire(_generatedRequestObject(map["card"], '$path.card'), '$path.card'),
+      audioDurationMs: map["audioDurationMs"] == null ? null : _generatedRequestInt(map["audioDurationMs"], '$path.audioDurationMs'),
+      audioWaveform: map["audioWaveform"] == null ? null : List<double>.unmodifiable(_generatedRequestList(map["audioWaveform"], '$path.audioWaveform').asMap().entries.map((entry) => _generatedRequestDouble(entry.value, '$path.audioWaveform' + '[${entry.key}]'))),
       replyToMessageId: map["replyToMessageId"] == null ? null : _generatedRequestString(map["replyToMessageId"], '$path.replyToMessageId'),
       mentions: map.containsKey("mentions") ? List<String>.unmodifiable(_generatedRequestList(map["mentions"], '$path.mentions').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.mentions' + '[${entry.key}]'))) : const <String>[],
       senderDisplayNameSnapshot: map["senderDisplayNameSnapshot"] == null ? null : _generatedRequestString(map["senderDisplayNameSnapshot"], '$path.senderDisplayNameSnapshot'),
@@ -893,6 +916,8 @@ final class ChatSendMessageCommand {
     "clientMsgId": this.clientMsgId,
     if (this.mediaAssetId != null) "mediaAssetId": this.mediaAssetId!,
     if (this.card != null) "card": this.card!.toWire(),
+    if (this.audioDurationMs != null) "audioDurationMs": this.audioDurationMs!,
+    if (this.audioWaveform != null) "audioWaveform": this.audioWaveform!.map((value) => value).toList(growable: false),
     if (this.replyToMessageId != null) "replyToMessageId": this.replyToMessageId!,
     if (this.mentions.isNotEmpty) "mentions": this.mentions.map((value) => value).toList(growable: false),
     if (this.senderDisplayNameSnapshot != null) "senderDisplayNameSnapshot": this.senderDisplayNameSnapshot!,
@@ -1352,7 +1377,7 @@ CloudOperationRequestPayload encodeChatConversationMembershipListMembersGenerate
       if (request.cursor != null) "cursor": request.cursor!,
       "limit": (request.limit).toString(),
       if (request.role != null) "role": request.role!,
-      "sort": request.sort,
+      "sort": (request.sort.wireName).toString(),
       if (request.query != null) "query": request.query!,
     },
   );
@@ -1451,6 +1476,8 @@ CloudOperationRequestPayload encodeChatMessageSendMessageGeneratedRequest(ChatSe
       "clientMsgId": request.clientMsgId,
       if (request.mediaAssetId != null) "mediaAssetId": request.mediaAssetId!,
       if (request.card != null) "card": request.card!.toWire(),
+      if (request.audioDurationMs != null) "audioDurationMs": request.audioDurationMs!,
+      if (request.audioWaveform != null) "audioWaveform": request.audioWaveform!.map((value) => value).toList(growable: false),
       if (request.replyToMessageId != null) "replyToMessageId": request.replyToMessageId!,
       if (request.mentions.isNotEmpty) "mentions": request.mentions.map((value) => value).toList(growable: false),
       if (request.senderDisplayNameSnapshot != null) "senderDisplayNameSnapshot": request.senderDisplayNameSnapshot!,

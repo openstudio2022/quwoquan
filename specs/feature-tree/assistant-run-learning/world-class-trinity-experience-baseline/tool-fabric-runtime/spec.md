@@ -123,4 +123,18 @@
 - 影响或价值：Android instrumentation 与 iOS XCTest 已覆盖原生参数校验、边界收敛、系统日历写入、readback 和同一 `idempotencyKey` 重放不重复写入。
 - 已有服务端 local contract 覆盖确认前停机、缺回执拒绝、回执续接和重复 command 不重复记录。
 - 尚缺 generated permit verifier、真实 installation/device binding、Assistant 与平台 bridge 的 capability 同源映射，以及把不透明 permit 绑定到 Device bridge canonical input 的 production composition；同时尚缺 Android/iPhone 受管真机上的权限拒绝、重复点击、App 重启恢复和端云同一 Remote 候选收据。
-- 完成判定：在 Android/iPhone 受管真机对同一 Remote 候选执行批准、用户拒绝、权限拒绝、平台不可用、原生失败、重复点击与 App 重启恢复场景；系统日历 readback 证明每个 `idempotencyKey` 最多产生一个副作用，失败场景不出现 `device_action_completed`。
+- 完成判定：`GWT-003` 在 Android/iPhone 受管真机对同一 Remote 候选成立——执行批准、用户拒绝、权限拒绝、平台不可用、原生失败、重复点击与 App 重启恢复场景；系统日历 readback 证明每个 `idempotencyKey` 最多产生一个副作用，失败场景不出现 `device_action_completed`。
+- 契约翻绿路径（`ApproveAssistantToolUse` 与 `SubmitDeviceActionReceipt` 在 `contracts/assistant/assistant_run/operations.yaml` 的 `commercial.status: blocked`，gap_id `ASSISTANT_ASSISTANT_RUN_COMMERCIAL_EVIDENCE`）：
+  1. Alpha Remote 候选经 `stackctl package/up/verify` 启动且 assistant-service 健康检查通过（受管 Provider material 登记完成）；
+  2. `tests/api_integration/assistant/assistant_run/assistant_run_control_operations__api_integration_test.go` 中 approve 与 device-action-receipt case 在真实 Mongo 上全量通过，产出执行收据；
+  3. Android/iPhone 受管真机 Patrol UAT 对同一 Remote 候选覆盖上述完成判定场景，产出系统日历 readback 收据；
+  4. 凭以上三份真实收据把两个 operation 的 `commercial.status` 改为可用并删除 `block_reason`/`gap_id`，同时删除本 OPEN；真机不可得时本 OPEN 保留并注明外部阻断，禁止以模拟器通过或 skip 的 Patrol 充当收据。
+
+### OPEN-002 交集读工具运行时绑定未实现
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`block`
+- 影响或价值：尚缺 `intersection.read_mine` 的运行时执行绑定（delegated grant 换发、内部读面调用、redaction），以及未绑定期间进入运行前被阻断的 local_contract 断言与绑定后真实返回当前用户交集只读投影的 api_integration 收据。该工具已登记进 canonical 工具目录（owner=content-service `ListMyIntersections`，delegated_query 只读），用于把「都想去 / 同圈 / 共同经历」等可证交集转成行动建议并与 `gathering.propose_create_draft` 串联（交集飞轮撮合环）；按 REQ-003，未绑定前该工具不得进入策略允许集，不得伪成功。
+- 完成判定：`GWT-002` 对该工具成立（未绑定期间在进入运行前被阻断、不伪成功）；绑定后 `GWT-001` 的预算与恢复合同对该工具同样成立，且会话内真实返回当前用户交集只读投影、不拼句。
+- 依赖：content-service 交集读面内部授权路径；`intersection-unified-experience` REQ-009。

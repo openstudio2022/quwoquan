@@ -4,6 +4,10 @@
 # 测试无任何 workflow 调用方（只能本地手跑）。content-service 的
 # api_integration 通过 testcontainers 自管 Mongo/Redis，GitHub-hosted runner
 # 的 Docker 即可承载，无需 self-hosted 环境。
+#
+# recommendation-service 自身的 pytest api_integration（排序窗口真实
+# uvicorn 传输、候选/特征投影、serving API、事实落库）由第二个 job 承载：
+# 真实 mongod 副本集（docker）+ 真实 redis-server（apt 二进制，fixture 自拉起）。
 name: "Recommendation API Integration"
 
 permissions:
@@ -16,6 +20,7 @@ on:
   pull_request:
     paths:
       - "quwoquan_service/services/content-service/**"
+      - "quwoquan_service/services/recommendation-service/**"
       - "quwoquan_service/runtime/recommendation/**"
       - "quwoquan_service/runtime/recpolicy/**"
       - ".github/workflows/recommendation_api_integration.yml"
@@ -72,4 +77,73 @@ jobs:
         with:
           name: recommendation-api-integration-log
           path: quwoquan_service/api_integration.log
+          retention-days: 3
+
+  recommendation-service-api-integration:
+    name: "recommendation-service api_integration (pytest)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: quwoquan_service/services/recommendation-service
+    env:
+      QWQ_TEST_MONGO_URI: mongodb://127.0.0.1:27017/?directConnection=true
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+      - name: Install redis-server binary
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends redis-server
+          sudo systemctl stop redis-server || true
+      - name: Start MongoDB replica set
+        run: |
+          docker run -d --name qwq-rec-mongo -p 27017:27017 mongo:7-jammy \
+            --replSet rs0 --bind_ip_all
+          for _ in $(seq 1 60); do
+            if docker exec qwq-rec-mongo mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec qwq-rec-mongo mongosh --quiet --eval \
+            'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          for _ in $(seq 1 60); do
+            if docker exec qwq-rec-mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true; then
+              break
+            fi
+            sleep 1
+          done
+      - name: Install Python dependencies
+        run: |
+          pip install \
+            -r internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt \
+            -r resources/coverage-toolchain.lock
+      - name: Run recommendation-service api_integration
+        run: |
+          python -B -m pytest -o cache_dir="$QWQ_OUTPUT_ROOT/pytest-cache/recommendation-service" \
+            -v tests/api_integration 2>&1 | tee rec_api_integration.log
+      - name: Assert ranked-window real-transport tests executed
+        run: |
+          # 防回归：排序窗口真实传输与 serving 契约测试必须真实执行（不是被 skip）。
+          for required in \
+            test_ranked_window_create_and_continue_over_real_redis_and_mongo \
+            test_ranked_window_rejects_unauthorized_conflict_and_missing_window \
+            test_ranked_window_closes_and_erases_windows_for_closed_subject \
+            test_metrics_exposes_http_series; do
+            if ! grep -E "${required}.* PASSED" rec_api_integration.log >/dev/null; then
+              echo "required api_integration test ${required} did not pass"
+              exit 1
+            fi
+          done
+      - name: Upload log
+        if: ${{ failure() && !cancelled() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: recommendation-service-api-integration-log
+          path: quwoquan_service/services/recommendation-service/rec_api_integration.log
           retention-days: 3

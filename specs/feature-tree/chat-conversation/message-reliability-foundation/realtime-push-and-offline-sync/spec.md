@@ -87,7 +87,7 @@
 
 ## 4. 契约引用
 
-- local_contract 对象构造器：`quwoquan_app/test/support/runtime/fixtures/object_contract_example_builders.dart#buildObjectContractExampleDocument(chat)`；环境会话与消息通过 typed capability 和公开 command 构造。
+- local_contract 对象构造器：`quwoquan_app/test/support/service/chat_service/chat/conversation/chat_state_seed_builder.dart#minimalChatStateSeed`；环境会话与消息通过 typed capability 和公开 command 构造。
 - canonical：`quwoquan_service/services/realtime-gateway/contracts/realtime/connection/operations.yaml`
 - canonical：`quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/realtime/realtime_operation_contracts.g.dart`
 - canonical：`quwoquan_app/lib/runtime/transport/generated/realtime/realtime_request_page_ids.g.dart`
@@ -130,10 +130,19 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 持久流、游标与传输恢复事件均未落地
+### OPEN-001 断连补洞剩双端 api_integration 全链证据
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前会话事件只做即时广播且长轮询无游标，断连期间的消息永久丢失。恢复分支与补洞入口都存在但无人发出事件、无人调用，属于不可达代码。群分发为串行且首个失败即中断整批。
-- 完成判定：`GWT-002` 与 `GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：尚缺真实 Redis/双进程下「断网期间发送 → 重连补齐无缺号无重复」的
+  api_integration 全链证据，以及网关按连接数/订阅积压扩缩的告警接线。持久流与游标已落地
+  （chat-service 事件经 `rt:resume:chat:user:{accountId}` Redis Stream 持久化，LongPoll 携带 cursor 并回执 nextCursor/transportResumed，App 端 cursor 持久化于 SharedPreferences 并在 resume 时发出一次性 `Reconnected`）；
+  群 fan-out 为批内 goroutine 并行、单点失败隔离（`event_fanout_failure_isolation__local_contract_test.go` 绑定 `GWT-003`）；
+  WS 断连重连成功后由 delegate 发出携带活跃会话的恢复事件，handler
+  以端侧最大 seq 触发 `syncFromSeq` 补洞、与实时推送同链去重；
+  后台切前台重建传输与 WS 重试预算耗尽降级 LongPoll 两条路径同样发出
+  恢复事件并补洞（后台断开窗口与降级窗口的消息不再依赖下一次全量刷新）
+  （`realtime_reconnect_gap_recovery__local_contract_test.dart` 四用例绑定 `GWT-002`）；
+  生产路径的重复 handler 死分支已删除。
+- 完成判定：`GWT-002` 的 api_integration 全链证据有效；扩缩告警在既有规则组内登记。

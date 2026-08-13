@@ -33,10 +33,10 @@ from core.source_digest import (
 from content.execution.identity import validate_execution_id
 from content.execution.terminal_state_integrity import verify_terminal_state_integrity
 
-_REASONS = frozenset({"source_drift", "legacy_contract"})
+_REASONS = frozenset({"source_drift", "missing_canonical_input"})
 _ERROR_CODES = {
     "source_drift": "DATA.EXECUTION.SOURCE_DRIFT_SUPERSEDED",
-    "legacy_contract": "DATA.EXECUTION.LEGACY_CONTRACT_SUPERSEDED",
+    "missing_canonical_input": "DATA.EXECUTION.MISSING_CANONICAL_INPUT_SUPERSEDED",
 }
 _ANCHOR_REFS = {
     "executionManifest": "execution_manifest.json",
@@ -430,14 +430,14 @@ def validate_execution_supersession_receipt(
 
 
 def _source_identity_kind(document: object) -> str:
-    """Validate one legacy or v2 source identity without weakening either shape."""
+    """Validate one v1 or v2 source identity without weakening either shape."""
 
     try:
         SourceDefinitionSnapshot.from_document(document)
         return "source_definition_snapshot"
     except SourceDigestError:
         SourceDigest.from_document(document)
-        return "legacy_source_digest"
+        return "source_digest_v1"
 
 
 def load_execution_supersession_receipt(
@@ -474,7 +474,9 @@ def supersede_execution(
     normalized = validate_execution_id(execution_id)
     normalized_reason = str(reason or "").strip()
     if normalized_reason not in _REASONS:
-        raise ValueError("supersession reason must be source_drift or legacy_contract")
+        raise ValueError(
+            "supersession reason must be source_drift or missing_canonical_input"
+        )
     output = (executions_root or paths.DATA_EXECUTIONS_ROOT).resolve()
     root = output / normalized
     if not root.is_dir():
@@ -526,7 +528,7 @@ def supersede_execution(
             for name in ("executionManifest", "request", "targetSet")
         ):
             raise ValueError(
-                "legacy_contract supersession requires a missing canonical input"
+                "missing_canonical_input supersession requires a missing canonical input"
             )
         process_evidence, previous_status = _process_evidence(
             root,
@@ -621,7 +623,7 @@ def register_supersede_execution_parser(
 ) -> None:
     parser = subparsers.add_parser(
         "supersede-execution",
-        help="以 create-once receipt 终结 source-drift/legacy execution，保留旧证据",
+        help="以 create-once receipt 终结 source-drift/缺 canonical input 的 execution，保留旧证据",
     )
     parser.add_argument("execution_id")
     parser.add_argument("--reason", required=True, choices=tuple(sorted(_REASONS)))

@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/service/notification_service/notification_delivery/notification/application/notification_facets.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
+import 'app_message_test_builder.dart';
 
 /// 无站内信的 Notification 对象替身。
 ///
@@ -31,8 +31,8 @@ final class EmptyAppMessageQueryDouble implements AppMessageQuery {
 /// local_contract Notification 对象替身。
 final class AppMessageTypedDouble
     implements AppMessageQuery, AppMessageCommandWriter {
-  AppMessageTypedDouble({ObjectContractExampleReader? fixtures})
-    : _messages = _readMessages(fixtures ?? objectContractExampleReader);
+  AppMessageTypedDouble({List<AppMessage>? messages})
+    : _messages = List<AppMessage>.of(messages ?? _defaultMessages);
 
   final List<AppMessage> _messages;
 
@@ -135,23 +135,7 @@ final class AppMessageTypedDouble
     return replacement;
   }
 
-  static List<AppMessage> _readMessages(ObjectContractExampleReader fixtures) {
-    final decoded = fixtures.document('notification');
-    final examples = decoded['examples'];
-    if (examples is! Map) {
-      throw FormatException(
-        'Notification typed double contract examples are missing',
-      );
-    }
-    final core = examples['notification_core'];
-    if (core is! Map || core['appMessages'] is! List) {
-      throw FormatException(
-        'Notification typed double seed messages are missing',
-      );
-    }
-    return List<AppMessage>.of(
-      (core['appMessages'] as List).map(decodeAppMessage),
-      growable: true,
-    );
-  }
+  static final List<AppMessage> _defaultMessages = appMessageWireExamples()
+      .map(decodeAppMessage)
+      .toList(growable: false);
 }

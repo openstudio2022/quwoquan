@@ -19,6 +19,8 @@ final class ChatMessageViewData {
     this.mediaType,
     this.mediaContentType,
     this.mediaFileSizeBytes,
+    this.audioDurationMs,
+    this.audioWaveform,
     this.card,
     this.replyToMessageId,
     this.mentions,
@@ -43,6 +45,8 @@ final class ChatMessageViewData {
       mediaType: source.mediaType,
       mediaContentType: source.mediaContentType,
       mediaFileSizeBytes: source.mediaFileSizeBytes,
+      audioDurationMs: source.audioDurationMs,
+      audioWaveform: source.audioWaveform,
       card: source.card,
       replyToMessageId: source.replyToMessageId,
       mentions: source.mentions,
@@ -66,6 +70,8 @@ final class ChatMessageViewData {
   final String? mediaType;
   final String? mediaContentType;
   final int? mediaFileSizeBytes;
+  final int? audioDurationMs;
+  final List<double>? audioWaveform;
   final MessageCard? card;
   final String? replyToMessageId;
   final List<String>? mentions;
@@ -88,6 +94,8 @@ final class ChatMessageViewData {
     String? mediaType,
     String? mediaContentType,
     int? mediaFileSizeBytes,
+    int? audioDurationMs,
+    List<double>? audioWaveform,
     MessageCard? card,
     String? replyToMessageId,
     List<String>? mentions,
@@ -110,6 +118,8 @@ final class ChatMessageViewData {
       mediaType: mediaType ?? this.mediaType,
       mediaContentType: mediaContentType ?? this.mediaContentType,
       mediaFileSizeBytes: mediaFileSizeBytes ?? this.mediaFileSizeBytes,
+      audioDurationMs: audioDurationMs ?? this.audioDurationMs,
+      audioWaveform: audioWaveform ?? this.audioWaveform,
       card: card ?? this.card,
       replyToMessageId: replyToMessageId ?? this.replyToMessageId,
       mentions: mentions ?? this.mentions,

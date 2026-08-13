@@ -165,17 +165,9 @@ class IntersectionStatementRow extends StatelessWidget {
     // 头像已由槽②（句内头像）/槽③（对象封面）/传播节点承载时不再渲染 leading 视觉簇，
     // 避免重复；否则继续渲染 leading 簇服务通用消费者。
     final hasVisuals = item.visuals.isNotEmpty && !item._suppressLeadingCluster;
-    final primaryActionHint = item.actionHints
-        .where(isDisplayableIntersectionActionHint)
-        .fold<IntersectionActionHint?>(
-          null,
-          (best, hint) =>
-              best == null ||
-                  (hint.isPrimary && !best.isPrimary) ||
-                  hint.priority < best.priority
-              ? hint
-              : best,
-        );
+    final primaryActionHint = primaryDisplayableIntersectionActionHint(
+      item.actionHints,
+    );
     final Widget primaryLineContent = hasSpans
         ? InteractiveIntersectionText(
             spans: item.spans,
@@ -343,6 +335,25 @@ class IntersectionStatementRow extends StatelessWidget {
 ///   `IntersectionTargetNavigator._openMessage`），target 是真实 person 时展示；
 ///   非 person target 不展示，避免「打招呼」退化成对象下钻；
 /// - 未登记 dispatch：fail-closed，不渲染。
+/// 从云侧 actionHints 中选出唯一主行动：isPrimary 优先，其次 priority 最小；
+/// 全部不可渲染时返回 null。七触点（收件箱行 / 对象页卡 / 沉浸单句等）共用此
+/// 单一选择口径，禁止各触点自写第二份 fold（UX 总纲：一句主句 + 一个主动作）。
+IntersectionActionHint? primaryDisplayableIntersectionActionHint(
+  List<IntersectionActionHint> hints,
+) {
+  return hints
+      .where(isDisplayableIntersectionActionHint)
+      .fold<IntersectionActionHint?>(
+        null,
+        (best, hint) =>
+            best == null ||
+                (hint.isPrimary && !best.isPrimary) ||
+                hint.priority < best.priority
+            ? hint
+            : best,
+      );
+}
+
 bool isDisplayableIntersectionActionHint(IntersectionActionHint hint) {
   if (hint.label.trim().isEmpty) {
     return false;

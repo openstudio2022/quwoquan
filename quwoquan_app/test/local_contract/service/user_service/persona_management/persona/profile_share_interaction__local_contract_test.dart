@@ -152,7 +152,7 @@ void main() {
     await tester.pumpWidget(
       CupertinoApp(
         home: CupertinoPageScaffold(
-          child: ShareEmptyState(
+          child: shareInteractionEmptyState(
             direction: ShareInteractionDirection.received,
             onAction: () {},
           ),
@@ -167,7 +167,7 @@ void main() {
     await tester.pumpWidget(
       CupertinoApp(
         home: CupertinoPageScaffold(
-          child: ShareEmptyState(
+          child: shareInteractionEmptyState(
             direction: ShareInteractionDirection.initiated,
             onAction: () {},
           ),

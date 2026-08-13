@@ -293,7 +293,7 @@ def test_terminal_completion_and_readiness_boundaries_reject_early_event_tamper(
         lambda: reconcile.reconcile_stale_execution(EXECUTION_ID),
         lambda: execution_supersession.supersede_execution(
             EXECUTION_ID,
-            reason="legacy_contract",
+            reason="missing_canonical_input",
             executions_root=tmp_path,
         ),
         lambda: execution_completion_issues(SimpleNamespace(execution_id=EXECUTION_ID), state),

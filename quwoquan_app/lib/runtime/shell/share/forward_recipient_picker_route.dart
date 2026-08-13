@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
@@ -7,7 +8,6 @@ import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_pa
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/di/forward_share_dependencies.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
@@ -188,7 +188,7 @@ class _ForwardPickerList extends StatelessWidget {
     final recent = _filter(data.recent, normalizedQuery);
     final contacts = _filter(data.contacts, normalizedQuery);
     if (recent.isEmpty && contacts.isEmpty) {
-      return _ForwardPickerEmptyState(isDark: isDark);
+      return const AppEmptyState(title: ChatText.forwardNoRecipients);
     }
     return ListView(
       padding: EdgeInsets.fromLTRB(
@@ -237,32 +237,6 @@ class _ForwardPickerList extends StatelessWidget {
               recipient.displaySubtitle.toLowerCase().contains(normalizedQuery);
         })
         .toList(growable: false);
-  }
-}
-
-class _ForwardPickerEmptyState extends StatelessWidget {
-  const _ForwardPickerEmptyState({required this.isDark});
-
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerXl),
-        child: Text(
-          ChatText.forwardNoRecipients,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: AppTypography.iosBody,
-            color:
-                SettingsSemanticConstants.conversationSheetSecondaryLabelColor(
-                  isDark,
-                ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

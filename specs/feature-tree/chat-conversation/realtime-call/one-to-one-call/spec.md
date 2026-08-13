@@ -149,15 +149,6 @@
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：四种收尾、重复命令、取消/接听竞态和 chat durable projection 均可验证。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
 
-<a id="open-003"></a>
-### OPEN-003 后台、锁屏与被终止状态的离线来电
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：provider、设备注册、平台回调、接听/拒绝与真实设备 readback 全链通过。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
-
 <a id="open-004"></a>
 ### OPEN-004 AnswerCall、ReportMediaConnected 与 no_answer 严格分离
 

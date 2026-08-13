@@ -1,6 +1,9 @@
 import 'conversation_state_typed_double.dart';
+import 'chat_state_seed_builder.dart';
 
-final _chatFixtureEngine = InMemoryChatStateEngine();
+final _chatFixtureEngine = InMemoryChatStateEngine(
+  seed: minimalChatStateSeed(),
+);
 
 String chatCurrentUserProfileId() => _chatFixtureEngine.currentUserId;
 

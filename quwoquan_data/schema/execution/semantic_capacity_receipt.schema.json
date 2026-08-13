@@ -5,7 +5,6 @@
   "required": [
     "schema",
     "receiptId",
-    "executionId",
     "provider",
     "model",
     "role",
@@ -33,11 +32,31 @@
     "resultSha256",
     "recordedAt"
   ],
+  "anyOf": [
+    {"required": ["executionId"]},
+    {"required": ["sourceReview"]}
+  ],
+  "not": {
+    "required": ["executionId", "sourceReview"]
+  },
   "additionalProperties": false,
   "properties": {
     "schema": { "const": "quwoquan_data.semantic_capacity_receipt" },
     "receiptId": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "executionId": { "type": "string", "minLength": 1 },
+    "sourceReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionBundleDigest", "handoffDigest", "requestDigest"],
+      "properties": {
+        "sourceRevision": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "sourceDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "executionBundleDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "handoffDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "requestDigest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+      }
+    },
     "provider": { "enum": ["cursor_sdk", "codex_sdk"] },
     "model": { "type": "string", "minLength": 1 },
     "role": { "enum": ["author", "reviewer", "calibration"] },

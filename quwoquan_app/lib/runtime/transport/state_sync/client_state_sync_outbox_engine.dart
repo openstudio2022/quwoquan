@@ -10,10 +10,16 @@ typedef ClientStateSyncEntryExecutor =
     Future<void> Function(ClientStateSyncOutboxEntry entry);
 typedef ClientStateSyncStateListener =
     void Function(ClientStateSyncOutboxState state);
+typedef ClientStateSyncTerminalFailureListener =
+    void Function(ClientStateSyncOutboxEntry entry);
 
 /// Runtime transport engine for coalescing and retrying client interaction
 /// intents. Domain operation mapping, persistence technology and composition
 /// stay outside this library behind typed callbacks.
+///
+/// 重试期间的瞬时失败保持静默；entry 首次入队超过 `maxPendingAge` 进入
+/// 终态失败：放弃重试、移除 entry 并经 [onTerminalFailure] 交由上层回滚
+/// 乐观态与提示用户。
 final class ClientStateSyncOutboxEngine {
   ClientStateSyncOutboxEngine({
     required this.readConfig,
@@ -21,6 +27,7 @@ final class ClientStateSyncOutboxEngine {
     required this.writePersistedState,
     required this.executeEntry,
     required this.onStateChanged,
+    required this.onTerminalFailure,
   });
 
   final ClientStateSyncConfigReader readConfig;
@@ -28,6 +35,7 @@ final class ClientStateSyncOutboxEngine {
   final ClientStateSyncOutboxWriter writePersistedState;
   final ClientStateSyncEntryExecutor executeEntry;
   final ClientStateSyncStateListener onStateChanged;
+  final ClientStateSyncTerminalFailureListener onTerminalFailure;
 
   Timer? _flushTimer;
   final Map<String, bool> _inFlightDesiredValues = <String, bool>{};
@@ -97,6 +105,22 @@ final class ClientStateSyncOutboxEngine {
     }
     final config = readConfig();
     final now = DateTime.now();
+    // 超期终态优先：放弃重试、移除并通知上层，不再发出远程写入。
+    final expired = _state.entries
+        .where(
+          (entry) =>
+              !_isInFlight(entry.coalesceKey) &&
+              entry.hasPendingDelta &&
+              now.difference(entry.firstQueuedAt) > config.maxPendingAge,
+        )
+        .toList(growable: false);
+    for (final entry in expired) {
+      _removeEntry(entry.coalesceKey);
+      onTerminalFailure(entry);
+    }
+    if (expired.isNotEmpty) {
+      unawaited(_persistState());
+    }
     final dueKeys = _state.entries
         .where(
           (entry) =>
@@ -182,6 +206,8 @@ final class ClientStateSyncOutboxEngine {
         desiredBoolValue: desiredBoolValue,
         sourceSurfaceId: sourceSurfaceId,
         nextFlushAt: flushImmediately ? now : now.add(config.flushDelay),
+        // coalesce 更新不重置首次入队时间，终态判定以最早意图为准。
+        firstQueuedAt: existingEntry?.firstQueuedAt ?? now,
         confirmedBoolValue: confirmedBoolValue,
         retryCount: existingEntry?.retryCount ?? 0,
       ),
@@ -268,10 +294,17 @@ final class ClientStateSyncOutboxEngine {
       _removeEntry(coalesceKey);
       return;
     }
+    final now = DateTime.now();
+    if (now.difference(currentEntry.firstQueuedAt) > config.maxPendingAge) {
+      // 失败瞬间跨过期限：同样进入终态，不再安排下一次重试。
+      _removeEntry(coalesceKey);
+      onTerminalFailure(currentEntry);
+      return;
+    }
     _replaceEntry(
       currentEntry.copyWith(
         retryCount: currentEntry.retryCount + 1,
-        nextFlushAt: DateTime.now().add(config.retryDelay),
+        nextFlushAt: now.add(config.retryDelay),
       ),
     );
   }

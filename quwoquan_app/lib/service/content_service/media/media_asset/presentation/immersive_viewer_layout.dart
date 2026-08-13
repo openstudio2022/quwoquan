@@ -140,10 +140,12 @@ ArticleCanvasMetricsView resolveImmersiveArticleCanvasMetricsView(
     ),
     headerReservedHeight: 0,
     footerReservedHeight: 0,
-    wrapImageGap: width >= 430
+    wrapImageGap: width >= AppSpacing.articleWrapImageBreakpoint
         ? AppSpacing.containerMd
         : AppSpacing.containerSm,
-    wrapImageMaxWidth: width >= 430 ? 156 : 144,
+    wrapImageMaxWidth: width >= AppSpacing.articleWrapImageBreakpoint
+        ? AppSpacing.articleWrapImageMaxWidthWide
+        : AppSpacing.articleWrapImageMaxWidthCompact,
     fullWidthImageAspectRatio: 4 / 3,
     journalImageAspectRatio: 1,
     inlineImageSpacing: AppSpacing.interGroupSm,

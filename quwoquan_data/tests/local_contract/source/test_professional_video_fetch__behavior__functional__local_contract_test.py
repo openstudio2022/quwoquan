@@ -104,6 +104,21 @@ def test_acquire_video_reports_typed_missing_probe_dependency() -> None:
     assert "dependency=imageio_ffmpeg" in result.stderr
 
 
+def test_acquire_commons_video_reports_typed_missing_probe_dependency() -> None:
+    result = _run_cli_with_blocked_imageio(
+        "task",
+        "acquire-videos",
+        "--commons-entity",
+        "西湖",
+        "--handoff-ref",
+        "missing-handoff.json",
+    )
+    assert result.returncode != 0
+    assert "DATA.SOURCE.VIDEO_PROBE_DEPENDENCY_MISSING" in result.stderr
+    assert "dependency=imageio_ffmpeg" in result.stderr
+    assert "UnboundLocalError" not in result.stderr
+
+
 def test_fetch_seam_consumes_receipt_bound_cas_without_network_refetch(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -195,6 +210,106 @@ def test_transport_rejects_credentials_and_manual_path_escape(tmp_path: Path) ->
     assert "user:password" not in redact_sensitive_video_url(
         "https://user:password@cdn.example.test/video.mp4"
     )
+
+
+def test_source_suffix_accepts_canonical_ogg_container_type() -> None:
+    # Commons transcodes serve .ogv payloads as application/ogg; the
+    # canonical IANA container type must map to the same admitted suffix.
+    assert professional_video_transport._source_suffix(
+        "https://upload.wikimedia.org/wikipedia/commons/transcoded/abc",
+        "application/ogg",
+    ) == ".ogv"
+    assert professional_video_transport._source_suffix(
+        "https://upload.wikimedia.org/wikipedia/commons/a/ab/clip.ogv",
+        "application/ogg",
+    ) == ".ogv"
+    with pytest.raises(ValueError, match="container is not supported"):
+        professional_video_transport._source_suffix(
+            "https://upload.wikimedia.org/wikipedia/commons/transcoded/abc",
+            "application/pdf",
+        )
+
+
+def test_video_transport_uses_managed_network_admission_and_verified_tls_peer(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    url = "https://upload.wikimedia.org/wikipedia/commons/video.webm"
+    admission = {
+        "admissionRevision": "professional-image-network-admission-v1",
+        "admissionMode": "managed_network_extension",
+        "host": "upload.wikimedia.org",
+        "resolvedAddresses": ["198.18.1.24"],
+    }
+    resolution_calls: list[str] = []
+    peer_calls: list[dict[str, object]] = []
+    https_contexts: list[object] = []
+    context = object()
+
+    class Response:
+        headers = {"Content-Type": "video/webm", "Content-Length": "8001"}
+
+        @staticmethod
+        def geturl() -> str:
+            return url
+
+        @staticmethod
+        def read(_size: int) -> bytes:
+            if getattr(Response, "returned", False):
+                return b""
+            Response.returned = True
+            return b"v" * 8001
+
+        def __enter__(self) -> "Response":
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    class Opener:
+        @staticmethod
+        def open(_request: object, *, timeout: int) -> Response:
+            assert timeout > 0
+            return Response()
+
+    monkeypatch.setattr(
+        professional_video_transport,
+        "resolve_https_admission",
+        lambda value: resolution_calls.append(value) or admission,
+    )
+    monkeypatch.setattr(
+        professional_video_transport,
+        "verified_tls_context",
+        lambda: context,
+    )
+    monkeypatch.setattr(
+        professional_video_transport,
+        "https_tls_peer",
+        lambda response, **kwargs: peer_calls.append(
+            {"response": response, **kwargs}
+        )
+        or {},
+    )
+    monkeypatch.setattr(
+        professional_video_transport.urllib.request,
+        "HTTPSHandler",
+        lambda *, context: https_contexts.append(context) or object(),
+    )
+    monkeypatch.setattr(
+        professional_video_transport.urllib.request,
+        "build_opener",
+        lambda *_handlers: Opener(),
+    )
+
+    assert professional_video_transport._fetch_public_video_once(
+        url, tmp_path / "video.webm", supported_api=False
+    ) == ".webm"
+    assert https_contexts == [context]
+    assert resolution_calls == [url, url]
+    assert len(peer_calls) == 1
+    assert peer_calls[0]["requested_url"] == url
+    assert peer_calls[0]["final_url"] == url
+    assert peer_calls[0]["admission"] == admission
 
 
 def test_receipt_store_is_create_once_under_concurrent_writers(

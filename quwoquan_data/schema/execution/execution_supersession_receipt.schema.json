@@ -13,11 +13,11 @@
     "schema": {"const": "quwoquan_data.execution_supersession_receipt"},
     "executionId": {"type": "string", "minLength": 1},
     "decision": {"const": "superseded"},
-    "reason": {"enum": ["source_drift", "legacy_contract"]},
+    "reason": {"enum": ["source_drift", "missing_canonical_input"]},
     "errorCode": {
       "enum": [
         "DATA.EXECUTION.SOURCE_DRIFT_SUPERSEDED",
-        "DATA.EXECUTION.LEGACY_CONTRACT_SUPERSEDED"
+        "DATA.EXECUTION.MISSING_CANONICAL_INPUT_SUPERSEDED"
       ]
     },
     "recordedAt": {"type": "string", "format": "date-time"},

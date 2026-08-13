@@ -67,3 +67,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：记录/讨论聚合四态齐备且点击回流埋点在。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 主页详情投影缺真实事实消费写入口,聚合非空态无法在集成层取证
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 Homepage `DetailProjectionStore` 的写端仅有 `UpsertReviewSummary`；`ContentPreview`、`QuestionPreview`、`RelatedGroups`、`RelationEdges` 与 `AssistantContext` 在全服务范围的唯一写入口是 memory store 的 `SeedDetailProjection`（fixture 专用），Mongo store 与任何对象事实消费者/relay 均无写路径。`GetEntityImpact` 与 introduction `relatedObjects` 的非空组装因此只能在 local_contract 层由 fixture 测试（`homepage_impact_projection__local_contract_test.go`）覆盖，api_integration 层只能证明诚实空态。
+- 完成判定：`GWT-001` 的聚合展示由真实链路支撑——circle/content 对象事实消费投影为 DetailProjection 提供真实写入口后，api_integration 层恢复非空聚合断言并以真实测试 `spec_ref` 绑定；在此之前不得用 fixture seed 伪造集成层非空证据。

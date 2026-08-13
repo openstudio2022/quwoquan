@@ -4,6 +4,7 @@ import 'package:quwoquan_app/service/recommendation_service/recommendation/recom
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/interactive_intersection_text.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 
@@ -298,46 +299,28 @@ class ProfileIntersectionSkeletonList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        for (var i = 0; i < 3; i += 1) ...[
-          if (i > 0) const ProfileInsightDivider(),
-          const _ProfileIntersectionSkeletonRow(),
-        ],
-      ],
-    );
-  }
-}
-
-class _ProfileIntersectionSkeletonRow extends StatelessWidget {
-  const _ProfileIntersectionSkeletonRow();
-
-  @override
-  Widget build(BuildContext context) {
-    final fill = AppColors.iosSecondaryFill(context).withValues(alpha: 0.65);
-    return Padding(
+    // 行形状：头像位 + 单行短句条；脉动与占位视觉由统一 primitives 承载。
+    final row = Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.containerSm,
         vertical: AppSpacing.containerSm,
       ),
-      child: Row(
+      child: const Row(
         children: <Widget>[
-          Container(
-            width: AppSpacing.avatarUserSm,
-            height: AppSpacing.avatarUserSm,
-            decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
-          ),
+          AppSkeletonCircle(size: AppSpacing.avatarUserSm),
           SizedBox(width: AppSpacing.intraGroupSm),
-          Expanded(
-            child: Container(
-              height: AppSpacing.sm,
-              decoration: BoxDecoration(
-                color: fill,
-                borderRadius: BorderRadius.circular(AppSpacing.sm),
-              ),
-            ),
-          ),
+          Expanded(child: AppSkeletonLine(height: AppSpacing.sm)),
+        ],
+      ),
+    );
+    return AppSkeletonShimmer(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          for (var i = 0; i < 3; i += 1) ...[
+            if (i > 0) const ProfileInsightDivider(),
+            row,
+          ],
         ],
       ),
     );

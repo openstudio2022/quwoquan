@@ -1,3 +1,4 @@
+// readiness_case: search_content_projection_app_uat
 // spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md#gwt-005
 // spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-002
 /// 公开 Content API 创建唯一真实 Post，等待 canonical Search 投影后，由

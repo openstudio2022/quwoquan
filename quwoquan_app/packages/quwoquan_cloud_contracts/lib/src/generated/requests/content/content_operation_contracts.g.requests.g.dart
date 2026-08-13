@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
+// ContractGraph SHA256: ba2dde9a203e9d9979e42aa34fc1994593f88f10ce159c4e37a42f66497c1ef9
 
 part of '../../../content/content_operation_contracts.g.dart';
 
@@ -691,6 +691,48 @@ final class ContentFootprintQuery {
   };
 }
 
+final class ContentGatheringPostsQuery {
+  static const int defaultLimit = 20;
+  static const int maximumLimit = 100;
+
+  ContentGatheringPostsQuery({
+    required String gatheringId,
+    String? cursor,
+    int limit = 20,
+  }) : gatheringId = gatheringId.trim(),
+       cursor = cursor,
+       limit = limit {
+    if (this.gatheringId.isEmpty) {
+      throw ArgumentError.value(this.gatheringId, "gatheringId", 'must not be blank');
+    }
+    if (this.limit <= 0) {
+      throw ArgumentError.value(this.limit, "limit", "must be positive");
+    }
+    if (this.limit > 100) {
+      throw ArgumentError.value(this.limit, "limit", "must not exceed 100");
+    }
+  }
+
+  final String gatheringId;
+  final String? cursor;
+  final int limit;
+
+  factory ContentGatheringPostsQuery.fromWire(Map<String, Object?> map, [String path = "ContentGatheringPostsQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"gatheringId", "cursor", "limit"}, path);
+    return ContentGatheringPostsQuery(
+      gatheringId: _generatedRequestString(map["gatheringId"], '$path.gatheringId'),
+      cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
+      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "gatheringId": this.gatheringId,
+    if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
+}
+
 final class ContentMyReportsQuery {
   static const int defaultLimit = 20;
   static const int maximumLimit = 100;
@@ -1158,6 +1200,37 @@ final class GetContentPostReactionStateQuery {
 
   Map<String, Object?> toWire() => <String, Object?>{
     "postId": this.postId,
+  };
+}
+
+final class GetGatheringSocialProofQuery {
+  GetGatheringSocialProofQuery({
+    required String anchorKind,
+    required String objectId,
+  }) : anchorKind = anchorKind.trim(),
+       objectId = objectId.trim() {
+    if (this.anchorKind.isEmpty) {
+      throw ArgumentError.value(this.anchorKind, "anchorKind", 'must not be blank');
+    }
+    if (this.objectId.isEmpty) {
+      throw ArgumentError.value(this.objectId, "objectId", 'must not be blank');
+    }
+  }
+
+  final String anchorKind;
+  final String objectId;
+
+  factory GetGatheringSocialProofQuery.fromWire(Map<String, Object?> map, [String path = "GetGatheringSocialProofQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"anchorKind", "objectId"}, path);
+    return GetGatheringSocialProofQuery(
+      anchorKind: _generatedRequestString(map["anchorKind"], '$path.anchorKind'),
+      objectId: _generatedRequestString(map["objectId"], '$path.objectId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "anchorKind": this.anchorKind,
+    "objectId": this.objectId,
   };
 }
 
@@ -1891,10 +1964,11 @@ final class SubmitContentPostPublicationCommand {
     String? locationName,
     String? geoTagRef,
     DateTime? visitedAt,
-    Iterable<String> captureDisclosure = const <String>[],
+    Iterable<CaptureDisclosureGroup> captureDisclosure = const <CaptureDisclosureGroup>[],
     String? primaryHomepageId,
     String? primaryHomepageType,
     PostHomepageSnapshot? primaryHomepageSnapshot,
+    String? gatheringRef,
     Visibility? visibility,
     AssistantUsePolicy? assistantUsePolicy,
     String? sourcePostId,
@@ -1924,10 +1998,11 @@ final class SubmitContentPostPublicationCommand {
        locationName = locationName,
        geoTagRef = geoTagRef,
        visitedAt = visitedAt,
-       captureDisclosure = _normalizeGeneratedTextList(captureDisclosure, deduplicate: false),
+       captureDisclosure = List.unmodifiable(captureDisclosure),
        primaryHomepageId = primaryHomepageId,
        primaryHomepageType = primaryHomepageType,
        primaryHomepageSnapshot = primaryHomepageSnapshot,
+       gatheringRef = gatheringRef,
        visibility = visibility,
        assistantUsePolicy = assistantUsePolicy,
        sourcePostId = sourcePostId,
@@ -1965,10 +2040,11 @@ final class SubmitContentPostPublicationCommand {
   final String? locationName;
   final String? geoTagRef;
   final DateTime? visitedAt;
-  final List<String> captureDisclosure;
+  final List<CaptureDisclosureGroup> captureDisclosure;
   final String? primaryHomepageId;
   final String? primaryHomepageType;
   final PostHomepageSnapshot? primaryHomepageSnapshot;
+  final String? gatheringRef;
   final Visibility? visibility;
   final AssistantUsePolicy? assistantUsePolicy;
   final String? sourcePostId;
@@ -1980,7 +2056,7 @@ final class SubmitContentPostPublicationCommand {
   final int? personaContextVersion;
 
   factory SubmitContentPostPublicationCommand.fromWire(Map<String, Object?> map, [String path = "SubmitContentPostPublicationCommand"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"publishIntentId", "localDraftId", "contentType", "contentIdentity", "title", "body", "summary", "semanticMentions", "mediaAssetIds", "articleMarkdown", "markdownDialect", "articleAssetManifest", "articleRenderProfile", "coverStrategy", "coverFrameTimeMs", "illustrationAssetId", "location", "locationName", "geoTagRef", "visitedAt", "captureDisclosure", "primaryHomepageId", "primaryHomepageType", "primaryHomepageSnapshot", "visibility", "assistantUsePolicy", "sourcePostId", "sourceType", "deviceInfo", "publishLocation", "authorDisplayNameSnapshot", "authorAvatarUrlSnapshot", "personaContextVersion"}, path);
+    _generatedRequestRejectUnknownFields(map, const <String>{"publishIntentId", "localDraftId", "contentType", "contentIdentity", "title", "body", "summary", "semanticMentions", "mediaAssetIds", "articleMarkdown", "markdownDialect", "articleAssetManifest", "articleRenderProfile", "coverStrategy", "coverFrameTimeMs", "illustrationAssetId", "location", "locationName", "geoTagRef", "visitedAt", "captureDisclosure", "primaryHomepageId", "primaryHomepageType", "primaryHomepageSnapshot", "gatheringRef", "visibility", "assistantUsePolicy", "sourcePostId", "sourceType", "deviceInfo", "publishLocation", "authorDisplayNameSnapshot", "authorAvatarUrlSnapshot", "personaContextVersion"}, path);
     return SubmitContentPostPublicationCommand(
       publishIntentId: _generatedRequestString(map["publishIntentId"], '$path.publishIntentId'),
       localDraftId: _generatedRequestString(map["localDraftId"], '$path.localDraftId'),
@@ -2002,10 +2078,11 @@ final class SubmitContentPostPublicationCommand {
       locationName: map["locationName"] == null ? null : _generatedRequestString(map["locationName"], '$path.locationName'),
       geoTagRef: map["geoTagRef"] == null ? null : _generatedRequestString(map["geoTagRef"], '$path.geoTagRef'),
       visitedAt: map["visitedAt"] == null ? null : _generatedRequestTimestamp(map["visitedAt"], '$path.visitedAt'),
-      captureDisclosure: map.containsKey("captureDisclosure") ? List<String>.unmodifiable(_generatedRequestList(map["captureDisclosure"], '$path.captureDisclosure').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.captureDisclosure' + '[${entry.key}]'))) : const <String>[],
+      captureDisclosure: map.containsKey("captureDisclosure") ? List<CaptureDisclosureGroup>.unmodifiable(_generatedRequestList(map["captureDisclosure"], '$path.captureDisclosure').asMap().entries.map((entry) => switch (entry.value) { "gear" => CaptureDisclosureGroup.gear, "parameters" => CaptureDisclosureGroup.parameters, "place" => CaptureDisclosureGroup.place, "time" => CaptureDisclosureGroup.time, _ => throw FormatException('$path.captureDisclosure' + '[${entry.key}]' + ' has an invalid enum value'), })) : const <CaptureDisclosureGroup>[],
       primaryHomepageId: map["primaryHomepageId"] == null ? null : _generatedRequestString(map["primaryHomepageId"], '$path.primaryHomepageId'),
       primaryHomepageType: map["primaryHomepageType"] == null ? null : _generatedRequestString(map["primaryHomepageType"], '$path.primaryHomepageType'),
       primaryHomepageSnapshot: map["primaryHomepageSnapshot"] == null ? null : PostHomepageSnapshot.fromWire(_generatedRequestObject(map["primaryHomepageSnapshot"], '$path.primaryHomepageSnapshot'), '$path.primaryHomepageSnapshot'),
+      gatheringRef: map["gatheringRef"] == null ? null : _generatedRequestString(map["gatheringRef"], '$path.gatheringRef'),
       visibility: map["visibility"] == null ? null : switch (map["visibility"]) { "public" => Visibility.public, "private" => Visibility.private, _ => throw FormatException('$path.visibility' + ' has an invalid enum value'), },
       assistantUsePolicy: map["assistantUsePolicy"] == null ? null : switch (map["assistantUsePolicy"]) { "inherit" => AssistantUsePolicy.inherit, "exclude" => AssistantUsePolicy.exclude, _ => throw FormatException('$path.assistantUsePolicy' + ' has an invalid enum value'), },
       sourcePostId: map["sourcePostId"] == null ? null : _generatedRequestString(map["sourcePostId"], '$path.sourcePostId'),
@@ -2039,10 +2116,11 @@ final class SubmitContentPostPublicationCommand {
     if (this.locationName != null) "locationName": this.locationName!,
     if (this.geoTagRef != null) "geoTagRef": this.geoTagRef!,
     if (this.visitedAt != null) "visitedAt": this.visitedAt!.toUtc().toIso8601String(),
-    "captureDisclosure": this.captureDisclosure.map((value) => value).toList(growable: false),
+    "captureDisclosure": this.captureDisclosure.map((value) => value.wireName).toList(growable: false),
     if (this.primaryHomepageId != null) "primaryHomepageId": this.primaryHomepageId!,
     if (this.primaryHomepageType != null) "primaryHomepageType": this.primaryHomepageType!,
     if (this.primaryHomepageSnapshot != null) "primaryHomepageSnapshot": this.primaryHomepageSnapshot!.toWire(),
+    if (this.gatheringRef != null) "gatheringRef": this.gatheringRef!,
     if (this.visibility != null) "visibility": this.visibility!.wireName,
     if (this.assistantUsePolicy != null) "assistantUsePolicy": this.assistantUsePolicy!.wireName,
     if (this.sourcePostId != null) "sourcePostId": this.sourcePostId!,
@@ -2416,6 +2494,15 @@ CloudOperationRequestPayload encodeContentPostGetFeedGeneratedRequest(ContentDis
   );
 }
 
+CloudOperationRequestPayload encodeContentPostGetGatheringSocialProofGeneratedRequest(GetGatheringSocialProofQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "anchorKind": request.anchorKind,
+      "objectId": request.objectId,
+    },
+  );
+}
+
 CloudOperationRequestPayload encodeContentPostGetMyFootprintGeneratedRequest(ContentFootprintQuery request) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
@@ -2450,6 +2537,18 @@ CloudOperationRequestPayload encodeContentPostListAuthorImpactEvidenceGeneratedR
     queryParameters: <String, String>{
       "impactId": request.impactId,
       if (request.evidenceSnapshotId != null) "evidenceSnapshotId": request.evidenceSnapshotId!,
+      if (request.cursor != null) "cursor": request.cursor!,
+      "limit": (request.limit).toString(),
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeContentPostListPostsByGatheringGeneratedRequest(ContentGatheringPostsQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "gatheringId": request.gatheringId,
+    },
+    queryParameters: <String, String>{
       if (request.cursor != null) "cursor": request.cursor!,
       "limit": (request.limit).toString(),
     },
@@ -2494,10 +2593,11 @@ CloudOperationRequestPayload encodeContentPostSubmitPostPublicationGeneratedRequ
       if (request.locationName != null) "locationName": request.locationName!,
       if (request.geoTagRef != null) "geoTagRef": request.geoTagRef!,
       if (request.visitedAt != null) "visitedAt": request.visitedAt!.toUtc().toIso8601String(),
-      "captureDisclosure": request.captureDisclosure.map((value) => value).toList(growable: false),
+      "captureDisclosure": request.captureDisclosure.map((value) => value.wireName).toList(growable: false),
       if (request.primaryHomepageId != null) "primaryHomepageId": request.primaryHomepageId!,
       if (request.primaryHomepageType != null) "primaryHomepageType": request.primaryHomepageType!,
       if (request.primaryHomepageSnapshot != null) "primaryHomepageSnapshot": request.primaryHomepageSnapshot!.toWire(),
+      if (request.gatheringRef != null) "gatheringRef": request.gatheringRef!,
       if (request.visibility != null) "visibility": request.visibility!.wireName,
       if (request.assistantUsePolicy != null) "assistantUsePolicy": request.assistantUsePolicy!.wireName,
       if (request.sourcePostId != null) "sourcePostId": request.sourcePostId!,

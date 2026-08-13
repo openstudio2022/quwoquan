@@ -85,10 +85,16 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 会话页尚无任何交集落地
+### OPEN-001 会话头剩常驻交集聚合的契约演进
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前会话页不展示任何交集信息，用户在时隔较久重新打开会话时无从回忆双方的连接理由，破冰依据在升级为正式会话后即丢失。
-- 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：尚缺非破冰来源 1v1 会话的常驻交集摘要（`ContactIntersectionFact` ≤2 条），需要
+  把该字段挂到会话读面（contracts-first：`GetConversation` 或专用 slice 增补 + 服务端复用联系面 resolver + codegen），
+  以及 `GWT-001` 的完整验收（含展示上限两条与云侧聚合来源断言）。
+  破冰依据展示已落地——1v1 会话头在标题下透传
+  `Conversation.originIntersectionSnapshot.primaryText`（端不拼句），群会话头部
+  有类型防御不展示，无快照不占位，均有 widget 测试
+  （`conversation_intersection_header__local_contract_test.dart` 绑定 `GWT-002`）。
+- 完成判定：`GWT-001` 的 2 条 THEN 组全部具备子句级 `spec_ref`（`gwt-001.t1..t2`）绑定的真实测试证据，且断言覆盖常驻交集摘要展示上限两条与云侧聚合来源；`GWT-002` 已闭合。

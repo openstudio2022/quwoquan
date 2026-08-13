@@ -86,5 +86,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺出站熔断状态迁移与剩余恢复条件的直接 `spec_ref`；目标：出站熔断、owner 侧并发背压与 operation 准入的允许、拒绝和负载摘除决定可观察。operation 准入的 `inflight_full` 拒绝已由 `quwoquan_service/tests/local_contract/runtime/governance/operation_admission__local_contract_test.go` 覆盖。
+- 影响或价值：仍缺出站熔断状态迁移与剩余恢复条件的直接 `spec_ref`；目标：出站熔断、owner 侧并发背压与 operation 准入的允许、拒绝和负载摘除决定可观察。operation 准入的 `inflight_full` 拒绝已由 `quwoquan_service/runtime/tests/local_contract/governance/operation_admission__local_contract_test.go` 覆盖。
 - 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。

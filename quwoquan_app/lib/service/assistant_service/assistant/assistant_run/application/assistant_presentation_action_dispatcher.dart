@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/errors/generated/assistant/assistant_errors.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 enum AssistantActionIntentRejection {
@@ -293,7 +294,7 @@ final class UnavailableAssistantDeviceActionExecutor
       AssistantDeviceActionExecutionResult(
         outcome: 'unavailable',
         executedAt: _systemUtcNow(),
-        failureCode: 'ASSISTANT.SYSTEM.device_action_unavailable',
+        failureCode: AssistantErrorCode.deviceActionUnavailable.code,
       ),
     );
   }

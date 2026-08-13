@@ -1,3 +1,4 @@
+// readiness_case: conversation_membership_group_admins_app_uat
 // spec_ref: specs/feature-tree/chat-conversation/group-creation-member-management/group-settings/spec.md#gwt-002
 /// 两个 disposable actor 先经公开 User command 形成真实互关，再由公开 Chat command
 /// 创建私建群与成员事实。production App 只在管理员命令及完整 Remote roster 回读收敛后
@@ -169,7 +170,7 @@ Future<ConversationMemberListRow> _waitForMember(
     final members = await harness.repository.listMembers(
       conversationId: conversationId,
       limit: 200,
-      sort: 'joined_asc',
+      sort: MemberListSort.joinedAsc,
     );
     for (final member in members) {
       if (member.userId == memberPersonaId && member.role == expectedRole) {

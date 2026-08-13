@@ -112,5 +112,28 @@ void main() {
       expect(log.last.query['identity'], 'work');
       expect(log.last.query['type'], 'article');
     });
+
+    // 推荐频道主链路（sit-001）：channelId 路由必须透传 channelId/sort 并
+    // 置空 identity/type（频道推荐与具名浏览流互斥，见 GetFeed 契约描述）。
+    test('listDiscoveryFeedPage 推荐频道路由透传 channelId 且不携带 identity/type',
+        () async {
+      await repo.listDiscoveryFeedPage(
+        category: 'recommended',
+        channelId: 'recommend',
+        sessionId: 'session-recommend-001',
+        feedRequestId: 'feed-req-recommend-001',
+      );
+      expect(log.last.method, 'GET');
+      expect(
+        log.last.path,
+        canonicalRemoteApiPath(AppCloudOperationIds.contentPostGetFeed),
+      );
+      expect(log.last.query['channelId'], 'recommend');
+      expect(log.last.query['sort'], 'recommend');
+      expect(log.last.query['sessionId'], 'session-recommend-001');
+      expect(log.last.query['feedRequestId'], 'feed-req-recommend-001');
+      expect(log.last.query.containsKey('identity'), isFalse);
+      expect(log.last.query.containsKey('type'), isFalse);
+    });
   });
 }

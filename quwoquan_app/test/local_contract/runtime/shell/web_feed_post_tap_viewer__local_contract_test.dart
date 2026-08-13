@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../support/runtime/shell/web/web_shell_test_harness.dart';
 import '../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
 void main() {
   setUp(() {
@@ -19,10 +19,14 @@ void main() {
       WebShellTestHarness.suppressExpectedErrors();
       WebShellTestHarness.useWideViewport(tester);
 
-      await tester.pumpWidget(WebShellTestHarness.build(
-        authenticated: true,
-        businessOverrides: mockContentFacetOverrides(MockContentRepository()),
-      ));
+      await tester.pumpWidget(
+        WebShellTestHarness.build(
+          authenticated: true,
+          businessOverrides: mockContentFacetOverrides(
+            store: InMemoryContentPostStore(),
+          ),
+        ),
+      );
       await WebShellTestHarness.enterToolbar(tester);
 
       // 首页默认 recommend 频道复用移动端内容流组件。

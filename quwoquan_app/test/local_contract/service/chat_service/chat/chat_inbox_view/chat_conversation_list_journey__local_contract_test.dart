@@ -16,6 +16,7 @@ import 'package:quwoquan_app/runtime/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart';
 import 'package:quwoquan_app/service/user_service/relationship/greeting_request/application/public/greeting_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_state_seed_builder.dart';
 import '../../../../../support/service/chat_service/chat/conversation/conversation_state_typed_double.dart';
 
 import '../../../../../support/service/user_service/relationship/greeting_request/user_typed_facet_test_support.dart';
@@ -28,7 +29,8 @@ Widget _scopedApp({
   GreetingRepository? greetingRepository,
   ValueNotifier<bool>? chatVisibility,
 }) {
-  final stateEngine = engine ?? InMemoryChatStateEngine();
+  final stateEngine =
+      engine ?? InMemoryChatStateEngine(seed: minimalChatStateSeed());
   final appMessages = _EmptyAppMessageFacet();
   return ProviderScope(
     retry: (_, _) => null,
@@ -138,7 +140,7 @@ Future<void> _pumpJourneyApp(WidgetTester tester, Widget app) async {
 void main() {
   group('旅程正常路径', () {
     testWidgets('会话列表正常加载并显示会话', (tester) async {
-      final engine = InMemoryChatStateEngine();
+      final engine = InMemoryChatStateEngine(seed: minimalChatStateSeed());
       final expected = _messageHomeRows(engine).first;
       await _pumpJourneyApp(tester, _scopedApp(engine: engine));
 
@@ -152,7 +154,7 @@ void main() {
     });
 
     testWidgets('Tab 切换消息/联系人', (tester) async {
-      final engine = InMemoryChatStateEngine();
+      final engine = InMemoryChatStateEngine(seed: minimalChatStateSeed());
       final expectedMessage = _messageHomeRows(engine).first;
       final expectedContact = _contactHomeRows(engine).first;
       await _pumpJourneyApp(tester, _scopedApp(engine: engine));
@@ -177,7 +179,7 @@ void main() {
     });
 
     testWidgets('会话列表显示会话标题和最后一条消息', (tester) async {
-      final engine = InMemoryChatStateEngine();
+      final engine = InMemoryChatStateEngine(seed: minimalChatStateSeed());
       final expected = _messageHomeRows(
         engine,
       ).firstWhere((row) => row.title.isNotEmpty && row.summary.isNotEmpty);
@@ -190,7 +192,7 @@ void main() {
 
   group('旅程错误路径', () {
     testWidgets('加载失败显示错误态', (tester) async {
-      final engine = InMemoryChatStateEngine();
+      final engine = InMemoryChatStateEngine(seed: minimalChatStateSeed());
       await _pumpJourneyApp(
         tester,
         _scopedApp(
@@ -210,7 +212,7 @@ void main() {
     });
 
     testWidgets('会话 Facet 异常不导致页面崩溃', (tester) async {
-      final engine = InMemoryChatStateEngine();
+      final engine = InMemoryChatStateEngine(seed: minimalChatStateSeed());
       await _pumpJourneyApp(
         tester,
         _scopedApp(
@@ -230,7 +232,7 @@ void main() {
     });
 
     testWidgets('Greeting 分区失败不覆盖已确认会话且可独立重试', (tester) async {
-      final engine = InMemoryChatStateEngine();
+      final engine = InMemoryChatStateEngine(seed: minimalChatStateSeed());
       final greeting = _ControllableGreetingRepository()..failInbox = true;
       final expected = _messageHomeRows(engine).first;
       await _pumpJourneyApp(
@@ -264,7 +266,7 @@ void main() {
     });
 
     testWidgets('重入与显式重试读取 authoritative 状态并保留 last-confirmed', (tester) async {
-      final engine = InMemoryChatStateEngine();
+      final engine = InMemoryChatStateEngine(seed: minimalChatStateSeed());
       final conversation = _InMemoryChatConversationJourneyFacet(engine);
       final visibility = ValueNotifier<bool>(true);
       addTearDown(visibility.dispose);
@@ -318,6 +320,7 @@ void main() {
   group('旅程边界/幂等', () {
     testWidgets('空列表安全渲染', (tester) async {
       final engine = InMemoryChatStateEngine(
+        seed: minimalChatStateSeed(),
         seedConversations: const <Map<String, Object?>>[],
       );
       await _pumpJourneyApp(tester, _scopedApp(engine: engine));
@@ -327,7 +330,7 @@ void main() {
     });
 
     testWidgets('多次切换 Tab 不导致状态异常', (tester) async {
-      final engine = InMemoryChatStateEngine();
+      final engine = InMemoryChatStateEngine(seed: minimalChatStateSeed());
       final expectedMessage = _messageHomeRows(engine).first;
       final expectedContact = _contactHomeRows(engine).first;
       await _pumpJourneyApp(tester, _scopedApp(engine: engine));
@@ -507,14 +510,14 @@ final class _InMemoryChatMemberJourneyFacet extends Fake
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     return _engine
         .listMembers(
           conversationId: conversationId,
           limit: limit,
           role: role,
-          sort: sort,
+          sort: sort?.wireName,
         )
         .map(
           (row) => ConversationMemberListRow.fromWire(<String, Object?>{

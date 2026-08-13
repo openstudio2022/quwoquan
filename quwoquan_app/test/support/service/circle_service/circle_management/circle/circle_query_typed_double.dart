@@ -1,6 +1,6 @@
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
+import 'circle_test_builder.dart';
 
 /// Alpha/test only Circle query adapter.
 ///
@@ -8,10 +8,7 @@ import '../../../../runtime/fixtures/object_contract_example_reader.dart';
 /// has no dependency on App DTOs, Remote adapters, or retired repositories.
 final class InMemoryCircleQueryReader
     implements CircleQueryReader, CircleDiscoveryFeedQueryReader {
-  InMemoryCircleQueryReader({ObjectContractExampleReader? fixtures})
-    : _fixtures = fixtures ?? objectContractExampleReader;
-
-  final ObjectContractExampleReader _fixtures;
+  InMemoryCircleQueryReader();
 
   @override
   Future<CirclePageSlice> list(CircleListQuery query) async {
@@ -138,32 +135,23 @@ final class InMemoryCircleQueryReader
   }
 
   List<Circle> get _circles {
-    final raw = _list(
-      _fixtures.requireExample('circle', 'circle_core')['circles'],
-    );
+    final raw = circleWireExamples();
     return raw.map(_circleProjection).toList(growable: false);
   }
 
   Map<String, Map<Object?, Object?>> get _statsByCircleId {
-    final raw = _list(
-      _fixtures.requireExample('circle', 'circle_profile_core')['stats'],
-    );
+    final raw = circleStatsWireExamples();
     return <String, Map<Object?, Object?>>{
       for (final item in raw) _text(item['circleId']): item,
     };
   }
 
   Map<String, Object?> get _impactsByCircleId {
-    final raw = _object(
-      _fixtures.requireExample('circle', 'circle_profile_core')['impacts'],
-    );
-    return raw.map((key, value) => MapEntry(key.toString(), value));
+    return circleImpactWireExamples();
   }
 
   Map<String, Map<Object?, Object?>> get _postsById {
-    final raw = _list(
-      _fixtures.requireExample('content', 'content_discovery_core')['posts'],
-    );
+    final raw = circleFeedPostWireExamples();
     return <String, Map<Object?, Object?>>{
       for (final item in raw) _text(item['postId']): item,
     };
@@ -173,9 +161,7 @@ final class InMemoryCircleQueryReader
     String circleId, {
     String? type,
   }) {
-    final placements = _list(
-      _fixtures.requireExample('circle', 'circle_profile_core')['placements'],
-    );
+    final placements = circlePlacementWireExamples();
     final normalizedType = type?.trim();
     return placements
         .where(
@@ -349,19 +335,6 @@ CircleFeedItemView _feedItem({
 }
 
 final DateTime _epoch = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
-
-List<Map<Object?, Object?>> _list(Object? value) {
-  if (value is! List) return const <Map<Object?, Object?>>[];
-  return value
-      .whereType<Map>()
-      .map((item) => Map<Object?, Object?>.from(item))
-      .toList(growable: false);
-}
-
-Map<Object?, Object?> _object(Object? value) {
-  if (value is! Map) return const <Object?, Object?>{};
-  return Map<Object?, Object?>.from(value);
-}
 
 bool _matchesOptional(String? actual, String? expected) =>
     expected == null || expected.trim().isEmpty || actual == expected;

@@ -113,6 +113,25 @@ Visibility? _optionalPostVisibility(Object? raw) =>
       ),
     };
 
+/// 披露分组是 canonical 闭集，payload 里的 wire 值必须逐项落在该闭集内。
+/// 草稿层允许历史脏值静默丢弃，提交命令这一层不允许：非法分组要么被拒，
+/// 要么会带着未定义语义进入服务端的派生与撤回逻辑。
+List<CaptureDisclosureGroup> _payloadCaptureDisclosureList(Object? raw) {
+  if (raw is! Iterable) return const <CaptureDisclosureGroup>[];
+  final groups = <CaptureDisclosureGroup>{};
+  for (final value in raw) {
+    final wire = value.toString().trim();
+    if (wire.isEmpty) continue;
+    groups.add(
+      CaptureDisclosureGroup.fromWire(
+        wire,
+        'SubmitContentPostPublicationCommand.captureDisclosure',
+      ),
+    );
+  }
+  return List<CaptureDisclosureGroup>.unmodifiable(groups);
+}
+
 AssistantUsePolicy? _optionalAssistantUsePolicy(Object? raw) =>
     switch (_optionalPayloadText(raw)) {
       null => null,
@@ -138,15 +157,6 @@ PostSourceType? _optionalPostSourceType(Object? raw) =>
 String? _optionalPayloadText(Object? raw) {
   final value = raw?.toString().trim() ?? '';
   return value.isEmpty ? null : value;
-}
-
-List<String> _payloadStringList(Object? raw) {
-  if (raw is! Iterable) return const <String>[];
-  return raw
-      .map((value) => value.toString().trim())
-      .where((value) => value.isNotEmpty)
-      .toSet()
-      .toList(growable: false);
 }
 
 int? _optionalPayloadInt(Object? raw, String field) {

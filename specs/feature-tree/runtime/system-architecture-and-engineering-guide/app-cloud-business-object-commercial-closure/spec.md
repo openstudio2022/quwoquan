@@ -239,7 +239,7 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：仍缺从冻结 fresh ContractGraph 动态派生的「每个 required operation → production route/composition → exactly-one guard」全覆盖报告，以及同一候选环境的 401/403/404 与零写入拒绝回执；source descriptor/guard 机制与重点负向测试已通过，但 checked-in generated descriptor 仍不可作为 fresh 覆盖证明。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
+- 完成判定：`GWT-003` 的结果子句由真实测试或可执行门 `spec_ref` 绑定，且证据同时包含冻结 fresh ContractGraph 动态派生的 required operation 全覆盖报告与同一候选环境的 401/403/404 零写入拒绝回执；checked-in generated descriptor 不计。
 
 <a id="open-004"></a>
 ### OPEN-004 四环境 Remote 与 test-only double 物理隔离
@@ -248,7 +248,7 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：仍缺同一候选的 alpha/beta/gamma/prod dependency/kernel/AOT/SBOM、双端安装包与 UAT transitive import 回执；静态纯度、包依赖与 Remote 单轨门已通过。
-- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
+- 完成判定：`GWT-004` 的结果子句由真实测试或可执行门 `spec_ref` 绑定，且证据包含同一候选四环境的 dependency graph、kernel/AOT reachability、SBOM 与双端安装包回执，其中 Mock/fixture/Noop 计数为 0。
 
 <a id="open-006"></a>
 ### OPEN-006 当前全部真实 Remote Scenario 完成商业准出
@@ -259,7 +259,7 @@
 - 影响或价值：仍缺当前全部 AppRoot Journey 在同一候选上的 alpha/beta/gamma/prod 真实 user_acceptance、Provider、SLO、灰度与回滚 CaseResult；局部 local_contract/api_integration authoring 与静态 implemented 状态不等于结果已执行，当前 dynamic readiness 仍非 commercial-ready。
 - 本 Story 只拥有冻结 fresh Graph 中 `commercial.targetStory` 指向本 Story 的真实结果缺口，精确对象、operation 与 gapId 必须动态派生，不在规格固化名单或复制第二台账。
 - `targetStory` 指向其他最低可关闭 Story 的 blocked operation 仍由其所属节点独占，当前 OPEN 不代持其 Provider、外部批准、产品行为或 UAT 证据。
-- 完成判定：`GWT-006` 对应行为满足且真实测试 `spec_ref` 有效。
+- 完成判定：`GWT-006` 的结果子句由真实测试 `spec_ref` 绑定，且冻结 fresh Graph 中 `commercial.targetStory` 指向本 Story 的 gap 动态派生数为 0——即全部 AppRoot Journey 在同一候选取得 alpha/beta/gamma/prod 真实 user_acceptance、Provider、SLO、灰度与回滚 CaseResult。
 
 <a id="open-010"></a>
 ### OPEN-010 lifecycle consumer 已唯一绑定生产实现，仍缺逐边运行时可达回执

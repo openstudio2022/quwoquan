@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import ipaddress
 import shutil
-import socket
 import time
 import urllib.error
 import urllib.parse
@@ -12,6 +11,12 @@ from pathlib import Path
 
 from core.runtime_policy import active_runtime_policy
 
+from content.source.professional_image_network_admission import (
+    https_tls_peer,
+    resolve_https_admission,
+    verified_tls_context,
+)
+
 _MAX_VIDEO_BYTES = 512 * 1024 * 1024
 _MIN_VIDEO_BYTES = 8_000
 _VIDEO_EXTENSIONS = frozenset({".mp4", ".webm", ".ogv", ".mov"})
@@ -19,6 +24,9 @@ _CONTENT_TYPE_EXTENSIONS = {
     "video/mp4": ".mp4",
     "video/webm": ".webm",
     "video/ogg": ".ogv",
+    # Wikimedia Commons serves .ogv files with the canonical IANA Ogg
+    # container type; media probe + semantic review still gate the content.
+    "application/ogg": ".ogv",
     "video/quicktime": ".mov",
     "application/octet-stream": "",
 }
@@ -91,23 +99,8 @@ def _validated_https_url(url: str, *, allow_signed_query: bool) -> str:
     return parsed.geturl()
 
 
-def _assert_public_resolution(url: str) -> None:
-    host = urllib.parse.urlparse(url).hostname or ""
-    try:
-        addresses = {
-            result[4][0]
-            for result in socket.getaddrinfo(
-                host,
-                443,
-                type=socket.SOCK_STREAM,
-            )
-        }
-    except socket.gaierror as exc:
-        raise ValueError("professional video host DNS resolution failed") from exc
-    if not addresses or any(
-        not ipaddress.ip_address(address).is_global for address in addresses
-    ):
-        raise ValueError("professional video host resolves to a non-public address")
+def _assert_public_resolution(url: str) -> dict[str, object]:
+    return resolve_https_admission(url)
 
 
 def _source_suffix(url: str, content_type: str) -> str:
@@ -144,6 +137,7 @@ def _fetch_public_video_once(
     _assert_public_resolution(normalized)
     opener = urllib.request.build_opener(
         urllib.request.ProxyHandler({}),
+        urllib.request.HTTPSHandler(context=verified_tls_context()),
         _PublicRedirects(allow_signed_query=supported_api),
     )
     request = urllib.request.Request(
@@ -158,7 +152,13 @@ def _fetch_public_video_once(
                 str(response.geturl()),
                 allow_signed_query=supported_api,
             )
-            _assert_public_resolution(final_url)
+            admission = _assert_public_resolution(final_url)
+            https_tls_peer(
+                response,
+                requested_url=normalized,
+                final_url=final_url,
+                admission=admission,
+            )
             content_type = str(
                 response.headers.get("Content-Type") or ""
             ).split(";", 1)[0].strip().casefold()

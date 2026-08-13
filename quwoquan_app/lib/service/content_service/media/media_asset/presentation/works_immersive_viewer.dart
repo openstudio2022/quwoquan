@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart'
     show RenderBox, RenderObject, RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart' show LaunchMode, launchUrl;
 import 'package:video_player/video_player.dart' show VideoViewType;
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/generated/content_media_post_projection_keys.g.dart';
@@ -31,6 +32,16 @@ import 'package:quwoquan_app/design_system/gestures/immersive_gesture_intent_con
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/media_page_flip_book.dart';
 import 'package:quwoquan_app/runtime/di/object_intersection_provider.dart';
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
+import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart'
+    show GatheringText;
+import 'package:quwoquan_app/runtime/di/gathering_dependencies.dart'
+    show gatheringQueryReaderProvider;
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_ports.dart'
+    show GatheringBySourceListQuery;
+import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/generated/homepage_ui_config.g.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_kind_mapping.dart'
+    show intersectionMutualCountOf;
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_presenter.dart';
@@ -226,6 +237,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   // 仅保存 canonical operation deadline 内的在途去重；finally 必须移除，
   // 不作为跨请求、跨作品或跨会话缓存。
   final Set<String> _requestingOriginalMediaIds = <String>{};
+  // 想去状态：按 primaryHomepageId 缓存当前会话内读到/写入的 wishlist 状态；
+  // 只反映服务端事实或本次确认写入，不做本地推断。
+  final Map<String, bool> _wishlistStateByHomepageId = <String, bool>{};
+  final Set<String> _loadingWishlistHomepageIds = <String>{};
+
+  // 经历溯源（L0 氛围层）：种草内容按 content 锚点社会证明（成形级）判定
+  // 「他们从这条内容出发一起去了」；回顾内容由 wire gatheringRef 直接锚定。
+  // 只缓存服务端事实；null 表示尚未读取，false 表示已确认无成形行动。
+  final Map<String, bool> _seedProvenanceByPostId = <String, bool>{};
+  final Set<String> _loadingSeedProvenancePostIds = <String>{};
   final Map<String, Map<String, Object?>> _hydratedRawPostsById =
       <String, Map<String, Object?>>{};
   // GetPost 严格串行且只保留最新可见文章；切换作品会 cooperative cancel

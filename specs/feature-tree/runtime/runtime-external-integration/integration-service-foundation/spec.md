@@ -63,3 +63,21 @@
 - 前置要求：[`runtime-external-integration`](../spec.md) 的范围、要求与 SIT。
 - 下游结果：本 Story 声明的 GWT 可观察结果。
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
+
+## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 ReadLocationRoute 公开读面的单轨归宿待裁决
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：尚缺 `ReadLocationRoute`（`GET /integration/location/route`）在 GraphQL 读单轨下的归宿裁决。
+  该路由被 `verify_graphql_read_rest_command_single_track.py` 计为 App/public legacy REST query，但 App 与第一方服务当前均无生产消费。
+  能力本身已在 provider binding registry 登记 `location.route.read`（OSRM adapter 与 conformance 合约），并有 readiness case `read-location-route-local` 绑定 GWT-001。
+  旅行旗舰主线的行程地图与路线讲解是潜在回用方，不宜按无主路由机械删除。
+- 完成判定：GWT-001 对应行为满足且下列三选一裁决落地。
+  - 删除路由并同步退役 `location.route.read` binding、conformance 与 readiness case。
+  - 或收敛为 typed-owner service 读面（`principal: service` 加 scopes 且 `visibility: internal`）。
+  - 或登记 GraphQL 迁移波次并完成切轨。
+  - 裁决后 `verify_graphql_read_rest_command_single_track.py` 不再把该路由计入 `appPublicLegacyRestQueryRoutes`，且 provider binding 与 readiness case 与裁决结果一致。

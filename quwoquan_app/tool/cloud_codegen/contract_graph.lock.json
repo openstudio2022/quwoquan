@@ -3086,6 +3086,197 @@
       "actorRequirement": "account",
       "aggregateOwner": "",
       "authMode": "required",
+      "canonicalOperationId": "assistant.skill_surface_placement.GetSkillSurfacePlacement",
+      "clientContract": {
+        "dartImport": "../assistant/assistant_operation_contracts.g.dart",
+        "responseDecoder": "decodeSkillSurfacePlacement",
+        "responseType": "SkillSurfacePlacement"
+      },
+      "commercial": {
+        "blockReason": "缺 Chat/Circle typed authority 四环境与双端群圈 UAT",
+        "explicit": true,
+        "gapId": "ASSISTANT_SKILL_SURFACE_PLACEMENT_COMMERCIAL_EVIDENCE",
+        "status": "blocked",
+        "targetStory": "shared-surface-skill-placement"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.skill_placement_unauthorized",
+        "ASSISTANT.USER.skill_placement_forbidden",
+        "ASSISTANT.USER.skill_placement_not_found",
+        "ASSISTANT.SYSTEM.skill_placement_authority_unavailable",
+        "ASSISTANT.SYSTEM.skill_placement_storage_unavailable"
+      ],
+      "facadeMethod": "getPlacement",
+      "facet": "SkillSurfacePlacementQueryFacade",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetSkillSurfacePlacement",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "assistant.skill_surface_placement",
+      "ownershipPolicy": "surface_member",
+      "pagination": null,
+      "pathTemplate": "/assistant/skill-placements/{surfaceKind}/{surfaceId}",
+      "permissions": [],
+      "principal": "account",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "surfaceKind",
+            "name": "surfaceKind"
+          },
+          {
+            "field": "surfaceId",
+            "name": "surfaceId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GetSkillSurfacePlacementQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "SkillSurfacePlacement",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "assistant/assistant/skill_surface_placement/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "assistantSkills"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code",
+          "surface_kind"
+        ],
+        "metric": "assistant_skill_surface_placement_query",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "account",
+      "aggregateOwner": "SkillSurfacePlacement",
+      "authMode": "required",
+      "canonicalOperationId": "assistant.skill_surface_placement.PutSkillSurfacePlacement",
+      "clientContract": {
+        "dartImport": "../assistant/assistant_operation_contracts.g.dart",
+        "responseDecoder": "decodeSkillSurfacePlacement",
+        "responseType": "SkillSurfacePlacement"
+      },
+      "commercial": {
+        "blockReason": "缺 Chat/Circle typed authority 四环境与双端群圈 UAT",
+        "explicit": true,
+        "gapId": "ASSISTANT_SKILL_SURFACE_PLACEMENT_COMMERCIAL_EVIDENCE",
+        "status": "blocked",
+        "targetStory": "shared-surface-skill-placement"
+      },
+      "concurrency": {},
+      "domain": "assistant",
+      "errorCodes": [
+        "ASSISTANT.USER.skill_placement_unauthorized",
+        "ASSISTANT.USER.skill_placement_forbidden",
+        "ASSISTANT.USER.skill_placement_invalid_argument",
+        "ASSISTANT.USER.skill_placement_revision_conflict",
+        "ASSISTANT.USER.skill_placement_idempotency_conflict",
+        "ASSISTANT.USER.skill_placement_unknown_skill",
+        "ASSISTANT.SYSTEM.skill_placement_authority_unavailable",
+        "ASSISTANT.SYSTEM.skill_placement_package_unavailable",
+        "ASSISTANT.SYSTEM.skill_placement_storage_unavailable"
+      ],
+      "facadeMethod": "putPlacement",
+      "facet": "SkillSurfacePlacementCommandFacade",
+      "invariantTarget": "SkillSurfacePlacement",
+      "kind": "command",
+      "localOperationId": "PutSkillSurfacePlacement",
+      "method": "PUT",
+      "mutationTarget": "SkillSurfacePlacement",
+      "objectId": "assistant.skill_surface_placement",
+      "ownershipPolicy": "surface_admin",
+      "pagination": null,
+      "pathTemplate": "/assistant/skill-placements/{surfaceKind}/{surfaceId}",
+      "permissions": [],
+      "principal": "account",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "SENSITIVE",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 2000
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "surfaceKind",
+            "name": "surfaceKind"
+          },
+          {
+            "field": "surfaceId",
+            "name": "surfaceId"
+          }
+        ]
+      },
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "PutSkillSurfacePlacementRequest",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "SkillSurfacePlacement",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 700
+      },
+      "sourcePath": "assistant/assistant/skill_surface_placement/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "assistantSkills"
+      ],
+      "telemetry": {
+        "attributes": [
+          "operation",
+          "outcome",
+          "error_code",
+          "surface_kind",
+          "replayed"
+        ],
+        "metric": "assistant_skill_surface_placement_command",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "account",
+      "aggregateOwner": "",
+      "authMode": "required",
       "canonicalOperationId": "assistant.skill_user_setting.GetSkillUserSetting",
       "clientContract": {
         "dartImport": "../assistant/assistant_operation_contracts.g.dart",
@@ -10416,6 +10607,7 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
+        "chatList",
         "gatheringDetail"
       ],
       "telemetry": {
@@ -10943,6 +11135,94 @@
       "actorRequirement": "persona",
       "aggregateOwner": "Gathering",
       "authMode": "required",
+      "canonicalOperationId": "circle.gathering.DeclineGatheringInvitation",
+      "clientContract": {
+        "dartImport": "../circle/circle_operation_contracts.g.dart",
+        "responseDecoder": "decodeGatheringCommandResult",
+        "responseType": "GatheringCommandResult"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "circle",
+      "errorCodes": [
+        "CIRCLE.USER.gathering_not_found",
+        "CIRCLE.USER.gathering_invitation_recipient_mismatch",
+        "CIRCLE.USER.gathering_invitation_inactive",
+        "CIRCLE.USER.gathering_participation_conflict",
+        "CIRCLE.USER.gathering_invitation_expired",
+        "CIRCLE.USER.gathering_transition_forbidden",
+        "CIRCLE.USER.gathering_version_conflict",
+        "CIRCLE.USER.gathering_idempotency_conflict",
+        "CIRCLE.SYSTEM.gathering_storage_failed"
+      ],
+      "facadeMethod": "declineGatheringInvitation",
+      "facet": "GatheringCommandFacet",
+      "invariantTarget": "Gathering",
+      "kind": "command",
+      "localOperationId": "DeclineGatheringInvitation",
+      "method": "POST",
+      "mutationTarget": "Gathering",
+      "objectId": "circle.gathering",
+      "ownershipPolicy": "self_invitation",
+      "pagination": null,
+      "pathTemplate": "/gatherings/{gatheringId}:decline-invitation",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "required",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 3000
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "gatheringId",
+            "name": "gatheringId"
+          }
+        ]
+      },
+      "requestBodyKind": "object",
+      "requestConstants": null,
+      "requestEntity": "GatheringParticipationVersionCommand",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "GatheringCommandResult",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 1500
+      },
+      "sourcePath": "circle/circle_management/gathering/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "chatList",
+        "gatheringDetail"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "circle_gathering_invitation_decline",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "Gathering",
+      "authMode": "required",
       "canonicalOperationId": "circle.gathering.EndGatheringEarly",
       "clientContract": {
         "dartImport": "../circle/circle_operation_contracts.g.dart",
@@ -11364,6 +11644,288 @@
           "admission_state"
         ],
         "metric": "circle_gathering_join_open",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "circle.gathering.ListGatheringsByHost",
+      "clientContract": {
+        "dartImport": "../circle/circle_operation_contracts.g.dart",
+        "responseDecoder": "decodeGatheringByHostPageSlice",
+        "responseType": "GatheringByHostPageSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "circle",
+      "errorCodes": [
+        "CIRCLE.USER.gathering_host_authority_invalid",
+        "CIRCLE.SYSTEM.gathering_storage_failed"
+      ],
+      "facadeMethod": "listGatheringsByHost",
+      "facet": "GatheringPublicQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListGatheringsByHost",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "circle.gathering",
+      "ownershipPolicy": "published_gathering_disclosure",
+      "pagination": {
+        "defaultItems": 20,
+        "maximumItems": 50
+      },
+      "pathTemplate": "/gatherings/by-host",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1000
+      },
+      "requestBindings": {
+        "query": [
+          {
+            "field": "hostSubjectKind",
+            "name": "hostSubjectKind"
+          },
+          {
+            "field": "hostSubjectId",
+            "name": "hostSubjectId"
+          },
+          {
+            "field": "cursor",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "field": "limit",
+            "name": "limit"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GatheringListByHostQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "GatheringByHostPageSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 400
+      },
+      "sourcePath": "circle/circle_management/gathering/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "myGatherings"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome",
+          "host_subject_kind"
+        ],
+        "metric": "circle_gathering_list_by_host",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "circle.gathering.ListGatheringsBySource",
+      "clientContract": {
+        "dartImport": "../circle/circle_operation_contracts.g.dart",
+        "responseDecoder": "decodeGatheringBySourcePageSlice",
+        "responseType": "GatheringBySourcePageSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "circle",
+      "errorCodes": [
+        "CIRCLE.DEPENDENCY.gathering_target_unavailable",
+        "CIRCLE.SYSTEM.gathering_storage_failed"
+      ],
+      "facadeMethod": "listGatheringsBySource",
+      "facet": "GatheringPublicQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListGatheringsBySource",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "circle.gathering",
+      "ownershipPolicy": "published_gathering_disclosure",
+      "pagination": {
+        "defaultItems": 20,
+        "maximumItems": 50
+      },
+      "pathTemplate": "/gatherings/by-source",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1000
+      },
+      "requestBindings": {
+        "query": [
+          {
+            "field": "sourceObjectTypeRef",
+            "name": "sourceObjectTypeRef"
+          },
+          {
+            "field": "sourceObjectId",
+            "name": "sourceObjectId"
+          },
+          {
+            "field": "cursor",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "field": "limit",
+            "name": "limit"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GatheringListBySourceQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "GatheringBySourcePageSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 400
+      },
+      "sourcePath": "circle/circle_management/gathering/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "homepageDetail"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome",
+          "source_object_type"
+        ],
+        "metric": "circle_gathering_list_by_source",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
+      "canonicalOperationId": "circle.gathering.ListMyHostedGatherings",
+      "clientContract": {
+        "dartImport": "../circle/circle_operation_contracts.g.dart",
+        "responseDecoder": "decodeGatheringByHostPageSlice",
+        "responseType": "GatheringByHostPageSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "circle",
+      "errorCodes": [
+        "CIRCLE.USER.invalid_argument",
+        "CIRCLE.SYSTEM.gathering_storage_failed"
+      ],
+      "facadeMethod": "listMyHostedGatherings",
+      "facet": "GatheringQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListMyHostedGatherings",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "circle.gathering",
+      "ownershipPolicy": "host_self_gatherings",
+      "pagination": {
+        "defaultItems": 20,
+        "maximumItems": 50
+      },
+      "pathTemplate": "/gatherings/mine",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PII",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1000
+      },
+      "requestBindings": {
+        "query": [
+          {
+            "field": "cursor",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "field": "limit",
+            "name": "limit"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GatheringMineListQuery",
+      "responseAdmission": null,
+      "responseBody": "",
+      "responseBodyKind": "",
+      "responseEntity": "GatheringByHostPageSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 400
+      },
+      "sourcePath": "circle/circle_management/gathering/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "myGatherings"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "circle_gathering_list_mine",
         "trace": true
       },
       "transport": "json"
@@ -12928,7 +13490,7 @@
       "pagination": null,
       "pathTemplate": "/content/behaviors",
       "permissions": [],
-      "principal": "public",
+      "principal": "persona_or_device",
       "privacy": {
         "logPolicy": "metadata_only",
         "requestClassification": "SENSITIVE",
@@ -14945,7 +15507,8 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
-        "homepageDetail"
+        "homepageDetail",
+        "workBrowser"
       ],
       "telemetry": {
         "attributes": [
@@ -15093,6 +15656,93 @@
           "outcome"
         ],
         "metric": "content_feed_get",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "optional",
+      "canonicalOperationId": "content.post.GetGatheringSocialProof",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodeGatheringSocialProofSummary",
+        "responseType": "GatheringSocialProofSummary"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.SYSTEM.storage_read_failed",
+        "CONTENT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "getGatheringSocialProof",
+      "facet": "PostQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "GetGatheringSocialProof",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "content.post",
+      "ownershipPolicy": "visibility_filtered",
+      "pagination": null,
+      "pathTemplate": "/content/social-proof/{anchorKind}/{objectId}",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "PUBLIC"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "anchorKind",
+            "name": "anchorKind"
+          },
+          {
+            "field": "objectId",
+            "name": "objectId"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "GetGatheringSocialProofQuery",
+      "responseAdmission": null,
+      "responseBody": "GatheringSocialProofSummary",
+      "responseBodyKind": "object",
+      "responseEntity": "GatheringSocialProofSummary",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "content/content/post/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "gatheringDetail",
+        "homepageDetail",
+        "workBrowser"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "content_gathering_social_proof_read",
         "trace": true
       },
       "transport": "json"
@@ -15476,6 +16126,101 @@
       "actorRequirement": "none",
       "aggregateOwner": "",
       "authMode": "optional",
+      "canonicalOperationId": "content.post.ListPostsByGathering",
+      "clientContract": {
+        "dartImport": "../content/content_operation_contracts.g.dart",
+        "responseDecoder": "decodeGatheringPostPageSlice",
+        "responseType": "GatheringPostPageSlice"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "content",
+      "errorCodes": [
+        "CONTENT.USER.invalid_argument",
+        "CONTENT.SYSTEM.storage_read_failed",
+        "CONTENT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "listPostsByGathering",
+      "facet": "PostQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListPostsByGathering",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "content.post",
+      "ownershipPolicy": "visibility_filtered",
+      "pagination": {
+        "defaultItems": 20,
+        "maximumItems": 100
+      },
+      "pathTemplate": "/content/gatherings/{gatheringId}/posts",
+      "permissions": [],
+      "principal": "public",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "PUBLIC",
+        "responseClassification": "INTERNAL"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "gatheringId",
+            "name": "gatheringId"
+          }
+        ],
+        "query": [
+          {
+            "field": "cursor",
+            "name": "cursor",
+            "required": false
+          },
+          {
+            "field": "limit",
+            "name": "limit"
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "ContentGatheringPostsQuery",
+      "responseAdmission": null,
+      "responseBody": "GatheringPostPageSlice",
+      "responseBodyKind": "page",
+      "responseEntity": "GatheringPostPageSlice",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "content/content/post/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "gatheringDetail"
+      ],
+      "telemetry": {
+        "attributes": [
+          "outcome"
+        ],
+        "metric": "content_gathering_posts_list",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "none",
+      "aggregateOwner": "",
+      "authMode": "optional",
       "canonicalOperationId": "content.post.ListUserPosts",
       "clientContract": {
         "dartImport": "../content/content_operation_contracts.g.dart",
@@ -15603,6 +16348,7 @@
       "errorCodes": [
         "CONTENT.USER.unauthorized",
         "CONTENT.USER.forbidden_edit",
+        "CONTENT.USER.gathering_participation_required",
         "CONTENT.USER.invalid_argument",
         "CONTENT.USER.invalid_content_type",
         "CONTENT.USER.content_too_long",
@@ -21861,7 +22607,7 @@
         "idempotency": "optional",
         "maxAttempts": 2,
         "retryMode": "idempotent",
-        "timeoutMilliseconds": 6000
+        "timeoutMilliseconds": 1500
       },
       "requestBindings": {
         "header": [
@@ -28831,13 +29577,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "d67da22282049a51bf2e832278ca0239eec7efd64e892ae3a8cd6d314f8098f8"
+    "sha256": "f450f4b9c1914a8acb807ebcbb010a0c31ff032bee87f923a0714f6c93519b50"
   },
   "contractGraph": {
-    "compilerHash": "sha256:1d83f04abfc24ec7d9a326cfea80d1d4ed72786482e1e1044e7409f0b78b91b7",
+    "compilerHash": "sha256:88eda096929822ed15dc83b01bf7dd3fd60051e241d98548a7f90dd0794b0196",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1",
-    "sourceDigestSetSha256": "2bf4699f7b0f501fca816a364c46fc9528b6e7f1bd3cea825da6f52d32c5bd01"
+    "sha256": "ba2dde9a203e9d9979e42aa34fc1994593f88f10ce159c4e37a42f66497c1ef9",
+    "sourceDigestSetSha256": "bb9380851d0f09d24ae966fe3d6d77080f965877adc8fa84fe52d4e24352fda3"
   },
   "generator": "app-cloud-handoff"
 }

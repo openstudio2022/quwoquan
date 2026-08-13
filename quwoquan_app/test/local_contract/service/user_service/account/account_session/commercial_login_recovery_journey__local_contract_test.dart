@@ -13,6 +13,7 @@ import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/login_dependencies.dart';
 import 'package:quwoquan_app/runtime/platform/one_tap_login_native_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/otp_autofill_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/presentation/login_page.dart';
@@ -39,6 +40,9 @@ void main() {
           ),
           oneTapLoginClientProvider.overrideWithValue(
             const _JourneyUnavailableOneTapClient(),
+          ),
+          otpAutofillGatewayProvider.overrideWithValue(
+            const SystemOtpAutofillGateway(),
           ),
           platformCapabilitiesProvider.overrideWithValue(
             CapabilityProfile.mobile,
@@ -68,10 +72,27 @@ void main() {
       find.byKey(const ValueKey<String>('loginPhoneField')),
       '18013813909',
     );
-    await tester.ensureVisible(find.byIcon(CupertinoIcons.circle).first);
-    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
+    final agreementToggle = find.descendant(
+      of: find.byType(LoginAgreementRow),
+      matching: find.byIcon(CupertinoIcons.circle),
+    );
+    await tester.ensureVisible(agreementToggle);
+    await tester.tap(agreementToggle);
     await tester.pump();
-    await tester.tap(find.text(FoundationText.loginSendOtp));
+    expect(
+      find.descendant(
+        of: find.byType(LoginAgreementRow),
+        matching: find.byIcon(CupertinoIcons.check_mark_circled_solid),
+      ),
+      findsOneWidget,
+    );
+    await _pumpUntilPhoneReady(tester);
+    final sendOtp = find.descendant(
+      of: find.byKey(const ValueKey<String>('loginPhonePrimary')),
+      matching: find.byType(CupertinoButton),
+    );
+    await tester.ensureVisible(sendOtp);
+    await tester.tap(sendOtp);
     await _pumpUntilFound(tester, find.byType(OtpCodeBoxes));
 
     expect(facets.sendOtpCalls, 1);
@@ -145,6 +166,26 @@ Future<void> _pumpUntilFound(
   expect(finder, findsOneWidget);
 }
 
+Future<void> _pumpUntilPhoneReady(WidgetTester tester) async {
+  final primary = find.byKey(const ValueKey<String>('loginPhonePrimary'));
+  for (var attempt = 0; attempt < 8; attempt++) {
+    if (primary.evaluate().isNotEmpty) {
+      final button = tester.widget<LoginActionButton>(primary);
+      if (!button.busy &&
+          button.enabled &&
+          button.label == FoundationText.loginSendOtp) {
+        return;
+      }
+    }
+    await tester.pump(const Duration(milliseconds: 20));
+  }
+  expect(primary, findsOneWidget);
+  final button = tester.widget<LoginActionButton>(primary);
+  expect(button.busy, isFalse);
+  expect(button.enabled, isTrue);
+  expect(button.label, FoundationText.loginSendOtp);
+}
+
 Future<void> _pumpJourneyLogin(
   WidgetTester tester, {
   required AuthSessionStore authStore,
@@ -159,6 +200,9 @@ Future<void> _pumpJourneyLogin(
         accountSessionLifecycleCommandWriterProvider.overrideWithValue(facets),
         authenticationChallengeCommandWriterProvider.overrideWithValue(facets),
         oneTapLoginClientProvider.overrideWithValue(oneTapClient),
+        otpAutofillGatewayProvider.overrideWithValue(
+          const SystemOtpAutofillGateway(),
+        ),
         platformCapabilitiesProvider.overrideWithValue(
           CapabilityProfile.mobile,
         ),

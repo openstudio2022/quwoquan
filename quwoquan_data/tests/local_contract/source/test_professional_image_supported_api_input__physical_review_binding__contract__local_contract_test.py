@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import pytest
+from content.source import professional_image_supported_api_input as supported_input
 from content.source.professional_image_discovery import (
     create_professional_image_discovery_plan,
 )
@@ -256,7 +257,7 @@ def _pending_receipt(error: ProfessionalImageSupportedApiInputError, output_root
 
 def _write_semantic_result(
     root: Path, *, catalog: dict, candidate_id: str, review_request: Path,
-    content_sha256: str,
+    content_sha256: str, slot: str = "",
 ) -> str:
     judgment = {
         "status": "passed", "entityMatch": "matched", "privacyRisk": "none",
@@ -283,7 +284,7 @@ def _write_semantic_result(
         "semanticSelectionDigest": "sha256:" + "7" * 64, "maxAttempts": 2,
     }
     request = {**request_stable, "requestDigest": _digest(request_stable, newline=True)}
-    request_path = _write(root / "semantic/request.json", request)
+    request_path = _write(root / f"semantic/request{slot}.json", request)
     _write(
         root / "data/tasks/20260811--travel-image-supported-api--west-lake--scale-001/execution_manifest.json",
         {
@@ -308,7 +309,7 @@ def _write_semantic_result(
         "capacityReceiptRef": "", "capacityReceiptDigest": "",
     }
     attempt = {**attempt_stable, "attemptDigest": _digest(attempt_stable, newline=True)}
-    attempt_path = _write(root / "semantic/attempt.json", attempt)
+    attempt_path = _write(root / f"semantic/attempt{slot}.json", attempt)
     result = {
         "schema": "quwoquan_data.professional_image_supported_api_reviewer_result",
         "candidateId": candidate_id, "contentSha256": content_sha256,
@@ -323,7 +324,7 @@ def _write_semantic_result(
         "resultSha256": judgment_digest, "judgment": judgment,
         "judgmentDigest": judgment_digest,
     }
-    result_path = _write(root / "semantic/reviewer-result.json", result)
+    result_path = _write(root / f"semantic/reviewer-result{slot}.json", result)
     return result_path.relative_to(root).as_posix()
 
 
@@ -525,6 +526,290 @@ def test_pending_checkpoint_resumes_without_refetch_and_binds_semantic_review(
             handoff_ref=tmp_path / "handoff.json",
             output_root=receipt_path.parent.parent,
         )
+
+
+def test_incremental_adoption_freezes_new_manifest_record_without_rewriting_first(
+    tmp_path: Path,
+) -> None:
+    """增量采纳会让 manifest 内容增长：首个 record 拥有固定路径，后续内容冻结为 content-addressed record。"""
+    plan, plan_path = create_professional_image_discovery_plan(
+        entities=["西湖"], category="风光", season="秋季", style="纪实",
+        viewpoint="航拍", popularity="热门", output_root=tmp_path / "plans",
+    )
+    discovery = next(
+        row for row in plan["candidates"] if row["provider"] == "wikimedia_commons"
+    )
+    file_titles = ("File:West Lake.jpg", "File:West Lake Second.jpg")
+    asset_urls = (
+        "https://upload.wikimedia.org/wikipedia/commons/a/ab/west-lake.png",
+        "https://upload.wikimedia.org/wikipedia/commons/b/bc/west-lake-second.png",
+    )
+    candidates = []
+    for index, (file_title, asset_url) in enumerate(zip(file_titles, asset_urls), start=1):
+        candidates.append({
+            "candidateId": f"wikimedia_commons:commons:{index:016d}",
+            "queryId": f"commons-query-{index:016d}",
+            "discoveryCandidateId": discovery["candidateId"],
+            "provider": "wikimedia_commons", "entityId": "西湖",
+            "observedEntityId": "西湖", "entityAliases": ["西湖"],
+            "providerAssetId": str(index), "upstreamProvider": "wikimedia_commons",
+            "fileTitle": file_title, "pageId": index, "caption": "西湖秋日航拍风光",
+            "relevance": "西湖景区秋季全景与湖岸层次",
+            "sourcePageUrl": (
+                "https://commons.wikimedia.org/wiki/"
+                + file_title.replace(" ", "_")
+            ),
+            "originalAssetUrl": asset_url,
+            "creator": "Travel Photographer", "license": "CC BY-SA 4.0",
+            "licenseVersion": "4.0",
+            "attributionText": "Travel Photographer · Wikimedia Commons · CC BY-SA 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "width": 800, "height": 600,
+            "apiRequestUrl": "https://commons.wikimedia.org/w/api.php?action=query",
+            "apiResponseSha256": "sha256:" + "4" * 64,
+        })
+    stable = {
+        "sourceRevision": "sha256:" + "1" * 64,
+        "sourceDigest": "sha256:" + "2" * 64,
+        "entityCatalogDigest": "sha256:" + "3" * 64,
+        "discoveryPlanId": plan["planId"], "discoveryPlanDigest": plan["planDigest"],
+        "handoffId": "handoff-test", "handoffRevision": 1,
+        "handoffDigest": "sha256:" + "5" * 64,
+        "entityCatalogRef": "quwoquan_data/reference/travel/entities/china",
+        "requestedProviders": ["wikimedia_commons"],
+        "observedAt": "2026-08-11T10:00:00Z",
+        "targetCandidateCount": 2, "queryCount": 1, "completedQueryCount": 1,
+        "excludedCount": 0, "candidateCount": 2, "candidates": candidates,
+    }
+    digest = _digest(stable)
+    catalog = {
+        "schema": "quwoquan_data.professional_image_supported_api_metadata_catalog",
+        "catalogId": f"professional-image-supported-api-metadata-{digest[7:23]}",
+        "catalogDigest": digest, **stable,
+    }
+    catalog_path = _write(tmp_path / "metadata.json", catalog)
+
+    payloads = {title: _api_payload(title) for title in file_titles}
+    second_info = payloads[file_titles[1]]["query"]["pages"][0]["imageinfo"][0]
+    second_info["url"] = asset_urls[1]
+    second_info["descriptionurl"] = candidates[1]["sourcePageUrl"]
+
+    def api_fetch(url: str) -> dict:
+        title = file_titles[1] if "Second" in url else file_titles[0]
+        body = json.dumps(payloads[title], ensure_ascii=False).encode("utf-8")
+        return {
+            "bytes": body, "payload": payloads[title],
+            "sha256": "sha256:" + hashlib.sha256(body).hexdigest(),
+            "transportEvidence": _transport(url, body, "application/json"),
+        }
+
+    bodies = {asset_urls[0]: _image_bytes(), asset_urls[1]: _image_bytes()}
+
+    def image_fetch(url: str, **_kwargs) -> dict:
+        return {
+            "bytes": bodies[url], "ext": ".png",
+            "transportEvidence": _transport(url, bodies[url], "image/png"),
+        }
+
+    output_root = tmp_path / "output"
+    options = {
+        "handoff_ref": tmp_path / "handoff.json", "discovery_plan_path": plan_path,
+        "metadata_catalog_path": catalog_path, "accepted_target": 2,
+        "output_root": output_root, "reviewer_root": tmp_path,
+        "api_fetcher": api_fetch, "image_fetcher": image_fetch,
+        "identity_guard": _identity_guard, "inventory_check": _inventory_check,
+    }
+    with pytest.raises(ProfessionalImageSupportedApiInputError) as first_wave:
+        prepare_supported_api_inputs(**options)
+    pending, pending_path = _pending_receipt(first_wave.value, output_root)
+    root = pending_path.parent.parent
+    evidences = {
+        row["candidateId"]: json.loads((root / row["evidenceRef"]).read_text())
+        for row in pending["items"]
+    }
+    first_ref = _write_semantic_result(
+        tmp_path, catalog=catalog,
+        candidate_id=candidates[0]["candidateId"],
+        review_request=root / evidences[candidates[0]["candidateId"]]["reviewRequestRef"],
+        content_sha256=evidences[candidates[0]["candidateId"]]["contentSha256"],
+    )
+    with pytest.raises(ProfessionalImageSupportedApiInputError) as second_wave:
+        prepare_supported_api_inputs(**options, reviewer_result_refs=(first_ref,))
+    partial, partial_path = _pending_receipt(second_wave.value, output_root)
+    assert partial["acceptedCount"] == 1 and partial["pendingCount"] == 1
+    assert partial["acquisitionManifestRef"] == "manifests/acquisition.json"
+    first_manifest_bytes = (root / "manifests/acquisition.json").read_bytes()
+    partial_receipt_bytes = partial_path.read_bytes()
+
+    second_ref = _write_semantic_result(
+        tmp_path, catalog=catalog,
+        candidate_id=candidates[1]["candidateId"],
+        review_request=root / evidences[candidates[1]["candidateId"]]["reviewRequestRef"],
+        content_sha256=evidences[candidates[1]["candidateId"]]["contentSha256"],
+        slot="-second",
+    )
+
+    ready, _ready_path = prepare_supported_api_inputs(
+        **options, reviewer_result_refs=(first_ref, second_ref)
+    )
+    assert ready["status"] == "ready" and ready["acceptedCount"] == 2
+    assert ready["acquisitionManifestRef"].startswith("manifests/acquisition-")
+    grown = json.loads((root / ready["acquisitionManifestRef"]).read_text())
+    assert len(grown["items"]) == 2
+    assert (root / "manifests/acquisition.json").read_bytes() == first_manifest_bytes
+    assert partial_path.read_bytes() == partial_receipt_bytes
+    assert file_sha256(root / "manifests/acquisition.json") == partial[
+        "acquisitionManifestSha256"
+    ]
+
+    replay, _replay_path = prepare_supported_api_inputs(
+        **options, reviewer_result_refs=(first_ref, second_ref)
+    )
+    assert replay["acquisitionManifestRef"] == ready["acquisitionManifestRef"]
+
+
+def test_same_raw_bytes_require_fresh_handoff_review_before_governed_rebind(
+    tmp_path: Path,
+) -> None:
+    plan_path, catalog_path, catalog = _plan_and_catalog(tmp_path)
+    output_root = tmp_path / "output"
+    source_body = _image_bytes()
+    first_options = {
+        "handoff_ref": tmp_path / "handoff.json",
+        "discovery_plan_path": plan_path,
+        "metadata_catalog_path": catalog_path,
+        "accepted_target": 1,
+        "output_root": output_root,
+        "reviewer_root": tmp_path,
+        "api_fetcher": _api_fetch(_api_payload("File:West Lake.jpg"), []),
+        "image_fetcher": _image_fetch(source_body, []),
+        "identity_guard": _identity_guard,
+        "inventory_check": _inventory_check,
+    }
+    with pytest.raises(ProfessionalImageSupportedApiInputError) as first_error:
+        prepare_supported_api_inputs(**first_options)
+    first_pending, first_receipt_path = _pending_receipt(first_error.value, output_root)
+    first_evidence = json.loads(
+        (first_receipt_path.parent.parent / first_pending["items"][0]["evidenceRef"]).read_text()
+    )
+    first_request = first_receipt_path.parent.parent / first_evidence["reviewRequestRef"]
+    old_result_ref = _write_semantic_result(
+        tmp_path,
+        catalog=catalog,
+        candidate_id=first_evidence["candidateId"],
+        review_request=first_request,
+        content_sha256=first_evidence["contentSha256"],
+    )
+
+    fresh = dict(catalog)
+    fresh.update(
+        sourceRevision="sha256:" + "6" * 64,
+        sourceDigest="sha256:" + "7" * 64,
+        entityCatalogDigest="sha256:" + "8" * 64,
+    )
+    stable = {
+        key: value
+        for key, value in fresh.items()
+        if key not in {"schema", "catalogId", "catalogDigest"}
+    }
+    fresh["catalogDigest"] = _digest(stable)
+    fresh["catalogId"] = "professional-image-supported-api-metadata-" + fresh["catalogDigest"][7:23]
+    fresh_catalog_path = _write(tmp_path / "metadata-rebind.json", fresh)
+    rebound_options = {
+        **first_options,
+        "metadata_catalog_path": fresh_catalog_path,
+        "api_fetcher": _api_fetch(_api_payload("File:West Lake.jpg"), []),
+        "image_fetcher": _image_fetch(source_body, []),
+    }
+    with pytest.raises(
+        ProfessionalImageSupportedApiInputError,
+        match="source identity differs from handoff",
+    ):
+        prepare_supported_api_inputs(**rebound_options, reviewer_result_refs=(old_result_ref,))
+    first_asset = first_request.parent / "original" / "asset.png"
+    first_asset.write_bytes(b"tampered")
+    with pytest.raises(ProfessionalImageSupportedApiInputError) as sha_drift:
+        prepare_supported_api_inputs(**rebound_options)
+    sha_drift_receipt, _sha_drift_path = _pending_receipt(
+        sha_drift.value, output_root
+    )
+    assert sha_drift_receipt["items"][0]["failureCode"] == "DATA.SOURCE.REBIND_ASSET_SHA_DRIFT"
+    first_asset.write_bytes(source_body)
+    with pytest.raises(ProfessionalImageSupportedApiInputError) as rebound_error:
+        prepare_supported_api_inputs(**rebound_options)
+    rebound_pending, rebound_receipt_path = _pending_receipt(
+        rebound_error.value, output_root
+    )
+    rebound_evidence = json.loads(
+        (rebound_receipt_path.parent.parent / rebound_pending["items"][0]["evidenceRef"]).read_text()
+    )
+    rebound_request = rebound_receipt_path.parent.parent / rebound_evidence["reviewRequestRef"]
+    assert rebound_evidence["contentSha256"] == first_evidence["contentSha256"]
+    assert rebound_request != first_request
+    assert file_sha256(rebound_request) != file_sha256(first_request)
+    new_result_ref = _write_semantic_result(
+        tmp_path,
+        catalog=fresh,
+        candidate_id=rebound_evidence["candidateId"],
+        review_request=rebound_request,
+        content_sha256=rebound_evidence["contentSha256"],
+    )
+    rebound, _rebound_path = prepare_supported_api_inputs(
+        **rebound_options, reviewer_result_refs=(new_result_ref,)
+    )
+    assert rebound["acceptedCount"] == 1
+    assert rebound["pendingCount"] == rebound["blockedCount"] == 0
+
+
+def test_rebind_rejects_source_rights_entity_and_prior_asset_sha_drift(
+    tmp_path: Path,
+) -> None:
+    prior_evidence = {
+        "provider": "wikimedia_commons",
+        "providerAssetId": "1",
+        "sourcePageUrl": "https://commons.wikimedia.org/wiki/File:West_Lake.jpg",
+        "originalAssetUrl": "https://upload.wikimedia.org/west-lake.png",
+        "creator": "Travel Photographer",
+        "license": "CC BY-SA 4.0",
+        "licenseVersion": "4.0",
+        "attributionText": "Travel Photographer · Wikimedia Commons · CC BY-SA 4.0",
+        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    }
+    prior_request = {
+        "entityId": "西湖",
+        "observedEntityId": "西湖",
+    }
+    candidate = {
+        "provider": "wikimedia_commons",
+        "providerAssetId": "1",
+        "entityId": "西湖",
+        "observedEntityId": "西湖",
+    }
+    meta = {
+        key: value
+        for key, value in prior_evidence.items()
+        if key not in {"provider", "providerAssetId"}
+    }
+    for field, value in (
+        ("entityId", "杭州"),
+        ("license", "CC BY-ND 4.0"),
+        ("sourcePageUrl", "https://commons.wikimedia.org/wiki/File:Drift.jpg"),
+    ):
+        changed_candidate = dict(candidate)
+        changed_meta = dict(meta)
+        if field in changed_candidate:
+            changed_candidate[field] = value
+        else:
+            changed_meta[field] = value
+        with pytest.raises(
+            ProfessionalImageSupportedApiInputError, match="REBIND_IDENTITY_DRIFT"
+        ):
+            supported_input._assert_rebindable_provenance(
+                candidate=changed_candidate,
+                meta=changed_meta,
+                evidence=prior_evidence,
+                request=prior_request,
+            )
 
 
 def test_reviewer_result_cannot_drift_from_semantic_prompt(tmp_path: Path) -> None:

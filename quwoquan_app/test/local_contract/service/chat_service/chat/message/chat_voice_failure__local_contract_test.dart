@@ -1,5 +1,5 @@
 // spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/voice-message/spec.md#gwt-001
-// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/voice-message/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-007
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -28,6 +28,34 @@ void main() {
       expect(source, contains('.drain()'));
       final failedBarSection = source.split('_buildVoiceSendStatusBar').last;
       expect(failedBarSection, isNot(contains('ContentText.gotIt')));
+    });
+
+    test('modal 与 status bar 不同时出现：失败呈现链路零 dialog 载体', () {
+      // GWT-007：语音发送失败只允许 status bar 单一低打扰载体。
+      // 页面与发送状态机内不得存在任何 dialog/modal 呈现入口，从源头排除
+      // 「modal + status bar 同屏」的可能。
+      final voiceSendSource = File(
+        'lib/service/chat_service/chat/message/application/voice_send_provider.dart',
+      ).readAsStringSync();
+      expect(voiceSendSource, isNot(contains('AppActionErrorFeedback')));
+      expect(voiceSendSource, isNot(contains('showAppCupertinoDialog')));
+      expect(voiceSendSource, isNot(contains('CupertinoAlertDialog')));
+
+      final conversationSource = _chatConversationSource();
+      final voiceSections = conversationSource
+          .split('\n')
+          .where((line) => line.toLowerCase().contains('voice'))
+          .join('\n');
+      expect(voiceSections, isNot(contains('AppActionErrorFeedback')));
+      expect(voiceSections, isNot(contains('showAppCupertinoDialog')));
+    });
+
+    test('语音失败 modal 死文案已删除，不再提供第二载体入口', () {
+      final copySource = File(
+        'lib/l10n/copy/chat_text_constants.dart',
+      ).readAsStringSync();
+      expect(copySource, isNot(contains('chatVoiceSendFailedTitle')));
+      expect(copySource, isNot(contains('chatVoiceSendFailed ')));
     });
   });
 

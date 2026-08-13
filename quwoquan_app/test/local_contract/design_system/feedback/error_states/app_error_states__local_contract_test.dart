@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-015.t1
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-015.t2
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md#gwt-015.t3
 import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -76,7 +79,7 @@ void main() {
     expect(retryCount, 1);
   });
 
-  testWidgets('AppPageErrorState 不自动注入返回或关闭导航', (tester) async {
+  testWidgets('AppPageErrorState 根页面（不可 pop）不注入返回或关闭导航', (tester) async {
     await tester.pumpWidget(
       const CupertinoApp(
         home: AppPageErrorState(
@@ -97,6 +100,173 @@ void main() {
     expect(find.text(ContentText.back), findsNothing);
     expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
     expect(find.text(SearchText.reload), findsNothing);
+  });
+
+  testWidgets('AppPageErrorState 可 pop 页面内建「返回」出路并可离开', (tester) async {
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Builder(
+          builder: (context) => CupertinoButton(
+            onPressed: () => Navigator.of(context).push(
+              CupertinoPageRoute<void>(
+                builder: (_) => const AppPageErrorState(
+                  semantic: UiErrorSemantic(
+                    category: UiErrorCategory.pageLoad,
+                    scope: UiErrorScope.page,
+                    title: SearchText.recoveryReloadLaterTitle,
+                    message: SearchText.recoveryReloadLaterMessage,
+                  ),
+                ),
+              ),
+            ),
+            child: const Text('打开详情'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开详情'));
+    await tester.pumpAndSettle();
+
+    // 无恢复回调也必须有一条离开的路：内建「返回」。
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsOneWidget);
+    expect(find.text(ContentText.back), findsOneWidget);
+
+    await tester.tap(find.text(ContentText.back));
+    await tester.pumpAndSettle();
+    expect(find.text('打开详情'), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsNothing);
+  });
+
+  testWidgets('modal 容器（fullscreenDialog）内建出路显示「关闭」而非「返回」', (tester) async {
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Builder(
+          builder: (context) => CupertinoButton(
+            onPressed: () => Navigator.of(context).push(
+              CupertinoPageRoute<void>(
+                fullscreenDialog: true,
+                builder: (_) => const AppPageErrorState(
+                  semantic: UiErrorSemantic(
+                    category: UiErrorCategory.pageLoad,
+                    scope: UiErrorScope.page,
+                    title: SearchText.recoveryReloadLaterTitle,
+                    message: SearchText.recoveryReloadLaterMessage,
+                  ),
+                ),
+              ),
+            ),
+            child: const Text('打开面板'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开面板'));
+    await tester.pumpAndSettle();
+
+    // modal 语境出路文案为「关闭」；仍是文字动作，不引入「×」图标钮。
+    expect(find.text(FoundationText.close), findsOneWidget);
+    expect(find.text(ContentText.back), findsNothing);
+    expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
+
+    await tester.tap(find.text(FoundationText.close));
+    await tester.pumpAndSettle();
+    expect(find.text('打开面板'), findsOneWidget);
+    expect(find.text(SearchText.recoveryReloadLaterTitle), findsNothing);
+  });
+
+  testWidgets('AppPageErrorState 可 pop 页面保留恢复主动作并补返回次动作', (tester) async {
+    var retryCount = 0;
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Builder(
+          builder: (context) => CupertinoButton(
+            onPressed: () => Navigator.of(context).push(
+              CupertinoPageRoute<void>(
+                builder: (_) => AppPageErrorState(
+                  semantic: const UiErrorSemantic(
+                    category: UiErrorCategory.pageLoad,
+                    scope: UiErrorScope.page,
+                    title: SearchText.recoveryReloadLaterTitle,
+                    message: SearchText.recoveryReloadLaterMessage,
+                    primaryAction: UiErrorAction(
+                      type: UiErrorActionType.retry,
+                      label: SearchText.reload,
+                    ),
+                  ),
+                  onRecovery: (_) async {
+                    retryCount += 1;
+                    return UiRecoveryOutcome.recovered;
+                  },
+                ),
+              ),
+            ),
+            child: const Text('打开详情'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开详情'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(SearchText.reload), findsOneWidget);
+    expect(find.text(ContentText.back), findsOneWidget);
+
+    await tester.tap(find.text(SearchText.reload));
+    await tester.pump();
+    expect(retryCount, 1);
+
+    await tester.tap(find.text(ContentText.back));
+    await tester.pumpAndSettle();
+    expect(find.text('打开详情'), findsOneWidget);
+  });
+
+  testWidgets('semantic 已有 dismiss 动作时不重复注入内建返回', (tester) async {
+    var dismissCount = 0;
+    await tester.pumpWidget(
+      CupertinoApp(
+        home: Builder(
+          builder: (context) => CupertinoButton(
+            onPressed: () => Navigator.of(context).push(
+              CupertinoPageRoute<void>(
+                builder: (_) => AppPageErrorState(
+                  semantic: const UiErrorSemantic(
+                    category: UiErrorCategory.pageLoad,
+                    scope: UiErrorScope.page,
+                    title: SearchText.recoveryReloadLaterTitle,
+                    message: SearchText.recoveryReloadLaterMessage,
+                    primaryAction: UiErrorAction(
+                      type: UiErrorActionType.dismiss,
+                      label: ContentText.gotIt,
+                    ),
+                  ),
+                  onRecovery: (action) async {
+                    if (action.type == UiErrorActionType.dismiss) {
+                      dismissCount += 1;
+                    }
+                    return UiRecoveryOutcome.handedOff;
+                  },
+                ),
+              ),
+            ),
+            child: const Text('打开详情'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开详情'));
+    await tester.pumpAndSettle();
+
+    // 已有 dismiss 语义：不再合成第二个「返回」。
+    expect(find.text(ContentText.gotIt), findsOneWidget);
+    expect(find.text(ContentText.back), findsNothing);
+
+    await tester.tap(find.text(ContentText.gotIt));
+    await tester.pump();
+    expect(dismissCount, 1);
   });
 
   testWidgets('AppPageErrorState 用户树不展示图标或技术诊断', (tester) async {

@@ -274,16 +274,16 @@ class StartupProbeParserContractTest(unittest.TestCase):
             ]
             with (
                 mock.patch.object(
-                    startup_matrix,
+                    startup_matrix.cli,
                     "_runtime_defines",
                     side_effect=environment_defines,
                 ),
                 mock.patch.object(
-                    startup_matrix,
+                    startup_matrix.cli,
                     "_ios_defines",
                     side_effect=environment_defines,
                 ),
-                mock.patch.object(startup_matrix, "_launcher_handoff", side_effect=handoff),
+                mock.patch.object(startup_matrix.cli, "_launcher_handoff", side_effect=handoff),
                 mock.patch.object(sys, "argv", argv),
                 mock.patch("builtins.print"),
             ):
@@ -356,17 +356,17 @@ class StartupProbeParserContractTest(unittest.TestCase):
             ]
             with (
                 mock.patch.object(
-                    startup_matrix,
+                    startup_matrix.cli,
                     "_runtime_defines",
                     side_effect=environment_defines,
                 ),
                 mock.patch.object(
-                    startup_matrix,
+                    startup_matrix.cli,
                     "_ios_defines",
                     side_effect=environment_defines,
                 ),
                 mock.patch.object(
-                    startup_matrix,
+                    startup_matrix.cli,
                     "_launcher_handoff",
                     side_effect=handoff,
                 ),

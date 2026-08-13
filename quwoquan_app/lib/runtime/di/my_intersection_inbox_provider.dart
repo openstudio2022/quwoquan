@@ -170,3 +170,33 @@ final myIntersectionListProvider =
       MyIntersectionListNotifier,
       MyIntersectionListState
     >(MyIntersectionListNotifier.new);
+
+/// 「共同经历」资产行数据源（REQ-008）：只读经历交集事实
+/// （`sourceRef=coExperiencedGathering`，云侧 gathering_shared_experience
+/// 物化器是唯一生产者）。短时缓存与预览同窗口，防止主页重建重打服务。
+const String _experienceCacheKey = 'coExperiencedGathering';
+
+final _myExperienceCacheProvider =
+    Provider<TtlCache<List<IntersectionReason>>>(
+      (ref) => TtlCache<List<IntersectionReason>>(),
+    );
+
+final myExperienceIntersectionsProvider =
+    FutureProvider.autoDispose<List<IntersectionReason>>((ref) async {
+      final cache = ref.read(_myExperienceCacheProvider);
+      final hit = cache.readFresh(
+        _experienceCacheKey,
+        _myIntersectionPreviewCacheTtl,
+      );
+      if (hit != null) {
+        return hit.value;
+      }
+      final items = await ref
+          .read(intersectionRepositoryProvider)
+          .listMyIntersections(
+            filter: 'fact',
+            sourceRef: _experienceCacheKey,
+          );
+      cache.write(_experienceCacheKey, items);
+      return items;
+    });

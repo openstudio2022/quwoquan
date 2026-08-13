@@ -28,29 +28,23 @@ class EmojiRepository {
   }
 
   /// 总使用统计：id -> count
-  Map<String, int> getTotalCounts() {
-    final raw = _prefs.getString(_keyTotal);
-    if (raw == null || raw.isEmpty) return {};
-    try {
-      final map = jsonDecode(raw) as Map<String, dynamic>?;
-      if (map == null) return {};
-      return map.map(
-        (k, v) => MapEntry(k, (v is int) ? v : int.tryParse(v.toString()) ?? 0),
-      );
-    } catch (_) {
-      return {};
-    }
-  }
+  Map<String, int> getTotalCounts() => _decodeCounts(_prefs.getString(_keyTotal));
 
   /// 待上报增量：id -> count
-  Map<String, int> getIncrementalForReport() {
-    final raw = _prefs.getString(_keyIncremental);
+  Map<String, int> getIncrementalForReport() =>
+      _decodeCounts(_prefs.getString(_keyIncremental));
+
+  /// JSON 解码收口：磁盘 JSON 立即投影为 typed `id -> count`，弱类型不外泄。
+  static Map<String, int> _decodeCounts(String? raw) {
     if (raw == null || raw.isEmpty) return {};
     try {
-      final map = jsonDecode(raw) as Map<String, dynamic>?;
-      if (map == null) return {};
-      return map.map(
-        (k, v) => MapEntry(k, (v is int) ? v : int.tryParse(v.toString()) ?? 0),
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return {};
+      return decoded.map(
+        (k, v) => MapEntry(
+          k.toString(),
+          (v is int) ? v : int.tryParse(v.toString()) ?? 0,
+        ),
       );
     } catch (_) {
       return {};

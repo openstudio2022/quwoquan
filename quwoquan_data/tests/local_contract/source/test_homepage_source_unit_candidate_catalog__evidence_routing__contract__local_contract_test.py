@@ -129,7 +129,6 @@ def _catalog(
 ) -> dict[str, object]:
     return build_homepage_source_unit_catalog(
         catalog_id="travel-homepage-source-units",
-        catalog_version="2026-08-08.1",
         created_at="2026-08-08T00:00:00Z",
         minimum_candidate_count=minimum,
         candidates=candidates if candidates is not None else [_candidate()],
@@ -156,7 +155,6 @@ def test_catalog_keeps_narrative_and_structured_fact_sources_separate() -> None:
     assert candidate["structuredFacts"]["factSources"][0]["sourceClass"] == "official_site"
     assert evidence == {
         "catalogId": "travel-homepage-source-units",
-        "catalogVersion": "2026-08-08.1",
         "catalogDigest": catalog["catalogDigest"],
         "candidateCount": 1,
         "heroReadyCount": 1,

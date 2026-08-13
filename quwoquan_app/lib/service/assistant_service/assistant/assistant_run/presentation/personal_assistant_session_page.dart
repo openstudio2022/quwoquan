@@ -322,9 +322,15 @@ class _PersonalAssistantSessionBody extends ConsumerWidget {
       isDark,
       ColorType.foregroundPrimary,
     );
-    final chatListBg = isDark ? background : AppColors.chatBackground;
+    final chatListBg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.chatListBackground,
+    );
     final bubbleSelf = AppColors.chatBubbleOutgoing;
-    final bubbleOther = AppColors.chatBubbleIncoming;
+    final bubbleOther = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.chatBubbleIncoming,
+    );
     final hasRetryError =
         state.retryAvailable && state.errorMessage.trim().isNotEmpty;
     final timelinePadding = EdgeInsets.symmetric(
@@ -601,7 +607,10 @@ class _PersonalAssistantSessionBody extends ConsumerWidget {
               ),
             ),
           ColoredBox(
-            color: isDark ? background : AppColors.chatToolbarBackground,
+            color: AppColorsFunctional.getColor(
+              isDark,
+              ColorType.chatToolbarBackground,
+            ),
             child: SafeArea(
               top: false,
               child: Padding(
@@ -671,7 +680,10 @@ class _RunControlButton extends StatelessWidget {
           vertical: AppSpacing.xs,
         ),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.dark.backgroundSecondary : AppColors.white,
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.chatBubbleIncoming,
+          ),
           borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
           border: Border.all(
             color: AppColorsFunctional.getColor(

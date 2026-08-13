@@ -109,13 +109,13 @@ def _pool_evidence(root: Path) -> tuple[str, str]:
     )
 
 
-def _legacy_record(root: Path, *, migration_identity: bool) -> None:
+def _pre_contract_record(root: Path, *, migration_identity: bool) -> None:
     evidence_ref, evidence_digest = _pool_evidence(root)
     record: dict[str, object] = {
         "schema": POOL_RECORD_SCHEMA,
         "objectType": "content",
-        "objectId": "legacy-content",
-        "objectRef": "article/legacy/1",
+        "objectId": "pre-contract-content",
+        "objectRef": "article/pre-contract/1",
         "status": "active",
         "processResult": "completed",
         "qualityResult": "passed",
@@ -126,20 +126,17 @@ def _legacy_record(root: Path, *, migration_identity: bool) -> None:
         "payloadDigest": pool_payload_digest(root),
     }
     if migration_identity:
-        stable_identity = {
-            "identityKind": "legacy_canonical_migration",
-            "executionId": "legacy-execution",
-            "sourceDigest": "sha256:" + "1" * 64,
-            "canonicalObjectDigest": record["payloadDigest"],
-            "migrationEvidenceDigest": "sha256:" + "2" * 64,
-        }
         record.update(
             recordSequence=1,
             contentVersion=1,
             canonicalObjectDigest=record["payloadDigest"],
             sourceIdentity={
-                **stable_identity,
-                "identityDigest": source_identity_digest(stable_identity),
+                "identityKind": "retired_migration_kind",
+                "executionId": "pre-contract-execution",
+                "sourceDigest": "sha256:" + "1" * 64,
+                "canonicalObjectDigest": record["payloadDigest"],
+                "migrationEvidenceDigest": "sha256:" + "2" * 64,
+                "identityDigest": "sha256:" + "3" * 64,
             },
             sourceAttribution=_source_attribution(),
         )
@@ -205,30 +202,48 @@ def test_existing_version_requires_exact_next_append(tmp_path: Path) -> None:
     assert fields["admission"]["usageScope"] == "commercial"
 
 
-@pytest.mark.parametrize("migration_identity", [False, True])
-def test_legacy_record_without_manifest_identity_is_excluded_from_known_versions(
-    tmp_path: Path,
-    migration_identity: bool,
-) -> None:
-    legacy = tmp_path / "publish/posts/article/legacy/1"
-    legacy.mkdir(parents=True)
-    (legacy / "manifest.json").write_text(
+def test_pre_sequence_record_shape_fails_closed(tmp_path: Path) -> None:
+    """Records lacking an explicit recordSequence stay rejected, never inferred."""
+
+    stale = tmp_path / "publish/posts/article/pre-contract/1"
+    stale.mkdir(parents=True)
+    (stale / "manifest.json").write_text(
         json.dumps({"contentType": "article"}), encoding="utf-8"
     )
-    _legacy_record(legacy, migration_identity=migration_identity)
+    _pre_contract_record(stale, migration_identity=False)
 
-    fields = build_content_pool_fields(
-        source_manifest={"contentId": "modern-content", "version": 1},
-        canonical_ref="article/modern/1",
-        source_task_id="modern-task",
-        attestation_path=_attestation(tmp_path),
-        publish_root=tmp_path / "publish",
-        rights_rows=[],
-        reserved_identity=_reserved_identity("modern-content", 1),
+    with pytest.raises(ObjectTransactionError, match="RECORD_SEQUENCE_MISSING"):
+        build_content_pool_fields(
+            source_manifest={"contentId": "modern-content", "version": 1},
+            canonical_ref="article/modern/1",
+            source_task_id="modern-task",
+            attestation_path=_attestation(tmp_path),
+            publish_root=tmp_path / "publish",
+            rights_rows=[],
+            reserved_identity=_reserved_identity("modern-content", 1),
+        )
+
+
+def test_retired_migration_identity_record_fails_closed(tmp_path: Path) -> None:
+    """Migration-kind source identities are no longer a valid pool record shape."""
+
+    stale = tmp_path / "publish/posts/article/pre-contract/1"
+    stale.mkdir(parents=True)
+    (stale / "manifest.json").write_text(
+        json.dumps({"contentType": "article"}), encoding="utf-8"
     )
+    _pre_contract_record(stale, migration_identity=True)
 
-    assert fields["contentId"] == "modern-content"
-    assert fields["version"] == 1
+    with pytest.raises(ObjectTransactionError, match="SOURCE_IDENTITY_INVALID"):
+        build_content_pool_fields(
+            source_manifest={"contentId": "modern-content", "version": 1},
+            canonical_ref="article/modern/1",
+            source_task_id="modern-task",
+            attestation_path=_attestation(tmp_path),
+            publish_root=tmp_path / "publish",
+            rights_rows=[],
+            reserved_identity=_reserved_identity("modern-content", 1),
+        )
 
 
 @pytest.mark.parametrize(

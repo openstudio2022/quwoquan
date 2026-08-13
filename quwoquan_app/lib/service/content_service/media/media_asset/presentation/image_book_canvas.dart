@@ -688,7 +688,9 @@ class _ImageBookLoadingOverlay extends StatelessWidget {
       key: const ValueKey<String>('image-book-loading-overlay'),
       child: Opacity(
         opacity: 0.36,
-        child: AppRequestFeedback.inline(indicatorColor: AppColors.white),
+        child: AppRequestFeedback.inline(
+          indicatorColor: AppColors.immersiveForeground,
+        ),
       ),
     );
   }

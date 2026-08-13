@@ -1,3 +1,4 @@
+// readiness_case: media_upload_session_publication_app_uat
 // spec_ref: specs/feature-tree/spec.md#uat-002
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-003
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-003
@@ -5,6 +6,8 @@
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-005.t1
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-005.t2
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-008
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-001
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-005
 // spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-005
 // spec_ref: specs/feature-tree/runtime/runtime-media/media-upload-and-storage/spec.md#gwt-001
 // spec_ref: specs/feature-tree/runtime/runtime-media/media-upload-and-storage/spec.md#gwt-002
@@ -327,8 +330,34 @@ Future<void> _runTextPublicationJourney(
     await $(
       TestKeys.createPublishConfirmSheet,
     ).waitUntilVisible(timeout: const Duration(seconds: 15));
+    // GWT-001：确认页显示系统建议的最终形态（用户可修改），提交按确认值。
+    expect(
+      find.byKey(const ValueKey<String>('publish-confirm-form-row')),
+      findsOneWidget,
+      reason: '文字发布确认页必须显示可修改的发布形态行。',
+    );
+    expect(
+      find.text(
+        publishAsArticle
+            ? CreationText.publishFormArticle
+            : CreationText.publishFormMicro,
+      ),
+      findsWidgets,
+      reason: '确认页必须显示与内容建议一致的最终形态。',
+    );
     await $(TestKeys.createPublishConfirmButton).tap();
     await _waitForPublicationResultWithRecovery($);
+    // GWT-005：结果页展示真实分发去向摘要（此旅程为公开发布）。
+    expect(
+      find.byKey(TestKeys.createPublishResultDestinationSummary),
+      findsOneWidget,
+      reason: '发布结果页必须展示真实去向摘要。',
+    );
+    expect(
+      find.textContaining(CreationText.publishDestinationPublic),
+      findsWidgets,
+      reason: '公开发布的去向摘要必须如实标注公开。',
+    );
     expect(
       await _waitFor(
         $,

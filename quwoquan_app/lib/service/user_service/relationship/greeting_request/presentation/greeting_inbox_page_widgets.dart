@@ -166,39 +166,3 @@ class _GreetingStatusChip extends StatelessWidget {
     };
   }
 }
-
-class _GreetingEmptyState extends StatelessWidget {
-  const _GreetingEmptyState({required this.box, required this.isDark});
-
-  final _GreetingBox box;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerLg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(
-              CupertinoIcons.chat_bubble_2,
-              color: AppColors.iosSecondaryLabel(context),
-              size: AppSpacing.iconLarge,
-            ),
-            SizedBox(height: AppSpacing.interGroupMd),
-            Text(
-              box == _GreetingBox.received
-                  ? ChatText.chatGreetingReceivedEmpty
-                  : ChatText.chatGreetingSentEmpty,
-              style: TextStyle(
-                color: SettingsSemanticConstants.labelColor(isDark),
-                fontSize: AppTypography.iosBody,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

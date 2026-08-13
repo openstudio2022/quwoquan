@@ -222,38 +222,6 @@
 
 ## 8. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 入口清晰度与关系门禁
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：仍缺 1v1 输入区按 mutual relationship 显示语音/视频入口、非互关教育卡以及对应关系拒绝的直接 `spec_ref`。
-- 目标：1v1 输入区仅互相关注显示语音/视频入口；非互相关注显示可解释教育卡而非空白。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-002"></a>
-### OPEN-002 呼出/来电/通话全过程态闭环
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：发起→呼出（可取消）→振铃（接听/拒绝/30s 超时）→建连→通话→挂断收尾完整可达。
-- 完成判定：`SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-003"></a>
-### OPEN-003 多人房间、通话中加人与信任两态提示
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：Join/Leave/Invite 全路径可用
-- 32 人上限返回 call_full
-- 最后一人离开结束房间。
-- 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
-
 <a id="open-004"></a>
 ### OPEN-004 三端来电唤醒与权限降级
 
@@ -264,52 +232,12 @@
 - 目标：iOS 后台/锁屏经 PushKit 唤醒并立即上报 CallKit；Android 经 FCM 高优先级+全屏意图唤醒，14+ 权限不可用降级 heads-up。
 - 完成判定：`SIT-004` 对应行为满足且真实测试 `spec_ref` 有效
 
-<a id="open-005"></a>
-### OPEN-005 realtime-gateway 单通道 wire type 端云一致与参与者绑定
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：仍缺最终 fresh generated graph/App package 上的全 App 编译、来电与参与者事件端云组合回归证据；Go 发布端、Dart typed envelope 与两组直接 `spec_ref` 本地合同已存在。
-- 目标：`RealtimeEventEnvelope` 是唯一在线事件 wire owner，RTC 仅通过 typed envelope 读取来电、参与者和屏幕共享事件。
-- 完成判定：`SIT-005` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-006"></a>
-### OPEN-006 错误与权限统一语义
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：通话错误走 errors.yaml→codegen，端侧用 RtcErrorCode.fromCode(...).toDisplayMessage(l10n)，含 not_mutual/blocked。
-- 完成判定：`SIT-006` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-007"></a>
-### OPEN-007 全局通话条、PiP 与后台恢复
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：IncomingCallCoordinator/ActiveCallBar/PipCallOverlay 挂载到 app shell 唯一入口。
-- 完成判定：`SIT-007` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-008"></a>
-### OPEN-008 屏幕共享生命周期、互斥与平台降级
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：StartScreenShare/StopScreenShare 只经 CallScreenShareCommandFacet 修改 CallSession。
-- 完成判定：`SIT-008` 对应行为满足且真实测试 `spec_ref` 有效
-
 <a id="open-009"></a>
 ### OPEN-009 RTC 媒体 QoE 黄金指标与发布 readback
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：缺少受控 Gamma/Prod 凭据、两台真机、真实 QoE series 与获批发布/回滚运行证据；代码与 source-owned 双设备 UAT 已覆盖 emitter、终态去重、默认遮罩、同 call digest 关联和 hosted receipt 校验。
+- 影响或价值：缺少受控 Gamma/Prod 凭据、两台真机、真实 QoE series 与获批发布/回滚运行证据；代码与 source-owned 双设备 UAT 已覆盖 emitter、终态去重、默认遮罩、同 call digest 关联和 hosted receipt 校验。弱网注入依赖的平台 fault harness 当前只实现 `disconnect` profile（latency/bandwidth 与告警命中 readback 由 fault-injection-harness 与 alert-drill-closure 的 OPEN 承接），Gamma 侧演练需在该前置解除后执行。
 - 目标：在同一候选上完成双向真机呼叫、弱网/重连、告警恢复与 hosted rollback readback。
 - 完成判定：`SIT-009` 对应行为满足且真实测试 `spec_ref` 有效

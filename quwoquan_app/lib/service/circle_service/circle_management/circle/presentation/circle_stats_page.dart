@@ -8,6 +8,8 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_stats_visit_recorder.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_group/application/public/circle_group_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
+import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
+import 'package:quwoquan_app/design_system/actions/app_follow_button.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
@@ -21,8 +23,15 @@ import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_stats_list_view_data.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_stats_row_mapper.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
+import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
+    show currentUserIdProvider;
+import 'package:quwoquan_app/runtime/di/media_viewer_interaction_facade.dart';
+import 'package:quwoquan_app/runtime/di/user_relationship_state_dependencies.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 圈子成员/群聊/粉丝/获赞列表页（1:1 对应 AuthorStatsList 的 members/groups/fans/likes 圈子维度）
@@ -275,6 +284,41 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     );
   }
 
+  /// 成员/粉丝行：整行进入用户主页（建联承接：关注/打招呼/私聊由主页既有能力承担）。
+  void _openMemberProfile(CircleStatsMemberRowViewData member) {
+    final personaId = member.id.trim();
+    if (personaId.isEmpty) {
+      return;
+    }
+    context.push(
+      AppRoutePaths.userProfile(userHandle: personaId),
+      extra: UserProfileRouteExtra(
+        personaId: personaId,
+        avatarUrl: member.avatarUrl.trim().isEmpty ? null : member.avatarUrl,
+        displayName: member.name.trim().isEmpty ? null : member.name,
+      ),
+    );
+  }
+
+  /// 关注真相源是 `userRelationshipStateProvider`，写意图统一走
+  /// `syncProfileFollowIntent`（含持久 outbox）；禁止页面级本地假开关。
+  void _toggleMemberFollow(CircleStatsMemberRowViewData member) {
+    final personaId = member.id.trim();
+    if (personaId.isEmpty) {
+      return;
+    }
+    runWhenLoggedIn(ref, context, AuthGateReason.follow, () {
+      final wasFollowing = effectiveProfileFollowing(ref, personaId);
+      syncProfileFollowIntent(
+        ref,
+        personaId: personaId,
+        previousFollowing: wasFollowing,
+        isFollowing: !wasFollowing,
+        sourceSurfaceId: AppUiSurfaces.circleStats.id,
+      );
+    });
+  }
+
   Widget _buildUsersList(
     Color fg,
     Color fgSecondary,
@@ -290,6 +334,7 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         ),
       );
     }
+    final relationshipState = ref.watch(userRelationshipStateProvider);
     return ListView.builder(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.containerMd,
@@ -305,15 +350,17 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         final worksCount = u.worksCountLabel;
         final fansCount = u.fansCountLabel;
         final likesCount = u.likesCountLabel;
-        final isFollowed = u.isFollowed;
+        final isFollowing = relationshipState.isFollowing(u.id);
+        final isSelf = u.id.trim() == ref.read(currentUserIdProvider).trim();
         return Padding(
           padding: EdgeInsets.only(bottom: AppSpacing.sm),
           child: _buildCard(
             borderColor: borderColor,
             backgroundColor: bg,
             child: CupertinoButton(
+              key: ValueKey<String>('circle-stats-member-row-${u.id}'),
               padding: EdgeInsets.all(AppSpacing.containerSm),
-              onPressed: () {},
+              onPressed: () => _openMemberProfile(u),
               child: Row(
                 children: [
                   AppCircularAvatar(
@@ -356,43 +403,14 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
                     ),
                   ),
                   SizedBox(width: AppSpacing.largeBorderRadius),
-                  CupertinoButton(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
-                    color: isFollowed
-                        ? borderColor.withValues(alpha: 0.18)
-                        : AppColors.primaryColor.withValues(alpha: 0.12),
-                    minimumSize: Size(
-                      AppSpacing.largeButtonSize + AppSpacing.lg,
-                      AppSpacing.xl,
-                    ),
-                    borderRadius: BorderRadius.circular(
-                      AppSpacing.circularBorderRadius,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        final idx = _users.indexWhere((e) => e.id == u.id);
-                        if (idx >= 0) {
-                          final row = _users[idx];
-                          row.isFollowed = !row.isFollowed;
-                        }
-                      });
-                    },
-                    child: Text(
-                      isFollowed
-                          ? FoundationText.following
-                          : FoundationText.follow,
-                      style: TextStyle(
-                        fontSize: AppTypography.xsPlus,
-                        fontWeight: AppTypography.extraBold,
-                        color: isFollowed
-                            ? fgSecondary
-                            : AppColors.primaryColor,
+                  if (!isSelf)
+                    AppFollowButton(
+                      isFollowing: isFollowing,
+                      pillKey: ValueKey<String>(
+                        'circle-stats-member-follow-${u.id}',
                       ),
+                      onPressed: () => _toggleMemberFollow(u),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -424,14 +442,21 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         final g = list[i];
         final name = g.name;
         final count = g.memberCountLabel;
+        final conversationId = (g.conversationId ?? '').trim();
         return Padding(
           padding: EdgeInsets.only(bottom: AppSpacing.sm),
           child: _buildCard(
             borderColor: borderColor,
             backgroundColor: AppColors.transparent,
             child: CupertinoButton(
+              key: ValueKey<String>('circle-stats-group-row-${g.id}'),
               padding: EdgeInsets.all(AppSpacing.containerSm),
-              onPressed: () {},
+              // 群会话由 Chat 绑定写回；未绑定时不提供假聊天入口。
+              onPressed: conversationId.isEmpty
+                  ? null
+                  : () => context.push(
+                      AppRoutePaths.chatDetail(id: conversationId),
+                    ),
               child: Row(
                 children: [
                   Container(

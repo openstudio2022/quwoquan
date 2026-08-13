@@ -1,33 +1,54 @@
 import 'dart:async';
 
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/runtime/di/realtime_message_handler.dart';
 
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
-
-/// Test-only catalog backed by the canonical Chat contract scenario.
+/// Test-only catalog with the one realtime event shape exercised by this suite.
 final class FixtureRealtimeEventCatalog {
   FixtureRealtimeEventCatalog._();
 
   static List<Map<String, dynamic>> eventsForConversation(
     String conversationId,
   ) {
-    final contractSeed = objectContractExampleReader.example(
-      'chat',
-      'chat_realtime_fixture_core',
-    );
-    final realtimeEvents = contractSeed?['realtimeEvents'];
-    if (realtimeEvents is! Map) {
+    // 群 roster 事件：ConversationMemberAdded 只携带会话锚点，handler
+    // 按事件类型触发成员 Provider 重载（不伪造未持久化 Message）。
+    if (conversationId == 'fixture_conv_group') {
+      return <Map<String, dynamic>>[
+        <String, dynamic>{
+          'type': 'ConversationMemberAdded',
+          'conversationId': conversationId,
+          'payload': <String, dynamic>{
+            'conversationId': conversationId,
+            'userId': 'fixture_user_new_member',
+          },
+        },
+      ];
+    }
+    if (conversationId != 'conv_001') {
       return const <Map<String, dynamic>>[];
     }
-    final rows = realtimeEvents[conversationId];
-    if (rows is! List) {
-      return const <Map<String, dynamic>>[];
-    }
-    return rows
-        .whereType<Map>()
-        .map((row) => row.cast<String, dynamic>())
-        .toList(growable: false);
+    // payload 必须保持 canonical MessageSent wire 形状（messageId、
+    // senderDisplayNameSnapshot 快照字段、无 status），与
+    // RealtimeMessageHandler._decodeMessageSentEvent 的白名单同源；
+    // 有辨识度的 fixture 文案与 messageId 是三个 realtime 旅程测试共同的
+    // 断言真相源，修改必须同步全部消费者。
+    return <Map<String, dynamic>>[
+      <String, dynamic>{
+        'type': 'MessageSent',
+        'conversationId': conversationId,
+        'payload': <String, dynamic>{
+          'messageId': 'fixture_rt_conv_001_msg_13',
+          'conversationId': conversationId,
+          'seq': 13,
+          'clientMsgId': 'fixture_msg_realtime_13_client',
+          'senderId': 'fixture_user_friend',
+          'senderDisplayNameSnapshot': '契约好友',
+          'content': 'Fixture Realtime 新消息：咖啡馆门口见。',
+          'type': 'text',
+          'timestamp': '2026-06-10T00:12:00Z',
+        },
+      },
+    ];
   }
 }
 

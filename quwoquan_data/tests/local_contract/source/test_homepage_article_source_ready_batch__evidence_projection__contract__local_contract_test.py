@@ -11,7 +11,7 @@ from content.source.research.homepage_article_source_ready_batch import (
 )
 from content.source.research.homepage_article_seed_selection import seed_id
 
-from quwoquan_data.tests.local_contract.source.test_scale_source_pool_homepage_article__catalog_projection__contract__local_contract_test import (
+from support.scale_source_pool_catalog_fixture import (
     IDENTITY,
     _article_candidate,
     _homepage_candidate,
@@ -69,9 +69,9 @@ def _seed_selection(
             "bodyContentSha256": source["bodyContentSha256"],
         }
         seeds.append({
-            "seedOrigin": "legacy_hint",
+            "seedOrigin": "historical_capsule_hint",
             "seedId": seed_id(
-                seed_origin="legacy_hint",
+                seed_origin="historical_capsule_hint",
                 coverage_key=coverage_key,
             ),
             "coverageKey": coverage_key,

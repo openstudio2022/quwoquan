@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_facets.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_operations.dart';
+import 'package:quwoquan_app/runtime/di/post_interaction_state_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/user_relationship_state_dependencies.dart';
 import 'package:quwoquan_app/runtime/platform/storage/client_interaction_state_store.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync.dart';
@@ -87,6 +89,45 @@ final clientStateSyncOutboxProvider =
       ClientStateSyncOutboxNotifier.new,
     );
 
+/// 当前 outbox 中仍有待同步 like 意图的 postId 集合。
+///
+/// feed/详情以服务端 `viewerLiked` hydrate 本地点赞态时，这些 post 的本地
+/// pending 意图优先，权威投影跳过它们，待 outbox flush 后由确认值收敛。
+final pendingLikeSyncPostIdsProvider = Provider<Set<String>>((ref) {
+  final outbox = ref.watch(clientStateSyncOutboxProvider);
+  return <String>{
+    for (final entry in outbox.entries)
+      if (entry.objectType == 'post' &&
+          entry.intentType == 'like' &&
+          entry.hasPendingDelta)
+        entry.objectId,
+  };
+});
+
+/// outbox 终态失败通知（运行时瞬态，不持久化）。
+///
+/// 引擎放弃重试后由 [ClientStateSyncOutboxNotifier] 完成乐观态回滚并在此
+/// 发布；壳层监听并以统一警示轻提示告知用户，消费后 [consume] 清空。
+final clientStateSyncTerminalFailureProvider =
+    NotifierProvider<
+      ClientStateSyncTerminalFailureNotifier,
+      ClientStateSyncOutboxEntry?
+    >(ClientStateSyncTerminalFailureNotifier.new);
+
+final class ClientStateSyncTerminalFailureNotifier
+    extends Notifier<ClientStateSyncOutboxEntry?> {
+  @override
+  ClientStateSyncOutboxEntry? build() => null;
+
+  void publish(ClientStateSyncOutboxEntry entry) {
+    state = entry;
+  }
+
+  void consume() {
+    state = null;
+  }
+}
+
 final class ClientStateSyncOutboxNotifier
     extends Notifier<ClientStateSyncOutboxState> {
   late ClientStateSyncOutboxEngine _engine;
@@ -104,10 +145,34 @@ final class ClientStateSyncOutboxNotifier
           state = nextState;
         }
       },
+      onTerminalFailure: (entry) {
+        if (!ref.mounted) {
+          return;
+        }
+        _rollbackOptimisticState(entry);
+        ref
+            .read(clientStateSyncTerminalFailureProvider.notifier)
+            .publish(entry);
+      },
     );
     ref.onDispose(_engine.dispose);
     unawaited(_engine.hydrate());
     return _engine.state;
+  }
+
+  /// 终态失败回滚：乐观布尔态回到已确认值；计数由权威投影下次刷新收敛。
+  void _rollbackOptimisticState(ClientStateSyncOutboxEntry entry) {
+    final confirmed = entry.confirmedBoolValue ?? !entry.desiredBoolValue;
+    switch ('${entry.objectType}:${entry.intentType}') {
+      case 'post:like':
+        ref
+            .read(postInteractionStateProvider.notifier)
+            .setLiked(entry.objectId, confirmed);
+      case 'profile:follow':
+        ref
+            .read(userRelationshipStateProvider.notifier)
+            .setFollowing(entry.objectId, confirmed);
+    }
   }
 
   void enqueueFollow({

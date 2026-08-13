@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
+// ContractGraph SHA256: ba2dde9a203e9d9979e42aa34fc1994593f88f10ce159c4e37a42f66497c1ef9
 
 part of '../../../search/search_operation_contracts.g.dart';
 
@@ -60,6 +60,7 @@ final class CanonicalSearchQuery {
     required String query,
     CanonicalSearchMode mode = CanonicalSearchMode.result,
     Iterable<String> objectTypes = const <String>[],
+    Iterable<String> contentTypes = const <String>[],
     Iterable<String> ids = const <String>[],
     int limit = 20,
     String? cursor,
@@ -67,6 +68,7 @@ final class CanonicalSearchQuery {
        query = query.trim(),
        mode = mode,
        objectTypes = _normalizeGeneratedTextList(objectTypes, deduplicate: false),
+       contentTypes = _normalizeGeneratedTextList(contentTypes, deduplicate: false),
        ids = _normalizeGeneratedTextList(ids, deduplicate: false),
        limit = limit,
        cursor = cursor {
@@ -79,17 +81,19 @@ final class CanonicalSearchQuery {
   final String query;
   final CanonicalSearchMode mode;
   final List<String> objectTypes;
+  final List<String> contentTypes;
   final List<String> ids;
   final int limit;
   final String? cursor;
 
   factory CanonicalSearchQuery.fromWire(Map<String, Object?> map, [String path = "CanonicalSearchQuery"]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"sessionId", "query", "mode", "objectTypes", "ids", "limit", "cursor"}, path);
+    _generatedRequestRejectUnknownFields(map, const <String>{"sessionId", "query", "mode", "objectTypes", "contentTypes", "ids", "limit", "cursor"}, path);
     return CanonicalSearchQuery(
       sessionId: map["sessionId"] == null ? null : _generatedRequestString(map["sessionId"], '$path.sessionId'),
       query: _generatedRequestString(map["query"], '$path.query'),
       mode: map.containsKey("mode") ? switch (map["mode"]) { "suggest" => CanonicalSearchMode.suggest, "result" => CanonicalSearchMode.result, _ => throw FormatException('$path.mode' + ' has an invalid enum value'), } : CanonicalSearchMode.result,
       objectTypes: map.containsKey("objectTypes") ? List<String>.unmodifiable(_generatedRequestList(map["objectTypes"], '$path.objectTypes').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.objectTypes' + '[${entry.key}]'))) : const <String>[],
+      contentTypes: map.containsKey("contentTypes") ? List<String>.unmodifiable(_generatedRequestList(map["contentTypes"], '$path.contentTypes').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.contentTypes' + '[${entry.key}]'))) : const <String>[],
       ids: map.containsKey("ids") ? List<String>.unmodifiable(_generatedRequestList(map["ids"], '$path.ids').asMap().entries.map((entry) => _generatedRequestString(entry.value, '$path.ids' + '[${entry.key}]'))) : const <String>[],
       limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 20,
       cursor: map["cursor"] == null ? null : _generatedRequestString(map["cursor"], '$path.cursor'),
@@ -101,6 +105,7 @@ final class CanonicalSearchQuery {
     "query": this.query,
     "mode": this.mode.wireValue,
     "objectTypes": this.objectTypes.map((value) => value).toList(growable: false),
+    if (this.contentTypes.isNotEmpty) "contentTypes": this.contentTypes.map((value) => value).toList(growable: false),
     if (this.ids.isNotEmpty) "ids": this.ids.map((value) => value).toList(growable: false),
     "limit": this.limit,
     if (this.cursor != null) "cursor": this.cursor!,
@@ -360,6 +365,7 @@ CloudOperationRequestPayload encodeSearchSearchIndexViewSearchGeneratedRequest(C
       "query": request.query,
       "mode": request.mode.wireValue,
       "objectTypes": request.objectTypes.map((value) => value).toList(growable: false),
+      if (request.contentTypes.isNotEmpty) "contentTypes": request.contentTypes.map((value) => value).toList(growable: false),
       if (request.ids.isNotEmpty) "ids": request.ids.map((value) => value).toList(growable: false),
       "limit": request.limit,
       if (request.cursor != null) "cursor": request.cursor!,

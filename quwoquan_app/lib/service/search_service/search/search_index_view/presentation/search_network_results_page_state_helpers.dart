@@ -88,10 +88,12 @@ extension _SearchNetworkResultsPageStateHelpers
     }
     if (contentItems.isEmpty) {
       return withDegradeBanner(<Widget>[
-        _SearchEmptyState(
+        AppEmptyState(
+          icon: CupertinoIcons.search,
           title: UITextConstants.searchNoResultsForQuery(_query),
-          isDark: isDark,
-          onEditQuery: _editEmptySearchQuery,
+          subtitle: SearchText.searchEmptySuggestion,
+          actionLabel: SearchText.searchEditQuery,
+          onAction: _editEmptySearchQuery,
         ),
         if (relatedSearchCard != null) ...[
           SizedBox(height: AppSpacing.containerLg),
@@ -162,10 +164,12 @@ extension _SearchNetworkResultsPageStateHelpers
           count: 0,
           isDark: isDark,
         ),
-        _SearchEmptyState(
+        AppEmptyState(
+          icon: CupertinoIcons.search,
           title: UITextConstants.searchNoResultsForQuery(_query),
-          isDark: isDark,
-          onEditQuery: _editEmptySearchQuery,
+          subtitle: SearchText.searchEmptySuggestion,
+          actionLabel: SearchText.searchEditQuery,
+          onAction: _editEmptySearchQuery,
         ),
         if (relatedSearchCard != null) ...[
           SizedBox(height: AppSpacing.containerLg),
@@ -319,10 +323,12 @@ extension _SearchNetworkResultsPageStateHelpers
 
     if (sections.isEmpty) {
       return <Widget>[
-        _SearchEmptyState(
+        AppEmptyState(
+          icon: CupertinoIcons.search,
           title: UITextConstants.searchNoIntersectionForQuery(_query),
-          isDark: isDark,
-          onEditQuery: _editEmptySearchQuery,
+          subtitle: SearchText.searchEmptySuggestion,
+          actionLabel: SearchText.searchEditQuery,
+          onAction: _editEmptySearchQuery,
         ),
       ];
     }

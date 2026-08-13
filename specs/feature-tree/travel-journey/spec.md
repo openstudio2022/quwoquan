@@ -102,7 +102,9 @@
 - Ops：`quwoquan_ops/migrations/travel_to_gathering` 只保存 target-only crosswalk、证据控制面与回滚审批协议。
 - 目标实现归 [`circle-community`](../circle-community/spec.md) 工程归属管理；本节点不重复认领 `quwoquan_app/lib/service/circle_service` 或 `circle-service`。
 - 测试：
-  - `local_contract`：`quwoquan_ops/tests/local_contract/test_travel_to_gathering_migration__local_contract_test.py`
+  - `local_contract`：`quwoquan_ops/tests/local_contract/stackctl/test_travel_to_gathering_migration__mapping__local_contract_test.py`、
+    `quwoquan_ops/tests/local_contract/stackctl/test_travel_to_gathering_migration__execute__local_contract_test.py` 与
+    `quwoquan_ops/tests/local_contract/stackctl/test_travel_to_gathering_migration__cutover_rollback__local_contract_test.py`
   - `api_integration`：归属各目标 owner 的 Gathering/Plan/Chat/Content/Integration 证据树，不保留源服务目录。
 
 ## 8. 开放事项
@@ -114,7 +116,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：尚缺验收证据：alpha、beta、gamma、prod 真实历史对象全集的 inventory、目标 owner import/readback、100% parity、cutover 与 target-only rollback receipt。生产主链已经静态退役，仓内现有证据只证明控制面能校验合成快照；若把静态删除当作数据迁移完成，可能遗失历史计划、参与、内容引用或审计义务。
-- 完成判定：四环境分别提供绑定同一 source snapshot、crosswalk、ContractGraph、mapping、target candidate 与审批摘要的 inventory、owner-command import、target readback、100% parity、cutover receipt；Prod 另有 target backup 和 target-only rollback 演练，且全部历史对象满足 sourceCount = migrated + archived + quarantined + notApplicable、orphan/collision=0、raw PII emission=0。
+- 完成判定：`DOM-001` 的「历史源数据环境提供与候选/crosswalk/目标 readback 绑定的签名 receipt、生产调用只读目标 owner、不得用合成 receipt 冒充环境迁移完成」子句成立——四环境分别提供绑定同一 source snapshot、crosswalk、ContractGraph、mapping、target candidate 与审批摘要的 inventory、owner-command import、target readback、100% parity、cutover receipt；Prod 另有 target backup 和 target-only rollback 演练，且全部历史对象满足 sourceCount = migrated + archived + quarantined + notApplicable、orphan/collision=0、raw PII emission=0。
 - 依赖：各环境受保护的源 inventory、Circle/Chat/Content canonical import command、目标 readback、审批与配置激活证据。
 
 <a id="open-002"></a>

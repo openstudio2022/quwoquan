@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-001
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -15,6 +17,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
 void main() {
+  // spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-001.t1
   test('CloudErrorMapper parses RuntimeErrorResponse', () {
     final body = jsonEncode(<String, dynamic>{
       'code': 'ASSISTANT.MIDDLEWARE.llm_timeout',
@@ -76,6 +79,7 @@ void main() {
     },
   );
 
+  // spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-001.t3
   test('CloudErrorMapper rejects retired user-message aliases', () {
     for (final key in <String>['user_message', 'message', 'reasonMessage']) {
       expect(
@@ -183,6 +187,7 @@ void main() {
     );
   });
 
+  // spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-001.t2
   test('CloudErrorMapper preserves distinct HTTP failure kinds', () {
     const cases = <int, RuntimeFailureKind>{
       400: RuntimeFailureKind.validation,
@@ -211,6 +216,7 @@ void main() {
     }
   });
 
+  // spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-001.t2
   test('CloudHttpClient 通过平台分类端口保留 Socket 失败语义', () async {
     const socketError = SocketException(
       'Connection refused',
@@ -242,7 +248,7 @@ void main() {
         'USER.AUTH.otp_mismatch': 'user',
         'CHAT.USER.conversation_not_found': 'chat',
         'RTC.USER.call_not_found': 'rtc',
-        'INTEGRATION.USER.location_unavailable': 'integration_location',
+        'INTEGRATION.USER.location_permission_required': 'integration_location',
         'ASSISTANT.MIDDLEWARE.upstream_timeout': 'assistant',
         'CIRCLE.USER.not_found': 'circle',
         CircleMembershipErrorCode.membershipNotFound.code: 'circle',
@@ -277,6 +283,7 @@ void main() {
     },
   );
 
+  // spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-001.t3
   test('未知错误码仍下发 userMessage + recovery 结构化兜底', () {
     // 模拟云侧新增了一个客户端尚无 typed 枚举的错误码：端侧不认识该 code，
     // 但必须仍能展示云端下发的 userMessage，并消费结构化 recovery。

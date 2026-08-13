@@ -15,7 +15,7 @@ from core.schema import assert_valid
 
 
 SCHEMA = "quwoquan_data.data_output_layout_migration"
-LEGACY_LAYOUT = (
+PRE_WORKSPACE_LAYOUT = (
     ("local/article-source-frontier", "local/workspace/article-source-frontier"),
     ("local/gc", "local/workspace/gc"),
     ("local/release-identity-incidents", "local/workspace/release-identity-incidents"),
@@ -53,7 +53,7 @@ def _tree_identity(
         child for child in sorted(path.rglob("*")) if child.is_file()
     )
     if not files:
-        raise OutputLayoutMigrationError(f"legacy output is empty: {path}")
+        raise OutputLayoutMigrationError(f"migration source output is empty: {path}")
     digest = hashlib.sha256()
     byte_count = 0
     for child in files:
@@ -102,7 +102,7 @@ def plan_output_layout_migration(
 ) -> tuple[dict[str, object], Path]:
     root = data_output_root.expanduser().resolve()
     entries: list[dict[str, object]] = []
-    for source_ref, destination_ref in LEGACY_LAYOUT:
+    for source_ref, destination_ref in PRE_WORKSPACE_LAYOUT:
         source = root / source_ref
         destination = root / destination_ref
         if not source.exists():
@@ -238,7 +238,7 @@ def apply_output_layout_migration(
                     "digest": entry["digest"],
                 }:
                     raise OutputLayoutMigrationError(
-                        f"legacy output drifted after plan: {entry['sourceRef']}"
+                        f"migration source output drifted after plan: {entry['sourceRef']}"
                     )
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 os.rename(source, destination)
@@ -274,7 +274,7 @@ def apply_output_layout_migration(
 
 
 __all__ = [
-    "LEGACY_LAYOUT",
+    "PRE_WORKSPACE_LAYOUT",
     "OutputLayoutMigrationError",
     "apply_output_layout_migration",
     "plan_output_layout_migration",

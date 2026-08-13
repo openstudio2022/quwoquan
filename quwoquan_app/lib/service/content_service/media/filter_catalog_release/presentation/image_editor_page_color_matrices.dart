@@ -25,88 +25,6 @@ extension _ImageEditorPageColorMatrices on _ImageEditorPageState {
     return out;
   }
 
-  List<double> _brightnessMatrix(double value) {
-    final offset = value / 100 * 255;
-    return <double>[
-      1,
-      0,
-      0,
-      0,
-      offset,
-      0,
-      1,
-      0,
-      0,
-      offset,
-      0,
-      0,
-      1,
-      0,
-      offset,
-      0,
-      0,
-      0,
-      1,
-      0,
-    ];
-  }
-
-  List<double> _contrastMatrix(double value) {
-    final factor = (1 + value / 100).clamp(0.0, 3.0);
-    final translate = 128 * (1 - factor);
-    return <double>[
-      factor,
-      0,
-      0,
-      0,
-      translate,
-      0,
-      factor,
-      0,
-      0,
-      translate,
-      0,
-      0,
-      factor,
-      0,
-      translate,
-      0,
-      0,
-      0,
-      1,
-      0,
-    ];
-  }
-
-  List<double> _saturationMatrix(double value) {
-    final s = (1 + value / 100).clamp(0.0, 3.0);
-    const lR = 0.2126;
-    const lG = 0.7152;
-    const lB = 0.0722;
-    return <double>[
-      lR * (1 - s) + s,
-      lG * (1 - s),
-      lB * (1 - s),
-      0,
-      0,
-      lR * (1 - s),
-      lG * (1 - s) + s,
-      lB * (1 - s),
-      0,
-      0,
-      lR * (1 - s),
-      lG * (1 - s),
-      lB * (1 - s) + s,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-    ];
-  }
-
   List<double> _temperatureMatrix(double value) {
     final t = (value / 100).clamp(-1.0, 1.0);
     final redScale = (1 + t * 0.18).clamp(0.7, 1.3);
@@ -196,179 +114,58 @@ extension _ImageEditorPageColorMatrices on _ImageEditorPageState {
     ];
   }
 
-  List<double> _exposureMatrix(double value) {
-    final ev = (value / 100).clamp(-1.5, 1.5);
-    final factor = math.pow(2, ev).toDouble();
-    return <double>[
-      factor,
-      0,
-      0,
-      0,
-      0,
-      0,
-      factor,
-      0,
-      0,
-      0,
-      0,
-      0,
-      factor,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-    ];
-  }
-
-  List<double> _hueRotationMatrix(double value) {
-    final angle = (value / 100) * (math.pi / 2);
-    final cosA = math.cos(angle);
-    final sinA = math.sin(angle);
-    const lR = 0.213;
-    const lG = 0.715;
-    const lB = 0.072;
-    return <double>[
-      lR + cosA * (1 - lR) + sinA * (-lR),
-      lG + cosA * (-lG) + sinA * (-lG),
-      lB + cosA * (-lB) + sinA * (1 - lB),
-      0,
-      0,
-      lR + cosA * (-lR) + sinA * 0.143,
-      lG + cosA * (1 - lG) + sinA * 0.140,
-      lB + cosA * (-lB) + sinA * (-0.283),
-      0,
-      0,
-      lR + cosA * (-lR) + sinA * (-(1 - lR)),
-      lG + cosA * (-lG) + sinA * lG,
-      lB + cosA * (1 - lB) + sinA * lB,
-      0,
-      0,
-      0,
-      0,
-      0,
-      1,
-      0,
-    ];
-  }
-
+  /// 整体面板的纯色彩矩阵：只承载真正可用矩阵表达的项。
+  ///
+  /// 细节类（sharpen/texture/structure）、分区类（highlight/shadow）与
+  /// 颗粒（grain）不再折算为对比度/亮度系数冒充效果——它们由
+  /// [ImageEditorExportEngine.applyDetailAdjustmentsToRgbaPixels] 逐像素实现，
+  /// 预览与烘焙同源（REQ-005）。
+  /// 纯色彩矩阵（与滤镜链共用同一真相源 buildImageEditorBaseColorMatrix）：
+  /// fade 为显式声明的「黑场抬升 + 轻度去饱和」精确线性实现；lightSense
+  /// 不再折算进矩阵，由 detail 管线的 ambiance 真算法承载。
   List<double> _buildBaseColorMatrixFromValues(Map<String, double> values) {
-    final lightSense = values['lightSense'] ?? 0;
-    final brightness = values['brightness'] ?? 0;
-    final exposure = values['exposure'] ?? 0;
-    final contrast = values['contrast'] ?? 0;
-    final saturation = values['saturation'] ?? 0;
-    final vibrance = values['vibrance'] ?? 0;
-    final texture = values['texture'] ?? 0;
-    final sharpen = values['sharpen'] ?? 0;
-    final structure = values['structure'] ?? 0;
-    final highlights = values['highlight'] ?? 0;
-    final shadows = values['shadow'] ?? 0;
-    final temperature = values['temperature'] ?? 0;
-    final tint = values['tint'] ?? 0;
-    final grain = values['grain'] ?? 0;
-    final fade = values['fade'] ?? 0;
-    final lightSenseBrightness = lightSense * 0.09;
-    final lightSenseContrast = lightSense * 0.18;
-    final vibranceSaturation = vibrance * 0.65;
-    final textureContrast = texture * 0.14;
-    final sharpenContrast = sharpen * 0.12;
-    final structureContrast = structure * 0.24;
-    final highlightBrightness = highlights * 0.20;
-    final shadowBrightness = shadows * 0.25;
-    final grainContrast = grain * 0.10;
-    final fadeLift = fade * 0.22;
-
-    var matrix = _identityColorMatrix();
-    matrix = _multiplyColorMatrices(_exposureMatrix(exposure), matrix);
-    matrix = _multiplyColorMatrices(
-      _brightnessMatrix(
-        brightness +
-            lightSenseBrightness +
-            highlightBrightness +
-            shadowBrightness +
-            fadeLift,
-      ),
-      matrix,
-    );
-    matrix = _multiplyColorMatrices(
-      _contrastMatrix(
-        contrast +
-            lightSenseContrast +
-            textureContrast +
-            sharpenContrast +
-            structureContrast +
-            grainContrast +
-            highlights * 0.10 -
-            shadows * 0.10 -
-            fade * 0.30,
-      ),
-      matrix,
-    );
-    matrix = _multiplyColorMatrices(
-      _saturationMatrix(saturation + vibranceSaturation - fade * 0.18),
-      matrix,
-    );
-    matrix = _multiplyColorMatrices(_temperatureMatrix(temperature), matrix);
-    matrix = _multiplyColorMatrices(_tintMatrix(tint), matrix);
-    return matrix;
+    return buildImageEditorBaseColorMatrix(values);
   }
+
+  /// values → 细节类像素参数（整体面板、局部锚点、滤镜链共用同一映射）。
+  ImageEditorDetailSpec _detailSpecFromValues(Map<String, double> values) {
+    return ImageEditorDetailSpec(
+      sharpen: values['sharpen'] ?? 0,
+      texture: values['texture'] ?? 0,
+      structure: values['structure'] ?? 0,
+      highlights: values['highlight'] ?? 0,
+      shadows: values['shadow'] ?? 0,
+      vibrance: values['vibrance'] ?? 0,
+      denoise: math.max(0, values['denoise'] ?? 0),
+      ambiance: values['lightSense'] ?? 0,
+      grain: math.max(0, values['grain'] ?? 0),
+    );
+  }
+
+  /// 局部锚点的细节类像素参数（与整体面板同一映射与管线，真算法）。
+  ImageEditorDetailSpec _buildLocalAnchorDetailSpec(
+    Map<String, double> values,
+  ) => _detailSpecFromValues(values);
 
   List<double> _buildProBaseColorMatrix() =>
       _buildBaseColorMatrixFromValues(_proBaseValues);
 
-  List<double> _buildProHslColorMatrix(
-    Map<String, Map<String, double>> values,
-  ) {
-    if (values.isEmpty) {
-      return _identityColorMatrix();
-    }
-    final count = values.length;
-    var sumHue = 0.0;
-    var sumSaturation = 0.0;
-    var sumLuminance = 0.0;
-    for (final channelValues in values.values) {
-      sumHue += channelValues[kHslAxisHue] ?? 0;
-      sumSaturation += channelValues[kHslAxisSaturation] ?? 0;
-      sumLuminance += channelValues[kHslAxisLuminance] ?? 0;
-    }
-    final avgHue = sumHue / count;
-    final avgSaturation = sumSaturation / count;
-    final avgLuminance = sumLuminance / count;
-    var matrix = _identityColorMatrix();
-    matrix = _multiplyColorMatrices(_hueRotationMatrix(avgHue), matrix);
-    matrix = _multiplyColorMatrices(_saturationMatrix(avgSaturation), matrix);
-    matrix = _multiplyColorMatrices(_brightnessMatrix(avgLuminance), matrix);
-    return matrix;
-  }
+  /// 整体面板的细节/分区/颗粒像素参数（与 CPU 预览、烘焙同一映射）。
+  ImageEditorDetailSpec _buildProBaseDetailSpec() =>
+      _detailSpecFromValues(_proBaseValues);
 
   List<double> _buildCombinedProColorMatrix({
-    bool useHslSessionBaseline = false,
     bool useBwLevelsSessionBaseline = false,
     bool includeWhiteBalance = true,
   }) {
+    // 整体面板（base）不再进组合矩阵：编辑会话由 CPU 组合预览层承载，
+    // 烘焙走 applyBaseAdjustments，同一管线同源。
     var matrix = _identityColorMatrix();
-    if (_hasProBaseAdjustments) {
-      matrix = _multiplyColorMatrices(_buildProBaseColorMatrix(), matrix);
-    }
     if (includeWhiteBalance && _hasWhiteBalanceAdjustments) {
       matrix = _multiplyColorMatrices(_buildWhiteBalanceColorMatrix(), matrix);
     }
-    final hslSource = useHslSessionBaseline
-        ? _hslSessionBaselineValues
-        : _proHslValues;
-    final hasHsl = hslSource.values.any(
-      (channelValues) =>
-          channelValues.values.any((value) => value.abs() > 0.001),
-    );
-    if (hasHsl) {
-      matrix = _multiplyColorMatrices(
-        _buildProHslColorMatrix(hslSource),
-        matrix,
-      );
-    }
+    // HSL 分带不再进组合矩阵：编辑会话由 CPU 分带预览层承载
+    // （_buildHslSessionImageLayer），导出走 applyHslBands，同一算法同源。
     if (_hasBwLevelsAdjustments || useBwLevelsSessionBaseline) {
       final white = useBwLevelsSessionBaseline
           ? _bwSessionBaselineWhiteLevel
@@ -407,6 +204,14 @@ extension _ImageEditorPageColorMatrices on _ImageEditorPageState {
     double strength,
   ) => buildImageEditorFilterColorMatrix(preset, strength);
 
+  /// 滤镜的细节类像素参数（与整体面板同一映射，滤镜/面板同源）。
+  ImageEditorDetailSpec _buildFilterDetailSpec(
+    ImageEditorFilterPreset preset,
+    double strength,
+  ) => _detailSpecFromValues(
+    buildImageEditorFilterDetailValues(preset, strength),
+  );
+
   Widget _wrapWithFilterAdjustments(Widget imageWidget) {
     final preset = _selectedFilterPreset;
     if (preset == null) return imageWidget;
@@ -422,13 +227,10 @@ extension _ImageEditorPageColorMatrices on _ImageEditorPageState {
   }
 
   Widget _wrapWithProAdjustments(Widget imageWidget) {
-    if (!_hasProBaseAdjustments &&
-        !_hasProHslAdjustments &&
-        !_hasBwLevelsAdjustments &&
-        !_hasWhiteBalanceAdjustments) {
+    // HSL 分带与整体面板由各自 CPU 预览层承载（与烘焙同管线），不进矩阵。
+    if (!_hasBwLevelsAdjustments && !_hasWhiteBalanceAdjustments) {
       return imageWidget;
     }
-    final useBaseline = _isComparingSessionBaseline && _isEditingHsl;
     final useBwBaseline = _isComparingSessionBaseline && _isEditingBwLevels;
     // 白平衡编辑中长按对比原图时不应用 wb 矩阵。
     final includeWhiteBalance =
@@ -436,7 +238,6 @@ extension _ImageEditorPageColorMatrices on _ImageEditorPageState {
     return ColorFiltered(
       colorFilter: ColorFilter.matrix(
         _buildCombinedProColorMatrix(
-          useHslSessionBaseline: useBaseline,
           useBwLevelsSessionBaseline: useBwBaseline,
           includeWhiteBalance: includeWhiteBalance,
         ),

@@ -6,10 +6,30 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/runtime/business_contract_fixture_server.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_state_seed_builder.dart';
+import '../../../../../support/service/circle_service/circle_management/circle/circle_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_wire_test_builder.dart';
+import '../../../../../support/service/notification_service/notification_delivery/notification/app_message_test_builder.dart';
+import '../../../../../support/service/user_service/account/user_account/user_profile_test_builder.dart';
+
+
+BusinessFixtureSeeds businessFixtureSeeds() {
+  final chatSeed = minimalChatStateSeed();
+  return BusinessFixtureSeeds(
+    content: contentDiscoveryWireExample(),
+    chatTimeline: chatStateSeedTimelineWire(chatSeed),
+    chatContacts: chatStateSeedContactsWire(chatSeed),
+    circle: businessCircleWireExample(),
+    user: userProfileWireExample(),
+    notificationMessages: appMessageWireExamples(),
+  );
+}
 
 void main() {
   test('chat conversation views preserve contacts and message home', () async {
-    final server = await BusinessContractFixtureServer.start();
+    final server = await BusinessContractFixtureServer.start(
+      seeds: businessFixtureSeeds(),
+    );
     addTearDown(server.close);
     final repository = ChatProductionComposition.repository(
       client: server.buildGeneratedClient(),
@@ -17,7 +37,7 @@ void main() {
     );
 
     final contacts = await repository.listContacts(limit: 20);
-    expect(contacts.items.length, greaterThanOrEqualTo(6));
+    expect(contacts.items, hasLength(3));
     expect(
       contacts.items.map((item) => item.userId),
       contains('fixture_user_friend'),
@@ -36,7 +56,7 @@ void main() {
     );
 
     final messageHome = await repository.listMessageHome(limit: 20);
-    expect(messageHome.length, greaterThanOrEqualTo(5));
+    expect(messageHome, hasLength(2));
     expect(
       messageHome.every(
         (row) => row.avatarUrl.toLowerCase().startsWith('media/avatar/'),

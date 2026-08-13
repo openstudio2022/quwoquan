@@ -1,3 +1,4 @@
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-004.t7
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -77,6 +78,18 @@ void main() {
       expect(post.normalizedBody, 'B');
       expect(post.articleTemplate, 'modern');
       expect(post.articleFontPreset, 'editorial');
+    });
+
+    test('article preview uses body only when canonical summary is absent', () {
+      final post = _post(
+        id: 'a_body_only',
+        contentType: 'article',
+        authorId: 'u',
+        displayName: 'U',
+        body: '正文承担无摘要文章的预览内容。',
+      );
+
+      expect(post.articlePreviewText, '正文承担无摘要文章的预览内容。');
     });
   });
 }

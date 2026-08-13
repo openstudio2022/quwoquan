@@ -881,5 +881,5 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：尚缺验收证据：alpha、beta、gamma、prod 真实历史 Trip 对象的 source inventory、canonical owner import/readback、parity、cutover 与 target-only rollback receipt。服务源码、契约、生成客户端、路由和运行拓扑已归零，现有仓内证据只验证合成快照上的迁移控制面合同。
-- 完成判定：四环境分别完成真实 source inventory、owner-command import、target readback、100% parity 与永久 target-only cutover；Prod 另有目标备份和不恢复源服务的 rollback 演练。全部历史对象计数守恒、orphan/collision 为零、原始 PII 零输出，receipt 绑定同一 crosswalk、ContractGraph、mapping、候选、审批和配置激活摘要。
+- 完成判定：四环境分别完成真实 source inventory、owner-command import、target readback、100% parity 与永久 target-only cutover；Prod 另有目标备份和不恢复源服务的 rollback 演练。全部历史对象计数守恒、orphan/collision 为零、原始 PII 零输出，receipt 绑定同一 crosswalk、ContractGraph、mapping、候选、审批和配置激活摘要。切流后 `UAT-012` 的「旅行能力不创建长期公共独立 Trip 根，也不复制成员或会话」结果在真实环境仍成立。
 - 依赖：[`travel-journey OPEN-001`](./travel-journey/spec.md#open-001)、Circle/Chat/Content target owner、四环境受保护 inventory 与审批证据。

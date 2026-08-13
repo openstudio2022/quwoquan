@@ -8,7 +8,7 @@ import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/adapte
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/adapters/realtime_connection_operation_remote.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_operation_gateway.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// realtime domain 的唯一 production 装配入口。

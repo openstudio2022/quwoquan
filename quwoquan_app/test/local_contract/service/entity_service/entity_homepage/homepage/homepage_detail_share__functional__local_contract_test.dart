@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_repository_typed_double.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
@@ -14,7 +14,7 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart'
     show ObjectHomepageText;
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
-    show chatRepositoryCompositionProvider, intersectionRepositoryProvider;
+    show intersectionRepositoryProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_client_sync.dart'
     show homepageFacetSetProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
@@ -62,9 +62,7 @@ void main() {
         intersectionRepositoryProvider.overrideWithValue(
           InMemoryIntersectionRepository(),
         ),
-        chatRepositoryCompositionProvider.overrideWithValue(
-          MockChatRepository(),
-        ),
+        ...chatTestRepositoryOverrides(),
         contentRuntimeConfigProvider.overrideWithValue(
           buildProductionContentRuntimeConfigDefaults(),
         ),

@@ -32,6 +32,7 @@ def discover_commons_sourced_videos(
     *,
     entity_aliases: list[str],
     limit: int = 50,
+    selected_limit: int = 1,
     diagnostics: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Discover anonymous public Commons video candidates with an audit funnel."""
@@ -130,6 +131,11 @@ def discover_commons_sourced_videos(
         license_url = _strip_html(
             str(((metadata.get("LicenseUrl") or {}).get("value") or ""))
         )
+        # Commons 对 CC0/PD 历史条目返回 http:// 的 canonical license URL；
+        # creativecommons.org 全站强制 TLS,协议归一不改变权利语义,
+        # 否则 schema 的 ^https:// termsUrl 门会误拦 CC0 素材。
+        if license_url.startswith("http://creativecommons.org/"):
+            license_url = "https://" + license_url.removeprefix("http://")
         categories = _strip_html(
             str(((metadata.get("Categories") or {}).get("value") or ""))
         ).lower()
@@ -218,7 +224,9 @@ def discover_commons_sourced_videos(
             int(item["sizeBytes"]),
         )
     )
-    selected = candidates[:1]
+    if selected_limit < 1:
+        raise ValueError("Commons video selected_limit must be at least one")
+    selected = candidates[:selected_limit]
     funnel["selectedForAnonymousDownload"] = len(selected)
     if diagnostics is not None:
         diagnostics.append(funnel)

@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/run_artifacts.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_journey.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_citation.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_timeline_turn_codec.dart';
@@ -24,7 +25,6 @@ import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/p
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_answer_toolbar.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_journey_view_model.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_process_drawer.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_turn_message_resolver.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_presentation_renderer.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/regenerate_options_popup.dart';
 import 'package:quwoquan_app/runtime/di/chat_presentation_slots.dart';
@@ -217,8 +217,12 @@ class AssistantMessageBubble extends ConsumerWidget {
             assistantBubbleMaxWidth,
             viewportWidth * assistantBubbleWidthFactor,
           );
+    final persisted = switch (row) {
+      AssistantAnswerTranscriptRow r => r.persisted,
+      _ => null,
+    };
     final persistedDisplayState = isAssistantMessage
-        ? resolvePersistedAssistantDisplayStateFromTranscriptRow(row)
+        ? persisted?.displayState ?? const AssistantDisplayState()
         : const AssistantDisplayState();
     final fallbackAnswerText = isAssistantMessage
         ? _resolveAssistantVisibleAnswerTextFromTranscriptRow(
@@ -229,27 +233,26 @@ class AssistantMessageBubble extends ConsumerWidget {
           )
         : content;
     final resolvedProcessTimeline = isAssistantMessage
-        ? resolveAssistantProcessTimelineFromTranscriptRow(row)
+        ? persisted?.visibleProcessTimeline ?? const <ProcessTimelineFrame>[]
         : const <ProcessTimelineFrame>[];
     final resolvedRetrievalProcessing = isAssistantMessage
-        ? resolveAssistantRetrievalProcessingFromTranscriptRow(row)
+        ? persisted?.retrievalProcessing ?? const RetrievalProcessingSnapshot()
         : const RetrievalProcessingSnapshot();
     final displayMarkdownForBuild = isAssistantMessage
-        ? resolvePersistedAssistantDisplayMarkdownFromTranscriptRow(row)
+        ? persisted?.resolvedDisplayMarkdown ?? ''
         : '';
     final displayPlainTextForBuild = isAssistantMessage
-        ? resolvePersistedAssistantDisplayPlainTextFromTranscriptRow(row)
+        ? persisted?.resolvedDisplayPlainText ?? ''
         : '';
     final resolvedDisplayState = isAssistantMessage
         ? buildAssistantDisplayState(
             explicitState: persistedDisplayState,
             processTimeline: resolvedProcessTimeline,
-            understandingSnapshot:
-                resolveAssistantUnderstandingSnapshotFromTranscriptRow(row),
+            understandingSnapshot: persisted?.understandingSnapshot ??
+                const RunArtifactsUnderstandingSnapshot(),
             retrievalProcessing: resolvedRetrievalProcessing,
-            answerProcessing: resolveAssistantAnswerProcessingFromTranscriptRow(
-              row,
-            ),
+            answerProcessing: persisted?.answerProcessing ??
+                const RunArtifactsAnswerProcessing(),
             answerMarkdown:
                 persistedDisplayState.answer.blocks.isEmpty &&
                     displayMarkdownForBuild.isNotEmpty
@@ -277,21 +280,19 @@ class AssistantMessageBubble extends ConsumerWidget {
     final resolvedJourneyViewModel = isAssistantMessage
         ? (journeyViewModel ??
               buildAssistantJourneyViewModel(
-                journey: resolveAssistantJourneyFromTranscriptRow(row),
+                journey: persisted?.journey ?? const AssistantJourney(),
                 processTimeline: resolvedProcessTimeline,
                 isRunning: isAssistantRunning,
                 displayState: resolvedDisplayState,
-                understandingSnapshot:
-                    resolveAssistantUnderstandingSnapshotFromTranscriptRow(row),
+                understandingSnapshot: persisted?.understandingSnapshot ??
+                    const RunArtifactsUnderstandingSnapshot(),
                 retrievalProcessing: resolvedRetrievalProcessing,
-                answerProcessing:
-                    resolveAssistantAnswerProcessingFromTranscriptRow(row),
-                usageStats: AssistantUiUsageStatsViewData.fromProtocolMap(
-                  switch (row) {
-                    AssistantAnswerTranscriptRow r => r.uiUsageStats,
-                    _ => const <String, dynamic>{},
-                  },
-                ),
+                answerProcessing: persisted?.answerProcessing ??
+                    const RunArtifactsAnswerProcessing(),
+                usageStats: switch (row) {
+                  AssistantAnswerTranscriptRow r => r.uiUsageStats,
+                  _ => AssistantUiUsageStatsViewData.empty,
+                },
                 elapsedMs: switch (row) {
                   AssistantAnswerTranscriptRow r =>
                     r.persisted.assistantElapsedMs,
@@ -473,8 +474,8 @@ class AssistantMessageBubble extends ConsumerWidget {
         showAnswerPreview ||
         showFinalAnswer ||
         (!showProcessDrawer && answerText.trim().isNotEmpty);
-    final followupPrompt = resolveAssistantFollowupPromptFromTranscriptRow(row);
-    final actionHints = resolveAssistantActionHintsFromTranscriptRow(row);
+    final followupPrompt = persisted?.sanitizedFollowupPrompt ?? '';
+    final actionHints = persisted?.sanitizedActionHints ?? const <String>[];
     Widget? avatarWidget;
     if (!hideAvatarAndName) {
       final chatAvatarSize = AppSpacing.avatarUserMd;

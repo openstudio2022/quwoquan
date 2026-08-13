@@ -14,6 +14,7 @@ extension _ImageEditorPageProTools on _ImageEditorPageState {
       _isComparingSessionBaseline = false;
       if (entry.categoryIndex == kImageEditorProCategoryHsl) {
         _resetHslSessionHistory();
+        _prepareHslPreviewSession();
       }
       if (entry.categoryIndex == kImageEditorProCategoryBwLevels) {
         _resetBwSessionHistory();
@@ -21,6 +22,12 @@ extension _ImageEditorPageProTools on _ImageEditorPageState {
       if (entry.categoryIndex == kImageEditorProCategoryOverall ||
           entry.categoryIndex == kImageEditorProCategoryLocal) {
         _resetLocalSessionHistory();
+      }
+      if (entry.categoryIndex == kImageEditorProCategoryOverall) {
+        _prepareBasePreviewSession();
+      }
+      if (entry.categoryIndex == kImageEditorProCategoryLocal) {
+        _prepareLocalPreviewSession();
       }
       if (entry.categoryIndex == kImageEditorProCategoryCurve) {
         _prepareCurveSession();

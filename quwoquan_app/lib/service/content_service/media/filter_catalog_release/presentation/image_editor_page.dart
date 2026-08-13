@@ -26,7 +26,7 @@ import 'package:quwoquan_app/runtime/platform/local_image_provider.dart';
 import 'package:quwoquan_app/runtime/platform/temporary_file_writer.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_step.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_step_payload.dart';
-import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_page_params.dart';
+import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/application/public/image_editor_page_params.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_export_engine.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_step_stack.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_top_bar.dart';
@@ -356,9 +356,6 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   Map<String, Map<String, double>> _proHslSnapshotValues =
       createDefaultHslValues();
 
-  /// HSL：会话基线（用于对比原图）
-  Map<String, Map<String, double>> _hslSessionBaselineValues =
-      createDefaultHslValues();
 
   /// HSL：会话撤回/重做栈
   final List<Map<String, Map<String, double>>> _hslSessionStack = [];
@@ -398,6 +395,35 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   bool _curvePreviewDirty = false;
   bool _curvePreviewComputing = false;
 
+  // HSL 分带 CPU 预览（与导出 applyHslBands 同一算法，保证确认不跳变）。
+  ui.Image? _hslPreviewBase;
+  Uint8List? _hslPreviewBaseRgba;
+  ui.Image? _hslPreviewImage;
+  bool _hslPreviewDirty = false;
+  bool _hslPreviewComputing = false;
+
+  // 整体面板 CPU 预览（矩阵 + 细节/分区/颗粒逐像素，与烘焙同一管线）。
+  ui.Image? _basePreviewBase;
+  Uint8List? _basePreviewBaseRgba;
+  ui.Image? _basePreviewImage;
+  bool _basePreviewDirty = false;
+  bool _basePreviewComputing = false;
+
+  // 局部锚点 CPU 预览（径向权重 + 矩阵/细节逐像素，与烘焙同一管线）。
+  ui.Image? _localPreviewBase;
+  Uint8List? _localPreviewBaseRgba;
+  ui.Image? _localPreviewImage;
+  bool _localPreviewDirty = false;
+  bool _localPreviewComputing = false;
+
+  // 滤镜 CPU 预览（纯色彩矩阵 + 细节逐像素，与烘焙同一管线）；仅当选中
+  // 滤镜含细节类参数时接管，否则走 GPU 矩阵 ColorFiltered。
+  ui.Image? _filterPreviewBase;
+  Uint8List? _filterPreviewBaseRgba;
+  ui.Image? _filterPreviewImage;
+  bool _filterPreviewDirty = false;
+  bool _filterPreviewComputing = false;
+
   /// 白平衡会话：色温/色调（-100..100）
   double _wbTemperature = 0;
   double _wbTint = 0;
@@ -419,6 +445,12 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   double _bwSessionBaselineBlackLevel = 0;
   final List<Map<String, double>> _bwSessionStack = <Map<String, double>>[];
   int _bwSessionCursor = -1;
+
+  /// 透视校正参数（-100..100，映射 ±PerspectiveGeometry.kMaxDegrees 度）
+  double _perspectiveHorizontal = 0;
+  double _perspectiveVertical = 0;
+  double _perspectiveSnapshotHorizontal = 0;
+  double _perspectiveSnapshotVertical = 0;
 
   /// 旋转精细角度（约 ±45° 或更大，度）
   double _rotateFineDegrees = 0;
@@ -538,6 +570,13 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                         _localRangeVisible = false;
                         if (index == kImageEditorProCategoryHsl) {
                           _resetHslSessionHistory();
+                          _prepareHslPreviewSession();
+                        }
+                        if (index == kImageEditorProCategoryOverall) {
+                          _prepareBasePreviewSession();
+                        }
+                        if (index == kImageEditorProCategoryLocal) {
+                          _prepareLocalPreviewSession();
                         }
                         if (index == kImageEditorProCategoryBwLevels) {
                           _resetBwSessionHistory();
@@ -642,6 +681,14 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                         _onBwLevelChanged(isWhite: true, value: v),
                     onBwBlackLevelChanged: (v) =>
                         _onBwLevelChanged(isWhite: false, value: v),
+                    perspectiveHorizontal: _perspectiveHorizontal,
+                    perspectiveVertical: _perspectiveVertical,
+                    onPerspectiveHorizontalChanged: (v) => setState(
+                      () => _perspectiveHorizontal = v.clamp(-100.0, 100.0),
+                    ),
+                    onPerspectiveVerticalChanged: (v) => setState(
+                      () => _perspectiveVertical = v.clamp(-100.0, 100.0),
+                    ),
                     proBaseSelectedIndex: _selectedProBaseToolIndex,
                     proBaseValues: _proBaseValues,
                     onProBaseSelectedIndexChanged: (index) => setState(() {
@@ -721,6 +768,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
         _prepareFilterSnapshot();
         _clearFilterPreviewCache();
         _ensureFilterSelectionForEditing();
+        _prepareFilterPreviewSession();
       }
       if (index == kImageEditorToolMosaic) {
         _prepareMosaicSession();

@@ -213,7 +213,7 @@
 - 影响或价值：仓内已实现 OIDC Authorization Code + PKCE、RS256/JWKS/issuer/audience/MFA
   校验、generated permission scope 与伪造身份头清除，但尚未绑定正式企业 IdP，也没有两个
   真实 operator principal 完成菜单/API 权限分离和危险动作双签的发布回执。
-- 完成判定：正式 IdP issuer/audience/JWKS 与 Portal client 配置由仓外受控注入；IdP group/role
+- 完成判定：`SIT-002` 的可观察验收在正式 IdP 上通过——正式 IdP issuer/audience/JWKS 与 Portal client 配置由仓外受控注入；IdP group/role
   到 canonical permission scope 的映射经安全审批；两个不同 MFA principal 分别完成允许、拒绝、
   伪造 `X-Actor`/`X-User-Id` 失败及同 digest 双签，API audit/outbox/receipt 与 Portal 展示一致。
 
@@ -227,13 +227,22 @@
 - 完成判定：`SIT-002` 的可观察验收通过，双人双签后状态、workflow、audit、outbox 与 receipt 原子提交，单人自批被拒绝。
 
 <a id="open-004"></a>
-### OPEN-004 发布 SLO 使用调用方数字而非真实监控读回
+### OPEN-004 发布 SLO Prometheus 读回已收口，缺真实发布窗口验收
 
 - 类型：`risk`
-- 优先级：`P1`
+- 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：发布 SLO 使用调用方数字而非真实监控读回
-- 完成判定：`SIT-004` 的可观察验收通过，发布 SLO 只从 Prometheus 读回并满足最小样本与窗口。
+- 影响或价值：调用方数字旁路已全部关闭——deploy 主链按
+  `slo_thresholds.yaml` 的窗口/最小样本从 Prometheus 读回
+  （errorRate/p95/redis/推荐业务指标），样本不足 pause、读回失败
+  rollback；`stackctl verify --kind config-slo` 与 `make config-slo-gate`
+  手工入口改为强制 `--prometheus-url` 并拒绝人工 SLO 数字
+  （local_contract 已锁定拒绝/pause/透传语义）；CI workflow 的
+  caller-supplied SLO token 由 `verify_prod_rollout_stackctl_contract.py`
+  禁用。剩余缺口是真实发布窗口的可观察验收。
+- 完成判定：`SIT-004` 的可观察验收在真实 canary 发布中通过——SLO 读回
+  样本满足最小样本与窗口，超阈值自动回滚 receipt 落
+  `.qwq_output/env/prod/runs/**`。
 
 <a id="open-006"></a>
 <a id="open-007"></a>
@@ -244,7 +253,7 @@
 - 准出影响：`block`
 - 影响或价值：没有受控备份、隔离恢复、RPO/RTO、远端加密副本与容量成本水位时，任何生产
   发布都无法证明可恢复，不能以本机 dump 或合成报告替代。
-- 完成判定：`stackctl verify --env prod --target prod-hosted --profile release` 只能接受摘要、
+- 完成判定：`SIT-005` 的备份恢复与 RPO/RTO/容量成本机器证据成立——`stackctl verify --env prod --target prod-hosted --profile release` 只能接受摘要、
   KMS key version、远端副本状态、隔离恢复目标、RPO/RTO 和容量成本水位全部有效的新鲜
   receipt；任一缺失、过期、未加密或摘要不一致必须 GATE_BLOCK。真实生产恢复演练需由受控
   data-plane 权限执行并保留 hosted receipt。
@@ -292,7 +301,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：prod 渲染配置路径/证书/Secret 漂移
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+- 完成判定：相关缺口消失，`SIT-006` 的可观察验收在 prod 渲染配置路径、证书与 Secret 上通过——实例 ACK 零 drift，有效配置缺失或摘要不匹配时不得启动，也不回退旧分层路径。
 
 <a id="open-013"></a>
 <a id="open-014"></a>
@@ -302,7 +311,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：配置中心（platform-ops-service）生产链路收口
-- 完成判定：相关缺口消失，目标节点的要求与可观察验收通过。
+- 完成判定：相关缺口消失，`SIT-006` 的可观察验收在 platform-ops-service 生产链路上通过——全部 governed workload 共用同一 ConfigSnapshot/ACK 契约并收敛到零 drift，Portal 只展示真实控制面数据。
 
 <a id="open-015"></a>
 ### OPEN-015 遥测与日志在异常条件下不丢关键事实
@@ -359,7 +368,7 @@
   province/carrier 已被 render 与 policy gate 拒绝。当前仍没有外部受控边缘提供的可信
   地域/运营商证明，也没有对应 hosted UAT，因此这两个维度绝不能启用。
 - 完成判定：受审批的边缘服务以不可伪造的 server-side attestation 传入 region/carrier；
-  该信任链、边缘到服务的身份边界和 hosted UAT 证明它们命中/不命中均符合策略。未取得
+  该信任链、边缘到服务的身份边界和 hosted UAT 证明它们命中/不命中均符合 `SIT-006` 的可信灰度维度策略。未取得
   该证据时，`appVersion/userId` 是唯一可用维度，release 保持 `GATE_BLOCK`，不得将“空数组禁用”
   误报为该项完成。
 

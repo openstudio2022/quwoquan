@@ -21,7 +21,7 @@ import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/search_execution_values.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/public/homepage_view_data.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_ports.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_facets.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage/homepage_test_adapter.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
@@ -139,7 +139,7 @@ Widget _buildApp({
       assistantSearchRunFacetProvider.overrideWithValue(
         _FakeAssistantRepository(),
       ),
-      chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
+      ...chatTestRepositoryOverrides(),
       homepageFacetSetProvider.overrideWithValue(
         homepageRepository ?? MockHomepageRepository(),
       ),

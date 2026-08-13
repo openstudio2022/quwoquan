@@ -38,6 +38,7 @@ class CircleRequestPageIds {
     'GetCircleImpact': 'circle.get.circle.impact',
     'GetCircleStats': 'circle.stats',
     'GetGathering': 'circle.get.gathering',
+    'GetGatheringParticipationStatus': 'circle.get.gathering.participation.status',
     'GetGatheringPlan': 'circle.get.gathering.plan',
     'GetMyCircleGroupMembership': 'circle.get.my.circle.group.membership',
     'GetMyCircleMembership': 'circle.members.self',
@@ -59,6 +60,7 @@ class CircleRequestPageIds {
     'ListGatheringRoster': 'circle.list.gathering.roster',
     'ListGatheringsByHost': 'circle.list.gatherings.by.host',
     'ListGatheringsBySource': 'circle.list.gatherings.by.source',
+    'ListMyHostedGatherings': 'circle.list.my.hosted.gatherings',
     'ListPendingCircleMemberships': 'circle.list.pending.circle.memberships',
     'ListPersonaCircles': 'circle.user.list',
     'PauseGatheringAdmission': 'circle.pause.gathering.admission',
@@ -127,6 +129,7 @@ class CircleRequestPageIds {
   static const String getCircleImpact = 'circle.get.circle.impact';
   static const String getCircleStats = 'circle.stats';
   static const String getGathering = 'circle.get.gathering';
+  static const String getGatheringParticipationStatus = 'circle.get.gathering.participation.status';
   static const String getGatheringPlan = 'circle.get.gathering.plan';
   static const String getMyCircleGroupMembership = 'circle.get.my.circle.group.membership';
   static const String getMyCircleMembership = 'circle.members.self';
@@ -148,6 +151,7 @@ class CircleRequestPageIds {
   static const String listGatheringRoster = 'circle.list.gathering.roster';
   static const String listGatheringsByHost = 'circle.list.gatherings.by.host';
   static const String listGatheringsBySource = 'circle.list.gatherings.by.source';
+  static const String listMyHostedGatherings = 'circle.list.my.hosted.gatherings';
   static const String listPendingCircleMemberships = 'circle.list.pending.circle.memberships';
   static const String listPersonaCircles = 'circle.user.list';
   static const String pauseGatheringAdmission = 'circle.pause.gathering.admission';

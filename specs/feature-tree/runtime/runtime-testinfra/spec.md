@@ -17,6 +17,8 @@
 - directory-layout / no-fake / coverage-map 门禁
 - Alpha/Beta/Gamma 验收数据的强类型请求、按需 Provider、依赖图、Actor 租约、回读、清理与追加式回执
 - 测试数据准备关键路径、operation 数量与阶段耗时治理
+- 契约驱动的压测负载生成与 SLO 对照性能证据
+- 环境边缘受控故障注入 harness 与故障 profile 闭集
 
 ### Out of Scope
 
@@ -33,6 +35,8 @@
 
 - [`test-execution-and-evidence`](./test-execution-and-evidence/spec.md)：按 canonical 目录发现并执行用例，从真实结果生成结构与运行证据。
 - [`test-data-provisioning-and-isolation`](./test-data-provisioning-and-isolation/spec.md)：按选中用例的强类型请求图准备、回读和清理最小验收数据。
+- [`performance-load-harness`](./performance-load-harness/spec.md)：按 operation 契约生成负载并出具与 SLO 对照的幂等性能证据。
+- [`fault-injection-harness`](./fault-injection-harness/spec.md)：以闭集故障 profile 在环境边缘受控注入与恢复，production 装配零侵入。
 
 ## 5. 能力要求
 
@@ -56,6 +60,7 @@
 - 测试代码只引用领域公开的强类型 capability、参数与结果，不书写 capability key、wire path、operation ID、裸字典参数或 Provider 实现。
 - Runner 只收集当前选中用例的根请求；控制面只加载其依赖闭包内 Provider，并按依赖图并行执行互不相关节点。
 - 内容、Creator、Entity 与已发布 Media 只读引用当前候选绑定的 immutable release；账号与交易事实只经各领域公开 command/event 创建。同源表示采用相同 publish、release、importer、契约和 readback，不表示复制 Prod 数据库。
+- 三环境各自消费 environment/target-bound exact handoff；共享 package/release/request，环境自治地绑定 config、import、readiness receipt 与 `candidateBindingDigest`。
 - 一个 CaseResult 的一次尝试拥有独立数据实例和 Actor 租约；可变业务事实不得跨 case 复用，清理不确定时必须隔离并阻断。
 - Prod 在首条测试数据 mutation 前拒绝，生产/App/Service 制品不得包含测试数据控制面、fixture、租约或回执。
 
@@ -64,6 +69,7 @@
 
 - 报告分别记录环境启动、静态门、请求收集、Provider 发现、规划、Actor 准备、每个 capability 的 provision/readback/cleanup、测试正文、回执写入、关键路径和总耗时，以及 operation 数量、加载 Provider、并发度、租约等待与缓存命中。
 - 前置失败或提前退出的 run 与完整绿色 run 分开表达，不得进入性能基线。
+- 旧基线使用串行、禁 candidate cache 的 benchmark-only policy，候选使用正常并发与 single-flight；benchmark-only 结果不得作为环境正式绿色回执。
 - 无 mutation 的 smoke 不执行环境数据准备；单领域用例的额外 Provider 与无关 operation 必须为零。
 
 ## 6. 契约与依赖

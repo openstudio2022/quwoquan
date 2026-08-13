@@ -116,6 +116,7 @@ class IntersectionCompactTimelineRow extends StatelessWidget {
     this.onTap,
     this.onSpanTap,
     this.onNegativeFeedback,
+    this.trailing,
   });
 
   final String primaryText;
@@ -139,6 +140,10 @@ class IntersectionCompactTimelineRow extends StatelessWidget {
   /// 交集条目负反馈手势（F 推荐差异化）：长按触发「不感兴趣」入口，
   /// 由页面弹出 action sheet 并 trackIntersectionFeedback（端云同源 feedbackKinds）。
   final VoidCallback? onNegativeFeedback;
+
+  /// 行尾自定义 widget（缺省渲染 chevron）：可行动分组用行动 pill 替换 chevron，
+  /// 复用同一行布局避免出现第二套交集行实现。
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -182,11 +187,12 @@ class IntersectionCompactTimelineRow extends StatelessWidget {
               _LifecycleWeakBadge(label: lifecycleLabel),
             ],
             SizedBox(width: AppSpacing.intraGroupSm),
-            Icon(
-              CupertinoIcons.chevron_forward,
-              size: AppSpacing.eighteen,
-              color: AppColors.iosTertiaryLabel(context),
-            ),
+            trailing ??
+                Icon(
+                  CupertinoIcons.chevron_forward,
+                  size: AppSpacing.eighteen,
+                  color: AppColors.iosTertiaryLabel(context),
+                ),
           ],
         ),
       ),
@@ -284,6 +290,91 @@ class IntersectionTimelineRecentLimitNote extends StatelessWidget {
             fontSize: AppTypography.iosFootnote,
             color: AppColors.iosTertiaryLabel(context),
             height: AppSpacing.textLineHeightFootnote,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 可行动交集置顶分组（REQ-008「可约」）：分组标题 + 分组卡，行由页面构建注入。
+///
+/// 复用 [_BucketGroupCard] 的卡面，与时间桶分组保持同一视觉语言；
+/// 分组内顺序即传入顺序（云侧排序主权），行内主 CTA 由页面经
+/// `IntersectionTargetNavigator.openActionHint` 分发。空列表不渲染。
+class IntersectionActionableGroupSection extends StatelessWidget {
+  const IntersectionActionableGroupSection({super.key, required this.rows});
+
+  static const Key sectionKey = ValueKey<String>(
+    'my-intersections-actionable-section',
+  );
+
+  final List<Widget> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      key: IntersectionActionableGroupSection.sectionKey,
+      padding: EdgeInsets.only(bottom: AppSpacing.containerMd),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '${DiscoveryFeedText.intersectionActionableGroupTitle} '
+            '${_bucketCountLabel(rows.length)}',
+            style: TextStyle(
+              fontSize: AppTypography.iosBody,
+              fontWeight: AppTypography.semiBold,
+              color: AppColors.iosLabel(context),
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          _BucketGroupCard(children: rows),
+        ],
+      ),
+    );
+  }
+}
+
+/// 可行动行行尾的主行动 pill：label 来自云侧 actionHint（不改写文案）。
+class IntersectionActionablePill extends StatelessWidget {
+  const IntersectionActionablePill({
+    super.key,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppColors.iosAccent(context);
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size(
+        AppSpacing.minInteractiveSize,
+        AppSpacing.minInteractiveSize,
+      ),
+      onPressed: onPressed,
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.containerSm,
+          vertical: AppSpacing.intraGroupXs,
+        ),
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: AppTypography.iosFootnote,
+            fontWeight: AppTypography.medium,
+            color: accent,
           ),
         ),
       ),

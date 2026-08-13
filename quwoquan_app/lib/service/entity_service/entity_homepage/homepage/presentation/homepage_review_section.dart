@@ -6,6 +6,7 @@ import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage_rev
 import 'package:quwoquan_app/runtime/errors/generated/entity/entity_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/object_page/profile_ios_components.dart';
@@ -429,7 +430,13 @@ final class _HomepageReviewSectionState
           SizedBox(height: AppSpacing.containerSm),
         ],
         if (others.isEmpty && !mineActive)
-          ProfileIosSectionCard(child: _HomepageReviewEmptyState())
+          const ProfileIosSectionCard(
+            child: AppEmptyState(
+              icon: CupertinoIcons.star,
+              title: ObjectHomepageText.homepageReviewEmptyTitle,
+              subtitle: ObjectHomepageText.homepageReviewEmptyDescription,
+            ),
+          )
         else ...<Widget>[
           for (final review in others)
             Padding(
@@ -532,39 +539,6 @@ final class _HomepageReviewTile extends StatelessWidget {
                 .toList(growable: false),
           ),
         ],
-      ],
-    );
-  }
-}
-
-final class _HomepageReviewEmptyState extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        Icon(
-          CupertinoIcons.star,
-          size: AppSpacing.iconLarge,
-          color: AppColors.iosTertiaryLabel(context),
-        ),
-        SizedBox(height: AppSpacing.intraGroupXs),
-        Text(
-          ObjectHomepageText.homepageReviewEmptyTitle,
-          style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            fontWeight: AppTypography.medium,
-            color: AppColors.iosLabel(context),
-          ),
-        ),
-        SizedBox(height: AppSpacing.intraGroupXs),
-        Text(
-          ObjectHomepageText.homepageReviewEmptyDescription,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: AppTypography.iosFootnote,
-            color: AppColors.iosSecondaryLabel(context),
-          ),
-        ),
       ],
     );
   }

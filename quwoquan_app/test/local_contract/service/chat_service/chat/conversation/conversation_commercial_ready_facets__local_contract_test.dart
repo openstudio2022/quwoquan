@@ -64,7 +64,10 @@ void main() {
     );
 
     expect(batch.items.single.id, 'conversation-1');
-    expect(home.items.single.summaryIntersections, <String>['共同关注摄影']);
+    expect(home.items.single.intersectionFacts.map((f) => f.primaryText), [
+      '共同关注摄影',
+    ]);
+    expect(home.items.single.intersectionFacts.single.kind, 'sharedFollowees');
     expect(contacts.items.single.userId, 'persona-2');
     expect(contacts.items.single.userHandle, 'xiaoq_public');
     expect(candidates.items.single.source, ChatContactSource.mutual);
@@ -266,7 +269,15 @@ const Map<String, Object?> _contactHome = <String, Object?>{
   'title': '小趣',
   'subtitle': '摄影作者',
   'avatarUrl': '',
-  'summaryIntersections': <String>['共同关注摄影'],
+  'intersectionFacts': <Map<String, Object?>>[
+    <String, Object?>{
+      'intersectionId': 'ix_shared_followees_photo',
+      'kind': 'sharedFollowees',
+      'dimension': 'relationship',
+      'intersectionClass': 'fact',
+      'primaryText': '共同关注摄影',
+    },
+  ],
   'sortKey': 'xiaoq',
   'contactCount': 0,
 };

@@ -62,5 +62,11 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺少能够证明“会话治理动作”已满足当前规格的真实测试证据。
+- 影响或价值：尚缺群二维码入群与举报入口的实现与验收证据。
+  免打扰/置顶开关已接线真实 `ConversationUserState` 命令并复验全绿：初值水合、命令绑定与失败回滚三个用例见 `chat_settings_page_widget__local_contract_test.dart` 的免打扰/置顶分组。
+  设置页「查找聊天记录」入口打开会话内搜索面板，`LocalChatSearchStore.searchMessages` 支持 `conversationId` scoped 过滤，点击结果按搜索锚点语义进入会话定位；
+  入口与 scoped 过滤证据见同文件「查找聊天记录入口打开会话内搜索面板」与 `local_chat_search_store__local_contract_test.dart`。
+  免打扰/置顶已从本地假状态接线真实 `ConversationUserState` 命令：初值从
+  inbox 本地副本水合、乐观切换、远端失败回滚并提示，remote 幂等与
+  api_integration 证据先在。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

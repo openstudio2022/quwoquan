@@ -21,7 +21,7 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/c
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/user_service/account/account_session/test_auth_facets.dart';
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
 
@@ -120,7 +120,7 @@ Widget _buildHarness({
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
       startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       accountSessionLifecycleCommandWriterProvider.overrideWithValue(

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -141,6 +142,15 @@ def render_contact_sheet(
     frame_count: int,
     fail: Any,
 ) -> None:
+    """Render the review contact sheet via the shared direction-safe sampler.
+
+    Container frame counts for Commons WebM/VP8/VP9 are estimates; OpenCV
+    CAP_PROP_POS_FRAMES seeks near the estimated tail fail on files that
+    decode cleanly, so sampling shares the ffmpeg timestamp fallback with the
+    admission/motion probes instead of a second seek-only chain.
+    """
+    from content.source.sourced_video_admission import sample_video_frame_files
+
     sample_count = _CONTACT_COLUMNS * _CONTACT_ROWS
     positions = sorted(
         {
@@ -150,19 +160,19 @@ def render_contact_sheet(
     )
     if len(positions) < 6:
         fail("prepared video has too few distinct sample positions")
-    capture = cv2.VideoCapture(str(video))
     frames: list[Any] = []
-    try:
-        if not capture.isOpened():
-            fail("prepared video cannot be opened for contact-sheet evidence")
-        for position in positions:
-            capture.set(cv2.CAP_PROP_POS_FRAMES, position)
-            ok, frame = capture.read()
-            if not ok or frame is None:
-                fail(f"contact-sheet sample frame is unreadable: {position}")
+    with tempfile.TemporaryDirectory(prefix="qwq_contact_sheet_") as temp:
+        try:
+            files = sample_video_frame_files(
+                video, sample_count=sample_count, output_dir=Path(temp)
+            )
+        except (OSError, ValueError) as exc:
+            fail(f"contact-sheet sample frame is unreadable: {exc}")
+        for file in files:
+            frame = cv2.imread(str(file))
+            if frame is None:
+                fail(f"contact-sheet sample frame is unreadable: {file.name}")
             frames.append(_letterbox(frame))
-    finally:
-        capture.release()
     sheet = np.zeros(
         (
             _CONTACT_ROWS * _CONTACT_HEIGHT,

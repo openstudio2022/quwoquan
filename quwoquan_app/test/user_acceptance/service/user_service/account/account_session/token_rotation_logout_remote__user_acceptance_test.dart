@@ -1,3 +1,4 @@
+// readiness_case: account_session_token_rotation_app_uat
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/auth-token-lifecycle/spec.md#gwt-002
 /// disposable actor 先经 production Remote 轮换 refresh token 并证明旧 token 失效；
 /// production App 再从设置页执行 hard logout，只有新 token 也被服务端拒绝且 UI 进入

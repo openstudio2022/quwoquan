@@ -1,3 +1,4 @@
+// readiness_case: user_account_closure_app_uat
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 /// Patrol UAT：真实 Remote 账号注销后回到不可重入的游客安全态。
 ///

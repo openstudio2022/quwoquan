@@ -95,7 +95,6 @@ def test_site_frontier_skips_non_exact_listing_and_freezes_exact_qunar_detail(
     assert acquired.source_unit["qualityStatus"] == "passed"
     catalog = build_article_source_unit_catalog(
         catalog_id="site-first",
-        catalog_version="m100",
         created_at="2026-08-12T06:00:00Z",
         minimum_candidate_count=1,
         source_revision=SHA_A,

@@ -355,20 +355,45 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
       }
       final original = controller
           .take<RequestOriginalImageAccessContinuation>();
-      if (original == null) {
+      if (original != null) {
+        final post = _postById(_buildFeed(), original.postId);
+        if (post != null) {
+          unawaited(
+            _loadOriginalImage(
+              post: post,
+              mediaId: original.mediaId,
+              imageIndex: original.imageIndex,
+            ),
+          );
+        } else {
+          controller.set(original);
+        }
         return;
       }
-      final post = _postById(_buildFeed(), original.postId);
-      if (post != null) {
-        unawaited(
-          _loadOriginalImage(
-            post: post,
-            mediaId: original.mediaId,
-            imageIndex: original.imageIndex,
-          ),
-        );
-      } else {
-        controller.set(original);
+      // 双目标契约：登录成功续接「想去」——仅当当前可见作品仍锚定同一
+      // 实体主页时执行；否则交还 continuation 给真正的目标页面。
+      final pendingWishlist = ref.read(authContinuationProvider);
+      if (pendingWishlist is WishlistHomepageContinuation) {
+        final posts = _buildFeed();
+        final post = posts.isEmpty
+            ? null
+            : posts[_currentPage.clamp(0, posts.length - 1)];
+        final anchor = post == null ? null : _wishlistAnchorForPost(post);
+        if (post != null &&
+            anchor != null &&
+            anchor.homepageId == pendingWishlist.homepageId) {
+          final wishlist = controller.take<WishlistHomepageContinuation>();
+          if (wishlist != null) {
+            unawaited(
+              _applyWishlist(
+                post: post,
+                homepageId: anchor.homepageId,
+                displayName: anchor.displayName,
+                wishlisted: true,
+              ),
+            );
+          }
+        }
       }
     });
   }

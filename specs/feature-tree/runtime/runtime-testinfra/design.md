@@ -13,6 +13,8 @@
 
 - [`test-execution-and-evidence`](./test-execution-and-evidence/spec.md)：发现并执行 canonical 测试，分离结构入口与运行结果。
 - [`test-data-provisioning-and-isolation`](./test-data-provisioning-and-isolation/spec.md)：以强类型请求图按需准备、回读和清理隔离数据。
+- [`performance-load-harness`](./performance-load-harness/spec.md)：契约驱动负载生成与 SLO 对照证据。
+- [`fault-injection-harness`](./fault-injection-harness/spec.md)：环境边缘受控故障注入与恢复编排。
 
 ## 3. 端云与数据流
 
@@ -69,13 +71,30 @@
 - 决策：领域 capability 对外部 Provider 的依赖使用 `ProviderCapabilityKey` 强类型引用；`stackctl test-data-evidence` 从当前 Provider conformance readiness 只投影选中请求的精确依赖闭包，并绑定 candidate 与 request digest。稳定字符串只存在于序列化和长期证据中。
 - 决策：`CapabilityRef.bind` 的进程内请求身份只负责对象图隔离，不作为长期证据身份；序列化器按选中 case 顺序与依赖遍历生成确定性 wire request ID，使同一 composition 的文档和 `requestDigest` 字节幂等，实际 mutation 仍由新的 `testDataInstanceId` 隔离。
 - 决策：环境测试数据引用当前候选绑定的 immutable release，其 lifecycle 可为 `research` 或 `commercial`；控制面必须从 canonical readiness receipt 的显式 `readinessPhase` 选择对应严格验证器，不得按环境猜测，也不得把 Research 冒充 Commercial。
+- 决策：`test-data-evidence` 为每个 environment/target 生成独立 exact handoff。
+- 决策：三环境 handoff 共享 source revision、package、release manifest、request、Provider 闭包与公开 operation 允许集。`candidateBindingDigest`、runtime config、import run 和 readiness receipt 保持环境自治，禁止用一份环境绑定冒充三环境证据。
+- 决策：实际 operation 集是允许集的非空子集并在三环境一致。可选参数未触发的 operation 不得被伪造为已执行。
 - 决策：只缓存 ContractGraph、capability definition、immutable release、Provider conformance 和 candidate binding 等只读事实；不缓存跨 case mutable object。
 - 决策：报告分段记录环境、静态门、请求收集、发现、规划、Actor 准备、provision、readback、测试正文、cleanup、回执与关键路径，并记录 operation 数量和加载 Provider。
+- 决策：性能旧基线只允许显式 `serial-no-cache` benchmark-only policy，强制全局并发 1 且关闭 candidate immutable cache；候选样本使用正常并发与 single-flight。benchmark-only 报告不得进入 Alpha/Beta/Gamma 环境绿色回执。
 - 理由：主要性能成本来自无关 mutation 与全域 Provider 前置条件，而非动态 import；请求图把总时间从固定 recipe 总和收敛为实际依赖关键路径。
 - 被否决方案：integration 固定执行全部 recipe、全域 Provider readiness、通过减少断言/回读/cleanup 提速、为测试新增 bulk API、把早退失败时长作为成功基线。
 - 约束与影响：默认全局准备并发度为 4，跨 Case 也不得倍增。相同 immutable lookup 使用 single-flight；同租约、同对象和显式依赖保持串行。报告以 suite 实测 `dataPreparationMs` 表达 wall time，不把并行分支耗时相加冒充关键路径。完整回归作为受管任务，不进入 commit gate。
 - 关联要求：`REQ-004`
 - 影响 Story：[`test-data-provisioning-and-isolation`](./test-data-provisioning-and-isolation/spec.md) 的 DAG 与性能证据。
+- 关联验收：`SIT-002`
+
+<a id="dec-005"></a>
+### DEC-005 压测与故障注入经环境编排入口收口且不进入生产装配
+
+- 决策：压测负载只由契约驱动的 loadgen 按 generated client 与公开 operation 生成，经统一环境编排 CLI（`stackctl loadtest`）执行；性能证据与 `slo_thresholds` 对照后写入 `.qwq_output`，字节可幂等重建。
+- 决策：故障注入只发生在环境边缘受控代理与测试树内 typed fault double 两个面；故障 profile（延迟、错误、断连、弱网带宽）是闭集枚举，由 `stackctl drill` 编排注入、观测与恢复并产出结构化回执。
+- 决策：压测与演练只允许 alpha/beta/gamma 环境；Prod 在首条压测或注入 mutation 前拒绝，仅保留放量后 soak 观测。
+- 理由：负载与故障语义复用契约单一真相源可防止第二套压测脚本模型；边缘注入使 production `lib/**` 与服务装配保持零注入开关，符合 Mock 物理隔离约束。
+- 被否决方案：引入独立开源压测/混沌平台形成第二编排入口、在服务代码内埋故障开关、用裸 HTTP 脚本绕过 generated client 压测。
+- 约束与影响：benchmark-only policy 沿用 DEC-004，不得作为环境正式绿色回执；新故障 profile 必须先扩展 harness 契约闭集再实现。
+- 关联要求：`REQ-004`
+- 影响 Story：[`performance-load-harness`](./performance-load-harness/spec.md)、[`fault-injection-harness`](./fault-injection-harness/spec.md)
 - 关联验收：`SIT-002`
 
 ## 5. 失败与恢复

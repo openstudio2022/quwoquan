@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: 647c7b556596bb370e386bfe039faeb5263ea0e884d49cdc37e360c8ed295ab1
+// ContractGraph SHA256: ba2dde9a203e9d9979e42aa34fc1994593f88f10ce159c4e37a42f66497c1ef9
 
 library;
 
@@ -95,7 +95,8 @@ enum MessageCardKind {
   entityProfile("entity_profile"),
   circle("circle"),
   gathering("gathering"),
-  rtcCallLog("rtc_call_log");
+  rtcCallLog("rtc_call_log"),
+  intersectionIcebreaker("intersection_icebreaker");
 
   const MessageCardKind(this.wireName);
 
@@ -110,6 +111,7 @@ enum MessageCardKind {
       "circle" => MessageCardKind.circle,
       "gathering" => MessageCardKind.gathering,
       "rtc_call_log" => MessageCardKind.rtcCallLog,
+      "intersection_icebreaker" => MessageCardKind.intersectionIcebreaker,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -619,6 +621,8 @@ final class ChatMessageView {
     this.mediaType,
     this.mediaContentType,
     this.mediaFileSizeBytes,
+    this.audioDurationMs,
+    this.audioWaveform,
     this.card,
     this.replyToMessageId,
     this.mentions,
@@ -641,6 +645,8 @@ final class ChatMessageView {
   final String? mediaType;
   final String? mediaContentType;
   final int? mediaFileSizeBytes;
+  final int? audioDurationMs;
+  final List<double>? audioWaveform;
   final MessageCard? card;
   final String? replyToMessageId;
   final List<String>? mentions;
@@ -649,7 +655,7 @@ final class ChatMessageView {
   final DateTime timestamp;
 
   factory ChatMessageView.fromWire(Map<String, Object?> map, [String path = "ChatMessageView"]) {
-    _rejectUnknownFields(map, const <String>{"id", "conversationId", "seq", "clientMsgId", "senderId", "senderName", "senderAvatar", "type", "content", "mediaAssetId", "mediaDeliveryUrl", "mediaType", "mediaContentType", "mediaFileSizeBytes", "card", "replyToMessageId", "mentions", "status", "recalledAt", "timestamp"}, path);
+    _rejectUnknownFields(map, const <String>{"id", "conversationId", "seq", "clientMsgId", "senderId", "senderName", "senderAvatar", "type", "content", "mediaAssetId", "mediaDeliveryUrl", "mediaType", "mediaContentType", "mediaFileSizeBytes", "audioDurationMs", "audioWaveform", "card", "replyToMessageId", "mentions", "status", "recalledAt", "timestamp"}, path);
     return ChatMessageView(
       id: _requiredString(map["id"], '$path.id'),
       conversationId: _requiredString(map["conversationId"], '$path.conversationId'),
@@ -665,6 +671,8 @@ final class ChatMessageView {
       mediaType: map["mediaType"] == null ? null : _requiredString(map["mediaType"], '$path.mediaType'),
       mediaContentType: map["mediaContentType"] == null ? null : _requiredString(map["mediaContentType"], '$path.mediaContentType'),
       mediaFileSizeBytes: map["mediaFileSizeBytes"] == null ? null : _requiredInt(map["mediaFileSizeBytes"], '$path.mediaFileSizeBytes'),
+      audioDurationMs: map["audioDurationMs"] == null ? null : _requiredInt(map["audioDurationMs"], '$path.audioDurationMs'),
+      audioWaveform: map["audioWaveform"] == null ? null : List<double>.unmodifiable(_requiredList(map["audioWaveform"], '$path.audioWaveform').asMap().entries.map((entry) => _requiredDouble(entry.value, '$path.audioWaveform' + '[${entry.key}]'))),
       card: map["card"] == null ? null : MessageCard.fromWire(_requiredObject(map["card"], '$path.card'), '$path.card'),
       replyToMessageId: map["replyToMessageId"] == null ? null : _requiredString(map["replyToMessageId"], '$path.replyToMessageId'),
       mentions: map["mentions"] == null ? null : List<String>.unmodifiable(_requiredList(map["mentions"], '$path.mentions').asMap().entries.map((entry) => _requiredString(entry.value, '$path.mentions' + '[${entry.key}]'))),
@@ -689,6 +697,8 @@ final class ChatMessageView {
     if (mediaType != null) "mediaType": mediaType!,
     if (mediaContentType != null) "mediaContentType": mediaContentType!,
     if (mediaFileSizeBytes != null) "mediaFileSizeBytes": mediaFileSizeBytes!,
+    if (audioDurationMs != null) "audioDurationMs": audioDurationMs!,
+    if (audioWaveform != null) "audioWaveform": audioWaveform!.map((value) => value).toList(growable: false),
     if (card != null) "card": card!.toWire(),
     if (replyToMessageId != null) "replyToMessageId": replyToMessageId!,
     if (mentions != null) "mentions": mentions!.map((value) => value).toList(growable: false),
@@ -759,7 +769,7 @@ final class ContactHomeRow {
     required this.subtitle,
     required this.avatarUrl,
     this.relationState,
-    required this.summaryIntersections,
+    required this.intersectionFacts,
     this.sourceEntityTitle,
     this.sourceCircleTitle,
     this.memberCount,
@@ -782,7 +792,7 @@ final class ContactHomeRow {
   final String subtitle;
   final String avatarUrl;
   final String? relationState;
-  final List<String> summaryIntersections;
+  final List<ContactIntersectionFact> intersectionFacts;
   final String? sourceEntityTitle;
   final String? sourceCircleTitle;
   final int? memberCount;
@@ -792,7 +802,7 @@ final class ContactHomeRow {
   final bool? isStarred;
 
   factory ContactHomeRow.fromWire(Map<String, Object?> map, [String path = "ContactHomeRow"]) {
-    _rejectUnknownFields(map, const <String>{"id", "kind", "objectId", "userId", "userHandle", "conversationId", "circleId", "circleGroupId", "entityId", "title", "subtitle", "avatarUrl", "relationState", "summaryIntersections", "sourceEntityTitle", "sourceCircleTitle", "memberCount", "contactCount", "lastActiveAt", "sortKey", "isStarred"}, path);
+    _rejectUnknownFields(map, const <String>{"id", "kind", "objectId", "userId", "userHandle", "conversationId", "circleId", "circleGroupId", "entityId", "title", "subtitle", "avatarUrl", "relationState", "intersectionFacts", "sourceEntityTitle", "sourceCircleTitle", "memberCount", "contactCount", "lastActiveAt", "sortKey", "isStarred"}, path);
     return ContactHomeRow(
       id: _requiredString(map["id"], '$path.id'),
       kind: _requiredString(map["kind"], '$path.kind'),
@@ -807,7 +817,7 @@ final class ContactHomeRow {
       subtitle: _requiredString(map["subtitle"], '$path.subtitle'),
       avatarUrl: _requiredString(map["avatarUrl"], '$path.avatarUrl'),
       relationState: map["relationState"] == null ? null : _requiredString(map["relationState"], '$path.relationState'),
-      summaryIntersections: List<String>.unmodifiable(_requiredList(map["summaryIntersections"], '$path.summaryIntersections').asMap().entries.map((entry) => _requiredString(entry.value, '$path.summaryIntersections' + '[${entry.key}]'))),
+      intersectionFacts: List<ContactIntersectionFact>.unmodifiable(_requiredList(map["intersectionFacts"], '$path.intersectionFacts').asMap().entries.map((entry) => ContactIntersectionFact.fromWire(_requiredObject(entry.value, '$path.intersectionFacts' + '[${entry.key}]'), '$path.intersectionFacts' + '[${entry.key}]'))),
       sourceEntityTitle: map["sourceEntityTitle"] == null ? null : _requiredString(map["sourceEntityTitle"], '$path.sourceEntityTitle'),
       sourceCircleTitle: map["sourceCircleTitle"] == null ? null : _requiredString(map["sourceCircleTitle"], '$path.sourceCircleTitle'),
       memberCount: map["memberCount"] == null ? null : _requiredInt(map["memberCount"], '$path.memberCount'),
@@ -832,7 +842,7 @@ final class ContactHomeRow {
     "subtitle": subtitle,
     "avatarUrl": avatarUrl,
     if (relationState != null) "relationState": relationState!,
-    "summaryIntersections": summaryIntersections.map((value) => value).toList(growable: false),
+    "intersectionFacts": intersectionFacts.map((value) => value.toWire()).toList(growable: false),
     if (sourceEntityTitle != null) "sourceEntityTitle": sourceEntityTitle!,
     if (sourceCircleTitle != null) "sourceCircleTitle": sourceCircleTitle!,
     if (memberCount != null) "memberCount": memberCount!,
@@ -840,6 +850,41 @@ final class ContactHomeRow {
     if (lastActiveAt != null) "lastActiveAt": lastActiveAt!.toUtc().toIso8601String(),
     "sortKey": sortKey,
     if (isStarred != null) "isStarred": isStarred!,
+  };
+}
+
+final class ContactIntersectionFact {
+  const ContactIntersectionFact({
+    required this.intersectionId,
+    required this.kind,
+    required this.dimension,
+    required this.intersectionClass,
+    required this.primaryText,
+  });
+
+  final String intersectionId;
+  final String kind;
+  final String dimension;
+  final String intersectionClass;
+  final String primaryText;
+
+  factory ContactIntersectionFact.fromWire(Map<String, Object?> map, [String path = "ContactIntersectionFact"]) {
+    _rejectUnknownFields(map, const <String>{"intersectionId", "kind", "dimension", "intersectionClass", "primaryText"}, path);
+    return ContactIntersectionFact(
+      intersectionId: _requiredNonBlankString(map["intersectionId"], '$path.intersectionId'),
+      kind: _requiredNonBlankString(map["kind"], '$path.kind'),
+      dimension: _requiredNonBlankString(map["dimension"], '$path.dimension'),
+      intersectionClass: _requiredNonBlankString(map["intersectionClass"], '$path.intersectionClass'),
+      primaryText: _requiredNonBlankString(map["primaryText"], '$path.primaryText'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "intersectionId": intersectionId,
+    "kind": kind,
+    "dimension": dimension,
+    "intersectionClass": intersectionClass,
+    "primaryText": primaryText,
   };
 }
 
@@ -1853,6 +1898,11 @@ DateTime _requiredTimestamp(Object? value, String path) {
 int _requiredInt(Object? value, String path) {
   if (value is! int) throw FormatException('$path must be an int');
   return value;
+}
+
+double _requiredDouble(Object? value, String path) {
+  if (value is! num) throw FormatException('$path must be a number');
+  return value.toDouble();
 }
 
 bool _requiredBool(Object? value, String path) {

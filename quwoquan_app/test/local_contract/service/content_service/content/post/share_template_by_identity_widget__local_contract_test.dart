@@ -5,12 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/conversation_dto.dart';
+import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/outbound_share_fact/application/public/content_outbound_share_appender.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_post_placement/application/public/circle_post_placement_commands.dart';
 import 'package:quwoquan_app/runtime/observability/generated/app_telemetry_catalog.g.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
@@ -33,6 +36,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/service/chat_service/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 
 class _FakeShareActionHandler implements ContentShareActionHandler {
   final List<String> executed = <String>[];
@@ -424,7 +429,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryCompositionProvider.overrideWithValue(chat),
+          ...chatTestRepositoryOverrides(
+            conversation: chat.conversation,
+            contact: chat.contact,
+          ),
           authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
         ],
         child: MaterialApp(
@@ -462,7 +470,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryCompositionProvider.overrideWithValue(chat),
+          ...chatTestRepositoryOverrides(
+            conversation: chat.conversation,
+            contact: chat.contact,
+          ),
           forwardExternalShareServiceProvider.overrideWithValue(external),
         ],
         child: MaterialApp(
@@ -504,7 +515,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryCompositionProvider.overrideWithValue(chat),
+          ...chatTestRepositoryOverrides(
+            conversation: chat.conversation,
+            contact: chat.contact,
+          ),
           forwardExternalShareServiceProvider.overrideWithValue(external),
         ],
         child: MaterialApp(
@@ -552,7 +566,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryCompositionProvider.overrideWithValue(chat),
+          ...chatTestRepositoryOverrides(
+            conversation: chat.conversation,
+            contact: chat.contact,
+          ),
           forwardExternalShareServiceProvider.overrideWithValue(external),
         ],
         child: MaterialApp(
@@ -732,7 +749,30 @@ final class _CircleMembershipQuery implements CircleMembershipQueries {
   );
 }
 
-class _ContentShareChatRepository extends MockChatRepository {
+class _ContentShareChatRepository {
+  _ContentShareChatRepository() {
+    final facets = ChatTestFacets();
+    conversation = _ContentShareConversationRepository(facets.conversation);
+    contact = _ContentShareContactRepository(facets.contact);
+  }
+
+  late final ChatConversationRepository conversation;
+  late final ChatContactRepository contact;
+}
+
+final class _ContentShareConversationRepository
+    implements ChatConversationRepository {
+  const _ContentShareConversationRepository(this._delegate);
+
+  final ChatConversationRepository _delegate;
+
+  @override
+  Future<List<MessageHomeRow>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listMessageHome(filter: filter, cursor: cursor, limit: limit);
+
   @override
   Future<List<ChatInboxViewData>> listConversations({
     String? cursor,
@@ -755,6 +795,60 @@ class _ContentShareChatRepository extends MockChatRepository {
   }
 
   @override
+  Future<ChatConversationCreatedViewData> createConversation({
+    required String type,
+    String? title,
+    int? maxGroupSize,
+    List<String>? initialMemberIds,
+    String? idempotencyKey,
+  }) => _delegate.createConversation(
+    type: type,
+    title: title,
+    maxGroupSize: maxGroupSize,
+    initialMemberIds: initialMemberIds,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
+  Future<ConversationViewData> getConversation(String conversationId) =>
+      _delegate.getConversation(conversationId);
+
+  @override
+  Future<void> updateConversationTitle(String conversationId, String title) =>
+      _delegate.updateConversationTitle(conversationId, title);
+
+  @override
+  Future<void> updateConversationSettings({
+    required String conversationId,
+    bool? muted,
+    bool? pinned,
+  }) => _delegate.updateConversationSettings(
+    conversationId: conversationId,
+    muted: muted,
+    pinned: pinned,
+  );
+
+  @override
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() =>
+      _delegate.getConversationTimestamps();
+
+  @override
+  Future<List<ConversationViewData>> batchGetConversations(List<String> ids) =>
+      _delegate.batchGetConversations(ids);
+}
+
+final class _ContentShareContactRepository implements ChatContactRepository {
+  const _ContentShareContactRepository(this._delegate);
+
+  final ChatContactRepository _delegate;
+
+  @override
+  Future<CursorPage<ChatContactRowViewData>> listContacts({
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listContacts(cursor: cursor, limit: limit);
+
+  @override
   Future<List<ContactHomeRow>> listContactHome({
     String filter = 'all',
     String? cursor,
@@ -762,6 +856,15 @@ class _ContentShareChatRepository extends MockChatRepository {
   }) async {
     return const <ContactHomeRow>[];
   }
+
+  @override
+  Future<List<ChatContactRowViewData>> listGroupCandidates({
+    String? conversationId,
+    int limit = 100,
+  }) => _delegate.listGroupCandidates(
+    conversationId: conversationId,
+    limit: limit,
+  );
 }
 
 class _RecordingExternalShareService implements ForwardExternalShareService {

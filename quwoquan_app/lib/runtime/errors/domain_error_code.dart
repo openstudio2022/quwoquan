@@ -7,6 +7,9 @@ import 'package:quwoquan_app/runtime/errors/generated/entity/entity_errors.g.dar
 import 'package:quwoquan_app/runtime/errors/generated/rtc/rtc_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/integration/integration_location_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/notification/notification_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/ops/ops_event_record_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/search/search_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/generated/tag/tag_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/generated/user/user_errors.g.dart';
 
 class DomainErrorCode {
@@ -76,6 +79,20 @@ class DomainErrorCodeRegistry {
       return value == NotificationErrorCode.unknown
           ? null
           : _fromNotification(value);
+    }
+    if (code.startsWith('SEARCH.')) {
+      final value = SearchErrorCode.fromCode(code);
+      return value == SearchErrorCode.unknown ? null : _fromSearch(value);
+    }
+    if (code.startsWith('TAG.')) {
+      final value = TagErrorCode.fromCode(code);
+      return value == TagErrorCode.unknown ? null : _fromTag(value);
+    }
+    if (code.startsWith('OPS.')) {
+      final value = OpsEventRecordErrorCode.fromCode(code);
+      return value == OpsEventRecordErrorCode.unknown
+          ? null
+          : _fromOpsEventRecord(value);
     }
     return null;
   }
@@ -181,6 +198,36 @@ class DomainErrorCodeRegistry {
   static DomainErrorCode _fromNotification(NotificationErrorCode value) {
     return DomainErrorCode(
       domain: 'notification',
+      code: value.code,
+      defaultMessage: value.defaultMessage,
+      httpStatus: value.httpStatus,
+      value: value,
+    );
+  }
+
+  static DomainErrorCode _fromSearch(SearchErrorCode value) {
+    return DomainErrorCode(
+      domain: 'search',
+      code: value.code,
+      defaultMessage: value.defaultMessage,
+      httpStatus: value.httpStatus,
+      value: value,
+    );
+  }
+
+  static DomainErrorCode _fromTag(TagErrorCode value) {
+    return DomainErrorCode(
+      domain: 'tag',
+      code: value.code,
+      defaultMessage: value.defaultMessage,
+      httpStatus: value.httpStatus,
+      value: value,
+    );
+  }
+
+  static DomainErrorCode _fromOpsEventRecord(OpsEventRecordErrorCode value) {
+    return DomainErrorCode(
+      domain: 'ops',
       code: value.code,
       defaultMessage: value.defaultMessage,
       httpStatus: value.httpStatus,

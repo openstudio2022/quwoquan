@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -113,7 +115,7 @@ def _seed_selection(
     rows: list[dict[str, object]],
     *,
     homepage_count: int,
-    seed_origin: str = "legacy_hint",
+    seed_origin: str = "historical_capsule_hint",
 ) -> Path:
     seeds = []
     for index, row in enumerate(rows):
@@ -142,7 +144,7 @@ def _seed_selection(
             "sourceKind": source["sourceKind"],
             "extractor": source["extractor"],
         }
-        if seed_origin == "legacy_hint":
+        if seed_origin == "historical_capsule_hint":
             seed["historicalBaseline"] = {
                 "candidateId": f"historical-{carrier}-{index}",
                 "bodyContentSha256": _sha(
@@ -332,6 +334,8 @@ def _fake_acquired(carrier: str, name: str) -> AcquiredSourceReadyCandidate:
                 "fileSha256",
                 "safetyEvidence",
                 "accessEvidence",
+                "usageScope",
+                "modelReleaseStatus",
             ):
                 row.pop(field)
             row["sourceUnitId"] = source_unit_id
@@ -670,6 +674,207 @@ def test_acquisition_can_run_article_carrier_without_waiting_for_homepage(
     assert result["counts"] == {"homepage": 0, "article": 1}
 
 
+def test_acquisition_uses_bounded_concurrency_and_replaces_rejected_candidates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from content.source.research import homepage_article_source_ready_acquisition as mod
+
+    rows = [_planned(f"首页实体{index}") for index in range(3)]
+    projection = {
+        "plannedCandidates": rows,
+        "projectionDigest": _sha(b"bounded-concurrency-projection"),
+    }
+    monkeypatch.setattr(
+        mod, "_project_coverage_run", lambda _run, *, identity: projection
+    )
+    monkeypatch.setattr(
+        mod,
+        "_copy_coverage_run",
+        lambda _run, *, evidence_root, identity, expected_projection=None: _projection(
+            evidence_root, rows
+        ),
+    )
+
+    lock = threading.Lock()
+    active = 0
+    maximum_active = 0
+
+    def acquire(
+        row: dict[str, object], *, carrier: str, **_: object
+    ) -> AcquiredSourceReadyCandidate:
+        nonlocal active, maximum_active
+        with lock:
+            active += 1
+            maximum_active = max(maximum_active, active)
+        try:
+            time.sleep(0.02)
+            if row["candidateName"] == "首页实体0":
+                raise MediaWikiSourceReadyRejected("first candidate unavailable")
+            return _fake_acquired(carrier, str(row["candidateName"]))
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(mod, "acquire_mediawiki_source_ready_candidate", acquire)
+    result = acquire_homepage_article_source_ready_batch(
+        coverage_run_dir=tmp_path / "coverage",
+        output_root=tmp_path / "output",
+        source_set_id="m100-bounded-concurrency",
+        target_scale="M100",
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+        captured_at=CAPTURED_AT,
+        homepage_count=2,
+        article_count=0,
+        seed_selection=_seed_selection(
+            tmp_path / "seed-selection.json", rows, homepage_count=3
+        ),
+        acquisition_concurrency=2,
+    )
+
+    assert maximum_active == 2
+    assert result["counts"] == {"homepage": 2, "article": 0}
+    report = json.loads(
+        (Path(result["evidenceRoot"]) / result["reportRef"]).read_text()
+    )
+    assert report["counts"]["attempted"] == 3
+    assert report["counts"]["rejected"] == 1
+
+
+def test_acquisition_resumes_verified_capsules_without_repeating_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from content.source.research import homepage_article_source_ready_acquisition as mod
+
+    rows = [_planned(f"首页恢复实体{index}") for index in range(2)]
+    projection = {
+        "plannedCandidates": rows,
+        "projectionDigest": _sha(b"resume-capsules-projection"),
+    }
+    monkeypatch.setattr(
+        mod, "_project_coverage_run", lambda _run, *, identity: projection
+    )
+    monkeypatch.setattr(
+        mod,
+        "_copy_coverage_run",
+        lambda _run, *, evidence_root, identity, expected_projection=None: _projection(
+            evidence_root, rows
+        ),
+    )
+    network_calls = 0
+
+    def acquire(
+        row: dict[str, object], *, carrier: str, **_: object
+    ) -> AcquiredSourceReadyCandidate:
+        nonlocal network_calls
+        network_calls += 1
+        return _fake_acquired(carrier, str(row["candidateName"]))
+
+    monkeypatch.setattr(mod, "acquire_mediawiki_source_ready_candidate", acquire)
+    arguments = {
+        "coverage_run_dir": tmp_path / "coverage",
+        "output_root": tmp_path / "output",
+        "source_set_id": "m100-resume-capsules",
+        "target_scale": "M100",
+        "source_revision": IDENTITY["sourceRevision"],
+        "source_digest": IDENTITY["sourceDigest"],
+        "entity_catalog_digest": IDENTITY["entityCatalogDigest"],
+        "captured_at": CAPTURED_AT,
+        "homepage_count": 2,
+        "article_count": 0,
+        "seed_selection": _seed_selection(
+            tmp_path / "seed-selection.json", rows, homepage_count=2
+        ),
+        "acquisition_concurrency": 2,
+    }
+
+    first = acquire_homepage_article_source_ready_batch(**arguments)
+    replay = acquire_homepage_article_source_ready_batch(**arguments)
+
+    assert replay == first
+    assert network_calls == 2
+
+
+def test_acquisition_resume_skips_duplicated_seed_capsules_deterministically(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """历史波次给同一 seed 冻结过两个合法 capsule：同参数 resume 必须确定性跳过多余的，而非整批拒绝。"""
+    from content.source.research import homepage_article_source_ready_acquisition as mod
+    from content.source.research.homepage_article_source_ready_evidence import (
+        file_sha256,
+    )
+
+    rows = [_planned("首页去重实体")]
+    projection = {
+        "plannedCandidates": rows,
+        "projectionDigest": _sha(b"duplicated-seed-projection"),
+    }
+    monkeypatch.setattr(
+        mod, "_project_coverage_run", lambda _run, *, identity: projection
+    )
+    monkeypatch.setattr(
+        mod,
+        "_copy_coverage_run",
+        lambda _run, *, evidence_root, identity, expected_projection=None: _projection(
+            evidence_root, rows
+        ),
+    )
+    monkeypatch.setattr(
+        mod,
+        "acquire_mediawiki_source_ready_candidate",
+        lambda row, *, carrier, **_: _fake_acquired(carrier, str(row["candidateName"])),
+    )
+    arguments = {
+        "coverage_run_dir": tmp_path / "coverage",
+        "output_root": tmp_path / "output",
+        "source_set_id": "m100-duplicated-seed",
+        "target_scale": "M100",
+        "source_revision": IDENTITY["sourceRevision"],
+        "source_digest": IDENTITY["sourceDigest"],
+        "entity_catalog_digest": IDENTITY["entityCatalogDigest"],
+        "captured_at": CAPTURED_AT,
+        "homepage_count": 1,
+        "article_count": 0,
+        "seed_selection": _seed_selection(
+            tmp_path / "seed-selection.json", rows, homepage_count=1
+        ),
+    }
+    first = acquire_homepage_article_source_ready_batch(**arguments)
+    evidence_root = Path(first["evidenceRoot"])
+    selection = json.loads((evidence_root / "seed-selection.json").read_text())
+    coverage_projection = json.loads(
+        (evidence_root / "coverage-projection.json").read_text()
+    )
+    # 同一 seed、同一页面、不同波次 capturedAt：产出第二个合法 capsule。
+    mod._write_acquired_candidate(
+        _fake_acquired("homepage", "首页去重实体"),
+        evidence_root=evidence_root,
+        identity=IDENTITY,
+        captured_at="2026-08-08T00:00:00Z",
+        coverage_binding={
+            "ref": "coverage-projection.json",
+            "digest": str(coverage_projection["projectionDigest"]),
+            "fileSha256": file_sha256(evidence_root / "coverage-projection.json"),
+        },
+        seed_selection_binding={
+            "ref": "seed-selection.json",
+            "digest": str(selection["selectionDigest"]),
+            "fileSha256": file_sha256(evidence_root / "seed-selection.json"),
+        },
+        seed=selection["seeds"][0],
+    )
+    assert len(list((evidence_root / "capsules" / "homepage").iterdir())) == 2
+
+    resume = acquire_homepage_article_source_ready_batch(**arguments)
+    replay = acquire_homepage_article_source_ready_batch(**arguments)
+
+    assert resume == replay
+    assert resume["counts"] == {"homepage": 1, "article": 0}
+    batch = json.loads(Path(resume["sourceReadyManifest"]).read_text())
+    assert len(batch["candidateCapsules"]) == 1
+
+
 def test_acquisition_shortfall_freezes_replayable_partial_checkpoint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -818,7 +1023,6 @@ def test_wikidata_official_website_is_frozen_as_raw_fact_evidence(
     assert b"officialWebsiteAccess" in acquired.raw_evidence
     catalog = build_homepage_source_unit_catalog(
         catalog_id="wikidata-official-site",
-        catalog_version="1",
         created_at=CAPTURED_AT,
         minimum_candidate_count=1,
         source_revision=IDENTITY["sourceRevision"],
@@ -1225,8 +1429,403 @@ def test_acquisition_cli_freezes_exact_identity_and_counts(
         "homepage_count": 180,
         "article_count": 180,
         "seed_selection": tmp_path / "seed-selection.json",
+        "acquisition_concurrency": 1,
     }
     assert json.loads(capsys.readouterr().out)["counts"] == {
         "homepage": 180,
         "article": 180,
     }
+
+
+def test_acquisition_resume_retries_previously_rejected_seeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """幂等 resume 必须按 capsule 存在性跳过：早于最后一个已接受 capsule 的被拒 seed 在生产者修复后必须被重试。"""
+    from content.source.research import homepage_article_source_ready_acquisition as mod
+
+    rows = [_planned(f"重试实体{index}") for index in range(4)]
+    projection = {
+        "plannedCandidates": rows,
+        "projectionDigest": _sha(b"retry-rejected-projection"),
+    }
+    monkeypatch.setattr(
+        mod, "_project_coverage_run", lambda _run, *, identity: projection
+    )
+    monkeypatch.setattr(
+        mod,
+        "_copy_coverage_run",
+        lambda _run, *, evidence_root, identity, expected_projection=None: _projection(
+            evidence_root, rows
+        ),
+    )
+    blocked_names = {"重试实体1"}
+    acquired_names: list[str] = []
+
+    def acquire(
+        row: dict[str, object], *, carrier: str, **_: object
+    ) -> AcquiredSourceReadyCandidate:
+        name = str(row["candidateName"])
+        acquired_names.append(name)
+        if name in blocked_names:
+            raise MediaWikiSourceReadyRejected(
+                "homepage source lacks an immutable structured fact"
+            )
+        return _fake_acquired(carrier, name)
+
+    monkeypatch.setattr(mod, "acquire_mediawiki_source_ready_candidate", acquire)
+    arguments = {
+        "coverage_run_dir": tmp_path / "coverage",
+        "output_root": tmp_path / "output",
+        "source_set_id": "m100-retry-rejected",
+        "target_scale": "M100",
+        "source_revision": IDENTITY["sourceRevision"],
+        "source_digest": IDENTITY["sourceDigest"],
+        "entity_catalog_digest": IDENTITY["entityCatalogDigest"],
+        "captured_at": CAPTURED_AT,
+        "homepage_count": 4,
+        "article_count": 0,
+        "seed_selection": _seed_selection(
+            tmp_path / "seed-selection.json",
+            rows,
+            homepage_count=4,
+            seed_origin="current_coverage",
+        ),
+    }
+    with pytest.raises(HomepageArticleSourceReadyAcquisitionError) as shortfall:
+        acquire_homepage_article_source_ready_batch(**arguments)
+    assert shortfall.value.code == mod.SOURCE_POOL_SHORTFALL
+    assert shortfall.value.checkpoint is not None
+    assert shortfall.value.checkpoint["counts"] == {"homepage": 3, "article": 0}
+
+    # 生产者修复后，同参数 resume 必须重试之前被拒的 seed（它位于三个已
+    # 接受 capsule 之间），而不是因列表位置被永久跳过。
+    blocked_names.clear()
+    acquired_names.clear()
+    resumed = acquire_homepage_article_source_ready_batch(**arguments)
+
+    assert acquired_names == ["重试实体1"]
+    assert resumed["counts"] == {"homepage": 4, "article": 0}
+    batch = json.loads(Path(resumed["sourceReadyManifest"]).read_text())
+    assert len(batch["candidateCapsules"]) == 4
+
+
+def test_article_site_frontier_falls_back_to_wikipedia_detail_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """governed site frontier 全部无候选时，coverage 认证过的 wikipedia 词条按原路径产出 article capsule。"""
+    from content.source.research import homepage_article_source_ready_acquisition as mod
+
+    rows = [_planned("文章回退实体")]
+    projection = {
+        "plannedCandidates": rows,
+        "projectionDigest": _sha(b"article-fallback-projection"),
+    }
+    monkeypatch.setattr(
+        mod, "_project_coverage_run", lambda _run, *, identity: projection
+    )
+    monkeypatch.setattr(
+        mod,
+        "_copy_coverage_run",
+        lambda _run, *, evidence_root, identity, expected_projection=None: _projection(
+            evidence_root, rows
+        ),
+    )
+    frontier_calls: list[str] = []
+
+    def frontier(row: dict[str, object], **_: object) -> AcquiredSourceReadyCandidate:
+        frontier_calls.append(str(row["candidateName"]))
+        raise MediaWikiSourceReadyRejected(
+            "article site frontier produced no source-ready detail page: "
+            "no governed site candidate"
+        )
+
+    wikipedia_calls: list[tuple[str, str]] = []
+
+    def wikipedia(
+        row: dict[str, object], *, carrier: str, **_: object
+    ) -> AcquiredSourceReadyCandidate:
+        wikipedia_calls.append((carrier, str(row["candidateName"])))
+        return _fake_acquired(carrier, str(row["candidateName"]))
+
+    monkeypatch.setattr(
+        mod, "acquire_article_site_source_ready_candidate", frontier
+    )
+    monkeypatch.setattr(mod, "acquire_mediawiki_source_ready_candidate", wikipedia)
+    result = acquire_homepage_article_source_ready_batch(
+        coverage_run_dir=tmp_path / "coverage",
+        output_root=tmp_path / "output",
+        source_set_id="m100-article-wikipedia-fallback",
+        target_scale="M100",
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+        captured_at=CAPTURED_AT,
+        homepage_count=0,
+        article_count=1,
+        seed_selection=_seed_selection(
+            tmp_path / "seed-selection.json",
+            rows,
+            homepage_count=0,
+            seed_origin="current_coverage",
+        ),
+    )
+
+    assert frontier_calls == ["文章回退实体"]
+    assert wikipedia_calls == [("article", "文章回退实体")]
+    assert result["counts"] == {"homepage": 0, "article": 1}
+
+
+def test_article_non_wikipedia_seed_keeps_frontier_rejection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """非 wikipedia seed 的 frontier 拒绝不得偷换成任何 fallback 页面。"""
+    from content.source.research import homepage_article_source_ready_acquisition as mod
+
+    row = _planned("头条文章实体")
+    source = row["source"]
+    assert isinstance(source, dict)
+    source["sourceKind"] = "toutiao_baike"
+    source["extractor"] = "toutiao_baike_html"
+    rows = [row]
+    projection = {
+        "plannedCandidates": rows,
+        "projectionDigest": _sha(b"article-no-fallback-projection"),
+    }
+    monkeypatch.setattr(
+        mod, "_project_coverage_run", lambda _run, *, identity: projection
+    )
+    monkeypatch.setattr(
+        mod,
+        "_copy_coverage_run",
+        lambda _run, *, evidence_root, identity, expected_projection=None: _projection(
+            evidence_root, rows
+        ),
+    )
+    monkeypatch.setattr(
+        mod,
+        "acquire_article_site_source_ready_candidate",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            MediaWikiSourceReadyRejected(
+                "article site frontier produced no source-ready detail page: "
+                "no governed site candidate"
+            )
+        ),
+    )
+
+    def forbidden(*_args: object, **_kwargs: object) -> AcquiredSourceReadyCandidate:
+        raise AssertionError("non-wikipedia article seed must not reach mediawiki")
+
+    monkeypatch.setattr(mod, "acquire_mediawiki_source_ready_candidate", forbidden)
+    with pytest.raises(HomepageArticleSourceReadyAcquisitionError) as captured:
+        acquire_homepage_article_source_ready_batch(
+            coverage_run_dir=tmp_path / "coverage",
+            output_root=tmp_path / "output",
+            source_set_id="m100-article-no-fallback",
+            target_scale="M100",
+            source_revision=IDENTITY["sourceRevision"],
+            source_digest=IDENTITY["sourceDigest"],
+            entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+            captured_at=CAPTURED_AT,
+            homepage_count=0,
+            article_count=1,
+            seed_selection=_seed_selection(
+                tmp_path / "seed-selection.json",
+                rows,
+                homepage_count=0,
+                seed_origin="current_coverage",
+            ),
+        )
+    assert captured.value.code == mod.SOURCE_POOL_SHORTFALL
+    assert "no governed site candidate" in str(captured.value)
+
+
+def _fact_bundle(body: str, wikitext: str = "{{Infobox}}") -> MediaWikiPageBundle:
+    return MediaWikiPageBundle(
+        requested_title="测试景区",
+        resolved_title="测试景区",
+        redirect_chain=(),
+        page_id=10,
+        revision_id=20,
+        content_sha256="page-sha",
+        rendered_text=body,
+        wikitext=wikitext,
+        rendered_image_titles=("File:a.jpg",),
+        raw='{"query":{"pages":{"10":{}}}}',
+    )
+
+
+def test_mediawiki_homepage_fact_extracts_governed_field_from_rendered_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """infobox 无闭集字段时，同一 Wikipedia 渲染正文中的闭集事实必须被抽取。"""
+    from content.source.research import homepage_article_source_ready_mediawiki as mod
+
+    body = (
+        "测试景区位于成都市，历史悠久并保存多处文化遗产，海拔约2070米。\n"
+        "景区包含湖泊、园林和展馆，公共交通可到达。\n\n"
+        "游客可以沿步道参观不同区域，了解当地历史、生态保护与社区文化。"
+        "园区设有导览、休息和无障碍设施，参观前应核对开放信息并遵守安全提示。"
+    )
+    bundle = _fact_bundle(body)
+    monkeypatch.setattr(
+        mod, "fetch_mediawiki_page_bundle_for_url", lambda *a, **k: bundle
+    )
+    monkeypatch.setattr(
+        mod,
+        "_mediawiki_page_images",
+        lambda *a, **k: [
+            {
+                "url": "https://upload.wikimedia.org/a.jpg",
+                "pageRevisionId": 20,
+                "pageContentSha256": "page-sha",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        mod,
+        "wikidata_structured_fact",
+        lambda *a, **k: pytest.fail("body fact must win before Wikidata"),
+    )
+
+    def acquire_assets(_rows, *, source_unit_ref, roles, captured_at):
+        document, asset_body = _asset_document(
+            source_unit_ref=source_unit_ref, role=roles[0], seed="body-fact-hero"
+        )
+        return (AcquiredAsset(body=asset_body, document=document),)
+
+    monkeypatch.setattr(mod, "acquire_open_image_assets", acquire_assets)
+    acquired = acquire_mediawiki_source_ready_candidate(
+        _planned("测试景区"),
+        carrier="homepage",
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+        captured_at=CAPTURED_AT,
+    )
+
+    facts = acquired.candidate["structuredFacts"]
+    assert facts["altitudeMeters"] == 2070
+    assert facts["factSources"][0]["sourceId"] == "wikipedia"
+    assert facts["factSources"][0]["sourceClass"] == "encyclopedia"
+    fact_evidence = acquired.candidate["factEvidence"][0]
+    assert fact_evidence["evidenceRef"].endswith("source.md")
+
+
+def test_mediawiki_homepage_fact_falls_back_to_governed_baike_fact_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wikipedia/Wikidata 双双无闭集事实时，事实轨允许独立的头条百科证据源，正文仍绑定 Wikipedia。"""
+    from content.source.research import homepage_article_source_ready_mediawiki as mod
+    from content.source.research.baike_com import BaikePageResolution
+
+    body = (
+        "测试景区位于成都市，历史悠久并保存多处文化遗产。\n"
+        "景区包含湖泊、园林和展馆，公共交通可到达。\n\n"
+        "游客可以沿步道参观不同区域，了解当地历史、生态保护与社区文化。"
+        "园区设有导览、休息和无障碍设施，参观前应核对开放信息并遵守安全提示。"
+    )
+    bundle = _fact_bundle(body)
+    monkeypatch.setattr(
+        mod, "fetch_mediawiki_page_bundle_for_url", lambda *a, **k: bundle
+    )
+    monkeypatch.setattr(
+        mod,
+        "_mediawiki_page_images",
+        lambda *a, **k: [
+            {
+                "url": "https://upload.wikimedia.org/a.jpg",
+                "pageRevisionId": 20,
+                "pageContentSha256": "page-sha",
+            }
+        ],
+    )
+    monkeypatch.setattr(mod, "wikidata_structured_fact", lambda *a, **k: None)
+    observed_geo: list[tuple[str, ...]] = []
+
+    def resolve(entity_id: str, *, geo_context_terms=(), **_: object):
+        observed_geo.append(tuple(geo_context_terms))
+        assert entity_id == "测试景区"
+        return BaikePageResolution(
+            url="https://www.baike.com/wikiid/123",
+            title="测试景区",
+            matched_term="测试景区",
+            match_confidence=0.95,
+        )
+
+    monkeypatch.setattr(mod, "resolve_toutiao_baike_page", resolve)
+    monkeypatch.setattr(
+        mod,
+        "fetch_source_payload",
+        lambda url, **_: {
+            "text": "测试景区门票价格为50元，全年对公众开放。",
+            "htmlBytes": b"<html>baike</html>",
+        },
+    )
+
+    def acquire_assets(_rows, *, source_unit_ref, roles, captured_at):
+        document, asset_body = _asset_document(
+            source_unit_ref=source_unit_ref, role=roles[0], seed="baike-fact-hero"
+        )
+        return (AcquiredAsset(body=asset_body, document=document),)
+
+    monkeypatch.setattr(mod, "acquire_open_image_assets", acquire_assets)
+    acquired = acquire_mediawiki_source_ready_candidate(
+        _planned("测试景区"),
+        carrier="homepage",
+        source_revision=IDENTITY["sourceRevision"],
+        source_digest=IDENTITY["sourceDigest"],
+        entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+        captured_at=CAPTURED_AT,
+    )
+
+    assert observed_geo == [("四川省", "成都市", "锦江区")]
+    facts = acquired.candidate["structuredFacts"]
+    assert facts["ticketPriceRange"] == {
+        "currency": "CNY",
+        "minAmountCents": 5000,
+        "maxAmountCents": 5000,
+        "free": False,
+    }
+    fact_source = facts["factSources"][0]
+    assert fact_source["sourceId"] == "toutiao_baike"
+    assert fact_source["sourceClass"] == "encyclopedia"
+    assert fact_source["sourceUrl"] == "https://www.baike.com/wikiid/123"
+    fact_evidence = acquired.candidate["factEvidence"][0]
+    assert str(fact_evidence["evidenceRef"]).startswith("raw/homepage/")
+    assert fact_evidence["contentSha256"] == _sha(acquired.raw_evidence)
+    raw = json.loads(acquired.raw_evidence.decode("utf-8"))
+    assert "mediawikiRaw" in raw
+    baike_raw = json.loads(raw["baikeRaw"])
+    assert baike_raw["sourceUrl"] == "https://www.baike.com/wikiid/123"
+    assert "门票价格" in baike_raw["bodyText"]
+    # 正文轨保持 Wikipedia 绑定，不因事实轨换源。
+    assert acquired.candidate["primarySource"]["sourceKind"] == "wikipedia"
+
+
+def test_mediawiki_homepage_without_any_governed_fact_stays_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from content.source.research import homepage_article_source_ready_mediawiki as mod
+
+    body = (
+        "测试景区位于成都市，历史悠久并保存多处文化遗产。\n"
+        "景区包含湖泊、园林和展馆，公共交通可到达。\n\n"
+        "游客可以沿步道参观不同区域，了解当地历史、生态保护与社区文化。"
+        "园区设有导览、休息和无障碍设施，参观前应核对开放信息并遵守安全提示。"
+    )
+    bundle = _fact_bundle(body)
+    monkeypatch.setattr(
+        mod, "fetch_mediawiki_page_bundle_for_url", lambda *a, **k: bundle
+    )
+    monkeypatch.setattr(mod, "wikidata_structured_fact", lambda *a, **k: None)
+    monkeypatch.setattr(mod, "resolve_toutiao_baike_page", lambda *a, **k: None)
+    with pytest.raises(MediaWikiSourceReadyRejected) as captured:
+        acquire_mediawiki_source_ready_candidate(
+            _planned("测试景区"),
+            carrier="homepage",
+            source_revision=IDENTITY["sourceRevision"],
+            source_digest=IDENTITY["sourceDigest"],
+            entity_catalog_digest=IDENTITY["entityCatalogDigest"],
+            captured_at=CAPTURED_AT,
+        )
+    assert "lacks an immutable structured fact" in str(captured.value)

@@ -1,5 +1,6 @@
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_ui_usage_stats_view_data.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_answer_anchor.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/domain/assistant_dialogue_runtime_read_view.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_citation.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/domain/transcript_line_id.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_assistant_timeline_payload.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/domain/utterance_send_state.dart';
@@ -38,11 +39,18 @@ const Set<String> kTranscriptAnchorKeys = {
 };
 
 const Set<String> kTranscriptAssistantBlobKeys = {
-  'dialogueState',
   'uiReferences',
-  'uiActions',
   'runArtifacts',
   'uiUsageStats',
+};
+
+/// 已退役的历史协议键：Codec 解码时丢弃，禁止经 [extra] 兜底回流。
+/// `dialogueState` / `uiActions` 为零业务消费死袋，
+/// `assistantBoundaryOutcome` 为零写入方死键。
+const Set<String> kTranscriptRetiredKeys = {
+  'dialogueState',
+  'uiActions',
+  'assistantBoundaryOutcome',
 };
 
 /// 时间轴行（sealed）：用户 / 助手 / 错误。
@@ -111,11 +119,9 @@ final class AssistantAnswerTranscriptRow
     this.anchor = const AssistantAnswerAnchor(),
     this.terminalSnapshot,
     PersistedAssistantTimelinePayload? persisted,
-    this.dialogueState = const <String, dynamic>{},
-    this.uiReferences = const <Map<String, dynamic>>[],
-    this.uiActions = const <Map<String, dynamic>>[],
+    this.uiReferences = const <AssistantCitation>[],
     this.runArtifacts = const <String, dynamic>{},
-    this.uiUsageStats = const <String, dynamic>{},
+    this.uiUsageStats = AssistantUiUsageStatsViewData.empty,
     this.extra = const <String, dynamic>{},
   }) : persisted = persisted ?? PersistedAssistantTimelinePayload.empty();
 
@@ -134,12 +140,11 @@ final class AssistantAnswerTranscriptRow
   final AssistantRunTerminalSnapshotView? terminalSnapshot;
   final PersistedAssistantTimelinePayload persisted;
 
-  /// 开放 JSON；稳定键请用 [AssistantDialogueRuntimeReadView]。
-  final Map<String, dynamic> dialogueState;
-  final List<Map<String, dynamic>> uiReferences;
-  final List<Map<String, dynamic>> uiActions;
+  final List<AssistantCitation> uiReferences;
+
+  /// 运行时诊断开放袋（含 `presentationDocument`），提键收敛见 OPEN-003。
   final Map<String, dynamic> runArtifacts;
-  final Map<String, dynamic> uiUsageStats;
+  final AssistantUiUsageStatsViewData uiUsageStats;
   final Map<String, dynamic> extra;
 
   AssistantAnswerTranscriptRow copyWith({
@@ -156,11 +161,9 @@ final class AssistantAnswerTranscriptRow
     AssistantAnswerAnchor? anchor,
     AssistantRunTerminalSnapshotView? terminalSnapshot,
     PersistedAssistantTimelinePayload? persisted,
-    Map<String, dynamic>? dialogueState,
-    List<Map<String, dynamic>>? uiReferences,
-    List<Map<String, dynamic>>? uiActions,
+    List<AssistantCitation>? uiReferences,
     Map<String, dynamic>? runArtifacts,
-    Map<String, dynamic>? uiUsageStats,
+    AssistantUiUsageStatsViewData? uiUsageStats,
     Map<String, dynamic>? extra,
   }) {
     return AssistantAnswerTranscriptRow(
@@ -177,9 +180,7 @@ final class AssistantAnswerTranscriptRow
       anchor: anchor ?? this.anchor,
       terminalSnapshot: terminalSnapshot ?? this.terminalSnapshot,
       persisted: persisted ?? this.persisted,
-      dialogueState: dialogueState ?? this.dialogueState,
       uiReferences: uiReferences ?? this.uiReferences,
-      uiActions: uiActions ?? this.uiActions,
       runArtifacts: runArtifacts ?? this.runArtifacts,
       uiUsageStats: uiUsageStats ?? this.uiUsageStats,
       extra: extra ?? this.extra,

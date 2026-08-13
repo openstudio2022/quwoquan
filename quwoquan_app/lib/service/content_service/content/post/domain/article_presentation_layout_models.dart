@@ -489,10 +489,12 @@ ArticleCanvasMetrics resolveArticleCanvasMetrics(
       ),
       headerReservedHeight: 0,
       footerReservedHeight: 0,
-      wrapImageGap: width >= 430
+      wrapImageGap: width >= AppSpacing.articleWrapImageBreakpoint
           ? AppSpacing.containerMd
           : AppSpacing.containerSm,
-      wrapImageMaxWidth: width >= 430 ? 156 : 144,
+      wrapImageMaxWidth: width >= AppSpacing.articleWrapImageBreakpoint
+        ? AppSpacing.articleWrapImageMaxWidthWide
+        : AppSpacing.articleWrapImageMaxWidthCompact,
       fullWidthImageAspectRatio: 4 / 3,
       journalImageAspectRatio: 1,
       inlineImageSpacing: articleParagraphSpacing(),
@@ -504,10 +506,12 @@ ArticleCanvasMetrics resolveArticleCanvasMetrics(
     contentPadding: paperSpec.contentPadding,
     headerReservedHeight: paperSpec.headerReservedHeight,
     footerReservedHeight: paperSpec.footerReservedHeight,
-    wrapImageGap: width >= 430
+    wrapImageGap: width >= AppSpacing.articleWrapImageBreakpoint
         ? AppSpacing.containerMd
         : AppSpacing.containerSm,
-    wrapImageMaxWidth: width >= 430 ? 156 : 144,
+    wrapImageMaxWidth: width >= AppSpacing.articleWrapImageBreakpoint
+        ? AppSpacing.articleWrapImageMaxWidthWide
+        : AppSpacing.articleWrapImageMaxWidthCompact,
     fullWidthImageAspectRatio: 4 / 3,
     journalImageAspectRatio: 1,
     inlineImageSpacing: articleParagraphSpacing(),

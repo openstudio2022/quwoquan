@@ -9,12 +9,18 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/layout/app_terminal_viewport.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
+import 'package:quwoquan_app/runtime/di/client_state_sync_dependencies.dart';
+import 'package:quwoquan_app/runtime/errors/app_user_recovery.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
+import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/navigation/push_tap_navigation.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/main_tab_registry.dart';
@@ -64,6 +70,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   /// 全局来电协调器当前绑定的登录用户；空串表示未启动。
   /// 用作幂等守卫，避免重复 start / 漏 stop。
   String _incomingCallBoundUserId = '';
+
+  /// 设备推送 tap 直达路由；平台能力不可用时 start 为一致降级 no-op。
+  PushTapNavigator? _pushTapNavigator;
 
   /// 依据登录态唯一地启动/停止全局来电协调器。
   /// 登录用户切换时先停旧再启新；登出时停止并解绑。
@@ -132,6 +141,16 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         telemetryReporter: ref.read(appTelemetryReporterProvider),
       );
       _syncIncomingCallCoordinator();
+      final pushTapNavigator = PushTapNavigator(
+        messagingClient: ref.read(pushTapMessagingClientProvider),
+        push: (location) {
+          if (mounted) {
+            context.push(location);
+          }
+        },
+      );
+      _pushTapNavigator = pushTapNavigator;
+      unawaited(pushTapNavigator.start());
     });
   }
 
@@ -168,6 +187,11 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       enterAt: _currentPageEnterAt,
       telemetryReporter: _pageAccessTelemetryReporter,
     );
+    final pushTapNavigator = _pushTapNavigator;
+    _pushTapNavigator = null;
+    if (pushTapNavigator != null) {
+      unawaited(pushTapNavigator.dispose());
+    }
     super.dispose();
   }
 
@@ -213,6 +237,28 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         );
       });
     });
+    // 点赞/关注 outbox 终态失败：乐观态已由 Notifier 回滚，这里以统一
+    // 恢复语义的警示轻提示告知用户，消费后清空信号避免重复弹出。
+    ref.listen<ClientStateSyncOutboxEntry?>(
+      clientStateSyncTerminalFailureProvider,
+      (ClientStateSyncOutboxEntry? previous, ClientStateSyncOutboxEntry? next) {
+        if (next == null || !mounted) {
+          return;
+        }
+        ref.read(clientStateSyncTerminalFailureProvider.notifier).consume();
+        AppToast.showError(
+          context,
+          AppUserRecoveryContract.semanticFor(
+            group: AppUserRecoveryGroup.serviceUnavailable,
+            category: UiErrorCategory.backgroundAction,
+            scope: UiErrorScope.global,
+            sourceSurfaceId: next.sourceSurfaceId.isEmpty
+                ? null
+                : next.sourceSurfaceId,
+          ),
+        );
+      },
+    );
     final themeDark = ref.watch(isDarkProvider);
     final isFeaturedActive = _currentDestination == MainTabDestination.featured;
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;

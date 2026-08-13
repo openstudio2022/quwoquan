@@ -15,6 +15,7 @@ const int kImageEditorProCategoryHsl = 2;
 const int kImageEditorProCategoryCurve = 3;
 const int kImageEditorProCategoryWhiteBalance = 4;
 const int kImageEditorProCategoryBwLevels = 5;
+const int kImageEditorProCategoryPerspective = 6;
 
 class ImageEditorToolEntry {
   const ImageEditorToolEntry({

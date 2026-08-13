@@ -314,6 +314,15 @@ class AppRoutePaths {
   }
   static const String myIntersectionsSegment = 'intersections';
 
+  static const String myGatheringsPathTemplate = '/profile/gatherings';
+  static String myGatherings({String? segment}) {
+    return _buildPath(myGatheringsPathTemplate, <String, String>{
+    }, <String, String?>{
+      'segment': segment,
+    });
+  }
+  static const String myGatheringsSegment = 'gatherings';
+
   static const String objectIntersectionsPathTemplate = '/object/intersections';
   static String objectIntersections({String? objectId, String? objectType, String? title}) {
     return _buildPath(objectIntersectionsPathTemplate, <String, String>{

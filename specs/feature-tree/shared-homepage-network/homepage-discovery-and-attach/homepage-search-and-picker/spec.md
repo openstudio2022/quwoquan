@@ -68,3 +68,12 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：picker 页 loading/error/empty/populated 四态齐备且选择结果可回填。
 - 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 主页搜索的拼音与同义词信号只存在于测试替身,生产读面无此行为
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 `/homepages/search` 的拼音首字母（如 `scly`）与同义词（如 `出行`）扩展只内嵌在 entity-service 测试 memory reader 的 `rtsearch.Execute` 里，生产组装的 Mongo reader 只有 `$text` 全文索引——旧测试证明的是生产 HTTP 上不存在的行为，已改写为 `$text` 命中与候选隔离的真实断言。信号能力的真实落点需在「搜索投影 → search-service 链路」与「Mongo reader 接入 rtsearch」之间裁决（suggest 归属见 `search-storage-topology-and-elasticity` 的既有裁决）。
+- 完成判定：`GWT-001` 的搜索命中行为在生产组装读面上具备拼音首字母与同义词信号，且真实 api_integration 测试 `spec_ref` 断言该行为经生产 reader 成立，不接受 memory reader 证据。

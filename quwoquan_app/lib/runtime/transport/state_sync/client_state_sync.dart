@@ -79,6 +79,7 @@ class ClientStateSyncOutboxEntry {
     required this.intentType,
     required this.desiredBoolValue,
     required this.nextFlushAt,
+    required this.firstQueuedAt,
     this.sourceSurfaceId = '',
     this.confirmedBoolValue,
     this.retryCount = 0,
@@ -90,6 +91,10 @@ class ClientStateSyncOutboxEntry {
   final String intentType;
   final bool desiredBoolValue;
   final DateTime nextFlushAt;
+
+  /// 首次入队时间：coalesce 更新不重置，是 `maxPendingAge` 终态判定的唯一依据。
+  final DateTime firstQueuedAt;
+
   final String sourceSurfaceId;
   final bool? confirmedBoolValue;
   final int retryCount;
@@ -106,6 +111,7 @@ class ClientStateSyncOutboxEntry {
       'desiredBoolValue',
       'sourceSurfaceId',
       'nextFlushAt',
+      'firstQueuedAt',
       'confirmedBoolValue',
       'retryCount',
     };
@@ -134,6 +140,18 @@ class ClientStateSyncOutboxEntry {
     if (nextFlushAt == null) {
       throw const FormatException('invalid nextFlushAt');
     }
+    final rawFirstQueuedAt = map['firstQueuedAt'];
+    DateTime? firstQueuedAt;
+    if (rawFirstQueuedAt == null) {
+      // 一次性 schema 演进：旧记录缺首次入队时间时以 nextFlushAt 初始化，
+      // 写回后即带新字段；不保留长期双读。
+      firstQueuedAt = nextFlushAt;
+    } else if (rawFirstQueuedAt is String) {
+      firstQueuedAt = DateTime.tryParse(rawFirstQueuedAt)?.toUtc();
+    }
+    if (firstQueuedAt == null) {
+      throw const FormatException('invalid firstQueuedAt');
+    }
     final confirmedBoolValue = map['confirmedBoolValue'];
     if (confirmedBoolValue != null && confirmedBoolValue is! bool) {
       throw const FormatException('invalid confirmedBoolValue');
@@ -150,6 +168,7 @@ class ClientStateSyncOutboxEntry {
       desiredBoolValue: desiredBoolValue,
       sourceSurfaceId: sourceSurfaceId as String? ?? '',
       nextFlushAt: nextFlushAt,
+      firstQueuedAt: firstQueuedAt,
       confirmedBoolValue: confirmedBoolValue as bool?,
       retryCount: retryCount,
     );
@@ -162,6 +181,7 @@ class ClientStateSyncOutboxEntry {
     String? intentType,
     bool? desiredBoolValue,
     DateTime? nextFlushAt,
+    DateTime? firstQueuedAt,
     String? sourceSurfaceId,
     bool? confirmedBoolValue,
     int? retryCount,
@@ -173,6 +193,7 @@ class ClientStateSyncOutboxEntry {
       intentType: intentType ?? this.intentType,
       desiredBoolValue: desiredBoolValue ?? this.desiredBoolValue,
       nextFlushAt: nextFlushAt ?? this.nextFlushAt,
+      firstQueuedAt: firstQueuedAt ?? this.firstQueuedAt,
       sourceSurfaceId: sourceSurfaceId ?? this.sourceSurfaceId,
       confirmedBoolValue: confirmedBoolValue ?? this.confirmedBoolValue,
       retryCount: retryCount ?? this.retryCount,
@@ -187,6 +208,7 @@ class ClientStateSyncOutboxEntry {
       'intentType': intentType,
       'desiredBoolValue': desiredBoolValue,
       'nextFlushAt': nextFlushAt.toUtc().toIso8601String(),
+      'firstQueuedAt': firstQueuedAt.toUtc().toIso8601String(),
       if (sourceSurfaceId.isNotEmpty) 'sourceSurfaceId': sourceSurfaceId,
       'confirmedBoolValue': confirmedBoolValue,
       'retryCount': retryCount,

@@ -184,7 +184,7 @@ class _ConversationAvatarRepository implements ChatMemberRepository {
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     memberRequestCount += 1;
     return members;

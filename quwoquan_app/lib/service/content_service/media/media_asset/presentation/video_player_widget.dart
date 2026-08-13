@@ -9,6 +9,7 @@ import 'package:chewie/chewie.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_candidate_failure.dart';
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
     show mediaDownloadCacheProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
@@ -333,11 +334,13 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
         } catch (error, stackTrace) {
           // 业务行为回调不能中断播放器资源归还；否则 controller slot 泄漏会让
           // 后续首页视频一直等待并最终被误映射为 initializationTimeout。
-          developer.log(
-            'effective playback callback failed during controller disposal',
-            name: 'VideoPlayerWidget',
-            error: error,
-            stackTrace: stackTrace,
+          // 有效播放行为丢失影响推荐回流，必须结构化上报（dispose 路径不用 ref）。
+          unawaited(
+            AppExceptionTelemetryService.instance.recordHandledException(
+              source: 'content.video_player.effective_playback_callback',
+              error: error,
+              stackTrace: stackTrace,
+            ),
           );
         }
       }
@@ -386,11 +389,13 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
       try {
         await controller.dispose();
       } catch (error, stackTrace) {
-        developer.log(
-          'video controller disposal failed',
-          name: 'VideoPlayerWidget',
-          error: error,
-          stackTrace: stackTrace,
+        // dispose 失败是原生解码器泄漏线索，必须结构化上报。
+        unawaited(
+          AppExceptionTelemetryService.instance.recordHandledException(
+            source: 'content.video_player.controller_dispose',
+            error: error,
+            stackTrace: stackTrace,
+          ),
         );
       } finally {
         if (identical(_disposingController, controller)) {
@@ -623,11 +628,13 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget>
             .read(mediaDownloadCacheProvider)
             .getCachedFilePath(normalized);
       } catch (error, stackTrace) {
-        developer.log(
-          'cached video source lookup failed; continue with delivery URI',
-          name: 'VideoPlayerWidget',
-          error: error,
-          stackTrace: stackTrace,
+        // 回退在线播放不阻断用户，但缓存链路故障必须可观测。
+        unawaited(
+          AppExceptionTelemetryService.instance.recordHandledException(
+            source: 'content.video_player.cached_source_lookup',
+            error: error,
+            stackTrace: stackTrace,
+          ),
         );
       }
       if (cachedPath != null && seen.add('cache:$cachedPath')) {

@@ -10,8 +10,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:quwoquan_app/runtime/shell/startup/app_startup_runtime.dart';
 import 'package:quwoquan_app/runtime/shell/recovery/bootstrap_recovery.dart';
+import 'package:quwoquan_app/runtime/shell/recovery/release_build_failure_placeholder.dart';
 import 'package:quwoquan_app/runtime/shell/recovery/runtime_recovery_host.dart';
 import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
+import 'package:quwoquan_app/runtime/observability/runtime_diagnostics.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/di/app_cloud_client_context_provider.dart';
@@ -194,11 +196,25 @@ Future<void> _hydrateNativeStartupTimingForBootstrap() async {
   }
 }
 
+/// release 下把 Widget 构建异常的默认灰屏死块替换为中性可读占位。
+///
+/// 仅 [kReleaseMode] 生效：debug 保留 Flutter 红屏便于定位，widget 测试
+/// 保持默认行为以免构建错误被吞掉造成误通过。异常本身仍先经
+/// [FlutterError.onError] 链完成日志与遥测，这里只负责用户可见降级。
+void _installReleaseErrorWidgetBuilder() {
+  if (!kReleaseMode) {
+    return;
+  }
+  ErrorWidget.builder = (FlutterErrorDetails details) =>
+      const ReleaseBuildFailurePlaceholder();
+}
+
 void _installBootstrapErrorBoundary() {
   if (_bootstrapErrorBoundaryInstalled) {
     return;
   }
   _bootstrapErrorBoundaryInstalled = true;
+  _installReleaseErrorWidgetBuilder();
   final previousFlutterErrorHandler = FlutterError.onError;
   FlutterError.onError = (FlutterErrorDetails details) {
     final message = details.exceptionAsString();
@@ -215,11 +231,15 @@ void _installBootstrapErrorBoundary() {
     } catch (_) {
       // 原 handler 的日志异常不能阻止 recovery 根接管。
     }
-    _logBootstrapException(
-      source: 'flutter_error',
-      exceptionText: message,
-      stackText: details.stack?.toString() ?? '',
-    );
+    // 首帧后 AppRuntimeDiagnostics 是未捕获异常的唯一 ES 写入口（它链式包装
+    // 本 handler 并自行记录）；此处让位，避免同一异常写出两条不同指纹的记录。
+    if (!AppRuntimeDiagnostics.globalUncaughtCaptureActive) {
+      _logBootstrapException(
+        source: 'flutter_error',
+        exceptionText: message,
+        stackText: details.stack?.toString() ?? '',
+      );
+    }
     if (details.exception is UnrecoverableRuntimeException) {
       RuntimeRecoveryCoordinator.instance.enter(
         error: details.exception,
@@ -234,11 +254,14 @@ void _installBootstrapErrorBoundary() {
   };
   final previousPlatformDispatcherHandler = PlatformDispatcher.instance.onError;
   PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-    _logBootstrapException(
-      source: 'platform_dispatcher',
-      exceptionText: error.toString(),
-      stackText: stack.toString(),
-    );
+    // 同 FlutterError 链：diagnostics 接管后由其单点记录，避免双写。
+    if (!AppRuntimeDiagnostics.globalUncaughtCaptureActive) {
+      _logBootstrapException(
+        source: 'platform_dispatcher',
+        exceptionText: error.toString(),
+        stackText: stack.toString(),
+      );
+    }
     _scheduleBootstrapRecoveryBeforeFirstFrame(error, stack);
     if (_bootstrapFirstFrameConfirmed &&
         error is UnrecoverableRuntimeException) {

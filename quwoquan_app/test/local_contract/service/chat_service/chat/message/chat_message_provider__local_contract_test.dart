@@ -2,18 +2,21 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/persona_query.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_media_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_view_data.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
@@ -44,12 +47,11 @@ void main() {
         videoBaseUrl: 'https://video.example.test/media/video',
         attachmentBaseUrl: 'https://image.example.test/media/image',
       );
-      final repository = MockChatRepository();
+      final facets = ChatTestFacets();
       final container = ProviderContainer(
         overrides: [
           ...sealedCloudBoundaryOverrides(),
-          chatMessageRepositoryProvider.overrideWithValue(repository),
-          chatMemberRepositoryProvider.overrideWithValue(repository),
+          ...chatTestRepositoryOverrides(facets: facets),
           personaQueryProvider(
             AppUiSurfaces.appShell,
           ).overrideWithValue(_ChatPersonaQuery()),
@@ -71,7 +73,7 @@ void main() {
         (message) => message.senderId == 'fixture_user_current',
       );
 
-      expect(friendMessage.senderName, '契约联系人');
+      expect(friendMessage.senderName, '契约好友');
       expect(
         friendMessage.senderAvatar,
         'https://avatar.example.test/media/avatar/s/'
@@ -93,7 +95,7 @@ void main() {
         overrides: [
           ...sealedCloudBoundaryOverrides(),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
-          ...mockContentFacetOverrides(MockContentRepository()),
+          ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
               personaId: 'persona_media_test',
@@ -146,7 +148,7 @@ void main() {
         overrides: [
           ...sealedCloudBoundaryOverrides(),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
-          ...mockContentFacetOverrides(MockContentRepository()),
+          ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
           activePersonaContextProvider.overrideWith(
             (ref) async => ActivePersonaContextViewData.fallback(
               personaId: 'persona_mention_test',
@@ -175,12 +177,12 @@ void main() {
     test(
       'markConversationRead ignores completion after provider disposal',
       () async {
-        final repository = _DelayedReadReceiptRepository();
+        final facets = ChatTestFacets();
+        final repository = _DelayedReadReceiptRepository(facets.message);
         final container = ProviderContainer(
           overrides: [
             ...sealedCloudBoundaryOverrides(),
-            chatMessageRepositoryProvider.overrideWithValue(repository),
-            chatMemberRepositoryProvider.overrideWithValue(repository),
+            ...chatTestRepositoryOverrides(facets: facets, message: repository),
             personaQueryProvider(
               AppUiSurfaces.appShell,
             ).overrideWithValue(_ChatPersonaQuery()),
@@ -202,9 +204,26 @@ void main() {
   });
 }
 
-class _DelayedReadReceiptRepository extends MockChatRepository {
+class _DelayedReadReceiptRepository extends Fake
+    implements ChatMessageRepository {
+  _DelayedReadReceiptRepository(this._delegate);
+
+  final ChatMessageRepository _delegate;
   final Completer<void> started = Completer<void>();
   final Completer<void> _completion = Completer<void>();
+
+  @override
+  Future<List<ChatMessageViewData>> listMessages({
+    required String conversationId,
+    String? before,
+    int limit = 20,
+  }) {
+    return _delegate.listMessages(
+      conversationId: conversationId,
+      before: before,
+      limit: limit,
+    );
+  }
 
   @override
   Future<void> markAsRead({

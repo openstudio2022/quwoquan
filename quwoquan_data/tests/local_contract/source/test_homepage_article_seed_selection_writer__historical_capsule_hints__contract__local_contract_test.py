@@ -115,7 +115,7 @@ def test_writer_strips_legacy_identity_and_keeps_only_fresh_lookup_hints(
 
     assert result["counts"] == {"homepage": 1, "article": 0}
     seed = result["seeds"][0]
-    assert seed["seedOrigin"] == "legacy_hint"
+    assert seed["seedOrigin"] == "historical_capsule_hint"
     assert seed["coverageKey"]["entityRef"] == "/entity/地点/城市/测试市"
     assert seed["historicalBaseline"]["bodyContentSha256"] == "sha256:" + "d" * 64
     assert not ({"sourceRevision", "sourceDigest", "receiptRef"} & set(seed))

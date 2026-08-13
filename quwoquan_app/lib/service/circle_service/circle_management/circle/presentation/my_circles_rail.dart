@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show Circle;
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/media/app_media_image.dart';
@@ -25,7 +27,7 @@ double _myCirclesRailHeight(BuildContext context) {
       : AppSpacing.avatarRailHeight;
 }
 
-class MyCirclesRail extends StatelessWidget {
+class MyCirclesRail extends ConsumerWidget {
   final List<Circle> circles;
   final ValueChanged<Circle> onCircleTap;
 
@@ -36,8 +38,17 @@ class MyCirclesRail extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (circles.isEmpty) return const SizedBox.shrink();
+    final isDark = ref.watch(isDarkProvider);
+    final fgSecondary = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundSecondary,
+    );
+    final surfaceMuted = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundSecondary,
+    );
 
     return SizedBox(
       height: _myCirclesRailHeight(context),
@@ -49,15 +60,15 @@ class MyCirclesRail extends StatelessWidget {
             const SizedBox(width: AppSpacing.intraGroupMd),
         itemBuilder: (context, index) {
           if (index == circles.length) {
-            return _buildMoreButton(context);
+            return _buildMoreButton(fgSecondary, surfaceMuted);
           }
-          return _buildCircleItem(circles[index]);
+          return _buildCircleItem(circles[index], fgSecondary);
         },
       ),
     );
   }
 
-  Widget _buildCircleItem(Circle circle) {
+  Widget _buildCircleItem(Circle circle, Color fgSecondary) {
     return GestureDetector(
       onTap: () => onCircleTap(circle),
       child: Column(
@@ -69,9 +80,7 @@ class MyCirclesRail extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: AppColors.light.foregroundSecondary.withValues(
-                  alpha: 0.2,
-                ),
+                color: fgSecondary.withValues(alpha: 0.2),
                 width: AppSpacing.one,
               ),
             ),
@@ -87,9 +96,7 @@ class MyCirclesRail extends StatelessWidget {
             width: AppSpacing.largeAvatarSize,
             child: Text(
               circle.name,
-              style: _myCirclesRailLabelStyle().copyWith(
-                color: AppColors.light.foregroundSecondary,
-              ),
+              style: _myCirclesRailLabelStyle().copyWith(color: fgSecondary),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
@@ -100,7 +107,7 @@ class MyCirclesRail extends StatelessWidget {
     );
   }
 
-  Widget _buildMoreButton(BuildContext context) {
+  Widget _buildMoreButton(Color fgSecondary, Color surfaceMuted) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -108,12 +115,12 @@ class MyCirclesRail extends StatelessWidget {
           width: AppSpacing.avatarCircleLg,
           height: AppSpacing.avatarCircleLg,
           decoration: BoxDecoration(
-            color: AppColors.light.backgroundSecondary,
+            color: surfaceMuted,
             shape: BoxShape.circle,
           ),
           child: Icon(
             Icons.grid_view_rounded, // Or "All" icon
-            color: AppColors.light.foregroundSecondary,
+            color: fgSecondary,
             size: AppSpacing.iconMedium,
           ),
         ),
@@ -125,9 +132,7 @@ class MyCirclesRail extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: _myCirclesRailLabelStyle().copyWith(
-              color: AppColors.light.foregroundSecondary,
-            ),
+            style: _myCirclesRailLabelStyle().copyWith(color: fgSecondary),
           ),
         ),
       ],

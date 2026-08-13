@@ -10,6 +10,8 @@ import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/rt
 import 'package:quwoquan_app/runtime/observability/generated/app_telemetry_catalog.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/platform/call_audio_session_gateway.dart';
+import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/active_call_service.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_session_signal_projection.dart';
@@ -17,6 +19,7 @@ import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_se
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_state.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_participants_provider.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_quality_indicator.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
@@ -45,6 +48,8 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   String _mediaAccessToken = '';
   bool _mediaAccessEnableVideo = false;
   bool _mediaConnectInFlight = false;
+  StreamSubscription<CallAudioSessionEvent>? _audioSessionEventsSub;
+  bool _interruptionMutedLocally = false;
 
   @override
   CallSessionState build() {
@@ -54,11 +59,28 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
         .read(rtcSignalEventBusProvider)
         .events
         .listen(_onSignalEvent);
+    // 信令通道中断（App 后台/网络闪断）期间事件会丢失；通道恢复时必须从
+    // CallQuery 对齐可能错过的通话事实（对端挂断、参与者变化），不得让
+    // 回前台的用户停留在过期的本地通话状态。
+    ref.listen<TransportState>(realtimeConnectionManagerProvider, (
+      previous,
+      next,
+    ) {
+      final restored =
+          previous == TransportState.disconnected &&
+          next != TransportState.disconnected;
+      if (!restored) return;
+      final callId = state.session?.id.trim() ?? '';
+      if (callId.isEmpty || state.status == CallStatus.ended) return;
+      unawaited(retryCurrentCall());
+    });
     ref.onDispose(() {
       _signalSub?.cancel();
       _signalSub = null;
       _cancelTimeoutTimer();
       _detachLiveKitObservers();
+      _audioSessionEventsSub?.cancel();
+      _audioSessionEventsSub = null;
     });
     return const CallSessionState();
   }

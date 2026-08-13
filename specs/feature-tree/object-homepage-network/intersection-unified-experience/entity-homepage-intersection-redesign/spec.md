@@ -20,7 +20,7 @@
 - 我的交集卡标题统一为「我的交集」，渲染共享 ObjectIntersectionPreviewCard（objectBType=homepage、objectSharedReasonsProvider 单一真相源）：单列预览句 + 蓝锚点 + 查看全部。
 - 打动卡新增，标题「这里打动的人」，IntersectionStatementCard + entityImpactProvider，逐条只读 EntityImpactItem，句内数字下钻影响明细，无事实不展示。
 - 资料/关于入口不进入首屏核心模块，头部只保留一句话简介。
-- 核心动作主按钮关注、次按钮改「发记录」；移除首屏常驻「想去·结伴」入口。
+- 核心动作按主页类型分轨（与交集主线一致）：可到访地点类（`HomepageUIConfig.wishlistHomepageTypes`）主按钮「想去」——想去是交集意图信号源（`coWishlistedEntity` 燃料），点击有登录续接与诚实即时反馈（有交集点名、无交集只确认「已加入想去清单」，不伪造同行者）；非地点类主按钮「关注」。次按钮统一「发记录」。移除旧「想去·结伴」组合入口——结伴语义由交集行动句（`actionHints.start_gathering`）承载，不做第二入口。
 - 一级 tab 记录/讨论/相关圈子；记录流双列瀑布 + 卡内唯一交集句（封面→交集句→标题→作者→赞）。
 
 ### Out of Scope
@@ -98,11 +98,4 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 实体主页交集重做 验收证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺少能够证明“实体主页交集重做”已满足当前规格的真实测试证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
+（当前无开放事项：GWT-001 已由实体主页想去/续接、「近期行动」区块与生成 Remote 读面的真实测试子句级绑定。）

@@ -180,4 +180,4 @@
 - 影响或价值：当前尚缺对象级 readiness case、生产 runner、canonical snapshot authority、当前 receipt 解析与 stage 消费的完整接线；动态 result/receipt 类型存在仍不能形成职责匹配的用户验收或四环境结果。
 - 缺上述执行链时，调用方仍只能在「把入口声明或调用方自报 digest 当回执用」和「让全部对象停在 `implemented`」之间二选一；前者违反本节点红线，后者是当前必须保留的诚实结果。
 - 关闭方式是由对象合同声明 case，可信 runner 只在真实断言后输出结果，并由 evaluator 从 canonical package/activation manifest 解析当前候选摘要、复算 receipt bytes 后消费；case、runner、snapshot authority、receipt 与 stage 消费缺一不可。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
+- 完成判定：`GWT-003` 的 2 条 THEN 组全部具备子句级 `spec_ref`（`gwt-003.t1..t2`）绑定的真实测试或可执行门证据，且 receipt 必须由 evaluator 从 canonical snapshot authority 复算 bytes 后消费，调用方自报 digest 不计。

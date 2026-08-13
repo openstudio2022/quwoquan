@@ -14,7 +14,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle/app
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_contact_record.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_chat_search_store.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/local_chat_search_sync.dart';
-import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/local_search_namespace.dart';
+import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/local_search_namespace.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/adapters/hybrid_search_repository.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -363,6 +363,7 @@ final class _LocalReader implements LocalChatSearchReader {
     required LocalSearchNamespace namespace,
     required String query,
     String? conversationType,
+    String? conversationId,
     int limit = 20,
   }) async {
     calls.add('messages');

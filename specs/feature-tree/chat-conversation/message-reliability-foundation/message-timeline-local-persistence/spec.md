@@ -83,10 +83,20 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 本地时间线落盘尚未实现
+### OPEN-001 本地时间线落盘剩冷启动真实读回证据
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前会话打开恒发远端请求且不落盘，冷启动或离线打开会话直接进入错误态，整段对话上下文不可读。
-- 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：尚缺真机 UAT 层「杀进程重启后离线打开会话可读」的旅程证据。
+  真实 SQLite 磁盘文件的跨实例冷启动读回已有 api_integration 证据，由
+  `message_timeline_cold_start__api_integration_test.dart` 断言新 store 实例读回
+  seq 升序完整恢复、分页游标语义保持与 persona scope 隔离。撤回消息在本地副本
+  写 recalled 占位而非物理删除、离线重开仍可见占位，由
+  `chat_send_failure_recovery__local_contract_test.dart` 断言。
+  本地水合→远端刷新→写回本地副本的链路已实现并有 local_contract 证据
+  （`message_timeline_persistence_paging__reliability__local_contract_test.dart`）：
+  本地命中且远端失败表达为离线只读来源（会话页展示离线提示条、不清空内容、不与刷新失败混态），
+  本地为空且远端失败呈现可重试失败态且不写入本地成功事实；本地
+  存储复用搜索 SQLite 单库（`chatMessageTimelineCacheProvider` → search index adapter）。
+- 完成判定：`GWT-001` 的冷启动语义由真实持久库跨进程读回测试证明；`GWT-002` 已闭合。

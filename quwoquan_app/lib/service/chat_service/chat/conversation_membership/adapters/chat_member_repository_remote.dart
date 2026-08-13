@@ -35,7 +35,7 @@ final class RemoteChatMemberRepository implements ChatMemberRepository {
     String? cursor,
     int limit = ChatListConversationMembersQuery.defaultLimit,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     return _listEveryMemberPage(
       query: _membershipQuery,
@@ -43,7 +43,7 @@ final class RemoteChatMemberRepository implements ChatMemberRepository {
       cursor: cursor,
       limit: limit,
       role: role,
-      sort: sort ?? 'joined_asc',
+      sort: sort ?? MemberListSort.joinedAsc,
     );
   }
 
@@ -58,7 +58,7 @@ final class RemoteChatMemberRepository implements ChatMemberRepository {
       conversationId: conversationId,
       limit: limit,
       searchQuery: query.trim(),
-      sort: 'display_name_asc',
+      sort: MemberListSort.displayNameAsc,
     );
   }
 
@@ -68,7 +68,7 @@ final class RemoteChatMemberRepository implements ChatMemberRepository {
     String? cursor,
     required int limit,
     String? role,
-    required String sort,
+    required MemberListSort sort,
     String? searchQuery,
   }) async {
     var nextCursor = cursor?.trim() ?? '';

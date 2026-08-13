@@ -121,7 +121,7 @@ def cursor_key_file_issues() -> list[str]:
 def resolve_cursor_api_key(*, refresh: bool = True) -> str | None:
     """Resolve the freshest Cursor API key from the single source of truth.
 
-    Only the key file is accepted.  The legacy environment variable is neither
+    Only the key file is accepted.  The retired environment variable is neither
     read nor populated: nested bridge processes must receive no credential and
     all SDK calls pass this return value explicitly.
     """

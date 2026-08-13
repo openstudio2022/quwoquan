@@ -1,4 +1,6 @@
 import 'dart:async';
+
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'dart:developer' as developer;
 
 import 'package:flutter/foundation.dart';
@@ -359,11 +361,13 @@ class RtcRoomService {
     try {
       await disconnect();
     } catch (error, stackTrace) {
-      developer.log(
-        'RTC room cleanup during dispose failed',
-        name: 'RtcRoomService',
-        error: error.runtimeType,
-        stackTrace: stackTrace,
+      // dispose 清理失败可能持续占用媒体设备（麦克风/摄像头），必须上报。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'platform.rtc_room.dispose_disconnect',
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }
@@ -375,20 +379,27 @@ class RtcVideoTrackRenderer extends StatelessWidget {
     super.key,
     required this.track,
     this.fit = RtcVideoViewFit.cover,
+    this.mirror = false,
   });
 
   final RtcVideoTrack track;
   final RtcVideoViewFit fit;
 
+  /// 本地前摄预览按业界默认水平镜像（照镜子预期）；远端与后摄不镜像。
+  /// 决策由 `shouldMirrorLocalPreview` 单一真相源给出，调用方透传。
+  final bool mirror;
+
   @override
   Widget build(BuildContext context) {
-    return livekit.VideoTrackRenderer(
+    final renderer = livekit.VideoTrackRenderer(
       track._delegate,
       fit: switch (fit) {
         RtcVideoViewFit.cover => livekit.VideoViewFit.cover,
         RtcVideoViewFit.contain => livekit.VideoViewFit.contain,
       },
     );
+    if (!mirror) return renderer;
+    return Transform.flip(flipX: true, child: renderer);
   }
 }
 

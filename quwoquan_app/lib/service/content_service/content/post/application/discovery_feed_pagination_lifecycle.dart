@@ -143,7 +143,10 @@ abstract class _DiscoveryFeedMapPaginationLifecycle
       feedSession.adoptServerFeedRequestId(page.feedRequestId);
       ref
           .read(postInteractionStateProvider.notifier)
-          .applyConfirmedPosts(dedupedNew);
+          .applyConfirmedPosts(
+            dedupedNew,
+            pendingLikePostIds: ref.read(pendingLikeSyncPostIdsProvider),
+          );
       final mergedSeen = _boundedSeenItemIds(
         value.seenItemIds,
         dedupedNew.map((item) => item.id),
@@ -400,7 +403,10 @@ abstract class _DiscoveryFeedMapPaginationLifecycle
       if (confirmed.isNotEmpty) {
         ref
             .read(postInteractionStateProvider.notifier)
-            .applyConfirmedPosts(confirmed);
+            .applyConfirmedPosts(
+              confirmed,
+              pendingLikePostIds: ref.read(pendingLikeSyncPostIdsProvider),
+            );
       }
       final normalizedFallback = fallbackError == null
           ? null

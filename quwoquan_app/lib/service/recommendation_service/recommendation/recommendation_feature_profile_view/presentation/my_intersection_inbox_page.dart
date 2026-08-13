@@ -17,6 +17,7 @@ import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_actionable_reasons.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
@@ -332,10 +333,78 @@ class _MyIntersectionInboxPageState
       if (items.isEmpty && state.rawError == null)
         const IntersectionTimelineEmptyState()
       else ...<Widget>[
-        IntersectionBucketTimeline(rows: _intersectionRows(items)),
+        // 可约分组置顶（REQ-008）：可行动交集从时间桶抽出置顶，同一交集不双重展示；
+        // 分组内保持云侧下发顺序，端侧只做展示分层。
+        ..._buildActionableSection(items),
+        IntersectionBucketTimeline(
+          rows: _intersectionRows(
+            items
+                .where((item) => !isActionableIntersectionReason(item))
+                .toList(growable: false),
+          ),
+        ),
         const IntersectionTimelineRecentLimitNote(),
       ],
     ];
+  }
+
+  List<Widget> _buildActionableSection(List<IntersectionReason> items) {
+    final actionable = actionableIntersectionReasons(items);
+    if (actionable.isEmpty) {
+      return const <Widget>[];
+    }
+    return <Widget>[
+      IntersectionActionableGroupSection(
+        rows: <Widget>[
+          for (final reason in actionable)
+            if (displayReadyIntersectionReason(reason)
+                case final displayReason?)
+              IntersectionCompactTimelineRow(
+                primaryText: displayReason.primaryText,
+                spans: displayReason.primarySpans,
+                iconKey: displayReason.iconKey,
+                sourceRef: _sourceRefFor(displayReason),
+                dimension: displayReason.dimension,
+                tone: displayReason.tone,
+                typeIconUrl: displayReason.typeVisual?.imageUrl ?? '',
+                lifecycleState: displayReason.lifecycleState,
+                onTap: () => _openReason(displayReason),
+                onSpanTap: (span) => _onSpanTap(displayReason, span),
+                onNegativeFeedback: () => _onNegativeFeedback(displayReason),
+                trailing: switch (primaryIntersectionActionHint(
+                  displayReason,
+                )) {
+                  final hint? => IntersectionActionablePill(
+                    label: hint.label,
+                    onPressed: () => _openPrimaryActionHint(
+                      displayReason,
+                      hint,
+                    ),
+                  ),
+                  null => null,
+                },
+              ),
+        ],
+      ),
+    ];
+  }
+
+  /// 可约分组主行动：经统一 actionHint 分发（dispatch 闭集，未登记 fail-closed）；
+  /// 分发失败回落打开交集对象，绝不静默失败。
+  void _openPrimaryActionHint(
+    IntersectionReason reason,
+    IntersectionActionHint hint,
+  ) {
+    final result = _navigator.openActionHint(
+      context,
+      hint,
+      sourceRef: _sourceRefFor(reason),
+      attribution: _attributionFor(reason),
+      evidenceReason: reason,
+    );
+    if (!result.didOpen) {
+      _openReason(reason);
+    }
   }
 
   /// 交集行 → 时间桶条目（详情页紧凑行：图标 + 单句 + chevron）。

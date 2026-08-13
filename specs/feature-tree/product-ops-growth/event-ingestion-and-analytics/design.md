@@ -32,6 +32,29 @@
 - 影响 Story：[`analytics-metric-dictionary`](./analytics-metric-dictionary/spec.md)、[`event-schema-governance`](./event-schema-governance/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-002"></a>
+### DEC-002 跨轨统一漏斗只做读侧 actorHash 天级合并，不建数仓
+- 决策：「曝光 → 消费 → 发布 → 再消费」漏斗横跨产品遥测轨（ES，身份键 sessionId 可派生 actorHash）与行为归因轨（Mongo/Redis 流，身份键 personaId/feedRequestId）。统一视图只在读侧合并：join 键固定为 actorHash（sha256(actorId)，与 growth 投影同派生域）；产品轨由 `GetGrowthOverview` 扩展天级去重段计数，行为轨由 content-service 归因端点扩展 actor 去重数，product-ops 聚合层读侧合并、不复制事实。漏斗每段标注 sourceTrack 与 freshness，缺任一轨显式 unavailable，禁止跨轨数值换算。
+- 理由：两轨物理隔离是既定架构（BehaviorSignal 不得伪装 Ops 事件）；当前规模下天级去重计数由既有 ES/Mongo 聚合承载即可，提前引入数仓（ClickHouse/BigQuery）是无收益的第二存储面。
+- 被否决方案：以下路线均被否决。
+  - 引入独立分析数仓做明细 join。
+  - 用户级明细跨轨关联（隐私与基数不允许）。
+  - 在任一轨复制另一轨事实形成第二真相源。
+  - 分钟级实时跨轨漏斗。
+- 约束与影响：先契约（product-ops `GetGrowthOverview` response_fields 扩展与 content 归因端点扩展）再 verify/codegen 再实现；规模超出单机聚合能力时重评数仓，禁止提前建设。
+- 关联要求：[`analytics-metric-dictionary REQ-003`](./analytics-metric-dictionary/spec.md#req-003)
+- 影响 Story：[`analytics-metric-dictionary`](./analytics-metric-dictionary/spec.md)
+- 关联验收：`SIT-002`
+
+<a id="dec-003"></a>
+### DEC-003 rollup 写侧与 ES 告警评估共用一条契约驱动执行链
+- 决策：`rollups.yaml` 经 codegen 生成 `RollupCatalog`，ES 写侧由单一数据驱动执行器按 catalog 遍历产出全部 rowKind 聚合行，批修复读回直接消费 raw 文档全字段。`product_telemetry_alerts.yaml` 每条告警用 `fields` 显式声明 condition 字段的派生，rollup 的 filter/where 与告警的 condition/where 共用同一最小条件语言。评估循环内建于 product-ops：聚合行读回、内存字段派生、条件求值、Alertmanager v2 推送，firing 按评估间隔三倍续期自动 resolve，由 `telemetry_alerts.policy_path` 与 `alertmanager_url` 配置启用。control_plane 告警字段由评估器自产：派生失败计数、聚合 generatedThrough 新鲜度水位、ES ILM 实际保留天数。seek unsettled 采用 settle 直方图超 2000ms 尾部占比的代理口径；rtc 比率类告警的分子由字段级 where 承载，顶层 filter 只做公共排除，保证分子分母口径分离。
+- 理由：聚合定义、告警字段与数据行形态必须单源，显式派生声明使门禁能静态闭合校验——condition 字段包含于 fields、fields 输入包含于 rowKind measures。
+- 被否决方案：外置独立告警评估服务、ES watcher/transform 承载、condition 字段与 measures 隐式同名映射。
+- 约束与影响：先改 `rollups.yaml` 与告警契约，再 codegen，再实现，禁止按 rowKind 手写第二套聚合分支；新增告警字段必须先有 rowKind measure 或 evaluator 白名单登记，`verify_ops_event_schema_completeness.py` 的告警字段闭合段命中即 BLOCK。
+- 关联验收：`SIT-002`
+- 遗留：四环境启用收据由 [`OPEN-011`](./spec.md#open-011) 跟踪。
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

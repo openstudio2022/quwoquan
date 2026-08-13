@@ -599,7 +599,8 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth < 360 ? 3 : 4;
+        final columns =
+            constraints.maxWidth < AppSpacing.compactBreakpoint ? 3 : 4;
         final width =
             (constraints.maxWidth - _gridSpacing * (columns - 1)) / columns;
         final reduceMotion = MediaQuery.disableAnimationsOf(context);
@@ -710,7 +711,8 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth < 360 ? 3 : 4;
+        final columns =
+            constraints.maxWidth < AppSpacing.compactBreakpoint ? 3 : 4;
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),

@@ -74,6 +74,48 @@ void main() {
       );
     });
 
+    test('RTC 通话页族深链需要登录（契约 required 同源）', () {
+      expect(
+        requiredRouteGateForLocation(AppRoutePaths.rtcVoice(callId: 'c1')),
+        AuthGateReason.startCall,
+      );
+      expect(
+        requiredRouteGateForLocation(AppRoutePaths.rtcVideo(callId: 'c1')),
+        AuthGateReason.startCall,
+      );
+      expect(
+        requiredRouteGateForLocation(AppRoutePaths.rtcIncoming(callId: 'c1')),
+        AuthGateReason.startCall,
+      );
+      expect(
+        requiredRouteGateForLocation(AppRoutePaths.rtcOutgoing(callId: 'c1')),
+        AuthGateReason.startCall,
+      );
+      expect(
+        requiredRouteGateForLocation(AppRoutePaths.rtcPickParticipants),
+        AuthGateReason.startCall,
+      );
+    });
+
+    test('账号态设置子页深链需要登录，/settings 首页保持游客可浏览', () {
+      expect(requiredRouteGateForLocation(AppRoutePaths.settings), isNull);
+      for (final page in <String>[
+        AppRoutePaths.settingsAbout,
+        AppRoutePaths.settingsAccountSecurity,
+        AppRoutePaths.settingsCalls,
+        AppRoutePaths.settingsDarkMode,
+        AppRoutePaths.settingsNotifications,
+        AppRoutePaths.settingsPermissions,
+        AppRoutePaths.settingsPrivacy,
+      ]) {
+        expect(
+          requiredRouteGateForLocation(page),
+          AuthGateReason.settingsAccount,
+          reason: page,
+        );
+      }
+    });
+
     test('私助管理页需要登录且关闭登录页回到安全页', () {
       expect(
         requiredRouteGateForLocation(AppRoutePaths.assistantManagement),

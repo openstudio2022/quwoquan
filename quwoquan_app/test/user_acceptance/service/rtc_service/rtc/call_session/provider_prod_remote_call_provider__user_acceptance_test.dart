@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/one-to-one-call/spec.md#gwt-003
+// readiness_case: call_session_one_to_one_app_uat
 /// Production Provider two-device journey.
 ///
 /// The callee must be backgrounded before call creation. It reaches the

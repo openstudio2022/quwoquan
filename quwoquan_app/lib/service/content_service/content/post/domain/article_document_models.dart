@@ -8,6 +8,11 @@ enum ArticleDocumentNodeType {
   orderedItem,
   bulletItem,
   figure,
+  // 富块阅读最小集（GWT-003）：数据工程供稿可产出，阅读端不得有损压缩；
+  // 编辑器暂只保留语义（加载不降级、序列化原样写回），不提供创作 UI。
+  quote,
+  callout,
+  codeBlock,
 }
 
 enum ArticleDocumentTitleStyle { none, major, minor }
@@ -20,6 +25,9 @@ enum ArticleDocumentBlockType {
   orderedItem,
   bulletItem,
   image,
+  quote,
+  callout,
+  codeBlock,
 }
 
 String _normalizeArticleText(String value) {
@@ -38,6 +46,7 @@ class ArticleDocumentNode {
     this.caption = '',
     this.textAlign = '',
     this.listDepth = 0,
+    this.codeLanguage = '',
     this.spans = const <ArticleInlineSpan>[],
   });
 
@@ -52,6 +61,9 @@ class ArticleDocumentNode {
       'orderedItem' => ArticleDocumentNodeType.orderedItem,
       'bulletItem' => ArticleDocumentNodeType.bulletItem,
       'figure' || 'image' => ArticleDocumentNodeType.figure,
+      'quote' => ArticleDocumentNodeType.quote,
+      'callout' => ArticleDocumentNodeType.callout,
+      'codeBlock' => ArticleDocumentNodeType.codeBlock,
       _ => ArticleDocumentNodeType.paragraph,
     };
     final spansRaw = (map['spans'] as List?) ?? const <Object?>[];
@@ -72,6 +84,7 @@ class ArticleDocumentNode {
       caption: (map['caption'] ?? '').toString(),
       textAlign: (map['textAlign'] ?? '').toString(),
       listDepth: (map['listDepth'] as num?)?.toInt() ?? 0,
+      codeLanguage: (map['codeLanguage'] ?? '').toString(),
       spans: spans,
     );
   }
@@ -85,6 +98,9 @@ class ArticleDocumentNode {
   final String caption;
   final String textAlign;
   final int listDepth;
+
+  /// 仅 [ArticleDocumentNodeType.codeBlock] 使用的语言标注（可为空）。
+  final String codeLanguage;
   final List<ArticleInlineSpan> spans;
 
   bool get hasText => text.trim().isNotEmpty;
@@ -98,6 +114,12 @@ class ArticleDocumentNode {
       type == ArticleDocumentNodeType.paragraph ||
       type == ArticleDocumentNodeType.orderedItem ||
       type == ArticleDocumentNodeType.bulletItem;
+
+  /// 富块（阅读渲染最小集）：编辑器保留语义但不提供创作 UI。
+  bool get isRichBlock =>
+      type == ArticleDocumentNodeType.quote ||
+      type == ArticleDocumentNodeType.callout ||
+      type == ArticleDocumentNodeType.codeBlock;
   bool get usesWrappedLayout =>
       imageLayout == 'wrapLeft' || imageLayout == 'wrapRight';
 
@@ -111,6 +133,7 @@ class ArticleDocumentNode {
     String? caption,
     String? textAlign,
     int? listDepth,
+    String? codeLanguage,
     List<ArticleInlineSpan>? spans,
   }) {
     return ArticleDocumentNode(
@@ -123,6 +146,7 @@ class ArticleDocumentNode {
       caption: caption ?? this.caption,
       textAlign: textAlign ?? this.textAlign,
       listDepth: listDepth ?? this.listDepth,
+      codeLanguage: codeLanguage ?? this.codeLanguage,
       spans: spans ?? this.spans,
     );
   }
@@ -138,6 +162,7 @@ class ArticleDocumentNode {
       if (caption.trim().isNotEmpty) 'caption': caption,
       if (textAlign.trim().isNotEmpty) 'textAlign': textAlign,
       if (listDepth > 0) 'listDepth': listDepth,
+      if (codeLanguage.trim().isNotEmpty) 'codeLanguage': codeLanguage,
       if (spans.isNotEmpty)
         'spans': spans.map((span) => span.toMap()).toList(growable: false),
     };
@@ -288,6 +313,10 @@ class ArticleInlineSpan {
   /// 正文内联可点击 mention（实体或标签），渲染与序列化统一以此判定。
   bool get isInlineMention => isEntity || isTag;
 
+  /// 行内超链接（kind='link'，targetId 为白名单 scheme 的 URL）。
+  bool get isLink =>
+      kind == 'link' && isArticleLinkTargetAllowed(targetId ?? '');
+
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
       'start': start,
@@ -304,6 +333,127 @@ class ArticleInlineSpan {
   }
 }
 
+/// 文章行内链接允许的 scheme（恶意 scheme 如 javascript:/data: 在解析期即
+/// 拒绝，不进入 span 真相源）：仅 https/http 外链。
+bool isArticleLinkTargetAllowed(String url) {
+  final trimmed = url.trim();
+  if (trimmed.isEmpty) {
+    return false;
+  }
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null) {
+    return false;
+  }
+  return switch (uri.scheme.toLowerCase()) {
+    'https' || 'http' => true,
+    _ => false,
+  };
+}
+
+/// 行内渲染/序列化共用的分段结果：文本区段 + 字符级合成样式 + 可选 mention。
+///
+/// 这是行内样式的唯一分段真相源（GWT-002）：阅读端渲染、编辑预览与 markdown
+/// 序列化都消费同一函数，禁止各自再做第二套 span 切分。
+@immutable
+class ArticleInlineSegment {
+  const ArticleInlineSegment({
+    required this.start,
+    required this.end,
+    this.bold = false,
+    this.italic = false,
+    this.underline = false,
+    this.strikethrough = false,
+    this.mention,
+  });
+
+  final int start;
+  final int end;
+  final bool bold;
+  final bool italic;
+  final bool underline;
+  final bool strikethrough;
+
+  /// 非 null 表示该段是原子 mention 段（不被样式记号切分）。
+  final ArticleInlineSpan? mention;
+
+  bool get hasStyle => bold || italic || underline || strikethrough;
+}
+
+/// 把 [spans]（mention/link 与样式 span，允许重叠）按字符级合成切分为有序段。
+///
+/// mention 与 link 段原子输出（段内样式忽略，渲染以语义为准）；其余文本按
+/// 四个样式布尔的字符级 OR 合成，样式向量变化处切段。
+List<ArticleInlineSegment> resolveArticleInlineSegments(
+  String text,
+  List<ArticleInlineSpan> spans,
+) {
+  if (text.isEmpty) {
+    return const <ArticleInlineSegment>[];
+  }
+  final length = text.length;
+  final mentionAt = List<ArticleInlineSpan?>.filled(length, null);
+  final bolds = List<bool>.filled(length, false);
+  final italics = List<bool>.filled(length, false);
+  final underlines = List<bool>.filled(length, false);
+  final strikethroughs = List<bool>.filled(length, false);
+  final sorted = [...spans]..sort((a, b) => a.start.compareTo(b.start));
+  for (final span in sorted) {
+    final start = span.start.clamp(0, length);
+    final end = span.end.clamp(start, length);
+    if (span.isInlineMention || span.isLink) {
+      for (var i = start; i < end; i++) {
+        mentionAt[i] ??= span;
+      }
+      continue;
+    }
+    for (var i = start; i < end; i++) {
+      if (span.bold) bolds[i] = true;
+      if (span.italic) italics[i] = true;
+      if (span.underline) underlines[i] = true;
+      if (span.strikethrough) strikethroughs[i] = true;
+    }
+  }
+  final segments = <ArticleInlineSegment>[];
+  var i = 0;
+  while (i < length) {
+    final mention = mentionAt[i];
+    if (mention != null) {
+      final start = i;
+      while (i < length && identical(mentionAt[i], mention)) {
+        i++;
+      }
+      segments.add(
+        ArticleInlineSegment(start: start, end: i, mention: mention),
+      );
+      continue;
+    }
+    final b = bolds[i];
+    final it = italics[i];
+    final u = underlines[i];
+    final s = strikethroughs[i];
+    final start = i;
+    while (i < length &&
+        mentionAt[i] == null &&
+        bolds[i] == b &&
+        italics[i] == it &&
+        underlines[i] == u &&
+        strikethroughs[i] == s) {
+      i++;
+    }
+    segments.add(
+      ArticleInlineSegment(
+        start: start,
+        end: i,
+        bold: b,
+        italic: it,
+        underline: u,
+        strikethrough: s,
+      ),
+    );
+  }
+  return segments;
+}
+
 @immutable
 class ArticleDocumentBlock {
   const ArticleDocumentBlock({
@@ -317,6 +467,7 @@ class ArticleDocumentBlock {
     this.orderedIndex,
     this.textAlign = '',
     this.listDepth = 0,
+    this.codeLanguage = '',
     this.spans = const <ArticleInlineSpan>[],
   });
 
@@ -332,8 +483,11 @@ class ArticleDocumentBlock {
   /// start | center | end | justify（空表示默认）
   final String textAlign;
 
-  /// 有序/无序嵌套深度 1–3（0 表示非列表块或未设置）
+  /// 有序/无序嵌套级别 0–2（0 = 顶层；序列化为两空格/级缩进，与 codec 同源）
   final int listDepth;
+
+  /// 仅 [ArticleDocumentBlockType.codeBlock] 使用的语言标注（可为空）。
+  final String codeLanguage;
   final List<ArticleInlineSpan> spans;
 
   bool get isTextLike => type != ArticleDocumentBlockType.image;
@@ -668,6 +822,32 @@ _ArticleDocumentProjection _projectArticleDocument(
       case ArticleDocumentNodeType.bulletItem:
         orderedIndex = 0;
         appendBodyText(node.text.trim().isEmpty ? '' : '• ${node.text.trim()}');
+        break;
+      case ArticleDocumentNodeType.quote:
+      case ArticleDocumentNodeType.callout:
+      case ArticleDocumentNodeType.codeBlock:
+        // 富块不做有损压缩（GWT-003）：以独立 block 进入投影并保留正文
+        // 可搜索文本，渲染端按类型呈现引用条/callout 卡面/等宽代码块。
+        orderedIndex = 0;
+        if (node.text.trim().isNotEmpty) {
+          final b = ArticleDocumentBlock(
+            id: node.id,
+            type: switch (node.type) {
+              ArticleDocumentNodeType.quote => ArticleDocumentBlockType.quote,
+              ArticleDocumentNodeType.callout =>
+                ArticleDocumentBlockType.callout,
+              _ => ArticleDocumentBlockType.codeBlock,
+            },
+            offset: bodyBuffer.length,
+            text: node.text,
+            textAlign: node.textAlign,
+            codeLanguage: node.codeLanguage,
+            spans: node.spans,
+          );
+          blocks.add(b);
+          allBlocks.add(b);
+          appendBodyText(node.text);
+        }
         break;
       case ArticleDocumentNodeType.figure:
         orderedIndex = 0;

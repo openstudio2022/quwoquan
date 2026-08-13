@@ -19,6 +19,7 @@ import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_session_provider.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/second_incoming_call_provider.dart';
 
 final callKitServiceProvider = Provider<CallKitService>((ref) {
   final service = CallKitService(
@@ -67,9 +68,8 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
     if (normalizedPersonaId.isEmpty) {
       return;
     }
-    final channel = resolveIncomingCallChannel(
-      ref.read(platformCapabilitiesProvider),
-    );
+    final capabilities = ref.read(platformCapabilitiesProvider);
+    final channel = resolveIncomingCallChannel(capabilities);
 
     // 实时通话能力不可用（如初始 ohos / desktop）：不建立来电监听，由入口
     // 能力位隐藏发起按钮，二者一致降级（R-XP1/R-XP5）。
@@ -94,7 +94,11 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
       });
       unawaited(_consumeNativeState(generation, channel));
     }
-    unawaited(_startPushEndpointSync(generation, channel));
+    // 推送 endpoint 注册按 pushDelivery 能力位门控（R-XP1/R-XP5）：能力关闭
+    // 平台结构化跳过 FCM runtime 与 token 同步，来电仍走 realtime 站内通道。
+    if (shouldSyncPushEndpoints(capabilities)) {
+      unawaited(_startPushEndpointSync(generation, channel));
+    }
 
     _signalSub = signals.incomingCalls.listen((event) {
       final wrap = event.payload as RtcCallRingingWsPayload;
@@ -232,6 +236,9 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
   }
 
   Future<void> _removePushEndpointsForLogout() async {
+    if (!shouldSyncPushEndpoints(ref.read(platformCapabilitiesProvider))) {
+      return;
+    }
     try {
       await ref.read(devicePushEndpointCoordinatorProvider).removeForLogout();
     } catch (error, stack) {
@@ -269,6 +276,27 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
         return;
       case IncomingCallClaimResult.accepted:
         break;
+    }
+
+    // 通话中来电（call waiting）安全行为：存在其他活跃通话时，不得篡夺
+    // 活跃 CallSession 状态机、不得导航覆盖通话页、不得再弹系统来电面；
+    // 降级为第二来电轻提示（通话页展示），未接事实由 system_call_log 承接
+    // 回拨。轻提示也是真实呈现，照常 ACK 投递记账。
+    final activeCall = ref.read(callSessionProvider);
+    final busyWithAnotherCall =
+        activeCall.session != null &&
+        activeCall.status != CallStatus.ended &&
+        activeCall.session!.id != envelope.callId;
+    if (busyWithAnotherCall) {
+      if (alreadyPresentedByNative) {
+        // 系统全屏来电面已由原生侧展示，App 内不做二次呈现也不撤系统面；
+        // 系统面接听第二通的语义属于真机 CallKit 验收范围。
+        await _acknowledgePresentation(envelope, source);
+        return;
+      }
+      ref.read(secondIncomingCallProvider.notifier).notify(envelope);
+      await _acknowledgePresentation(envelope, source);
+      return;
     }
 
     _pendingByCallId[envelope.callId] = envelope;
@@ -577,6 +605,13 @@ IncomingCallChannel resolveIncomingCallChannel(PlatformCapabilities caps) {
   }
   return IncomingCallChannel.inAppOnly;
 }
+
+/// 依据平台能力位判定是否执行设备推送 endpoint 注册与登出反注册（纯函数）。
+///
+/// 业务只读 [PlatformCapabilities.pushDelivery]，不做裸平台判断（R-XP1/R-XP2）；
+/// 能力关闭（web / 初始 ohos / desktop）时结构化跳过同步：不启动 FCM runtime、
+/// 不消费 push endpoint queue、不触达原生通道（R-XP5）。
+bool shouldSyncPushEndpoints(PlatformCapabilities caps) => caps.pushDelivery;
 
 final incomingCallRouterReaderProvider = Provider<GoRouter Function()>((ref) {
   return () {

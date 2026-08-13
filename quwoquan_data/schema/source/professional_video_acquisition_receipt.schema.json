@@ -243,7 +243,7 @@
         "sizeBytes": {"type": "integer", "minimum": 1},
         "mediaProbe": {"$ref": "#/$defs/mediaProbe"},
         "popularitySignals": {"$ref": "#/$defs/popularitySignals"},
-        "professionalAcquisitionReceiptRef": {"type": "string", "pattern": "^receipts/[0-9a-f]{64}\\.json$"},
+        "professionalAcquisitionReceiptRef": {"type": "string", "pattern": "^receipts/[0-9a-f]{64}(-attempt-[0-9]{3,})?\\.json$"},
         "professionalAssetId": {"type": "string", "minLength": 1},
         "professionalContentSha256": {"$ref": "#/$defs/sha256"},
         "premiumPlayableEligible": {"const": true}

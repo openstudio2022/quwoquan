@@ -138,7 +138,7 @@
 ### REQ-002 为端侧首页与内容详情提供统一发现流与内容读取能力，支持按用户画像和行为进行推荐排序
 
 - 为端侧首页与内容详情提供统一发现流与内容读取能力，支持按用户画像和行为进行推荐排序。
-- **四类内容**（文章、微趣、美图、视频）统一支持全量用户反馈：关注作者、赞、收藏、转发、评论，以及不感兴趣、不想看此作者、不想看此类内容、举报；反馈端云契约与推荐过滤逻辑见 `feed-orchestration-recommendation/design.md`。
+- **四类内容**（文章、微趣、美图、视频）统一支持全量用户反馈：关注作者、赞、想去（内容锚定到支持想去的实体时，见 `publish-comment-reaction/design.md#dec-002`）、转发、评论，以及不感兴趣、不想看此作者、不想看此类内容、举报；反馈端云契约与推荐过滤逻辑见 `feed-orchestration-recommendation/design.md`。
 - 端侧 UI 必须遵从语义 token（`AppSpacing`/`AppColors`/`AppTypography`），禁止硬编码视觉值。
 - 发现流与内容列表响应统一 `items` + `nextCursor`。
 - 行为事件必须可被 `product-ops` 消费，且可关联 `traceId/requestId/pageId`。
@@ -207,6 +207,10 @@
 - 条件：taxonomy 与 App 生产代码均可读。
 - 可观察结果：`verify_tag_collection_wiring.py` 列出每条在用通道的覆盖标签数与接线状态，
  并对未登记通道、基线外未接通、基线内已接通三类偏离全部阻断。
+ taxonomy 在用三条通道已全部接通、`UNWIRED_BASELINE` 为空：`poi` 经
+ `GeoTagRefResolver` 写 `PublishSettings.geoTagRef`；`exif` 经
+ `extractMediaCaptureMetadata` 写 `captureMetadata`；`creator_chip` 经发布确认页
+ `PublishTagChipPickerPage` 打标 chip 写 `tagRefs`（widget local_contract 覆盖选中回填、上限约束与单轴降级）。
 - 禁止结果：不得以文档注释提及生产符号冒充接通；不得在未接通的前提下扩大基线。
 
 <a id="dom-004"></a>
@@ -254,25 +258,11 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前 `closure-scorecard` 实测 `defined=5891 / collectible=4159 / published=5 / consumed=4159 / verified=0`，
- 判定 `BLOCK`。尚无任何标签同时具备采集通道、真实内容供给与消费方。
- 其中 `consumed` 的 4159 项全部落在「有消费声明但零内容供给」——`Topic/地理` 4122 个节点声明了 `poi` 采集与
- `recall`/`intersection` 消费，但 `Post.geoTagRef` 在端侧没有生产写入点，供给恒为空（断点证据见 `OPEN-003`）。
- canonical 发布物只有 3 篇、合计使用 5 个 `tagRef`，因此扩充标签定义不会转化为可用信号，只会放大空转。
+- 影响或价值：当前 `closure-scorecard` 实测 `verified=0`，判定 `BLOCK`。
+ 采集级断点已全部修复：三条在用采集通道（`poi`/`exif`/`creator_chip`）的生产
+ 写入点均已接通（见 `DOM-003`），端侧发布会真实写入 `geoTagRef`/`captureMetadata`/`tagRefs`。
+ 剩余缺口在供给级：
+ canonical 发布物仅个位数、地理 `tagRef` 尚无真实使用，`published` 与 `verified`
+ 仍为零。让 `verified > 0` 需要数据生产侧发布带 `geoTagRef` 的 canonical 内容
+ （或在线 UGC 进入 canonical 供给统计口径），扩充标签定义不会转化为可用信号。
 - 完成判定：`DOM-002` 可复跑，且 `verified > 0`（至少一条语义轴打通采集、供给、消费三级）
-
-<a id="open-003"></a>
-### OPEN-003 三条在用采集通道全部没有生产写入点
-
-- 类型：`capability_gap`
-- 优先级：`P0`
-- 准出影响：`block`
-- 影响或价值：当前 taxonomy 只使用三条采集通道，三条都未接通，合计 4159 个标签永远不会被打上：
- `poi` 覆盖 4059 个 `Topic/地理` 节点，`GeoTagRefResolver` 已实现却只在测试树被调用，
- 发布确认页选中 POI 时仅写 `locationPoi`，`Post.geoTagRef` 恒空，
- 导致 `decodeDeclaredVisit` 的区域级同地交集分支从未被触发；
- `exif` 覆盖 40 个摄影节点，`extractMediaCaptureMetadata` 无任何生产调用点，
- `PublishSettings.captureMetadata` 恒为 `empty`，`captureDerivedTagRefs` 恒为空列表；
- `creator_chip` 覆盖 60 个节点，创作页尚无打标 chip，`tagRefs` 只能由正文内联 mention 填充。
- 断点已由 `UNWIRED_BASELINE` 固化，接通一条即须删除一条。
-- 完成判定：`DOM-003` 通过且 `UNWIRED_BASELINE` 为空

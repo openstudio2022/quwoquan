@@ -489,16 +489,31 @@ final class PostPublicationIntentQueueNotifier
       final preferences = await SharedPreferences.getInstance();
       final raw = preferences.getString(scopeKey);
       final decoded = raw == null || raw.isEmpty ? null : jsonDecode(raw);
-      final intents = decoded is List
-          ? decoded
-                .whereType<Map>()
-                .map(
-                  (value) => LocalPostPublicationIntent.fromStorageMap(
-                    value.map((key, item) => MapEntry(key.toString(), item)),
+      final intents = <LocalPostPublicationIntent>[];
+      if (decoded is List) {
+        for (final value in decoded.whereType<Map>()) {
+          // 逐条隔离：command 的 wire 解码是 fail-closed 的，一条历史脏记录
+          // 不得连坐清空用户其余待发布内容；丢弃事实必须结构化上报（自带
+          // 指纹去重），不得只留本地日志。
+          try {
+            intents.add(
+              LocalPostPublicationIntent.fromStorageMap(
+                value.map((key, item) => MapEntry(key.toString(), item)),
+              ),
+            );
+          } catch (error, stackTrace) {
+            unawaited(
+              ref
+                  .read(exceptionTelemetryPortProvider)
+                  .recordHandledException(
+                    source: 'content.post_publication_queue.intent_decode',
+                    error: error,
+                    stackTrace: stackTrace,
                   ),
-                )
-                .toList(growable: false)
-          : const <LocalPostPublicationIntent>[];
+            );
+          }
+        }
+      }
       if (ref.mounted && scopeKey == _activeScopeKey) {
         state = PostPublicationIntentQueueState(
           intents: intents,
@@ -506,11 +521,16 @@ final class PostPublicationIntentQueueNotifier
         );
       }
     } catch (error, stackTrace) {
-      developer.log(
-        'Post publication queue hydration failed',
-        name: 'PostPublicationIntentQueue',
-        error: error,
-        stackTrace: stackTrace,
+      // 整体水合失败降级为空队列（发布意图丢失是用户可感知事实），必须
+      // 结构化上报，禁止只留本地日志。
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'content.post_publication_queue.hydrate',
+              error: error,
+              stackTrace: stackTrace,
+            ),
       );
       if (ref.mounted && scopeKey == _activeScopeKey) {
         state = const PostPublicationIntentQueueState(hydrated: true);

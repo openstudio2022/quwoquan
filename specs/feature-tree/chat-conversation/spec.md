@@ -241,3 +241,12 @@
 - 影响或价值：尚缺 Publish 前唯一 contextual room、Participation/Organizer 双投影、默认消息入口、Board、Announcement/AssetIndex、取消/完成 access mode、退出/Block/安全撤权，以及 C 位发起活动/群聊并列语义的实现与验收；消息离线可靠性仍阻断上层商用。
 - 完成判定：`DOM-003` 与跨域 user_acceptance 在重复事件、杀进程、重连和依赖恢复下通过，并覆盖 [`gathering-conversation-binding`](../circle-community/gathering-coordination/gathering-conversation-binding/spec.md) 的全部 GWT。
 - 依赖：`message-reliability-foundation`、Circle target contracts、后续 Board route/surface contracts 与 production Remote App。
+
+<a id="open-004"></a>
+### OPEN-004 chat 域错误码契约按对象归位
+
+- 类型：`risk`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：尚缺按对象拆分的错误码契约与独立 generated 错误产物——当前 chat 域全部 `CHAT.*` 错误码集中定义在 `chat/conversation/errors.yaml` 单文件，`message`、`conversation_membership`、`conversation_user_state`、`message_receipt_fact`、`chat_inbox_view` 五个对象的 `operations.yaml` 跨对象引用该文件的错误码，generated 侧仅有 `generated/chat/conversation/errors.go` 一个错误产物供 message 等实现消费，构成 `quwoquan_service/AGENTS.md` 「禁止将整个 domain 的错误聚合到主对象包」的聚合债；拆分涉及 contracts、codegen、Go 消费点与端云 parity 门禁清单的原子迁移，超出单轮容量。
+- 完成判定：每个声明客户端可见错误面的 chat 对象拥有自己的 `contracts/chat/<object>/errors.yaml` 与独立 `generated/chat/<object>/errors.*`，`verify_error_code_endcloud_parity` 的 chat 域清单同步更新且保持绿，`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效。

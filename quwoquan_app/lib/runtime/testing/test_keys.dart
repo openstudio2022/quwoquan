@@ -335,6 +335,12 @@ class TestKeys {
   );
   static const createPublishButton = ValueKey<String>('create_publish_button');
   static const createCloseButton = ValueKey<String>('create_close_button');
+  static const createGatheringContextBar = ValueKey<String>(
+    'create_gathering_context_bar',
+  );
+  static const createGatheringContextRemove = ValueKey<String>(
+    'create_gathering_context_remove',
+  );
   static const createPublishResultSheet = ValueKey<String>(
     'create_publish_result_sheet',
   );
@@ -343,6 +349,9 @@ class TestKeys {
   );
   static const createPublishResultDoneButton = ValueKey<String>(
     'create_publish_result_done_button',
+  );
+  static const createPublishResultDestinationSummary = ValueKey<String>(
+    'create_publish_result_destination_summary',
   );
   static const createTitleToggle = ValueKey<String>('create_title_toggle');
   static const createTitleInput = ValueKey<String>('create_title_input');

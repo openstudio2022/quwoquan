@@ -21,9 +21,11 @@ void main() {
     });
 
     test('startup runtime snapshot exposes native segment keys', () {
-      final props = AppStartupRuntime.instance.snapshotProperties(
+      final snapshot = AppStartupRuntime.instance.phaseSnapshot(
         phase: 'contract_probe',
       );
+      expect(snapshot.phase, 'contract_probe');
+      final props = snapshot.toJson();
       expect(props, containsPair('phase', 'contract_probe'));
       expect(props.keys, contains('elapsedMs'));
       expect(props.keys, contains('elapsedSinceProcessStartMs'));

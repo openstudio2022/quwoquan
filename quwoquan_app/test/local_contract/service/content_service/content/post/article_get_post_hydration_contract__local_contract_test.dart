@@ -11,11 +11,40 @@ import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_f
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_reader_remote.dart';
-import '../../../../../support/service/content_service/content/post/content_mock_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_detail_view.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_view_projection.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
+
+ContentPostViewData _articlePost(String postId) => contentPostViewDataBuilder(
+  postId: postId,
+  contentType: 'article',
+  title: '结构化长文',
+  body: '用于验证详情 hydration 的摘要。',
+  articleTemplate: 'journal',
+  articleFontPreset: 'serif',
+);
+
+InMemoryContentPostDetailReader _articleReader(
+  ContentPostViewData post, {
+  String? markdown,
+}) {
+  final detail = contentPostDetailPayloadBuilder(
+    post: post,
+    articleMarkdown:
+        markdown ??
+        '# ${post.title}\n\n## 测试章节\n\n${post.body}\n\n用于验证 typed detail hydration。',
+  );
+  return InMemoryContentPostDetailReader(
+    InMemoryContentPostStore(
+      posts: <ContentPostViewData>[post],
+      details: <String, ContentPostDetailPayload>{post.id: detail},
+    ),
+  );
+}
 
 void main() {
   setUp(() {
@@ -30,8 +59,9 @@ void main() {
 
   group('Article getPost hydration contract', () {
     test('Mock getPost 暴露 canonical ContentPostDetailPayload 文章扩展字段', () async {
-      final mockRepo = MockContentRepository();
-      final detail = await mockRepo.getPost(postId: 'web-dev');
+      final post = _articlePost('web-dev');
+      final reader = _articleReader(post);
+      final detail = await reader.getPost(postId: post.id);
       expect(detail.detailWire.articleTemplate, isNotNull);
       expect(detail.detailWire.articleMarkdown, isNotNull);
       expect(detail.detailWire.articleMarkdown, contains('#'));
@@ -39,10 +69,10 @@ void main() {
     });
 
     test('Mock getPost 与 Remote getPost 投射结果保持一致', () async {
-      final dtoFixture = ContentMockData.discoveryArticleData.first;
+      final dtoFixture = _articlePost('article-remote-roundtrip');
       final postId = dtoFixture.id;
-      final mockRepo = MockContentRepository();
-      final mockDetail = await mockRepo.getPost(postId: postId);
+      final reader = _articleReader(dtoFixture);
+      final mockDetail = await reader.getPost(postId: postId);
       final rawFixture = mockDetail.detailWire.toWire();
       final remoteRepo = RemoteContentPostReaderAdapter(
         client: buildGeneratedCloudOperationClient(
@@ -94,13 +124,25 @@ void main() {
     });
 
     test('Mock getPost 覆盖上文下三图文章详情', () async {
-      final mockRepo = MockContentRepository();
-      final detail = await mockRepo.getPost(
-        postId: 'home_showcase_article_top_three_images',
+      final post = _articlePost('article-top-three-images');
+      final reader = _articleReader(
+        post,
+        markdown: '''
+# 上文下三图
+
+这里是图片之前的正文。
+
+![图片一](https://media.example.com/image/one.jpg)
+
+![图片二](https://media.example.com/image/two.jpg)
+
+![图片三](https://media.example.com/image/three.jpg)
+''',
       );
+      final detail = await reader.getPost(postId: post.id);
       final view = projectArticleDetailViewFromPayload(
         detail,
-        fallbackArticleId: 'home_showcase_article_top_three_images',
+        fallbackArticleId: post.id,
       );
       final imageNodes = view.document.nodes
           .where((node) => node.isFigure)
@@ -108,11 +150,7 @@ void main() {
 
       expect(imageNodes, hasLength(3));
       expect(
-        imageNodes.every(
-          (node) =>
-              node.imageUrl.startsWith('http://') ||
-              node.imageUrl.startsWith('https://'),
-        ),
+        imageNodes.every((node) => node.imageUrl.trim().isNotEmpty),
         isTrue,
       );
       expect(

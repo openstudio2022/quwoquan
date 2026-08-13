@@ -116,3 +116,14 @@
 - THEN 请求、状态、内存、磁盘、图片和视频资源全部有界，取消或过期 generation 不回写，已有内容不被分页失败遮挡。
 - AND 依赖故障在声明预算内返回 canonical failure 或明确允许的缓存/降级结果，不无限等待、重试放大或伪造成功。
 - AND typed telemetry 能以分母还原首屏、滚动、视频 QoE、缓存、ANR/卡顿与内存压力，并与 SLO/告警同源。
+
+## 8. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 content 库 rm_discovery_feed 双写待收敛单轨
+
+- 类型：`risk`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：content 库的 `rm_discovery_feed`（`releaseimport.UpsertDiscoveryFeed` 与在线 `DiscoveryFeedProjector` 双写）当前无任何在线读方；feed 读路径已单轨经 recommendation-service 候选投影与 RankedRecommendationWindow，残留双写构成第二真相源回归风险。裁决为收敛单轨：删除 content 侧双写与 `projections/discovery_feed.yaml` 声明，读写真相统一归 recommendation-platform REQ-001。删除前置条件：四环境存量集合处置方案、release importer 字节幂等回归、冷启动候选供给证明只依赖 `PostPublished` outbox → `events.content.post_lifecycle` 链路。
+- 完成判定：`SIT-001` 在 content-service 不再写 `rm_discovery_feed` 的前提下仍然成立（importer 幂等与冷启动 feed api_integration 证据通过），投影契约声明同步删除。

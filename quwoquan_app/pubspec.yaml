@@ -10,7 +10,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  
+
+  # 几何（透视校正 Matrix4，Flutter SDK 同源、四平台 pure Dart）
+  vector_math: ^2.4.0
+
   # 状态管理
   flutter_riverpod: ^3.3.2
   riverpod: ^3.3.2
@@ -68,6 +71,8 @@ dependencies:
   record: ^7.1.0
   just_audio: ^0.10.5
   audio_session: ^0.2.3
+  # 通话中屏幕常亮（ScreenWakeGateway 防腐层消费；vendored pin 见 overrides）
+  wakelock_plus: ^1.6.1
   connectivity_plus: ^7.1.1
 
   # 实时音视频通话

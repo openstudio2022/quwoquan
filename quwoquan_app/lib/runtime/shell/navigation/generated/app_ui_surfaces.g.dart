@@ -42,6 +42,8 @@ class AppUiSurfaces {
       'AckAppMessage',
       'ReadAppMessage',
       'GetAppMessageUnreadCount',
+      'AcceptGatheringInvitation',
+      'DeclineGatheringInvitation',
       'ListCalls',
     ],
   );
@@ -392,7 +394,7 @@ class AppUiSurfaces {
     owner: 'entity',
     routeId: 'homepageDetail',
     pathTemplate: '/homepages/{id}',
-    description: '实体（共享主页）统一对象页：身份 / 我的交集 / 打动 / Tab 内容（含详情与阅读壳层、口碑评价读写、相关群组）；关注动作归 user.SubjectFollow',
+    description: '实体（共享主页）统一对象页：身份 / 我的交集 / 打动 / Tab 内容（含详情与阅读壳层、口碑评价读写、相关群组）；关注动作归 user.SubjectFollow，近期公开行动读面归 circle.gathering',
     operationIds: <String>[
       'GetObjectPageBundle',
       'GetEntityImpact',
@@ -408,6 +410,8 @@ class AppUiSurfaces {
       'DeleteHomepageReview',
       'FollowSubject',
       'UnfollowSubject',
+      'ListGatheringsBySource',
+      'GetGatheringSocialProof',
     ],
   );
 
@@ -826,6 +830,16 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface createEntry = AppUiSurface(
+    id: 'createEntry',
+    owner: 'content',
+    routeId: 'createEntry',
+    pathTemplate: '/create-entry',
+    description: '全局创作入口动作面板（发内容/发起聚集/发起群聊）；游客可见，具体动作各自触发登录续接',
+    operationIds: <String>[
+    ],
+  );
+
   static const AppUiSurface createWorkspace = AppUiSurface(
     id: 'createWorkspace',
     owner: 'content',
@@ -872,6 +886,8 @@ class AppUiSurfaces {
       'LikePost',
       'UnlikePost',
       'GetContentReactionState',
+      'GetEntityWishlistState',
+      'GetGatheringSocialProof',
       'ListComments',
       'ListCommentReplies',
       'CreateComment',
@@ -944,6 +960,8 @@ class AppUiSurfaces {
       'ListConsents',
       'GrantSkillConsent',
       'RevokeSkillConsent',
+      'GetSkillSurfacePlacement',
+      'PutSkillSurfacePlacement',
       'ListSkillActivities',
       'CreateSkillDataControlRequest',
       'ConfirmSkillDataControlRequest',
@@ -984,6 +1002,7 @@ class AppUiSurfaces {
       'JoinOpenGathering',
       'ApplyToGathering',
       'AcceptGatheringInvitation',
+      'DeclineGatheringInvitation',
       'ReviewGatheringApplication',
       'InviteToGathering',
       'RemoveGatheringParticipant',
@@ -996,6 +1015,8 @@ class AppUiSurfaces {
       'EndGatheringEarly',
       'SafetyTerminateGathering',
       'WatchGatheringAvailability',
+      'ListPostsByGathering',
+      'GetGatheringSocialProof',
     ],
   );
 
@@ -1234,6 +1255,18 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface myGatherings = AppUiSurface(
+    id: 'myGatherings',
+    owner: 'user',
+    routeId: 'myGatherings',
+    pathTemplate: '/profile/gatherings',
+    description: '我的行动（host 本人的 Gathering 分组列表，私有读面含 draft 与非公开行动）',
+    operationIds: <String>[
+      'ListMyHostedGatherings',
+      'ListGatheringsByHost',
+    ],
+  );
+
   static const AppUiSurface rtcOutgoing = AppUiSurface(
     id: 'rtcOutgoing',
     owner: 'rtc',
@@ -1361,6 +1394,7 @@ class AppUiSurfaces {
     legalPrivacyPolicy,
     legalPermissions,
     legalThirdPartySdkList,
+    createEntry,
     createWorkspace,
     imageEditor,
     workBrowser,
@@ -1386,6 +1420,7 @@ class AppUiSurfaces {
     profileStats,
     myIntersections,
     objectIntersections,
+    myGatherings,
     rtcOutgoing,
     rtcIncoming,
     rtcVoice,
@@ -1444,6 +1479,7 @@ class AppUiSurfaces {
     'legalPrivacyPolicy': legalPrivacyPolicy,
     'legalPermissions': legalPermissions,
     'legalThirdPartySdkList': legalThirdPartySdkList,
+    'createEntry': createEntry,
     'createWorkspace': createWorkspace,
     'imageEditor': imageEditor,
     'workBrowser': workBrowser,
@@ -1469,6 +1505,7 @@ class AppUiSurfaces {
     'profileStats': profileStats,
     'myIntersections': myIntersections,
     'objectIntersections': objectIntersections,
+    'myGatherings': myGatherings,
     'rtcOutgoing': rtcOutgoing,
     'rtcIncoming': rtcIncoming,
     'rtcVoice': rtcVoice,

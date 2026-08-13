@@ -96,7 +96,7 @@ AssistantSkillCatalogItemView _catalog() => AssistantSkillCatalogItemView(
   ],
   dataUseSummary: '仅使用已授权的行程上下文',
   examples: const <ResolvedSkillExample>[],
-  activationMode: 'hybrid',
+  activationMode: SkillActivationMode.hybrid,
   surfaceKinds: const <SkillCatalogSemanticLabel>[
     SkillCatalogSemanticLabel(id: 'personal', displayText: '个人小趣'),
   ],

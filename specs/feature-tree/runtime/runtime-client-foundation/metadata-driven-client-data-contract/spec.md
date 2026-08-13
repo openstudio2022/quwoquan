@@ -76,7 +76,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：`homepage_introduction_page.dart`、`profile_stats_page.dart` 与若干 profile read model 仍直接解析匿名 Map，metadata 字段变化可能绕过 codegen 校验。
-- 完成判定：上述页面与 profile read model 改为具名 projection/ViewModel；`page_object_contract` 的 typed presentation 与代码扫描均无匿名业务 Map。
+- 完成判定：`GWT-001` 的“同一 codegen 类型、禁止另一套 Map 键名”对应行为在这些读模型上满足——上述页面与 profile read model 改为具名 projection/ViewModel；`page_object_contract` 的 typed presentation 与代码扫描均无匿名业务 Map。
 - 依赖：user profile 与 entity homepage projection metadata。
 
 <a id="open-002"></a>
@@ -86,7 +86,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：内容详情、沉浸阅读、圈子作品和创作 payload 仍存在 raw Map 过渡，容易形成 DTO 与手写键双轨。
-- 完成判定：UI 只消费 `PostReadPresentation`/generated DTO；raw Map 仅存在于 HTTP decoder 单点且由 wire key/codegen 门禁证明。
+- 完成判定：`GWT-001` 的 typed 单轨对应行为覆盖内容阅读与创作路径——UI 只消费 `PostReadPresentation`/generated DTO；raw Map 仅存在于 HTTP decoder 单点且由 wire key/codegen 门禁证明。
 - 依赖：content projection metadata 与创作 draft composite。
 
 <a id="open-003"></a>

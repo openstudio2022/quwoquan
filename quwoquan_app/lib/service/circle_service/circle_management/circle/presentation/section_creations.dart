@@ -24,6 +24,7 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle/app
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/adapters/home_circles_hub_media_viewer_wiring.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/circle_state_provider.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/di/post_interaction_state_dependencies.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

@@ -14,7 +14,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    hide ContentDiscoveryFeedQuery;
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/observability/analytics.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
@@ -22,16 +23,18 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/video_preview_track_query.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart'
+    show ContentConfigRepository, ContentPostDetailReader;
 import 'package:quwoquan_app/service/content_service/trust_safety/report/application/public/content_report_ports.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart'
-    show kFeedSortRecommend;
+    show ContentDiscoveryFeedQuery, kFeedSortRecommend;
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_projection_codec.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart'
     show ActivePersonaContextViewData;
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
-import '../../../../../support/service/content_service/content/post/content_mock_data.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../../../support/service/content_service/content/post/test_content_app_config.dart';
 import '../../../../../support/service/content_service/content/comment/in_memory_content_comment_facet.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
@@ -76,7 +79,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/presentat
 import 'package:video_player_platform_interface/video_player_platform_interface.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/runtime/platform/media/fake_video_player_platform.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import 'package:http/testing.dart';
@@ -514,28 +517,13 @@ class _FakeAnalyticsService extends AnalyticsService {
   }
 }
 
-class _ConfigurableContentRepository extends MockContentRepository {
-  _ConfigurableContentRepository({
-    this.appConfig,
+class _ConfigurableContentDetailReader implements ContentPostDetailReader {
+  _ConfigurableContentDetailReader({
     this.detailById = const <String, Map<String, dynamic>>{},
   });
 
-  final Map<String, dynamic>? appConfig;
   final Map<String, Map<String, dynamic>> detailById;
   int getPostCallCount = 0;
-
-  @override
-  Future<AppConfigSlice> getAppConfig() async {
-    if (appConfig != null) {
-      return testAppConfigSlice(
-        content: Map<String, Object?>.from(appConfig!['content']! as Map),
-        defaultActivation: 'immediate',
-        fetchedAt: DateTime.now().toUtc(),
-        maxAgeSec: 3600,
-      );
-    }
-    return super.getAppConfig();
-  }
 
   @override
   Future<ContentPostDetailPayload> getPost({
@@ -550,7 +538,7 @@ class _ConfigurableContentRepository extends MockContentRepository {
         _contentPostDetailSliceFromTestMap(detail, postId: postId),
       );
     }
-    return super.getPost(
+    return InMemoryContentPostDetailReader(InMemoryContentPostStore()).getPost(
       postId: postId,
       cancellation: cancellation,
       deadlineAt: deadlineAt,
@@ -558,7 +546,26 @@ class _ConfigurableContentRepository extends MockContentRepository {
   }
 }
 
-class _BlockingArticleHydrationRepository extends MockContentRepository {
+class _ConfigurableContentConfigRepository implements ContentConfigRepository {
+  _ConfigurableContentConfigRepository({required this.appConfig});
+
+  final Map<String, dynamic> appConfig;
+
+  @override
+  Future<AppConfigSlice> getAppConfig() async {
+    return testAppConfigSlice(
+      content: Map<String, Object?>.from(appConfig['content']! as Map),
+      defaultActivation: 'immediate',
+      fetchedAt: DateTime.now().toUtc(),
+      maxAgeSec: 3600,
+    );
+  }
+
+  @override
+  bool get requiresResolvedPersonaForMutations => false;
+}
+
+class _BlockingArticleHydrationRepository implements ContentPostDetailReader {
   _BlockingArticleHydrationRepository({this.lateSuccessDetail});
 
   final Map<String, dynamic>? lateSuccessDetail;
@@ -607,8 +614,9 @@ class _BlockingArticleHydrationRepository extends MockContentRepository {
   }
 }
 
-class _PagedFeaturedContentRepository extends MockContentRepository {
-  _PagedFeaturedContentRepository();
+class _PagedFeaturedContentRepository
+    extends InMemoryContentDiscoveryFeedQuery {
+  _PagedFeaturedContentRepository() : super(InMemoryContentPostStore());
 
   final int pageSize = 2;
   final Duration appendDelay = const Duration(seconds: 4);
@@ -618,19 +626,25 @@ class _PagedFeaturedContentRepository extends MockContentRepository {
     List<ContentPostViewData> source;
     switch (category) {
       case 'photo':
-        source = ContentMockData.discoveryPhotoData
-            .take(4)
-            .toList(growable: false);
+        source = contentPostListBuilder(
+          contentType: 'image',
+          count: 4,
+          idPrefix: 'immersive-photo',
+        );
         break;
       case 'video':
-        source = ContentMockData.discoveryVideoData
-            .take(4)
-            .toList(growable: false);
+        source = contentPostListBuilder(
+          contentType: 'video',
+          count: 4,
+          idPrefix: 'immersive-video',
+        );
         break;
       case 'article':
-        source = ContentMockData.discoveryArticleData
-            .take(4)
-            .toList(growable: false);
+        source = contentPostListBuilder(
+          contentType: 'article',
+          count: 4,
+          idPrefix: 'immersive-article',
+        );
         break;
       default:
         return const <ContentPostViewData>[];
@@ -999,11 +1013,18 @@ Widget _wrap(
   bool useProductionRuntimeConfig = false,
   double? textScaleFactor,
   EdgeInsets? viewPadding,
-  MockContentRepository? contentRepository,
+  ContentPostDetailReader? detailReader,
+  ContentConfigRepository? configRepository,
+  ContentDiscoveryFeedQuery? feedQuery,
 }) {
   final allOverrides = [
     ..._sealedViewerBoundaryOverrides(),
-    ...mockContentFacetOverrides(contentRepository ?? MockContentRepository()),
+    ...mockContentFacetOverrides(
+      store: InMemoryContentPostStore(),
+      detailReader: detailReader,
+      configRepository: configRepository,
+      feedQuery: feedQuery,
+    ),
     mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
     if (!useProductionRuntimeConfig)
       contentRuntimeConfigProvider.overrideWithValue(
@@ -1100,7 +1121,7 @@ void _mockPathProviderForImmersiveViewerTest() {
 Widget _wrapWithRouter(
   Widget child, {
   List overrides = const [],
-  MockContentRepository? contentRepository,
+  ContentPostDetailReader? detailReader,
 }) {
   final router = GoRouter(
     routes: [
@@ -1135,7 +1156,8 @@ Widget _wrapWithRouter(
     overrides: [
       ..._sealedViewerBoundaryOverrides(),
       ...mockContentFacetOverrides(
-        contentRepository ?? MockContentRepository(),
+        store: InMemoryContentPostStore(),
+        detailReader: detailReader,
       ),
       mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
       ...overrides,
@@ -1528,7 +1550,10 @@ void main() {
     final analytics = _FakeAnalyticsService();
     final container = _testProviderContainer(
       overrides: [
-        ...mockContentFacetOverrides(repo),
+        ...mockContentFacetOverrides(
+          store: InMemoryContentPostStore(),
+          feedQuery: repo,
+        ),
         analyticsProvider.overrideWithValue(analytics),
       ],
     );
@@ -1638,7 +1663,12 @@ void main() {
   testWidgets('视频书顶部仅保留返回与更多入口并取消形态分段与一级 tab', (tester) async {
     final repo = _PagedFeaturedContentRepository();
     final container = _testProviderContainer(
-      overrides: [...mockContentFacetOverrides(repo)],
+      overrides: [
+        ...mockContentFacetOverrides(
+          store: InMemoryContentPostStore(),
+          feedQuery: repo,
+        ),
+      ],
     );
     addTearDown(container.dispose);
 
@@ -1690,7 +1720,7 @@ void main() {
     );
     final container = _testProviderContainer(
       overrides: <Override>[
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       ],
     );
 
@@ -1762,7 +1792,7 @@ void main() {
     final post = _articlePost();
     final container = _testProviderContainer(
       overrides: <Override>[
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       ],
     );
 
@@ -3885,7 +3915,7 @@ void main() {
     addTearDown(engagementTracker.dispose);
     final container = _testProviderContainer(
       overrides: [
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
         authSessionControllerProvider.overrideWith(_FlippableViewerSession.new),
         workBrowserContentReportCommandWriterProvider.overrideWithValue(
           reportWriter,
@@ -5301,7 +5331,9 @@ void main() {
     );
     var dismissed = false;
     final container = _testProviderContainer(
-      overrides: [...mockContentFacetOverrides(MockContentRepository())],
+      overrides: [
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
+      ],
     );
 
     await tester.pumpWidget(
@@ -5799,7 +5831,7 @@ void main() {
         ],
       },
     );
-    final repository = _ConfigurableContentRepository(
+    final repository = _ConfigurableContentDetailReader(
       detailById: <String, Map<String, dynamic>>{post.id: detail},
     );
 
@@ -5814,7 +5846,7 @@ void main() {
           onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
           onAssistantTap: () {},
         ),
-        contentRepository: repository,
+        detailReader: repository,
       ),
     );
     await tester.pump();
@@ -6083,7 +6115,7 @@ void main() {
   ) async {
     final post = _articlePost();
     final analytics = _FakeAnalyticsService();
-    final repo = _ConfigurableContentRepository(
+    final configRepository = _ConfigurableContentConfigRepository(
       appConfig: <String, dynamic>{
         'content': <String, dynamic>{
           'feature_flags': <String, dynamic>{
@@ -6108,7 +6140,7 @@ void main() {
         ),
         overrides: [analyticsProvider.overrideWithValue(analytics)],
         useProductionRuntimeConfig: true,
-        contentRepository: repo,
+        configRepository: configRepository,
       ),
     );
     await tester.pump();
@@ -6129,7 +6161,7 @@ void main() {
   testWidgets('文章摘要快照会异步水合详情并上报 hydration 埋点', (tester) async {
     final post = _articlePost();
     final analytics = _FakeAnalyticsService();
-    final repo = _ConfigurableContentRepository(
+    final repo = _ConfigurableContentDetailReader(
       detailById: <String, Map<String, dynamic>>{
         post.id: <String, dynamic>{
           'postId': post.id,
@@ -6188,7 +6220,7 @@ void main() {
           onAssistantTap: () {},
         ),
         overrides: [analyticsProvider.overrideWithValue(analytics)],
-        contentRepository: repo,
+        detailReader: repo,
       ),
     );
     await tester.pump();
@@ -6264,7 +6296,7 @@ void main() {
           onAssistantTap: () {},
         ),
         overrides: [analyticsProvider.overrideWithValue(analytics)],
-        contentRepository: repo,
+        detailReader: repo,
       ),
     );
     await tester.pump();
@@ -6307,7 +6339,7 @@ void main() {
   ) async {
     final post = _articlePost();
     final analytics = _FakeAnalyticsService();
-    final repo = _ConfigurableContentRepository();
+    final repo = _ConfigurableContentDetailReader();
 
     await tester.pumpWidget(
       _wrap(
@@ -6333,7 +6365,7 @@ void main() {
           onAssistantTap: () {},
         ),
         overrides: [analyticsProvider.overrideWithValue(analytics)],
-        contentRepository: repo,
+        detailReader: repo,
       ),
     );
 

@@ -34,6 +34,16 @@
 - 影响 Story：[`call-experience`](./call-experience/spec.md)、[`group-call`](./group-call/spec.md)、[`media-infrastructure`](./media-infrastructure/spec.md)、[`one-to-one-call`](./one-to-one-call/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-002"></a>
+### DEC-002 全局通话条与 PiP 浮窗是壳层挂载组件，不进入 page_object_contract
+- 决策：`ActiveCallBar` 与 `PipCallOverlay` 是 app shell 唯一挂载的通话回流浮层，不注册 route/surface，也不进入 `page_object_contract.yaml`；页面契约只拥有六个 routed 通话页（拨出/来电/语音/视频/选人/通话设置）。
+- 理由：两者没有独立路由与导航生命周期，其可见性完全由活跃通话状态派生；强行按页面登记会制造没有 route 证据的伪页面条目。
+- 被否决方案：为浮层伪造 route_id/surface_id 进入页面契约；或把浮层重写为独立路由页。
+- 约束与影响：浮层的挂载唯一性、回流与挂断收尾由 `SIT-007` 及其子句级验收承载（shell mount / active bar / PiP / 信令通道恢复补偿）；页面横向质量扫描（`*_page.dart`）天然不覆盖它们，禁止另建第二套浮层页面台账。
+- 关联要求：`REQ-007`
+- 影响 Story：[`call-experience`](./call-experience/spec.md)
+- 关联验收：`SIT-007`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

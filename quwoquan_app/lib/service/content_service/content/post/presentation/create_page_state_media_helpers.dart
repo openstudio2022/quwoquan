@@ -40,6 +40,15 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
     if (confirmedSettings == null) {
       return;
     }
+    // GWT-001 fail-closed：文字发布的最终形态必须来自确认页固化的确认值，
+    // 提交阶段不得再次静默推导。确认页 initState 恒固化建议值，此处为
+    // 合同防线而非可达分支。
+    if (state.editorKind == CreateEditorKind.text &&
+        confirmedSettings.textContentType.trim().isEmpty) {
+      throw StateError(
+        'text publication requires explicit content form confirmation',
+      );
+    }
     final publishState = state.copyWith(settings: confirmedSettings);
     final expectedContentType =
         buildPostPublicationPayloadMap(
@@ -180,6 +189,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         state: resultState,
         postId: postId,
         localDraftId: localDraftId,
+        destinationSummary: buildPublishDestinationSummary(confirmedSettings),
       );
     } on ContentMediaUploadCancelledException {
       await reportCreateEditorSurfaceEvent(
@@ -214,6 +224,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       await _showPublicationResult(
         state: CreatePublishResultState.queued,
         localDraftId: publicationDraftId,
+        destinationSummary: buildPublishDestinationSummary(confirmedSettings),
       );
     } catch (error) {
       final failure = runtimeFailureFromError(error);
@@ -283,6 +294,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
     required CreatePublishResultState state,
     String? postId,
     String? localDraftId,
+    String destinationSummary = '',
   }) async {
     final presentation = ValueNotifier<CreatePublishResultPresentation>(
       CreatePublishResultPresentation(state: state, postId: postId),
@@ -327,6 +339,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         context,
         state: state,
         postId: postId,
+        destinationSummary: destinationSummary,
         presentationListenable: presentation,
       );
       if (!mounted) {

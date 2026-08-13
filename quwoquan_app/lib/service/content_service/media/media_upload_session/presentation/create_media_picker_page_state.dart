@@ -728,16 +728,11 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
         continueToCreate: continueWhenDone,
       );
     }
-    if (result is Map) {
-      final rawPath = result['path']?.toString().trim();
-      if (rawPath == null || rawPath.isEmpty) return null;
-      final rawIndex = result['index'];
-      final imageIndex = rawIndex is num
-          ? rawIndex.toInt()
-          : int.tryParse(rawIndex?.toString() ?? '');
-      if (imageIndex == null ||
-          imageIndex < 0 ||
-          imageIndex >= imageSelectedIndexes.length) {
+    if (result is ImageEditorMultiImageDoneResult) {
+      final rawPath = result.path.trim();
+      if (rawPath.isEmpty) return null;
+      final imageIndex = result.index;
+      if (imageIndex < 0 || imageIndex >= imageSelectedIndexes.length) {
         return _EditedPickerImages(
           items: _replaceSelectedImagePath(fallbackSelectedIndex, rawPath),
           currentImageIndex: imageSelectedIndexes.indexOf(
@@ -746,11 +741,10 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           continueToCreate: continueWhenDone,
         );
       }
-      final rawPaths = (result['paths'] as List?)
-          ?.map((entry) => entry.toString().trim())
+      final rawPaths = result.paths
+          ?.map((entry) => entry.trim())
           .where((path) => path.isNotEmpty)
           .toList(growable: false);
-      final action = result['action']?.toString().trim();
       return _EditedPickerImages(
         items: _applyEditedImagePaths(
           imageSelectedIndexes: imageSelectedIndexes,
@@ -759,7 +753,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           editedPaths: rawPaths,
         ),
         currentImageIndex: imageIndex,
-        continueToCreate: continueWhenDone || action == 'continueToCreate',
+        continueToCreate: continueWhenDone || result.continueToCreate,
       );
     }
     return null;

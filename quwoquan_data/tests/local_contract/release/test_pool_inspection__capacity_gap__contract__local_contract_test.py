@@ -220,12 +220,14 @@ def test_pool_inspection_requires_explicit_eligibility_result() -> None:
     assert subject._eligibility_passed({}) is False
 
 
-def test_legacy_seq1_approved_evidence_defaults_to_research(tmp_path: Path) -> None:
+def test_pre_sequence_record_shape_stays_excluded(tmp_path: Path) -> None:
+    """A sidecar without recordSequence fails closed instead of being inferred."""
+
     publish = tmp_path / "publish"
     _author(publish)
     _homepage(publish)
-    root = publish / "posts/article/legacy-seq1/1"
-    _post(publish, carrier="article", work="legacy-seq1")
+    root = publish / "posts/article/pre-seq1/1"
+    _post(publish, carrier="article", work="pre-seq1")
     current = json.loads(
         (root / "_pool/versions/1.json").read_text(encoding="utf-8")
     )
@@ -239,12 +241,11 @@ def test_legacy_seq1_approved_evidence_defaults_to_research(tmp_path: Path) -> N
         strict_delivery=False,
     )
 
-    assert report["supply"]["article"]["admitted"] == 1
-    assert report["supply"]["article"]["publishable"] == 1
-    assert report["supply"]["article"]["legacyPending"] == 0
-    assert report["usageScope"] == {"research": 2, "commercial": 0}
-    assert not any(
-        row["ref"] == "posts/article/legacy-seq1/1"
+    assert report["supply"]["article"]["admitted"] == 0
+    assert report["supply"]["article"]["publishable"] == 0
+    assert any(
+        row["ref"] == "posts/article/pre-seq1/1"
+        and row["code"] == "DATA.POOL.OBJECT_NOT_ADMITTED"
         for row in report["issues"]
     )
 
@@ -262,9 +263,9 @@ def test_pool_inspection_reports_partial_without_blocking_publishable_supply(
             work=f"work-{carrier}",
             usage_scope="commercial" if carrier == "video" else "research",
         )
-    legacy = publish / "posts/article/legacy/1"
+    pending = publish / "posts/article/admission-pending/1"
     write_json(
-        legacy / "manifest.json",
+        pending / "manifest.json",
         {
             "contentType": "article",
             "reviewDecision": "approved",
@@ -272,8 +273,8 @@ def test_pool_inspection_reports_partial_without_blocking_publishable_supply(
             "entityRefs": ["/entity/地点/景区/实体甲"],
         },
     )
-    write_json(legacy / "creator.refs.json", {"creatorRefs": ["author-a"]})
-    _approved_attestation(legacy)
+    write_json(pending / "creator.refs.json", {"creatorRefs": ["author-a"]})
+    _approved_attestation(pending)
 
     report = inspect_pool(
         publish_root=publish,
@@ -295,7 +296,7 @@ def test_pool_inspection_reports_partial_without_blocking_publishable_supply(
             "admitted": 1,
             "publishable": 1,
             "deliveryPending": 0,
-            "legacyPending": 0,
+            "explicitAdmissionPending": 0,
             "target": 100,
             "gap": 99,
         },
@@ -304,7 +305,7 @@ def test_pool_inspection_reports_partial_without_blocking_publishable_supply(
             "admitted": 1,
             "publishable": 1,
             "deliveryPending": 0,
-            "legacyPending": 1,
+            "explicitAdmissionPending": 1,
             "target": 100,
             "gap": 99,
         },
@@ -313,7 +314,7 @@ def test_pool_inspection_reports_partial_without_blocking_publishable_supply(
             "admitted": 1,
             "publishable": 1,
             "deliveryPending": 0,
-            "legacyPending": 0,
+            "explicitAdmissionPending": 0,
             "target": 100,
             "gap": 99,
         },
@@ -322,7 +323,7 @@ def test_pool_inspection_reports_partial_without_blocking_publishable_supply(
             "admitted": 1,
             "publishable": 1,
             "deliveryPending": 0,
-            "legacyPending": 0,
+            "explicitAdmissionPending": 0,
             "target": 10,
             "gap": 9,
         },
@@ -336,9 +337,9 @@ def test_pool_inspection_reports_partial_without_blocking_publishable_supply(
     }
     assert report["reasons"] == [{
         "gate": "eligibility",
-        "code": "DATA.POOL.LEGACY_ADMISSION_REQUIRED",
+        "code": "DATA.POOL.EXPLICIT_ADMISSION_MISSING",
         "count": 1,
-        "message": "历史对象需要追加显式准入结果",
+        "message": "对象缺少显式准入记录，需要补录",
     }]
     assert report["milestone"] == "M100"
     assert report["targetAttained"] is False
@@ -493,7 +494,7 @@ def test_m10000_inspection_is_a_lower_bound_and_keeps_rolling_wave(
     assert all(row["requestedCandidateCount"] == 12 for row in report["nextWave"])
 
 
-def test_legacy_only_pool_is_blocked_but_reports_observed_homepage(tmp_path: Path) -> None:
+def test_admission_missing_pool_is_blocked_but_reports_observed_homepage(tmp_path: Path) -> None:
     publish = tmp_path / "publish"
     root = publish / "entities/地点/景区/历史实体"
     write_json(root / "manifest.json", {"schema": "quwoquan_data.entity_object"})
@@ -503,7 +504,7 @@ def test_legacy_only_pool_is_blocked_but_reports_observed_homepage(tmp_path: Pat
 
     assert report["result"] == "blocked"
     assert report["supply"]["homepage"]["observed"] == 1
-    assert report["supply"]["homepage"]["legacyPending"] == 1
+    assert report["supply"]["homepage"]["explicitAdmissionPending"] == 1
     assert report["supply"]["homepage"]["gap"] == 100
     assert {reason["gate"] for reason in report["reasons"]} == {
         "eligibility",
@@ -511,11 +512,11 @@ def test_legacy_only_pool_is_blocked_but_reports_observed_homepage(tmp_path: Pat
     }
 
 
-def test_legacy_approved_attestation_requires_explicit_admission(tmp_path: Path) -> None:
+def test_approved_attestation_without_record_requires_explicit_admission(tmp_path: Path) -> None:
     publish = tmp_path / "publish"
     _author(publish)
     _homepage(publish)
-    root = publish / "posts/video/legacy-approved/1"
+    root = publish / "posts/video/approved-no-record/1"
     write_json(
         root / "manifest.json",
         {
@@ -536,17 +537,17 @@ def test_legacy_approved_attestation_requires_explicit_admission(tmp_path: Path)
 
     assert report["supply"]["video"]["admitted"] == 0
     assert report["supply"]["video"]["publishable"] == 0
-    assert report["supply"]["video"]["legacyPending"] == 1
+    assert report["supply"]["video"]["explicitAdmissionPending"] == 1
     assert report["usageScope"] == {"research": 1, "commercial": 0}
     assert any(
-        issue["code"] == "DATA.POOL.LEGACY_ADMISSION_REQUIRED"
+        issue["code"] == "DATA.POOL.EXPLICIT_ADMISSION_MISSING"
         for issue in report["issues"]
     )
 
 
-def test_legacy_review_without_quality_evidence_remains_excluded(tmp_path: Path) -> None:
+def test_review_without_quality_evidence_remains_excluded(tmp_path: Path) -> None:
     publish = tmp_path / "publish"
-    root = publish / "posts/video/legacy-no-quality/1"
+    root = publish / "posts/video/no-quality/1"
     write_json(
         root / "manifest.json",
         {"contentType": "video", "reviewDecision": "approved"},
@@ -563,7 +564,7 @@ def test_legacy_review_without_quality_evidence_remains_excluded(tmp_path: Path)
     )
 
     assert report["supply"]["video"]["admitted"] == 0
-    assert report["supply"]["video"]["legacyPending"] == 1
+    assert report["supply"]["video"]["explicitAdmissionPending"] == 1
 
 
 def test_pool_inspection_by_task_reports_funnel_without_changing_admission(
@@ -779,12 +780,12 @@ def test_extra_bad_object_does_not_block_attained_milestone(
     _homepage(publish)
     for carrier in ("article", "image", "video"):
         _post(publish, carrier=carrier, work=f"ready-{carrier}")
-    legacy = publish / "posts/article/legacy-extra/1"
+    pending = publish / "posts/article/admission-pending-extra/1"
     write_json(
-        legacy / "manifest.json",
+        pending / "manifest.json",
         {"contentType": "article", "reviewDecision": "approved"},
     )
-    _approved_attestation(legacy)
+    _approved_attestation(pending)
 
     report = inspect_pool(
         publish_root=publish,
@@ -796,5 +797,5 @@ def test_extra_bad_object_does_not_block_attained_milestone(
     assert report["result"] == "ready"
     assert report["nextWave"] == []
     assert report["issueCount"] == 1
-    assert report["issues"][0]["code"] == "DATA.POOL.LEGACY_ADMISSION_REQUIRED"
+    assert report["issues"][0]["code"] == "DATA.POOL.EXPLICIT_ADMISSION_MISSING"
     assert report["nextAction"].startswith("build Research milestone release")

@@ -1,4 +1,4 @@
-"""Create exact acquisition seeds from legacy hints or one current coverage run."""
+"""Create exact acquisition seeds from historical capsule hints or one current coverage run."""
 
 from __future__ import annotations
 
@@ -349,7 +349,7 @@ def build_seed_selection_from_historical_capsules(
     homepage_candidate_ids: Sequence[str],
     article_candidate_ids: Sequence[str],
 ) -> dict[str, Any]:
-    """Strip legacy identity/receipt fields and retain only fresh lookup hints."""
+    """Strip capsule identity/receipt fields and retain only fresh lookup hints."""
 
     root = resolve_evidence_root(evidence_root)
     bindings, planned = _historical_inputs(
@@ -408,7 +408,7 @@ def build_seed_selection_from_historical_capsules(
             _seed_from_coverage_row(
                 row,
                 carrier=carrier,
-                seed_origin="legacy_hint",
+                seed_origin="historical_capsule_hint",
                 entity_ref=entity_ref,
                 historical_baseline={
                     "candidateId": candidate_id,
@@ -463,7 +463,7 @@ def handle_prepare_seed_selection(args: argparse.Namespace) -> None:
         else:
             if not args.historical_evidence_root or not args.historical_batch_ref:
                 _fail(
-                    "legacy mode requires --historical-evidence-root and --historical-batch-ref"
+                    "historical capsule mode requires --historical-evidence-root and --historical-batch-ref"
                 )
             selection = build_seed_selection_from_historical_capsules(
                 evidence_root=Path(args.historical_evidence_root),
@@ -501,7 +501,7 @@ def handle_prepare_seed_selection(args: argparse.Namespace) -> None:
 def register_seed_selection_parser(commands: argparse._SubParsersAction) -> None:
     parser = commands.add_parser(
         "prepare-homepage-article-seeds",
-        help="从显式 current coverage 或 legacy capsule 生成 exact acquisition seeds",
+        help="从显式 current coverage 或 historical capsule 生成 exact acquisition seeds",
     )
     parser.add_argument("--historical-evidence-root")
     parser.add_argument("--historical-batch-ref", action="append")

@@ -37,33 +37,16 @@
   "$defs": {
     "digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "sourceIdentity": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["executionId", "sourceRevision", "sourceDigest", "entityCatalogDigest", "identityDigest"],
-          "properties": {
-            "executionId": {"type": "string", "minLength": 1},
-            "sourceRevision": {"$ref": "#/$defs/digest"},
-            "sourceDigest": {"$ref": "#/$defs/digest"},
-            "entityCatalogDigest": {"$ref": "#/$defs/digest"},
-            "identityDigest": {"$ref": "#/$defs/digest"}
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["identityKind", "executionId", "sourceDigest", "canonicalObjectDigest", "migrationEvidenceDigest", "identityDigest"],
-          "properties": {
-            "identityKind": {"const": "legacy_canonical_migration"},
-            "executionId": {"type": "string", "minLength": 1},
-            "sourceDigest": {"$ref": "#/$defs/digest"},
-            "canonicalObjectDigest": {"$ref": "#/$defs/digest"},
-            "migrationEvidenceDigest": {"$ref": "#/$defs/digest"},
-            "identityDigest": {"$ref": "#/$defs/digest"}
-          }
-        }
-      ]
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executionId", "sourceRevision", "sourceDigest", "entityCatalogDigest", "identityDigest"],
+      "properties": {
+        "executionId": {"type": "string", "minLength": 1},
+        "sourceRevision": {"$ref": "#/$defs/digest"},
+        "sourceDigest": {"$ref": "#/$defs/digest"},
+        "entityCatalogDigest": {"$ref": "#/$defs/digest"},
+        "identityDigest": {"$ref": "#/$defs/digest"}
+      }
     }
   }
 }

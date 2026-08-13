@@ -45,15 +45,8 @@ from content.release.canonical.lifecycle_exit import (
 )
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.canonical.object_transaction_lock import canonical_publish_lock
-from content.release.canonical.publish_intermediate_cleanup import (
-    apply_publish_intermediate_cleanup,
-    plan_publish_intermediate_cleanup,
-)
 from content.release.canonical.release_identity_incident import (
     record_release_identity_incident,
-)
-from content.release.canonical.release_identity_incident_legacy_migration import (
-    migrate_legacy_release_identity_incident,
 )
 from content.release.canonical.release_identity_recovery import (
     write_deterministic_identity_attestation_recovery,
@@ -178,32 +171,6 @@ def handle_release_identity_incident(args: argparse.Namespace) -> None:
     print(
         json.dumps(
             {**document, "incidentRef": path.relative_to(output_root).as_posix()},
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
-
-
-def handle_release_identity_incident_legacy_migration(
-    args: argparse.Namespace,
-) -> None:
-    output_root = Path(args.output_root or OUTPUT_ROOT).resolve()
-    try:
-        document, path = migrate_legacy_release_identity_incident(
-            source_incident_path=Path(args.incident).expanduser(),
-            source_incident_file_sha256=str(args.incident_sha256),
-            output_root=output_root,
-        )
-    except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
-        raise SystemExit(
-            f"[release identity-incident-migrate-legacy] GATE_BLOCK {exc}"
-        ) from exc
-    print(
-        json.dumps(
-            {
-                **document,
-                "migrationReceiptRef": path.relative_to(output_root).as_posix(),
-            },
             ensure_ascii=False,
             indent=2,
         )
@@ -413,51 +380,6 @@ def handle_gc_plan(args: argparse.Namespace) -> None:
     print(
         json.dumps(
             {**document, "planRef": path.relative_to(output_root).as_posix()},
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
-
-
-def handle_publish_intermediate_cleanup_plan(args: argparse.Namespace) -> None:
-    output_root = Path(args.output_root or OUTPUT_ROOT).resolve()
-    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
-    try:
-        document, path = plan_publish_intermediate_cleanup(
-            cleanup_id=str(args.cleanup_id),
-            publish_root=publish_root,
-            output_root=output_root,
-        )
-    except (FileNotFoundError, ObjectTransactionError, TypeError, ValueError) as exc:
-        raise SystemExit(
-            f"[release publish-intermediate-cleanup plan] GATE_BLOCK {exc}"
-        ) from exc
-    print(
-        json.dumps(
-            {**document, "planRef": path.relative_to(output_root).as_posix()},
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
-
-
-def handle_publish_intermediate_cleanup_apply(args: argparse.Namespace) -> None:
-    output_root = Path(args.output_root or OUTPUT_ROOT).resolve()
-    publish_root = Path(args.publish_root or PUBLISH_ROOT).resolve()
-    try:
-        document, path = apply_publish_intermediate_cleanup(
-            cleanup_id=str(args.cleanup_id),
-            plan_digest=str(args.plan_digest),
-            publish_root=publish_root,
-            output_root=output_root,
-        )
-    except (FileNotFoundError, ObjectTransactionError, TypeError, ValueError) as exc:
-        raise SystemExit(
-            f"[release publish-intermediate-cleanup apply] GATE_BLOCK {exc}"
-        ) from exc
-    print(
-        json.dumps(
-            {**document, "receiptRef": path.relative_to(output_root).as_posix()},
             ensure_ascii=False,
             indent=2,
         )

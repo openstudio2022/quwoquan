@@ -7,6 +7,7 @@ import 'package:hive/hive.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/platform/temporary_file_cleanup.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_provider.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_send_outbox_control.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/voice_send_provider.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/voice_recording.dart';
@@ -27,6 +28,7 @@ class ChatSendOutbox {
     required this.sendCommand,
     required this.sendQueuedVoice,
     required this.telemetry,
+    this.onCommandDelivered,
     Future<void> Function(String path)? deleteTemporaryFile,
   }) : _deleteTemporaryFile = deleteTemporaryFile ?? deleteAppTemporaryFile;
 
@@ -38,6 +40,10 @@ class ChatSendOutbox {
     VoiceRecordResult result,
   )
   sendQueuedVoice;
+
+  /// 自动 drain 送达一条命令后回调（conversationId）：会话打开时气泡可能
+  /// 停留在 failed 态，必须由消费方刷新该会话 timeline 与服务端收敛。
+  final void Function(String conversationId)? onCommandDelivered;
   final Future<void> Function(String path) _deleteTemporaryFile;
 
   static const String boxName = 'chat_send_outbox';
@@ -148,7 +154,8 @@ class ChatSendOutbox {
             await box.delete(key);
             continue;
           }
-          final delivered = switch (data['kind'] as String? ?? 'voice') {
+          final kind = data['kind'] as String? ?? 'voice';
+          final delivered = switch (kind) {
             'command' => await _drainCommand(data),
             _ => await _drainVoice(conversationId, data),
           };
@@ -156,6 +163,9 @@ class ChatSendOutbox {
             break;
           }
           await box.delete(key);
+          if (kind == 'command') {
+            onCommandDelivered?.call(conversationId);
+          }
         } catch (error, stackTrace) {
           unawaited(
             telemetry.recordHandledException(
@@ -281,6 +291,12 @@ class ChatSendOutboxNotifier extends Notifier<int>
       sendCommand: (command) => writer.sendMessage(command),
       sendQueuedVoice: voiceSender,
       telemetry: ref.read(exceptionTelemetryPortProvider),
+      onCommandDelivered: (conversationId) {
+        // 自动重放送达后刷新该会话 timeline：failed 气泡收敛为服务端确认态。
+        unawaited(
+          ref.read(chatMessageProvider(conversationId).notifier).loadMessages(),
+        );
+      },
     );
     _outbox = outbox;
     ref.onDispose(() {

@@ -1,3 +1,4 @@
+// readiness_case: chat_inbox_view_source_switch_app_uat
 // spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/conversation-list-source-switch/spec.md#gwt-001
 /// disposable actor 只经公开 Chat command 创建会话与消息；API 先确认
 /// ListMessageHome 已产生对应 typed row，production App 再在离页重入后从 Remote

@@ -1,50 +1,58 @@
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-001
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-003
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-001.t3
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
-    show chatRepositoryCompositionProvider;
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
+import 'package:quwoquan_app/runtime/transport/generated/cloud_api_defaults.g.dart';
+import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/chat_inbox_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/conversation_dto.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_participant_picker_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/chat_service/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 
-class _PickerChatRepository extends MockChatRepository {
-  static final ChatInboxViewData _inbox002 = chatInboxFixture(
-    id: 'conv_002',
-    type: 'group',
-    title: '当前群聊',
-    avatarUrl: '',
-    lastMessagePreview: '',
-    lastMessageType: MessageType.text,
-    lastSeq: 0,
-    unreadCount: 0,
-    mentionUnreadCount: 0,
-    muted: false,
-    pinned: false,
-    circleId: '',
-  );
-  static final ChatInboxViewData _inbox003 = chatInboxFixture(
-    id: 'conv_003',
-    type: 'group',
-    title: '摄影群',
-    avatarUrl: '',
-    lastMessagePreview: '',
-    lastMessageType: MessageType.text,
-    lastSeq: 0,
-    unreadCount: 0,
-    mentionUnreadCount: 0,
-    muted: false,
-    pinned: false,
-    circleId: '',
-  );
+final ChatInboxViewData _inbox002 = chatInboxFixture(
+  id: 'conv_002',
+  type: 'group',
+  title: '当前群聊',
+  avatarUrl: '',
+  lastMessagePreview: '',
+  lastMessageType: MessageType.text,
+  lastSeq: 0,
+  unreadCount: 0,
+  mentionUnreadCount: 0,
+  muted: false,
+  pinned: false,
+  circleId: '',
+);
+final ChatInboxViewData _inbox003 = chatInboxFixture(
+  id: 'conv_003',
+  type: 'group',
+  title: '摄影群',
+  avatarUrl: '',
+  lastMessagePreview: '',
+  lastMessageType: MessageType.text,
+  lastSeq: 0,
+  unreadCount: 0,
+  mentionUnreadCount: 0,
+  muted: false,
+  pinned: false,
+  circleId: '',
+);
 
+class _PickerInboxRepository implements ChatInboxRepository {
   @override
   Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
@@ -52,6 +60,19 @@ class _PickerChatRepository extends MockChatRepository {
   }) async {
     return <ChatInboxViewData>[_inbox002, _inbox003];
   }
+}
+
+class _PickerConversationRepository implements ChatConversationRepository {
+  _PickerConversationRepository(this._delegate);
+
+  final ChatConversationRepository _delegate;
+
+  @override
+  Future<List<MessageHomeRow>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) => _delegate.listMessageHome(filter: filter, cursor: cursor, limit: limit);
 
   @override
   Future<List<ChatInboxViewData>> listConversations({
@@ -62,12 +83,60 @@ class _PickerChatRepository extends MockChatRepository {
   }
 
   @override
+  Future<ChatConversationCreatedViewData> createConversation({
+    required String type,
+    String? title,
+    int? maxGroupSize,
+    List<String>? initialMemberIds,
+    String? idempotencyKey,
+  }) => _delegate.createConversation(
+    type: type,
+    title: title,
+    maxGroupSize: maxGroupSize,
+    initialMemberIds: initialMemberIds,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
+  Future<ConversationViewData> getConversation(String conversationId) =>
+      _delegate.getConversation(conversationId);
+
+  @override
+  Future<void> updateConversationTitle(String conversationId, String title) =>
+      _delegate.updateConversationTitle(conversationId, title);
+
+  @override
+  Future<void> updateConversationSettings({
+    required String conversationId,
+    bool? muted,
+    bool? pinned,
+  }) => _delegate.updateConversationSettings(
+    conversationId: conversationId,
+    muted: muted,
+    pinned: pinned,
+  );
+
+  @override
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() =>
+      _delegate.getConversationTimestamps();
+
+  @override
+  Future<List<ConversationViewData>> batchGetConversations(List<String> ids) =>
+      _delegate.batchGetConversations(ids);
+}
+
+class _PickerMemberRepository implements ChatMemberRepository {
+  _PickerMemberRepository(this._delegate);
+
+  final ChatMemberRepository _delegate;
+
+  @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     if (conversationId == 'conv_initial_large') {
       return List<ConversationMemberListRow>.generate(
@@ -146,6 +215,51 @@ class _PickerChatRepository extends MockChatRepository {
   }
 
   @override
+  Future<List<ConversationMemberListRow>> searchMembers({
+    required String conversationId,
+    required String query,
+    required int limit,
+  }) => _delegate.searchMembers(
+    conversationId: conversationId,
+    query: query,
+    limit: limit,
+  );
+
+  @override
+  Future<void> addMembers({
+    required String conversationId,
+    required List<String> userIds,
+  }) => _delegate.addMembers(conversationId: conversationId, userIds: userIds);
+
+  @override
+  Future<void> removeMember({
+    required String conversationId,
+    required String userId,
+  }) => _delegate.removeMember(conversationId: conversationId, userId: userId);
+
+  @override
+  Future<void> leaveConversation(String conversationId) =>
+      _delegate.leaveConversation(conversationId);
+
+  @override
+  Future<List<String>> listMemberUserIds(String conversationId) =>
+      _delegate.listMemberUserIds(conversationId);
+
+  @override
+  Future<void> inviteAssistant({required String conversationId}) =>
+      _delegate.inviteAssistant(conversationId: conversationId);
+
+  @override
+  Future<void> removeAssistant({required String conversationId}) =>
+      _delegate.removeAssistant(conversationId: conversationId);
+}
+
+class _PickerContactRepository implements ChatContactRepository {
+  _PickerContactRepository(this._delegate);
+
+  final ChatContactRepository _delegate;
+
+  @override
   Future<CursorPage<ChatContactRowViewData>> listContacts({
     String? cursor,
     int limit = 20,
@@ -177,9 +291,25 @@ class _PickerChatRepository extends MockChatRepository {
       ],
     );
   }
+
+  @override
+  Future<List<ContactHomeRow>> listContactHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) => _delegate.listContactHome(filter: filter, cursor: cursor, limit: limit);
+
+  @override
+  Future<List<ChatContactRowViewData>> listGroupCandidates({
+    String? conversationId,
+    int limit = ChatListGroupCandidatesQuery.defaultLimit,
+  }) => _delegate.listGroupCandidates(
+    conversationId: conversationId,
+    limit: limit,
+  );
 }
 
-class _FailingPickerChatRepository extends MockChatRepository {
+class _FailingPickerInboxRepository implements ChatInboxRepository {
   @override
   Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
@@ -187,6 +317,12 @@ class _FailingPickerChatRepository extends MockChatRepository {
   }) async {
     throw StateError('inbox unavailable');
   }
+}
+
+class _FailingPickerContactRepository implements ChatContactRepository {
+  _FailingPickerContactRepository(this._delegate);
+
+  final ChatContactRepository _delegate;
 
   @override
   Future<CursorPage<ChatContactRowViewData>> listContacts({
@@ -197,15 +333,95 @@ class _FailingPickerChatRepository extends MockChatRepository {
   }
 
   @override
+  Future<List<ContactHomeRow>> listContactHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) => _delegate.listContactHome(filter: filter, cursor: cursor, limit: limit);
+
+  @override
+  Future<List<ChatContactRowViewData>> listGroupCandidates({
+    String? conversationId,
+    int limit = ChatListGroupCandidatesQuery.defaultLimit,
+  }) => _delegate.listGroupCandidates(
+    conversationId: conversationId,
+    limit: limit,
+  );
+}
+
+class _FailingPickerMemberRepository implements ChatMemberRepository {
+  _FailingPickerMemberRepository(this._delegate);
+
+  final ChatMemberRepository _delegate;
+
+  @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     throw StateError('members unavailable');
   }
+
+  @override
+  Future<List<ConversationMemberListRow>> searchMembers({
+    required String conversationId,
+    required String query,
+    required int limit,
+  }) => _delegate.searchMembers(
+    conversationId: conversationId,
+    query: query,
+    limit: limit,
+  );
+
+  @override
+  Future<void> addMembers({
+    required String conversationId,
+    required List<String> userIds,
+  }) => _delegate.addMembers(conversationId: conversationId, userIds: userIds);
+
+  @override
+  Future<void> removeMember({
+    required String conversationId,
+    required String userId,
+  }) => _delegate.removeMember(conversationId: conversationId, userId: userId);
+
+  @override
+  Future<void> leaveConversation(String conversationId) =>
+      _delegate.leaveConversation(conversationId);
+
+  @override
+  Future<List<String>> listMemberUserIds(String conversationId) =>
+      _delegate.listMemberUserIds(conversationId);
+
+  @override
+  Future<void> inviteAssistant({required String conversationId}) =>
+      _delegate.inviteAssistant(conversationId: conversationId);
+
+  @override
+  Future<void> removeAssistant({required String conversationId}) =>
+      _delegate.removeAssistant(conversationId: conversationId);
+}
+
+List<Override> _pickerOverrides({bool failing = false}) {
+  final facets = ChatTestFacets();
+  if (failing) {
+    return chatTestRepositoryOverrides(
+      facets: facets,
+      inbox: _FailingPickerInboxRepository(),
+      member: _FailingPickerMemberRepository(facets.member),
+      contact: _FailingPickerContactRepository(facets.contact),
+    );
+  }
+  return chatTestRepositoryOverrides(
+    facets: facets,
+    inbox: _PickerInboxRepository(),
+    conversation: _PickerConversationRepository(facets.conversation),
+    member: _PickerMemberRepository(facets.member),
+    contact: _PickerContactRepository(facets.contact),
+  );
 }
 
 void _suppressImageErrors() {
@@ -226,11 +442,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(
-              _PickerChatRepository(),
-            ),
-          ],
+          overrides: [..._pickerOverrides()],
           child: const CupertinoApp(
             home: CallParticipantPickerPage(
               routeExtra: CallParticipantPickerRouteExtra.initialCall(
@@ -260,11 +472,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(
-              _PickerChatRepository(),
-            ),
-          ],
+          overrides: [..._pickerOverrides()],
           child: const CupertinoApp(
             home: CallParticipantPickerPage(
               routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(
@@ -287,11 +495,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(
-              _PickerChatRepository(),
-            ),
-          ],
+          overrides: [..._pickerOverrides()],
           child: const CupertinoApp(
             home: CallParticipantPickerPage(
               routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(
@@ -320,11 +524,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(
-              _PickerChatRepository(),
-            ),
-          ],
+          overrides: [..._pickerOverrides()],
           child: const CupertinoApp(
             home: CallParticipantPickerPage(
               routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(
@@ -357,11 +557,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(
-              _PickerChatRepository(),
-            ),
-          ],
+          overrides: [..._pickerOverrides()],
           child: const CupertinoApp(
             home: CallParticipantPickerPage(
               routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(
@@ -388,11 +584,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(
-              _PickerChatRepository(),
-            ),
-          ],
+          overrides: [..._pickerOverrides()],
           child: const CupertinoApp(
             home: CallParticipantPickerPage(
               routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(
@@ -413,11 +605,7 @@ void main() {
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [
-            chatRepositoryCompositionProvider.overrideWithValue(
-              _FailingPickerChatRepository(),
-            ),
-          ],
+          overrides: [..._pickerOverrides(failing: true)],
           child: const CupertinoApp(
             home: CallParticipantPickerPage(
               routeExtra: CallParticipantPickerRouteExtra.existingCallInvite(

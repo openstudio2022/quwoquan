@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:quwoquan_app/runtime/platform/assistant_device_action_bridge.dart';
+import 'package:quwoquan_app/runtime/platform/call_audio_session_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/contacts/device_contacts_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/contacts/flutter_contacts_device_contacts_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/device_calendar_bridge.dart';
@@ -13,6 +14,7 @@ import 'package:quwoquan_app/runtime/platform/native_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/runtime/platform/platform_target.dart';
 import 'package:quwoquan_app/runtime/platform/push_endpoint_gateway.dart';
+import 'package:quwoquan_app/runtime/platform/screen_wake_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/web_install_context.dart';
 
 /// Current platform (assembly/observability only — do NOT branch on this in
@@ -93,6 +95,39 @@ final webInstallContextProvider = Provider<WebInstallContext>(
   (ref) => readWebInstallContext(),
 );
 
+/// 屏幕常亮防腐入口：通话等长驻前台场景保持屏幕不熄灭。
+///
+/// OHOS 暂无 wakelock 插件支持，装配一致降级实现（R-XP5）；其余平台由
+/// wakelock_plus 承载，失败在 gateway 内部降级不打断业务。
+final screenWakeGatewayProvider = Provider<ScreenWakeGateway>((ref) {
+  switch (ref.watch(platformTargetProvider)) {
+    case AppPlatform.android:
+    case AppPlatform.ios:
+    case AppPlatform.web:
+    case AppPlatform.desktop:
+      return const WakelockScreenWakeGateway();
+    case AppPlatform.ohos:
+      return const UnsupportedScreenWakeGateway();
+  }
+});
+
+/// RTC 通话音频会话防腐入口：playAndRecord 激活、中断与 becomingNoisy
+/// 事实流。移动端由 audio_session 承载；其余平台一致降级（R-XP5），
+/// 通话不因音频会话能力缺失而失败。
+final callAudioSessionGatewayProvider = Provider<CallAudioSessionGateway>((
+  ref,
+) {
+  switch (ref.watch(platformTargetProvider)) {
+    case AppPlatform.android:
+    case AppPlatform.ios:
+      return AudioSessionCallAudioSessionGateway();
+    case AppPlatform.web:
+    case AppPlatform.ohos:
+    case AppPlatform.desktop:
+      return const UnsupportedCallAudioSessionGateway();
+  }
+});
+
 /// Local file/path access behind the anti-corruption boundary.
 final fileStorageGatewayProvider = Provider<FileStorageGateway>(
   (ref) => createFileStorageGateway(),
@@ -170,9 +205,15 @@ final incomingCallNativeBridgeProvider = Provider<IncomingCallNativeBridge>((
 });
 
 /// APNs VoIP 原生 queue 与 Dart FCM queue 的统一持久化入口。
-final pushEndpointGatewayProvider = Provider<PushEndpointGateway>(
-  (ref) => PersistentPushEndpointGateway(),
-);
+///
+/// `pushDelivery` 能力关闭平台装配 fail-safe 空实现：注册/反注册/清理结构化
+/// 跳过，不触达安全存储与原生通道（R-XP1/R-XP5）。
+final pushEndpointGatewayProvider = Provider<PushEndpointGateway>((ref) {
+  if (!ref.watch(platformCapabilitiesProvider).pushDelivery) {
+    return const UnsupportedPushEndpointGateway();
+  }
+  return PersistentPushEndpointGateway();
+});
 
 /// Firebase 只在防腐层内部判断 Android；业务仅消费 runtime state/capability。
 final firebaseIncomingCallRuntimeProvider =
@@ -185,3 +226,21 @@ final firebaseIncomingCallRuntimeProvider =
       });
       return runtime;
     });
+
+/// 设备推送 tap 直达的防腐入口：Android 消费 FCM 打开流；其余平台返回
+/// null 表示能力不可用，消费方按一致降级处理（R-XP5），不得抛错。
+final pushTapMessagingClientProvider = Provider<FirebasePushMessagingClient?>((
+  ref,
+) {
+  switch (ref.watch(platformTargetProvider)) {
+    case AppPlatform.android:
+      return const FirebasePluginPushMessagingClient();
+    case AppPlatform.ios:
+    case AppPlatform.web:
+    case AppPlatform.ohos:
+    case AppPlatform.desktop:
+      // iOS 普通 alert 推送端点种类尚未注册（现有 apns_voip 仅来电）；
+      // 该缺口由 chat-offline-push-delivery OPEN 承接。
+      return null;
+  }
+});

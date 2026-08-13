@@ -7,7 +7,7 @@ import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/d
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/runtime_enums.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_process_timeline.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/domain/persisted_assistant_turn.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_assistant_timeline_payload.dart';
 import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/l10n/copy/assistant_text_constants.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
@@ -75,7 +75,7 @@ Map<String, dynamic> _assistantMessage({
     'timestamp': '10:10',
     'isRead': true,
     'isSelf': false,
-    ...buildPersistedAssistantTurnFields(
+    ...PersistedAssistantTimelinePayload.build(
       journey: effectiveJourney,
       processTimeline: processTimeline,
       displayMarkdown: content,
@@ -83,7 +83,7 @@ Map<String, dynamic> _assistantMessage({
       followupPrompt: '',
       actionHints: const <String>[],
       elapsedMs: 4200,
-    ),
+    ).toMap(),
     ...extra,
   };
 }

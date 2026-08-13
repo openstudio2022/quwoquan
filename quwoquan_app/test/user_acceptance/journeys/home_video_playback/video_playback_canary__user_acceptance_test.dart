@@ -132,12 +132,18 @@ void main() {
   patrolTest(
     'environment_hour_boundary_video_playback_canary',
     tags: ['user-acceptance', 'environment-smoke', 'video-playback'],
-    skip: !kRunPatrolAcceptance || _hourVideoWorkId.isEmpty,
+    skip: !kRunPatrolAcceptance,
     config: PatrolTesterConfig(
       visibleTimeout: const Duration(seconds: 12),
       printLogs: true,
     ),
     ($) async {
+      expect(
+        _hourVideoWorkId.trim(),
+        isNotEmpty,
+        reason:
+            'environment Patrol requires an injected hour-boundary video canary work id',
+      );
       await launchEnvironmentPatrolApp($);
       await patrolGoTo(
         $,

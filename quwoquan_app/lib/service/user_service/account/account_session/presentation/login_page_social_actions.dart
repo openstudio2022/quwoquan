@@ -240,6 +240,7 @@ extension _LoginPageSocialActions on _LoginFrameHostState {
         action: 'login_phone_binding',
         result: 'required',
       );
+      unawaited(_checkOtpDeliveryReadiness());
       _trackLoginOperation(
         operationId: 'login_social_$method',
         result: 'binding_required',

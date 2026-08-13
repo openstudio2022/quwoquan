@@ -11,7 +11,7 @@ import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
     show homeChannelsProvider;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
 const HomeChannelConfig _following = HomeChannelConfig(
   id: 'following',
@@ -44,7 +44,7 @@ const HomeChannelConfig _recommend = HomeChannelConfig(
 Widget _buildHome(List<HomeChannelConfig> channels) {
   return ProviderScope(
     overrides: [
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       homeChannelsProvider.overrideWithValue(channels),
     ],
     child: ScreenUtilInit(

@@ -26,7 +26,10 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/spacing/discovery_feed_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/service/product_ops_service/product_ops/event_record/adapters/event_record_batch_writer.dart';
+import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/transport/cloud_api_query_defaults.dart';
+import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/runtime/di/ops_event_record_dependencies.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart';
 import 'package:quwoquan_app/design_system/layout/app_terminal_viewport.dart';
@@ -40,6 +43,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         ContentFeedEmptyReason,
         IntersectionActionHint,
         IntersectionActorEvidence,
+        IntersectionInboxSummary,
         IntersectionReason,
         IntersectionRepresentativeActor,
         IntersectionTarget,
@@ -50,7 +54,8 @@ import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
@@ -546,6 +551,7 @@ Widget _buildFeed(
   ContentPostViewData post, {
   ContentBehaviorTracker? tracker,
   bool authenticated = false,
+  List<Override> extraOverrides = const <Override>[],
   void Function(
     ContentPostViewData post,
     int index, {
@@ -557,7 +563,7 @@ Widget _buildFeed(
     key: ValueKey<String>('feed-scope-${post.id}'),
     overrides: _boundaryOverrides(
       extra: <Override>[
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
         mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
         discoveryFeedMapProvider.overrideWith(
           () => _SinglePostFeedMapNotifier(post),
@@ -567,6 +573,7 @@ Widget _buildFeed(
           authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
         if (tracker != null)
           contentBehaviorTrackerProvider.overrideWithValue(tracker),
+        ...extraOverrides,
       ],
     ),
     child: CupertinoApp(
@@ -588,10 +595,19 @@ Widget _buildFeed(
 }
 
 Widget _buildRealProviderFeed() {
+  final post = contentPostViewDataBuilder(
+    postId: 'real-provider-photo',
+    contentType: 'image',
+    authorId: 'nature_photographer',
+    authorDisplayName: '自然摄影师',
+    mediaUrls: const <String>[testContentImageUrl],
+  );
   return ProviderScope(
     overrides: _boundaryOverrides(
       extra: <Override>[
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(
+          store: InMemoryContentPostStore(posts: <ContentPostViewData>[post]),
+        ),
         mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
       ],
     ),
@@ -792,7 +808,7 @@ void main() {
     );
   });
 
-  testWidgets('默认 Provider 加载首页推荐时保留 showcase 作者头像 media candidates', (
+  testWidgets('默认 Provider 加载最小 typed post 时保留作者头像 media candidates', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -803,16 +819,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('晨间记录者'), findsWidgets);
+    expect(find.text('自然摄影师'), findsWidgets);
 
     final avatars = tester
         .widgetList<RoundedSquareAvatar>(find.byType(RoundedSquareAvatar))
         .toList(growable: false);
     expect(avatars, isNotEmpty);
-    expect(
-      avatars.first.imageUrl,
-      'media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
-    );
+    expect(avatars.first.imageUrl, testContentAvatarUrl);
 
     final avatarImages = tester
         .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
@@ -820,7 +833,7 @@ void main() {
         .toList(growable: false);
     expect(avatarImages, isNotEmpty);
     expect(avatarImages.first.imageUrlCandidates, <String>[
-      'https://cdn.alpha.quwoquan.com:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+      'https://cdn.alpha.quwoquan.com:17100/$testContentAvatarUrl',
     ]);
   });
 
@@ -1950,6 +1963,175 @@ void main() {
       expect(click.intersectionTagRefs, isNotNull);
     },
   );
+
+  // ── 首页卡想去动作（意图环 L0 氛围层，B10 三表面之三）──
+  // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-006
+
+  testWidgets('无实体锚点的内容卡不渲染想去动作，不做本地推断', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_buildFeed(_microPost()));
+    await tester.pump();
+
+    expect(find.byKey(_kHomeCardWishlistKey), findsNothing);
+  });
+
+  testWidgets('实体锚点内容卡渲染想去动作；游客点击设置双目标续接不静默丢失', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final behaviorRepo = RecordingContentBehaviorRepository();
+    final tracker = ContentBehaviorTracker(
+      reporter: behaviorRepo,
+      maxBatchSize: 1,
+      enablePeriodicFlush: false,
+    );
+    addTearDown(tracker.dispose);
+
+    late final ProviderContainer container;
+    await tester.pumpWidget(
+      _routedFeed(
+        _wishlistAnchoredPost(),
+        tracker: tracker,
+        extraOverrides: <Override>[
+          intersectionRepositoryProvider.overrideWithValue(
+            _EmptyObjectIntersectionRepository(),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+    container = ProviderScope.containerOf(
+      tester.element(find.byType(HomeMultiFormFeed)),
+    );
+
+    final wishlistAction = find.byKey(_kHomeCardWishlistKey);
+    expect(wishlistAction, findsOneWidget);
+
+    await tester.ensureVisible(wishlistAction);
+    await tester.tap(wishlistAction, warnIfMissed: false);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final pending = container.read(authContinuationProvider);
+    expect(pending, isA<WishlistHomepageContinuation>());
+    expect(
+      (pending! as WishlistHomepageContinuation).homepageId,
+      'homepage-wish-card-1',
+    );
+    expect(
+      behaviorRepo.recorded.where(
+        (event) => event.action == BehaviorEventType.wishlistAdd,
+      ),
+      isEmpty,
+      reason: '未登录不得发出 wishlist 行为事实',
+    );
+  });
+
+  testWidgets('登录后点击想去 → wishlist 行为事实上报并诚实确认（无交集不伪造）', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final behaviorRepo = RecordingContentBehaviorRepository();
+    final tracker = ContentBehaviorTracker(
+      reporter: behaviorRepo,
+      maxBatchSize: 1,
+      enablePeriodicFlush: false,
+    );
+    addTearDown(tracker.dispose);
+
+    await tester.pumpWidget(
+      _routedFeed(
+        _wishlistAnchoredPost(),
+        tracker: tracker,
+        authenticated: true,
+        extraOverrides: <Override>[
+          intersectionRepositoryProvider.overrideWithValue(
+            _EmptyObjectIntersectionRepository(),
+          ),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    final wishlistAction = find.byKey(_kHomeCardWishlistKey);
+    await tester.ensureVisible(wishlistAction);
+    await tester.tap(wishlistAction, warnIfMissed: false);
+    for (var i = 0; i < 8; i += 1) {
+      await tester.pump(const Duration(milliseconds: 60));
+    }
+
+    final wishlistEvents = behaviorRepo.recorded
+        .where((event) => event.action == BehaviorEventType.wishlistAdd)
+        .toList(growable: false);
+    expect(wishlistEvents, hasLength(1));
+    expect(wishlistEvents.single.contentId, 'homepage-wish-card-1');
+    expect(
+      find.text(ObjectHomepageText.wishlistAddedFeedback),
+      findsOneWidget,
+      reason: '无交集时只确认动作本身，不伪造社会证明',
+    );
+    // 排空 toast 自动消失 Timer，避免测试结束时残留计时器。
+    await tester.pump(const Duration(seconds: 4));
+  });
+}
+
+const _kHomeCardWishlistKey = ValueKey<String>('home-card-wishlist-action');
+
+/// 锚定到支持想去类型实体主页（sight）的内容卡 fixture。
+ContentPostViewData _wishlistAnchoredPost() {
+  return ContentPostViewData(
+    id: 'post_wishlist_card_1',
+    type: 'image',
+    identity: 'work',
+    displayFormat: 'image',
+    assistantUsePolicy: AssistantUsePolicy.inherit,
+    authorId: 'user_wish_author',
+    displayName: '风光摄影师',
+    avatarUrl: '',
+    authorBackgroundUrl: null,
+    authorRoleLabel: '',
+    authorIdentityTags: const <String>[],
+    authorVerified: false,
+    body: '黄龙五彩池的秋天',
+    imageUrls: const <String>[
+      'media/image/s/archived-image/post/fixture_wish_001/v1/cover.png',
+    ],
+    likeCount: 3,
+    commentCount: 1,
+    shareCount: 0,
+    createdAt: DateTime(2026),
+    primaryHomepageId: 'homepage-wish-card-1',
+    primaryHomepageType: 'sight',
+  );
+}
+
+/// 对象级 typed double：对象交集恒为空（诚实空态分支）。
+final class _EmptyObjectIntersectionRepository implements IntersectionRepository {
+  @override
+  Future<IntersectionInboxSummary> getMyIntersectionSummary() {
+    throw StateError('该 contract 不应读取交集收件箱摘要');
+  }
+
+  @override
+  Future<List<IntersectionReason>> listMyIntersections({
+    String? dimension,
+    String? filter,
+    String? sourceRef,
+    String? timeBucket,
+    String? cursor,
+    int limit = CloudApiQueryDefaults.intersectionListLimit,
+  }) {
+    throw StateError('该 contract 不应列出我的交集');
+  }
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = CloudApiQueryDefaults.objectIntersectionsLimit,
+  }) async => const <IntersectionReason>[];
 }
 
 /// N6：带 GoRouter 的 feed 宿主，使交集 span 点击的 `context.push` 可达，
@@ -1958,6 +2140,8 @@ void main() {
 Widget _routedFeed(
   ContentPostViewData post, {
   required ContentBehaviorTracker tracker,
+  bool authenticated = false,
+  List<Override> extraOverrides = const <Override>[],
 }) {
   final router = GoRouter(
     initialLocation: '/',
@@ -1978,6 +2162,7 @@ Widget _routedFeed(
           ),
         ),
       ),
+      GoRoute(path: '/login', builder: (_, _) => const SizedBox.shrink()),
       GoRoute(
         path: '/user/:userHandle',
         builder: (_, state) =>
@@ -1989,13 +2174,16 @@ Widget _routedFeed(
     key: ValueKey<String>('routed-feed-scope-${post.id}'),
     overrides: _boundaryOverrides(
       extra: <Override>[
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
         mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
         discoveryFeedMapProvider.overrideWith(
           () => _SinglePostFeedMapNotifier(post),
         ),
         mediaDownloadCacheProvider.overrideWithValue(_NoopMediaDownloadCache()),
         contentBehaviorTrackerProvider.overrideWithValue(tracker),
+        if (authenticated)
+          authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+        ...extraOverrides,
       ],
     ),
     child: CupertinoApp.router(routerConfig: router),
@@ -2344,14 +2532,16 @@ Widget _buildFeedScope({
   bool disableAnimations = false,
   String channelId = 'recommend',
   String? scopeId,
+  List<Override> extraOverrides = const <Override>[],
 }) {
   return ProviderScope(
     key: ValueKey<String>('feed-scope-${scopeId ?? channelId}'),
     overrides: _boundaryOverrides(
       extra: <Override>[
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
         mediaEndpointConfigProvider.overrideWithValue(_testMediaEndpointConfig),
         discoveryFeedMapProvider.overrideWith(notifier),
+        ...extraOverrides,
       ],
     ),
     child: CupertinoApp(

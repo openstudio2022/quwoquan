@@ -38,6 +38,7 @@ final class ContentPostViewData {
     required this.likeCount,
     required this.commentCount,
     required this.shareCount,
+    this.viewerLiked,
     required this.createdAt,
     this.updatedAt,
     this.publishedAt,
@@ -45,6 +46,9 @@ final class ContentPostViewData {
     this.supplySource,
     this.intersectionReasons,
     this.sourceAttribution,
+    this.primaryHomepageId,
+    this.primaryHomepageType,
+    this.gatheringRef,
   });
 
   factory ContentPostViewData.fromWire(
@@ -113,6 +117,7 @@ final class ContentPostViewData {
       likeCount: wire.likeCount,
       commentCount: wire.commentCount,
       shareCount: wire.shareCount,
+      viewerLiked: wire.viewerLiked,
       createdAt:
           wire.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       updatedAt: wire.updatedAt,
@@ -121,6 +126,9 @@ final class ContentPostViewData {
       supplySource: wire.supplySource,
       intersectionReasons: wire.intersectionReasons,
       sourceAttribution: sourceAttribution,
+      primaryHomepageId: wire.primaryHomepageId,
+      gatheringRef: wire.gatheringRef,
+      primaryHomepageType: wire.primaryHomepageType,
     );
   }
 
@@ -156,6 +164,10 @@ final class ContentPostViewData {
   final int likeCount;
   final int commentCount;
   final int shareCount;
+
+  /// viewer 维度点赞态：true/false 为服务端权威值；null 表示本次响应未附着
+  /// viewer 态（匿名请求或读路径降级），hydrate 时不得据 null 回滚本地状态。
+  final bool? viewerLiked;
   final DateTime createdAt;
   final DateTime? updatedAt;
   final DateTime? publishedAt;
@@ -163,6 +175,15 @@ final class ContentPostViewData {
   final String? supplySource;
   final List<IntersectionReason>? intersectionReasons;
   final SourceAttribution? sourceAttribution;
+
+  /// 主实体锚点（canonical homepage 引用）：想去 CTA 与实体跳转的意图信号源；
+  /// 无实体锚点的内容两字段均为 null，想去入口不渲染、不做本地推断。
+  final String? primaryHomepageId;
+
+  /// 共同经历回流引用：feed/沉浸卡溯源标「他们从这条内容出发」的锚点；
+  /// 作者删除或取消关联为 null。
+  final String? gatheringRef;
+  final String? primaryHomepageType;
 
   bool get hasMeaningfulUpdate {
     final value = updatedAt;
@@ -172,7 +193,11 @@ final class ContentPostViewData {
   String get normalizedTitle => title.trim();
   String get normalizedBody => (body ?? '').trim();
   String get normalizedSummary => summary.trim();
-  String get articlePreviewText => normalizedSummary;
+  String get articlePreviewText {
+    final summary = normalizedSummary;
+    return summary.isNotEmpty ? summary : normalizedBody;
+  }
+
   List<String> get mediaImageUrls => imageUrls
       .map((url) => url.trim())
       .where((url) => url.isNotEmpty)
@@ -246,6 +271,7 @@ final class ContentPostViewData {
     likeCount: likeCount,
     commentCount: commentCount,
     shareCount: shareCount,
+    viewerLiked: viewerLiked,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt,
     publishedAt: publishedAt,
@@ -253,5 +279,8 @@ final class ContentPostViewData {
     supplySource: supplySource,
     intersectionReasons: intersectionReasons,
     sourceAttribution: sourceAttribution,
+    primaryHomepageId: primaryHomepageId,
+    gatheringRef: gatheringRef,
+    primaryHomepageType: primaryHomepageType,
   );
 }

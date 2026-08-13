@@ -74,6 +74,26 @@
 - 影响 Story：[`three-layer-evidence`](./three-layer-evidence/spec.md) 的分层数据边界。
 - 关联验收：`SIT-001`
 
+<a id="dec-005"></a>
+### DEC-005 api_integration 直插存储只允许显式声明的 persistence 专项
+
+- 决策：api_integration 用例对存储的直接写入（SQL Exec 插入/更新、Mongo Insert/Update/Delete 等）只允许三种显式专项形态。
+  - 文件名携带 `__data_consistency__` facet（persistence adapter、migration、corruption recovery 专项）。
+  - 文件名以 `contract_provider_state_persistence` 开头（provider-state harness 自身，即构造前置状态的 canonical 通道）。
+  - 文件为包级 seed/setup harness，basename 去掉 `__api_integration_test.go` 后以 `__support` 或 `_test_support` 结尾（如 `helpers__support`、`pg_setup__support`、`contract_fixture_seed__support`、`runtime_test_support`）；该形态是同包 contract 用例共享的前置状态收口点，业务断言不得写在 harness 文件内。
+- 决策：专项形态之外的直插存量以棘轮圈住，只减不增；消化方向是改走 application command/provider-state harness 构造前置状态，或在语义确属专项时改名声明 facet。
+- 理由：AGENTS 早已规定「direct storage 仅限专项」，但没有可执行区分，一般用例直插会绕过公开契约制造环境不可能出现的状态，使 api_integration 证据等级失真；以文件名 facet 承载专项声明可让门禁、评审与覆盖统计共用同一判定。
+- 被否决方案：为存量建立 allowlist（掩盖新债）、按目录建 `persistence/` 子目录（与对象同构路径规则冲突，`<context>/<object>` 下的子目录是 Go 包组织而非层语义）、扫描读操作（readback 断言是合法验证手段，纳入会造成大面积误报）。
+- 约束与影响：门禁 `quwoquan_ops/gate/verify_api_integration_direct_storage.py` 扫描 `services/*/tests/api_integration/**/*__api_integration_test.go` 的直写 token，专项形态豁免，残量超过棘轮基线即阻断。
+  - 基线随迁移批次只减不增。
+  - 扫描面必须覆盖 pgx `Exec` 的 SQL 写句（含反引号跨行形态），以及 Mongo 全部单/多文档写形态（`InsertOne/InsertMany/UpdateOne/UpdateMany/ReplaceOne/FindOneAndUpdate/FindOneAndReplace/BulkWrite`，不限定 ctx 首参写法）。
+  - 发现漏检形态时先收紧口径并按实扫值重定基线，再对新入册文件逐件二选一。
+- 约束与影响（消化模式一：专项声明改名）：语义确属存储适配器聚合/唯一性约束、投影生命周期清除或 migration 历史形态的测试，在 `__api_integration_test.go` 前插入 `data_consistency` facet 段完成声明；改名必须原子同步该对象 `operations.yaml` 中 `runner_source_path` 的引用。首批样例：tag 的 `taxonomy_release_contract`（唯一 active 部分索引）与 `active_taxonomy_validation`（snapshot identity migration）、search 的 `feedback_store_mongo`/`hot_queries`（store 聚合重建）、search 与 integration 的 `user_account_closed_projection__privacy`（关闭清除需覆盖历史存量形态）。
+- 约束与影响（消化模式二：harness 清库不计数）：`DeleteMany` 全量清库属用例间隔离机制，不构造业务事实，不在扫描面；若删除被用于伴随构造前置状态，Insert/Update token 仍会捕获。测试的业务前置状态仍必须经 application command 或 provider-state harness 构造。
+- 关联要求：`REQ-004`
+- 影响 Story：[`three-layer-evidence`](./three-layer-evidence/spec.md) 的 persistence 专项与直插存储边界。
+- 关联验收：`SIT-001`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

@@ -17,7 +17,6 @@ abstract final class SettingsText {
   static const String settingsEnableMarketingSubtitle = '精选内容与活动推荐（可随时关闭）';
   static const String settingsCallSection = '通话与铃声';
   static const String settingsCallRingtone = '来电铃声';
-  static const String settingsCallRingtoneDefault = '默认铃声';
   static const String settingsAllowCallerRingtoneOverride = '允许好友专属铃声';
   static const String settingsAllowCallerRingtoneOverrideSubtitle =
       '来电时使用发起方配置的专属铃声';
@@ -30,8 +29,6 @@ abstract final class SettingsText {
   static const String settingsProfileVisibility = '主页可见范围';
   static const String settingsProfileVisibilityPublic = '公开';
   static const String settingsProfileVisibilityPrivate = '仅自己';
-  static const String settingsCallRingtoneClassic = '经典铃声';
-  static const String settingsCallRingtoneSoft = '轻柔铃声';
   static const String settingsAccountSecurity = '账号安全';
   static const String settingsCredentialSection = '登录凭证';
   static const String settingsCredentialPhone = '手机号';

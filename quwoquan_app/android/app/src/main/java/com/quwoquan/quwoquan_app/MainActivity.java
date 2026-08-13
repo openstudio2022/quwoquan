@@ -66,6 +66,7 @@ public class MainActivity extends FlutterFragmentActivity {
   private AliyunOneTapPlugin aliyunOneTapPlugin;
   private CellularNetworkProbePlugin cellularNetworkProbePlugin;
   private AssistantDeviceActionPlugin assistantDeviceActionPlugin;
+  private VideoEditingBridgePlugin videoEditingBridgePlugin;
   private SmsRetrieverOtpPlugin smsRetrieverOtpPlugin;
   private RecoveryFailureEncryptedStore recoveryFailureEncryptedStore;
   private ScheduledFuture<?> flutterFirstFrameWatchdog;
@@ -182,6 +183,12 @@ public class MainActivity extends FlutterFragmentActivity {
         .setMethodCallHandler(
             (MethodCall call, MethodChannel.Result result) ->
                 assistantDeviceActionPlugin().handle(call, result));
+    new MethodChannel(
+            flutterEngine.getDartExecutor().getBinaryMessenger(),
+            "quwoquan/video_editing")
+        .setMethodCallHandler(
+            (MethodCall call, MethodChannel.Result result) ->
+                videoEditingBridgePlugin().handle(call, result));
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
             RUNTIME_CRASH_MARKER_CHANNEL)
@@ -380,6 +387,13 @@ public class MainActivity extends FlutterFragmentActivity {
       commercialAuthPlugin = new CommercialAuthPlugin(this, wechatSdkCoordinator());
     }
     return commercialAuthPlugin;
+  }
+
+  private VideoEditingBridgePlugin videoEditingBridgePlugin() {
+    if (videoEditingBridgePlugin == null) {
+      videoEditingBridgePlugin = new VideoEditingBridgePlugin(getApplicationContext());
+    }
+    return videoEditingBridgePlugin;
   }
 
   private AliyunOneTapPlugin aliyunOneTapPlugin() {

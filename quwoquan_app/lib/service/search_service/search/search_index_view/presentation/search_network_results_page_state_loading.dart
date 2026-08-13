@@ -26,6 +26,8 @@ extension _SearchNetworkResultsPageStateLoading
       _isSlow = false;
       _errorSemantic = null;
       _degradeSignals = const <SearchDegradeSignal>[];
+      _nextCursor = null;
+      _isLoadingMore = false;
       if (_activeTabId == _SearchNetworkResultsPageState._tabXiaoqu) {
         _xiaoquResult = null;
       } else {
@@ -182,12 +184,17 @@ extension _SearchNetworkResultsPageStateLoading
         _userResults = _userHitsFromResponse(response);
         _contentResults = _contentItemsFromResponse(response);
         _pageItems = response.pageItems;
+        _nextCursor = response.nextCursor;
         _relatedTerms = response.relatedTerms;
         _degradeSignals = response.degradeSignals;
         _searchRequestId = response.searchRequestId;
+        // rankPosition 的真相源：GraphQL flat card 用 objectRef，旧 REST hit 用
+        // objectId；两者互斥出现，合并进同一张排序索引供曝光/点击埋点消费。
         _searchRankByObjectId = <String, int>{
           for (final hit in response.hits)
             if (hit.rankPosition != null) hit.objectId: hit.rankPosition!,
+          for (final item in response.pageItems)
+            item.objectRef: item.rankPosition,
         };
         _isLoading = false;
         _isSlow = false;
@@ -357,5 +364,75 @@ extension _SearchNetworkResultsPageStateLoading
     final sorted = results.take(12).toList(growable: false);
     _contentCloudMetaById = cloudMeta;
     return sorted;
+  }
+
+  /// 滚动到底追加下一页：cursor 原样回传服务端，条目按 opaque objectRef 去重。
+  /// cursor 因策略身份变化 fail-closed 时终止翻页并保留已加载结果（结构化恢复：
+  /// 用户重新提交查询即回到第一页），不整页报错、不静默退化为无游标查询。
+  Future<void> _loadMoreResults() async {
+    final cursor = _nextCursor;
+    final trimmedQuery = _query.trim();
+    if (cursor == null ||
+        cursor.isEmpty ||
+        trimmedQuery.isEmpty ||
+        _isLoading ||
+        _isLoadingMore ||
+        _activeTabId == _SearchNetworkResultsPageState._tabXiaoqu) {
+      return;
+    }
+    final token = _requestToken;
+    final activeTabId = _activeTabId;
+    _setMountedState(() {
+      _isLoadingMore = true;
+    });
+    try {
+      final response = await ref
+          .read(searchRepositoryProvider)
+          .search(
+            SearchRequest(
+              query: trimmedQuery,
+              mode: CanonicalSearchMode.result,
+              objectTypes: _canonicalObjectTypes(activeTabId),
+              contentTypes: _canonicalContentTypes(activeTabId),
+              limit: 12,
+              cursor: cursor,
+            ),
+            deadlineAt: DateTime.now().add(
+              AppRequestWaitTimings.foregroundReadDeadline,
+            ),
+          );
+      if (!mounted || token != _requestToken || _activeTabId != activeTabId) {
+        return;
+      }
+      _setMountedState(() {
+        final seenRefs = <String>{
+          for (final item in _pageItems) item.objectRef,
+        };
+        final appended = <SearchPageResultItem>[
+          ..._pageItems,
+          for (final item in response.pageItems)
+            if (seenRefs.add(item.objectRef)) item,
+        ];
+        _pageItems = List<SearchPageResultItem>.unmodifiable(appended);
+        _nextCursor = response.nextCursor;
+        _searchRankByObjectId = Map<String, int>.unmodifiable(<String, int>{
+          ..._searchRankByObjectId,
+          for (final item in response.pageItems)
+            item.objectRef: item.rankPosition,
+        });
+        _isLoadingMore = false;
+      });
+    } catch (error) {
+      if (!mounted || token != _requestToken || _activeTabId != activeTabId) {
+        return;
+      }
+      if (kDebugMode) {
+        debugPrint('search load-more terminated: $error');
+      }
+      _setMountedState(() {
+        _nextCursor = null;
+        _isLoadingMore = false;
+      });
+    }
   }
 }

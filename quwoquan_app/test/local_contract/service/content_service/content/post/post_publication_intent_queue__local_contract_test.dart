@@ -1,3 +1,6 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-004.t2
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-004.t3
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-004.t4
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -485,6 +488,92 @@ void main() {
     expect(intent.blocked, isTrue);
     expect(intent.lastErrorCode, ContentErrorCode.mediaProcessingRejected.code);
     expect(drafts.deletedDraftIds, isEmpty);
+  });
+
+  // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-002.t3
+  test('rate_limited 按服务端 recovery-after 调度下一次尝试，不用默认回退', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final writer = _CloudFailingPublicationWriter(
+      CloudException(
+        type: CloudErrorType.server,
+        message: 'publication rate limited',
+        code: ContentErrorCode.rateLimited.code,
+        runtimeFailure: testRuntimeFailure(
+          code: ContentErrorCode.rateLimited.code,
+          nature: RuntimeFailureNature.transient,
+          recovery: const RuntimeRecoveryDirective(
+            action: 'retry',
+            afterSeconds: 120,
+            disruptionLevel: 'silent',
+          ),
+        ),
+      ),
+    );
+    final container = _container(
+      writer: writer,
+      drafts: _RecordingDraftRepository(),
+    );
+    addTearDown(container.dispose);
+    final before = DateTime.now().toUtc();
+
+    await expectLater(
+      container
+          .read(postPublicationIntentQueueProvider.notifier)
+          .submit(command: _command(), authorPersonaId: 'persona-publication'),
+      throwsA(isA<PostPublicationQueuedException>()),
+    );
+
+    final intent = container
+        .read(postPublicationIntentQueueProvider)
+        .intents
+        .single;
+    expect(intent.blocked, isFalse);
+    expect(intent.lastErrorCode, ContentErrorCode.rateLimited.code);
+    // 服务端指示 120s：显著大于默认指数回退上限 60s，证明按恢复时间调度
+    // 而非无限立即重试。
+    expect(
+      intent.nextAttemptAt.difference(before),
+      greaterThanOrEqualTo(const Duration(seconds: 100)),
+    );
+    expect(writer.commands, hasLength(1));
+  });
+
+  // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-004.t5
+  test('放弃后后台 flush 与手动重试都不得复活 intent', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final writer = _FailingPublicationWriter();
+    final drafts = _RecordingDraftRepository();
+    final container = _container(
+      writer: writer,
+      drafts: drafts,
+      media: RecordingContentMediaFacet(),
+    );
+    addTearDown(container.dispose);
+    final notifier = container.read(
+      postPublicationIntentQueueProvider.notifier,
+    );
+
+    await expectLater(
+      notifier.submit(
+        command: _command(),
+        authorPersonaId: 'persona-publication',
+      ),
+      throwsA(isA<PostPublicationQueuedException>()),
+    );
+    final attemptsBeforeCancel = writer.commands.length;
+
+    await notifier.cancelPending('draft-1');
+    expect(container.read(postPublicationIntentQueueProvider).intents, isEmpty);
+
+    // 后台 flush 不得复活已放弃的意图。
+    await notifier.flushNow();
+
+    expect(writer.commands, hasLength(attemptsBeforeCancel));
+    expect(container.read(postPublicationIntentQueueProvider).intents, isEmpty);
+    final persisted = (await SharedPreferences.getInstance()).getString(
+      'post_publication_intents:user-publication',
+    );
+    expect(persisted == null || persisted == '[]', isTrue);
   });
 
   test('未授权即使 HTTP 分类曾可重试也按 reauthenticate 永久阻断', () async {

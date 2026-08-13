@@ -42,7 +42,10 @@ final class ChatApiContractHarness {
 
   static Future<ChatApiContractHarness> create() async {
     if (_apiBase.isEmpty) {
-      throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
+      throw StateError(
+        'L3: API_CONTRACT_BASE_URL was not injected by the canonical '
+        'stackctl App API integration launcher',
+      );
     }
     final tokenProvider = _MutableAccessTokenProvider();
     final httpClient = CloudHttpClient(authTokenProvider: tokenProvider);

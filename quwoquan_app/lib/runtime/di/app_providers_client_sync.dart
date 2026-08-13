@@ -15,6 +15,7 @@ import 'package:quwoquan_app/service/assistant_service/assistant/skill_catalog/a
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_consent/application/skill_consent_facet.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_data_control_request/application/skill_data_control_facet.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_subscription/application/skill_subscription_facet.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/skill_surface_placement/application/skill_surface_placement_facet.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/skill_user_setting/application/skill_user_setting_facet.dart';
 import 'package:quwoquan_app/runtime/observability/app_trace_context_store.dart';
 import 'package:quwoquan_app/runtime/observability/app_log_models.dart';
@@ -200,6 +201,24 @@ final assistantSkillUserSettingFacetProvider =
             AssistantSkillUserSettingFacet
           >(
             AssistantProductionAdapter.skillUserSetting,
+            client: ref.watch(generatedCloudOperationClientProvider),
+            invocationContext:
+                (String clientPageId, {String? idempotencyKey}) =>
+                    _assistantSkillCenterInvocationContext(
+                      ref,
+                      clientPageId: clientPageId,
+                      idempotencyKey: idempotencyKey,
+                    ),
+          ),
+    );
+
+final assistantSkillSurfacePlacementFacetProvider =
+    Provider<AssistantSkillSurfacePlacementFacet>(
+      (ref) =>
+          AssistantProductionComposition.generatedAdapter<
+            AssistantSkillSurfacePlacementFacet
+          >(
+            AssistantProductionAdapter.skillSurfacePlacement,
             client: ref.watch(generatedCloudOperationClientProvider),
             invocationContext:
                 (String clientPageId, {String? idempotencyKey}) =>

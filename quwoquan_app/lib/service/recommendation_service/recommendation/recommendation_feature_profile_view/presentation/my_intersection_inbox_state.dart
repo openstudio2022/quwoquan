@@ -1,4 +1,3 @@
-import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class MyIntersectionSummaryState {
@@ -13,8 +12,6 @@ class MyIntersectionSummaryState {
   final Object? rawError;
 
   bool get hasNew => (summary?.totalNewCount ?? 0) > 0;
-  String? get error =>
-      rawError == null ? null : runtimeErrorDisplayMessage(rawError!).trim();
 
   MyIntersectionSummaryState copyWith({
     IntersectionInboxSummary? summary,
@@ -39,9 +36,6 @@ class MyIntersectionPreviewState {
   final List<IntersectionReason> items;
   final bool isLoading;
   final Object? rawError;
-
-  String? get error =>
-      rawError == null ? null : runtimeErrorDisplayMessage(rawError!).trim();
 
   MyIntersectionPreviewState copyWith({
     List<IntersectionReason>? items,
@@ -74,9 +68,6 @@ class MyIntersectionListState {
   final List<IntersectionReason> items;
   final bool isLoading;
   final Object? rawError;
-
-  String? get error =>
-      rawError == null ? null : runtimeErrorDisplayMessage(rawError!).trim();
 
   MyIntersectionListState copyWith({
     String? dimension,

@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-001
+// readiness_case: comment_post_journey_app_uat
 /// user_acceptance Patrol: 评论发布旅程
 ///
 /// 对应 e2e.yaml 场景：comment_on_post_journey [test_type: ui_journey]

@@ -33,10 +33,24 @@ class AppNavigationSemanticConstants {
     }
   }
 
-  /// 应用 chrome 操作按钮背景。当前统一为透明，避免资料页/圈子页半透明圆底漂移。
+  /// 应用 chrome 操作按钮背景。
+  ///
+  /// - `immersive`：半透明暗色圆底（iOS Photos 沉浸惯例），保证媒体加载失败
+  ///   退到浅色背景时白色返回/操作图标仍然可见，用户不会被困在失败页。
+  /// - `overlay`：封面壳保持透明——其前景色已随封面亮度自适应
+  ///   （见 profile/circle shell 的 compactForeground），不叠加圆底避免漂移。
+  /// - `standard`：透明。
   static Color chromeActionBackground({
     AppChromeSurface surface = AppChromeSurface.standard,
-  }) => AppColors.transparent;
+  }) {
+    switch (surface) {
+      case AppChromeSurface.immersive:
+        return AppColors.overlayLight;
+      case AppChromeSurface.overlay:
+      case AppChromeSurface.standard:
+        return AppColors.transparent;
+    }
+  }
 
   /// 设置入口使用业界通用齿轮图标语义。
   static const IconData settingsActionIcon = CupertinoIcons.gear;

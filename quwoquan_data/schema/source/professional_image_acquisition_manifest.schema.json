@@ -16,8 +16,12 @@
     "executionBundle": {"$ref": "#/$defs/digestDocument"},
     "frozenPhysicalInput": {"$ref": "#/$defs/frozenPhysicalInput"},
     "reviewExecutionBindings": {
-      "type": "array", "minItems": 1,
+      "type": "array",
       "items": {"$ref": "#/$defs/reviewExecutionBinding"}
+    },
+    "reviewSourceBindings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/reviewSourceBinding"}
     },
     "discoveryPlanRef": {"type": "string", "minLength": 1},
     "discoveryPlanDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
@@ -106,6 +110,27 @@
         "executionBundle": {"$ref": "#/$defs/digestDocument"},
         "executionManifestRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
         "executionManifestSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "reviewSourceBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceReview", "reviewerResultRef", "reviewerResultSha256"],
+      "properties": {
+        "sourceReview": {"$ref": "#/$defs/sourceReview"},
+        "reviewerResultRef": {"type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "reviewerResultSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sourceReview": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceRevision", "sourceDigest", "entityCatalogDigest", "executionBundleDigest", "handoffDigest", "requestDigest"],
+      "properties": {
+        "sourceRevision": {"$ref": "#/$defs/sha256"},
+        "sourceDigest": {"$ref": "#/$defs/sha256"},
+        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "executionBundleDigest": {"$ref": "#/$defs/sha256"},
+        "handoffDigest": {"$ref": "#/$defs/sha256"},
+        "requestDigest": {"$ref": "#/$defs/sha256"}
       }
     },
     "accessEvidence": {

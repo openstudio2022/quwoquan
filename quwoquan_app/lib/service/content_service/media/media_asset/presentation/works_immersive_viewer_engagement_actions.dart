@@ -778,4 +778,276 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       _pageController.jumpToPage(index + 1);
     }
   }
+
+  /// 想去锚点：作品经 primaryHomepageId 绑定到支持想去的实体主页时才存在。
+  /// 真相源是 list/detail wire 的 primaryHomepageId/Type + codegen 类型门；
+  /// 锚点缺失时不渲染想去按钮，不做本地推断。
+  ({String homepageId, String displayName})? _wishlistAnchorForPost(
+    ContentPostViewData post,
+  ) {
+    final raw = _effectiveRawPostById(post.id);
+    if (raw == null) {
+      return null;
+    }
+    final homepageId = raw['primaryHomepageId']?.toString().trim() ?? '';
+    final homepageType = raw['primaryHomepageType']?.toString().trim() ?? '';
+    if (homepageId.isEmpty ||
+        !HomepageUIConfig.wishlistHomepageTypes.contains(homepageType)) {
+      return null;
+    }
+    final snapshot = raw['primaryHomepageSnapshot'];
+    final displayName = snapshot is Map
+        ? (snapshot['title']?.toString().trim() ?? '')
+        : '';
+    return (homepageId: homepageId, displayName: displayName);
+  }
+
+  /// 按需读取 wishlist 服务端状态；未登录默认 false（登录后经续接刷新）。
+  void _ensureWishlistStateLoaded(String homepageId) {
+    if (_wishlistStateByHomepageId.containsKey(homepageId) ||
+        !_loadingWishlistHomepageIds.add(homepageId)) {
+      return;
+    }
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      // build 期间可被调用：默认未想去与 UI 缺省一致，直接记录、不触发重建。
+      _loadingWishlistHomepageIds.remove(homepageId);
+      _wishlistStateByHomepageId[homepageId] = false;
+      return;
+    }
+    unawaited(() async {
+      try {
+        final state = await ref
+            .read(workBrowserEntityWishlistStateReaderProvider)
+            .getEntityWishlistState(
+              objectId: homepageId,
+              objectKind: FollowSubjectKind.homepage.wireName,
+            );
+        if (!mounted) return;
+        _setMountedState(
+          () => _wishlistStateByHomepageId[homepageId] = state.wishlisted,
+        );
+      } catch (error, stackTrace) {
+        unawaited(
+          ref
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'content.works_viewer.load_wishlist_state',
+                error: error,
+                stackTrace: stackTrace,
+              ),
+        );
+        if (!mounted) return;
+        _setMountedState(
+          () => _wishlistStateByHomepageId[homepageId] = false,
+        );
+      } finally {
+        _loadingWishlistHomepageIds.remove(homepageId);
+      }
+    }());
+  }
+
+  void _toggleWishlistForPost(ContentPostViewData post) {
+    final anchor = _wishlistAnchorForPost(post);
+    if (anchor == null) {
+      return;
+    }
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      // 双目标契约：关闭登录回安全态（首页），登录成功经续接完成想去。
+      ref
+          .read(authContinuationProvider.notifier)
+          .set(
+            WishlistHomepageContinuation(homepageId: anchor.homepageId),
+            ownerToken: 'work-browser-wishlist:${anchor.homepageId}',
+          );
+      unawaited(
+        requireLogin(
+          ref,
+          context,
+          AuthGateReason.wishlist,
+          dismissFallback: AppRoutePaths.home,
+          dismissPolicy: LoginDismissPolicy.safeFallback,
+        ),
+      );
+      return;
+    }
+    final wishlisted = _wishlistStateByHomepageId[anchor.homepageId] ?? false;
+    unawaited(
+      _applyWishlist(
+        post: post,
+        homepageId: anchor.homepageId,
+        displayName: anchor.displayName,
+        wishlisted: !wishlisted,
+      ),
+    );
+  }
+
+  Future<void> _applyWishlist({
+    required ContentPostViewData post,
+    required String homepageId,
+    required String displayName,
+    required bool wishlisted,
+  }) async {
+    final tracker = ref.read(contentBehaviorTrackerProvider);
+    final attribution = _feedAttributionForPost(post);
+    if (wishlisted) {
+      tracker.trackWishlistAdd(
+        homepageId,
+        objectKind: FollowSubjectKind.homepage.wireName,
+        displayName: displayName.isEmpty ? null : displayName,
+        sourceSurface: AppUiSurfaces.workBrowser.id,
+        feedRequestId: attribution.feedRequestId,
+        referralSource: widget.referralSource,
+      );
+    } else {
+      tracker.trackWishlistRemove(
+        homepageId,
+        objectKind: FollowSubjectKind.homepage.wireName,
+        sourceSurface: AppUiSurfaces.workBrowser.id,
+        feedRequestId: attribution.feedRequestId,
+        referralSource: widget.referralSource,
+      );
+    }
+    await tracker.flush();
+    if (!mounted) {
+      return;
+    }
+    _setMountedState(
+      () => _wishlistStateByHomepageId[homepageId] = wishlisted,
+    );
+    if (!wishlisted) {
+      AppToast.show(context, ObjectHomepageText.wishlistRemovedFeedback);
+      return;
+    }
+    await _showWishlistIntersectionFeedback(homepageId);
+  }
+
+  /// 回顾内容的溯源锚点：作者主动写入的 gatheringRef（wire 直接可得）。
+  String _recapGatheringRefFor(ContentPostViewData post) {
+    final raw = _effectiveRawPostById(post.id);
+    return raw?['gatheringRef']?.toString().trim() ?? '';
+  }
+
+  /// 种草内容溯源判定：content 锚点社会证明成形级 > 0 才显示
+  /// 「他们从这条内容出发一起去了」；读取失败诚实缺席。
+  void _ensureSeedProvenanceLoaded(ContentPostViewData post) {
+    final postId = post.id.trim();
+    if (postId.isEmpty ||
+        _seedProvenanceByPostId.containsKey(postId) ||
+        !_loadingSeedProvenancePostIds.add(postId)) {
+      return;
+    }
+    unawaited(() async {
+      var formed = false;
+      try {
+        final proof = await ref
+            .read(workBrowserSocialProofReaderProvider)
+            .getGatheringSocialProof(anchorKind: 'content', objectId: postId);
+        formed = proof.formedCount > 0;
+      } catch (error, stackTrace) {
+        unawaited(
+          ref
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'content.works_viewer.load_seed_provenance',
+                error: error,
+                stackTrace: stackTrace,
+              ),
+        );
+      } finally {
+        _loadingSeedProvenancePostIds.remove(postId);
+      }
+      if (!mounted) return;
+      _setMountedState(() => _seedProvenanceByPostId[postId] = formed);
+    }());
+  }
+
+  void _openRecapProvenance(String gatheringRef) {
+    context.push(AppRoutePaths.gatheringDetail(id: gatheringRef));
+  }
+
+  /// 种草溯源点击：经既有按源公开行动读面取第一条成形行动进详情。
+  void _openSeedProvenance(ContentPostViewData post) {
+    unawaited(() async {
+      try {
+        final cards = await ref
+            .read(gatheringQueryReaderProvider)
+            .listBySource(
+              GatheringBySourceListQuery(
+                sourceObjectTypeRef: 'content',
+                sourceObjectId: post.id,
+                limit: 1,
+              ),
+            );
+        if (!mounted || cards.isEmpty) return;
+        _openRecapProvenance(cards.first.gatheringId);
+      } catch (error, stackTrace) {
+        unawaited(
+          ref
+              .read(exceptionTelemetryPortProvider)
+              .recordHandledException(
+                source: 'content.works_viewer.open_seed_provenance',
+                error: error,
+                stackTrace: stackTrace,
+              ),
+        );
+      }
+    }());
+  }
+
+  /// Aha 时刻（诚实两态）：想去成功后立刻回答「谁也想去」。
+  /// 有对象交集 → 点名共同人数并给查看入口；无 → 只确认动作，不伪造。
+  Future<void> _showWishlistIntersectionFeedback(String homepageId) async {
+    final personaId = ref
+        .read(authSessionControllerProvider)
+        .activePersonaId
+        .trim();
+    List<IntersectionReason> reasons = const <IntersectionReason>[];
+    try {
+      reasons = await ref.read(
+        objectSharedReasonsProvider(
+          ObjectIntersectionQuery(
+            objectAId: personaId,
+            objectAType: 'person',
+            objectBId: homepageId,
+            objectBType: 'homepage',
+          ),
+        ).future,
+      );
+    } catch (error, stackTrace) {
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'content.works_viewer.wishlist_intersection_feedback',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    final wishReason = reasons.isEmpty
+        ? null
+        : reasons.firstWhere(
+            (reason) => reason.kind == 'coWishlistedEntity',
+            orElse: () => reasons.first,
+          );
+    final mutualCount = wishReason == null
+        ? 0
+        : intersectionMutualCountOf(wishReason);
+    if (wishReason == null || mutualCount <= 0) {
+      AppToast.show(context, ObjectHomepageText.wishlistAddedFeedback);
+      return;
+    }
+    AppToast.show(
+      context,
+      ObjectHomepageText.wishlistSharedFeedback(mutualCount),
+      actionLabel: ObjectHomepageText.wishlistSharedFeedbackViewAction,
+      onAction: () {
+        if (!mounted) return;
+        context.push(AppRoutePaths.homepageDetail(id: homepageId));
+      },
+    );
+  }
 }

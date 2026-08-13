@@ -61,9 +61,9 @@ abstract final class MediaText {
   static const String imageEditorProWarmth = '暖色调';
   static const String imageEditorProTone = '色调';
   static const String imageEditorProGrain = '颗粒';
+  static const String imageEditorProDenoise = '降噪';
   static const String imageEditorProFade = '褪色';
   static const String imageEditorProSharpen = '锐化';
-  static const String imageEditorProDenoise = '降噪';
   static const String imageEditorProUnsharpen = '反锐化';
   static const String imageEditorProPerspective = '透视';
   static const String imageEditorProHeal = '修复';
@@ -98,6 +98,8 @@ abstract final class MediaText {
   static const String imageEditorProTabLocal = '局部';
   static const String imageEditorProTabHsl = 'HSL';
   static const String imageEditorProTabBwLevels = '黑白色阶';
+  static const String imageEditorProPerspectiveHorizontal = '水平透视';
+  static const String imageEditorProPerspectiveVertical = '垂直透视';
   static const String imageEditorProHue = '色相';
   static const String imageEditorProLuminance = '明度';
   static const String imageEditorProStructure = '结构';

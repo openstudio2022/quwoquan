@@ -139,6 +139,25 @@ final class ImageEditorProHslStepPayload extends ImageEditorStepPayload {
   String get label => MediaText.imageEditorProTabHsl;
 }
 
+final class ImageEditorProPerspectiveStepPayload extends ImageEditorStepPayload {
+  const ImageEditorProPerspectiveStepPayload({
+    required this.horizontal,
+    required this.vertical,
+  });
+
+  final double horizontal;
+  final double vertical;
+
+  @override
+  String get toolType => 'proTools';
+
+  @override
+  String get subType => 'perspectiveAdjustments';
+
+  @override
+  String get label => MediaText.imageEditorProPerspective;
+}
+
 final class ImageEditorProBwLevelsStepPayload extends ImageEditorStepPayload {
   const ImageEditorProBwLevelsStepPayload({
     required this.whiteLevel,

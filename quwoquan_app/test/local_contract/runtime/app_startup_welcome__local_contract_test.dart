@@ -34,7 +34,7 @@ import '../../support/runtime/errors/runtime_failure_fixtures.dart';
 import '../../support/runtime/observability/recording_app_telemetry_recorder.dart';
 import '../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
 /// 以固定行为代理 refresh 的会话生命周期写面（logout 不参与启动链路断言）。
 final class _StubSessionLifecycleWriter
@@ -84,7 +84,7 @@ void main() {
     return [
       ...sealedCloudBoundaryOverrides(),
       visitRecorderServiceProvider.overrideWithValue(VisitRecorderService()),
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       authSessionStoreProvider.overrideWithValue(authStore),
       appTelemetryReporterProvider.overrideWithValue(
         RecordingAppTelemetryRecorder(),

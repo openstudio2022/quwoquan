@@ -179,7 +179,7 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：尚缺 Prod 真实 Elasticsearch 接收、Android/iPhone 本地加密队列和真机补报证据的共同闭合；恢复异常必须严格保持十字段，并与产品事件和身份事实完全隔离。
-- 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效
+- 完成判定：`SIT-003` 的 2 条 THEN 组全部具备子句级 `spec_ref`（`sit-003.t1..t2`）绑定的真实测试证据，且补报证据必须来自 Android/iPhone 真机本地加密队列，Prod 接收侧以真实 Elasticsearch readback 证明。
 
 <a id="open-005"></a>
 ### OPEN-005 推荐反馈单出口与一次生效
@@ -197,7 +197,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：关键业务对象缺指标、告警或看板绑定时，无法按对象判断错误、延迟和转化异常。
-- 完成判定：关键对象 operation/event 的 metric、告警和 dashboard 可由 metadata 与运行证据双向定位。
+- 完成判定：`SIT-001` 的黄金指标机器目录分项与 `SIT-002` 的查询门面、告警分项对应行为满足——关键对象 operation/event 的 metric、告警和 dashboard 可由 metadata 与运行证据双向定位。
 
 <a id="open-007"></a>
 ### OPEN-007 多领域行为漏斗与推荐归因完整性
@@ -205,18 +205,45 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：缺失端侧行为事件会使 Journey 漏斗和推荐反馈无法归因。
-- 完成判定：AppRoot 关键 Journey 的行为事件、公共归因字段和推荐反馈均通过目录、代码与真实事件证据校验。
+- 影响或价值：缺失端侧行为事件会使 Journey 漏斗和推荐反馈无法归因。交集飞轮 Journey 已收窄：App `product_action` 轨补齐 `gathering_flywheel` journey 埋点——gathering join/apply/accept-invitation 与 publish 成功、促成通知打开（`notification_facilitation_open`），widget 正例断言在案（`gathering_funnel_tracking__local_contract_test.dart`），埋点失败不阻断主流程；该轨只作体验辅证，北极星三比例分子分母真相源为 rec 漏斗读面（见 `analytics-metric-dictionary` REQ-003）。`content_publication` 的 recap 维度扩展经裁决不做：目录扩展字段为闭集治理且比例②已由域事实精确度量，辅证价值不抵目录演进成本。
+- 完成判定：`SIT-001` 的九字段目录分项与 `SIT-004` 的推荐反馈单出口分项对应行为满足——AppRoot 关键 Journey 的行为事件、公共归因字段和推荐反馈均通过目录、代码与真实事件证据校验。
 
 <a id="open-008"></a>
-### OPEN-008 匿名恢复异常入口的来源限流是每副本进程内窗口，不构成权威准入
+### OPEN-008 匿名恢复异常准入上收已实现，缺真实边界收据
 
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：当前 `/ops/recovery-failures` 的匿名来源限流由 `product_ops.recovery_failure` 的 inbound HTTP adapter 在进程内以固定窗口计数承担，窗口状态只存在于单个副本的内存里。多副本部署时每个副本各自计一份窗口，同一来源的实际准入上限随副本数放大，因此该限流不是权威准入，只是单副本内的自保。
-- 匿名入口的性质决定这不是纯运维问题：该端点不要求身份，来源键只能取自连接层地址，一旦准入上限失真，异常上报量就可能超出日志端口的容量预期并挤占正常产品事件的写入。
-- 副本重启会丢失全部窗口状态，因此同一来源可以通过触发或等待实例替换重新取得完整配额，限流结论不具有跨副本或跨重启的可复现性。
-- 长期修向是把匿名来源限流上收到 api-edge 的准入策略，由已拥有共享限流状态的边缘层按来源统一裁决，`product_ops.recovery_failure` 的 inbound adapter 退回为只做载荷校验。在上收完成前不得把进程内窗口描述为准入保证，也不得据它放宽日志端口的容量预算。
-- 完成判定：`SIT-005` 通过，匿名恢复异常入口的来源准入由 api-edge 侧的共享限流状态裁决，多副本下同一来源的实际准入上限与声明上限一致，并有直接绑定该行为的 local_contract 与真实边界收据。
-- 依赖：api-edge `edge_security/rate_limit_bucket` 的共享限流状态与匿名来源键定义。
+- 影响或价值：尚缺 `SIT-005` 要求的真实边界收据——多副本环境下同一来源的
+  实际准入上限与声明上限一致的运行证据尚未产出。匿名来源准入已上收
+  api-edge 共享 admission：`rate_limit.operation.ops_recovery_failure_report`
+  （四环境 config 已声明，subject 为可信连接层 IP 的 `network` kind，跨副本 Redis 裁决），
+  `product_ops.recovery_failure` 的 inbound adapter 已退回只做载荷校验并有
+  local_contract 锁定该职责边界
+  （edge 侧 override 权威性与同来源单桶断言、服务侧无本地窗口断言均已绑定）。
+- 完成判定：`SIT-005` 通过——在真实环境（gamma 起）以同一来源打超过
+  声明上限的恢复异常上报，api-edge 返回受控限流拒绝且 product-ops 写入
+  量不超过声明上限，收据落 `.qwq_output/env/<env>/runs/**`。
+- 依赖：环境验证窗口（stackctl verify / api_integration 边界执行）。
+
+<a id="open-011"></a>
+### OPEN-011 ES 告警评估循环缺四环境启用收据
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：尚缺四环境的告警链启用运行收据。已具备的能力：
+  rollups.yaml 全部 13 个 rowKind 的写侧聚合、product-ops 内建的
+  ES 告警评估循环，均有 local_contract 代数测试与真实 ES 容器按
+  rowKind 读回证据。尚缺的证据：评估循环按配置关闭启动，四环境
+  尚未投放策略 configMap 与 telemetry_alerts 配置，线上告警面未激活，
+  没有任何环境的启动日志与投递演练收据。
+- 完成判定：`SIT-002` 的告警分项在四环境逐一通过，gamma 起步。
+  每个环境需要三份证据：投放 `product-ops-telemetry-alert-policy`
+  configMap 与 telemetry_alerts 配置的部署记录、评估循环启动日志、
+  一次 alert drill 投递收据，全部落 `.qwq_output/env/<env>/runs/**`。
+- 依赖：环境部署窗口，与 `OPEN-001` 的 ES Provider 证据同窗执行；
+  环境包准入已升级为要求 canonical `quwoquan_data.release_attestation`，
+  窗口执行时须由环境 owner 一并携带（自建窗口在 alpha 端口被占、
+  beta/alpha 准入未携带 attestation、gamma 被持续占用下不可行，
+  归因收据见 `.qwq_output/env/alpha/runs/telemetry-alert-window-attempt-20260813/`）。

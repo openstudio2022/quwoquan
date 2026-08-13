@@ -91,3 +91,12 @@
 - 影响或价值：尚缺实现或直接 `spec_ref`。
 - 目标：客户端可见域均通过 metadata/codegen 输出结构化错误；content 不再保留 sentinel-only 豁免。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-002"></a>
+### OPEN-002 各域错误 codegen 文案形态不齐与单语直读
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：当前各域生成错误码形态不一致——`UserErrorCode` 携带 zh/en + `recoveryAction`/`disruptionLevel`/`messageForLocale`，而 `SearchErrorCode`/`TagErrorCode`/`OpsEventRecordErrorCode` 只有单语 `defaultMessage`+`httpStatus`，`Content` 另用 `ContentErrorMessages` Map。导致同一错误码在不同消费点文案能力不同；`upload_policy` 等无 context 的 application 层只能直读 `ContentErrorMessages.zh`，无法随 locale 切换。
+- 完成判定：`SIT-001` 对应行为满足——codegen 模板对全部客户端可见域输出统一形态（zh/en + recovery/disruption + `messageForLocale`），`DomainErrorCodeRegistry` 与 `UiErrorSemanticResolver` 消费统一形态，application 层策略校验类文案支持 locale 注入或返回错误码由 presentation 解析，且真实测试 `spec_ref` 有效。

@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_learning_fact/application/assistant_learning_fact_outbox.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_request_headers.dart';
 import 'package:quwoquan_app/runtime/context/actor_queue_partition.dart';
@@ -67,11 +67,13 @@ final class AssistantLearningFactOutboxNotifier extends Notifier<int> {
         _scheduleRetry(pendingCount);
       }
     } catch (error, stackTrace) {
-      developer.log(
-        'assistant learning fact outbox flush failed',
-        name: 'assistant_learning_fact_outbox',
-        error: error,
-        stackTrace: stackTrace,
+      // 学习事实同步失败静默会让助手个性化盲区不可发现，必须结构化上报。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'assistant.learning_fact_outbox.flush',
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }
@@ -91,11 +93,12 @@ final class AssistantLearningFactOutboxNotifier extends Notifier<int> {
         await flush();
       }
     } catch (error, stackTrace) {
-      developer.log(
-        'assistant learning fact outbox restore failed',
-        name: 'assistant_learning_fact_outbox',
-        error: error,
-        stackTrace: stackTrace,
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'assistant.learning_fact_outbox.restore',
+          error: error,
+          stackTrace: stackTrace,
+        ),
       );
     }
   }

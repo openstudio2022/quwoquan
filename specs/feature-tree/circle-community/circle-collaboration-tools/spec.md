@@ -89,3 +89,40 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`；目标：CircleGroup 创建、成员状态机、Chat 名册/Inbox、反向绑定、DLQ/health 与客户端终态体验可端到端验证。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-003"></a>
+### OPEN-003 SCN-014 主旅程 Gamma 双端 UAT 的环境与设备前置
+
+- 类型：`external_blocker`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：SCN-014「实体主页→圈子→群聊→建联」主旅程与审批页 UAT 需要健康的
+  `gamma-local` 栈与 Android/iPhone 物理真机。当前 `gamma-local` compose up 失败的
+  直接根因已定位：`recommendation-service` 容器启动即退出
+  （exit 3，`main.py` bootstrap runtime contract fail-fast），
+  拖垮依赖链后 stackctl 按治理拆栈，
+  健康检查停在 `startup Provider runtime identity is not current`；修复归
+  recommendation 服务属地（其正在重建镜像迭代）。本机仅连接模拟器、无物理真机。
+  绑定链上 api_integration 证据（binding-sync GWT-001..GWT-012 全子句）已闭合，
+  SCN-014 主旅程 API journey runner 已落
+  `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/circle-service/`
+  （smoke probe + gamma 聚合器 + ActorLease handoff 投影，缺 handoff 时如实 blocked），
+  实体页「近期行动」App Remote 合同 runner 亦已落
+  `quwoquan_app/test/api_integration/service/circle_service/circle_management/gathering/gathering_list_by_source_remote__api_integration_test.dart`；
+  环境恢复后两者可直接执行。推荐流仍在循环迭代其启动修复（多轮 rebuild + package + up 中）。
+- 完成判定：`SIT-001` 的端到端子句由 `gamma-local` user_acceptance 直接绑定：
+  `stackctl health --scope full` 通过后，UAT runner 落入 `service_ops` 验收树内新建的
+  circle-service gamma 目录（capability request 经 `stackctl verify` 创建隔离 Actor，禁止 fixture/seed），
+  主旅程步步公开读面断言并产出双端 ResultBundle；物理真机由运维接入后执行。
+
+<a id="open-002"></a>
+### OPEN-002 圈子资料的群空间入口挂载
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前圈子资料暂无用户可达入口，需在圈群会话空间（群设置/群空间）挂载资料入口后才可达；
+  圈子主页讨论 Tab 已按「群层以交流、资料、公告为主」收敛为纯群聊入口（metadata `circle/ui_config.yaml` 已移除 discussion 的 storage 板块），`SectionStorage` 组件与 `circle_file` typed contract 保留待复用。
+- 完成判定：`SIT-001` 的客户端终态体验子句被真实测试 `spec_ref` 覆盖，且其中包含
+  圈群会话空间资料入口可达（复用 `circle_file` typed 读写链）与 BOLA 边界断言；
+  挂载落点归聊天会话（群组及空间）工作流。

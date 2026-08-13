@@ -4,21 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/presentation/group_admins_page.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_seed_refs.dart';
 
 const _testConvId = 'fixture_conv_group';
 
-Widget _scopedApp({ChatRepository? mock}) {
-  final repo = mock ?? MockChatRepository();
+Widget _scopedApp({ChatMemberRepository? member}) {
   return ProviderScope(
     overrides: [
-      chatRepositoryCompositionProvider.overrideWithValue(repo),
+      ...chatTestRepositoryOverrides(member: member),
       currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
     ],
     child: MaterialApp.router(
@@ -92,7 +91,7 @@ void main() {
 
     testWidgets('初始管理员显示管理员标签', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp());
+      await tester.pumpWidget(_scopedApp(member: _AdminSeedMembersRepo()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -167,7 +166,7 @@ void main() {
   group('GroupAdminsPage — 错误态渲染', () {
     testWidgets('listMembers 失败时页面不崩溃', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp(mock: _ErrorMembersRepo()));
+      await tester.pumpWidget(_scopedApp(member: _ErrorMembersRepo()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -176,7 +175,7 @@ void main() {
 
     testWidgets('空成员列表时安全渲染', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp(mock: _EmptyMembersRepo()));
+      await tester.pumpWidget(_scopedApp(member: _EmptyMembersRepo()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -185,27 +184,72 @@ void main() {
   });
 }
 
-class _ErrorMembersRepo extends MockChatRepository {
+/// 含初始管理员的成员名册（最小共享 seed 不再内置 admin 角色成员）。
+class _AdminSeedMembersRepo extends Fake implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
+  }) async {
+    return <ConversationMemberListRow>[
+      ConversationMemberListRow(
+        userId: chatCurrentUserProfileId(),
+        userHandle: '',
+        displayName: '当前群主',
+        avatarUrl: '',
+        role: 'owner',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: true,
+      ),
+      const ConversationMemberListRow(
+        userId: 'fixture_user_weekend_1',
+        userHandle: 'fixture_user_weekend_1',
+        displayName: '契约同伴一',
+        avatarUrl: '',
+        role: 'admin',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: false,
+      ),
+      const ConversationMemberListRow(
+        userId: 'fixture_user_weekend_2',
+        userHandle: 'fixture_user_weekend_2',
+        displayName: '契约同伴二',
+        avatarUrl: '',
+        role: 'member',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: false,
+      ),
+    ];
+  }
+}
+
+class _ErrorMembersRepo extends Fake implements ChatMemberRepository {
+  @override
+  Future<List<ConversationMemberListRow>> listMembers({
+    required String conversationId,
+    String? cursor,
+    int limit = 20,
+    String? role,
+    MemberListSort? sort,
   }) async {
     throw Exception('network error');
   }
 }
 
-class _EmptyMembersRepo extends MockChatRepository {
+class _EmptyMembersRepo extends Fake implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     return [];
   }

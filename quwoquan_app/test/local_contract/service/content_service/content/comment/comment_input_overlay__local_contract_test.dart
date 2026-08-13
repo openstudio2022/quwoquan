@@ -32,7 +32,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/runtime/transport/recording_content_media_facet.dart';
 import '../../../../../support/service/content_service/content/comment/in_memory_content_comment_facet.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/runtime/errors/runtime_failure_fixtures.dart';
 
 class _AuthenticatedSession extends AuthSessionController {
@@ -64,7 +64,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          ...mockContentFacetOverrides(MockContentRepository()),
+          ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
           analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
         ],
         child: CupertinoApp(
@@ -215,7 +215,7 @@ Widget _overlayHarness({
 }) {
   return ProviderScope(
     overrides: [
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
       activePersonaContextProvider.overrideWith(
@@ -255,12 +255,12 @@ Widget _overlayHarness({
 /// 提交必须经 typed command，然后从权威查询投影回读，不构造兼容 DTO。
 Future<void> testCommentSubmitThroughProvider() async {
   SharedPreferences.setMockInitialValues(const <String, Object>{});
-  final repo = MockContentRepository();
+  final store = InMemoryContentPostStore();
   final comments = InMemoryContentCommentFacet();
   const postId = 'home_showcase_photo_landscape_single';
   final container = ProviderContainer(
     overrides: [
-      ...mockContentFacetOverrides(repo, commentFacet: comments),
+      ...mockContentFacetOverrides(store: store, commentFacet: comments),
       analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
       authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
       activePersonaContextProvider.overrideWith(
@@ -302,7 +302,7 @@ Future<void> testCommentComposerMentionsAndAttachment(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        ...mockContentFacetOverrides(MockContentRepository()),
+        ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
         analyticsProvider.overrideWithValue(AnalyticsService.forTesting()),
         authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
         imagePickGatewayProvider.overrideWithValue(

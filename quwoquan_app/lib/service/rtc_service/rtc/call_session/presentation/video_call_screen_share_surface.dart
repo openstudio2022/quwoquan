@@ -24,7 +24,9 @@ class VideoCallScreenShareSurface extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  AppRequestFeedback.inline(indicatorColor: AppColors.white),
+                  AppRequestFeedback.inline(
+                    indicatorColor: AppColors.immersiveForeground,
+                  ),
                   SizedBox(height: AppSpacing.sm),
                   Text(
                     CallText.callScreenShareConnecting,

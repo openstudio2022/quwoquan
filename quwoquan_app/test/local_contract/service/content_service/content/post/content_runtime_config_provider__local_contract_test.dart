@@ -1,12 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/content_service/content/post/test_content_app_config.dart';
 
-class _RuntimeConfigRepository extends MockContentRepository {
+class _RuntimeConfigRepository implements ContentConfigRepository {
   _RuntimeConfigRepository(this._config);
 
   AppConfigSlice _config;
@@ -17,6 +18,9 @@ class _RuntimeConfigRepository extends MockContentRepository {
 
   @override
   Future<AppConfigSlice> getAppConfig() async => _config;
+
+  @override
+  bool get requiresResolvedPersonaForMutations => false;
 }
 
 AppConfigSlice _remoteConfig(Map<String, Object?> root) {
@@ -50,7 +54,8 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         ...mockContentFacetOverrides(
-          _RuntimeConfigRepository(
+          store: InMemoryContentPostStore(),
+          configRepository: _RuntimeConfigRepository(
             _remoteConfig({
               'content': {
                 'feature_flags': {
@@ -127,7 +132,12 @@ void main() {
       }),
     );
     final container = ProviderContainer(
-      overrides: [...mockContentFacetOverrides(repo)],
+      overrides: [
+        ...mockContentFacetOverrides(
+          store: InMemoryContentPostStore(),
+          configRepository: repo,
+        ),
+      ],
     );
     addTearDown(container.dispose);
 
@@ -173,7 +183,8 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         ...mockContentFacetOverrides(
-          _RuntimeConfigRepository(
+          store: InMemoryContentPostStore(),
+          configRepository: _RuntimeConfigRepository(
             _remoteConfig({
               'content': {
                 'client_state_sync': {

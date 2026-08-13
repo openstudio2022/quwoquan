@@ -8,6 +8,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/application/public/image_editor_filter_models.dart';
+import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/application/public/image_editor_page_params.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/adapters/image_editor_filter_repository.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/media_picker_port.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/create_media_models.dart';
@@ -22,7 +23,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class _FakePickerImageEditorPage extends StatelessWidget {
   const _FakePickerImageEditorPage({required this.result});
 
-  final Map<String, Object> result;
+  final ImageEditorMultiImageDoneResult result;
 
   @override
   Widget build(BuildContext context) {
@@ -193,12 +194,12 @@ void main() {
                           mediaPickerPort: _EmptyMediaPickerPort(),
                           imageEditorBuilder: (context, request) =>
                               _FakePickerImageEditorPage(
-                                result: <String, Object>{
-                                  'index': request.index,
-                                  'path': request.initialPath,
-                                  'paths': request.imagePaths,
-                                  'action': 'continueToCreate',
-                                },
+                                result: ImageEditorMultiImageDoneResult(
+                                  index: request.index,
+                                  path: request.initialPath,
+                                  paths: request.imagePaths,
+                                  action: 'continueToCreate',
+                                ),
                               ),
                           cameraBuilder:
                               (

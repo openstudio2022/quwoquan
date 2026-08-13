@@ -70,7 +70,12 @@ ChatContactsRow chatContactsRowFromContactHomeDto(
       endpointConfig: mediaEndpointConfig,
     ),
     subtitle: kind == ChatContactsRowKind.user
-        ? dto.summaryIntersections.take(2).join(' · ')
+        // typed 交集事实（≤2 条）：只透传云侧 primaryText，端不拼句不改写。
+        ? dto.intersectionFacts
+              .take(2)
+              .map((fact) => fact.primaryText.trim())
+              .where((text) => text.isNotEmpty)
+              .join(' · ')
         : dto.subtitle.trim(),
     relationState: dto.relationState ?? 'not_following',
     source: dto.kind,

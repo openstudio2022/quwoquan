@@ -100,7 +100,7 @@ void main() {
 
     expect(snapshot.nickname, '主分身');
     expect(snapshot.phoneCredential?.isBound, isTrue);
-    expect(card.qrPayload, 'quwoquan://profile/persona-1');
+    expect(card.qrPayload, 'https://quwoquan.example/u/owner?qr=qr-token-1');
     expect(resolved.personaId, 'persona-2');
     expect(
       executor.operationIds,
@@ -278,9 +278,12 @@ const Map<String, Object?> _activeContext = <String, Object?>{
   'switchedAt': '2026-07-20T00:00:00Z',
 };
 
+// canonical 名片 payload = publicWeb `/u/{handle}?qr={token}`（云侧
+// profile_service.go: `qrPayload := publicURL + "?qr=" + escape(rawToken)`）；
+// 旧 deep-link scheme 形式已退役，端侧 requireUsableAt 会 fail-closed。
 const Map<String, Object?> _qrCard = <String, Object?>{
   'publicProfileUrl': 'https://quwoquan.example/u/owner',
-  'qrPayload': 'quwoquan://profile/persona-1',
+  'qrPayload': 'https://quwoquan.example/u/owner?qr=qr-token-1',
   'qrTokenId': 'qr-token-1',
   'avatarUrl': '',
   'displayName': '主分身',

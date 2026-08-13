@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/search_query_contract.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_page_query_facet.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -37,11 +38,14 @@ final class RemoteSearchPageRepository implements SearchRepository {
         sections: const <SearchSection>[],
       );
     }
+    final contentTypes = _searchPageContentTypes(normalized.contentTypes);
     final result = await remoteQuery.searchPage(
       SearchPageInput(
         query: normalized.query,
         first: normalized.limit.clamp(1, _maximumPageItems),
+        after: normalized.cursor,
         objectTypes: objectTypes.isEmpty ? null : objectTypes,
+        contentTypes: contentTypes.isEmpty ? null : contentTypes,
       ),
       cancellation: cancellation,
       deadlineAt: deadlineAt,
@@ -50,6 +54,11 @@ final class RemoteSearchPageRepository implements SearchRepository {
       request: normalized,
       sections: const <SearchSection>[],
       relatedTerms: List<String>.unmodifiable(result.suggestions),
+      matchedTerms: List<String>.unmodifiable(result.matchedTerms),
+      searchRequestId: result.searchRequestId,
+      degradeSignals: List<SearchDegradeSignal>.unmodifiable(
+        result.degradeSignals.map(_degradeSignalFromWire),
+      ),
       pageItems: List<SearchPageResultItem>.unmodifiable(
         result.items.map(SearchPageResultItem.fromWireSlice),
       ),
@@ -76,5 +85,28 @@ final class RemoteSearchPageRepository implements SearchRepository {
     }
     final sorted = values.toList()..sort();
     return List<String>.unmodifiable(sorted);
+  }
+
+  List<String> _searchPageContentTypes(Set<SearchContentTypeFilter> requested) {
+    final values = <String>{};
+    for (final contentType in requested) {
+      final value = switch (contentType) {
+        SearchContentTypeFilter.article ||
+        SearchContentTypeFilter.micro => SearchPageContentType.article,
+        SearchContentTypeFilter.image => SearchPageContentType.image,
+        SearchContentTypeFilter.video => SearchPageContentType.video,
+      };
+      values.add(value.wireName);
+    }
+    final sorted = values.toList()..sort();
+    return List<String>.unmodifiable(sorted);
+  }
+
+  SearchDegradeSignal _degradeSignalFromWire(SearchPageDegradeSignal value) {
+    return SearchDegradeSignal(
+      code: value.code,
+      message: value.message,
+      objectType: SearchObjectType.fromWire(value.objectType),
+    );
   }
 }

@@ -116,6 +116,23 @@ class RealtimeMessageHandler {
         return;
 
       case 'ConversationReadWatermarkAdvanced':
+        if (conversationId.isEmpty) return;
+        final readerUserId = (payload['userId'] as String? ?? '').trim();
+        final readSeqRaw = payload['readSeq'];
+        final readSeq = readSeqRaw is int
+            ? readSeqRaw
+            : int.tryParse(readSeqRaw?.toString() ?? '') ?? 0;
+        if (readerUserId.isEmpty || readSeq <= 0) return;
+        final currentUserId = _currentUserIdResolver().trim();
+        if (currentUserId.isNotEmpty && readerUserId == currentUserId) {
+          // 自己在其它设备读了：本地未读角标以服务端投影为准，刷新缓存。
+          _refreshConversationCache(conversationId);
+          return;
+        }
+        // 对端读位推进 → 1v1 双勾实时翻转（群聊指示器按 memberCount 保持单勾）。
+        _read(
+          chatMessageTimelineControllerProvider(conversationId),
+        ).advancePeerReadSeq(readSeq);
         return;
 
       case 'ConversationMemberAdded':
@@ -163,7 +180,7 @@ class RealtimeMessageHandler {
         return;
 
       case 'Reconnected':
-        _onReconnected();
+        _onReconnected(conversationId);
         return;
 
       default:
@@ -304,7 +321,7 @@ class RealtimeMessageHandler {
   }
 
   /// WS 重连成功 → 触发消息 seq gap 补全 + 会话列表同步
-  void _onReconnected() {
+  void _onReconnected(String conversationId) {
     _reconnectRecoveryTimer?.cancel();
     _reconnectRecoveryTimer = Timer(const Duration(milliseconds: 200), () {
       try {
@@ -312,6 +329,7 @@ class RealtimeMessageHandler {
         unawaited(syncService.sync(force: true));
         _scheduleAvatarPatchSync();
         unawaited(_read(localChatSearchSyncProvider).sync(force: true));
+        _recoverConversationSeqGap(conversationId);
       } catch (error, stackTrace) {
         // 重连补全失败若静默即丢消息不可观测：必须上报，由下一次心跳/重连兜底。
         unawaited(
@@ -323,6 +341,29 @@ class RealtimeMessageHandler {
         );
       }
     });
+  }
+
+  /// 恢复事件携带活跃会话时，以端侧已持有的最大 seq 为起点向服务端补齐缺口；
+  /// 补齐结果与实时推送经同一去重链路合并（reliability REQ-003/REQ-008）。
+  void _recoverConversationSeqGap(String conversationId) {
+    if (conversationId.isEmpty) {
+      return;
+    }
+    final controller = _read(
+      chatMessageTimelineControllerProvider(conversationId),
+    );
+    var localMaxSeq = 0;
+    for (final message
+        in _read(chatMessageTimelineProvider(conversationId)).messages) {
+      if (message.seq > localMaxSeq) {
+        localMaxSeq = message.seq;
+      }
+    }
+    if (localMaxSeq > 0) {
+      unawaited(controller.syncFromSeq(localMaxSeq));
+    } else {
+      unawaited(controller.loadMessages());
+    }
   }
 
   void _scheduleAvatarPatchSync() {

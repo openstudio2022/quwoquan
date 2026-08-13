@@ -14,37 +14,19 @@
 // readiness_case: homepage_suggest_homepage_candidate_app_api
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
-import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
-import 'package:quwoquan_app/runtime/di/entity_dependencies.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
-import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
-import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
-import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/application/homepage_operation_ports.dart';
-import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
-import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../../support/runtime/api_contract/production_cloud_operation_telemetry_evidence.dart';
+import '../../../../../support/runtime/api_contract/entity_api_contract_harness.dart';
 
-const _apiContractEnv = String.fromEnvironment(
-  'API_CONTRACT_ENV',
-  defaultValue: 'gamma',
-);
-const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
-const _deviceId = 'entity-homepage-api-contract-device';
-const _missingHomepageId = 'nonexistent_homepage_api_contract_000000';
-
-_HomepageApiContractHarness? _harness;
+EntityApiContractHarness? _harness;
 late HomepageSearchItemView _publishedHomepage;
 
-_HomepageApiContractHarness get _api => _harness!;
+EntityApiContractHarness get _api => _harness!;
 
 void main() {
   setUpAll(() async {
-    _harness = await _HomepageApiContractHarness.create();
+    _harness = await EntityApiContractHarness.create();
     _publishedHomepage = await _api.acquirePublishedHomepage();
   });
   tearDownAll(() => _harness?.close());
@@ -211,7 +193,7 @@ void main() {
 
       final created = await _api.withIdempotencyKey(
         idempotencyKey,
-        () => _api.command.suggest(command),
+        () => _api.candidateWriter.suggest(command),
       );
       expect(created.homepageId, isNotEmpty);
       expect(created.title, command.title);
@@ -224,7 +206,7 @@ void main() {
 
       final replayed = await _api.withIdempotencyKey(
         idempotencyKey,
-        () => _api.command.suggest(command),
+        () => _api.candidateWriter.suggest(command),
       );
       expect(replayed.homepageId, created.homepageId);
       expect(replayed.toWire(), created.toWire());
@@ -241,7 +223,7 @@ void main() {
         code: 'ENTITY.USER.invalid_homepage_type',
         invoke: () => _api.withIdempotencyKey(
           '$idempotencyKey-invalid',
-          () => _api.command.suggest(
+          () => _api.candidateWriter.suggest(
             SuggestHomepageCandidateCommand(
               title: '${command.title}非法类型',
               homepageType: 'invalid-homepage-type',
@@ -284,7 +266,7 @@ Future<void> _verifyRead<T>({
     operationId: operationId,
     statusCode: 404,
     code: 'ENTITY.USER.homepage_not_found',
-    invoke: () => invoke(_missingHomepageId),
+    invoke: () => invoke('${_publishedHomepage.homepageId}-missing'),
   );
 }
 
@@ -313,275 +295,4 @@ Future<void> _expectCanonicalFailure({
   );
   expect(event.requestId, captured.requestId);
   expect(event.traceId, captured.traceId);
-}
-
-final class _HomepageApiContractHarness {
-  _HomepageApiContractHarness._({
-    required this._httpClient,
-    required this.telemetry,
-    required this.query,
-    required this.introduction,
-    required this.command,
-    required this._accountLifecycle,
-    required this.session,
-    required this._setIdempotencyKey,
-  });
-
-  static Future<_HomepageApiContractHarness> create() async {
-    if (_apiBase.isEmpty) {
-      throw StateError('L3: API_CONTRACT_BASE_URL not set');
-    }
-    final environment = CloudEnvironment.values.firstWhere(
-      (candidate) => candidate.name == _apiContractEnv,
-      orElse: () =>
-          throw StateError('Unsupported API_CONTRACT_ENV: $_apiContractEnv'),
-    );
-    final tokenProvider = _MutableAccessTokenProvider();
-    final httpClient = CloudHttpClient(authTokenProvider: tokenProvider);
-    const clientContext = _EntityHomepageApiClientContext();
-    final telemetry = await ProductionCloudOperationTelemetryEvidence.start(
-      clientContextProvider: clientContext,
-    );
-    final client = buildGeneratedCloudOperationClient(
-      httpClient: httpClient,
-      clientContextProvider: clientContext,
-      telemetrySink: telemetry.sink,
-      environment: CloudRuntimeEnvironment(
-        environment: environment,
-        gatewayBaseUri: Uri.parse(_apiBase),
-      ),
-    );
-
-    try {
-      AuthSessionGrant? session;
-      String? activeIdempotencyKey;
-      CloudOperationInvocationContext invocationContext(
-        AppUiSurface surface,
-        String clientPageId, {
-        String? idempotencyKey,
-      }) => CloudOperationInvocationContext(
-        surfaceId: surface.id,
-        routeId: surface.routeId,
-        clientPageId: clientPageId,
-        idempotencyKey: idempotencyKey,
-        actor: CloudOperationActorContext(
-          accountId: session!.ownerId,
-          personaId: session.activePersona?.personaId,
-          deviceActorId: _deviceId,
-        ),
-      );
-
-      final accountSessions = RemoteAccountSessionCommandWriter(
-        client: client,
-        invocationContext: (clientPageId) =>
-            invocationContext(AppUiSurfaces.appShell, clientPageId),
-      );
-      session = await accountSessions.loginAnonymous(
-        LoginAnonymousCommand(
-          installId:
-              'entity-homepage-api-${DateTime.now().microsecondsSinceEpoch}',
-          deviceFingerprintHash:
-              'entity-homepage-api-${DateTime.now().microsecondsSinceEpoch}',
-          platform: 'web',
-          appVersion: 'api-integration',
-        ),
-      );
-      tokenProvider.accessToken = session.accessToken;
-      if (session.activePersona?.personaId.trim().isNotEmpty != true) {
-        throw StateError('L3: candidate session has no active persona');
-      }
-
-      final queries = EntityProductionComposition.homepageQueryFacets(
-        client: client,
-        detailInvocationContext: (clientPageId, {cancellation, deadlineAt}) =>
-            invocationContext(AppUiSurfaces.homepageDetail, clientPageId),
-        introductionInvocationContext:
-            (clientPageId, {cancellation, deadlineAt}) => invocationContext(
-              AppUiSurfaces.homepageIntroduction,
-              clientPageId,
-            ),
-        searchInvocationContext: (clientPageId, {cancellation, deadlineAt}) =>
-            invocationContext(AppUiSurfaces.homepagePicker, clientPageId),
-      );
-      final commands = EntityProductionComposition.homepageCommandFacets(
-        client: client,
-        invocationContext: (clientPageId, surface) => invocationContext(
-          surface,
-          clientPageId,
-          idempotencyKey:
-              activeIdempotencyKey ??
-              (throw StateError(
-                '$clientPageId requires an explicit idempotency scope',
-              )),
-        ),
-        claimRequestInvocationContext:
-            (clientPageId, surface, {idempotencyKey}) => invocationContext(
-              surface,
-              clientPageId,
-              idempotencyKey:
-                  idempotencyKey ??
-                  activeIdempotencyKey ??
-                  (throw StateError(
-                    '$clientPageId requires an explicit idempotency scope',
-                  )),
-            ),
-        statusReportInvocationContext:
-            (clientPageId, surface, {idempotencyKey}) => invocationContext(
-              surface,
-              clientPageId,
-              idempotencyKey:
-                  idempotencyKey ??
-                  activeIdempotencyKey ??
-                  (throw StateError(
-                    '$clientPageId requires an explicit idempotency scope',
-                  )),
-            ),
-      );
-      final accountLifecycle = RemoteAccountLifecycleCommandWriter(
-        client: client,
-        invocationContext: (clientPageId) => invocationContext(
-          AppUiSurfaces.settingsAccountSecurity,
-          clientPageId,
-          idempotencyKey: 'entity-homepage-api-cleanup-${session?.ownerId}',
-        ),
-      );
-      return _HomepageApiContractHarness._(
-        httpClient: httpClient,
-        telemetry: telemetry,
-        query: queries.query,
-        introduction: queries.introduction,
-        command: commands.candidateWriter,
-        accountLifecycle: accountLifecycle,
-        session: session,
-        setIdempotencyKey: (value) => activeIdempotencyKey = value,
-      );
-    } catch (_) {
-      httpClient.close();
-      await telemetry.dispose();
-      rethrow;
-    }
-  }
-
-  final CloudHttpClient _httpClient;
-  final ProductionCloudOperationTelemetryEvidence telemetry;
-  final HomepageQueryFacet query;
-  final HomepageIntroductionQuery introduction;
-  final HomepageCandidateCommandWriter command;
-  final RemoteAccountLifecycleCommandWriter _accountLifecycle;
-  final AuthSessionGrant session;
-  final void Function(String? value) _setIdempotencyKey;
-  var _observedEventCount = 0;
-  var _idempotencyScopeActive = false;
-
-  Future<HomepageSearchItemView> acquirePublishedHomepage() async {
-    final slice = await query.searchHomepages(
-      HomepageSearchQuery(
-        query: '北京',
-        status: HomepageStatus.published.wireName,
-        limit: 50,
-      ),
-    );
-    await expectTelemetry(
-      AppCloudOperationIds.entityHomepageSearchHomepages,
-      succeeded: true,
-      statusCode: 200,
-    );
-    final candidates = slice.items.where(
-      (item) =>
-          item.status == HomepageStatus.published &&
-          item.homepageId.isNotEmpty &&
-          item.canonicalEntityId.isNotEmpty &&
-          item.title.isNotEmpty &&
-          item.ratingCount > 0,
-    );
-    if (candidates.isEmpty) {
-      throw StateError(
-        'L3: production Search returned no authoritative published homepage',
-      );
-    }
-    return candidates.first;
-  }
-
-  Future<T> withIdempotencyKey<T>(
-    String idempotencyKey,
-    Future<T> Function() operation,
-  ) async {
-    final normalized = idempotencyKey.trim();
-    if (normalized.isEmpty) {
-      throw ArgumentError.value(idempotencyKey, 'idempotencyKey');
-    }
-    if (_idempotencyScopeActive) {
-      throw StateError('nested homepage API idempotency scope is not allowed');
-    }
-    _idempotencyScopeActive = true;
-    _setIdempotencyKey(normalized);
-    try {
-      return await operation();
-    } finally {
-      _setIdempotencyKey(null);
-      _idempotencyScopeActive = false;
-    }
-  }
-
-  Future<ProductionCloudOperationTelemetryEvent> expectTelemetry(
-    String operationId, {
-    required bool succeeded,
-    required int statusCode,
-  }) async {
-    final events = await telemetry.waitForEvents(
-      minimumCount: _observedEventCount + 1,
-    );
-    final matching = events
-        .skip(_observedEventCount)
-        .where((event) => event.canonicalOperationId == operationId)
-        .toList(growable: false);
-    _observedEventCount = events.length;
-    if (matching.isEmpty) {
-      throw StateError(
-        'production telemetry did not emit a fresh $operationId event',
-      );
-    }
-    final event = matching.last;
-    expect(event.succeeded, succeeded);
-    expect(event.statusCode, statusCode);
-    expect(event.requestId, isNotEmpty);
-    expect(event.traceId, isNotEmpty);
-    return event;
-  }
-
-  Future<void> close() async {
-    try {
-      await _accountLifecycle.closeAccount(
-        CloseAccountCommand(
-          clientRequestId: 'entity-homepage-api-cleanup-${session.ownerId}',
-        ),
-      );
-    } finally {
-      _httpClient.close();
-      await telemetry.dispose();
-    }
-  }
-}
-
-final class _MutableAccessTokenProvider implements CloudAuthTokenProvider {
-  String? accessToken;
-
-  @override
-  Future<String?> getAccessToken() async => accessToken;
-}
-
-final class _EntityHomepageApiClientContext
-    implements CloudClientContextProvider {
-  const _EntityHomepageApiClientContext();
-
-  @override
-  CloudClientContextSnapshot snapshot() {
-    return const CloudClientContextSnapshot(
-      sessionId: 'entity-homepage-api-contract',
-      deviceActorId: _deviceId,
-      platform: 'web',
-      appVersion: 'api-integration',
-      locale: 'zh-CN',
-    );
-  }
 }

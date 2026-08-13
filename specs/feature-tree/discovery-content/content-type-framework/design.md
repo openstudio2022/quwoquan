@@ -34,6 +34,22 @@
 - 影响 Story：[`creation-mode-and-surface-ia-unification`](./creation-mode-and-surface-ia-unification/spec.md)、[`creation-tagging-ia`](./creation-tagging-ia/spec.md)、[`markdown-article-kernel`](./markdown-article-kernel/spec.md)、[`unified-presentation-model`](./unified-presentation-model/spec.md)
 - 关联验收：`SIT-001`
 
+<a id="dec-002"></a>
+### DEC-002 创作工作台壳层使用 CupertinoPageScaffold 而非 AppScaffold
+
+- 决策：`CreatePage`（`content.create`）壳层保留 `CupertinoPageScaffold` + 页面内自建透明
+  `Material` ancestor，不收敛到 `AppScaffold`。
+- 理由：创作工作台是 iOS 原生沉浸编辑面（全屏编辑器、键盘联动工具条、Cupertino 导航语义），`CupertinoPageScaffold` 是 iOS 语义 v1 的正确基座；`AppScaffold` 面向常规内容页的
+  统一 chrome（顶栏/背景/安全区约定），对编辑器场景反而引入多余层级。页面横向质量矩阵
+  对壳层的要求以「语义 token + 双模式 + 安全区正确」为准，不强制单一 Widget 基座。
+- 被否决方案：把 `CreatePage` 包进 `AppScaffold`（多余 chrome 层且破坏编辑器沉浸布局）；为编辑器新建第三种页面壳（违反材质单层单义与壳层单轨）。
+- 约束与影响：`CreatePage` 及其 embedded 子页（排版预览、选圈、选位置）继续满足
+  design token、双模式、44×44 热区与 i18n 约束；透明 Material ancestor 只允许由
+  `CreatePage` 壳层提供一次，子组件不得再自建。
+- 关联要求：`REQ-001`
+- 影响 Story：[`creation-mode-and-surface-ia-unification`](./creation-mode-and-surface-ia-unification/spec.md)
+- 关联验收：`SIT-001`
+
 ## 5. 失败与恢复
 
 - 失败类型：权限拒绝、依赖超时、版本冲突或持久化失败。

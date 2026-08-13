@@ -6,7 +6,6 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/domain/persisted_assistant_turn.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/assistant_presentation_action_dispatcher.dart';
 import 'package:quwoquan_app/runtime/errors/generated/assistant/assistant_errors.g.dart';
@@ -609,14 +608,8 @@ void main() {
             state.transcript[1] as AssistantAnswerTranscriptRow;
         final secondAssistant =
             state.transcript[3] as AssistantAnswerTranscriptRow;
-        expect(
-          firstAssistant.persisted.toMap()[assistantProcessTimelineField],
-          isNotEmpty,
-        );
-        expect(
-          secondAssistant.persisted.toMap()[assistantProcessTimelineField],
-          isNotEmpty,
-        );
+        expect(firstAssistant.persisted.processTimeline, isNotEmpty);
+        expect(secondAssistant.persisted.processTimeline, isNotEmpty);
         expect(firstAssistant.id, isNot(secondAssistant.id));
       },
     );
@@ -847,14 +840,11 @@ void main() {
 
       final assistantRow =
           state.transcript.last as AssistantAnswerTranscriptRow;
-      final processTimeline =
-          assistantRow.persisted.toMap()[assistantProcessTimelineField]
-              as List<dynamic>;
       expect(
-        processTimeline.cast<Map>().any(
+        assistantRow.persisted.processTimeline.any(
           (frame) =>
-              frame['stepId'] == 'answer_organization' &&
-              frame['headline'] == '已结合检索与核对结果生成最终回答。',
+              frame.stepId == ProcessStepId.answerOrganization &&
+              frame.headline == '已结合检索与核对结果生成最终回答。',
         ),
         isTrue,
       );

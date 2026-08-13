@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/runtime/di/realtime_message_handler.dart';
-import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/group_home_provider.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
 
-class _CountingMembersRepo extends MockChatRepository {
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
+
+class _CountingMembersRepo implements ChatMemberRepository {
+  _CountingMembersRepo(this._delegate);
+
+  final ChatMemberRepository _delegate;
   int listMembersCallCount = 0;
 
   @override
@@ -16,10 +21,10 @@ class _CountingMembersRepo extends MockChatRepository {
     String? cursor,
     int limit = ChatListConversationMembersQuery.defaultLimit,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     listMembersCallCount++;
-    return super.listMembers(
+    return _delegate.listMembers(
       conversationId: conversationId,
       cursor: cursor,
       limit: limit,
@@ -27,14 +32,53 @@ class _CountingMembersRepo extends MockChatRepository {
       sort: sort,
     );
   }
+
+  @override
+  Future<List<ConversationMemberListRow>> searchMembers({
+    required String conversationId,
+    required String query,
+    required int limit,
+  }) => _delegate.searchMembers(
+    conversationId: conversationId,
+    query: query,
+    limit: limit,
+  );
+
+  @override
+  Future<void> addMembers({
+    required String conversationId,
+    required List<String> userIds,
+  }) => _delegate.addMembers(conversationId: conversationId, userIds: userIds);
+
+  @override
+  Future<void> removeMember({
+    required String conversationId,
+    required String userId,
+  }) => _delegate.removeMember(conversationId: conversationId, userId: userId);
+
+  @override
+  Future<void> leaveConversation(String conversationId) =>
+      _delegate.leaveConversation(conversationId);
+
+  @override
+  Future<List<String>> listMemberUserIds(String conversationId) =>
+      _delegate.listMemberUserIds(conversationId);
+
+  @override
+  Future<void> inviteAssistant({required String conversationId}) =>
+      _delegate.inviteAssistant(conversationId: conversationId);
+
+  @override
+  Future<void> removeAssistant({required String conversationId}) =>
+      _delegate.removeAssistant(conversationId: conversationId);
 }
 
 void main() {
   testWidgets('ConversationRosterUpdated 触发成员列表 load', (tester) async {
-    final repo = _CountingMembersRepo();
+    final repo = _CountingMembersRepo(ChatTestFacets().member);
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: [...chatTestRepositoryOverrides(member: repo)],
         child: Consumer(
           builder: (context, ref, _) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -57,11 +101,11 @@ void main() {
   testWidgets('ConversationRosterUpdated invalidate groupHomeProvider', (
     tester,
   ) async {
-    final repo = _CountingMembersRepo();
+    final repo = _CountingMembersRepo(ChatTestFacets().member);
     late ProviderContainer container;
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: [...chatTestRepositoryOverrides(member: repo)],
         child: Consumer(
           builder: (context, ref, _) {
             container = ProviderScope.containerOf(context);

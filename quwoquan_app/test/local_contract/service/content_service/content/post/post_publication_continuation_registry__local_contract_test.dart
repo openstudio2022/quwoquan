@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-004
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-004.t4
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_publication_continuation_registry.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';

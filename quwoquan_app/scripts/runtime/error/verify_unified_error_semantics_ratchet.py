@@ -13,6 +13,11 @@ Blocks new occurrences of:
 5) generic error UI that uses alarming icons, old "加载失败/重试" titles, or
    routes list append failures through section cards instead of footer.
 6) circular exclamation icons outside the shared inline error primitive.
+7) provider `error:` branches that render `*EmptyState*` widgets, disguising
+   failures as empty data and stripping users of any recovery entry.
+8) hand-rolled back buttons in navigation bar `leading:` slots instead of
+   `AppNavigationBarIconButton` (visibility guarantees live in the shared
+   chrome semantics, not per-page colors).
 
 当前历史基线已清零，任何命中均直接阻断。
 """
@@ -113,6 +118,20 @@ BLOCK_RULES = [
             re.MULTILINE,
         ),
         "页面 provider/error builder 应收敛到 AppPageErrorState / AppSectionErrorCard，禁止自绘 error 分支",
+    ),
+    (
+        re.compile(
+            r"error:\s*\((?:error|_|e)[^)]*\)\s*=>\s*(?:const\s+)?_?\w*Empty\w*\(",
+            re.MULTILINE,
+        ),
+        "错误分支禁止渲染空态组件伪装成无数据；必须使用 AppSectionErrorState / AppPageErrorState 并提供恢复入口",
+    ),
+    (
+        re.compile(
+            r"leading:\s*CupertinoButton\([\s\S]{0,400}?CupertinoIcons\.(?:chevron_back|back)\b",
+            re.MULTILINE,
+        ),
+        "导航栏 leading 返回按钮必须使用 AppNavigationBarIconButton（可见性与颜色由统一 chrome 语义保障），禁止裸写 CupertinoButton",
     ),
 ]
 

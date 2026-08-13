@@ -109,7 +109,12 @@ void applyConfirmedInteractionPosts(
   WidgetRef ref,
   Iterable<ContentPostViewData> posts,
 ) {
-  ref.read(postInteractionStateProvider.notifier).applyConfirmedPosts(posts);
+  ref
+      .read(postInteractionStateProvider.notifier)
+      .applyConfirmedPosts(
+        posts,
+        pendingLikePostIds: ref.read(pendingLikeSyncPostIdsProvider),
+      );
 }
 
 void applyMediaViewerResultToInteractionState(

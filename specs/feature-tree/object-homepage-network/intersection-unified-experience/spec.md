@@ -134,6 +134,22 @@
 - 某 kind 的候选池去重对象数低于 `minDistinctObjectsByKind` 时整 kind 不下发，防止 N=1 语料下「人人都有交集」稀释信息量。
 - 探针不可用时供给判定 fail-open；未进入 canonical registry 的 kind 永不生成或下发。
 
+<a id="req-009"></a>
+### REQ-009 交集飞轮：经历回流与社会证明（[DEC-003](./design.md#dec-003)/[DEC-004](./design.md#dec-004)）
+
+- 经历交集 `coExperiencedGathering` 只由「同一 Gathering 双方 active Participation + 双方各自主动发布关联 `content.post.gatheringRef` 的公开内容」产出；时间到达、聊天频率、位置或单方声明不得触发。
+- 结论句只说「一起参加过」；occurred 语义由 Gathering Outcome 独立承载，两者不得互换。
+- 社会证明按四锚点事实计数（实体/内容/创作者/发起人），计数只来自「成形」（room ready + ≥2 有效参与者）与「经历」（≥2 参与者主动发布关联内容）两级，互不冒充；时间已过无内容只显示已结束，不进计数。
+- 不做对人星级/评分；负面走举报/Block/安全终止通道。
+- 创作者成行力沿溯源链（经历 Post → `gatheringRef` → Gathering `sourceRefs` → 原内容 → 创作者）派生；促成通知只携带计数与公开经历引用，不暴露未公开参与者身份。
+- 产品与助手可行性文案只允许使用模型内可证事实（时限锚点、同城粒度、交集新鲜度）；禁止宣称「对方有空」（个人空闲不在任何模型内，`watch_availability` 是名额监听不是个人日程）。
+- 牵线搭桥 UX 服从四层出现强度阶梯：L0 氛围（chip/单句/计数，可完全忽略）、L1 时刻（仅用户刚对相关对象做出动作时出现）、L2 目的地（收件箱/对象页全量）、L3 主动（仅助手周度速递一条通道）。任何页面首次呈现 ≤1 行主句 + 1 个主动作，同屏最多一处交集模块；禁止全屏交集弹窗、开屏推人、消息流自动插入与"附近的人"式交集列表。
+- 经历沉淀读面与聚合区（现行）：`content.post.ListPostsByGathering` 只返回 public + published + 审核通过且作者主动写入 `gatheringRef` 的内容，作者删除或转私密即从聚合区消失。App 行动详情共同经历区按三态诚实渲染（≥2 名不同作者 → 共同经历聚合、仅 1 名 → 个人回顾、0 条且行动已结束 → 「行动时间已结束」），行动未结束且无内容不渲染；active 参与者从行动详情/Board 经「发布回顾」入口携带 `gatheringRef` 进入创作流，创作页展示可移除的关联上下文条，移除后 payload 不携带该字段。
+- 想去即时反馈（现行 Aha 1）：详情态想去按钮只在作品锚定到 `wishlistHomepageTypes` 类型的 `primaryHomepageId` 时出现；想去成功后的反馈诚实两态——有对象交集点名共同人数并给查看入口，无交集只确认动作本身，禁止伪造社会证明。未登录点击经 `WishlistHomepageContinuation` 双目标续接。
+- 四锚点社会证明（现行）：`GetGatheringSocialProof(anchorKind, objectId)` 按 organizer/entity/content/creator 四锚点返回发起/成形/经历三级诚实计数（成形=已发布且 ≥2 名 active 参与者，经历=成形且 ≥2 名参与者各自持有 active 公开回顾），计数由 recommendation 读时聚合派生、Content 只代理透传；展示面只用成形/经历两级（发起级仅发起人卡），零计数与读取失败一律不渲染，无内容的行动永远不进经历级（归属修订见 [DEC-004](./design.md#dec-004)）。
+- 经历内容溯源标（现行，works 详情态）：回顾内容按 wire `gatheringRef` 显示「来自一次共同行动」进行动详情。种草内容按 content 锚点成形级 > 0 显示「他们从这条内容出发，一起去了」，经 `ListGatheringsBySource` 进成形行动详情；与交集陈述互斥占位（同屏最多一处），两者都不成立不渲染。
+- 北极星漏斗读面（现行）：三比例（想去→成行、成形→双方回顾、促成→创作者续发）的分子分母唯一产出路径为 rec 内部读面 `GetRecommendationFlywheelFunnel`——时间窗必填，可选 `sourceObjectKind`/`sourceObjectId`/`capacityTier`（duo=容量 2 且邀请制、group=其余、旧事件缺字段归 unclassified 且被维度过滤排除）/`tagRef`（行动 content 来源的种草内容标签）切片。分子分母全部从域事实投影读时派生（想去=wishlist 事实、成形/经历复用四锚点两级、促成=幂等占位收据含冻结创作者名单、续发=收据 notifiedAt 后该创作者存在新 active 内容），空数据为零、有界扫描越界标 `truncated`、无预聚合缓存、读面不下发百分比。维度事实链：`GatheringPublished` 携带发布时冻结的 `maxParticipants`/`admissionPolicy`，`post_authors` 投影存 `tagRefs`。字典登记见 `analytics-metric-dictionary` REQ-003 `domain_fact_readface` 轨（互为引用）。不落实维度的裁决——gathering `topicRefs` 契约存在但创建页无输入控件当前采集率为零、`coarsePlaceLabel` 为必填自由文本聚合价值弱（地理镜头由来源实体承担），均不冒充维度，留待上线后按真实需求再议。
+
 ## 6. 契约与依赖
 
 - 上游能力：[`object-homepage-network`](../spec.md) 声明的领域入口。
@@ -214,6 +230,15 @@
 - THEN 浏览只进 `sharedEntityAttention`，声明到访才进 `coVisitedEntity`，二者文案不得互换。
 - AND `actionHint` 文案与 `dispatch` 承诺一致；供给低于阈值的 kind 在 Feed/List/ObjectIntersections 三入口均不下发。
 
+<a id="sit-008"></a>
+### SIT-008 经历回流与社会证明诚实分级
+
+- GIVEN 两名用户在同一 Gathering 均持有 active Participation，行动时间已真实结束。
+- WHEN 双方各自主动发布关联该 Gathering（`gatheringRef`）的公开内容。
+- THEN 双方交集列表出现 `coExperiencedGathering`，主句为云侧「一起参加过」模板渲染；实体/内容/创作者/发起人四锚点计数经历级各 +1，创作者收到只含计数与公开经历引用的促成通知。
+- AND 对照组：只有一方发布或双方均未发布时，不产出经历交集、不进经历级计数，行动详情只显示「行动时间已结束」。
+- AND 全程不存在签到、强制完成确认、位置推断或对人评分入口。
+
 ## 8. 开放事项
 
 <a id="open-001"></a>
@@ -233,6 +258,7 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`。
 - 目标：我的主页展示交集总数与最多 3 个维度的变化红点/数字，超 3 维度可展开更多。
+- 交集页（`user.my_intersections`、`intersection.object_list`）的验收数据供给：交集 inbox 是行为事实（`content.content_behavior_fact.ReportBehaviors`）经 recommendation 派生投影（`recommendation_feature_profile_view`）的跨服务异步结果，测试数据控制面不承诺确定性 provision；UAT 验收需在行为上报后按最终一致轮询交集投影，或将首访空态作为合法冷启动验收态。足迹页（`user.my_footprint`）不受此限——其写读闭环（`ReportBehaviors` → `GetMyFootprint`）同步于 content-service，由 typed capability 直接供数。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-003"></a>
@@ -275,6 +301,16 @@
 - 目标：交集触点统一遵循产品主轴「别人帮你刷内容，我们帮你遇到对的人」；所有可见交集句只读云侧 primaryText/primarySpans/displayBinding，端不拼句，join(spans.text)==primaryText 不变量成立。
 - 完成判定：`SIT-005` 对应行为满足且真实测试 `spec_ref` 有效
 
+<a id="open-008"></a>
+### OPEN-008 经历交集读面消费与端到端证据未闭合
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺 user_acceptance 三环境全链证据——九步旅程 probe（`gathering_flywheel_journey_probe_ops_env`，双隔离 Actor 真实 API 走想去 → 交集 → 发起 → 加入 → 双方回顾 → 经历交集 → 四锚点 +1 → 无内容对照组 → 无关锚点归零）与 readiness case（`producer: ops`、target=object）已就绪，probe 支持双 Actor 来源二选一（`stackctl verify` ActorLease handoff 或 `--self-provision-instance-id` 经受管 OTP 通道幂等自建，均为真实非生产账号且 Prod 被底层拒绝）。probe 并已覆盖 organizer 锚点断言与场景二延伸步（1对1 邀约 invite → decline → 发起方婉拒回执 → 再邀 → accept 成行，经真实 AppMessage inbox 轮询回执）。执行尚缺健康的完整环境栈：本机 stackctl 锁与 Docker 被并行 gamma/alpha 交付连续占用（跨多小时十余次启动尝试均 GATE_BLOCK 或锁排他，run 报告在案）。期间已修复 candidate 快照内 `product_telemetry_alerts.yaml` 被 Docker 挂载残留污染为空目录的启动阻断。最近一次窗口核查（20260813T10 UTC run 报告在案）：gamma 栈 15 容器 healthy 但 service-core 因并行 assistant 候选 readiness（`assistant_skill_package*`）退出。alpha 因数据卷 `local-gamma-mongo` 被并行调试容器（`tmp-mongo-skill`，活跃连接中）flock 独占而 `DBPathInUse` 启动失败——两窗口均被并行交付占用，待收敛后按 readiness case 执行。北极星度量读面已先行闭合：三比例分子分母经 `GetRecommendationFlywheelFunnel`（时间窗必填 + 来源对象/capacityTier/tagRef 切片、越界 truncated、读时聚合无缓存）有 api_integration 精确正负例。创作者促成通知已闭合：recommendation 在经历级首次达成且溯源链回到创作者内容时经 `events.recommendation.intersections` 发布 `IntersectionFacilitationRecorded`（占位收据幂等、溯源链断/私密回顾不发布，api_integration 正负例），Notification 投影为内容维度通知并回链行动公开详情（Go 正负例），App 通知行按 gathering target 导航。feed 列表卡溯源标已接线：feed/detail 服务端投影输出 `gatheringRef`，feed 卡在无交集主句时渲染「来自一次共同行动」轻标进行动详情。
+- 完成判定：`SIT-008` 的 user_acceptance 层在真实环境走完整圈（想去 → 发起 → 成行 → 双方回顾 → 经历交集出现），四锚点计数经历级 +1 且创作者促成通知可见。
+- 依赖：`chat-conversation/intersection-native-messaging` OPEN-001 的 App 展示面。
+
 <a id="open-007"></a>
 ### OPEN-007 旅游 POI / 实体主页经纬度语料回填
 
@@ -282,4 +318,4 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：代码链路已接上 `Location` / GeoJSON / `filters.near`，但 canonical travel 实体坐标回填仍为 0/2899，`coPresentHere` / `nearbyAffinity` 与 near 检索无法在真实语料上成立。
-- 完成判定：`quwoquan_data/reference/travel/entities/**` 坐标覆盖达到可商用阈值，且 gamma import receipt 证明 near 检索返回非空。
+- 完成判定：`quwoquan_data/reference/travel/entities/**` 坐标覆盖达到可商用阈值，且 gamma import receipt 证明 near 检索返回非空，使 `SIT-007` 的到访同一性判定与冷启动供给闸门在 `coPresentHere` / `nearbyAffinity` 上有真实语料可裁定。

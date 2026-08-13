@@ -1009,7 +1009,7 @@ class AssistantPolicyRollout {
 
   final String policyId;
   final int revision;
-  final String? status;
+  final AssistantPolicyRolloutStatus status;
   final List<AssistantPolicyBucketDefinition> bucketDefinitions;
   final List<AssistantPolicyCohortAssignment> assignments;
   final List<AssistantPolicyCohortAssignment> previousAssignments;
@@ -1060,7 +1060,7 @@ class AssistantPolicyRollout {
     return AssistantPolicyRollout(
       policyId: (json['policyId'] ?? '').toString(),
       revision: (json['revision'] as num?)?.toInt() ?? 0,
-      status: json['status']?.toString(),
+      status: parseAssistantPolicyRolloutStatusStrict((json['status'] ?? '').toString()),
       bucketDefinitions: ((json['bucketDefinitions'] as List?) ?? const [])
             .whereType<Map>()
             .map((item) => AssistantPolicyBucketDefinition.fromJson(item.cast<String, dynamic>()))
@@ -1081,7 +1081,7 @@ class AssistantPolicyRollout {
   Map<String, dynamic> toJson() => <String, dynamic>{
         'policyId': policyId,
         'revision': revision,
-        'status': status,
+        'status': status.wireName,
         'bucketDefinitions': bucketDefinitions.map((item) => item.toJson()).toList(growable: false),
         'assignments': assignments.map((item) => item.toJson()).toList(growable: false),
         'previousAssignments': previousAssignments.map((item) => item.toJson()).toList(growable: false),
@@ -1875,7 +1875,7 @@ class AssistantSkillCatalogItemView {
   final List<SkillCatalogSemanticLabel> targetAudiences;
   final String dataUseSummary;
   final List<ResolvedSkillExample> examples;
-  final String? activationMode;
+  final SkillActivationMode activationMode;
   final List<SkillCatalogSemanticLabel> surfaceKinds;
   final String configurationSchemaDigest;
   final String setupTemplateRef;
@@ -1997,7 +1997,7 @@ class AssistantSkillCatalogItemView {
             .whereType<Map>()
             .map((item) => ResolvedSkillExample.fromJson(item.cast<String, dynamic>()))
             .toList(growable: false),
-      activationMode: json['activationMode']?.toString(),
+      activationMode: parseSkillActivationModeStrict((json['activationMode'] ?? '').toString()),
       surfaceKinds: ((json['surfaceKinds'] as List?) ?? const [])
             .whereType<Map>()
             .map((item) => SkillCatalogSemanticLabel.fromJson(item.cast<String, dynamic>()))
@@ -2026,7 +2026,7 @@ class AssistantSkillCatalogItemView {
         'targetAudiences': targetAudiences.map((item) => item.toJson()).toList(growable: false),
         'dataUseSummary': dataUseSummary,
         'examples': examples.map((item) => item.toJson()).toList(growable: false),
-        'activationMode': activationMode,
+        'activationMode': activationMode.wireName,
         'surfaceKinds': surfaceKinds.map((item) => item.toJson()).toList(growable: false),
         'configurationSchemaDigest': configurationSchemaDigest,
         'setupTemplateRef': setupTemplateRef,
@@ -2439,8 +2439,8 @@ class DomainReaderDescriptor {
   final int? maxFreshnessSeconds;
   final int? cacheTtlSeconds;
   final List<String> surfaceKinds;
-  final String? artifactPolicy;
-  final String? citationPolicy;
+  final DomainReaderArtifactPolicy artifactPolicy;
+  final DomainReaderCitationPolicy citationPolicy;
   final String descriptorDigest;
 
   factory DomainReaderDescriptor.fromJson(Map<String, dynamic> json) {
@@ -2538,8 +2538,8 @@ class DomainReaderDescriptor {
       surfaceKinds: ((json['surfaceKinds'] as List?) ?? const [])
             .map((e) => e.toString())
             .toList(growable: false),
-      artifactPolicy: json['artifactPolicy']?.toString(),
-      citationPolicy: json['citationPolicy']?.toString(),
+      artifactPolicy: parseDomainReaderArtifactPolicyStrict((json['artifactPolicy'] ?? '').toString()),
+      citationPolicy: parseDomainReaderCitationPolicyStrict((json['citationPolicy'] ?? '').toString()),
       descriptorDigest: (json['descriptorDigest'] ?? '').toString(),
     );
   }
@@ -2558,8 +2558,8 @@ class DomainReaderDescriptor {
         'maxFreshnessSeconds': maxFreshnessSeconds,
         'cacheTtlSeconds': cacheTtlSeconds,
         'surfaceKinds': surfaceKinds,
-        'artifactPolicy': artifactPolicy,
-        'citationPolicy': citationPolicy,
+        'artifactPolicy': artifactPolicy.wireName,
+        'citationPolicy': citationPolicy.wireName,
         'descriptorDigest': descriptorDigest,
       };
 }
@@ -3496,7 +3496,7 @@ class SkillPackageAsset {
   });
 
   final String assetId;
-  final String? kind;
+  final SkillPackageAssetKind kind;
   final String locator;
   final String assetDigest;
 
@@ -3527,7 +3527,7 @@ class SkillPackageAsset {
     }
     return SkillPackageAsset(
       assetId: (json['assetId'] ?? '').toString(),
-      kind: json['kind']?.toString(),
+      kind: parseSkillPackageAssetKindStrict((json['kind'] ?? '').toString()),
       locator: (json['locator'] ?? '').toString(),
       assetDigest: (json['assetDigest'] ?? '').toString(),
     );
@@ -3535,7 +3535,7 @@ class SkillPackageAsset {
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'assetId': assetId,
-        'kind': kind,
+        'kind': kind.wireName,
         'locator': locator,
         'assetDigest': assetDigest,
       };
@@ -3711,7 +3711,7 @@ class SkillPackageRelease {
   final SkillPackageProvenance provenance;
   final SkillPackageSignature signature;
   final List<SkillCapabilityGrant> capabilityGrants;
-  final String? status;
+  final SkillPackageReleaseStatus status;
   final int revision;
   final String stagedAt;
   final String? activatedAt;
@@ -3788,7 +3788,7 @@ class SkillPackageRelease {
             .whereType<Map>()
             .map((item) => SkillCapabilityGrant.fromJson(item.cast<String, dynamic>()))
             .toList(growable: false),
-      status: json['status']?.toString(),
+      status: parseSkillPackageReleaseStatusStrict((json['status'] ?? '').toString()),
       revision: (json['revision'] as num?)?.toInt() ?? 0,
       stagedAt: (json['stagedAt'] as String),
       activatedAt: json['activatedAt']?.toString(),
@@ -3804,7 +3804,7 @@ class SkillPackageRelease {
         'provenance': provenance.toJson(),
         'signature': signature.toJson(),
         'capabilityGrants': capabilityGrants.map((item) => item.toJson()).toList(growable: false),
-        'status': status,
+        'status': status.wireName,
         'revision': revision,
         'stagedAt': stagedAt,
         'activatedAt': activatedAt,

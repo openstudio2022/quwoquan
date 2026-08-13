@@ -1,9 +1,14 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-002.t3
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/media/media_reorderable_view.dart';
+import 'package:quwoquan_app/service/content_service/content/post/domain/generated/content_publication_policy.g.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_circle_facets.dart'
     show circlesListQueryProvider;
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
@@ -15,7 +20,7 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/c
 import 'package:quwoquan_app/service/content_service/content/post/application/create_editor_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
 
 Widget _buildCreatePageApp({
@@ -24,7 +29,7 @@ Widget _buildCreatePageApp({
 }) {
   return ProviderScope(
     overrides: [
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
     ],
     child: ScreenUtilInit(
@@ -199,6 +204,34 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CupertinoActionSheet), findsNothing);
+  });
+
+  testWidgets('媒体正文常显剩余量计数，接近上限转警示色（GWT-002）', (tester) async {
+    await tester.pumpWidget(_buildCreatePageApp(initialTabKey: 'photo'));
+    await tester.pumpAndSettle();
+
+    final counterFinder = find.byKey(
+      const ValueKey<String>('create-body-length-counter'),
+    );
+    expect(counterFinder, findsOneWidget);
+    expect(
+      find.text('0 / ${ContentPublicationPolicy.microBodyMaxRunes}'),
+      findsOneWidget,
+      reason: '剩余量以「当前/契约上限」常显，上限来自 codegen 单一真相',
+    );
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(CreatePage)),
+    );
+    final notifier = container.read(createEditorProvider.notifier);
+    // 接近上限（≥90%）时计数转警示色，提示用户即将到达契约边界。
+    notifier.updateMediaBody(
+      '长' * (ContentPublicationPolicy.microBodyMaxRunes * 9 ~/ 10 + 1),
+    );
+    await tester.pump();
+
+    final warningCounter = tester.widget<Text>(counterFinder);
+    expect(warningCounter.style?.color, AppColors.warning);
   });
 
   testWidgets('视频态居中展示并提供封面编辑入口', (tester) async {

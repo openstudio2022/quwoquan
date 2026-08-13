@@ -547,7 +547,8 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
     if (!context.mounted) {
       return;
     }
-    AppToast.show(context, message);
+    // 软提示仅在权限被拒/受限失败分支出现：以警示 tone 呈现，保持可辨识。
+    AppToast.show(context, message, tone: UiErrorTone.caution);
   }
 
   void _registerDefaultAdapters() {

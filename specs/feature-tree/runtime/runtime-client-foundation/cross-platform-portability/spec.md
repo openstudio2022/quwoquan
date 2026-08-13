@@ -61,3 +61,20 @@
 - 父级设计：[L2 DEC-001](../design.md#dec-001)
 
 ## 7. 开放事项
+
+<a id="open-001"></a>
+### OPEN-001 手势/返回策略仍按 TargetPlatform 分叉，未收口到能力位
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：仍有 `lib/runtime/shell/navigation/native_back_navigation.dart` 与
+  `lib/service/content_service/media/media_asset/presentation/works_immersive_viewer_presentation.dart`
+  消费 `defaultTargetPlatform` / `TargetPlatform.*` 决定返回手势与沉浸式滑动策略（约 13 处）。
+  这是「能力优先」军规的残留分叉：新平台（ohos/web 宽屏）接入时需要逐处评估 OS 判断，
+  而不是翻一个能力位。`AppPlatform == web` 体验分叉已清零（welcome 已改 `startupWelcomeFlow` 能力位），
+  且门禁 `verify_lib_platform_check_isolation.py`
+  已新增 `app_platform_experience_branch` 扫描（装配层豁免 `runtime/di`、`runtime/shell/startup`）。
+- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效——`PlatformCapabilities`
+  登记导航/手势策略能力位（如 `edgeBackGesture` / `immersiveVerticalSwipe`），
+  两个文件改为消费能力位；门禁扩展 `TargetPlatform` 业务层扫描且命中为 0。

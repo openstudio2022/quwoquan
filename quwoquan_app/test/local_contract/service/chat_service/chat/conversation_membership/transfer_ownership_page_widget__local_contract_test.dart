@@ -4,15 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/presentation/transfer_ownership_page.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/chat_interaction_telemetry_tracker.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_seed_refs.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
 
 const _testConvId = 'fixture_conv_group';
@@ -22,11 +25,13 @@ ChatInteractionTelemetryTracker _telemetryTracker() =>
       telemetryReporter: RecordingAppTelemetryRecorder(),
     );
 
-Widget _scopedApp({ChatRepository? mock}) {
-  final repo = mock ?? MockChatRepository();
+Widget _scopedApp({
+  ChatMemberRepository? member,
+  ChatGroupAdminRepository? groupAdmin,
+}) {
   return ProviderScope(
     overrides: [
-      chatRepositoryCompositionProvider.overrideWithValue(repo),
+      ...chatTestRepositoryOverrides(member: member, groupAdmin: groupAdmin),
       currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
     ],
     child: MaterialApp.router(
@@ -185,7 +190,7 @@ void main() {
     testWidgets('失败重试复用同一幂等意图并等待 Remote roster 收敛', (tester) async {
       _suppressImageErrors();
       final repo = _RetryTransferRepo();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(_scopedApp(groupAdmin: repo));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -207,7 +212,7 @@ void main() {
   group('TransferOwnershipPage — 错误态渲染', () {
     testWidgets('listMembers 失败时页面不崩溃', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp(mock: _ErrorMembersRepo()));
+      await tester.pumpWidget(_scopedApp(member: _ErrorMembersRepo()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -216,7 +221,7 @@ void main() {
 
     testWidgets('空成员列表安全渲染', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp(mock: _EmptyMembersRepo()));
+      await tester.pumpWidget(_scopedApp(member: _EmptyMembersRepo()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -225,33 +230,37 @@ void main() {
   });
 }
 
-class _ErrorMembersRepo extends MockChatRepository {
+class _ErrorMembersRepo extends Fake implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     throw Exception('network error');
   }
 }
 
-class _EmptyMembersRepo extends MockChatRepository {
+class _EmptyMembersRepo extends Fake implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     return [];
   }
 }
 
-class _RetryTransferRepo extends MockChatRepository {
+class _RetryTransferRepo extends Fake implements ChatGroupAdminRepository {
+  // 读方法委托共享 typed double：Fake 默认抛 UnimplementedError 会把页面
+  // 推入错误态，掩盖被验证的幂等重试断言。
+  final ChatGroupAdminRepository _delegate = ChatTestFacets().groupAdmin;
+
   final List<String> idempotencyKeys = <String>[];
 
   @override
@@ -264,10 +273,13 @@ class _RetryTransferRepo extends MockChatRepository {
     if (idempotencyKeys.length == 1) {
       throw Exception('transient transfer failure');
     }
-    await super.transferOwnership(
-      conversationId,
-      newOwnerId,
-      idempotencyKey: idempotencyKey,
-    );
   }
+
+  @override
+  Future<GroupHome> getGroupHome(String conversationId) =>
+      _delegate.getGroupHome(conversationId);
+
+  @override
+  Future<ChatGroupSettingsViewData> getGroupSettings(String conversationId) =>
+      _delegate.getGroupSettings(conversationId);
 }

@@ -146,6 +146,11 @@ extension _ProfileStatsPageActions on _ProfileStatsPageState {
           'Relationship command did not converge in authoritative state',
         );
       }
+      // 权威确认后回写共享关系投影，保证 feed 卡片/主页/沉浸式等
+      // watch userRelationshipStateProvider 的界面即时一致。
+      ref
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowing(targetPersonaId, confirmed.viewerFollowsTarget);
       if (!mounted ||
           attempt != _relationshipAttemptGeneration ||
           requestedPageUserId != _userId) {

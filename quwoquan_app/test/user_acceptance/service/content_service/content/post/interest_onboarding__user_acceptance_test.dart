@@ -1,3 +1,4 @@
+// readiness_case: post_interest_onboarding_app_uat
 /// Gamma-local remote UAT for the first-run interest flow.
 ///
 /// The test starts the production Remote composition, signs in through the

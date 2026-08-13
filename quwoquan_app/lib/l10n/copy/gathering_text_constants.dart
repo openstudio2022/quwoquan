@@ -63,6 +63,44 @@ abstract final class GatheringText {
   static const String createPublishStepLabel = '正在发布活动';
   static const String createCompletedStepLabel = '活动已发布';
 
+  static const String sourceRecentGatheringsTitle = '近期行动';
+  static String sourceGatheringSeatsRemaining(int count) => '余 $count 席';
+  static const String sourceGatheringFullLabel = '已满';
+
+  /// 「我的行动」入口与分组页（REQ-008；只消费 ListGatheringsByHost 公开披露面）。
+  static const String myGatheringsTitle = '我的行动';
+  static const String myGatheringsEntryHint = '我发起的公开行动';
+  static String myGatheringsUpcomingBadge(int count) => '$count 个即将开始';
+  static const String myGatheringsSegmentUpcoming = '即将开始';
+  static const String myGatheringsSegmentDraft = '草稿';
+  static const String myGatheringsSegmentEnded = '已结束';
+  static const String myGatheringsSegmentCancelled = '已取消';
+  static const String myGatheringsEmptyTitle = '还没有公开行动';
+  static const String myGatheringsEmptyDescription =
+      '从一条交集出发发起第一次行动，成行后会沉淀在这里。';
+  static const String myGatheringsSegmentEmpty = '该分组暂无行动';
+
+  /// 四锚点诚实社会证明（只用成形/经历两级；organizer 锚点另有发起级）。
+  static const String detailOrganizerStatsLabel = '发起人往绩';
+  static String detailOrganizerStats(
+    int published,
+    int formed,
+    int experienced,
+  ) => '发起 $published 次 · 成形 $formed 次 · 经历 $experienced 次';
+  static String sourceFormedCountLabel(int formed) => '$formed 次行动从这里成行';
+
+  /// 经历内容溯源标（works 详情态两种语义，L0 氛围层）。
+  static const String provenanceRecapBadge = '来自一次共同行动';
+  static const String provenanceSeedBadge = '他们从这条内容出发，一起去了';
+
+  /// 双人邀约（1对1 同好邀约）。
+  static const String duoInviteFailedToast = '邀请发送失败，可在行动详情中重新邀请';
+  static const String invitationCardAccept = '接受';
+  static const String invitationCardDecline = '婉拒';
+  static const String invitationCardTitlePrefix = '邀你同行：';
+  static const String invitationDeclinedFeedback = '已婉拒邀请';
+  static const String invitationActionFailedToast = '操作失败，请稍后重试';
+
   static const String detailPageTitle = '活动详情';
   static const String detailEmptyTitle = '暂时无法读取活动';
   static const String detailHostLabel = '发起方';
@@ -104,4 +142,8 @@ abstract final class GatheringText {
   static const String detailDisputedOutcome = '活动结果有争议';
   static const String detailUnverifiedOutcome = '活动结果待确认';
   static const String detailNoRequirements = '暂无额外参与要求';
+  static const String detailRecapAction = '发布回顾';
+  static const String detailSharedExperienceTitle = '共同经历';
+  static const String detailSharedExperienceSingleTitle = '个人回顾';
+  static const String detailSharedExperienceEndedEmpty = '行动时间已结束';
 }

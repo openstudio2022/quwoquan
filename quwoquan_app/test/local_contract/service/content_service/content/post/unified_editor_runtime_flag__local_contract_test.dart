@@ -9,7 +9,7 @@ import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/create_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
 
 void main() {
@@ -23,8 +23,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          ...mockContentFacetOverrides(MockContentRepository()),
-          circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
+          ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
+          circlesListQueryProvider.overrideWithValue(
+            InMemoryCircleQueryReader(),
+          ),
           contentFeatureFlagProvider(
             'enable_unified_create_editor',
           ).overrideWith((ref) => false),

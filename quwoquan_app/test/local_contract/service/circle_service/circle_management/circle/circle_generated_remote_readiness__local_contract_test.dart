@@ -1,12 +1,14 @@
 // spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001
 // spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001.t1
 // spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md#gwt-001.t3
 // spec_ref: specs/feature-tree/circle-community/activity-member-governance/activity-stream-paging/spec.md#gwt-001
 // spec_ref: specs/feature-tree/circle-community/activity-member-governance/activity-stream-paging/spec.md#gwt-001.t1
 // spec_ref: specs/feature-tree/circle-community/activity-member-governance/activity-stream-paging/spec.md#gwt-001.t2
 // spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/spec.md#gwt-001
 // spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/spec.md#gwt-001.t1
 // spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/spec.md#gwt-001.t3
 // spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001
 // spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001.t1
 // spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001.t2

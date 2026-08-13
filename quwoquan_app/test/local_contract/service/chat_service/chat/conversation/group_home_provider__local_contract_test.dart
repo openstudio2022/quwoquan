@@ -2,15 +2,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
-import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/group_home_provider.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 
 void main() {
   test('groupHomeProvider 消费 GetGroupHome 云端主页契约', () async {
     final repo = _FakeChatRepository();
     final container = ProviderContainer(
-      overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+      overrides: chatTestRepositoryOverrides(groupAdmin: repo),
     );
     addTearDown(container.dispose);
 
@@ -28,7 +28,8 @@ void main() {
   });
 }
 
-final class _FakeChatRepository extends MockChatRepository {
+final class _FakeChatRepository extends Fake
+    implements ChatGroupAdminRepository {
   final List<String> requestedConversationIds = <String>[];
 
   @override

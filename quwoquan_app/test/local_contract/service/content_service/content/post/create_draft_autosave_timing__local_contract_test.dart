@@ -13,7 +13,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/cr
 import 'package:quwoquan_app/service/content_service/content/post/adapters/create_draft_local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
 
 class _CreateHostApp extends StatelessWidget {
@@ -25,9 +25,9 @@ class _CreateHostApp extends StatelessWidget {
       body: Center(
         child: ElevatedButton(
           onPressed: () {
-            Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(builder: (_) => CreatePage()),
-            );
+            Navigator.of(
+              context,
+            ).push<void>(MaterialPageRoute<void>(builder: (_) => CreatePage()));
           },
           child: const Text('打开创作'),
         ),
@@ -40,7 +40,7 @@ Widget _buildApp() {
   return ProviderScope(
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
     ],
     child: ScreenUtilInit(
@@ -59,7 +59,7 @@ Widget _buildCreatePageApp({String? initialTabKey}) {
   return ProviderScope(
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
     ],
     child: ScreenUtilInit(

@@ -15,6 +15,7 @@ abstract final class ObjectHomepageText {
   static const String objectIntersectionEmptyCircle =
       '你和这个圈子暂时没有可展示交集，进入讨论或关注成员后会在这里沉淀';
   static const String entityActionPublishRecord = '发记录';
+  static const String entityActionStartGathering = '在这里发起';
   static const String circleActionEnterDiscussion = '进入讨论';
   static const String objectConnectionWithYou = '与你的交集';
   static const String impactEnumerableHintMine = '可查看与你内容相关的连接来源';
@@ -31,6 +32,13 @@ abstract final class ObjectHomepageText {
   static const String homepageShareUnavailable = '该主页暂不可分享';
   static const String homepageWishlistAction = '想去';
   static const String homepageWishlistedAction = '已想去';
+
+  /// 想去成功后的即时反馈（诚实两态）：有交集时点名人数并给查看入口，
+  /// 无交集时只确认动作本身，不伪造社交证明。
+  static const String wishlistAddedFeedback = '已加入想去清单';
+  static String wishlistSharedFeedback(int count) => '你和 $count 人都想去这里';
+  static const String wishlistSharedFeedbackViewAction = '查看';
+  static const String wishlistRemovedFeedback = '已移出想去清单';
   static const String homepageMaintainAction = '维护主页';
   static const String homepageMaintenanceSave = '保存主页信息';
   static const String homepageMaintenanceClaimRequired = '需先完成认领';

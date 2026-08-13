@@ -132,4 +132,4 @@
 - 准出影响：`track`
 - 影响或价值：尚缺实现或直接 `spec_ref`。
 - 目标：link_templates.yaml 的 entities/attribution_params/transfer_pages/share_token 结构合法且 route_id 可解析。
-- 完成判定：link_templates.yaml 的 entities/attribution_params/transfer_pages/share_token 结构合法且 route_id 可解析。
+- 完成判定：`GWT-001` 的路由解析、`GWT-002` 的归因参数注入剥离与 `GWT-003` 的中转页/口令同源解析对应行为满足——link_templates.yaml 的 entities/attribution_params/transfer_pages/share_token 结构合法且 route_id 可解析。

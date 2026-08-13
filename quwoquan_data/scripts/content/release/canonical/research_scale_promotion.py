@@ -484,7 +484,7 @@ def write_research_scale_promotion(
     else:
         if len(source_digests) != 1:
             raise ResearchScalePromotionError(
-                "legacy promotion requires exactly one sourceDigest"
+                "single-source promotion requires exactly one sourceDigest"
             )
         source_identity_fields = {
             "sourceRevision": source_revision,

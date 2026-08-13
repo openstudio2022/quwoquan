@@ -1,4 +1,10 @@
 {
+  "_governance": {
+    "owner": "runtime-client-foundation",
+    "reason": "范围外域的用户可见中文文案字面量只减不增；页面商用成熟度专项范围内始终零容忍",
+    "expires_when": "counts 归零时删除本文件并把全域改为零容忍",
+    "measure": "verify_dart_semantic.py 在 quwoquan_app/lib 下按文件统计直接出现在 Dart 源码中的用户可见中文字面量（未经 l10n / *Text 常量类）。专项范围内零容忍；范围外按本文件 counts 逐文件比较，超出即 BLOCK。"
+  },
   "description": "范围外域用户可见中文文案字面量棘轮；页面商用成熟度专项范围始终零容忍，计数只减不增。",
   "counts": {
     "quwoquan_app/lib/service/circle_service/circle_management/circle_membership/presentation/circle_compact_card.dart": 1

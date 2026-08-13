@@ -6,6 +6,7 @@ import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_image_intrinsic_registry.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/article_pagination_engine.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/article_rich_block_chrome.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
 
 /// 单段流式布局单元（绑定一个可渲染 fragment + 测量高度）。
@@ -792,6 +793,9 @@ class ArticleFlowLayoutEngine {
             ArticleDocumentBlockType.sectionTitle => 'sectionTitle',
             ArticleDocumentBlockType.orderedItem => 'orderedItem',
             ArticleDocumentBlockType.bulletItem => 'bulletItem',
+            ArticleDocumentBlockType.quote => 'quote',
+            ArticleDocumentBlockType.callout => 'callout',
+            ArticleDocumentBlockType.codeBlock => 'codeBlock',
             _ => 'body',
           },
           textAlign: block.textAlign,
@@ -843,11 +847,16 @@ class ArticleFlowLayoutEngine {
           titleStyle: titleStyle,
           bodyStyle: bodyStyle,
         );
-        return measureArticleTextHeight(
-          block.text.trim(),
-          spec.style,
-          contentWidth,
+        // 富块容器几何与渲染同源（GWT-003）：内缩与内边距计入测量。
+        final horizontalInset = ArticleRichBlockChrome.horizontalInsetFor(
+          block.type,
         );
+        return ArticleRichBlockChrome.verticalPaddingFor(block.type) +
+            measureArticleTextHeight(
+              block.text.trim(),
+              spec.style,
+              contentWidth - horizontalInset,
+            );
       case ArticleLayoutFragmentKind.fullWidthImage:
         final asset = fragment.asset;
         if (asset == null || !asset.hasImage) {
@@ -968,6 +977,11 @@ _SemanticBlockSpec _semanticBlockSpec({
         fontWeight: FontWeight.w700,
         letterSpacing: 0.18,
       ),
+    ),
+    ArticleDocumentBlockType.quote ||
+    ArticleDocumentBlockType.callout ||
+    ArticleDocumentBlockType.codeBlock => _SemanticBlockSpec(
+      style: ArticleRichBlockChrome.textStyleFor(block.type, bodyStyle),
     ),
     _ => _SemanticBlockSpec(style: bodyStyle),
   };

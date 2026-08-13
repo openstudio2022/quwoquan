@@ -10,6 +10,7 @@ class RecommendationRequestPageIds {
     'CreateRankedRecommendationWindow': 'recommendation.create.ranked.recommendation.window',
     'GetRankedRecommendationPage': 'recommendation.get.ranked.recommendation.page',
     'GetRecommendationAuthorImpact': 'recommendation.get.recommendation.author.impact',
+    'GetRecommendationGatheringSocialProof': 'recommendation.get.recommendation.gathering.social.proof',
     'GetRecommendationIntersectionSupply': 'recommendation.get.recommendation.intersection.supply',
     'ListRecommendationAuthorImpactEvidence': 'recommendation.list.recommendation.author.impact.evidence',
     'ListRecommendationObjectIntersections': 'recommendation.list.recommendation.object.intersections',
@@ -23,6 +24,7 @@ class RecommendationRequestPageIds {
   static const String createRankedRecommendationWindow = 'recommendation.create.ranked.recommendation.window';
   static const String getRankedRecommendationPage = 'recommendation.get.ranked.recommendation.page';
   static const String getRecommendationAuthorImpact = 'recommendation.get.recommendation.author.impact';
+  static const String getRecommendationGatheringSocialProof = 'recommendation.get.recommendation.gathering.social.proof';
   static const String getRecommendationIntersectionSupply = 'recommendation.get.recommendation.intersection.supply';
   static const String listRecommendationAuthorImpactEvidence = 'recommendation.list.recommendation.author.impact.evidence';
   static const String listRecommendationObjectIntersections = 'recommendation.list.recommendation.object.intersections';

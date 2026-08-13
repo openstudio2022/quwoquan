@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:quwoquan_app/design_system/media/image_editor_semantic_icon.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
@@ -129,12 +130,27 @@ class CameraRoundIconButton extends StatelessWidget {
         minimumSize: Size.square(AppSpacing.minInteractiveSize),
         padding: EdgeInsets.zero,
         onPressed: enabled ? onTap : null,
-        child: Icon(
-          icon,
-          color: enabled
-              ? AppColors.white
-              : AppColors.white.withValues(alpha: 0.32),
-          size: AppSpacing.iconMedium,
+        // immersive 暗底：白色图标叠在实时取景（雪地/白墙等浅色画面）上仍可见。
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AppNavigationSemanticConstants.chromeActionBackground(
+              surface: AppChromeSurface.immersive,
+            ),
+            shape: BoxShape.circle,
+          ),
+          child: SizedBox(
+            width: AppSpacing.minInteractiveSize,
+            height: AppSpacing.minInteractiveSize,
+            child: Center(
+              child: Icon(
+                icon,
+                color: enabled
+                    ? AppColors.white
+                    : AppColors.white.withValues(alpha: 0.32),
+                size: AppSpacing.iconMedium,
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -49,6 +49,7 @@ abstract final class CallText {
   static const String callSwitchGroupMembersFailed = '切换群聊成员失败';
   static const String callTrustUnknownBadge = '可能不认识';
   static const String callOngoing = '通话中';
+  static const String callSecondIncomingHint = '通话中收到新的来电，结束后可在会话中回拨';
   static const String callBarTapToReturn = '点击返回';
   static const String callHangupConfirmTitle = '结束通话';
   static const String callHangupConfirmBody = '确定要挂断当前通话吗？';

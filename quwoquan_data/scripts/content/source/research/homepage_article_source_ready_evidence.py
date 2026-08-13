@@ -208,10 +208,10 @@ def assert_source_ready_evidence_matches_capsule(
         )
     historical_comparison = validated.get("historicalComparison")
     provenance_comparison = provenance.get("historicalComparison")
-    if seed.get("seedOrigin") == "legacy_hint":
+    if seed.get("seedOrigin") == "historical_capsule_hint":
         if not isinstance(historical_comparison, Mapping):
             raise SourceReadyAcquisitionEvidenceError(
-                ["legacy acquisition evidence lacks historical comparison"]
+                ["historical-capsule acquisition evidence lacks historical comparison"]
             )
         expected_comparison = (
             "same"

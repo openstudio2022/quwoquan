@@ -124,6 +124,13 @@ class _ContactConfirmPageState extends ConsumerState<ContactConfirmPage> {
           'FollowUser did not converge in authoritative relationship state',
         );
       }
+      // 权威确认后回写共享关系投影，其他 watch 该投影的页面即时一致。
+      ref
+          .read(userRelationshipStateProvider.notifier)
+          .setFollowing(
+            widget.targetUserId,
+            confirmedCapability.viewerFollowsTarget,
+          );
       if (!mounted || _activeFollowAttempt != attempt) {
         return;
       }

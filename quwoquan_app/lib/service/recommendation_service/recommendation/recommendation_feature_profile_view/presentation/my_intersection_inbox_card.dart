@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_actionable_reasons.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/domain/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
@@ -107,6 +108,12 @@ class _MyIntersectionInboxCardState
         .whereType<IntersectionReason>()
         .take(3)
         .toList(growable: false);
+    // 「可约 N」入口计数只来自已拉取预览（不伪造全量）；无可行动交集不渲染入口。
+    final actionableCount = actionableIntersectionReasons(
+      state.items
+          .where((item) => item.intersectionClass == 'fact')
+          .toList(growable: false),
+    ).length;
     return ProfileInsightSectionCard(
       key: MyIntersectionInboxCard.cardKey,
       title: DiscoveryFeedText.myIntersectionsTitle,
@@ -119,6 +126,8 @@ class _MyIntersectionInboxCardState
           if (summaryState.summary case final summary?) ...<Widget>[
             _IntersectionInboxSummaryStrip(
               summary: summary,
+              actionableCount: actionableCount,
+              onActionableTap: () => _openList(),
               onDimensionTap: (dimension) => _openList(dimension: dimension),
             ),
             const ProfileInsightDivider(),
@@ -149,10 +158,16 @@ class _IntersectionInboxSummaryStrip extends StatelessWidget {
   const _IntersectionInboxSummaryStrip({
     required this.summary,
     required this.onDimensionTap,
+    this.actionableCount = 0,
+    this.onActionableTap,
   });
 
   final IntersectionInboxSummary summary;
   final ValueChanged<String> onDimensionTap;
+
+  /// 已拉取预览内的可行动交集数（REQ-008「可约 N」入口）；0 不渲染。
+  final int actionableCount;
+  final VoidCallback? onActionableTap;
 
   @override
   Widget build(BuildContext context) {
@@ -175,6 +190,23 @@ class _IntersectionInboxSummaryStrip extends StatelessWidget {
               fontSize: AppTypography.iosFootnote,
             ),
           ),
+          if (actionableCount > 0 && onActionableTap != null) ...<Widget>[
+            SizedBox(width: AppSpacing.intraGroupSm),
+            CupertinoButton(
+              key: const ValueKey<String>('my-intersections-actionable-entry'),
+              padding: EdgeInsets.zero,
+              minimumSize: Size.zero,
+              onPressed: onActionableTap,
+              child: Text(
+                DiscoveryFeedText.intersectionActionableEntry(actionableCount),
+                style: TextStyle(
+                  color: AppColors.iosAccent(context),
+                  fontSize: AppTypography.iosFootnote,
+                  fontWeight: AppTypography.medium,
+                ),
+              ),
+            ),
+          ],
           if (newDimensions.isNotEmpty) ...<Widget>[
             SizedBox(width: AppSpacing.intraGroupSm),
             Expanded(

@@ -20,13 +20,13 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/c
 import 'package:quwoquan_app/service/content_service/content/post/application/create_editor_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/circle_service/circle_management/circle/circle_query_typed_double.dart';
 
 Widget _buildCreatePageApp({String? initialTabKey}) {
   return ProviderScope(
     overrides: [
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
     ],
     child: ScreenUtilInit(
@@ -164,8 +164,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          ...mockContentFacetOverrides(MockContentRepository()),
-          circlesListQueryProvider.overrideWithValue(InMemoryCircleQueryReader()),
+          ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
+          circlesListQueryProvider.overrideWithValue(
+            InMemoryCircleQueryReader(),
+          ),
           authSessionControllerProvider.overrideWith(
             _FlippableCreateSession.new,
           ),

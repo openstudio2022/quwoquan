@@ -11,8 +11,8 @@ import 'package:quwoquan_app/service/user_service/relationship/persona_relations
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/social_relation_search_item_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../runtime/fixtures/fixture_user_resolver.dart';
-import '../../../../runtime/fixtures/object_contract_example_reader.dart';
+import 'fixture_user_resolver.dart';
+import 'user_profile_test_builder.dart';
 
 String get kMockCurrentOwnerId => FixtureUserResolver.currentUserVariantUserId;
 
@@ -232,22 +232,11 @@ class MockUserProfileRepository
 
   @override
   Future<AuthorImpactSummary> getAuthorImpact(String personaId) async {
-    final seed = objectContractExampleReader.contentExample(
-      'intersection_core',
-    );
-    final byAuthor = seed?['authorImpact'];
-    if (byAuthor is! Map<Object?, Object?>) {
-      return AuthorImpactSummary(
-        authorId: personaId,
-        total: 0,
-        items: const <AuthorImpactItem>[],
-      );
-    }
     final resolved = _ownerLikePersonaIds.contains(personaId)
         ? 'fixture_user_current'
         : personaId;
-    final entry = byAuthor[resolved];
-    if (entry is! Map<Object?, Object?>) {
+    final entry = _authorImpactWireExample(resolved);
+    if (entry == null) {
       return AuthorImpactSummary(
         authorId: personaId,
         total: 0,
@@ -452,13 +441,7 @@ RelationshipCapabilityViewData _relationshipCapability({
 }
 
 List<Map<String, dynamic>> _scenarioProfiles() {
-  final raw = objectContractExampleReader.requireExample(
-    'user',
-    'user_profile_core',
-  )['profiles'];
-  if (raw is! List<Object?>) return const <Map<String, dynamic>>[];
-  return raw
-      .whereType<Map<Object?, Object?>>()
+  return userProfileWireExamples()
       .map((item) => _stringObjectMap(item).cast<String, dynamic>())
       .toList(growable: false);
 }
@@ -608,3 +591,60 @@ Map<String, Object?> _stringObjectMap(Map<Object?, Object?> raw) {
 int _intValue(Object? value) => value is num ? value.toInt() : 0;
 
 double _doubleValue(Object? value) => value is num ? value.toDouble() : 0;
+
+Map<String, Object?>? _authorImpactWireExample(String authorId) {
+  if (authorId != 'fixture_user_current' &&
+      authorId != 'fixture_user_travel_curator') {
+    return null;
+  }
+  final items = List<Map<String, Object?>>.generate(5, (index) {
+    final primaryText = '读者${index + 1}因你的内容获得帮助';
+    return <String, Object?>{
+      'impactId': 'impact_${authorId}_$index',
+      'helpType': <String>[
+        'community',
+        'decision',
+        'spread',
+        'relationship',
+        'knowledge',
+      ][index],
+      'action': 'view',
+      'intersectionDimension': <String>[
+        'interest',
+        'location',
+        'content',
+        'relationship',
+        'content',
+      ][index],
+      'tagRef': 'tag/user-account/$index',
+      'source': 'content',
+      'count': index + 1,
+      'primaryText': primaryText,
+      'subtitleText': 'user_account 对象级影响证据',
+      'primarySpans': <Map<String, Object?>>[
+        <String, Object?>{'text': primaryText, 'role': 'plain'},
+      ],
+      'representativeActor': const <String, Object?>{
+        'actorId': 'fixture_user_friend',
+        'displayName': '契约好友',
+        'relationLabel': '读者',
+        'privacyState': 'visible',
+        'evidenceRank': 1,
+        'snapshotVersion': 'user-account-impact',
+      },
+      'evidenceSnapshotId': 'impact_snapshot_${authorId}_$index',
+      'countObjectKind': 'person',
+      'iconKey': 'content',
+      'freshAt': '2026-07-20T00:00:00Z',
+      'timeBucket': 'today',
+      'lifecycleState': index.isEven ? 'strengthened' : 'reactivated',
+      'previousStrength': 0.7,
+      'strengthDelta': 0.1,
+    };
+  }, growable: false);
+  return <String, Object?>{
+    'authorId': authorId,
+    'total': items.length,
+    'items': items,
+  };
+}

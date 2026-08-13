@@ -224,11 +224,11 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
     final selectedMembers = allMembers
         .where((m) => _selectedIds.contains(m.userId))
         .map(
-          (member) => <String, Object?>{
-            'userId': member.userId,
-            'displayName': member.displayName,
-            'avatarUrl': member.avatarUrl,
-          },
+          (member) => EmbeddedMemberChipData(
+            userId: member.userId,
+            displayName: member.displayName,
+            avatarUrl: member.avatarUrl,
+          ),
         )
         .toList();
 

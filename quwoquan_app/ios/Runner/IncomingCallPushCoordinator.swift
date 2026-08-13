@@ -26,10 +26,10 @@ final class IncomingCallPushCoordinator {
   ) {
     self.defaults = defaults
     self.secretStore = secretStore
-    migrateLegacySecrets()
+    migrateUserDefaultsSecretsToKeychain()
   }
 
-  private func migrateLegacySecrets() {
+  private func migrateUserDefaultsSecretsToKeychain() {
     if let token = defaults.string(forKey: StoreKey.voipToken),
        !token.isEmpty,
        secretStore.set(token, forKey: StoreKey.voipToken)

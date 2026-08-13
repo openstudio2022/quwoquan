@@ -45,31 +45,15 @@
               "payloadDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
               "canonicalObjectDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
               "sourceIdentity": {
-                "oneOf": [
-                  {
-                    "type": "object", "additionalProperties": false,
-                    "required": ["executionId", "sourceRevision", "sourceDigest", "entityCatalogDigest", "identityDigest"],
-                    "properties": {
-                      "executionId": {"type": "string", "minLength": 1},
-                      "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-                      "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-                      "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-                      "identityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-                    }
-                  },
-                  {
-                    "type": "object", "additionalProperties": false,
-                    "required": ["identityKind", "executionId", "sourceDigest", "canonicalObjectDigest", "migrationEvidenceDigest", "identityDigest"],
-                    "properties": {
-                      "identityKind": {"const": "legacy_canonical_migration"},
-                      "executionId": {"type": "string", "minLength": 1},
-                      "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-                      "canonicalObjectDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-                      "migrationEvidenceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-                      "identityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
-                    }
-                  }
-                ]
+                "type": "object", "additionalProperties": false,
+                "required": ["executionId", "sourceRevision", "sourceDigest", "entityCatalogDigest", "identityDigest"],
+                "properties": {
+                  "executionId": {"type": "string", "minLength": 1},
+                  "sourceRevision": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                  "sourceDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                  "entityCatalogDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                  "identityDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+                }
               },
               "sourceAttribution": {"$ref": "../content/post_manifest.schema.json#/$defs/sourceAttribution"}
             },

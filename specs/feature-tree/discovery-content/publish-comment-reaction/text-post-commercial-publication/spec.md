@@ -30,22 +30,36 @@
 <a id="req-001"></a>
 ### REQ-001 写文字入口正文优先且短文字与文章由用户显式确认
 
-- micro 与 article 两种确认结果均有 widget 与 payload 合同证据。
+- 系统按内容长度给出形态建议（`shouldPublishAsArticleForPayload`），发布确认页把建议
+  固化为 `PublishSettings.textContentType` 并显示「发布形态」行允许用户修改；草稿已
+  确认的形态不被建议覆盖。
+- 提交阶段以确认值为唯一真相（`resolveTextPublishAsArticle`），文字发布在确认值缺失时
+  fail-closed；micro 与 article 两种确认结果均有 widget 与 payload 合同证据。
 
 <a id="req-002"></a>
 ### REQ-002 文字长度合同和发布频控端云同源
 
 - App 与真实 content API 必须对相同输入边界返回同一 canonical 错误语义。
+- 长度上限与形态建议阈值以 `publication_policy.yaml` 为唯一真相，端侧只消费
+  codegen `ContentPublicationPolicy` 常量，禁止页面第二份边界；编辑器常显
+  「当前/上限」剩余量并在接近上限（≥90%）时转警示色。
+- 频控命中按服务端 recovery-after 调度下一次尝试，不做默认回退，不无限立即重试。
 
 <a id="req-003"></a>
 ### REQ-003 发布前安全门 fail-closed 且未获批准时不公开 Post
 
 - 准入的四种结论、人工批准/拒绝与并发重放必须收敛到唯一发布状态。
+- allow 原子创建 published Post/receipt/outbox；review 与 unavailable 均落
+  pending_review 且不公开；reject 零写入并返回结构化拒绝；production composition
+  缺 SafetyGate 端口时启动 fail-closed；同一 intent 重放不得替换已发布内容。
 
 <a id="req-004"></a>
 ### REQ-004 发布意图可恢复可管理且鉴权失败不空转
 
 - 重启后必须恢复待发布状态；错误分类决定可重试或放弃，二者不得同时可用。
+- unauthorized 按 reauthenticate 永久阻断且不再网络重试；rate_limited 尊重服务端
+  recovery-after 调度；仅 published receipt 清理草稿，放弃后后台 flush 与手动重试
+  均不得复活 intent；发布任务页展示状态、错误与重试/放弃动作。
 
 <a id="req-005"></a>
 ### REQ-005 发布成功立即回流真实 Post 并刷新消费投影
@@ -56,6 +70,9 @@
 ### REQ-006 标签和实体只以可证实 semantic mention 进入交集投影
 
 - picker、payload、服务端投影和回读均有合同证据。
+- `semanticMentions` 是发布唯一可写 grounding 通道；端侧防御性过滤 candidate 与
+  畸形 targetRef（`isSemanticTargetRefValid` 镜像服务端 `semantic.ValidTargetRef`），
+  无选择时不合成空 grounding；服务端只投影合法 published mention。
 
 <a id="req-007"></a>
 ### REQ-007 创作发布漏斗进入产品遥测单轨并可运营
@@ -184,59 +201,17 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 写文字入口正文优先且短文字与文章由用户显式确认
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：micro 与 article 两种确认结果均有 widget 与 payload 合同证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-002"></a>
-### OPEN-002 文字长度合同和发布频控端云同源
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：App local_contract 与真实 content API 对同一边界和错误码给出一致结果。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-003"></a>
-### OPEN-003 发布前安全门 fail-closed 且未获批准时不公开 Post
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：四种结论、人工批准/拒绝与并发重放均有 local_contract 和 api_integration 证据。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-004"></a>
-### OPEN-004 发布意图可恢复可管理且鉴权失败不空转
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：重启恢复、错误分类、重试与放弃状态机均有 local_contract。
-- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效
-
 <a id="open-005"></a>
 ### OPEN-005 发布成功立即回流真实 Post 并刷新消费投影
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：写短文字和写文章两条完整 UAT 均从底栏加号走到回读页。
+- 影响或价值：仍缺 `RUN_PATROL_ACCEPTANCE` 真机窗口的执行证据与真机边界值发布
+  验收；单条入口旅程 UAT `text_publication_entry_journey__user_acceptance_test.dart`
+  已覆盖底栏加号→写文字→显式确认→发布→去向摘要→回读→workBrowser，与两条 draft
+  深链文字 UAT、弱网五段旅程 local_contract、五步联程 api_integration 均绑定 `#gwt-005`。
 - 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效
-
-<a id="open-006"></a>
-### OPEN-006 标签和实体只以可证实 semantic mention 进入交集投影
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：picker、payload、服务端投影和回读均有合同证据。
-- 完成判定：`GWT-006` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-007"></a>
 ### OPEN-007 创作发布漏斗进入产品遥测单轨并可运营

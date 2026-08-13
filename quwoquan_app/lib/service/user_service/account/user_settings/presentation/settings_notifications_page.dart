@@ -129,7 +129,7 @@ class _SettingsNotificationsPageState
 
   Future<void> _update(Future<bool> operation) async {
     if (!await operation && mounted) {
-      final error = ref.read(userSettingsSectionsProvider).rawError;
+      final error = ref.read(userSettingsSectionsProvider).actionError;
       await AppActionErrorFeedback.show(
         context,
         semantic: runtimeErrorSemantic(

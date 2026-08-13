@@ -24,25 +24,25 @@ HANDOFFS_RELATIVE_ROOT = Path("data/local/workspace/content-pre-acquisition-hand
 _CARRIERS = ("homepage", "article", "image", "video")
 _CARRIER_REQUIREMENTS: dict[str, dict[str, Any]] = {
     "homepage": {
-        "phase1Mode": "external_acquisition",
+        "externalInputMode": "external_acquisition",
         "requiredExternalInputKinds": ["professional_image_acquisition"],
         "operatorPrompt": "先取得并冻结主页专业图片，再准备 homepage envelope。",
     },
     "article": {
-        "phase1Mode": "execution_source_unit_freeze",
+        "externalInputMode": "execution_source_unit_freeze",
         "requiredExternalInputKinds": [],
         "operatorPrompt": (
-            "article phase1 不接受外部 acquisition；由 execution 内 sourceUnit "
+            "article 预获取不接受外部 acquisition；由 execution 内 sourceUnit "
             "create-once freeze 派生 READY。"
         ),
     },
     "image": {
-        "phase1Mode": "external_acquisition",
+        "externalInputMode": "external_acquisition",
         "requiredExternalInputKinds": ["professional_image_acquisition"],
         "operatorPrompt": "先取得并冻结图片作品专业图片，再准备 image envelope。",
     },
     "video": {
-        "phase1Mode": "external_acquisition",
+        "externalInputMode": "external_acquisition",
         "requiredExternalInputKinds": ["professional_video_acquisition"],
         "operatorPrompt": "先取得并冻结可播放专业视频，再准备 video envelope。",
     },
@@ -167,6 +167,31 @@ def _require_canonical_handoff_location(
         )
 
 
+def _load_superseded_handoff_identity(path: Path) -> dict[str, Any]:
+    """Load a retired revision by identity + digest integrity only.
+
+    Superseded revisions are immutable evidence frozen under the schema of
+    their own creation time; they are referenced by downstream create-once
+    receipts and must never be rewritten.  The supersession chain only needs
+    the prior identity triple and its self-consistent handoffDigest, so a
+    contract rename in the active schema must not invalidate the chain.
+    Active handoffs keep going through the fully validating loader.
+    """
+    handoff = read_json(path.expanduser().resolve())
+    if not isinstance(handoff, dict):
+        raise _typed("INVALID", "superseded handoff must be an object")
+    if handoff.get("schema") != HANDOFF_SCHEMA:
+        raise _typed("INVALID", f"superseded handoff schema mismatch: {path}")
+    stable = {
+        key: value
+        for key, value in handoff.items()
+        if key not in {"handoffDigest", "createdAt"}
+    }
+    if handoff.get("handoffDigest") != _digest(stable):
+        raise _typed("DIGEST_DRIFT", f"superseded handoffDigest drift: {path}")
+    return handoff
+
+
 def _supersedes_reference(
     *,
     handoff_id: str,
@@ -187,7 +212,7 @@ def _supersedes_reference(
             "handoffRevision>1 requires explicit supersedes evidence",
         )
     path = supersedes_handoff.expanduser().resolve()
-    prior = load_pre_acquisition_handoff(path)
+    prior = _load_superseded_handoff_identity(path)
     _require_canonical_handoff_location(
         path,
         prior,

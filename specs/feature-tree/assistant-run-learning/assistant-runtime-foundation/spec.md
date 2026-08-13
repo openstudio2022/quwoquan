@@ -112,7 +112,17 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：仍缺的实现与验收证据是 `RunItem.payload`、trigger/context/surface/presentation 内部快照及 planner/observation/tool retrieval/orchestration 的匿名 Map/`dynamic` 收敛，以及这些类型在真实后台恢复、重放与压缩链路中的同结构证明；metadata-owned `AssistantRunTerminalSnapshotView` 已以无 TTL owner 存储持久化 answer、可见 process/citation、failure 与 selected policy，GetRun、历史恢复和 journal 过期后的 SSE 终态重放已共用该事实，但长任务中间过程仍无法获得与终态同等级的字段安全证明。
-- 完成判定：按 `run artifacts -> turn protocol -> planner/observation -> tool retrieval -> orchestration` 将剩余弱类型数据收敛为 metadata-owned 具名 DTO/sealed type，并由持久化/重放/压缩使用同一结构；弱类型棘轮只减不增，禁止另建兼容 decoder 或第二 projection。
+- 完成判定：`SIT-001` 的持久化、重放与端侧 Facet 消费全部建立在具名类型之上——按 `run artifacts -> turn protocol -> planner/observation -> tool retrieval -> orchestration` 将剩余弱类型数据收敛为 metadata-owned 具名 DTO/sealed type，并由持久化/重放/压缩使用同一结构；弱类型棘轮只减不增，禁止另建兼容 decoder 或第二 projection。
+- 度量口径：棘轮由 `verify_assistant_search_weak_typing_ratchet.py` 承载，分 `map_string_dynamic`、`map_string_object_optional`、`bare_dynamic` 三个互不重叠的桶。
+  - 历史修正两次：最初口径把每个 `Map<String, dynamic>` 同时计入两个指标（209/373 里 209 为重复计数），且存量已漂到 292/522 未被 CI 拦截；第二版口径曾把 `Map<String, Object?>` 写成「目标形态」并只作 informational 指标，这给 `dynamic -> Object?` 的机械改写留下洗数通道——`Object?` 的匿名 Map 仍是无 schema、字符串 key 访问的弱类型。
+  - 现口径三桶全部只减不增；唯一目标形态是 metadata-owned 具名 DTO/sealed type，`Map<String, Object?>` 仅允许驻留在 serde（fromJson/toJson wire 层）与契约登记的开放扩展槽两类边界。
+- 已收敛：`domain` 与 `application/public` 之间 6 个逐字节重复的镜像文件已删除（timeline row / turn codec / timeline payload / turn message resolver / ui usage stats / orchestrator state contract），其中 4 个为零引用死代码，计数因此从 290 / 225 降到 240 / 181。这批重复说明 `domain -> application/public` 的分层搬迁未收尾；后续若再发现同名副本，按同一判据（精确解析 import 指向确认零引用）清理，不要保留"暂时并存"的第二份。
+- 剩余方向是自底向上的真 typed 化三路径，另有两项受限。
+  - 其一已完成前两族——`system_context_envelope` 与 `understanding_result` 已收编进 `_shared/*/schema.yaml` codegen 单轨（前者纯替换并按契约单轨删除了 location 的 country/region/city 双键读；后者因位于 LLM 直出边界保留手写 lenient 归一化 wrapper，未知键投影、脏 intent 过滤与枚举回退在 wrapper 一次完成后全程 strict typed，该 wrapper 的约 11 处 Map 属 serde 边界残量）。
+  - 其二已完成——`PersistedAssistantTimelinePayload` 从 `_entries` 匿名 Map 袋收成 typed 具名类：解码在 `PersistedTimelineTurnCodec`/`fromMap` 磁盘边界一次完成，流式增量 `copyWithMerged` 保留整键覆盖语义，`visibleProcessTimeline`/`resolvedDisplayMarkdown` 等派生逻辑收为 payload getter；`assistantBoundaryOutcome` 键随后复核确认全仓零写入方，已整键退役（进入 Codec retired 键集，解码丢弃防止经 `extra` 回流），payload 内弱 Map 残量清零。
+  - 其三已完成——encode->resolve 往返桥整体退役：`assistant_turn_message_resolver.dart`、`persisted_assistant_turn.dart` 裸 Map resolve 全组与 `persisted_assistant_turn_contract.dart` 转发层删除，bubble 直接读 `row.persisted.*`；`assistant_transcript_row_patch.dart` 死代码与 `assistant_run/domain/assistant_display_text_resolver.dart` 零引用镜像一并清理。
+  - Row 开放袋已收敛——`dialogueState` / `uiActions` 两袋复核为全仓零业务消费，整组退役（键名进 `kTranscriptRetiredKeys` 丢弃语义）；`uiUsageStats` 收成 typed `AssistantUiUsageStatsViewData`（补 `toProtocolMap` canonical 序列化出口，Map 编解码只在 Codec 边界）；`uiReferences` 收成 `List<AssistantCitation>`（沿用 `fromReferenceMap`/`toReferenceMap` 单轨编解码，解析失败 fail-closed 丢弃）；`assistant_ui_usage_stats_view_data.dart` 的零调用累计合并函数族一并删除。计数：map 231 -> 181 -> 157，bare 169 -> 148 -> 138，Object? 桶保持 27 未增。
+  - 后续方向：Row 仅剩 `runArtifacts`（活跃诊断袋，`presentationDocument` 提键为下一步）与 `extra`（协议开放兜底槽）两个弱 Map；`TaskGraph`/`SessionOrchestratorState`/`TurnSynthesisState` 的 schema 收编。另两项受限：`run_artifacts_map_partition.dart` 唯一调用方是 generated `run_artifacts.g.dart`，改签名需 Go 生成器协同；手写 `TaskGraph` 与 `AssistantTaskGraphWire` 存在双轨，合并需产品裁决。
 - 依赖：assistant metadata schema 与 app codegen。
 
 <a id="open-004"></a>
@@ -122,5 +132,5 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：尚缺 task、page context、entry personalization、creation assistance 与 search facade 的独立对象、source/store 和三层验收归属，这些能力仍混在 `assistant_session` 编排服务，且 `ReportPageContext` 在无 run 时也会调用。`assistant_turn_view` 已拥有独立 operations、HTTP Route、QueryFacade、Mongo Reader 与响应 Slice，`AssistantSession` 聚合服务和 `SessionRunStore` 已删除 turn 列表能力，local_contract 与真实 Mongo/Redis/Postgres API integration 已通过，但候选绑定的四环境 Remote UAT、SLI/SLO 与回滚证据尚缺。聚合根裸对象硬门已经建立，旧 `assistant_run` 根上 14 个未进入真实 Mongo `AssistantTurn` 的万能 payload 字段已删除。技能目录已由 `assistant.skill_catalog` 单轨拥有，`GetLearningOpsSummary` 与 `AssistantLearningOpsSummaryView` 已由 `assistant_learning_fact` 单轨拥有。
-- 完成判定：把 task、入口态与检索门面拆出聚合。`assistant_turn_view` 持续作为 turn 唯一读侧，每个拆出对象都具有独立 contract、application facade、source/store 归属与三层证据。`verify_metadata` 持续断言 `kind: aggregate_root` 的根字段不得为裸 `object`/`[]object`，临时 Post allowlist 只减不增且清零后删除。
+- 完成判定：把 task、入口态与检索门面拆出聚合后，`SIT-001` 的 owner 隔离会话/终态轮次分页与端侧对象级 Facet 消费仍然成立——`assistant_turn_view` 持续作为 turn 唯一读侧，每个拆出对象都具有独立 contract、application facade、source/store 归属与三层证据。`verify_metadata` 持续断言 `kind: aggregate_root` 的根字段不得为裸 `object`/`[]object`，临时 Post allowlist 只减不增且清零后删除。
 - 依赖：`quwoquan_service/tools/verify_metadata`。

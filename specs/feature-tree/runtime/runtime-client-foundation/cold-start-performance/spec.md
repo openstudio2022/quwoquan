@@ -168,7 +168,7 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：在不新增远程 Crash SDK、不安装 signal handler 的约束下，部分 Swift fatal、abort 与 signal 崩溃只能在 MetricKit 后续送达诊断后确认，无法保证下一次启动即时进入恢复页。
-- 完成判定：NSException、MetricKit 与用户终止负例均有真机证据，未覆盖边界在发布说明和监控中保持可见。
+- 完成判定：`GWT-002` 的致命异常分流判定在 NSException、MetricKit 与用户终止负例上均有真机证据，未覆盖边界在发布说明和监控中保持可见。
 
 <a id="open-003"></a>
 ### OPEN-003 静默异常队列端云闭环

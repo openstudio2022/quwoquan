@@ -17,8 +17,10 @@ class AssistantSkillCenterItem {
   bool get hasSubscription => subscriptions.isNotEmpty;
   bool get enabled => setting?.status != SkillUserSettingStatus.disabled;
   bool get proactiveCapable {
-    final mode = catalog.activationMode?.trim().toLowerCase() ?? '';
-    return mode == 'proactive' || mode == 'hybrid';
+    return switch (catalog.activationMode) {
+      SkillActivationMode.proactive || SkillActivationMode.hybrid => true,
+      SkillActivationMode.reactive => false,
+    };
   }
 
   bool get consentGranted {

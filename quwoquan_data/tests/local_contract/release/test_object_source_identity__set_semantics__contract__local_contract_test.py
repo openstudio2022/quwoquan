@@ -10,40 +10,17 @@ from content.release.canonical.object_transaction_contract import (
 )
 
 
-def _legacy_identity(*, object_digit: str, evidence_digit: str) -> dict[str, str]:
-    return {
-        "identityKind": "legacy_canonical_migration",
+def test_identity_set_rejects_retired_migration_identity_shape() -> None:
+    retired_shape = {
+        "identityKind": "retired_migration_kind",
         "executionId": "sequence-017-article",
         "sourceDigest": "sha256:" + "1" * 64,
-        "canonicalObjectDigest": "sha256:" + object_digit * 64,
-        "migrationEvidenceDigest": "sha256:" + evidence_digit * 64,
+        "canonicalObjectDigest": "sha256:" + "2" * 64,
+        "migrationEvidenceDigest": "sha256:" + "3" * 64,
     }
 
-
-def test_legacy_identity_set_allows_multiple_objects_for_one_execution() -> None:
-    first = _legacy_identity(object_digit="2", evidence_digit="3")
-    second = _legacy_identity(object_digit="4", evidence_digit="5")
-
-    rows, digest = source_identity_set([second, first, first])
-    replay_rows, replay_digest = source_identity_set([first, second])
-
-    assert rows == replay_rows == [
-        {
-            "identityKind": "legacy_canonical_migration",
-            "sourceDigest": first["sourceDigest"],
-            "canonicalObjectDigest": first["canonicalObjectDigest"],
-            "migrationEvidenceDigest": first["migrationEvidenceDigest"],
-            "executionIds": [first["executionId"]],
-        },
-        {
-            "identityKind": "legacy_canonical_migration",
-            "sourceDigest": second["sourceDigest"],
-            "canonicalObjectDigest": second["canonicalObjectDigest"],
-            "migrationEvidenceDigest": second["migrationEvidenceDigest"],
-            "executionIds": [second["executionId"]],
-        },
-    ]
-    assert digest == replay_digest
+    with pytest.raises(ObjectTransactionError, match="SOURCE_IDENTITY_INVALID"):
+        source_identity_set([retired_shape])
 
 
 def test_modern_identity_set_still_rejects_one_execution_with_drift() -> None:

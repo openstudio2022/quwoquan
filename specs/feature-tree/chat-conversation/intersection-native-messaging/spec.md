@@ -67,8 +67,10 @@
 <a id="req-003"></a>
 ### REQ-003 交集只出现在主体明确的位置
 
-- 交集只在联系首页与 1v1 会话头部展示；群会话头部不展示交集，消息首页不叠加交集行。
+- 交集常驻展示只在联系首页与 1v1 会话头部；群会话头部不展示交集，消息首页不叠加交集行。
+- 唯一例外是活动群聊破冰卡：新成员加入 Gathering 活动群时，允许一次性系统卡片按 disclosure 裁剪展示该成员与既有成员的交集主句；它是加入事件触发的固定位，不是消息流插播，不常驻、不重复下发。
 - 展示必须给出具体交集点，最多两个；不得以聚合计数表述代替具体内容。
+- 联系首页与会话头的交集载体是 chat contracts 的 typed `ContactIntersectionFact`（intersectionId/kind/dimension/intersectionClass/primaryText，≤2 条）；禁止弱类型字符串列表或资料字段拼接伪装。
 
 <a id="req-004"></a>
 ### REQ-004 依据必须由服务端按当前发起方重解析
@@ -121,16 +123,25 @@
 - THEN 展示与行动分流结果随事实变化而变化，端侧代码路径不发生任何改动。
 - AND 不出现按垂类命名的展示分支或行动分支。
 
+<a id="sit-004"></a>
+### SIT-004 活动群破冰卡一次性下发且不常驻
+
+- GIVEN 一个 Gathering 活动群，新成员与既有成员之间存在按 disclosure 裁剪后可展示的交集主句。
+- WHEN 该新成员加入活动群并且全体成员打开会话。
+- THEN 会话内出现一张由加入事件触发的一次性系统破冰卡，展示该成员与既有成员的交集主句（≤2 条、整体来自云侧）。
+- AND 破冰卡不常驻、不随会话重开重复下发；无可展示交集时不下发占位卡。
+- AND 普通群与 1v1 会话不出现破冰卡；群会话头部仍不展示交集。
+
 ## 8. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 消息域尚无任何交集接口
+### OPEN-001 消息域交集接口未闭环
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前联系首页的交集摘要由资料字段拼接伪装且圈子与群组行展示裸标识，会话页没有任何交集与助手落地，打招呼不携带交集引用。消息域因此无法承接交集行动，差异化在消息层面不成立。
-- 完成判定：`SIT-001` 与 `SIT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：尚缺非破冰会话的常驻交集聚合（契约演进）、打招呼交集引用的端到端 UAT 证据。活动群一次性破冰卡已端到端落地（`SIT-004`）：服务端 Gathering 成员真实新增经 `GatheringMemberJoinedHook` 触发 `GatheringIcebreakerProjector`，按「新成员 × 既有成员」经既有交集读面解析主句（≤2 条、Chat 不拼句），写入幂等 `intersection_icebreaker` card 消息（同成员重放收敛）、无交集不占位、角色变更与移除不触发、普通群与 1v1 结构上无触发面，证据见 `gathering_icebreaker_projector__local_contract_test.go` 与 `gathering_member_joined_hook__local_contract_test.go`。App 会话页气泡渲染云侧主句原文（无跳转 chevron、副句可空不占位），证据见 `chat_message_bubble_widget__local_contract_test.dart` 破冰卡用例。联系首页链路已实现——wire 为 typed `ContactIntersectionFact`（弱类型 `summaryIntersections` 已退役），生产 resolver 经 content 对象交集读面按当前 viewer/contact 解析并透传 `intersectionClass`，主句缺失或身份字段缺失整条丢弃（local_contract 覆盖）。1v1 会话头破冰依据展示已落地（透传 `originIntersectionSnapshot.primaryText`、群头类型防御、无快照不占位，widget 测试见 [`conversation-intersection-header` OPEN-001](./conversation-intersection-header/spec.md#open-001)）。仍缺保底路径：活动群成员间无人对人交集时（破冰卡按设计不占位），群内成员看不到「这个行动从何而来」的最薄来源说明（Gathering `sourceRefs` 已随 GatheringPublished 携带，Board 活动头或群内说明行是候选落点）。该保底说明与非破冰常驻聚合同属本 OPEN 承接。
+- 完成判定：`SIT-001`、`SIT-002` 与 `SIT-004` 对应行为满足且真实测试 `spec_ref` 有效；活动群无交集保底来源说明有实现与测试证据或经产品裁决显式豁免。
 
 <a id="open-002"></a>
 ### OPEN-002 垂类无关性尚无可执行证据

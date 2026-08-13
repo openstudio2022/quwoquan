@@ -10,7 +10,8 @@ import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_works_tab.dart';
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
 
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
@@ -24,12 +25,29 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
 }
 
 Widget _buildApp() {
+  final posts = [
+    contentPostViewDataBuilder(
+      postId: 'profile-article',
+      contentType: 'article',
+      authorId: 'nature_photographer',
+      title: '极简摄影的真谛',
+    ),
+    contentPostViewDataBuilder(
+      postId: 'profile-photo',
+      contentType: 'image',
+      authorId: 'nature_photographer',
+      title: '光影的节奏',
+      mediaUrls: const [testContentImageUrl],
+    ),
+  ];
   return ProviderScope(
     overrides: [
       profileQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
       ),
-      ...mockContentFacetOverrides(MockContentRepository()),
+      ...mockContentFacetOverrides(
+        store: InMemoryContentPostStore(posts: posts),
+      ),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
       ),

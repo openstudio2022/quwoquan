@@ -306,6 +306,7 @@ class IntersectionTargetNavigator {
           sourceRef,
           attribution,
           evidenceReason,
+          contextObjectTarget,
         );
       default:
         return const IntersectionActionDispatchResult(
@@ -456,6 +457,7 @@ class IntersectionTargetNavigator {
     String sourceRef,
     IntersectionNavAttribution? attribution,
     IntersectionReason? evidenceReason,
+    IntersectionTarget? contextObjectTarget,
   ) {
     final target = hint.target;
     if (target == null || target.objectId.trim().isEmpty) {
@@ -463,6 +465,12 @@ class IntersectionTargetNavigator {
         IntersectionActionDispatchStatus.missingTarget,
       );
     }
+    // 双人邀约（1对1）：展示位上下文对象是人（如他人主页交集卡）时，
+    // TA 即受邀者——创建预设收紧为容量 2 + 邀请制，发布后自动发出邀请。
+    final invitee =
+        contextObjectTarget != null && _isPersonTarget(contextObjectTarget)
+        ? contextObjectTarget.objectId.trim()
+        : '';
     GatheringCreateNavigationBinding? rawBinding;
     try {
       rawBinding = ProviderScope.containerOf(
@@ -524,6 +532,10 @@ class IntersectionTargetNavigator {
         ),
       ),
       referralSource: ReferralSource.myIntersections,
+      inviteePersonaId: invitee,
+      inviteeDisplayName: invitee.isEmpty || contextObjectTarget == null
+          ? ''
+          : gatheringObjectName(evidenceReason, contextObjectTarget),
     );
     if (attribution != null) {
       onTrack?.call(target, attribution);

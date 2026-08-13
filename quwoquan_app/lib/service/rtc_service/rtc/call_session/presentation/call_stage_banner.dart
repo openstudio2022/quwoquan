@@ -135,7 +135,9 @@ class CallStageBanner extends ConsumerWidget {
             SizedBox(
               width: AppSpacing.iconSmall,
               height: AppSpacing.iconSmall,
-              child: AppRequestFeedback.inline(indicatorColor: AppColors.white),
+              child: AppRequestFeedback.inline(
+                indicatorColor: AppColors.immersiveForeground,
+              ),
             ),
             SizedBox(width: AppSpacing.sm),
           ],

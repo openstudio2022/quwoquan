@@ -270,54 +270,6 @@ bool _isSensitiveSourceQueryKey(String rawKey) {
       key.contains('auth');
 }
 
-class _IntroductionEmptyState extends StatelessWidget {
-  const _IntroductionEmptyState({required this.onBack});
-
-  final VoidCallback onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerLg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(
-              CupertinoIcons.doc_text_search,
-              size: AppSpacing.iconLarge,
-              color: AppColors.iosSecondaryLabel(context),
-            ),
-            SizedBox(height: AppSpacing.containerSm),
-            Text(
-              ObjectHomepageText.objectIntroEmptyTitle,
-              style: TextStyle(
-                fontSize: AppTypography.iosTitle3,
-                fontWeight: AppTypography.semiBold,
-                color: AppColors.iosLabel(context),
-              ),
-            ),
-            SizedBox(height: AppSpacing.intraGroupXs),
-            Text(
-              ObjectHomepageText.objectIntroEmptyMessage,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.iosBody,
-                color: AppColors.iosSecondaryLabel(context),
-              ),
-            ),
-            SizedBox(height: AppSpacing.containerMd),
-            CupertinoButton.filled(
-              onPressed: onBack,
-              child: const Text(ObjectHomepageText.objectIntroBackToHomepage),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _IntroductionCard extends StatelessWidget {
   const _IntroductionCard({required this.child});
 

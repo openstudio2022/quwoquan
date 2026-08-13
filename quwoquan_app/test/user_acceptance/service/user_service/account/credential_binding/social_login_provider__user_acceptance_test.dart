@@ -1,3 +1,4 @@
+// readiness_case: credential_binding_social_login_app_uat
 // spec_ref: specs/feature-tree/runtime/runtime-external-integration/provider-adapter-conformance-suite/spec.md#gwt-002
 library;
 

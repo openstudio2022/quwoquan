@@ -23,7 +23,10 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/h
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
+import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
+import 'package:quwoquan_app/runtime/di/client_state_sync_dependencies.dart';
+import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
@@ -38,6 +41,7 @@ import 'package:quwoquan_app/design_system/layout/app_terminal_viewport.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/runtime/shell/interest_match/interest_match_page.dart';
@@ -47,10 +51,11 @@ import 'package:quwoquan_app/runtime/shell/welcome/welcome_flower_mark.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../support/service/content_service/content/post/content_facet_overrides.dart';
+import '../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../support/runtime/cloud_boundary_test_scope.dart';
-import '../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../support/service/notification_service/notification_delivery/notification/app_message_typed_double.dart';
 import '../../../support/service/user_service/relationship/greeting_request/user_typed_facet_test_support.dart';
 import '../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
@@ -95,15 +100,34 @@ List<Override> _shellTestOverrides({
   bool flippable = false,
   VisitRecorderService? visitRecorderService,
 }) {
+  final contentStore = InMemoryContentPostStore(
+    posts: [
+      ...contentPostListBuilder(
+        contentType: 'image',
+        count: 2,
+        idPrefix: 'shell-image',
+      ),
+      ...contentPostListBuilder(
+        contentType: 'video',
+        count: 2,
+        idPrefix: 'shell-video',
+      ),
+      ...contentPostListBuilder(
+        contentType: 'article',
+        count: 2,
+        idPrefix: 'shell-article',
+      ),
+    ],
+  );
   return <Override>[
     ...sealedCloudBoundaryOverrides(),
     visitRecorderServiceProvider.overrideWithValue(
       visitRecorderService ?? VisitRecorderService(),
     ),
-    ...mockContentFacetOverrides(MockContentRepository()),
+    ...mockContentFacetOverrides(store: contentStore),
     // 壳会把 /chat 与 /profile 页签一起挂进 IndexedStack：这两条对象级 typed port
     // 必须显式给出，否则 provider 图会一路走到被封死的 generated client。
-    chatRepositoryCompositionProvider.overrideWithValue(MockChatRepository()),
+    ...chatTestRepositoryOverrides(),
     appMessageQueryProvider.overrideWithValue(
       const EmptyAppMessageQueryDouble(),
     ),
@@ -663,6 +687,57 @@ void main() {
       expect(tester.takeException(), isNull);
       container.dispose();
     });
+
+    testWidgets(
+      // spec_ref: specs/feature-tree/discovery-content/content-display-consistency/viewer-profile-state-sync-contract/spec.md#gwt-001.t6
+      'outbox 终态失败经壳层弹统一警示轻提示并一次性消费信号',
+      (tester) async {
+        await tester.pumpWidget(_buildShell(AppRoutePaths.home));
+        await tester.pump(const Duration(milliseconds: 300));
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(MainAppShell)),
+        );
+
+        container
+            .read(clientStateSyncTerminalFailureProvider.notifier)
+            .publish(
+              ClientStateSyncOutboxEntry(
+                coalesceKey: 'post:like:post-terminal',
+                objectType: 'post',
+                objectId: 'post-terminal',
+                intentType: 'like',
+                desiredBoolValue: true,
+                confirmedBoolValue: false,
+                nextFlushAt: DateTime.now().toUtc(),
+                firstQueuedAt: DateTime.now().toUtc().subtract(
+                  const Duration(hours: 73),
+                ),
+              ),
+            );
+        await tester.pump();
+        await tester.pump();
+
+        // 统一恢复语义文案（恢复组，无新增字面量）+ 警示 tone 圆点。
+        expect(
+          find.text(SearchText.recoveryServiceUnavailableMessage),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey<String>('app-toast-tone-dot')),
+          findsOneWidget,
+        );
+        // 一次性消费：信号被壳层清空，不会重复提示。
+        expect(container.read(clientStateSyncTerminalFailureProvider), isNull);
+
+        // 主动收起 toast 清理自动消失计时器（避免长推帧引入 shell 周期任务）。
+        AppToast.dismiss();
+        await tester.pump();
+        expect(
+          find.text(SearchText.recoveryServiceUnavailableMessage),
+          findsNothing,
+        );
+      },
+    );
 
     testWidgets('底部导航展示五栏，视频书成为独立一级入口', (tester) async {
       _suppressExpectedErrors();

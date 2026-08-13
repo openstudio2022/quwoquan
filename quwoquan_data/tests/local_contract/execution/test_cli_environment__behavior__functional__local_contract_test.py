@@ -333,6 +333,7 @@ def test_agent_reexec_keeps_bytecode_out_of_the_source_tree(
     ("argv", "expected"),
     [
         (["cli.py", "task", "execute"], True),
+        (["cli.py", "task", "acquire-videos"], True),
         (["cli.py", "task", "preflight"], False),
     ],
 )

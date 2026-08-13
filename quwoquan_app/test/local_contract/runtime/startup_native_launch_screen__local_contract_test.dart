@@ -913,9 +913,20 @@ void main() {
     });
 
     test('设备 probe 明确检查原生镜像、可见时限和 Flutter 欢迎事件', () {
-      final probe = _readAppFile(
-        'scripts/device/verify_startup_first_frame.py',
-      );
+      // probe 实现单轨在 startup_first_frame/ 包内，入口只做 re-export；
+      // 源码断言读取「入口 + 包内全部模块」的拼接文本。
+      final probeSources =
+          _appFile('scripts/device/startup_first_frame/__init__.py')
+              .parent
+              .listSync()
+              .whereType<File>()
+              .where((file) => file.path.endsWith('.py'))
+              .toList()
+            ..sort((a, b) => a.path.compareTo(b.path));
+      final probe = <String>[
+        _readAppFile('scripts/device/verify_startup_first_frame.py'),
+        for (final file in probeSources) file.readAsStringSync(),
+      ].join('\n');
       final motionProbe = _readAppFile(
         'scripts/device/verify_welcome_motion_frames.py',
       );

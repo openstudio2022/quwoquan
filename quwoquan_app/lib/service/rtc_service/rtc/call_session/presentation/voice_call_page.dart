@@ -11,8 +11,10 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/active_call_service.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_presenter.dart';
+import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/second_incoming_call_provider.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_participant.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_state.dart';
@@ -25,6 +27,7 @@ import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/c
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_quality_indicator.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_stage_banner.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/participant_list_sheet.dart';
+import 'package:quwoquan_app/design_system/spacing/call_surface_motion.dart';
 
 class VoiceCallPage extends ConsumerStatefulWidget {
   const VoiceCallPage({super.key, required this.callId});
@@ -60,7 +63,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
 
   void _startControlsHideTimer() {
     _controlsHideTimer?.cancel();
-    _controlsHideTimer = Timer(const Duration(seconds: 5), () {
+    _controlsHideTimer = Timer(CallSurfaceMotion.voiceControlsAutoHide, () {
       if (mounted) setState(() => _controlsVisible = false);
     });
   }
@@ -101,6 +104,13 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
           context.go(AppRoutePaths.chat);
         }
       }
+    });
+
+    // 通话中第二来电轻提示：不覆盖通话 UI，展示后消费掉状态。
+    ref.listen(secondIncomingCallProvider, (_, envelope) {
+      if (!mounted || envelope == null) return;
+      ref.read(secondIncomingCallProvider.notifier).consume();
+      AppToast.show(context, CallText.callSecondIncomingHint);
     });
 
     final participants = participantState.participants;
@@ -202,7 +212,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                     bottom: 0,
                     child: AnimatedOpacity(
                       opacity: _controlsVisible ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 250),
+                      duration: CallSurfaceMotion.surfaceTransition,
                       child: IgnorePointer(
                         ignoring: !_controlsVisible,
                         child: CallControlsBar(

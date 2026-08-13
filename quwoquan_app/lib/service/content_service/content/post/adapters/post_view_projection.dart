@@ -269,6 +269,29 @@ List<ArticleLayoutFragment> _fragmentsFromDocument(
         );
         bodyCursor += node.text.length + 1;
         break;
+      case ArticleDocumentNodeType.quote:
+      case ArticleDocumentNodeType.callout:
+      case ArticleDocumentNodeType.codeBlock:
+        // 富块进入布局管道（GWT-003）：独立语义块，不压 paragraph。
+        final richText = node.text.trimRight();
+        if (richText.trim().isEmpty) {
+          break;
+        }
+        fragments.add(
+          ArticleLayoutFragment(
+            kind: ArticleLayoutFragmentKind.semanticBlock,
+            block: _blockFromNode(node, bodyCursor),
+            text: richText,
+            textStyleKey: switch (node.type) {
+              ArticleDocumentNodeType.quote => 'quote',
+              ArticleDocumentNodeType.callout => 'callout',
+              _ => 'codeBlock',
+            },
+            textAlign: node.textAlign,
+          ),
+        );
+        bodyCursor += node.text.length + 1;
+        break;
     }
   }
   return fragments;
@@ -283,12 +306,17 @@ ArticleDocumentBlock _blockFromNode(ArticleDocumentNode node, int offset) {
       ArticleDocumentNodeType.orderedItem =>
         ArticleDocumentBlockType.orderedItem,
       ArticleDocumentNodeType.bulletItem => ArticleDocumentBlockType.bulletItem,
+      ArticleDocumentNodeType.quote => ArticleDocumentBlockType.quote,
+      ArticleDocumentNodeType.callout => ArticleDocumentBlockType.callout,
+      ArticleDocumentNodeType.codeBlock => ArticleDocumentBlockType.codeBlock,
       _ => ArticleDocumentBlockType.paragraph,
     },
     offset: offset,
     text: node.text,
     textAlign: node.textAlign,
     listDepth: node.listDepth,
+    codeLanguage: node.codeLanguage,
+    spans: node.spans,
   );
 }
 
@@ -389,6 +417,27 @@ List<ArticleContentBlockView> _projectArticleContentBlocksFromDocument(
             continue;
           }
           blocks.add(ArticleContentBlockView(type: 'paragraph', body: text));
+          break;
+        case ArticleDocumentNodeType.quote:
+        case ArticleDocumentNodeType.callout:
+        case ArticleDocumentNodeType.codeBlock:
+          // 富块不做有损压缩（GWT-003）：以自身类型进入内容块投影。
+          orderedIndex = 0;
+          if (text.isEmpty) {
+            continue;
+          }
+          blocks.add(
+            ArticleContentBlockView(
+              type: switch (node.type) {
+                ArticleDocumentNodeType.quote => 'quote',
+                ArticleDocumentNodeType.callout => 'callout',
+                _ => 'code_block',
+              },
+              body: node.type == ArticleDocumentNodeType.codeBlock
+                  ? node.text.trimRight()
+                  : text,
+            ),
+          );
           break;
         case ArticleDocumentNodeType.documentTitle:
           break;

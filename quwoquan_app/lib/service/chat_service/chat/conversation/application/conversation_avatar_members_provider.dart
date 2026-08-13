@@ -109,7 +109,7 @@ class ConversationAvatarMembersNotifier
       final members = await repo.listMembers(
         conversationId: conversationId,
         limit: 9,
-        sort: 'joined_asc',
+        sort: MemberListSort.joinedAsc,
       );
       final normalized = List<ConversationMemberListRow>.unmodifiable(
         members

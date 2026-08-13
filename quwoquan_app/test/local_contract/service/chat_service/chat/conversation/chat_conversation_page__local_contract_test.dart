@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/service/user_service/relationship/persona_relationship/application/public/relationship_capability_repository.dart';
@@ -39,15 +39,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           chatMessageTimelineCacheProvider.overrideWithValue(
             const EmptyChatMessageTimelineCache(),
           ),
           contentConfigRepositoryProvider.overrideWithValue(
-            MockContentRepository(),
+            InMemoryContentConfigRepository(),
           ),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
             _MutualRelationshipCapability(),
@@ -125,15 +123,13 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          chatRepositoryCompositionProvider.overrideWithValue(
-            MockChatRepository(),
-          ),
+          ...chatTestRepositoryOverrides(),
           chatMessageCommandWriterProvider.overrideWithValue(writer),
           chatMessageTimelineCacheProvider.overrideWithValue(
             const EmptyChatMessageTimelineCache(),
           ),
           contentConfigRepositoryProvider.overrideWithValue(
-            MockContentRepository(),
+            InMemoryContentConfigRepository(),
           ),
           relationshipCapabilityRepositoryProvider.overrideWithValue(
             _BlockedRelationshipCapability(),

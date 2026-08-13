@@ -104,7 +104,7 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：GitHub Deployment、Deployment Status 与 Actions review-history 的当前只读响应没有同时给出 required-reviewer 请求和批准的明确事件时间；用 `queued/in_progress` 或 Prod job `started_at` 替代会把 runner/concurrency queue 误算成审批，造成 timing 假绿。
-- 完成判定：hosted release ledger 持久化显式 production review request/approved 事件及接收时间，并严格绑定 repository、workflow run、head SHA、environment 和 reviewer decision；`CiTimingSummary` 能据此生成 approvalRequestedAt、approvalApprovedAt、humanDecisionWait 与 approvalWait，且不再存在对应 `missingEvidence`。
+- 完成判定：`GWT-001` 的“只申请一次 production approval”分项可被真实证据裁定——hosted release ledger 持久化显式 production review request/approved 事件及接收时间，并严格绑定 repository、workflow run、head SHA、environment 和 reviewer decision；`CiTimingSummary` 能据此生成 approvalRequestedAt、approvalApprovedAt、humanDecisionWait 与 approvalWait，且不再存在对应 `missingEvidence`。
 - 依赖：GitHub 官方可订阅的 explicit review event、受控 GitHub App/webhook 接收面与 hosted ledger 不可变回读。
 
 <a id="open-002"></a>

@@ -24,6 +24,7 @@ enum UserErrorCode {
   accountSuspended('USER.AUTH.account_suspended', '账号已被限制登录，请更换手机号或联系支持', 'This account is currently restricted', 403, 'escalate', 'inlineCard', 0, ''),
   accountDeleted('USER.AUTH.account_deleted', '账号已注销或进入删除流程，请更换手机号登录', 'This account has been deleted or is being deleted', 410, 'escalate', 'inlineCard', 0, ''),
   tokenStale('USER.AUTH.token_stale', '登录凭据已失效，请重新登录', 'This session is no longer valid. Please sign in again', 401, 'surface', 'inlineCard', 0, ''),
+  researchIdentityInvalid('USER.USER.research_identity_invalid', '当前研究态身份无效或已过期', 'The research identity is invalid or expired', 403, 'surface', 'inlineCard', 0, ''),
   accountSecurityUnavailable('USER.AUTH.account_security_unavailable', '账号安全校验暂不可用，请稍后重试', 'Account security verification is temporarily unavailable. Please retry', 503, 'retry', 'inlineCard', 3, ''),
   otpExpired('USER.AUTH.otp_expired', '验证码已失效', 'Verification code is no longer valid', 400, 'retry', 'inlineCard', 0, ''),
   otpMismatch('USER.AUTH.otp_mismatch', '验证码不正确', 'Verification code is incorrect', 400, 'retry', 'inlineCard', 0, ''),

@@ -102,17 +102,23 @@ class _CommentThreadItem extends ConsumerWidget {
               dislikeCount: comment.dislikeCount,
               onLike: () =>
                   runWhenLoggedIn(ref, context, AuthGateReason.like, () {
-                    ref
-                        .read(commentProviderFamily(postId).notifier)
-                        .toggleLike(comment.id);
+                    return runCommentReactionWithFeedback(
+                      context,
+                      () => ref
+                          .read(commentProviderFamily(postId).notifier)
+                          .toggleLike(comment.id),
+                    );
                   }),
               onDislike: comment.canDelete
                   ? null
                   : () =>
                         runWhenLoggedIn(ref, context, AuthGateReason.like, () {
-                          ref
-                              .read(commentProviderFamily(postId).notifier)
-                              .toggleDislike(comment.id);
+                          return runCommentReactionWithFeedback(
+                            context,
+                            () => ref
+                                .read(commentProviderFamily(postId).notifier)
+                                .toggleDislike(comment.id),
+                          );
                         }),
               onDelete: comment.canDelete
                   ? () => unawaited(

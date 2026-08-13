@@ -97,6 +97,10 @@ class ImageEditorOperationPanel extends StatelessWidget {
     required this.bwBlackLevel,
     required this.onBwWhiteLevelChanged,
     required this.onBwBlackLevelChanged,
+    required this.perspectiveHorizontal,
+    required this.perspectiveVertical,
+    required this.onPerspectiveHorizontalChanged,
+    required this.onPerspectiveVerticalChanged,
     required this.proBaseSelectedIndex,
     required this.proBaseValues,
     required this.onProBaseSelectedIndexChanged,
@@ -191,6 +195,10 @@ class ImageEditorOperationPanel extends StatelessWidget {
   final double bwBlackLevel;
   final ValueChanged<double> onBwWhiteLevelChanged;
   final ValueChanged<double> onBwBlackLevelChanged;
+  final double perspectiveHorizontal;
+  final double perspectiveVertical;
+  final ValueChanged<double> onPerspectiveHorizontalChanged;
+  final ValueChanged<double> onPerspectiveVerticalChanged;
   final int proBaseSelectedIndex;
   final Map<String, double> proBaseValues;
   final ValueChanged<int> onProBaseSelectedIndexChanged;

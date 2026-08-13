@@ -13,9 +13,22 @@ import 'package:quwoquan_app/design_system/feedback/error_states/app_error_state
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/runtime/di/app_providers.dart'
+    show exceptionTelemetryPortProvider;
+import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart'
+    show GatheringText;
+import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
+    show journeyEventTrackerProvider;
+import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
+    show
+        gatheringDetailGatheringPostsReaderProvider,
+        gatheringDetailSocialProofReaderProvider;
 import 'package:quwoquan_app/runtime/di/gathering_dependencies.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show GatheringSocialProofSummary;
 
 class GatheringDetailPage extends ConsumerStatefulWidget {
   const GatheringDetailPage({
@@ -23,6 +36,8 @@ class GatheringDetailPage extends ConsumerStatefulWidget {
     required this.gatheringId,
     required this.copy,
     this.onEnterChat,
+    this.onPublishRecap,
+    this.onOpenRecapPost,
   });
 
   static const viewKey = ValueKey<String>('gathering-detail-page');
@@ -35,6 +50,15 @@ class GatheringDetailPage extends ConsumerStatefulWidget {
     'gathering-detail-private-place',
   );
   static const hostConsoleKey = ValueKey<String>('gathering-host-console');
+  static const sharedExperienceKey = ValueKey<String>(
+    'gathering-shared-experience',
+  );
+  static const publishRecapKey = ValueKey<String>(
+    'gathering-publish-recap',
+  );
+  static const organizerStatsKey = ValueKey<String>(
+    'gathering-organizer-stats',
+  );
 
   static ValueKey<String> approveKey(String personaId) =>
       ValueKey<String>('gathering-approve-$personaId');
@@ -48,6 +72,13 @@ class GatheringDetailPage extends ConsumerStatefulWidget {
   final String gatheringId;
   final GatheringDetailPageCopy copy;
   final ValueChanged<String>? onEnterChat;
+
+  /// 发布回顾入口：携带 (gatheringId, gatheringTitle) 进入创作流。
+  final void Function(String gatheringId, String gatheringTitle)?
+  onPublishRecap;
+
+  /// 打开一条共同经历回顾内容（postId）。
+  final ValueChanged<String>? onOpenRecapPost;
 
   @override
   ConsumerState<GatheringDetailPage> createState() =>
@@ -66,6 +97,15 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
   Object? _loadError;
   Object? _actionError;
   bool _loading = true;
+
+  // 共同经历聚合区：公开回顾内容与加载状态。读取失败只影响本区块，
+  // 不阻断详情主体；不伪造空列表成功态。
+  List<ContentPostViewData>? _recapPosts;
+  bool _recapLoading = false;
+
+  // 发起人往绩（四锚点 organizer 锚点两级诚实计数）；读取失败或零发起
+  // 不渲染，不伪造。
+  GatheringSocialProofSummary? _organizerStats;
 
   Color get _primaryTextColor => AppColorsFunctional.getColor(
     CupertinoTheme.of(context).brightness == Brightness.dark,
@@ -124,6 +164,10 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
           _capacityController.text = maxParticipants.toString();
         }
       });
+      if (result != null) {
+        unawaited(_loadRecapPosts());
+        unawaited(_loadOrganizerStats(result));
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -158,6 +202,19 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
     try {
       final writer = ref.read(gatheringCommandWriterProvider);
       await operation(writer, detail);
+      // 漏斗辅证埋点（product_action 轨）：只记成功事实；分子分母真相源
+      // 仍是域事实投影，埋点失败不阻断主流程。
+      unawaited(
+        ref
+            .read(journeyEventTrackerProvider)
+            .trackAction(
+              journey: 'gathering_flywheel',
+              action: 'gathering_${action.replaceAll('-', '_')}_succeeded',
+              pageName: 'gathering_detail',
+              targetType: 'gathering',
+              targetKey: detail.publicDetail.gatheringId,
+            ),
+      );
       if (!mounted) return;
       setState(() => _busyActions.remove(action));
       await _load();
@@ -248,6 +305,64 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
     );
   }
 
+  Future<void> _loadRecapPosts() async {
+    if (_recapLoading) return;
+    setState(() => _recapLoading = true);
+    try {
+      final page = await ref
+          .read(gatheringDetailGatheringPostsReaderProvider)
+          .listPostsByGathering(gatheringId: widget.gatheringId);
+      if (!mounted) return;
+      setState(() {
+        _recapPosts = page.items;
+        _recapLoading = false;
+      });
+    } catch (error, stackTrace) {
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'circle.gathering_detail.load_recap_posts',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+      );
+      if (!mounted) return;
+      // 读取失败保持 _recapPosts == null：区块不渲染，不伪造空态。
+      setState(() => _recapLoading = false);
+    }
+  }
+
+  Future<void> _loadOrganizerStats(
+    GatheringDetailPresentationSlice detail,
+  ) async {
+    final host = detail.publicDetail.host;
+    if (host.subjectKind != GatheringHostSubjectKind.persona ||
+        host.subjectId.trim().isEmpty) {
+      return;
+    }
+    try {
+      final stats = await ref
+          .read(gatheringDetailSocialProofReaderProvider)
+          .getGatheringSocialProof(
+            anchorKind: 'organizer',
+            objectId: host.subjectId.trim(),
+          );
+      if (!mounted) return;
+      setState(() => _organizerStats = stats);
+    } catch (error, stackTrace) {
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'circle.gathering_detail.load_organizer_stats',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+      );
+    }
+  }
+
   Widget _buildBody() {
     if (_loading) {
       return Center(
@@ -301,6 +416,7 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
       bottom: _primaryAction(detail),
       children: <Widget>[
         _publicDetail(detail),
+        ..._sharedExperienceSection(detail),
         if (detail.privateDetail?.authority.hasHostConsole ??
             false) ...<Widget>[
           SizedBox(height: AppSpacing.interGroupMd),
@@ -377,6 +493,16 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
                 label: widget.copy.hostLabel,
                 value: public.host.displayName,
               ),
+              if ((_organizerStats?.publishedCount ?? 0) > 0)
+                GatheringFactRow(
+                  key: GatheringDetailPage.organizerStatsKey,
+                  label: widget.copy.organizerStatsLabel,
+                  value: GatheringText.detailOrganizerStats(
+                    _organizerStats!.publishedCount.toInt(),
+                    _organizerStats!.formedCount.toInt(),
+                    _organizerStats!.experiencedCount.toInt(),
+                  ),
+                ),
               GatheringFactRow(label: widget.copy.timeLabel, value: schedule),
               GatheringFactRow(
                 label: widget.copy.placeLabel,
@@ -411,6 +537,150 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
           ),
         ),
       ],
+    );
+  }
+
+  /// 共同经历聚合区三态（诚实红线）：
+  /// - ≥2 名不同作者公开关联 → 「共同经历」聚合列表；
+  /// - 仅 1 名作者 → 「个人回顾」；
+  /// - 0 条且行动时间已结束 → 「行动时间已结束」，不伪造内容。
+  /// 行动未结束且无内容时不渲染区块；读取失败也不渲染（不冒充空态）。
+  /// active 参与者始终看到「发布回顾」入口。
+  List<Widget> _sharedExperienceSection(
+    GatheringDetailPresentationSlice detail,
+  ) {
+    final public = detail.publicDetail;
+    final viewerActive =
+        public.viewerParticipation?.state == GatheringParticipationState.active;
+    final posts = _recapPosts;
+    final ended = public.temporalPhase == GatheringTemporalPhase.ended ||
+        public.lifecycleStatus == GatheringLifecycleStatus.completed;
+    if (posts == null) {
+      // 未加载成功：只在 active 参与者场景保留发布入口，不渲染聚合态。
+      if (!viewerActive) return const <Widget>[];
+      return <Widget>[
+        SizedBox(height: AppSpacing.interGroupMd),
+        _publishRecapButton(public),
+      ];
+    }
+    final distinctAuthors = posts
+        .map((post) => post.authorId.trim())
+        .where((authorId) => authorId.isNotEmpty)
+        .toSet();
+    final hasSharedExperience = distinctAuthors.length >= 2;
+    if (posts.isEmpty && !ended && !viewerActive) {
+      return const <Widget>[];
+    }
+    final title = hasSharedExperience
+        ? widget.copy.sharedExperienceTitle
+        : widget.copy.sharedExperienceSingleTitle;
+    return <Widget>[
+      SizedBox(height: AppSpacing.interGroupMd),
+      GatheringSectionCard(
+        key: GatheringDetailPage.sharedExperienceKey,
+        title: posts.isEmpty ? widget.copy.sharedExperienceTitle : title,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            if (posts.isEmpty)
+              Text(
+                widget.copy.sharedExperienceEndedEmpty,
+                style: TextStyle(
+                  color: _secondaryTextColor,
+                  fontSize: AppTypography.base,
+                ),
+              )
+            else
+              for (final post in posts) _recapPostRow(post),
+            if (viewerActive) ...<Widget>[
+              SizedBox(height: AppSpacing.intraGroupSm),
+              _publishRecapButton(public),
+            ],
+          ],
+        ),
+      ),
+    ];
+  }
+
+  Widget _recapPostRow(ContentPostViewData post) {
+    final label = post.title.trim().isNotEmpty
+        ? post.title.trim()
+        : post.normalizedBody.trim();
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupXs),
+      onPressed: widget.onOpenRecapPost == null
+          ? null
+          : () => widget.onOpenRecapPost!(post.id),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _primaryTextColor,
+                    fontSize: AppTypography.base,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.intraGroupXs / 2),
+                Text(
+                  post.displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _secondaryTextColor,
+                    fontSize: AppTypography.sm,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            CupertinoIcons.chevron_forward,
+            size: AppTypography.base,
+            color: _secondaryTextColor,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _publishRecapButton(GatheringPublicDetailSlice public) {
+    return Semantics(
+      button: true,
+      label: widget.copy.recapAction,
+      child: CupertinoButton(
+        key: GatheringDetailPage.publishRecapKey,
+        padding: EdgeInsets.zero,
+        onPressed: widget.onPublishRecap == null
+            ? null
+            : () => widget.onPublishRecap!(
+                widget.gatheringId,
+                public.purpose.title,
+              ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              CupertinoIcons.square_pencil,
+              size: AppTypography.base,
+              color: AppColors.primaryColor,
+            ),
+            SizedBox(width: AppSpacing.intraGroupXs),
+            Text(
+              widget.copy.recapAction,
+              style: TextStyle(
+                color: AppColors.primaryColor,
+                fontSize: AppTypography.base,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

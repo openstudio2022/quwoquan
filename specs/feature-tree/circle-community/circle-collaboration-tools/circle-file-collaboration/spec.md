@@ -93,47 +93,4 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 CircleFile 分页列表证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺 `ListCircleFiles` 直接证明 nonempty typed page、稳定分页与 BOLA/canonical failure 的完整证据。
-- 完成判定：`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-002"></a>
-### OPEN-002 CircleFile 单项读取证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺 `GetCircleFile` 直接证明 authoritative typed slice、脱敏与 BOLA/canonical failure 的完整证据。
-- 完成判定：`GWT-002` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-003"></a>
-### OPEN-003 CircleFile 创建证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺 `CreateCircleFile` 直接证明 MediaAsset owner 边界、authoritative readback、幂等重放与失败原子性的完整证据。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-004"></a>
-### OPEN-004 CircleFile 更新证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺 `UpdateCircleFile` 直接证明 version、authoritative readback、幂等重放与失败原子性的完整证据。
-- 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
-
-<a id="open-005"></a>
-### OPEN-005 CircleFile 删除证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺 `DeleteCircleFile` 直接证明 owner 不可读终态、MediaAsset 独立性、幂等重放与失败原子性的完整证据。
-- 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效。
+（当前无开放事项：GWT-001..GWT-005 均已由真实 api_integration 测试子句级绑定。）

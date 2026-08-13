@@ -100,7 +100,7 @@
         "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
         "acquisitionReceiptRef": {
           "type": "string",
-          "pattern": "^data/local/workspace/source-acquisition/(video/)?receipts/[0-9a-f]{64}\\.json$"
+          "pattern": "^data/local/workspace/source-acquisition/(video/)?receipts/[0-9a-f]{64}(-attempt-[0-9]{3,})?\\.json$"
         },
         "acquisitionReceiptDigest": {"$ref": "#/$defs/sha256"},
         "acquisitionReceiptSha256": {"$ref": "#/$defs/sha256"},
@@ -173,7 +173,7 @@
         },
         "acquisitionReceiptRef": {
           "type": "string",
-          "pattern": "^data/local/workspace/source-acquisition/(video/)?receipts/[0-9a-f]{64}\\.json$"
+          "pattern": "^data/local/workspace/source-acquisition/(video/)?receipts/[0-9a-f]{64}(-attempt-[0-9]{3,})?\\.json$"
         },
         "independentAssetReview": {
           "$ref": "#/$defs/independentAssetReview"

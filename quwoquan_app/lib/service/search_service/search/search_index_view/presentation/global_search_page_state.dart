@@ -149,15 +149,9 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        CupertinoButton(
-          padding: EdgeInsets.zero,
-          minimumSize: Size.square(AppSpacing.appChromeActionButtonSize),
+        AppNavigationBarIconButton(
+          icon: CupertinoIcons.chevron_back,
           onPressed: _handleClose,
-          child: Icon(
-            CupertinoIcons.chevron_back,
-            color: fgSecondary,
-            size: AppSpacing.appChromeActionIconSize,
-          ),
         ),
         SizedBox(width: AppSpacing.intraGroupXs),
         Expanded(

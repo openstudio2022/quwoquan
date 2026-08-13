@@ -24,6 +24,8 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
     final isCurve = selectedProCategory == kImageEditorProCategoryCurve;
     final isWhiteBalance =
         selectedProCategory == kImageEditorProCategoryWhiteBalance;
+    final isPerspective =
+        selectedProCategory == kImageEditorProCategoryPerspective;
     if (isOverall || isLocal) {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -51,9 +53,44 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
               )
             : isWhiteBalance
             ? _buildWhiteBalancePanelContent()
+            : isPerspective
+            ? _buildPerspectivePanelContent()
             : const SizedBox.shrink(),
         _buildProPanelExitBar(),
       ],
+    );
+  }
+
+  Widget _buildPerspectivePanelContent() {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+      child: Column(
+        children: [
+          SizedBox(height: AppSpacing.sm),
+          _buildHslAxisRow(
+            MediaText.imageEditorProPerspectiveHorizontal,
+            perspectiveHorizontal,
+            gradient: <Color>[
+              AppColors.white.withValues(alpha: 0.15),
+              AppColors.white.withValues(alpha: 0.9),
+              AppColors.white.withValues(alpha: 0.15),
+            ],
+            onChanged: onPerspectiveHorizontalChanged,
+          ),
+          SizedBox(height: AppSpacing.xs),
+          _buildHslAxisRow(
+            MediaText.imageEditorProPerspectiveVertical,
+            perspectiveVertical,
+            gradient: <Color>[
+              AppColors.white.withValues(alpha: 0.15),
+              AppColors.white.withValues(alpha: 0.9),
+              AppColors.white.withValues(alpha: 0.15),
+            ],
+            onChanged: onPerspectiveVerticalChanged,
+          ),
+          SizedBox(height: AppSpacing.xs),
+        ],
+      ),
     );
   }
 
@@ -514,6 +551,8 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
         ? MediaText.imageEditorProCurve
         : selectedProCategory == kImageEditorProCategoryWhiteBalance
         ? MediaText.imageEditorProWhiteBalance
+        : selectedProCategory == kImageEditorProCategoryPerspective
+        ? MediaText.imageEditorProPerspective
         : MediaText.imageEditorProAdjustImage;
     final safeIndex = proBaseSelectedIndex.clamp(
       0,

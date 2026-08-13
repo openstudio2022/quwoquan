@@ -1,3 +1,4 @@
+// readiness_case: circle_commercial_visual_app_uat
 // spec_ref: specs/feature-tree/circle-community/circle-experience-redesign/circle-homepage-redesign/spec.md#gwt-001
 // spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001
 /// 圈子主页商用化真机视觉与主旅程前置。
@@ -50,6 +51,12 @@ void main() {
         $,
         find.byType(CirclesHubPage),
         reason: '圈子 hub 必须可达',
+      );
+      await _expectVisible(
+        $,
+        find.text(_circleName.trim()),
+        reason: '圈子 hub 冷启动列表必须包含前置 provision 的候选绑定圈子，'
+            '不允许空列表通过验收',
       );
 
       await patrolGoTo($, AppRoutePaths.circleDetail(id: _circleId));

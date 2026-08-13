@@ -6,6 +6,10 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/resea
 import 'package:quwoquan_app/service/user_service/account/account_session/adapters/account_session_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+// sha256("subject")
+const _subjectDigest =
+    'sha256:a9491f4c1bf7b0cffbadcba2db8f028e4b3f2867cb59e1f3a0bc1968f3c51242';
+
 void main() {
   test(
     'Research readback injects the exact issued attestation into generated header',
@@ -73,7 +77,7 @@ final class _RecordingExecutor implements CloudOperationExecutor {
     final response = switch (operation.canonicalOperationId) {
       AppCloudOperationIds.userAccountSessionIssueWhitelistedResearchSession =>
         <String, Object?>{
-          'subjectHash': 'sha256:subject',
+          'subjectHash': _subjectDigest,
           'attestationId': 'opaque-attestation-exact',
           'expiresAt': '2026-08-12T12:15:00Z',
         },
@@ -81,7 +85,7 @@ final class _RecordingExecutor implements CloudOperationExecutor {
         <String, Object?>{
           'releaseId': 'research-release-1',
           'manifestDigest': 'sha256:${'a' * 64}',
-          'subjectHash': 'sha256:subject',
+          'subjectHash': _subjectDigest,
           'attestationIdHash': 'sha256:${'b' * 64}',
           'signatureVerified': true,
           'researchBadgeVisible': true,

@@ -12,6 +12,7 @@ enum _CircleMoreAction {
   invite,
   share,
   copyLink,
+  leave,
   report,
 }
 

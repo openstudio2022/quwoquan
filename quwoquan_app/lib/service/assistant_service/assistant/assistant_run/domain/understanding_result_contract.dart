@@ -1,217 +1,138 @@
-enum NextTurnMode {
-  answer('answer'),
-  continueExecution('continue_execution'),
-  askUser('ask_user'),
-  blocked('blocked');
+// 理解结果契约的 Dto/serde 由 assistant/understanding_result/schema.yaml 单轨
+// 生成（strict：未知键拒绝、非法枚举抛异常）。本文件只保留 LLM 直出边界的
+// 宽容归一化 wrapper：模型输出可能带未登记键、脏 intent 项与非法枚举值，
+// 归一化在这里一次完成，之后全程走 strict typed。
+export 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/generated/understanding_result.g.dart';
 
-  const NextTurnMode(this.wireName);
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/generated/understanding_result.g.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/runtime_enums.dart';
 
-  final String wireName;
-}
-
-NextTurnMode parseNextTurnMode(String raw) {
-  switch (raw.trim().toLowerCase()) {
-    case 'continue_execution':
-      return NextTurnMode.continueExecution;
-    case 'ask_user':
-      return NextTurnMode.askUser;
-    case 'blocked':
-      return NextTurnMode.blocked;
-    default:
-      return NextTurnMode.answer;
-  }
-}
-
-class IntentEntityRef {
-  const IntentEntityRef({
-    required this.entityType,
-    required this.canonicalKey,
-    this.displayText = '',
-  });
-
-  final String entityType;
-  final String canonicalKey;
-  final String displayText;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'entityType': entityType,
-    'canonicalKey': canonicalKey,
-    'displayText': displayText,
-  };
-
-  factory IntentEntityRef.fromJson(Map<String, dynamic> json) {
-    return IntentEntityRef(
-      entityType: (json['entityType'] as String?)?.trim() ?? '',
-      canonicalKey: (json['canonicalKey'] as String?)?.trim() ?? '',
-      displayText: (json['displayText'] as String?)?.trim() ?? '',
-    );
-  }
-}
-
-class IntentConstraint {
-  const IntentConstraint({required this.key, this.value = ''});
-
-  final String key;
-  final String value;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'key': key,
-    'value': value,
-  };
-
-  factory IntentConstraint.fromJson(Map<String, dynamic> json) {
-    return IntentConstraint(
-      key: (json['key'] as String?)?.trim() ?? '',
-      value: (json['value'] as String?)?.trim() ?? '',
-    );
-  }
-}
-
-class IntentNode {
-  const IntentNode({
-    required this.intentId,
-    required this.intentType,
-    required this.goal,
-    this.entityRefs = const <IntentEntityRef>[],
-    this.constraints = const <IntentConstraint>[],
-    this.requiresEvidence = false,
-  });
-
-  final String intentId;
-  final String intentType;
-  final String goal;
-  final List<IntentEntityRef> entityRefs;
-  final List<IntentConstraint> constraints;
-  final bool requiresEvidence;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'intentId': intentId,
-    'intentType': intentType,
-    'goal': goal,
-    'entityRefs': entityRefs
-        .map((item) => item.toJson())
-        .toList(growable: false),
-    'constraints': constraints
-        .map((item) => item.toJson())
-        .toList(growable: false),
-    'requiresEvidence': requiresEvidence,
-  };
-
-  factory IntentNode.fromJson(Map<String, dynamic> json) {
-    return IntentNode(
-      intentId: (json['intentId'] as String?)?.trim() ?? '',
-      intentType: (json['intentType'] as String?)?.trim() ?? '',
-      goal: (json['goal'] as String?)?.trim() ?? '',
-      entityRefs: _entityRefList(json['entityRefs']),
-      constraints: _constraintList(json['constraints']),
-      requiresEvidence: json['requiresEvidence'] == true,
-    );
-  }
-}
-
-class DialogueTransitionDecision {
-  const DialogueTransitionDecision({
-    this.nextTurnMode = NextTurnMode.answer,
-    this.needsClarification = false,
-    this.clarificationTargetIntentId = '',
-    this.canAnswerPartially = false,
-  });
-
-  final NextTurnMode nextTurnMode;
-  final bool needsClarification;
-  final String clarificationTargetIntentId;
-  final bool canAnswerPartially;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'nextTurnMode': nextTurnMode.wireName,
-    'needsClarification': needsClarification,
-    'clarificationTargetIntentId': clarificationTargetIntentId,
-    'canAnswerPartially': canAnswerPartially,
-  };
-
-  factory DialogueTransitionDecision.fromJson(Map<String, dynamic> json) {
-    return DialogueTransitionDecision(
-      nextTurnMode: parseNextTurnMode(
-        (json['nextTurnMode'] as String?)?.trim() ?? '',
-      ),
-      needsClarification: json['needsClarification'] == true,
-      clarificationTargetIntentId:
-          (json['clarificationTargetIntentId'] as String?)?.trim() ?? '',
-      canAnswerPartially: json['canAnswerPartially'] == true,
-    );
-  }
-}
-
-class UnderstandingResult {
+class UnderstandingResult extends UnderstandingResultDto {
   const UnderstandingResult({
-    this.contractId = 'understanding_result',
-    this.intents = const <IntentNode>[],
-    this.dialogueTransitionDecision = const DialogueTransitionDecision(),
+    super.contractId = 'understanding_result',
+    super.intents = const <IntentNodeDto>[],
+    super.dialogueTransitionDecision = const DialogueTransitionDecisionDto(),
   });
-
-  final String contractId;
-  final List<IntentNode> intents;
-  final DialogueTransitionDecision dialogueTransitionDecision;
-
-  Map<String, dynamic> toJson() => <String, dynamic>{
-    'contractId': contractId,
-    'intents': intents.map((item) => item.toJson()).toList(growable: false),
-    'dialogueTransitionDecision': dialogueTransitionDecision.toJson(),
-  };
 
   factory UnderstandingResult.fromJson(Map<String, dynamic> json) {
+    final dto = UnderstandingResultDto.fromJson(<String, dynamic>{
+      UnderstandingResultDtoFields.contractId:
+          (json[UnderstandingResultDtoFields.contractId] as String?)?.trim(),
+      UnderstandingResultDtoFields.intents: _normalizedIntents(
+        json[UnderstandingResultDtoFields.intents],
+      ),
+      UnderstandingResultDtoFields.dialogueTransitionDecision:
+          _normalizedDecision(
+            json[UnderstandingResultDtoFields.dialogueTransitionDecision],
+          ),
+    });
     return UnderstandingResult(
-      contractId:
-          (json['contractId'] as String?)?.trim() ?? 'understanding_result',
-      intents: _intentList(json['intents']),
-      dialogueTransitionDecision: json['dialogueTransitionDecision'] is Map
-          ? DialogueTransitionDecision.fromJson(
-              (json['dialogueTransitionDecision'] as Map)
-                  .cast<String, dynamic>(),
-            )
-          : const DialogueTransitionDecision(),
+      contractId: dto.contractId,
+      intents: dto.intents,
+      dialogueTransitionDecision: dto.dialogueTransitionDecision,
     );
   }
-}
 
-List<IntentEntityRef> _entityRefList(Object? value) {
-  if (value is! List) {
-    return const <IntentEntityRef>[];
+  static List<Map<String, dynamic>> _normalizedIntents(Object? raw) {
+    if (raw is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+    final intents = <Map<String, dynamic>>[];
+    for (final item in raw.whereType<Map>()) {
+      final intentId = (item[IntentNodeDtoFields.intentId] as String?)?.trim();
+      final intentType = (item[IntentNodeDtoFields.intentType] as String?)
+          ?.trim();
+      final goal = (item[IntentNodeDtoFields.goal] as String?)?.trim();
+      if (intentId == null ||
+          intentId.isEmpty ||
+          intentType == null ||
+          intentType.isEmpty ||
+          goal == null ||
+          goal.isEmpty) {
+        continue;
+      }
+      intents.add(<String, dynamic>{
+        IntentNodeDtoFields.intentId: intentId,
+        IntentNodeDtoFields.intentType: intentType,
+        IntentNodeDtoFields.goal: goal,
+        IntentNodeDtoFields.entityRefs: _normalizedEntityRefs(
+          item[IntentNodeDtoFields.entityRefs],
+        ),
+        IntentNodeDtoFields.constraints: _normalizedConstraints(
+          item[IntentNodeDtoFields.constraints],
+        ),
+        IntentNodeDtoFields.requiresEvidence:
+            item[IntentNodeDtoFields.requiresEvidence] == true,
+      });
+    }
+    return intents;
   }
-  return value
-      .whereType<Map>()
-      .map((item) => IntentEntityRef.fromJson(item.cast<String, dynamic>()))
-      .where(
-        (item) =>
-            item.entityType.trim().isNotEmpty &&
-            item.canonicalKey.trim().isNotEmpty,
-      )
-      .toList(growable: false);
-}
 
-List<IntentConstraint> _constraintList(Object? value) {
-  if (value is! List) {
-    return const <IntentConstraint>[];
+  static List<Map<String, dynamic>> _normalizedEntityRefs(Object? raw) {
+    if (raw is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+    final refs = <Map<String, dynamic>>[];
+    for (final item in raw.whereType<Map>()) {
+      final entityType = (item[IntentEntityRefDtoFields.entityType] as String?)
+          ?.trim();
+      final canonicalKey =
+          (item[IntentEntityRefDtoFields.canonicalKey] as String?)?.trim();
+      if (entityType == null ||
+          entityType.isEmpty ||
+          canonicalKey == null ||
+          canonicalKey.isEmpty) {
+        continue;
+      }
+      refs.add(<String, dynamic>{
+        IntentEntityRefDtoFields.entityType: entityType,
+        IntentEntityRefDtoFields.canonicalKey: canonicalKey,
+        IntentEntityRefDtoFields.displayText:
+            (item[IntentEntityRefDtoFields.displayText] as String?)?.trim() ??
+            '',
+      });
+    }
+    return refs;
   }
-  return value
-      .whereType<Map>()
-      .map((item) => IntentConstraint.fromJson(item.cast<String, dynamic>()))
-      .where((item) => item.key.trim().isNotEmpty)
-      .toList(growable: false);
-}
 
-List<IntentNode> _intentList(Object? value) {
-  if (value is! List) {
-    return const <IntentNode>[];
+  static List<Map<String, dynamic>> _normalizedConstraints(Object? raw) {
+    if (raw is! List) {
+      return const <Map<String, dynamic>>[];
+    }
+    final constraints = <Map<String, dynamic>>[];
+    for (final item in raw.whereType<Map>()) {
+      final key = (item[IntentConstraintDtoFields.key] as String?)?.trim();
+      if (key == null || key.isEmpty) {
+        continue;
+      }
+      constraints.add(<String, dynamic>{
+        IntentConstraintDtoFields.key: key,
+        IntentConstraintDtoFields.value:
+            (item[IntentConstraintDtoFields.value] as String?)?.trim() ?? '',
+      });
+    }
+    return constraints;
   }
-  return value
-      .whereType<Map>()
-      .map((item) => IntentNode.fromJson(item.cast<String, dynamic>()))
-      .where(
-        (item) =>
-            item.intentId.trim().isNotEmpty &&
-            item.intentType.trim().isNotEmpty &&
-            item.goal.trim().isNotEmpty,
-      )
-      .toList(growable: false);
+
+  static Map<String, dynamic> _normalizedDecision(Object? raw) {
+    if (raw is! Map) {
+      return const <String, dynamic>{};
+    }
+    return <String, dynamic>{
+      DialogueTransitionDecisionDtoFields.nextTurnMode: parseNextTurnMode(
+        (raw[DialogueTransitionDecisionDtoFields.nextTurnMode] as String?)
+                ?.trim() ??
+            '',
+      ).wireName,
+      DialogueTransitionDecisionDtoFields.needsClarification:
+          raw[DialogueTransitionDecisionDtoFields.needsClarification] == true,
+      DialogueTransitionDecisionDtoFields.clarificationTargetIntentId:
+          (raw[DialogueTransitionDecisionDtoFields.clarificationTargetIntentId]
+                  as String?)
+              ?.trim() ??
+          '',
+      DialogueTransitionDecisionDtoFields.canAnswerPartially:
+          raw[DialogueTransitionDecisionDtoFields.canAnswerPartially] == true,
+    };
+  }
 }

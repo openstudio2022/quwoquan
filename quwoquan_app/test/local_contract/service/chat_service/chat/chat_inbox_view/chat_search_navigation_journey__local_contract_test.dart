@@ -10,7 +10,6 @@ import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
     show
-        chatRepositoryCompositionProvider,
         greetingRepositoryProvider,
         realtimeConnectionManagerProvider,
         relationshipCapabilityRepositoryProvider,
@@ -23,8 +22,9 @@ import 'package:quwoquan_app/runtime/di/generated_operation_client_dependencies.
     show cloudRuntimeEnvironmentProvider;
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/search_execution_values.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_ports.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_repository.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
@@ -45,7 +45,7 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/app
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/search_local_hit_views.dart';
 
 Widget _buildApp() {
-  final repo = MockChatRepository(
+  final facets = ChatTestFacets(
     seedConversations: <Map<String, dynamic>>[
       chatConversationSeedById('fixture_conv_direct'),
       chatConversationSeedById('fixture_conv_group'),
@@ -76,7 +76,7 @@ Widget _buildApp() {
               ),
         ),
       ),
-      chatRepositoryCompositionProvider.overrideWithValue(repo),
+      ...chatTestRepositoryOverrides(facets: facets),
       greetingRepositoryProvider.overrideWithValue(alphaGreetingRepository()),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         mutualRelationshipCapabilityRepository(),

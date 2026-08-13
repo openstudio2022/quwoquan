@@ -224,6 +224,7 @@ class GatheringBoardNavigationCallbacks {
     this.openCalendar,
     this.openMembers,
     this.openAsset,
+    this.openRecapComposer,
   });
 
   final GatheringBoardTargetNavigation? openAnnouncement;
@@ -232,4 +233,9 @@ class GatheringBoardNavigationCallbacks {
   final GatheringBoardTargetNavigation? openCalendar;
   final GatheringBoardTargetNavigation? openMembers;
   final GatheringBoardAssetNavigation? openAsset;
+
+  /// 发布回顾入口：携带 (gatheringId, gatheringTitle) 进入创作流，
+  /// 内容经 gatheringRef 回流到行动详情共同经历聚合区。
+  final void Function(String gatheringId, String gatheringTitle)?
+  openRecapComposer;
 }

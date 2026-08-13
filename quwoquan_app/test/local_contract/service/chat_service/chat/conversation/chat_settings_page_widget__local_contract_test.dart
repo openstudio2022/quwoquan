@@ -5,33 +5,54 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/public/rtc_call_entry_coordinator.dart';
-import 'package:quwoquan_app/runtime/di/chat_repository_facade.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/application/chat_conversation_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
 import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_cache.dart';
+import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/domain/conversation_dto.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_settings_page.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import 'package:quwoquan_app/runtime/di/conversation_members_provider.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_permission_guard.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_seed_refs.dart';
 
-List<Override> _chatTestOverrides(ChatRepository repo) => [
-  chatRepositoryCompositionProvider.overrideWithValue(repo),
+List<Override> _chatTestOverrides({
+  ChatMemberRepository? member,
+  ChatGroupAdminRepository? groupAdmin,
+  ChatConversationRepository? conversation,
+}) => [
+  ...chatTestRepositoryOverrides(
+    member: member,
+    groupAdmin: groupAdmin,
+    conversation: conversation,
+  ),
   currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
 ];
 
 Widget _scopedApp({
-  ChatRepository? mock,
+  ChatMemberRepository? member,
+  ChatGroupAdminRepository? groupAdmin,
+  ChatConversationRepository? conversation,
   List<Override> overrides = const <Override>[],
 }) {
-  final repo = mock ?? MockChatRepository();
   return ProviderScope(
-    overrides: <Override>[..._chatTestOverrides(repo), ...overrides],
+    overrides: <Override>[
+      ..._chatTestOverrides(
+        member: member,
+        groupAdmin: groupAdmin,
+        conversation: conversation,
+      ),
+      ...overrides,
+    ],
     child: MaterialApp.router(
       routerConfig: GoRouter(
         initialLocation: '/chat/fixture_conv_group/settings',
@@ -96,10 +117,12 @@ void main() {
     });
 
     testWidgets('摄影爱好者圈子标题人数与成员网格一致', (tester) async {
+      // seed 重构后共享 typed double 只保留最小两会话；圈群维度的成员
+      // 输入由用例自治提供，避免测试对共享 seed 的隐式耦合。
       _suppressImageErrors();
       await tester.pumpWidget(
         ProviderScope(
-          overrides: _chatTestOverrides(MockChatRepository()),
+          overrides: _chatTestOverrides(member: _PhotoCircleChatRepository()),
           child: MaterialApp.router(
             routerConfig: GoRouter(
               initialLocation: '/chat/fixture_conv_photo_group/settings',
@@ -198,9 +221,7 @@ void main() {
   group('ChatSettingsPage — 权限呈现契约', () {
     testWidgets('fixture 群主 Provider state 正确（isOwner=true）', (tester) async {
       // 用 ProviderContainer 直接验证 Provider state（避免 widget 时序问题）
-      final container = ProviderContainer(
-        overrides: _chatTestOverrides(MockChatRepository()),
-      );
+      final container = ProviderContainer(overrides: _chatTestOverrides());
       addTearDown(container.dispose);
 
       final notifier = container.read(
@@ -218,7 +239,7 @@ void main() {
 
     testWidgets('普通成员角色时不显示群管理入口', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp(mock: _MemberRoleChatRepository()));
+      await tester.pumpWidget(_scopedApp(member: _MemberRoleChatRepository()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -230,7 +251,10 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(390, 1200));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
-        _scopedApp(mock: _MemberRoleAdminOnlyNameRepository()),
+        _scopedApp(
+          member: _MemberRoleChatRepository(),
+          groupAdmin: _AdminOnlyNameRepository(),
+        ),
       );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
@@ -364,7 +388,7 @@ void main() {
   group('ChatSettingsPage — 错误态渲染', () {
     testWidgets('Repository 异常时页面不崩溃', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp(mock: _ErrorChatRepository()));
+      await tester.pumpWidget(_scopedApp(member: _ErrorChatRepository()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -411,7 +435,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       final repo = _RecordingChatRepository();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(_scopedApp(member: repo));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -436,7 +460,7 @@ void main() {
 
     testWidgets('普通成员不可见移出成员入口', (tester) async {
       _suppressImageErrors();
-      await tester.pumpWidget(_scopedApp(mock: _MemberRoleChatRepository()));
+      await tester.pumpWidget(_scopedApp(member: _MemberRoleChatRepository()));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -449,7 +473,7 @@ void main() {
     testWidgets('圈群绑定会话隐藏 Chat 成员治理入口并保留跳转提示', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(
-        _scopedApp(mock: _CircleGroupManagedChatRepository()),
+        _scopedApp(groupAdmin: _CircleGroupManagedChatRepository()),
       );
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
@@ -481,7 +505,7 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
 
       final repo = _RecordingChatRepository();
-      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpWidget(_scopedApp(member: repo));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
 
@@ -507,14 +531,324 @@ void main() {
         isNot(contains(chatCurrentUserProfileId())),
         reason: '退群不得复用治理动作 removeMember(self)',
       );
+
+      // 消化退群成功 toast 的自动消失 timer，避免残留 pending timer。
+      await tester.pump(const Duration(seconds: 4));
+    });
+  });
+
+  // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-001
+  group('ChatSettingsPage — 免打扰/置顶真实接线', () {
+    ChatInboxCacheEntry inboxEntry({required bool muted, required bool pinned}) {
+      return ChatInboxCacheEntry(
+        id: 'fixture_conv_group',
+        type: 'group',
+        title: '契约周末群',
+        avatarUrl: '',
+        groupAvatarVersion: 1,
+        lastMessagePreview: '',
+        lastMessageType: MessageType.text,
+        lastMessageTime: DateTime.utc(2026, 8, 13),
+        lastSeq: 1,
+        unreadCount: 0,
+        mentionUnreadCount: 0,
+        muted: muted,
+        pinned: pinned,
+        circleId: '',
+      );
+    }
+
+    testWidgets('开关初值从 inbox 本地副本水合', (tester) async {
+      _suppressImageErrors();
+      await tester.binding.setSurfaceSize(const Size(390, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final settingsRepo = _RecordingConversationSettingsRepository();
+      await tester.pumpWidget(
+        _scopedApp(
+          conversation: settingsRepo,
+          overrides: [
+            chatInboxCacheProvider.overrideWithValue(
+              _SeededInboxCache(inboxEntry(muted: true, pinned: false)),
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.scrollUntilVisible(
+        find.text(ChatText.muteNotifications),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ChatSettingsPage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      final muteSwitch = find
+          .descendant(
+            of: find.ancestor(
+              of: find.text(ChatText.muteNotifications),
+              matching: find.byType(Row),
+            ),
+            matching: find.byType(CupertinoSwitch),
+          )
+          .first;
+      expect(
+        tester.widget<CupertinoSwitch>(muteSwitch).value,
+        isTrue,
+        reason: '免打扰初值必须从 inbox 本地副本水合而非恒为 false',
+      );
+    });
+
+    testWidgets('切换免打扰调用 updateConversationSettings(muted)', (tester) async {
+      _suppressImageErrors();
+      await tester.binding.setSurfaceSize(const Size(390, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final settingsRepo = _RecordingConversationSettingsRepository();
+      await tester.pumpWidget(
+        _scopedApp(conversation: settingsRepo),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.scrollUntilVisible(
+        find.text(ChatText.muteNotifications),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ChatSettingsPage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      final muteSwitch = find
+          .descendant(
+            of: find.ancestor(
+              of: find.text(ChatText.muteNotifications),
+              matching: find.byType(Row),
+            ),
+            matching: find.byType(CupertinoSwitch),
+          )
+          .first;
+      await tester.tap(muteSwitch);
+      await tester.pump();
+
+      expect(settingsRepo.calls, hasLength(1));
+      expect(settingsRepo.calls.single.conversationId, 'fixture_conv_group');
+      expect(settingsRepo.calls.single.muted, isTrue);
+      expect(settingsRepo.calls.single.pinned, isNull);
+    });
+
+    // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-001
+    testWidgets('查找聊天记录入口打开会话内搜索面板', (tester) async {
+      _suppressImageErrors();
+      await tester.binding.setSurfaceSize(const Size(390, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _scopedApp(conversation: _RecordingConversationSettingsRepository()),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.scrollUntilVisible(
+        find.byKey(
+          const ValueKey<String>('chat_settings_search_in_conversation'),
+        ),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ChatSettingsPage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('chat_settings_search_in_conversation'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(
+          const ValueKey<String>('conversation_message_search_input'),
+        ),
+        findsOneWidget,
+        reason: '设置页「查找聊天记录」必须打开会话内搜索面板',
+      );
+    });
+
+    testWidgets('远端失败时开关回滚并提示', (tester) async {
+      _suppressImageErrors();
+      await tester.binding.setSurfaceSize(const Size(390, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final settingsRepo = _RecordingConversationSettingsRepository()
+        ..failNext = true;
+      await tester.pumpWidget(
+        _scopedApp(conversation: settingsRepo),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.scrollUntilVisible(
+        find.text(ChatText.pinChat),
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ChatSettingsPage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      final pinSwitch = find
+          .descendant(
+            of: find.ancestor(
+              of: find.text(ChatText.pinChat),
+              matching: find.byType(Row),
+            ),
+            matching: find.byType(CupertinoSwitch),
+          )
+          .first;
+      final before = tester.widget<CupertinoSwitch>(pinSwitch).value;
+      await tester.tap(pinSwitch);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+        tester.widget<CupertinoSwitch>(pinSwitch).value,
+        before,
+        reason: '远端失败必须回滚乐观开关，不留假状态',
+      );
+      expect(find.text(ChatText.settingUpdateFailed), findsOneWidget);
+      // 消化 toast 自动消失 timer。
+      await tester.pump(const Duration(seconds: 4));
     });
   });
 }
 
+typedef _SettingsCall = ({String conversationId, bool? muted, bool? pinned});
+
+/// 预填一条 inbox 本地副本（开关初值水合的输入面）。
+class _SeededInboxCache extends Fake implements ChatInboxCache {
+  _SeededInboxCache(this.entry);
+
+  final ChatInboxCacheEntry entry;
+
+  @override
+  ChatInboxCacheEntry? readInboxEntry(String conversationId) {
+    return conversationId == entry.id ? entry : null;
+  }
+}
+
+/// 记录 ConversationUserState 设置命令；其余读写显式委托对象级 typed double，
+/// 页面装载路径保持真实。
+class _RecordingConversationSettingsRepository
+    implements ChatConversationRepository {
+  _RecordingConversationSettingsRepository()
+    : _delegate = ChatTestFacets().conversation;
+
+  final ChatConversationRepository _delegate;
+  final List<_SettingsCall> calls = <_SettingsCall>[];
+  bool failNext = false;
+
+  @override
+  Future<void> updateConversationSettings({
+    required String conversationId,
+    bool? muted,
+    bool? pinned,
+  }) async {
+    if (failNext) {
+      failNext = false;
+      throw Exception('CHAT.MIDDLEWARE.unavailable');
+    }
+    calls.add((conversationId: conversationId, muted: muted, pinned: pinned));
+  }
+
+  @override
+  Future<List<MessageHomeRow>> listMessageHome({
+    String filter = 'all',
+    String? cursor,
+    int limit = 20,
+  }) => _delegate.listMessageHome(filter: filter, cursor: cursor, limit: limit);
+
+  @override
+  Future<List<ChatInboxViewData>> listConversations({
+    String? cursor,
+    int limit = 500,
+  }) => _delegate.listConversations(cursor: cursor, limit: limit);
+
+  @override
+  Future<ChatConversationCreatedViewData> createConversation({
+    required String type,
+    String? title,
+    int? maxGroupSize,
+    List<String>? initialMemberIds,
+    String? idempotencyKey,
+  }) => _delegate.createConversation(
+    type: type,
+    title: title,
+    maxGroupSize: maxGroupSize,
+    initialMemberIds: initialMemberIds,
+    idempotencyKey: idempotencyKey,
+  );
+
+  @override
+  Future<ConversationViewData> getConversation(String conversationId) =>
+      _delegate.getConversation(conversationId);
+
+  @override
+  Future<void> updateConversationTitle(String conversationId, String title) =>
+      _delegate.updateConversationTitle(conversationId, title);
+
+  @override
+  Future<List<ChatConversationTimestamp>> getConversationTimestamps() =>
+      _delegate.getConversationTimestamps();
+
+  @override
+  Future<List<ConversationViewData>> batchGetConversations(List<String> ids) =>
+      _delegate.batchGetConversations(ids);
+}
+
 /// 记录治理动作调用，验证页面动作与 Repository 契约绑定。
-class _RecordingChatRepository extends MockChatRepository {
+/// seed 重构后 member override 是整体替换：治理用例消费的成员名册由
+/// 本 double 自治提供（群主=当前用户 + 一名可移出普通成员）。
+class _RecordingChatRepository extends Fake implements ChatMemberRepository {
   final List<String> removedUserIds = <String>[];
   final List<String> leaveConversationCalls = <String>[];
+
+  @override
+  Future<List<ConversationMemberListRow>> listMembers({
+    required String conversationId,
+    String? cursor,
+    int limit = 20,
+    String? role,
+    MemberListSort? sort,
+  }) async {
+    return const [
+      ConversationMemberListRow(
+        userId: 'fixture_user_current',
+        userHandle: 'fixture_user_current',
+        displayName: '我',
+        avatarUrl: '',
+        role: 'owner',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: true,
+      ),
+      ConversationMemberListRow(
+        userId: 'fixture_user_weekend_1',
+        userHandle: 'fixture_user_weekend_1',
+        displayName: '契约同伴一',
+        avatarUrl: '',
+        role: 'member',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: false,
+      ),
+    ];
+  }
 
   @override
   Future<void> removeMember({
@@ -522,38 +856,81 @@ class _RecordingChatRepository extends MockChatRepository {
     required String userId,
   }) async {
     removedUserIds.add(userId);
-    await super.removeMember(conversationId: conversationId, userId: userId);
   }
 
   @override
   Future<void> leaveConversation(String conversationId) async {
     leaveConversationCalls.add(conversationId);
-    await super.leaveConversation(conversationId);
   }
 }
 
-class _ErrorChatRepository extends MockChatRepository {
+class _ErrorChatRepository extends Fake implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) async {
     throw Exception('Network error');
   }
 }
 
 /// 当前用户为普通成员
-class _MemberRoleChatRepository extends MockChatRepository {
+/// 摄影圈子群的三名成员（圈群标题人数与成员网格一致性用例的自治输入）。
+class _PhotoCircleChatRepository extends Fake implements ChatMemberRepository {
   @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
+  }) async {
+    return const [
+      ConversationMemberListRow(
+        userId: 'fixture_user_current',
+        userHandle: 'fixture_user_current',
+        displayName: '我',
+        avatarUrl: '',
+        role: 'member',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: true,
+      ),
+      ConversationMemberListRow(
+        userId: 'fixture_user_photographer',
+        userHandle: 'fixture_user_photographer',
+        displayName: '契约摄影师',
+        avatarUrl: '',
+        role: 'owner',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: false,
+      ),
+      ConversationMemberListRow(
+        userId: 'fixture_user_friend',
+        userHandle: 'fixture_user_friend',
+        displayName: '契约好友',
+        avatarUrl: '',
+        role: 'member',
+        memberType: 'user',
+        joinedAt: null,
+        isCurrentUser: false,
+      ),
+    ];
+  }
+}
+
+class _MemberRoleChatRepository extends Fake implements ChatMemberRepository {
+  @override
+  Future<List<ConversationMemberListRow>> listMembers({
+    required String conversationId,
+    String? cursor,
+    int limit = 20,
+    String? role,
+    MemberListSort? sort,
   }) async {
     return [
       ConversationMemberListRow(
@@ -580,7 +957,8 @@ class _MemberRoleChatRepository extends MockChatRepository {
   }
 }
 
-class _MemberRoleAdminOnlyNameRepository extends _MemberRoleChatRepository {
+class _AdminOnlyNameRepository extends Fake
+    implements ChatGroupAdminRepository {
   @override
   Future<ChatGroupSettingsViewData> getGroupSettings(
     String conversationId,
@@ -592,7 +970,8 @@ class _MemberRoleAdminOnlyNameRepository extends _MemberRoleChatRepository {
   }
 }
 
-class _CircleGroupManagedChatRepository extends MockChatRepository {
+class _CircleGroupManagedChatRepository extends Fake
+    implements ChatGroupAdminRepository {
   @override
   Future<ChatGroupSettingsViewData> getGroupSettings(
     String conversationId,

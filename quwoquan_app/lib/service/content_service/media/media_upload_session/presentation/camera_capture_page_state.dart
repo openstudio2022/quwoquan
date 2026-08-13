@@ -389,12 +389,9 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       final path = result.trim();
       return path.isEmpty ? fallbackPath : path;
     }
-    if (result is Map) {
-      final path = result['path']?.toString().trim();
-      if (path == null || path.isEmpty) {
-        return fallbackPath;
-      }
-      return path;
+    if (result is ImageEditorMultiImageDoneResult) {
+      final path = result.path.trim();
+      return path.isEmpty ? fallbackPath : path;
     }
     return fallbackPath;
   }
@@ -430,8 +427,15 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       await (widget.fileStorageGateway ?? createFileStorageGateway()).delete(
         trimmed,
       );
-    } catch (_) {
-      // 清理临时录制文件失败不应阻断用户重拍。
+    } catch (error, stackTrace) {
+      // 清理失败不阻断用户重拍，但孤儿录制文件会累积占用磁盘，必须上报。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'content.camera_capture.temp_file_cleanup',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
     }
   }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md#gwt-002
-"""Ratchet gate: contract enum fields must reach the App as typed Dart enums.
+"""Gate: contract enum fields must reach the App as typed Dart enums.
 
 Why this gate exists
 --------------------
@@ -15,43 +15,40 @@ definition creates the illusion of governance.
 
 What is measured
 ----------------
-1. Canonical enum names come from `_shared/types.yaml`.
-2. Every contract field declaration carrying `enum_ref: <canonical enum>` is
-   collected from the service contracts and the shared metadata tree. Field
-   names are kept with the *set* of enums they bind to, because a short name
-   such as `scope` or `outcome` legitimately binds to different enums in
-   different objects.
-3. Generated App contract DTOs under
-   `quwoquan_app/packages/quwoquan_cloud_contracts/lib` are scanned for
-   `final String <field>;` / `final String? <field>;` / `final List<String>
-   <field>;` declarations whose field name is enum-bound. Each such declaration
-   is one untyped site.
+The generator emits `quwoquan_app/tool/cloud_codegen/field_binding_report.json`,
+which records every generated Dart field whose owning contract declaration
+carries an `enum_ref`, together with the Dart type that was actually emitted.
+This gate reads that report and blocks on any binding where the emitted type is
+not the enum.
 
-Ratchet policy
---------------
-The baseline records the measured site count, both in total and per field. The
-gate BLOCKs when the count grows (a new untyped enum field) and it also BLOCKs
-when the count shrinks without the baseline being tightened, so the recorded
-number can never go stale upwards. There is deliberately no `--write-baseline`
-flag: tightening the ratchet is a reviewed, hand-edited change to
-`quwoquan_ops/policies/gates/app_enum_typed_binding_baseline.yaml`.
+The report replaces an earlier field-name heuristic that matched generated
+field names against every `enum_ref` in the contract tree. Field names are not
+unique across objects: `status` binds 27 different canonical enums depending on
+the owner, and `kind` on an assistant runtime failure has nothing to do with
+`CircleKind`. That heuristic reported 215 sites of which only 9 were real, so
+the number it produced could neither be trusted nor driven to zero. Only the
+generator knows which contract declaration produced which Dart field, so it now
+states the binding and this gate verifies it.
 
-The fix for a blocked field is always contracts-first: declare the field as
+This is a zero-gap gate: there is no baseline and no budget. Once the precise
+measure was in place the real debt turned out to be nine sites, all of which
+were paid off, so any untyped binding from here on is a new regression rather
+than inherited debt.
+
+Fixing a blocked field is always contracts-first: declare the field as
 `type: enum` together with its `enum_ref` in the owning service contract (object
-fields, request messages and projection slices all need it), regenerate, then let
-the typed enum flow into the App decoder. Compatibility mappings, dual-read and
-string fallbacks are forbidden.
+fields, request messages and projection slices all need it), make sure the enum
+is registered in the catalog its renderer reads, regenerate, then let the typed
+enum flow into the App decoder. Compatibility mappings, dual-read and string
+fallbacks are forbidden.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
-from collections import defaultdict
 from dataclasses import dataclass
-from dataclasses import field as dataclass_field
 from pathlib import Path
 
 _SCRIPTS_ROOT = next(
@@ -66,18 +63,19 @@ from _common.paths import REPO_ROOT
 
 GATE_NAME = "verify_app_enum_typed_binding"
 
-CANONICAL_TYPES_RELATIVE = "quwoquan_service/contracts/metadata/_shared/types.yaml"
-CONTRACT_ROOTS_RELATIVE = (
-    "quwoquan_service/services",
-    "quwoquan_service/contracts/metadata",
-)
-APP_GENERATED_ROOT_RELATIVE = "quwoquan_app/packages/quwoquan_cloud_contracts/lib"
-BASELINE_RELATIVE = "quwoquan_ops/policies/gates/app_enum_typed_binding_baseline.yaml"
+REPORT_RELATIVE = "quwoquan_app/tool/cloud_codegen/field_binding_report.json"
 
-_UNTYPED_DECLARATION = re.compile(
-    r"^\s*final\s+(String\?|String|List<String>\?|List<String>)\s+([A-Za-z0-9_]+)\s*;"
+# The report has to keep covering the renderers that historically emitted
+# untyped enum fields. If a renderer stops recording its bindings the gate would
+# go green while losing sight of a whole tree, so an empty or shrunken scan is
+# itself a blocking condition.
+REQUIRED_COVERAGE = (
+    "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+    "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/"
+    "content_operation_contracts.g.requests.g.dart",
+    "packages/quwoquan_cloud_contracts/lib/src/generated/assistant/"
+    "assistant_api_responses.g.dart",
 )
-_ANY_DECLARATION = re.compile(r"^\s*final\s+([A-Za-z0-9_<>,?\s]+?)\s+([A-Za-z0-9_]+)\s*;")
 
 
 class ScanError(RuntimeError):
@@ -86,261 +84,129 @@ class ScanError(RuntimeError):
 
 @dataclass(frozen=True)
 class UntypedSite:
-    path: str
-    line: int
-    declared_type: str
-    field: str
-    enums: tuple[str, ...]
+    generated_path: str
+    dart_class: str
+    dart_field: str
+    dart_type: str
+    enum_ref: str
+    contract_type: str
+    client_dart_type: str
+
+    @property
+    def key(self) -> str:
+        return f"{self.dart_class}.{self.dart_field}"
 
     def render(self) -> str:
-        enums = "|".join(self.enums)
-        return f"{self.path}:{self.line} final {self.declared_type} {self.field}; -> {enums}"
+        detail = f"contract type={self.contract_type or '(unset)'}"
+        if self.client_dart_type:
+            detail += f", client_dart_type={self.client_dart_type}"
+        return (
+            f"{self.key} -> {self.enum_ref} emitted as `{self.dart_type}` "
+            f"({detail}) in {self.generated_path}"
+        )
 
 
 @dataclass
 class ScanResult:
-    canonical_enums: tuple[str, ...] = ()
-    enum_bound_fields: dict[str, tuple[str, ...]] = dataclass_field(
-        default_factory=dict
-    )
-    scanned_declarations: int = 0
-    scanned_dart_files: int = 0
+    total_bindings: int = 0
+    typed_bindings: int = 0
+    covered_files: int = 0
     untyped_sites: tuple[UntypedSite, ...] = ()
 
     @property
-    def sites_by_field(self) -> dict[str, int]:
-        counts: dict[str, int] = defaultdict(int)
+    def sites_by_key(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
         for site in self.untyped_sites:
-            counts[site.field] += 1
-        return dict(counts)
+            counts[site.key] = counts.get(site.key, 0) + 1
+        return counts
 
 
-def load_canonical_enums(types_path: Path) -> tuple[str, ...]:
-    """Return the canonical enum names declared in `_shared/types.yaml`."""
-
-    import yaml  # type: ignore
-
-    if not types_path.is_file():
-        raise ScanError(f"canonical enum source is missing: {types_path}")
-    document = yaml.safe_load(types_path.read_text(encoding="utf-8")) or {}
-    enums = document.get("enums") or {}
-    if not isinstance(enums, dict) or not enums:
-        raise ScanError(f"canonical enum source declares no enums: {types_path}")
-    return tuple(sorted(str(name) for name in enums))
-
-
-def _scalar(node: object) -> str | None:
-    import yaml  # type: ignore
-
-    if isinstance(node, yaml.ScalarNode):
-        return str(node.value).strip()
-    return None
-
-
-def _walk_field_declarations(node: object, out: list[tuple[str, str]]) -> None:
-    import yaml  # type: ignore
-
-    if isinstance(node, yaml.MappingNode):
-        entries: dict[str, object] = {}
-        for key_node, value_node in node.value:
-            key = _scalar(key_node)
-            if key is not None:
-                entries[key] = value_node
-        name = _scalar(entries.get("name")) if "name" in entries else None
-        enum_ref = _scalar(entries.get("enum_ref")) if "enum_ref" in entries else None
-        if name and enum_ref:
-            out.append((name, enum_ref))
-        for _, value_node in node.value:
-            _walk_field_declarations(value_node, out)
-    elif isinstance(node, yaml.SequenceNode):
-        for item in node.value:
-            _walk_field_declarations(item, out)
-
-
-def collect_enum_bound_fields(
-    contract_roots: tuple[Path, ...],
-    canonical_enums: tuple[str, ...],
-) -> dict[str, tuple[str, ...]]:
-    """Map contract field name -> canonical enums the field binds to."""
-
-    import yaml  # type: ignore
-
-    known = set(canonical_enums)
-    bindings: dict[str, set[str]] = defaultdict(set)
-    for root in contract_roots:
-        if not root.is_dir():
-            raise ScanError(f"contract root does not exist: {root}")
-        for path in sorted(root.rglob("*.yaml")):
-            text = path.read_text(encoding="utf-8", errors="replace")
-            if "enum_ref" not in text:
-                continue
-            try:
-                documents = list(yaml.compose_all(text))
-            except yaml.YAMLError:
-                continue
-            found: list[tuple[str, str]] = []
-            for document in documents:
-                if document is not None:
-                    _walk_field_declarations(document, found)
-            for name, enum_ref in found:
-                if enum_ref in known:
-                    bindings[name].add(enum_ref)
-    if not bindings:
+def scan(repo_root: Path, *, report_path: Path | None = None) -> ScanResult:
+    report_path = report_path or repo_root / REPORT_RELATIVE
+    if not report_path.is_file():
         raise ScanError(
-            "no contract field binds to a canonical enum; the scan roots are "
-            f"wrong or empty: {[str(root) for root in contract_roots]}"
+            f"field binding report is missing: {report_path}; run `make codegen-app` "
+            "so the generator states which contract enum_ref produced which Dart field"
         )
-    return {name: tuple(sorted(refs)) for name, refs in sorted(bindings.items())}
-
-
-def scan_generated_dtos(
-    generated_root: Path,
-    enum_bound_fields: dict[str, tuple[str, ...]],
-) -> tuple[int, int, tuple[UntypedSite, ...]]:
-    """Return (dart files, scanned declarations, untyped enum sites)."""
-
-    if not generated_root.is_dir():
-        raise ScanError(f"generated App contract root does not exist: {generated_root}")
-    dart_files = 0
-    declarations = 0
-    sites: list[UntypedSite] = []
-    for path in sorted(generated_root.rglob("*.dart")):
-        dart_files += 1
-        relative = path.as_posix()
-        for line_number, line in enumerate(
-            path.read_text(encoding="utf-8", errors="replace").splitlines(), 1
-        ):
-            if _ANY_DECLARATION.match(line):
-                declarations += 1
-            match = _UNTYPED_DECLARATION.match(line)
-            if match is None:
-                continue
-            name = match.group(2)
-            enums = enum_bound_fields.get(name)
-            if enums is None:
-                continue
-            sites.append(
-                UntypedSite(
-                    path=relative,
-                    line=line_number,
-                    declared_type=match.group(1),
-                    field=name,
-                    enums=enums,
-                )
-            )
-    return dart_files, declarations, tuple(sites)
-
-
-def scan(
-    repo_root: Path,
-    *,
-    types_path: Path | None = None,
-    contract_roots: tuple[Path, ...] | None = None,
-    generated_root: Path | None = None,
-) -> ScanResult:
-    types_path = types_path or repo_root / CANONICAL_TYPES_RELATIVE
-    contract_roots = contract_roots or tuple(
-        repo_root / relative for relative in CONTRACT_ROOTS_RELATIVE
-    )
-    generated_root = generated_root or repo_root / APP_GENERATED_ROOT_RELATIVE
-
-    canonical_enums = load_canonical_enums(types_path)
-    enum_bound_fields = collect_enum_bound_fields(contract_roots, canonical_enums)
-    dart_files, declarations, sites = scan_generated_dtos(
-        generated_root, enum_bound_fields
-    )
-    if declarations == 0:
-        raise ScanError(
-            "scanned 0 field declarations under "
-            f"{generated_root}; the gate cannot prove anything about enum typing"
-        )
-    result = ScanResult(
-        canonical_enums=canonical_enums,
-        enum_bound_fields=enum_bound_fields,
-        scanned_declarations=declarations,
-        scanned_dart_files=dart_files,
-        untyped_sites=sites,
-    )
-    return result
-
-
-def load_baseline(baseline_path: Path) -> dict[str, object]:
-    import yaml  # type: ignore
-
-    if not baseline_path.is_file():
-        raise ScanError(f"ratchet baseline is missing: {baseline_path}")
-    document = yaml.safe_load(baseline_path.read_text(encoding="utf-8")) or {}
+    try:
+        document = json.loads(report_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ScanError(f"field binding report is malformed: {report_path}: {error}")
     if not isinstance(document, dict):
-        raise ScanError(f"ratchet baseline is malformed: {baseline_path}")
-    if "untyped_site_total" not in document:
+        raise ScanError(f"field binding report root must be an object: {report_path}")
+    bindings = document.get("bindings")
+    if not isinstance(bindings, list) or not bindings:
         raise ScanError(
-            f"ratchet baseline has no `untyped_site_total`: {baseline_path}"
+            f"field binding report declares no bindings: {report_path}; the gate "
+            "cannot prove anything about enum typing"
         )
-    return document
+
+    sites: list[UntypedSite] = []
+    typed = 0
+    covered: set[str] = set()
+    for entry in bindings:
+        if not isinstance(entry, dict):
+            raise ScanError(f"field binding report has a non-object entry: {entry!r}")
+        enum_ref = str(entry.get("enumRef") or "").strip()
+        if not enum_ref:
+            raise ScanError(
+                f"field binding report entry has no enumRef: {entry!r}; the report "
+                "must only contain enum-bound fields"
+            )
+        generated_path = str(entry.get("generatedPath") or "").strip()
+        if not generated_path:
+            raise ScanError(
+                f"field binding report entry has no generatedPath: {entry!r}; a "
+                "renderer recorded a binding without ever writing its file"
+            )
+        covered.add(generated_path)
+        if bool(entry.get("typed")):
+            typed += 1
+            continue
+        sites.append(
+            UntypedSite(
+                generated_path=generated_path,
+                dart_class=str(entry.get("dartClass") or "").strip(),
+                dart_field=str(entry.get("dartField") or "").strip(),
+                dart_type=str(entry.get("dartType") or "").strip(),
+                enum_ref=enum_ref,
+                contract_type=str(entry.get("contractType") or "").strip(),
+                client_dart_type=str(entry.get("clientDartType") or "").strip(),
+            )
+        )
+
+    missing_coverage = [path for path in REQUIRED_COVERAGE if path not in covered]
+    if missing_coverage:
+        raise ScanError(
+            "field binding report no longer covers "
+            f"{missing_coverage}; a renderer stopped recording its enum bindings"
+        )
+
+    return ScanResult(
+        total_bindings=len(bindings),
+        typed_bindings=typed,
+        covered_files=len(covered),
+        untyped_sites=tuple(sites),
+    )
 
 
-def evaluate(
-    result: ScanResult, baseline: dict[str, object]
-) -> tuple[list[str], list[str]]:
-    """Return (blocking failures, tighten reminders).
+def evaluate(result: ScanResult) -> list[str]:
+    """Return the blocking failures.
 
-    The ratchet only blocks on growth, per field and in total. Shrinking is the
-    desired direction, so it is reported as a reminder to hand-edit the baseline
-    down instead of blocking the agent that just paid the debt. Growth inside a
-    single field blocks even when the total still sits under a stale baseline, so
-    a fixed field cannot be silently traded for a new violation elsewhere.
+    Every enum-bound field must reach the App as its enum. There is no budget:
+    a contract that declares `enum_ref` and then hands the App a bare String
+    gives the value set the appearance of governance while accepting anything.
     """
 
     failures: list[str] = []
-    reminders: list[str] = []
-    expected_total = int(baseline.get("untyped_site_total", 0))
-    raw_per_field = baseline.get("untyped_sites_by_field") or {}
-    expected_per_field = {
-        str(name): int(count) for name, count in dict(raw_per_field).items()
-    }
-    actual_per_field = result.sites_by_field
-    actual_total = len(result.untyped_sites)
-
-    regressed = sorted(
-        name
-        for name, count in actual_per_field.items()
-        if count > expected_per_field.get(name, 0)
-    )
-    for name in regressed:
-        expected = expected_per_field.get(name, 0)
+    for name in sorted(result.sites_by_key):
         failures.append(
-            f"enum field `{name}` is declared as a bare String in "
-            f"{actual_per_field[name]} generated site(s), baseline allows {expected}; "
-            "declare it as `type: enum` with its `enum_ref` in the owning service "
-            "contract and regenerate"
+            f"`{name}` binds a canonical enum but is generated as a bare String"
         )
         for site in result.untyped_sites:
-            if site.field == name:
+            if site.key == name:
                 failures.append(f"  {site.render()}")
-
-    if actual_total > expected_total:
-        failures.append(
-            f"untyped enum site total grew: actual={actual_total} "
-            f"baseline={expected_total}"
-        )
-    elif actual_total < expected_total:
-        reminders.append(
-            f"ratchet can tighten: actual={actual_total} is below "
-            f"baseline={expected_total}; hand-edit {BASELINE_RELATIVE} down to "
-            "the measured value"
-        )
-
-    stale = sorted(
-        name
-        for name, count in expected_per_field.items()
-        if count > actual_per_field.get(name, 0)
-    )
-    for name in stale:
-        reminders.append(
-            f"stale baseline entry `{name}`: actual="
-            f"{actual_per_field.get(name, 0)} baseline={expected_per_field[name]}"
-        )
-    return failures, reminders
+    return failures
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -369,14 +235,11 @@ def main(argv: list[str] | None = None) -> int:
         print(
             json.dumps(
                 {
-                    "canonical_enums": len(result.canonical_enums),
-                    "enum_bound_fields": len(result.enum_bound_fields),
-                    "scanned_dart_files": result.scanned_dart_files,
-                    "scanned_declarations": result.scanned_declarations,
+                    "total_bindings": result.total_bindings,
+                    "typed_bindings": result.typed_bindings,
+                    "covered_files": result.covered_files,
                     "untyped_site_total": len(result.untyped_sites),
-                    "untyped_sites_by_field": dict(
-                        sorted(result.sites_by_field.items())
-                    ),
+                    "untyped_sites_by_field": dict(sorted(result.sites_by_key.items())),
                     "untyped_sites": [
                         site.render() for site in result.untyped_sites
                     ],
@@ -387,33 +250,27 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    try:
-        baseline = load_baseline(repo_root / BASELINE_RELATIVE)
-    except ScanError as error:
-        print(f"{GATE_NAME}: BLOCK: {error}", file=sys.stderr)
-        return 2
-
-    failures, reminders = evaluate(result, baseline)
+    failures = evaluate(result)
     if failures:
-        print(f"{GATE_NAME}: BLOCK: enum typed-binding ratchet drift", file=sys.stderr)
+        print(
+            f"{GATE_NAME}: BLOCK: contract enum reaches the App as a bare String",
+            file=sys.stderr,
+        )
         for failure in failures:
             print(f"  {failure}", file=sys.stderr)
         print(
             "  Fix contracts-first: declare `type: enum` + `enum_ref` on the "
             "object field, the request message and the projection slice in the "
-            "owning service contract, regenerate, then consume the typed enum in "
-            "the App decoder. Compatibility mappings and String fallbacks are "
-            "forbidden.",
+            "owning service contract, register the enum in the catalog its "
+            "renderer reads, regenerate, then consume the typed enum in the App "
+            "decoder. Compatibility mappings and String fallbacks are forbidden.",
             file=sys.stderr,
         )
         return 1
 
-    for reminder in reminders:
-        print(f"{GATE_NAME}: TIGHTEN: {reminder}")
     print(
-        f"{GATE_NAME}: OK (canonical_enums={len(result.canonical_enums)}, "
-        f"enum_bound_fields={len(result.enum_bound_fields)}, "
-        f"scanned_declarations={result.scanned_declarations}, "
+        f"{GATE_NAME}: OK (bindings={result.total_bindings}, "
+        f"typed={result.typed_bindings}, files={result.covered_files}, "
         f"untyped_sites={len(result.untyped_sites)})"
     )
     return 0

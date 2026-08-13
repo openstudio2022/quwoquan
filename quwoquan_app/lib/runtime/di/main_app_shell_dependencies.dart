@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_page.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/active_call_service.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_participants_provider.dart';
@@ -57,10 +58,16 @@ class MainAppShellBindings {
     required VoidCallback onReturnToCall,
     required VoidCallback onHangup,
   }) {
-    return PipCallOverlay(
-      activeSpeaker: ref.read(callParticipantsProvider).activeSpeaker,
-      onReturnToCall: onReturnToCall,
-      onHangup: onHangup,
+    // activeSpeaker 变化只重建 PiP 子树（局部 Consumer），不得上浮为
+    // bindings/MainAppShell 级重建。
+    return Consumer(
+      builder: (context, consumerRef, _) => PipCallOverlay(
+        activeSpeaker: consumerRef.watch(
+          callParticipantsProvider.select((state) => state.activeSpeaker),
+        ),
+        onReturnToCall: onReturnToCall,
+        onHangup: onHangup,
+      ),
     );
   }
 
@@ -100,16 +107,18 @@ class MainAppShellBindings {
 }
 
 final mainAppShellBindingsProvider = Provider<MainAppShellBindings>((ref) {
-  final activeCall = ref.watch(activeCallProvider);
-  ref.watch(callParticipantsProvider);
-  final callId = activeCall.callId?.trim() ?? '';
+  // 只订阅 shell 结构相关字段：elapsed 每秒 tick、参与者变化与 PiP 显隐
+  // 不得整树重建 MainAppShell（ActiveCallBar/PiP 浮层自行隔离 watch 展示态）。
+  final callId = ref.watch(
+    activeCallProvider.select((state) => state.callId?.trim() ?? ''),
+  );
+  final isVideo = ref.watch(
+    activeCallProvider.select((state) => state.callType == 'video'),
+  );
   return MainAppShellBindings(
     ref: ref,
     activeCallRoute: callId.isEmpty
         ? null
-        : MainAppShellActiveCallRoute(
-            callId: callId,
-            isVideo: activeCall.callType == 'video',
-          ),
+        : MainAppShellActiveCallRoute(callId: callId, isVideo: isVideo),
   );
 });

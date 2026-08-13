@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-import '../../../../../support/service/content_service/content/post/content_mock_data.dart';
 import '../../../../../support/service/content_service/content/post/content_post_contract_fixture.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 
 ContentPostProjection _projectionFromView(ContentPostViewData view) =>
     contentPostProjectionFixture(
@@ -54,10 +54,53 @@ ContentDiscoveryFeedPageSlice _page(List<ContentPostViewData> views) =>
       objectCards: const <FeedObjectCard>[],
     );
 
+ContentPostViewData _photo() => contentPostViewDataBuilder(
+  postId: 'd1',
+  contentType: 'image',
+  authorId: 'nature_photographer',
+  authorDisplayName: '自然摄影师',
+  mediaUrls: const <String>[testContentImageUrl],
+  coverUrl: testContentImageUrl,
+  thumbnailUrl: testContentImageUrl,
+  width: 960,
+  height: 800,
+  likeCount: 1200,
+  commentCount: 45,
+  shareCount: 18,
+  createdAt: DateTime.utc(2025, 12, 20, 10),
+);
+
+ContentPostViewData _video() => contentPostViewDataBuilder(
+  postId: 'video_tokyo_midnight',
+  contentType: 'video',
+  authorId: 'a1',
+  authorDisplayName: '楹语小筑',
+  body: '东京凌晨两点的街道',
+  thumbnailUrl: testContentImageUrl,
+  videoUrl: testContentVideoUrl,
+  width: 540,
+  height: 960,
+  durationMs: 125000,
+  likeCount: 12500,
+  commentCount: 892,
+);
+
+ContentPostViewData _moment() =>
+    contentPostViewDataBuilder(postId: 'moment-1', contentType: 'micro');
+
+ContentPostViewData _article() => contentPostViewDataBuilder(
+  postId: 'article-1',
+  contentType: 'article',
+  title: '现代 Web开发趋势',
+  body: '文章摘要',
+  articleTemplate: 'journal',
+  articleFontPreset: 'clean',
+);
+
 void main() {
   group('ContentDiscoveryFeedPageSlice — canonical items', () {
     test('photo item 保持作者、媒体、统计和时间事实', () {
-      final original = ContentMockData.discoveryPhotoData.first;
+      final original = _photo();
       final projection = _page(<ContentPostViewData>[original]).items.single;
       final item = ContentPostViewData.fromWire(projection);
 
@@ -75,7 +118,7 @@ void main() {
     });
 
     test('video item 保持单一视频形态和时长', () {
-      final original = ContentMockData.discoveryVideoData.first;
+      final original = _video();
       final item = ContentPostViewData.fromWire(
         _page(<ContentPostViewData>[original]).items.single,
       );
@@ -93,10 +136,7 @@ void main() {
     });
 
     test('moment 与 article 使用同一 ContentPostProjection owner', () {
-      final source = <ContentPostViewData>[
-        ContentMockData.discoveryMomentData.first,
-        ContentMockData.discoveryArticleData.first,
-      ];
+      final source = <ContentPostViewData>[_moment(), _article()];
       final page = _page(source);
       final items = page.items
           .map(ContentPostViewData.fromWire)
@@ -110,10 +150,10 @@ void main() {
 
     test('每个 feed item 均具有 canonical post/author identity', () {
       final page = _page(<ContentPostViewData>[
-        ...ContentMockData.discoveryPhotoData,
-        ...ContentMockData.discoveryVideoData,
-        ...ContentMockData.discoveryMomentData,
-        ...ContentMockData.discoveryArticleData,
+        _photo(),
+        _video(),
+        _moment(),
+        _article(),
       ]);
 
       for (final projection in page.items) {
@@ -138,7 +178,7 @@ void main() {
     });
 
     test('feed page round-trip 保持 typed cursor envelope 和 items', () {
-      final source = ContentMockData.discoveryPhotoData.first;
+      final source = _photo();
       final page = ContentDiscoveryFeedPageSlice(
         items: <ContentPostProjection>[_projectionFromView(source)],
         outcome: ContentFeedOutcome.content,
@@ -161,9 +201,7 @@ void main() {
     });
 
     test('generated decoder 拒绝旧 item 字段和未知 page 字段', () {
-      final page = _page(<ContentPostViewData>[
-        ContentMockData.discoveryPhotoData.first,
-      ]).toWire();
+      final page = _page(<ContentPostViewData>[_photo()]).toWire();
       final item = Map<String, Object?>.from(
         (page['items']! as List<Object?>).single! as Map,
       )..['id'] = 'retired-id';

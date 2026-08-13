@@ -233,7 +233,7 @@ class SourceDefinitionSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class FrozenSourceDigest:
-    """A validated historical input closure bound to legacy object evidence."""
+    """A validated historical input closure bound to pre-snapshot object evidence."""
 
     digest: str
     inputs: tuple[str, ...]
@@ -275,21 +275,9 @@ class FrozenSourceDigest:
         }
 
 
-def parse_source_digest_document(
-    value: object,
-    *,
-    frozen_digest_allowlist: frozenset[str] = frozenset(),
-) -> SourceDigest | FrozenSourceDigest:
-    """Parse current input truth or an explicitly bound historical closure."""
-    try:
-        return SourceDigest.from_document(value)
-    except SourceDigestError:
-        if (
-            not isinstance(value, Mapping)
-            or str(value.get("digest") or "") not in frozen_digest_allowlist
-        ):
-            raise
-        return FrozenSourceDigest.from_document(value)
+def parse_source_digest_document(value: object) -> SourceDigest:
+    """Parse the current input truth for one source digest document."""
+    return SourceDigest.from_document(value)
 
 
 def current_source_digest(*, repo_root: Path = REPO_ROOT) -> SourceDigest:

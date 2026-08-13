@@ -29,14 +29,72 @@ class _ArticleSemanticBlock extends StatelessWidget {
         fontWeight: AppTypography.bold,
         letterSpacing: 0.18,
       ),
+      ArticleDocumentBlockType.quote ||
+      ArticleDocumentBlockType.callout ||
+      ArticleDocumentBlockType.codeBlock =>
+        ArticleRichBlockChrome.textStyleFor(block.type, typography.bodyStyle),
       _ => typography.bodyStyle,
     };
-    return _ArticleInlineText(
+    final inlineText = _ArticleInlineText(
       text: block.text.trim(),
       spans: block.spans,
       style: style,
       onEntityTap: onEntityTap,
     );
+    // 嵌套列表缩进（GWT-004）：listDepth 与 codec 缩进同一约定。
+    if ((block.type == ArticleDocumentBlockType.orderedItem ||
+            block.type == ArticleDocumentBlockType.bulletItem) &&
+        block.listDepth > 0) {
+      return Padding(
+        key: ValueKey<String>('article-list-depth-${block.listDepth}'),
+        padding: EdgeInsets.only(
+          left: block.listDepth.clamp(0, 2) * AppSpacing.containerSm,
+        ),
+        child: inlineText,
+      );
+    }
+    // 富块容器（GWT-003）：几何与分页测量共用 ArticleRichBlockChrome。
+    final accent = typography.bodyStyle.color ?? AppColors.worksTitle;
+    return switch (block.type) {
+      ArticleDocumentBlockType.quote => Container(
+        key: const ValueKey<String>('article-rich-quote'),
+        padding: const EdgeInsets.only(left: ArticleRichBlockChrome.quoteGap),
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: accent.withValues(alpha: 0.32),
+              width: ArticleRichBlockChrome.quoteBarWidth,
+            ),
+          ),
+        ),
+        child: inlineText,
+      ),
+      ArticleDocumentBlockType.callout => Container(
+        key: const ValueKey<String>('article-rich-callout'),
+        width: double.infinity,
+        padding: ArticleRichBlockChrome.calloutPadding,
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+        ),
+        child: inlineText,
+      ),
+      ArticleDocumentBlockType.codeBlock => Container(
+        key: const ValueKey<String>('article-rich-code'),
+        width: double.infinity,
+        padding: ArticleRichBlockChrome.codePadding,
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+          border: Border.all(
+            color: accent.withValues(alpha: 0.12),
+            width: AppSpacing.hairline,
+          ),
+        ),
+        child: Text(block.text.trimRight(), style: style),
+      ),
+      _ => inlineText,
+    };
   }
 }
 
@@ -55,38 +113,57 @@ class _ArticleInlineText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mentionSpans = spans.where((span) => span.isInlineMention).toList()
-      ..sort((a, b) => a.start.compareTo(b.start));
-    if (mentionSpans.isEmpty) {
+    if (spans.isEmpty) {
+      return Text(text, style: style);
+    }
+    // 行内分段唯一真相源（GWT-002）：与序列化共用同一字符级合成，
+    // mention 原子段可点，样式段按 span 布尔渲染，无第二套切分。
+    final segments = resolveArticleInlineSegments(text, spans);
+    if (segments.isEmpty) {
       return Text(text, style: style);
     }
     final children = <InlineSpan>[];
-    var cursor = 0;
-    for (final span in mentionSpans) {
-      final start = span.start.clamp(0, text.length);
-      final end = span.end.clamp(start, text.length);
-      if (start < cursor) continue;
-      if (start > cursor) {
-        children.add(TextSpan(text: text.substring(cursor, start)));
+    for (final segment in segments) {
+      final raw = text.substring(segment.start, segment.end);
+      final mention = segment.mention;
+      if (mention != null) {
+        // 链接段与 mention 段共用原子分段与 tap 通道；链接不加粗以示区分。
+        final isLink = mention.isLink;
+        children.add(
+          TextSpan(
+            text: raw,
+            style: style.copyWith(
+              color: AppColors.worksAccent,
+              fontWeight: isLink ? null : AppTypography.semiBold,
+              decoration: TextDecoration.underline,
+              decorationColor: AppColors.worksAccent.withValues(alpha: 0.64),
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => onEntityTap?.call(mention),
+          ),
+        );
+        continue;
       }
-      final label = text.substring(start, end);
+      if (!segment.hasStyle) {
+        children.add(TextSpan(text: raw));
+        continue;
+      }
+      final decorations = <TextDecoration>[
+        if (segment.underline) TextDecoration.underline,
+        if (segment.strikethrough) TextDecoration.lineThrough,
+      ];
       children.add(
         TextSpan(
-          text: label,
+          text: raw,
           style: style.copyWith(
-            color: AppColors.worksAccent,
-            fontWeight: AppTypography.semiBold,
-            decoration: TextDecoration.underline,
-            decorationColor: AppColors.worksAccent.withValues(alpha: 0.64),
+            fontWeight: segment.bold ? AppTypography.bold : null,
+            fontStyle: segment.italic ? FontStyle.italic : null,
+            decoration: decorations.isEmpty
+                ? null
+                : TextDecoration.combine(decorations),
           ),
-          recognizer: TapGestureRecognizer()
-            ..onTap = () => onEntityTap?.call(span),
         ),
       );
-      cursor = end;
-    }
-    if (cursor < text.length) {
-      children.add(TextSpan(text: text.substring(cursor)));
     }
     return RichText(
       key: const ValueKey<String>('article-entity-rich-text'),

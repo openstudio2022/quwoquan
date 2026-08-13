@@ -233,6 +233,8 @@ def agent_command_needs_bootstrap(argv: list[str]) -> bool:
     args = list(argv[1:])
     if len(args) >= 2 and args[:2] == ["task", "execute"]:
         return True
+    if len(args) >= 2 and args[:2] == ["task", "acquire-videos"]:
+        return True
     if len(args) >= 2 and args[:2] == ["verify", "homepage-draft"]:
         return True
     return len(args) >= 2 and args[:2] == ["governance", "media-probe"]

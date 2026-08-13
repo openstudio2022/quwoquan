@@ -6,27 +6,34 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/config/app_remote_config_snapshot.dart';
 import 'package:quwoquan_app/runtime/config/app_remote_config_store.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_display_config.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../support/service/content_service/content/post/test_content_app_config.dart';
 
-class _ConfigRepo extends MockContentRepository {
+class _ConfigRepo implements ContentConfigRepository {
   _ConfigRepo(this.config);
 
   final AppConfigSlice config;
 
   @override
   Future<AppConfigSlice> getAppConfig() async => config;
+
+  @override
+  bool get requiresResolvedPersonaForMutations => false;
 }
 
-class _ThrowingConfigRepo extends MockContentRepository {
+class _ThrowingConfigRepo implements ContentConfigRepository {
   @override
   Future<AppConfigSlice> getAppConfig() async {
     throw const FormatException('generated app config decoder rejected input');
   }
+
+  @override
+  bool get requiresResolvedPersonaForMutations => false;
 }
 
 final class _MemoryAppRemoteConfigStore implements AppRemoteConfigStore {
@@ -72,7 +79,8 @@ void main() {
       overrides: [
         appRemoteConfigStoreProvider.overrideWithValue(store),
         ...mockContentFacetOverrides(
-          _ConfigRepo(
+          store: InMemoryContentPostStore(),
+          configRepository: _ConfigRepo(
             AppConfigSlice.fromWire(
               _signedRemoteConfig({
                 'comment': {
@@ -108,7 +116,8 @@ void main() {
         overrides: [
           appRemoteConfigStoreProvider.overrideWithValue(store),
           ...mockContentFacetOverrides(
-            _ConfigRepo(
+            store: InMemoryContentPostStore(),
+            configRepository: _ConfigRepo(
               AppConfigSlice.fromWire(
                 _signedRemoteConfig({
                   'feature_flags': {'enable_article_book_reader': false},
@@ -220,7 +229,10 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appRemoteConfigStoreProvider.overrideWithValue(store),
-        ...mockContentFacetOverrides(_ThrowingConfigRepo()),
+        ...mockContentFacetOverrides(
+          store: InMemoryContentPostStore(),
+          configRepository: _ThrowingConfigRepo(),
+        ),
       ],
     );
     addTearDown(container.dispose);

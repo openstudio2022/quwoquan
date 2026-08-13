@@ -7,10 +7,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/di/conversation_members_provider.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/application/public/chat_member_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/presentation/group_member_search_page.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_seed_refs.dart';
 
 const _conversationId = 'fixture_conv_group';
@@ -22,7 +24,7 @@ void main() {
       final repository = _RefreshableMembersRepository();
       final container = ProviderContainer(
         overrides: <Override>[
-          chatRepositoryCompositionProvider.overrideWithValue(repository),
+          ...chatTestRepositoryOverrides(member: repository),
           currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
         ],
       );
@@ -67,7 +69,9 @@ void main() {
   );
 }
 
-final class _RefreshableMembersRepository extends MockChatRepository {
+final class _RefreshableMembersRepository extends Fake
+    implements ChatMemberRepository {
+  final ChatMemberRepository _delegate = ChatTestFacets().member;
   bool failReads = false;
 
   @override
@@ -76,12 +80,12 @@ final class _RefreshableMembersRepository extends MockChatRepository {
     String? cursor,
     int limit = 20,
     String? role,
-    String? sort,
+    MemberListSort? sort,
   }) {
     if (failReads) {
       throw Exception('membership refresh unavailable');
     }
-    return super.listMembers(
+    return _delegate.listMembers(
       conversationId: conversationId,
       cursor: cursor,
       limit: limit,

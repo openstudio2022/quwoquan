@@ -42,9 +42,7 @@ extension _CircleShellBuilders on _CircleShellState {
     final circle = state.circleData;
     final statItems = _circleStatItems(state);
     final summarySurface = AppColors.iosProfileSurface(context);
-    final summaryBorder = AppColors.iosSeparator(
-      context,
-    ).withValues(alpha: isDark ? 0.24 : 0.08);
+    final summaryBorder = AppColors.iosCardBorder(context);
     final summaryShadow = isDark
         ? AppColors.black.withValues(alpha: 0.18)
         : AppColors.black.withValues(alpha: 0.05);
@@ -182,9 +180,7 @@ extension _CircleShellBuilders on _CircleShellState {
         color: AppColors.iosProfileSurface(context),
         borderRadius: BorderRadius.circular(_CircleShellState._cardRadius),
         border: Border.all(
-          color: AppColors.iosSeparator(
-            context,
-          ).withValues(alpha: isDark ? 0.24 : 0.08),
+          color: AppColors.iosCardBorder(context),
           width: AppSpacing.hairline,
         ),
       ),
@@ -600,14 +596,14 @@ extension _CircleShellBuilders on _CircleShellState {
     );
   }
 
-  /// 讨论 tab 按 metadata sectionTypes `[chat, storage]` 组合两个成员板块：
-  /// 群聊入口 + 圈子文件（容量来自 stats wire，缺失配额时不渲染文件板块）。
+  /// 讨论 tab 按 metadata sectionTypes `[chat]` 只承载交流入口；
+  /// 圈子资料以群为协作单元（redesign 规格 R「群层以交流、资料、公告为主」），
+  /// 不再混入圈子主页讨论 Tab。
   Widget _buildDiscussionBody(
     BuildContext context, {
     required bool isDark,
     required CircleState state,
   }) {
-    final stats = state.circleStats;
     return Padding(
       padding: EdgeInsets.only(top: AppSpacing.containerSm),
       child: Column(
@@ -626,29 +622,16 @@ extension _CircleShellBuilders on _CircleShellState {
           SectionChat(
             circleId: widget.circleId,
             conversationId: state.defaultPublicGroup?.conversationId,
+            hasDefaultGroup: (state.circleData?.defaultPublicGroupId ?? '')
+                .trim()
+                .isNotEmpty,
             isDark: isDark,
+            onRefresh: () => unawaited(
+              ref
+                  .read(circleStateProvider(widget.circleId).notifier)
+                  .loadCircle(),
+            ),
           ),
-          if (stats.storageQuotaBytes > 0) ...[
-            SizedBox(height: AppSpacing.containerSm),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-              child: Text(
-                CommunityText.circleStorageSection,
-                style: TextStyle(
-                  fontSize: AppTypography.sm,
-                  fontWeight: AppTypography.semiBold,
-                  color: AppColors.iosSecondaryLabel(context),
-                ),
-              ),
-            ),
-            SizedBox(height: AppSpacing.intraGroupXs),
-            widget.participantSlots.buildStorageSection(
-              circleId: widget.circleId,
-              isDark: isDark,
-              storageUsedBytes: stats.storageUsedBytes,
-              storageQuotaBytes: stats.storageQuotaBytes,
-            ),
-          ],
         ],
       ),
     );

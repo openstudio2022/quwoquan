@@ -9,6 +9,7 @@ import 'package:quwoquan_app/service/user_service/relationship/greeting_request/
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constants.dart';
@@ -439,7 +440,12 @@ class _GreetingInboxPageState extends ConsumerState<GreetingInboxPage> {
     }
     final items = _box == _GreetingBox.received ? _received : _sent;
     if (items.isEmpty) {
-      return _GreetingEmptyState(box: _box, isDark: isDark);
+      return AppEmptyState(
+        icon: CupertinoIcons.chat_bubble_2,
+        title: _box == _GreetingBox.received
+            ? ChatText.chatGreetingReceivedEmpty
+            : ChatText.chatGreetingSentEmpty,
+      );
     }
     return CustomScrollView(
       slivers: <Widget>[

@@ -44,6 +44,8 @@ import 'package:quwoquan_app/runtime/di/app_providers_operations.dart'
         personaRelationshipCommandWriterProvider,
         personaRelationshipQueryProvider,
         profileQueryProvider;
+import 'package:quwoquan_app/runtime/di/user_relationship_state_dependencies.dart'
+    show userRelationshipStateProvider;
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart';

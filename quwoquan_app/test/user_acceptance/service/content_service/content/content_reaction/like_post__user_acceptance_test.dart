@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/reaction-state-counter/spec.md#gwt-001
+// readiness_case: content_reaction_like_app_uat
 /// user_acceptance Patrol: 点赞旅程（realtime + error rollback）
 ///
 /// 对应 e2e.yaml 场景：like_post_realtime [test_type: ui_journey]

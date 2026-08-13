@@ -1,14 +1,19 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/chat_inbox_repository.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/public/chat_inbox_view_data.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
-import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/application/chat_inbox_provider.dart';
 
 import '../../../../../support/service/chat_service/chat/chat_inbox_view/chat_inbox_view_fixture_builder.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
 
-class _SwitchableInboxRepository extends MockChatRepository {
-  _SwitchableInboxRepository({required super.seedConversations});
+class _SwitchableInboxRepository extends Fake implements ChatInboxRepository {
+  _SwitchableInboxRepository({
+    required List<Map<String, dynamic>> seedConversations,
+  }) : _delegate = ChatTestFacets(seedConversations: seedConversations).inbox;
+
+  final ChatInboxRepository _delegate;
 
   bool returnEmptyInbox = false;
 
@@ -20,7 +25,7 @@ class _SwitchableInboxRepository extends MockChatRepository {
     if (returnEmptyInbox) {
       return const <ChatInboxViewData>[];
     }
-    return super.listInbox(cursor: cursor, limit: limit);
+    return _delegate.listInbox(cursor: cursor, limit: limit);
   }
 }
 
@@ -54,7 +59,7 @@ void main() {
         ],
       );
       final container = ProviderContainer(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: chatTestRepositoryOverrides(inbox: repo),
       );
       addTearDown(container.dispose);
       final sub = container.listen(chatInboxListProvider, (_, _) {});
@@ -71,11 +76,9 @@ void main() {
 
     test('markConversationRead clears unread and mention counts', () async {
       final container = ProviderContainer(
-        overrides: [
-          chatRepositoryCompositionProvider.overrideWithValue(
-            _UnreadMentionChatRepository(),
-          ),
-        ],
+        overrides: chatTestRepositoryOverrides(
+          inbox: _UnreadMentionChatRepository(),
+        ),
       );
       addTearDown(container.dispose);
 
@@ -103,7 +106,7 @@ void main() {
   });
 }
 
-class _UnreadMentionChatRepository extends MockChatRepository {
+class _UnreadMentionChatRepository extends Fake implements ChatInboxRepository {
   @override
   Future<List<ChatInboxViewData>> listInbox({
     String? cursor,
@@ -119,13 +122,5 @@ class _UnreadMentionChatRepository extends MockChatRepository {
         mentionUnreadCount: 1,
       ),
     ];
-  }
-
-  @override
-  Future<List<ChatInboxViewData>> listConversations({
-    String? cursor,
-    int limit = 20,
-  }) async {
-    return listInbox(cursor: cursor, limit: limit);
   }
 }

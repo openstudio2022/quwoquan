@@ -1,3 +1,4 @@
+// readiness_case: skill_catalog_disclosure_app_uat
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md#gwt-003
 /// 已认证 disposable owner 经 production Remote 打开 Skill Center，并读取
 /// official travel_companion 的账号隔离目录状态。

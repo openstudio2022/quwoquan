@@ -6,7 +6,7 @@ import 'package:riverpod/misc.dart' show ProviderListenable;
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/adapters/realtime_config.dart';
-import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/domain/realtime_connection_delegate.dart';
+import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_operation_gateway.dart';
 import 'package:quwoquan_app/runtime/di/realtime_message_handler.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/adapters/longpoll_transport.dart';
@@ -104,6 +104,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   int _reconnectAttempt = 0;
   Timer? _reconnectTimer;
   String? _activeConversationId;
+  bool _wsHadDisconnect = false;
 
   @override
   void onAppForeground() {
@@ -118,6 +119,12 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
 
   @override
   void onAppBackground() {
+    // 后台断开同样是断连窗口：回到前台重建传输后必须触发与 WS 断线重连
+    // 同等的 Reconnected 补洞（realtime-push-and-offline-sync REQ-008），
+    // 否则后台期间的消息在下一次全量刷新前不可见。
+    if (_state != TransportState.disconnected) {
+      _wsHadDisconnect = true;
+    }
     _transitionTo(TransportState.disconnected);
   }
 
@@ -207,6 +214,16 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
       // A completed authenticated connection, not a reconnect invocation,
       // starts a new retry budget.
       _reconnectAttempt = 0;
+      if (_wsHadDisconnect) {
+        // 传输恢复必须发出真实事件并驱动 seq 补洞
+        //（realtime-push-and-offline-sync REQ-008）：WS 是即时广播通道，
+        // 断连窗口内的消息只能由端侧按本地最大 seq 经消息同步接口补齐。
+        _wsHadDisconnect = false;
+        _handler.handle(<String, dynamic>{
+          'type': 'Reconnected',
+          'conversationId': ?_activeConversationId,
+        });
+      }
     }
     unawaited(
       _recordConnectResult(
@@ -220,6 +237,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
 
   void _onWebSocketDisconnect() {
     if (_state != TransportState.active) return;
+    _wsHadDisconnect = true;
     _scheduleReconnect();
   }
 
@@ -279,6 +297,16 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
       );
     };
     _longPoll!.start();
+    if (_wsHadDisconnect) {
+      // WS 重试预算耗尽降级 LongPoll、或后台恢复直接进入 idle 时，
+      // 断连窗口的消息同样只能由 seq 补洞收敛；LongPoll 游标不承载
+      // 断连期间的会话消息回放。
+      _wsHadDisconnect = false;
+      _handler.handle(<String, dynamic>{
+        'type': 'Reconnected',
+        'conversationId': ?_activeConversationId,
+      });
+    }
     unawaited(
       _recordConnectResult(
         transport: 'long_poll',

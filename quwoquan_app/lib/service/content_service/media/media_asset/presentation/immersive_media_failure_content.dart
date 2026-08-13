@@ -58,7 +58,7 @@ class ImmersiveMediaFailureContent extends StatelessWidget {
             title,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: AppColors.white.withValues(alpha: 0.92),
+              color: AppColors.immersiveForeground.withValues(alpha: 0.92),
               fontSize: AppTypography.sm,
               fontWeight: AppTypography.medium,
             ),
@@ -69,7 +69,7 @@ class ImmersiveMediaFailureContent extends StatelessWidget {
               message,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: AppColors.white.withValues(alpha: 0.72),
+                color: AppColors.immersiveForeground.withValues(alpha: 0.72),
                 fontSize: AppTypography.xs,
               ),
             ),
@@ -86,16 +86,20 @@ class ImmersiveMediaFailureContent extends StatelessWidget {
                 horizontal: AppSpacing.md,
                 vertical: AppSpacing.xs,
               ),
-              color: AppColors.white.withValues(alpha: 0.20),
-              disabledColor: AppColors.white.withValues(alpha: 0.12),
+              color: AppColors.immersiveForeground.withValues(alpha: 0.20),
+              disabledColor: AppColors.immersiveForeground.withValues(
+                alpha: 0.12,
+              ),
               borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
               onPressed: retrying ? null : onRetry,
               child: retrying
-                  ? AppRequestFeedback.inline(indicatorColor: AppColors.white)
+                  ? AppRequestFeedback.inline(
+                      indicatorColor: AppColors.immersiveForeground,
+                    )
                   : Text(
                       actionLabel,
                       style: TextStyle(
-                        color: AppColors.white,
+                        color: AppColors.immersiveForeground,
                         fontSize: AppTypography.sm,
                         fontWeight: AppTypography.semiBold,
                       ),

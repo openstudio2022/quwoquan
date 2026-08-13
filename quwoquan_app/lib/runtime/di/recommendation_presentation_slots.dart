@@ -10,6 +10,9 @@ import 'package:quwoquan_app/service/entity_service/entity_homepage/homepage/pre
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/object_intersection_query.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/author_impact_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_reason_chip.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/my_gatherings_entry_card.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/creator_flywheel_proof_row.dart';
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_experience_asset_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_impact_preview_card.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/object_intersection_section.dart';
@@ -84,6 +87,15 @@ Widget _buildOtherProfileIntersection({required String userId}) =>
 Widget _buildMyProfileIntersection({required bool isDark}) =>
     MyIntersectionInboxCard(isDark: isDark);
 
+Widget _buildMyProfileGatherings({required bool isDark}) =>
+    MyGatheringsEntryCard(isDark: isDark);
+
+Widget _buildMyProfileExperience({required bool isDark}) =>
+    MyExperienceAssetCard(isDark: isDark);
+
+Widget _buildMyProfileCreatorProof({required String personaId}) =>
+    CreatorFlywheelProofRow(personaId: personaId);
+
 Widget _buildAuthorImpact({
   required AuthorImpactSummary summary,
   required bool isDark,
@@ -106,13 +118,16 @@ const HomepageRecommendationSlots homepageRecommendationSlots =
       buildObjectImpact: _buildHomepageObjectImpact,
     );
 
-/// Persona source owner 的 production Recommendation participant 绑定。
+/// Persona source owner 的 production participant 绑定（Recommendation + Circle）。
 const ProfileRecommendationSlots profileRecommendationSlots =
     ProfileRecommendationSlots(
       buildOtherIntersection: _buildOtherProfileIntersection,
       buildMyIntersection: _buildMyProfileIntersection,
       buildAuthorImpact: _buildAuthorImpact,
       buildIntersectionReason: _buildIntersectionReason,
+      buildMyGatherings: _buildMyProfileGatherings,
+      buildMyExperience: _buildMyProfileExperience,
+      buildCreatorProof: _buildMyProfileCreatorProof,
     );
 
 /// CircleShell 仍在 runtime/di 组合期使用的同一 typed slot。

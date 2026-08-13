@@ -5,7 +5,8 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation/application/
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/public/chat_conversation_view_data.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/application/start_group_from_group_provider.dart';
-import '../../../../../support/service/chat_service/chat/conversation/chat_repository_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facets_typed_double.dart';
+import '../../../../../support/service/chat_service/chat/conversation/chat_repository_facet_overrides.dart';
 import '../../../../../support/service/chat_service/chat/conversation/chat_seed_refs.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 
@@ -19,9 +20,10 @@ void main() {
     });
 
     test('startGroupFromGroupProvider 保留 canonical 群身份并呈现头像空态', () async {
-      final repo = MockChatRepository();
+      final facets = ChatTestFacets();
+      final repo = facets.groupSelection;
       final container = ProviderContainer(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: chatTestRepositoryOverrides(facets: facets),
       );
       addTearDown(container.dispose);
 
@@ -50,9 +52,10 @@ void main() {
     });
 
     test('图四群列表只暴露含 mutual 成员的群且 friendCount = 成员交集大小', () async {
-      final repo = MockChatRepository();
+      final facets = ChatTestFacets();
+      final repo = facets.groupSelection;
       final container = ProviderContainer(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: chatTestRepositoryOverrides(facets: facets),
       );
       addTearDown(container.dispose);
 
@@ -122,9 +125,10 @@ void main() {
     });
 
     test('图五成员交集排除当前用户、按名排序且锁定成员被过滤', () async {
-      final repo = MockChatRepository();
+      final facets = ChatTestFacets();
+      final repo = facets.groupSelection;
       final container = ProviderContainer(
-        overrides: [chatRepositoryCompositionProvider.overrideWithValue(repo)],
+        overrides: chatTestRepositoryOverrides(facets: facets),
       );
       addTearDown(container.dispose);
 

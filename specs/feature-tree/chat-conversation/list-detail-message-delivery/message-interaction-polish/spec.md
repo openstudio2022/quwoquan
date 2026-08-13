@@ -129,9 +129,12 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：输入、选择、删除与发送行为有 local_contract，Mock 与 Remote 参数一致。
-- 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效。
+- 影响或价值：尚缺提及（mention）输入、选择、删除路径的同一强类型 payload
+  local_contract 证据。引用回复链路已落地并有 local_contract 证据
+  （`chat_reply_to_message__local_contract_test.dart` 绑定 `GWT-003`）：长按菜单
+  「回复」→ 输入栏可取消引用预览 → 发送命令携带 contracts `replyToMessageId`
+  强类型 payload → 带引用消息在气泡上方渲染被引用摘要（原消息不可用/已撤回时诚实占位）。
+- 完成判定：`GWT-003` 的提及路径证据补齐后闭合；引用回复路径已闭合。
 
 <a id="open-004"></a>
 ### OPEN-004 服务端目标校验与提及未读
@@ -139,8 +142,9 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：HTTP、Mongo Message、outbox 与 ConversationUserState 由 api_integration 证明一致且重放幂等。
+- 影响或价值：尚缺 HTTP、Mongo Message、outbox 与 ConversationUserState 的 api_integration 级一致性与重放幂等证据。
+  `replyToMessageId` 服务端目标校验已落地：SendMessage 校验引用消息存在且属同一会话，非法返回 canonical MessageInvalid，已撤回目标允许引用；
+  正负例见 `send_message_reply_target__local_contract_test.go`。
 - 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-005"></a>

@@ -180,7 +180,6 @@ def test_baike_homepage_freezes_body_fact_commons_hero_and_physical_evidence(
     assert "pageId" not in acquired.source_unit
     build_homepage_source_unit_catalog(
         catalog_id="baike-homepage",
-        catalog_version="v1",
         created_at=CAPTURED_AT,
         minimum_candidate_count=1,
         candidates=[acquired.candidate],

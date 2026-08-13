@@ -2,55 +2,6 @@ part of 'login_page.dart';
 
 const Object _loginUnset = Object();
 
-Map<String, dynamic> buildLoginTelemetryPayload({
-  required String environment,
-  required String platform,
-  required String action,
-  String provider = '',
-  Map<String, dynamic> raw = const <String, dynamic>{},
-}) {
-  String? safeString(String key, {int maxLength = 128}) {
-    final value = raw[key]?.toString().trim() ?? '';
-    if (value.isEmpty || value.length > maxLength) return null;
-    return value;
-  }
-
-  int? safeInt(String key) {
-    final value = raw[key];
-    if (value is! num || !value.isFinite) return null;
-    return value.round().clamp(0, 600000);
-  }
-
-  final normalizedProvider = provider.trim().toLowerCase().replaceAll('-', '_');
-  return <String, dynamic>{
-    'environment': environment,
-    'platform': platform,
-    'action': action,
-    if (normalizedProvider.isNotEmpty) 'provider': normalizedProvider,
-    'flowId': ?safeString('flowId'),
-    'entryMode': ?safeString('entryMode'),
-    'step': ?safeString('step'),
-    'fromStep': ?safeString('fromStep'),
-    'toStep': ?safeString('toStep'),
-    'otpPurpose': ?safeString('otpPurpose'),
-    'consentState': ?safeString('consentState'),
-    'result': ?safeString('result'),
-    'sourceCode': ?safeString('sourceCode'),
-    'failureKind': ?safeString('failureKind'),
-    'recoveryAction': ?safeString('recoveryAction'),
-    'copyKey': ?safeString('copyKey'),
-    'feedbackSurface': ?safeString('feedbackSurface'),
-    'requestId': ?safeString('requestId'),
-    'traceId': ?safeString('traceId'),
-    'countdownBucket': ?safeString('countdownBucket'),
-    'dismissPolicy': ?safeString('dismissPolicy'),
-    'durationMs': ?safeInt('durationMs'),
-    'attemptIndex': ?safeInt('attemptIndex'),
-    if (raw['motionReduced'] is bool)
-      'motionReduced': raw['motionReduced'] as bool,
-  };
-}
-
 enum LoginSurfaceMode { page, inline }
 
 enum LoginStep {
@@ -183,16 +134,6 @@ class LoginFeedback {
   bool get blocksAccountLogin =>
       sourceCode == UserErrorCode.accountSuspended.code ||
       sourceCode == UserErrorCode.accountDeleted.code;
-
-  Map<String, dynamic> get telemetry => <String, dynamic>{
-    if ((sourceCode ?? '').isNotEmpty) 'sourceCode': sourceCode,
-    if ((failureKind ?? '').isNotEmpty) 'failureKind': failureKind,
-    if (recoveryAction.isNotEmpty) 'recoveryAction': recoveryAction,
-    'copyKey': copyKey,
-    'feedbackSurface': surface.name,
-    if ((requestId ?? '').isNotEmpty) 'requestId': requestId,
-    if ((traceId ?? '').isNotEmpty) 'traceId': traceId,
-  };
 }
 
 /// The only user-facing projection for OTP delivery, verification and

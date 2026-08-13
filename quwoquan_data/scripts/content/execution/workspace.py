@@ -534,13 +534,13 @@ def load_frozen_execution_manifest(execution_id: str) -> dict[str, Any]:
     from content.execution.execution_terminal import load_terminal_execution_evidence
     from core.schema import assert_valid
 
-    legacy = "executionBundle" not in manifest
-    if legacy:
+    pre_bundle_manifest = "executionBundle" not in manifest
+    if pre_bundle_manifest:
         terminal = load_terminal_execution_evidence(manifest_path.parent)
         if terminal is None:
             raise ExecutionSourceDigestDriftError(
                 "GATE_BLOCK DATA.EXECUTION.SOURCE_IDENTITY_MIGRATION_REQUIRED: "
-                "legacy nonterminal execution cannot resume"
+                "pre-bundle nonterminal execution cannot resume"
             )
         if manifest.get("executionId") != validate_execution_id(execution_id):
             raise ValueError(f"execution manifest identity mismatch: {manifest_path}")
@@ -562,7 +562,7 @@ def load_execution_manifest(execution_id: str) -> dict[str, Any]:
     if "executionBundle" not in manifest:
         raise ExecutionSourceDigestDriftError(
             "GATE_BLOCK DATA.EXECUTION.SOURCE_IDENTITY_MIGRATION_REQUIRED: "
-            "legacy terminal execution is read-only"
+            "pre-bundle terminal execution is read-only"
         )
     SourceDefinitionSnapshot.from_document(manifest.get("sourceDigest"))
     ExecutionBundleIdentity.from_document(manifest.get("executionBundle"))

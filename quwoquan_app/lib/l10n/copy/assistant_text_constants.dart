@@ -76,6 +76,13 @@ abstract final class AssistantText {
   static String assistantSkillSubscriptionDefaultTopic(String skillName) =>
       '提醒我关注$skillName的重要变化和下一步';
   static const String assistantSkillPackageSkillCount = '个技能';
+  static const String assistantSkillPlacementTitle = '共享技能管理';
+  static const String assistantSkillPlacementPolicyAllShared =
+      '共享安全技能默认对本群聊/圈子可用；新发布的共享安全技能会自动进入可用集合。';
+  static const String assistantSkillPlacementAdminHint =
+      '仅管理员可修改；修改立即对新对话生效，进行中的对话在下一个安全边界重算。';
+  static const String assistantSkillPlacementSave = '保存共享策略';
+  static const String assistantSkillPlacementSaveFailed = '共享策略没有保存，请稍后重试。';
   static const String assistantSkillStatusPendingSync = '状态待同步';
   static const String assistantSkillDetailsAndSettings = '详情与设置';
   static const String assistantConnectorTitle = '连接的应用';

@@ -10,23 +10,40 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     hide ContentDiscoveryFeedQuery;
 
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
-import '../../../../../support/service/content_service/content/post/mock_content_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
 void main() {
   group('Content Post facets 装配契约 (D2a/D2b)', () {
-    test('Post Mock 只实现非 Comment 细粒度 Facet', () {
-      final repo = MockContentRepository();
-      expect(repo, isA<ContentDiscoveryFeedQuery>());
-      expect(repo, isA<ContentPostDetailReader>());
-      expect(repo, isA<ContentAuthorPostsReader>());
-      expect(repo, isA<ContentPostDeleteCommandWriter>());
-      expect(repo, isNot(isA<ContentCommentFacet>()));
-      expect(repo, isA<ContentConfigRepository>());
+    test('Post typed doubles 各自只实现一个对象级 Facet', () {
+      final store = InMemoryContentPostStore();
+      expect(
+        InMemoryContentDiscoveryFeedQuery(store),
+        isA<ContentDiscoveryFeedQuery>(),
+      );
+      expect(
+        InMemoryContentPostDetailReader(store),
+        isA<ContentPostDetailReader>(),
+      );
+      expect(
+        InMemoryContentAuthorPostsReader(store),
+        isA<ContentAuthorPostsReader>(),
+      );
+      expect(
+        InMemoryContentPostDeleteCommandWriter(store),
+        isA<ContentPostDeleteCommandWriter>(),
+      );
+      expect(InMemoryContentConfigRepository(), isA<ContentConfigRepository>());
+      expect(
+        InMemoryContentDiscoveryFeedQuery(store),
+        isNot(isA<ContentCommentFacet>()),
+      );
     });
 
     test('组合根按 Post facet 装配缓存与直连 adapter', () {
       final container = ProviderContainer(
-        overrides: [...mockContentFacetOverrides(MockContentRepository())],
+        overrides: [
+          ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
+        ],
       );
       addTearDown(container.dispose);
 

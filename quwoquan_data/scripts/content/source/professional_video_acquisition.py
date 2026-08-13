@@ -361,6 +361,14 @@ def _acquire_item(
     )
     try:
         probe = probe_professional_video(cas_path)
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        row.update(
+            distributionDecision=DistributionDecision.BLOCKED.value,
+            failureCode="DATA.SOURCE.MEDIA_PROBE_FAILED",
+            failure=f"{type(exc).__name__}: {exc}",
+        )
+        return row
+    try:
         validate_video_safety_payload(
             safety_evidence,
             item,
@@ -372,7 +380,7 @@ def _acquire_item(
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         row.update(
             distributionDecision=DistributionDecision.BLOCKED.value,
-            failureCode="DATA.SOURCE.MEDIA_PROBE_FAILED",
+            failureCode="DATA.SOURCE.SOURCE_BYTES_DRIFT",
             failure=f"{type(exc).__name__}: {exc}",
         )
         return row
@@ -463,13 +471,37 @@ def acquire_professional_videos(
         provider_labels[str(item["provider"])] = label
         validated.append((item, rights, publication, safety_evidence))
     manifest_digest = document_digest(manifest)
-    receipt_ref = f"receipts/{manifest_digest.removeprefix('sha256:')}.json"
-    receipt_path = root / receipt_ref
-    if receipt_path.is_file():
-        receipt = load_professional_video_acquisition_receipt(receipt_ref, root=root)
+    manifest_token = manifest_digest.removeprefix("sha256:")
+    receipts_root = root / "receipts"
+    prior_attempts: list[Path] = []
+    if (receipts_root / f"{manifest_token}.json").is_file():
+        prior_attempts.append(receipts_root / f"{manifest_token}.json")
+        prior_attempts.extend(
+            sorted(receipts_root.glob(f"{manifest_token}-attempt-*.json"))
+        )
+    if prior_attempts:
+        latest_path = prior_attempts[-1]
+        latest_ref = latest_path.relative_to(root).as_posix()
+        receipt = load_professional_video_acquisition_receipt(latest_ref, root=root)
         if receipt["manifestDigest"] != manifest_digest:
-            raise ValueError(f"professional video acquisition receipt collision: {receipt_path}")
-        return receipt, receipt_path
+            raise ValueError(
+                f"professional video acquisition receipt collision: {latest_path}"
+            )
+        retryable = any(
+            row["acquisitionStatus"] == AcquisitionStatus.FAILED.value
+            for row in receipt["assets"]
+        )
+        if not retryable:
+            return receipt, latest_path
+        # A frozen failure (for example an upstream 429) must not freeze the
+        # manifest forever: append a new immutable attempt receipt instead of
+        # rewriting history.
+        receipt_ref = (
+            f"receipts/{manifest_token}-attempt-{len(prior_attempts) + 1:03}.json"
+        )
+    else:
+        receipt_ref = f"receipts/{manifest_token}.json"
+    receipt_path = root / receipt_ref
     prior = _prior_content_index(
         root,
         current_receipt=receipt_path,

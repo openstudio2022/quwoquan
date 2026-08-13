@@ -92,6 +92,43 @@ void main() {
     );
   });
 
+  test('未捕获异常只允许单写：diagnostics 接管后 bootstrap 记录必须让位', () {
+    final bootstrap = File(
+      'lib/runtime/shell/startup/app_bootstrap.dart',
+    ).readAsStringSync();
+    final diagnostics = File(
+      'lib/runtime/observability/runtime_diagnostics.dart',
+    ).readAsStringSync();
+
+    // diagnostics 在 install/dispose 时维护接管标志。
+    expect(diagnostics, contains('globalUncaughtCaptureActive = true'));
+    expect(diagnostics, contains('globalUncaughtCaptureActive = false'));
+
+    // bootstrap 的 flutter_error 与 platform_dispatcher 记录点都必须被
+    // 接管标志守卫，否则同一未捕获异常会写出两条不同指纹的 ES 记录。
+    for (final source in <String>[
+      "source: 'flutter_error'",
+      "source: 'platform_dispatcher'",
+    ]) {
+      final recordIndex = bootstrap.indexOf(source);
+      expect(recordIndex, greaterThan(0));
+      final guardIndex = bootstrap.lastIndexOf(
+        '!AppRuntimeDiagnostics.globalUncaughtCaptureActive',
+        recordIndex,
+      );
+      expect(
+        guardIndex,
+        greaterThan(0),
+        reason: 'bootstrap 的 $source 记录点缺少 diagnostics 接管让位守卫',
+      );
+    }
+
+    // zone / root isolate / bootstrap 失败路径不经过 diagnostics 链，
+    // 必须保留 bootstrap 记录（不受让位守卫影响）。
+    expect(bootstrap, contains("source: 'zone_guarded'"));
+    expect(bootstrap, contains("source: 'root_isolate'"));
+  });
+
   test('重试复用首次 bootstrap Zone，避免 Zone mismatch', () {
     final source = File('lib/runtime/shell/startup/app_bootstrap.dart').readAsStringSync();
 

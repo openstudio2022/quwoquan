@@ -20,11 +20,13 @@ class PlatformCapabilities {
     required this.realtimeCommunication,
     required this.incomingCallUi,
     required this.webPushIncomingCall,
+    required this.pushDelivery,
     required this.nativeVideoEditing,
     required this.adaptiveVideoPlayback,
     required this.secureStorage,
     required this.backgroundAudio,
     required this.wideScreenLayout,
+    required this.startupWelcomeFlow,
     required this.promotesAppInstall,
     required this.oneTapLogin,
     required this.wechatNativeLogin,
@@ -82,6 +84,13 @@ class PlatformCapabilities {
   /// Service Worker 后台接听链。原生端使用 [incomingCallUi]。
   final bool webPushIncomingCall;
 
+  /// 设备推送 token 注册与离线推送送达链（Android FCM / iOS APNs endpoint 注册）。
+  ///
+  /// mobile 为 true；Web 无 Service Worker 推送链（与 [webPushIncomingCall]
+  /// 同一裁决）、初始 ohos / desktop 推送通道未接入，均为 false：注册与登出
+  /// 反注册路径结构化跳过，不触达安全存储与原生通道（R-XP4/R-XP5）。
+  final bool pushDelivery;
+
   /// Native video trim/mute/export via platform channel.
   final bool nativeVideoEditing;
 
@@ -100,6 +109,12 @@ class PlatformCapabilities {
 
   /// Wide-screen multi-column shell (desktop / web wide layout).
   final bool wideScreenLayout;
+
+  /// 首启是否进入全屏欢迎/引导流。
+  ///
+  /// 移动端为 true；Web/桌面直接进入内容（浏览器场景没有「装机首启」概念）。
+  /// 业务层读本能力位决定是否路由到 welcome，禁止问「是不是 Web」。
+  final bool startupWelcomeFlow;
 
   /// Whether the runtime should promote installing the native app.
   ///
@@ -157,11 +172,13 @@ class PlatformCapabilities {
     bool? realtimeCommunication,
     bool? incomingCallUi,
     bool? webPushIncomingCall,
+    bool? pushDelivery,
     bool? nativeVideoEditing,
     bool? adaptiveVideoPlayback,
     bool? secureStorage,
     bool? backgroundAudio,
     bool? wideScreenLayout,
+    bool? startupWelcomeFlow,
     bool? promotesAppInstall,
     bool? oneTapLogin,
     bool? wechatNativeLogin,
@@ -184,12 +201,14 @@ class PlatformCapabilities {
           realtimeCommunication ?? this.realtimeCommunication,
       incomingCallUi: incomingCallUi ?? this.incomingCallUi,
       webPushIncomingCall: webPushIncomingCall ?? this.webPushIncomingCall,
+      pushDelivery: pushDelivery ?? this.pushDelivery,
       nativeVideoEditing: nativeVideoEditing ?? this.nativeVideoEditing,
       adaptiveVideoPlayback:
           adaptiveVideoPlayback ?? this.adaptiveVideoPlayback,
       secureStorage: secureStorage ?? this.secureStorage,
       backgroundAudio: backgroundAudio ?? this.backgroundAudio,
       wideScreenLayout: wideScreenLayout ?? this.wideScreenLayout,
+      startupWelcomeFlow: startupWelcomeFlow ?? this.startupWelcomeFlow,
       promotesAppInstall: promotesAppInstall ?? this.promotesAppInstall,
       oneTapLogin: oneTapLogin ?? this.oneTapLogin,
       wechatNativeLogin: wechatNativeLogin ?? this.wechatNativeLogin,
@@ -226,11 +245,13 @@ class CapabilityProfile {
     realtimeCommunication: true,
     incomingCallUi: true,
     webPushIncomingCall: false,
+    pushDelivery: true,
     nativeVideoEditing: true,
     adaptiveVideoPlayback: true,
     secureStorage: true,
     backgroundAudio: true,
     wideScreenLayout: false,
+    startupWelcomeFlow: true,
     promotesAppInstall: false,
     oneTapLogin: true,
     wechatNativeLogin: true,
@@ -253,11 +274,13 @@ class CapabilityProfile {
     realtimeCommunication: true,
     incomingCallUi: false,
     webPushIncomingCall: false,
+    pushDelivery: false,
     nativeVideoEditing: false,
     adaptiveVideoPlayback: false,
     secureStorage: false,
     backgroundAudio: false,
     wideScreenLayout: true,
+    startupWelcomeFlow: false,
     promotesAppInstall: true,
     oneTapLogin: false,
     wechatNativeLogin: false,
@@ -282,11 +305,13 @@ class CapabilityProfile {
     realtimeCommunication: false,
     incomingCallUi: false,
     webPushIncomingCall: false,
+    pushDelivery: false,
     nativeVideoEditing: false,
     adaptiveVideoPlayback: false,
     secureStorage: true,
     backgroundAudio: true,
     wideScreenLayout: false,
+    startupWelcomeFlow: true,
     promotesAppInstall: false,
     oneTapLogin: false,
     wechatNativeLogin: false,
@@ -309,11 +334,13 @@ class CapabilityProfile {
     realtimeCommunication: true,
     incomingCallUi: false,
     webPushIncomingCall: false,
+    pushDelivery: false,
     nativeVideoEditing: false,
     adaptiveVideoPlayback: false,
     secureStorage: true,
     backgroundAudio: true,
     wideScreenLayout: true,
+    startupWelcomeFlow: false,
     promotesAppInstall: false,
     oneTapLogin: false,
     wechatNativeLogin: false,

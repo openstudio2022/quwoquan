@@ -28,6 +28,7 @@
     "contactSheetSha256": {"$ref": "#/$defs/sha256"},
     "sourceContentSha256": {"$ref": "#/$defs/sha256"},
     "transformation": {"type": "string", "minLength": 1},
+    "sourceAttribution": {"$ref": "#/$defs/sourceAttribution"},
     "mediaProbe": {
       "type": "object",
       "required": [
@@ -62,7 +63,8 @@
     "maliciousMediaRisk": {"enum": ["none", "present", "unknown"]},
     "watermarkStatus": {"enum": ["absent", "present", "unknown"]},
     "reviewedAt": {"type": "string", "minLength": 1},
-    "reviewer": {"type": "string", "minLength": 1}
+    "reviewer": {"type": "string", "minLength": 1},
+    "reviewEvidence": {"$ref": "#/$defs/sourceReviewEvidence"}
   },
   "$defs": {
     "sha256": {
@@ -73,6 +75,78 @@
       "type": "string",
       "minLength": 1,
       "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000]+$"
+    },
+    "sourceReviewIdentity": {
+      "type": "object",
+      "required": [
+        "sourceRevision",
+        "sourceDigest",
+        "entityCatalogDigest",
+        "executionBundleDigest",
+        "handoffDigest",
+        "requestDigest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sourceRevision": {"$ref": "#/$defs/sha256"},
+        "sourceDigest": {"$ref": "#/$defs/sha256"},
+        "entityCatalogDigest": {"$ref": "#/$defs/sha256"},
+        "executionBundleDigest": {"$ref": "#/$defs/sha256"},
+        "handoffDigest": {"$ref": "#/$defs/sha256"},
+        "requestDigest": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sourceReviewEvidence": {
+      "type": "object",
+      "required": [
+        "sourceReview",
+        "sourceReviewRequestRef",
+        "sourceReviewRequestSha256",
+        "sourceReviewAttemptRef",
+        "sourceReviewAttemptSha256",
+        "sourceCapacityReceiptRef",
+        "sourceCapacityReceiptSha256",
+        "provider",
+        "model",
+        "runId",
+        "resultSha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "sourceReview": {"$ref": "#/$defs/sourceReviewIdentity"},
+        "sourceReviewRequestRef": {"$ref": "#/$defs/relativeRef"},
+        "sourceReviewRequestSha256": {"$ref": "#/$defs/sha256"},
+        "sourceReviewAttemptRef": {"$ref": "#/$defs/relativeRef"},
+        "sourceReviewAttemptSha256": {"$ref": "#/$defs/sha256"},
+        "sourceCapacityReceiptRef": {"$ref": "#/$defs/relativeRef"},
+        "sourceCapacityReceiptSha256": {"$ref": "#/$defs/sha256"},
+        "provider": {"const": "cursor_sdk"},
+        "model": {"const": "grok-4.5"},
+        "runId": {"type": "string", "minLength": 1},
+        "resultSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sourceAttribution": {
+      "type": "object",
+      "required": [
+        "provider",
+        "sourcePostUrl",
+        "originalAssetUrl",
+        "creator",
+        "license",
+        "termsUrl",
+        "authorizationProof"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "sourcePostUrl": {"type": "string", "pattern": "^https://"},
+        "originalAssetUrl": {"type": "string", "pattern": "^https://"},
+        "creator": {"type": "string", "minLength": 1},
+        "license": {"type": "string", "minLength": 1},
+        "termsUrl": {"type": "string", "pattern": "^https://"},
+        "authorizationProof": {"type": "string", "pattern": "^https://"}
+      }
     }
   }
 }

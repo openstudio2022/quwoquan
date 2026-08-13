@@ -1,3 +1,4 @@
+// readiness_case: conversation_ime_input_app_uat
 // spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/spec.md#sit-001
 /// Patrol UAT：真实物理设备 IME 在 production Remote 会话发送中文与 Emoji。
 ///

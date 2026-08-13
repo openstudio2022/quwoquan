@@ -115,12 +115,16 @@ ALLOWED_GOLDEN_AGGREGATIONS = {
     "sum_ratio",
     "count",
 }
+ALLOWED_SERIES_AGGREGATIONS = {"series_rate_ratio"}
+ALLOWED_SOURCE_TRACKS = {"product_telemetry", "behavior_attribution"}
+ALLOWED_PORTAL_LEVELS = {"L1", "L2"}
 ALLOWED_TARGET_OPERATORS = {
     "less_than",
     "less_than_or_equal",
     "greater_than",
     "greater_than_or_equal",
 }
+SERIES_NAME_PATTERN = r"[a-z][a-z0-9_]*"
 
 
 def load_yaml(path: Path) -> dict:
@@ -239,6 +243,213 @@ def verify_catalog(errors: list[str]) -> None:
             errors.append(f"{event_type} must remain critical")
 
 
+def _verify_event_source(
+    metric_id: str,
+    source: dict,
+    events: dict,
+    allowed_fields: set[str],
+    common_fields: set[str],
+    errors: list[str],
+) -> None:
+    """product_telemetry 轨：事件引用、value_field 与过滤器必须与 event_catalog 同源。"""
+    aggregation = source.get("aggregation")
+    if aggregation not in ALLOWED_GOLDEN_AGGREGATIONS:
+        errors.append(f"{metric_id} uses unsupported aggregation {aggregation}")
+    is_ratio = (
+        "numerator_event_type" in source
+        or "denominator_event_type" in source
+    )
+    is_single_event = "event_type" in source
+    if is_ratio == is_single_event:
+        errors.append(
+            f"{metric_id} source must use exactly one event or ratio shape"
+        )
+    if is_ratio and (
+        not source.get("numerator_event_type")
+        or not source.get("denominator_event_type")
+    ):
+        errors.append(
+            f"{metric_id} ratio source needs numerator and denominator events"
+        )
+    if aggregation == "sum_ratio" and (
+        not source.get("numerator_value_field")
+        or not source.get("denominator_value_field")
+    ):
+        errors.append(
+            f"{metric_id} sum_ratio needs numerator and denominator value fields"
+        )
+    referenced_events = {
+        str(value)
+        for key, value in source.items()
+        if key.endswith("event_type")
+    }
+    for event_type in referenced_events:
+        if event_type not in events:
+            errors.append(f"{metric_id} references unknown event {event_type}")
+    value_field = source.get("value_field")
+    if value_field is not None and value_field not in allowed_fields:
+        errors.append(f"{metric_id} references unknown value_field {value_field}")
+    single_event = events.get(str(source.get("event_type")))
+    if value_field is not None and isinstance(single_event, dict):
+        event_fields = set(single_event.get("required_extensions", [])) | set(
+            single_event.get("optional_extensions", [])
+        )
+        if value_field not in event_fields and value_field not in common_fields:
+            errors.append(
+                f"{metric_id} value_field {value_field} is not emitted by "
+                f"{source.get('event_type')}"
+            )
+    for prefix in ("numerator", "denominator"):
+        ratio_value_field = source.get(f"{prefix}_value_field")
+        if ratio_value_field is None:
+            continue
+        if aggregation != "sum_ratio":
+            errors.append(
+                f"{metric_id} {prefix}_value_field requires sum_ratio"
+            )
+        if ratio_value_field not in allowed_fields:
+            errors.append(
+                f"{metric_id} references unknown {prefix}_value_field "
+                f"{ratio_value_field}"
+            )
+            continue
+        event_type = str(source.get(f"{prefix}_event_type", ""))
+        event = events.get(event_type)
+        if isinstance(event, dict):
+            event_fields = set(event.get("required_extensions", [])) | set(
+                event.get("optional_extensions", [])
+            )
+            if ratio_value_field not in event_fields:
+                errors.append(
+                    f"{metric_id} {prefix}_value_field {ratio_value_field} "
+                    f"is not emitted by {event_type}"
+                )
+    for prefix in ("numerator", "denominator"):
+        filters = source.get(f"{prefix}_filters")
+        if filters is None:
+            continue
+        if not isinstance(filters, dict) or not filters:
+            errors.append(
+                f"{metric_id} {prefix}_filters must be a non-empty mapping"
+            )
+            continue
+        event_type = str(source.get(f"{prefix}_event_type", ""))
+        event = events.get(event_type)
+        for field, filter_value in filters.items():
+            if not isinstance(filter_value, str) or not filter_value.strip():
+                errors.append(
+                    f"{metric_id} {prefix}_filters.{field} must be non-empty"
+                )
+            if isinstance(event, dict):
+                event_fields = set(event.get("required_extensions", [])) | set(
+                    event.get("optional_extensions", [])
+                )
+                if field not in event_fields and field not in common_fields:
+                    errors.append(
+                        f"{metric_id} filters {event_type} by {field}, but the "
+                        f"event does not emit {field}"
+                    )
+
+
+def _verify_series_source(
+    metric_id: str,
+    source: dict,
+    errors: list[str],
+) -> None:
+    """behavior_attribution 轨：分子/分母必须是真实 snake_case Prometheus series。"""
+    aggregation = source.get("aggregation")
+    if aggregation not in ALLOWED_SERIES_AGGREGATIONS:
+        errors.append(
+            f"{metric_id} uses unsupported series aggregation {aggregation}"
+        )
+    for key in ("numerator_series", "denominator_series"):
+        series = source.get(key)
+        if not isinstance(series, str) or re.fullmatch(
+            SERIES_NAME_PATTERN, series
+        ) is None:
+            errors.append(
+                f"{metric_id} {key} must be a snake_case Prometheus series name"
+            )
+    labels = source.get("numerator_series_labels")
+    if labels is not None and (
+        not isinstance(labels, dict)
+        or not labels
+        or any(
+            not isinstance(name, str)
+            or not name.strip()
+            or not isinstance(value, str)
+            or not value.strip()
+            for name, value in labels.items()
+        )
+    ):
+        errors.append(
+            f"{metric_id} numerator_series_labels must map label names to values"
+        )
+
+
+def _verify_golden_alerting(
+    metric_id: str,
+    metric: dict,
+    alerting_policies: dict,
+    errors: list[str],
+) -> None:
+    """alerting 为可选段；一旦声明，policy/alert_name/threshold 必须完整且落在
+    target 违反侧。跨文件的告警存在性与数值一致由 threshold homology 门禁校验。"""
+    alerting = metric.get("alerting")
+    if alerting is None:
+        return
+    if not isinstance(alerting, dict):
+        errors.append(f"{metric_id} alerting must be a mapping")
+        return
+    policy = alerting.get("policy")
+    if policy not in alerting_policies:
+        errors.append(f"{metric_id} alerting policy is not registered: {policy}")
+    alert_name = alerting.get("alert_name")
+    if not isinstance(alert_name, str) or not alert_name.strip():
+        errors.append(f"{metric_id} alerting alert_name must be non-empty")
+    threshold = alerting.get("threshold")
+    if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
+        errors.append(f"{metric_id} alerting threshold must be numeric")
+        return
+    target = metric.get("target")
+    if not isinstance(target, dict):
+        return
+    operator = target.get("operator")
+    value = target.get("value")
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return
+    violates_low = operator in {"less_than", "less_than_or_equal"}
+    violates_high = operator in {"greater_than", "greater_than_or_equal"}
+    if (violates_low and threshold < value) or (
+        violates_high and threshold > value
+    ):
+        errors.append(
+            f"{metric_id} alerting threshold {threshold} sits inside the target "
+            f"({operator} {value}); alerts must fire on the violating side"
+        )
+
+
+def _verify_golden_display(
+    metric_id: str,
+    metric: dict,
+    errors: list[str],
+) -> None:
+    display = metric.get("display")
+    if display is None:
+        return
+    if not isinstance(display, dict) or display.get(
+        "portal_level"
+    ) not in ALLOWED_PORTAL_LEVELS:
+        errors.append(
+            f"{metric_id} display.portal_level must be one of "
+            f"{sorted(ALLOWED_PORTAL_LEVELS)}"
+        )
+        return
+    label = display.get("label")
+    if not isinstance(label, str) or not label.strip():
+        errors.append(f"{metric_id} display.label must be non-empty")
+
+
 def verify_golden_metrics(errors: list[str]) -> None:
     catalog = load_yaml(EVENT_CATALOG)
     golden = load_yaml(GOLDEN_METRIC_CATALOG)
@@ -254,6 +465,28 @@ def verify_golden_metrics(errors: list[str]) -> None:
     if not isinstance(maximum, int) or maximum <= 0 or maximum > 3:
         errors.append("golden metrics max primary count must be an integer <= 3")
         return
+    allowed_tracks = rules.get("allowed_source_tracks")
+    if (
+        not isinstance(allowed_tracks, list)
+        or not allowed_tracks
+        or any(track not in ALLOWED_SOURCE_TRACKS for track in allowed_tracks)
+    ):
+        errors.append(
+            "golden metrics allowed_source_tracks must be a non-empty subset of "
+            + ", ".join(sorted(ALLOWED_SOURCE_TRACKS))
+        )
+        return
+    alerting_policies = golden.get("alerting_policies")
+    if not isinstance(alerting_policies, dict) or not alerting_policies:
+        errors.append(
+            "golden metric catalog must map alerting_policies to policy files"
+        )
+        return
+    for policy, path in alerting_policies.items():
+        if not isinstance(path, str) or not (REPO_ROOT / path).is_file():
+            errors.append(
+                f"alerting policy {policy} points to a missing file: {path}"
+            )
     required_dimensions = set(rules.get("required_drilldown_dimensions", []))
     forbidden_dimensions = set(rules.get("forbidden_dimensions", []))
     if not required_dimensions:
@@ -296,98 +529,10 @@ def verify_golden_metrics(errors: list[str]) -> None:
         if not isinstance(source, dict):
             errors.append(f"{metric_id} source must be a mapping")
             continue
-        if source.get("track") != rules.get("required_source_track"):
-            errors.append(f"{metric_id} must use the registered source track")
-        aggregation = source.get("aggregation")
-        if aggregation not in ALLOWED_GOLDEN_AGGREGATIONS:
-            errors.append(
-                f"{metric_id} uses unsupported aggregation {aggregation}"
-            )
-        is_ratio = (
-            "numerator_event_type" in source
-            or "denominator_event_type" in source
-        )
-        is_single_event = "event_type" in source
-        if is_ratio == is_single_event:
-            errors.append(
-                f"{metric_id} source must use exactly one event or ratio shape"
-            )
-        if is_ratio and (
-            not source.get("numerator_event_type")
-            or not source.get("denominator_event_type")
-        ):
-            errors.append(
-                f"{metric_id} ratio source needs numerator and denominator events"
-            )
-        if aggregation == "sum_ratio" and (
-            not source.get("numerator_value_field")
-            or not source.get("denominator_value_field")
-        ):
-            errors.append(
-                f"{metric_id} sum_ratio needs numerator and denominator value fields"
-            )
-        referenced_events = {
-            str(value)
-            for key, value in source.items()
-            if key.endswith("event_type")
-        }
-        for event_type in referenced_events:
-            if event_type not in events:
-                errors.append(f"{metric_id} references unknown event {event_type}")
-        value_field = source.get("value_field")
-        if value_field is not None and value_field not in allowed_fields:
-            errors.append(f"{metric_id} references unknown value_field {value_field}")
-        single_event = events.get(str(source.get("event_type")))
-        if value_field is not None and isinstance(single_event, dict):
-            event_fields = set(single_event.get("required_extensions", [])) | set(
-                single_event.get("optional_extensions", [])
-            )
-            if value_field not in event_fields and value_field not in common_fields:
-                errors.append(
-                    f"{metric_id} value_field {value_field} is not emitted by "
-                    f"{source.get('event_type')}"
-                )
-        for prefix in ("numerator", "denominator"):
-            ratio_value_field = source.get(f"{prefix}_value_field")
-            if ratio_value_field is None:
-                continue
-            if aggregation != "sum_ratio":
-                errors.append(
-                    f"{metric_id} {prefix}_value_field requires sum_ratio"
-                )
-            if ratio_value_field not in allowed_fields:
-                errors.append(
-                    f"{metric_id} references unknown {prefix}_value_field "
-                    f"{ratio_value_field}"
-                )
-                continue
-            event_type = str(source.get(f"{prefix}_event_type", ""))
-            event = events.get(event_type)
-            if isinstance(event, dict):
-                event_fields = set(event.get("required_extensions", [])) | set(
-                    event.get("optional_extensions", [])
-                )
-                if ratio_value_field not in event_fields:
-                    errors.append(
-                        f"{metric_id} {prefix}_value_field {ratio_value_field} "
-                        f"is not emitted by {event_type}"
-                    )
-        for prefix in ("numerator", "denominator"):
-            result_filter = source.get(f"{prefix}_result")
-            event_type = str(source.get(f"{prefix}_event_type", ""))
-            event = events.get(event_type)
-            if result_filter is None or not isinstance(event, dict):
-                continue
-            event_fields = set(event.get("required_extensions", [])) | set(
-                event.get("optional_extensions", [])
-            )
-            if "result" not in event_fields:
-                errors.append(
-                    f"{metric_id} filters {event_type} by result, but the event "
-                    "does not emit result"
-                )
-            if not str(result_filter).strip():
-                errors.append(f"{metric_id} {prefix}_result must be non-empty")
+        track = source.get("track")
+        if track not in allowed_tracks:
+            errors.append(f"{metric_id} must use a registered source track")
+            continue
         raw_dimensions = metric.get("dimensions", [])
         if not isinstance(raw_dimensions, list) or any(
             not isinstance(value, str) or not value.strip()
@@ -398,18 +543,34 @@ def verify_golden_metrics(errors: list[str]) -> None:
         dimensions = set(raw_dimensions)
         if len(dimensions) != len(raw_dimensions):
             errors.append(f"{metric_id} dimensions must be unique")
-        if not required_dimensions.issubset(dimensions):
-            errors.append(
-                f"{metric_id} lacks drilldowns {sorted(required_dimensions - dimensions)}"
-            )
-        unknown = dimensions - allowed_fields
-        if unknown:
-            errors.append(f"{metric_id} has unknown dimensions {sorted(unknown)}")
         forbidden = dimensions & forbidden_dimensions
         if forbidden:
             errors.append(
                 f"{metric_id} uses high-cardinality dimensions {sorted(forbidden)}"
             )
+        if track == "behavior_attribution":
+            _verify_series_source(metric_id, source, errors)
+        else:
+            _verify_event_source(
+                metric_id,
+                source,
+                events,
+                allowed_fields,
+                common_fields,
+                errors,
+            )
+            if not required_dimensions.issubset(dimensions):
+                errors.append(
+                    f"{metric_id} lacks drilldowns "
+                    f"{sorted(required_dimensions - dimensions)}"
+                )
+            unknown = dimensions - allowed_fields
+            if unknown:
+                errors.append(
+                    f"{metric_id} has unknown dimensions {sorted(unknown)}"
+                )
+        _verify_golden_alerting(metric_id, metric, alerting_policies, errors)
+        _verify_golden_display(metric_id, metric, errors)
         target = metric.get("target")
         if not isinstance(target, dict) or "operator" not in target or "value" not in target:
             errors.append(f"{metric_id} must declare an operator/value target")
@@ -652,6 +813,138 @@ def verify_elasticsearch_single_track(errors: list[str]) -> None:
         errors.append("product telemetry alert policy must use Elasticsearch")
 
 
+ALERT_FIELD_EXPRESSION = re.compile(
+    r"^([a-z][a-z0-9]*)\(([^)]*)\)(?:\s+where\s+(.+))?$"
+)
+ALERT_CONDITION_FIELD = re.compile(r"(?:^|\(|AND\s+|OR\s+)\s*([A-Za-z][A-Za-z0-9]*)")
+EVALUATOR_FIELDS = {
+    "failedTransformCount",
+    "freshnessMinutes",
+    "rawRetentionDays",
+    "runtimeRawRetentionDays",
+}
+
+
+def _rollup_measure_shapes(job: dict) -> tuple[set[str], set[str], set[str]]:
+    """返回 (数值 measure 名, 直方图 measure 名, hash 集合文档字段名)。"""
+    numeric: set[str] = set()
+    histogram: set[str] = set()
+    hashes: set[str] = set()
+    for measure in job.get("measures", []):
+        name = measure.get("name", "")
+        algebra = measure.get("algebra", "")
+        kind = algebra.split("(", 1)[0]
+        if kind in {"fixed_histogram", "fixed_histogram_where"}:
+            histogram.add(name)
+        elif kind == "mergeable_hll":
+            hashes.add(name.removesuffix("Hll") + "Hashes" if name.endswith("Hll") else name + "Hashes")
+        elif kind == "count_distinct_where":
+            hashes.add(name + "Hashes")
+            numeric.add(name)
+        else:
+            numeric.add(name)
+    return numeric, histogram, hashes
+
+
+def _condition_field_names(condition: str) -> set[str]:
+    names = set()
+    for match in ALERT_CONDITION_FIELD.finditer(condition):
+        token = match.group(1)
+        if token in {"AND", "OR", "IS", "NOT", "NULL", "IN", "true", "false"}:
+            continue
+        names.add(token)
+    return names
+
+
+def verify_alert_field_closure(errors: list[str]) -> None:
+    """ES 告警的 condition 字段必须由 fields 显式派生，且派生输入必须落在
+    对应 rowKind 的 rollups.yaml measures/dimensions 闭包内。"""
+    rollup_jobs = {
+        job.get("row_kind"): job
+        for job in load_yaml(EVENT_ROLLUPS).get("jobs", [])
+        if isinstance(job, dict)
+    }
+    alerts = load_yaml(ELASTICSEARCH_ALERTS).get("spec", {}).get("alerts", [])
+    if not alerts:
+        errors.append("product telemetry alert policy declares no alerts")
+        return
+    for alert in alerts:
+        name = alert.get("name", "<unnamed>")
+        row_kind = alert.get("rowKind")
+        fields = alert.get("fields") or {}
+        condition = alert.get("condition", "")
+        if not isinstance(alert.get("window_minutes"), int) or alert["window_minutes"] <= 0:
+            errors.append(f"alert {name} must declare positive window_minutes")
+        if not fields:
+            errors.append(f"alert {name} must declare explicit field derivations")
+            continue
+        job = rollup_jobs.get(row_kind)
+        if row_kind != "control_plane" and job is None:
+            errors.append(f"alert {name} references unknown rowKind {row_kind}")
+            continue
+        numeric, histogram, hashes = (
+            _rollup_measure_shapes(job) if job else (set(), set(), set())
+        )
+        dimensions = set(job.get("dimensions", [])) if job else set()
+        declared = set(fields)
+        for missing in sorted(_condition_field_names(condition) - declared):
+            errors.append(f"alert {name} condition references underived field {missing}")
+        for field_name, expression in fields.items():
+            match = ALERT_FIELD_EXPRESSION.match(str(expression).strip())
+            if match is None:
+                errors.append(f"alert {name} field {field_name} has unparseable derivation")
+                continue
+            function, raw_arguments, where = match.groups()
+            arguments = [item.strip() for item in raw_arguments.split(",")]
+            if function == "sum":
+                if arguments[0] not in numeric:
+                    errors.append(
+                        f"alert {name} field {field_name} sums unknown measure {arguments[0]}"
+                    )
+            elif function in {"p95", "hcount"}:
+                if arguments[0] not in histogram:
+                    errors.append(
+                        f"alert {name} field {field_name} reads unknown histogram {arguments[0]}"
+                    )
+            elif function == "htailratio":
+                if arguments[0] not in histogram or not arguments[1].isdigit():
+                    errors.append(
+                        f"alert {name} field {field_name} htailratio needs histogram + integer ms"
+                    )
+            elif function == "cardinality":
+                if arguments[0] not in hashes:
+                    errors.append(
+                        f"alert {name} field {field_name} reads unknown hash set {arguments[0]}"
+                    )
+            elif function == "div":
+                for argument in arguments:
+                    if argument not in declared:
+                        errors.append(
+                            f"alert {name} field {field_name} divides undeclared field {argument}"
+                        )
+            elif function == "evaluator":
+                if row_kind != "control_plane" or arguments[0] not in EVALUATOR_FIELDS:
+                    errors.append(
+                        f"alert {name} field {field_name} uses invalid evaluator source"
+                    )
+            else:
+                errors.append(
+                    f"alert {name} field {field_name} uses unsupported derivation {function}"
+                )
+            if where:
+                for token in _condition_field_names(where):
+                    if token not in dimensions:
+                        errors.append(
+                            f"alert {name} field {field_name} where references "
+                            f"non-dimension {token}"
+                        )
+        for group_dimension in alert.get("group_by", []) or []:
+            if group_dimension not in dimensions:
+                errors.append(
+                    f"alert {name} groups by non-dimension {group_dimension}"
+                )
+
+
 def main() -> int:
     errors: list[str] = []
     try:
@@ -661,6 +954,7 @@ def main() -> int:
         verify_pages(errors)
         verify_app_single_egress(errors)
         verify_elasticsearch_single_track(errors)
+        verify_alert_field_closure(errors)
     except (OSError, ValueError, yaml.YAMLError) as error:
         errors.append(str(error))
     if errors:

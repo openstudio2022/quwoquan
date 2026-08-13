@@ -58,7 +58,6 @@ void main() {
           'task_graph_patch',
           'checkpoint_committed',
           'presentation_snapshot',
-          'presentation_patch',
           'presentation_commit',
           'waiting_input',
           'waiting_approval',

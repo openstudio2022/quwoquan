@@ -59,6 +59,21 @@
 - **根 Go module 可复现**：search-service 与其余服务统一消费 `quwoquan_service/go.mod` 与 `quwoquan_service/go.sum`，独立二进制从根 package path 构建；单模块门禁阻断嵌套 module。
 - 该报告固定写入 `r_s06_s1_closed_by_local_gamma=false`：local 只能证明方法学、单节点稳定性、基本背压/退化和重复查询不跳变，不能关闭真集群 measured 容量阻断。
 
+<a id="req-006"></a>
+### REQ-006 索引 alias 读写分离与零停机重建
+
+- 统一索引名 `quwoquan_objects` 对读写双方均为 alias；物理索引携带版本后缀，analyzer/mapping 的破坏性变更只能经新物理索引重建切换，禁止原地改 analyzer。
+- 重建顺序固定：write alias 先切新索引（各 owner 增量投影与 search-service 消费者统一走 write alias）→ 全量 backfill → doc count 与抽样一致性校验 → 原子切 read alias → 观察期后删除旧索引；backfill 窗口内的增量更新不得丢失。
+- 每个被索引对象域（content/circle/entity/user）必须具备幂等冷启 backfill 工具；缺失即该域投影不可重建，视为 GATE_BLOCK。
+
+<a id="req-007"></a>
+### REQ-007 重复查询确定性的分片与副本策略
+
+- 分片数以 Elastic 官方单分片 10-50GB 区间为准绳按实测数据量收敛；数据量不足时保持单主分片，禁止以固定分片数拍板造成 oversharding 与 IDF 分片本地化评分抖动。
+- 相同 query 的重复执行必须命中确定性评分路径：单分片消除跨分片 IDF 偏差；副本间段合并差异由请求级 `preference` 会话粘性吸收，禁止用 `dfs_query_then_fetch` 的额外往返作为默认方案。
+- 扩容语义固定：QPS 增长加副本，数据量逼近单分片上限时经 `split` 或 alias 重建扩分片；两条路径都不得改变 canonical contract 与调用方语义。
+- 翻页序列绑定 PIT 快照：首屏不开快照（绝大多数搜索不翻页，避免峰值 RPS × keep_alive 级别的段引用堆积），首个后续页惰性 `OpenPIT`（keep_alive 90s）并把 PIT id 封入 AEAD cursor envelope，之后每页经查询体续期；带 PIT 的查询不携带 index path 与 `preference`（快照已固定分片副本）。快照失效（keep_alive 过期、节点重启）必须按 `ErrSearchCursor` fail-closed 走结构化恢复，禁止静默退化为无快照查询。翻页正常走到尽头时 best-effort `ClosePIT` 提前释放。带 cursor 的请求不进首屏结果缓存。
+
 ## 4. 契约引用
 
 - canonical：`contracts/metadata/_shared/search_objects.yaml`
@@ -126,5 +141,23 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：缺少真集群容量、长稳与重复性实测时，搜索服务不能获得生产准出。
+- 影响或价值：缺少真集群容量、长稳与重复性实测时，搜索服务不能获得生产准出。本地单节点已回填 measured 基线（`.qwq_output/env/repo/runs/search-load/`：baseline P95 39ms / peak 120RPS P95 68ms 达标、spike 300RPS 单节点饱和），报告固定 `r_s06_s1_closed_by_local_gamma=false`，只校准方法学。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
+
+<a id="open-004"></a>
+### OPEN-004 云侧 suggest 索引与 App 联想通道
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：当前联想是本地对象 + entity 域 `SearchHomepages`，云侧 suggest 无通道；拼音首字母缩写（如 `dl`）召回也按裁决归属 suggest 索引（result 主索引只承诺全拼音节召回）。suggest 与 result 的容量隔离当下天然成立（主索引只承 result 流量），接入云 suggest 时必须落在独立 completion suggester 小索引上，词条与主索引投影事件同源派生 + query log 热词，禁止对主索引 body 启用 edge_ngram。
+- 完成判定：`GWT-001` 的多读切片行为在独立 suggest 索引上满足（词条与主索引投影同源、App persisted 联想通道上线、本地对象不进 result），容量隔离由 `GWT-003` 同源压测证据确认。
+
+<a id="open-005"></a>
+### OPEN-005 prod CJK 镜像 digest 回填
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：尚缺 prod 侧 CJK 镜像 digest 回填——`quwoquan/elasticsearch-cjk` 镜像已在本地构建并驱动 gamma-local，prod 侧（`quwoquan_ops/environments/prod/access-isolation.yaml`）仍指向官方无插件 digest，推送私有 registry 取得 manifest digest 前 prod 不得启用 IK analyzer 索引。PIT 翻页快照已实现并有真实 ES 证据（惰性 open：首个后续页 `OpenPIT(keep_alive=90s)`、每页续期、cursor envelope 携带 PIT id、失效按 `ErrSearchCursor` fail-closed 不静默退化；`pit_pagination__api_integration_test.go` 断言翻页中途写入/删除无重复无丢失、快照过期结构化恢复）。
+- 完成判定：`GWT-002` 的 gamma 冒烟在 prod digest 回填后的 CJK 镜像上通过，发布/回滚演练覆盖镜像切换。

@@ -1,9 +1,21 @@
-import 'package:flutter/widgets.dart';
+import 'dart:async';
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
+import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
+import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
+import 'package:quwoquan_app/runtime/di/navigation/create_entry_navigation_arguments.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
+    show journeyEventTrackerProvider;
 import 'package:quwoquan_app/runtime/di/gathering_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart'
+    show exceptionTelemetryPortProvider;
+import 'package:quwoquan_app/runtime/errors/ui_error_models.dart'
+    show UiErrorTone;
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/route_unavailable_state.dart';
@@ -126,6 +138,11 @@ const GatheringDetailPageCopy _productionDetailCopy = GatheringDetailPageCopy(
   admissionApproval: GatheringText.admissionApproval,
   admissionInviteOnly: GatheringText.admissionInviteOnly,
   noRequirements: GatheringText.detailNoRequirements,
+  recapAction: GatheringText.detailRecapAction,
+  sharedExperienceTitle: GatheringText.detailSharedExperienceTitle,
+  sharedExperienceSingleTitle: GatheringText.detailSharedExperienceSingleTitle,
+  sharedExperienceEndedEmpty: GatheringText.detailSharedExperienceEndedEmpty,
+  organizerStatsLabel: GatheringText.detailOrganizerStatsLabel,
 );
 
 /// Circle Gathering create composition host.
@@ -145,27 +162,51 @@ class GatheringCreatePageRouteHost extends ConsumerWidget {
           port: 'AuthSession.activePersonaId',
         );
       }
-      final initialValue = ref.watch(
+      final initialValueAsync = ref.watch(
         gatheringCreateInitialValueProvider((
           activePersonaId: activePersonaId,
           navigationRequest: navigationRequest,
         )),
       );
-      final host = initialValue.host;
-      if (host.authorityEvidenceRef.trim().isEmpty ||
-          host.authorityVersion <= 0 ||
-          (host.subjectKind == GatheringHostSubjectKind.persona &&
-              host.subjectId.trim() != activePersonaId)) {
-        throw _routeFailure(
-          semanticReason: 'gathering_host_authority_invalid',
-          port: 'GatheringHostAuthorityComposer',
-        );
-      }
-      ref.watch(gatheringCommandWriterProvider);
-      return GatheringCreatePage(
-        copy: _productionCreateCopy,
-        initialValue: initialValue,
-        onPublished: (result) => _openPublishedGathering(context, result),
+      return initialValueAsync.when(
+        loading: () => AppScaffold(
+          navigationBar: const AppNavigationBar(
+            middle: Text(GatheringText.createPageTitle),
+          ),
+          body: AppRequestFeedback.page(),
+        ),
+        error: (error, _) => RouteUnavailableState(
+          error: error,
+          surface: AppUiSurfaces.gatheringCreate,
+          pageTitle: GatheringText.createPageTitle,
+        ),
+        data: (initialValue) {
+          final host = initialValue.host;
+          if (host.authorityEvidenceRef.trim().isEmpty ||
+              host.authorityVersion <= 0 ||
+              (host.subjectKind == GatheringHostSubjectKind.persona &&
+                  host.subjectId.trim() != activePersonaId)) {
+            return RouteUnavailableState(
+              error: _routeFailure(
+                semanticReason: 'gathering_host_authority_invalid',
+                port: 'GatheringHostAuthorityComposer',
+              ),
+              surface: AppUiSurfaces.gatheringCreate,
+              pageTitle: GatheringText.createPageTitle,
+            );
+          }
+          ref.watch(gatheringCommandWriterProvider);
+          return GatheringCreatePage(
+            copy: _productionCreateCopy,
+            initialValue: initialValue,
+            onPublished: (result) => _completeDuoInvitationThenOpen(
+              context,
+              ref,
+              result,
+              navigationRequest,
+            ),
+          );
+        },
       );
     } catch (error) {
       return RouteUnavailableState(
@@ -199,6 +240,18 @@ class GatheringDetailPageRouteHost extends ConsumerWidget {
         onEnterChat: (conversationId) {
           context.push<void>(AppRoutePaths.chatDetail(id: conversationId));
         },
+        onPublishRecap: (gatheringId, gatheringTitle) {
+          context.push<void>(
+            AppRoutePaths.create(),
+            extra: CreateEntryArguments(
+              gatheringId: gatheringId,
+              gatheringTitle: gatheringTitle,
+            ),
+          );
+        },
+        onOpenRecapPost: (postId) {
+          context.push<void>(AppRoutePaths.workBrowser(workId: postId));
+        },
       );
     } catch (error) {
       return RouteUnavailableState(
@@ -208,6 +261,66 @@ class GatheringDetailPageRouteHost extends ConsumerWidget {
       );
     }
   }
+}
+
+/// 双人邀约（1对1）：发布成功后自动向受邀者发出披露安全邀请，再进入
+/// 成行页面；邀请失败不阻断发布结果（详情 Host 控制台可重发），只提示。
+void _completeDuoInvitationThenOpen(
+  BuildContext context,
+  WidgetRef ref,
+  GatheringCommandResult result,
+  GatheringCreateNavigationRequest? navigation,
+) {
+  // 漏斗辅证埋点：发布成功事实（分子分母真相源仍是域事实投影）。
+  unawaited(
+    ref
+        .read(journeyEventTrackerProvider)
+        .trackAction(
+          journey: 'gathering_flywheel',
+          action: 'gathering_published',
+          pageName: 'gathering_create',
+          targetType: 'gathering',
+          targetKey: result.gatheringId,
+        ),
+  );
+  final inviteePersonaId = navigation?.inviteePersonaId.trim() ?? '';
+  if (inviteePersonaId.isEmpty) {
+    _openPublishedGathering(context, result);
+    return;
+  }
+  final writer = ref.read(gatheringCommandWriterProvider);
+  unawaited(() async {
+    try {
+      await writer.invite(
+        GatheringInviteInput(
+          idempotencyKey: 'duo-invite:${result.gatheringId}:$inviteePersonaId',
+          gatheringId: result.gatheringId,
+          participantPersonaId: inviteePersonaId,
+          seatHoldUntil: DateTime.now().toUtc().add(const Duration(hours: 48)),
+          expectedGatheringVersion: result.aggregateVersion,
+          expectedParticipationVersion: 0,
+        ),
+      );
+    } catch (error, stackTrace) {
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'circle.gathering_create.duo_auto_invite',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+      );
+      if (context.mounted) {
+        AppToast.show(
+          context,
+          GatheringText.duoInviteFailedToast,
+          tone: UiErrorTone.caution,
+        );
+      }
+    }
+  }());
+  _openPublishedGathering(context, result);
 }
 
 void _openPublishedGathering(

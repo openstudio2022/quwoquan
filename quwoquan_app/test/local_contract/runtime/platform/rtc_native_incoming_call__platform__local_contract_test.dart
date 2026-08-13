@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-004
 
 import 'dart:async';
 
@@ -460,6 +461,12 @@ final class _FakeFirebasePushMessagingClient
 
   @override
   Stream<RemoteMessage> get foregroundMessages => _foregroundMessages.stream;
+
+  @override
+  Stream<RemoteMessage> get openedMessages => const Stream.empty();
+
+  @override
+  Future<RemoteMessage?> readInitialMessage() async => null;
 
   @override
   Future<bool> readNotificationAuthorization() async => false;

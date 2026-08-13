@@ -650,15 +650,13 @@ extension _CreatePageStateHelpers on _CreatePageState {
           .setImages(next, editorKind: state.editorKind, currentIndex: index);
       return;
     }
-    // 多图：返回 {'index', 'path', 'paths'} —— 既写回当前编辑结果，也同步编辑器内重排顺序。
-    if (result is Map) {
-      final payload = Map<String, dynamic>.from(result);
-      final reordered = (payload['paths'] as List?)
-          ?.map((e) => e.toString())
-          .where((e) => e.trim().isNotEmpty)
+    // 多图：返回 typed pop 结果 —— 既写回当前编辑结果，也同步编辑器内重排顺序。
+    if (result is ImageEditorMultiImageDoneResult) {
+      final reordered = result.paths
+          ?.where((e) => e.trim().isNotEmpty)
           .toList(growable: true);
-      final editedPath = (payload['path'] as String?)?.trim();
-      final returnedIndex = (payload['index'] as num?)?.toInt() ?? index;
+      final editedPath = result.path.trim();
+      final returnedIndex = result.index;
       final next = reordered != null && reordered.isNotEmpty
           ? reordered
           : List<String>.from(state.imagePaths);
@@ -672,7 +670,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
           );
       // editedPath 已由编辑器写入 reordered 对应槽位（多图编辑只改当前图），无需重复落盘。
       assert(
-        editedPath == null ||
+        editedPath.isEmpty ||
             next.isEmpty ||
             next.contains(editedPath) ||
             reordered == null,
@@ -803,10 +801,17 @@ extension _CreatePageStateHelpers on _CreatePageState {
                 ),
               ),
               const Spacer(),
+              // 剩余量展示（GWT-002）：常显当前/上限；接近上限（≥90%）转警示色，
+              // 上限值与云端同源，端侧不维护第二份边界。
               Text(
                 '$currentLength / ${_CreatePageState._kMaxBodyLength}',
+                key: const ValueKey<String>('create-body-length-counter'),
                 style: TextStyle(
-                  color: CupertinoColors.secondaryLabel.resolveFrom(context),
+                  color:
+                      currentLength * 10 >=
+                          _CreatePageState._kMaxBodyLength * 9
+                      ? AppColors.warning
+                      : CupertinoColors.secondaryLabel.resolveFrom(context),
                   fontSize: AppTypography.sm,
                 ),
               ),
@@ -907,6 +912,13 @@ extension _CreatePageStateHelpers on _CreatePageState {
                   padding: EdgeInsets.zero,
                   placeholder: CreationText.createTitleSummaryPlaceholder,
                   decoration: const BoxDecoration(),
+                  // 标题上限与云端同源（publication_policy.yaml），超界前端拦截，
+                  // 与云端 CONTENT.USER.content_too_long 同一边界（GWT-002）。
+                  inputFormatters: <TextInputFormatter>[
+                    LengthLimitingTextInputFormatter(
+                      _CreatePageState._kMaxTitleLength,
+                    ),
+                  ],
                   onChanged: (value) {
                     ref.read(createEditorProvider.notifier).updateTitle(value);
                   },

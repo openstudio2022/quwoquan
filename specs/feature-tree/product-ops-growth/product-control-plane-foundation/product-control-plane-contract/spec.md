@@ -80,4 +80,4 @@
 - 优先级：`P0`
 - 准出影响：`block`
 - 影响或价值：当前 PremiumPoolEntry 原子 command 已可执行，但不可变候选尚未同时绑定 Alpha、Beta、Gamma 的 operator command、durable outbox、Recommendation consumer 与 content-release premium readback 收据。
-- 完成判定：同一 source revision、managed snapshot 与 release digest 在 Alpha、Beta、Gamma 分别通过 target-scoped 受管非生产 operator port 形成 command receipt、唯一 typed event/outbox receipt、Recommendation premium projection receipt 和 content-release readback receipt；Prod 只接受真实 RS256 OIDC，任何非生产 operator material 不得进入 Prod。
+- 完成判定：`GWT-002` 对应行为在三环境真实通过——同一 source revision、managed snapshot 与 release digest 在 Alpha、Beta、Gamma 分别通过 target-scoped 受管非生产 operator port 形成 command receipt、唯一 typed event/outbox receipt、Recommendation premium projection receipt 和 content-release readback receipt；Prod 只接受真实 RS256 OIDC，任何非生产 operator material 不得进入 Prod。

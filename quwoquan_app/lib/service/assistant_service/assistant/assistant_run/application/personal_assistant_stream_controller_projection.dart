@@ -289,20 +289,15 @@ AssistantAnswerTranscriptRow _personalAssistantAssistantRow({
     if (presentationDocument != null)
       'presentationDocument': presentationDocument.toJson(),
   };
-  final persisted = PersistedAssistantTimelinePayload.empty()
-      .copyWithMerged(<String, Object?>{
-        assistantDisplayMarkdownField: text,
-        assistantDisplayPlainTextField: text,
-        assistantJourneyField: projection.journey.toJson(),
-        assistantProcessTimelineField: projection.processTimeline
-            .map((frame) => frame.toJson())
-            .toList(growable: false),
-        assistantUnderstandingSnapshotField: projection.understandingSnapshot
-            .toJson(),
-        assistantRetrievalProcessingField: projection.retrievalProcessing
-            .toJson(),
-        'assistantElapsedMs': processSummary.elapsedMs,
-      });
+  final persisted = PersistedAssistantTimelinePayload(
+    displayMarkdown: text,
+    displayPlainText: text,
+    journey: projection.journey,
+    processTimeline: projection.processTimeline,
+    understandingSnapshot: projection.understandingSnapshot,
+    retrievalProcessing: projection.retrievalProcessing,
+    assistantElapsedMs: processSummary.elapsedMs,
+  );
   return AssistantAnswerTranscriptRow(
     id: id,
     sessionId: sessionId,

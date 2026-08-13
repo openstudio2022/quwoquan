@@ -96,5 +96,13 @@
 - 影响或价值：当前 `quwoquan_service/services/circle-service/contracts/circle_management/circle_membership/fields.yaml` 的 `PersonaCircleSlice.category` 与 `subCategory` 仍是裸 string，端侧只能自行约定类目取值，未知值无法失败关闭。
 - 根因是 `quwoquan_service/contracts/metadata/_shared/domain_taxonomy.yaml` 的自述已失效，它声称由 codegen 产出 Go 与 Dart 的领域标签类型，但仓库内既没有该生成器也没有这两个符号，唯一读取它的脚本只校验 `user_tag_ref`。
 - 该文件的子类目是按 domain 分组的本地化标签文案且没有稳定 id，直接压成扁平枚举会把 locale 文案写进 wire 取值，形成不可演进的对外契约。
+- 裁决补充：类目一级 id 闭集事实上已稳定存在
+  （`meet/campus/car/humanity/life/sports/tech/travel/food`），但散落为 App 页面
+  私有 const（`circle_edit_settings_page_state.dart` 九项闭集、hub 页五垂类子集），
+  且 `circle_category_tab_config_dto.dart` 注释仍指向已不存在的
+  `CircleCategoryTabsLoader`/`ui_category_tabs.yaml`。收敛方向：把该 id 闭集提升为
+  circle 契约 `enum_ref`（wire 只收稳定 id，不收 locale 文案），服务端过滤与写路径
+  fail-closed，App 两处 const 改消费 codegen 枚举；变更横跨契约单轨、双端 codegen
+  与存量数据核验，须以独立迭代整体完成，禁止双轨或半截收敛。
 - 完成判定：`SIT-002` 与 `SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
 - 依赖：先让领域标签文件真正产出枚举并为子类目分配稳定 id，再同时改聚合与投影字段类型。
