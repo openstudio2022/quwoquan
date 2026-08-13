@@ -74,10 +74,13 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺 chat 域页面对 `AppEmptyState` 与 `AppSkeleton` 标准组件的接入，
-  涉及 Inbox 列表、会话页、设置页、成员搜索、公告与转发面板。当前空态为手写
-  `Text`/图标组合，加载态无骨架屏、只有 `AppRequestFeedback`，与 design system
-  新组件不一致，跨页面空态视觉与语义漂移。
+- 影响或价值：尚缺成员搜索、公告与转发面板三处对标准组件的接入。
+  Inbox 列表、会话页与设置页已接入：会话空态使用 `AppEmptyState`，消息首页
+  分区、消息时间线与群首页初始加载使用共享 `AppSkeletonListRows` 骨架
+  （design system 新增该列表行骨架组合，页面不得再拼装私有行骨架）；接入
+  断言见 `chat_page_widget__local_contract_test.dart`、
+  `message_paging_scroll_anchor__local_contract_test.dart` 与
+  `chat_settings_page_widget__local_contract_test.dart`。
 - 完成判定：`SIT-001` 所述交互与状态在空态与加载态上同样成立——chat 域主表面空态
   经 `AppEmptyState`、列表加载经 `AppSkeleton` 呈现，并有对应 widget 测试
   `spec_ref`。

@@ -166,6 +166,7 @@
 - WHEN Host 管理准入与成员、Trust & Safety 执行终止、参与者完成活动并确认回顾发布。
 - THEN 越权 Host/审批/移除/读取被拒绝，Block/移除/安全退出收敛群聊、文件、计划和精确地点权限，安全终止与普通完成可区分。
 - AND 只有证据满足的 occurred 进入有效参与指标；回顾由 Content owner 发布并保留 Gathering/Host/来源引用，不泄露未授权参与事实。
+- AND（现行）`GatheringCompleted` 事件携带完成时冻结的 active 参与者名单（不含 pending/closed 轨迹），Notification 仅在 outcome=occurred 时向每位参与者投递一条幂等「发布回顾」催发并回链行动公开详情，未确认发生的 outcome 不催、安全终止走独立事件不触发；host 邀请控制台提供发起者真实人对人交集候选点选，候选身份字段不全或人对物交集不入选，候选读取失败保留手填兜底，提交仍走同一 typed invite command。
 
 ## 8. 开放事项
 

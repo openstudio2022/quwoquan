@@ -338,6 +338,8 @@ func TestAssistantPreferenceSessionLifecycleAndOwnerIsolation(t *testing.T) {
 }
 
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-001.t3
 func TestConfirmedLongTermMemoryRequiresConfirmationAndReusesRevokeRestore(t *testing.T) {
 	store := newAssistantPreferenceMemoryStore()
 	commands := NewCommandFacade(

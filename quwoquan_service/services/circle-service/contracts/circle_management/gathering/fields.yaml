@@ -540,6 +540,7 @@ types:
     - {name: sourceRefs, type: '[]GatheringEventSourceRef', constraints: [NULLABLE], description: 发起溯源引用（objectKind + objectId）；仅 GatheringPublished 携带，供 recommendation 社会证明四锚点按实体/内容/创作者归集，禁止携带私密名单或申请事实。}
     - {name: maxParticipants, type: int, constraints: [NULLABLE], description: 发布时冻结的公开容量政策；仅 GatheringPublished 携带，供漏斗按活动特征（duo/group）诚实切片。}
     - {name: admissionPolicy, type: enum, enum_ref: GatheringAdmissionPolicy, constraints: [NULLABLE], description: 发布时冻结的公开准入政策；仅 GatheringPublished 携带，与 maxParticipants 共同派生 capacityTier。}
+    - {name: participantPersonaIds, type: '[]string', constraints: [NULLABLE], description: 完成时冻结的 active 参与者名单；仅 GatheringCompleted 携带，供 Notification 催回顾投递，不含 pending/closed 参与轨迹。}
     - {name: occurredAt, type: timestamp, constraints: [NOT_NULL], semantic_type: instant}
   GatheringEventSourceRef:
     description: 事件载荷内的最小 canonical 溯源引用；只含对象类型与 ID，不复制标题或快照。

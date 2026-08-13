@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/search-intersection-consumption/spec.md#gwt-001
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/search-intersection-consumption/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/search-intersection-consumption/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/search-intersection-consumption/spec.md#gwt-001.t3
 import '../../../../../support/service/search_service/search/search_feedback_fact/search_feedback_typed_double.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';

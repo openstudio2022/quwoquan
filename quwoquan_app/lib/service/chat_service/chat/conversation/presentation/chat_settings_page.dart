@@ -11,8 +11,8 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
+import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/conversation_message_search_sheet.dart';
-import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
 import 'package:quwoquan_app/design_system/layout/web_page_max_width_frame.dart';
@@ -452,7 +452,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
             ),
             children: [
               if (groupHomeAsync.isLoading && groupHome == null) ...[
-                AppRequestFeedback.section(),
+                const AppSkeletonListRows(rowCount: 3),
                 SizedBox(
                   height: SettingsSemanticConstants.insetFormSectionVerticalGap,
                 ),

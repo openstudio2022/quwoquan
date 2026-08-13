@@ -1,5 +1,7 @@
 // spec_ref: specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine/spec.md#gwt-001
-// spec_ref: specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine/spec.md#gwt-001.t3
 package recommendation
 
 import (

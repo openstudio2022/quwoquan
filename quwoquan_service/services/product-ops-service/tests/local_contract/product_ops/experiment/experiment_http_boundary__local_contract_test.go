@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -88,6 +89,86 @@ func TestCreateExperimentPublishesOnePolicyFactAndReplaysIdempotently(t *testing
 	}
 }
 
+func TestExperimentHTTPBoundaryMapsNotFoundAndStorageFailureCodes(t *testing.T) {
+	store := newLocalExperimentStore()
+	facade, err := experimentapp.NewFacade(store, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assignments, err := assignmentapp.NewFacade(facade, store, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := experimenthttp.NewHandler(facade, assignments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	handler.Register(mux)
+
+	rolloutBody := `{"status":"paused","variants":[{"key":"control","allocationBasisPoints":5000},{"key":"treatment","allocationBasisPoints":5000}]}`
+	missingRollout := httptest.NewRequest(
+		http.MethodPost,
+		"/control-plane/product/experiments/missing_experiment:rollout",
+		bytes.NewBufferString(rolloutBody),
+	)
+	missingRollout.Header.Set("If-Match", `"1"`)
+	missingRollout.Header.Set("Idempotency-Key", "rollout-missing-experiment")
+	missingResponse := httptest.NewRecorder()
+	mux.ServeHTTP(missingResponse, missingRollout)
+	assertExperimentLocalError(
+		t,
+		missingResponse,
+		http.StatusNotFound,
+		"OPS.USER.experiment_not_found",
+	)
+
+	store.listErr = errors.New("postgres list timeout")
+	listResponse := httptest.NewRecorder()
+	mux.ServeHTTP(
+		listResponse,
+		httptest.NewRequest(http.MethodGet, "/control-plane/product/experiments", nil),
+	)
+	assertExperimentLocalError(
+		t,
+		listResponse,
+		http.StatusInternalServerError,
+		"OPS.SYSTEM.experiment_storage_read_failed",
+	)
+	store.listErr = nil
+
+	store.commitErr = errors.New("postgres commit timeout")
+	createRequest := httptest.NewRequest(
+		http.MethodPost,
+		"/control-plane/product/experiments",
+		bytes.NewBufferString(`{"id":"write_failure","key":"write_failure","status":"running","variants":[{"key":"control","allocationBasisPoints":5000},{"key":"treatment","allocationBasisPoints":5000}],"audienceRule":{"kind":"all"}}`),
+	)
+	createRequest.Header.Set("Idempotency-Key", "create-write-failure")
+	createResponse := httptest.NewRecorder()
+	mux.ServeHTTP(createResponse, createRequest)
+	assertExperimentLocalError(
+		t,
+		createResponse,
+		http.StatusInternalServerError,
+		"OPS.SYSTEM.experiment_storage_write_failed",
+	)
+}
+
+func assertExperimentLocalError(
+	t *testing.T,
+	recorder *httptest.ResponseRecorder,
+	status int,
+	code string,
+) {
+	t.Helper()
+	if recorder.Code != status {
+		t.Fatalf("status=%d want=%d body=%s", recorder.Code, status, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"code":"`+code+`"`) {
+		t.Fatalf("body=%s missing code %q", recorder.Body.String(), code)
+	}
+}
+
 func decodeLocalResponse(t *testing.T, recorder *httptest.ResponseRecorder, target any) {
 	t.Helper()
 	if err := json.Unmarshal(recorder.Body.Bytes(), target); err != nil {
@@ -102,6 +183,8 @@ type localExperimentStore struct {
 	receipts    map[string]localExperimentReceipt
 	events      []experimentmodel.Event
 	assignments map[string]assignmentdomain.Fact
+	listErr     error
+	commitErr   error
 }
 
 type localExperimentReceipt struct {
@@ -170,6 +253,9 @@ func (s *localExperimentStore) Replay(_ context.Context, id, key, digest string)
 func (s *localExperimentStore) Commit(_ context.Context, expectedVersion int64, changes experimentports.ChangeSet) (experimentports.CommitReceipt, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.commitErr != nil {
+		return experimentports.CommitReceipt{}, s.commitErr
+	}
 	if expectedVersion == 0 {
 		if _, found := s.created[changes.Experiment.ID]; found || changes.Experiment.ID == s.experiment.ID {
 			return experimentports.CommitReceipt{}, experimentmodel.ErrVersionConflict
@@ -199,6 +285,9 @@ func (s *localExperimentStore) Commit(_ context.Context, expectedVersion int64, 
 func (s *localExperimentStore) List(context.Context) ([]experimentmodel.Experiment, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
 	out := []experimentmodel.Experiment{s.experiment}
 	for _, experiment := range s.created {
 		out = append(out, experiment)

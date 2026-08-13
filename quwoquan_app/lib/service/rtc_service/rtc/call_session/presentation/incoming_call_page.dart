@@ -7,8 +7,10 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_ended_feedback.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_state.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_session_provider.dart';
@@ -64,6 +66,14 @@ class _IncomingCallPageState extends ConsumerState<IncomingCallPage> {
           : AppRoutePaths.rtcVoice(callId: widget.callId);
       context.go(route);
     } else if (state.status == CallStatus.ended) {
+      // 超时未接的终态原因在跳离前提示（跳离会吞掉页内 banner）。
+      final feedback = callEndedFeedbackText(
+        endReason: state.session?.endReason,
+        outgoing: false,
+      );
+      if (feedback != null) {
+        AppToast.show(context, feedback);
+      }
       if (context.canPop()) {
         context.pop();
       } else {

@@ -1,6 +1,8 @@
 // spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/spec.md#sit-001
 // spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/immersive-media-edge-swipe-back/spec.md#gwt-001
 // spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012.t3
+// spec_ref: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md#gwt-012.t4
 
 import 'dart:async';
 import 'dart:io';

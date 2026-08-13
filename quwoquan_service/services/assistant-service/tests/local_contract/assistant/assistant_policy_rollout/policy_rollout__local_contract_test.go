@@ -1,4 +1,7 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md#gwt-001.t4
 // readiness_case: activate-assistant-policy-rollout-local
 // readiness_case: rollback-assistant-policy-rollout-local
 package assistant_policy_rollout_test

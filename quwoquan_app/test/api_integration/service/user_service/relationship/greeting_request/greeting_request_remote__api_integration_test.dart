@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001.t1
 // readiness_case: greeting_request_send_greeting_request_app_api
 // readiness_case: greeting_request_list_greeting_inbox_app_api
 // readiness_case: greeting_request_list_greeting_outbox_app_api

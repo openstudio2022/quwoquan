@@ -89,6 +89,11 @@ const GatheringDetailPageCopy gatheringDetailTestCopy = GatheringDetailPageCopy(
   joinAction: 'JOIN',
   applyAction: 'APPLY',
   acceptInvitationAction: 'ACCEPT',
+  recapAction: 'RECAP',
+  sharedExperienceTitle: 'SHARED_EXPERIENCE',
+  sharedExperienceSingleTitle: 'SINGLE_RECAP',
+  sharedExperienceEndedEmpty: 'ENDED_EMPTY',
+  organizerStatsLabel: 'ORGANIZER_STATS',
   watchAvailabilityAction: 'WATCH',
   enterChatAction: 'ENTER_CHAT',
   readOnlyAction: 'READ_ONLY',
@@ -324,6 +329,7 @@ final class InMemoryGatheringPort
   int joinCalls = 0;
   int applyCalls = 0;
   int acceptCalls = 0;
+  int declineCalls = 0;
   int watchCalls = 0;
   int reviewCalls = 0;
   int inviteCalls = 0;
@@ -337,6 +343,10 @@ final class InMemoryGatheringPort
 
   GatheringCreateDraftInput? lastCreate;
   GatheringVersionCommandInput? lastPublish;
+  GatheringParticipationCommandInput? lastDecline;
+  GatheringInviteInput? lastInvite;
+  Object? declineError;
+  Object? inviteError;
   GatheringReviewApplicationInput? lastReview;
   GatheringChangeCapacityInput? lastCapacity;
 
@@ -421,6 +431,17 @@ final class InMemoryGatheringPort
   }
 
   @override
+  Future<GatheringCommandResult> declineInvitation(
+    GatheringParticipationCommandInput input,
+  ) async {
+    declineCalls += 1;
+    lastDecline = input;
+    final error = declineError;
+    if (error != null) throw error;
+    return _result(participation: GatheringParticipationState.closed);
+  }
+
+  @override
   Future<GatheringCommandResult> watchAvailability(
     GatheringAvailabilityWatchCommandInput input,
   ) async {
@@ -440,8 +461,26 @@ final class InMemoryGatheringPort
   @override
   Future<GatheringCommandResult> invite(GatheringInviteInput input) async {
     inviteCalls += 1;
+    lastInvite = input;
+    final error = inviteError;
+    if (error != null) throw error;
     return _result();
   }
+
+  @override
+  Future<List<GatheringSourceCardSummary>> listBySource(
+    GatheringBySourceListQuery query,
+  ) async => const <GatheringSourceCardSummary>[];
+
+  @override
+  Future<GatheringHostCardPage> listByHost(
+    GatheringByHostListQuery query,
+  ) async => GatheringHostCardPage.empty;
+
+  @override
+  Future<GatheringHostCardPage> listMine(
+    GatheringMineListQuery query,
+  ) async => GatheringHostCardPage.empty;
 
   @override
   Future<GatheringCommandResult> removeParticipant(

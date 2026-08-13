@@ -35,11 +35,15 @@ REPO_ROOT ?= $(abspath ..)
 QWQ_OUTPUT_ROOT := $(REPO_ROOT)/.qwq_output
 # 每个 Make 进程独占可删除编译视图，避免并发 codegen 在 ContractGraph 编译和对象
 # 生成之间删除另一进程的输入。
+<<<<<<< Updated upstream
 CONTRACT_VIEW ?= $(QWQ_OUTPUT_ROOT)/env/repo/local/service-contract-view/cache/view-$(shell printf %s "$$PPID")
 # ContractGraph 产物在两个 profile 下逐字节相同，profile 只决定必须通过哪一档校验。
 # 默认 commercial 保持准出门禁不被削弱；存量 commercial 债务未清期间，可显式
 # CONTRACT_GRAPH_PROFILE=baseline 重新生成 bundle，让下游 codegen 不被存量债务连坐。
 CONTRACT_GRAPH_PROFILE ?= commercial
+=======
+CONTRACT_VIEW ?= $(QWQ_OUTPUT_ROOT)/env/repo/local/service-contract-view/cache/$(shell printf %s "$$PPID")
+>>>>>>> Stashed changes
 ML_REPORT_ROOT ?= $(QWQ_OUTPUT_ROOT)/env/repo/runs/ml
 QWQ_PYTHON_CACHE_ROOT ?= $(HOME)/.cache/quwoquan/python-envs
 DATA_PYTHON ?= $(QWQ_PYTHON_CACHE_ROOT)/quwoquan-data/bin/python

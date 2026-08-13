@@ -67,6 +67,7 @@ const (
 	interactionTitleFacilitation   = "你的内容促成了一次成行"
 	interactionTitleInviteAccepted = "邀约有了回音"
 	interactionTitleInviteDeclined = "邀约已回复"
+	interactionTitleRecapNudge     = "行动成行了，记录一下吧"
 )
 
 // InteractionNotificationProjection 是 durable interaction stream 的唯一应用入口。
@@ -111,6 +112,8 @@ func (InteractionNotificationProjection) Project(
 		return single(projectIntersectionFacilitation(event))
 	case "GatheringInvitationChanged":
 		return single(projectInvitationInviterReceipt(event))
+	case "GatheringCompleted":
+		return projectGatheringRecapNudge(event)
 	default:
 		// 同一 stream 上的其它生命周期事件（删除、退出、清除等）
 		// 不属于触发矩阵，直接确认跳过。
@@ -163,6 +166,57 @@ func projectInvitationInviterReceipt(
 			TargetID:   payload.GatheringID,
 		},
 	), nil
+}
+
+// projectGatheringRecapNudge 是「结束催回顾」投影：Gathering 完成且 Outcome 为
+// occurred（确认发生）时，向完成时冻结的每位 active 参与者投递一条「发布回顾」
+// 催发，回链行动公开详情（详情内有携带 gatheringRef 的发布回顾入口）。诚实
+// 红线：did_not_happen / disputed / unverified 不催——不推动为未确认发生的行动
+// 制造回顾；每 (gathering, persona) 由事件 identity 幂等收敛，只发一条不骚扰。
+func projectGatheringRecapNudge(
+	event InteractionStreamEvent,
+) ([]*CreateAppMessageCommand, error) {
+	var payload struct {
+		GatheringID           string   `json:"gatheringId"`
+		OutcomeStatus         string   `json:"outcomeStatus"`
+		ParticipantPersonaIDs []string `json:"participantPersonaIds"`
+	}
+	if err := decodeInteractionPayload(event.Payload, &payload); err != nil {
+		return nil, fmt.Errorf("decode gathering recap nudge payload: %w", err)
+	}
+	if strings.TrimSpace(payload.OutcomeStatus) != "occurred" {
+		return nil, nil
+	}
+	gatheringID := strings.TrimSpace(payload.GatheringID)
+	if gatheringID == "" {
+		return nil, fmt.Errorf("gathering recap nudge identity is incomplete")
+	}
+	commands := make([]*CreateAppMessageCommand, 0, len(payload.ParticipantPersonaIDs))
+	seen := make(map[string]bool, len(payload.ParticipantPersonaIDs))
+	for _, personaID := range payload.ParticipantPersonaIDs {
+		recipient := strings.TrimSpace(personaID)
+		if recipient == "" || seen[recipient] {
+			continue
+		}
+		seen[recipient] = true
+		commands = append(commands, interactionCommand(
+			event,
+			recipient,
+			"circle",
+			"gathering_recap_nudge",
+			gatheringID,
+			interactionTitleRecapNudge,
+			"这次行动确认成行了，发布一篇回顾，让这段经历沉淀下来",
+			notification.AppMessageTarget{
+				TargetType: "gathering",
+				TargetID:   gatheringID,
+			},
+		))
+	}
+	if len(commands) == 0 {
+		return nil, nil
+	}
+	return commands, nil
 }
 
 // projectIntersectionFacilitation 把 recommendation 的创作者促成事实映射为

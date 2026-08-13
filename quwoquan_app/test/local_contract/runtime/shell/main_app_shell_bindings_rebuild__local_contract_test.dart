@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/call-experience/spec.md#gwt-013
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/call-experience/spec.md#gwt-013.t2
 //
 // Shell bindings 重建面契约：
 // 通话计时 elapsed 每秒 tick、参与者变化与 PiP 显隐切换不得重建

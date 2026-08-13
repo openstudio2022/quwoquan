@@ -13,6 +13,7 @@ import (
 	rtauth "quwoquan_service/runtime/auth"
 	rtgov "quwoquan_service/runtime/governance"
 	rthttp "quwoquan_service/runtime/http"
+	tool "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 	runports "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/connectorgateway"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/domainreader"
@@ -63,6 +64,7 @@ type assistantExternalClients struct {
 	deliveryPolicyReader   *orchestration.UserDeliveryPolicyClient
 	canonicalSearch        *searchclient.Client
 	intersectionEvidence   runports.IntersectionEvidenceReader
+	myIntersectionsReader  tool.MyIntersectionsReader
 	canonicalDomainReaders domainreader.CanonicalReaders
 	connectorGrantGateway  *connectorgateway.Client
 	interestReader         runports.ProactiveInterestReader
@@ -290,6 +292,7 @@ func buildAssistantExternalClients(
 		deliveryPolicyReader:   deliveryPolicyReader,
 		canonicalSearch:        canonicalSearch,
 		intersectionEvidence:   intersectionEvidence,
+		myIntersectionsReader:  intersectionEvidence,
 		canonicalDomainReaders: canonicalDomainReaders,
 		connectorGrantGateway:  connectorGrantGateway,
 		interestReader:         interestReader,

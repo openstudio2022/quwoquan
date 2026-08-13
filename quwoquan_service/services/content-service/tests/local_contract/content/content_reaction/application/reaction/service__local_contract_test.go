@@ -3,6 +3,8 @@
 // readiness_case: react-to-comment-local
 // readiness_case: get-content-reaction-state-local
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006.t1
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006.t2
 package reaction_test
 
 import (

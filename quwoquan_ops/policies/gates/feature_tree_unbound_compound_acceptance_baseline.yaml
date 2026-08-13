@@ -21,32 +21,12 @@ governance:
     而补齐子句绑定的条目必须同批从这里删除。
 
 entries:
-- spec: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-apply-audit/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-confirm-reject/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/proposal-create-review/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/assistant-run-learning/profile-proposal-apply-loop/spec.md
   anchor: SIT-001
-- spec: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/assistant-run-learning/run-stream-policy/run-stream-protocol/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/autonomous-web-exploration/spec.md
   anchor: GWT-003
-- spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/autonomous-web-exploration/spec.md
-  anchor: GWT-004
-- spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/context-assembly-slot-filling/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/context-assembly-slot-filling/spec.md
-  anchor: GWT-002
-- spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md
   anchor: GWT-002
 - spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/planner-aggregation-orchestration/spec.md
@@ -58,15 +38,9 @@ entries:
 - spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md
-  anchor: GWT-002
-- spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md
   anchor: GWT-003
 - spec: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/skill-progressive-disclosure-routing/spec.md
   anchor: GWT-004
-- spec: specs/feature-tree/chat-conversation/contact-and-session-governance/conversation-entry-matrix/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md
   anchor: SIT-001
 - spec: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md
@@ -81,28 +55,14 @@ entries:
   anchor: GWT-001
 - spec: specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/chat-conversation/message-reliability-foundation/realtime-push-and-offline-sync/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/circle-community/activity-member-governance/circle-lifecycle/spec.md
-  anchor: GWT-002
 - spec: specs/feature-tree/circle-community/activity-member-governance/member-role-permission/spec.md
   anchor: GWT-003
 - spec: specs/feature-tree/circle-community/activity-member-governance/spec.md
-  anchor: SIT-001
-- spec: specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/circle-community/in-circle-recommendation-loop/spec.md
   anchor: SIT-001
 - spec: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md
   anchor: GWT-002
 - spec: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md
-  anchor: GWT-010
-- spec: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md
-  anchor: GWT-012
-- spec: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/spec.md
-  anchor: GWT-013
 - spec: specs/feature-tree/discovery-content/exposure-governance/exposure-observability-capacity/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/discovery-content/feed-orchestration-recommendation/feed-fallback-degrade/spec.md
@@ -115,20 +75,10 @@ entries:
   anchor: GWT-001
 - spec: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md
   anchor: SIT-002
-- spec: specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md
   anchor: GWT-002
-- spec: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md
-  anchor: GWT-003
-- spec: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md
-  anchor: GWT-004
-- spec: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md
-  anchor: GWT-003
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
   anchor: GWT-004
-- spec: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
-  anchor: GWT-006
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
   anchor: GWT-010
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
@@ -137,10 +87,6 @@ entries:
   anchor: GWT-012
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
   anchor: GWT-013
-- spec: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md
-  anchor: GWT-002
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md
   anchor: GWT-003
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md
@@ -153,12 +99,6 @@ entries:
   anchor: GWT-004
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md
   anchor: GWT-008
-- spec: specs/feature-tree/discovery-content/spec.md
-  anchor: DOM-004
-- spec: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md
-  anchor: GWT-002
-- spec: specs/feature-tree/gateway-orchestrator-foundation/realtime-gateway/realtime-channel-delivery/spec.md
-  anchor: GWT-003
 - spec: specs/feature-tree/global-search-experience/cross-domain-search/circle-facet-search-and-filter/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md
@@ -175,15 +115,9 @@ entries:
   anchor: GWT-001
 - spec: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/global-search-experience/cross-domain-search/search-intersection-consumption/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md
   anchor: GWT-002
 - spec: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/circle-group-hybrid-fallback-contract/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/local-search-lifecycle-and-account-isolation/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-execution-routing-policy/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md
   anchor: GWT-001
@@ -205,8 +139,6 @@ entries:
   anchor: GWT-001
 - spec: specs/feature-tree/product-ops-growth/experiment-bucketing-and-rollout/spec.md
   anchor: SIT-001
-- spec: specs/feature-tree/product-ops-growth/product-control-plane-foundation/account-moderation-and-appeal-enforcement/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/offline-replay-evaluation/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/recommendation-platform/evaluation-and-flywheel/online-ab-significance/spec.md
@@ -221,8 +153,6 @@ entries:
   anchor: GWT-004
 - spec: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/runtime/native-edge-gesture-navigation/home-edge-swipe-exit-guard/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/runtime/native-edge-gesture-navigation/immersive-media-edge-swipe-back/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/runtime/native-edge-gesture-navigation/spec.md
@@ -231,8 +161,6 @@ entries:
   anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md
-  anchor: GWT-002
 - spec: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md
@@ -251,12 +179,6 @@ entries:
   anchor: GWT-009
 - spec: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
   anchor: GWT-013
-- spec: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
-  anchor: GWT-014
-- spec: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md
-  anchor: GWT-002
-- spec: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
-  anchor: GWT-002
 - spec: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md
@@ -267,8 +189,6 @@ entries:
   anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-governance/spec.md
   anchor: SIT-002
-- spec: specs/feature-tree/runtime/runtime-recommendation/dual-channel-recommendation-engine/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-testinfra/spec.md
   anchor: SIT-001
 - spec: specs/feature-tree/runtime/system-architecture-and-engineering-guide/domain-service-directory-ownership/spec.md
@@ -277,12 +197,8 @@ entries:
   anchor: GWT-001
 - spec: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-candidate-intake-and-publish/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/homepage-claim-request-and-review/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/shared-homepage-network/homepage-claim-maintain-and-offline/spec.md
   anchor: SIT-001
-- spec: specs/feature-tree/shared-homepage-network/homepage-review-and-content/homepage-review-read-and-score-summary/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/spec.md
   anchor: UAT-001
 - spec: specs/feature-tree/spec.md
@@ -297,8 +213,6 @@ entries:
   anchor: GWT-001
 - spec: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md
-  anchor: GWT-002
 - spec: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login-commercial-login-entry/spec.md
   anchor: GWT-003
 - spec: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/spec.md
@@ -333,13 +247,9 @@ entries:
   anchor: GWT-001
 - spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/profile-commercial-readiness/spec.md
   anchor: GWT-002
-- spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md
-  anchor: SIT-006
 - spec: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md
   anchor: GWT-002
-- spec: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md
-  anchor: GWT-004
 - spec: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/spec.md
   anchor: SIT-003

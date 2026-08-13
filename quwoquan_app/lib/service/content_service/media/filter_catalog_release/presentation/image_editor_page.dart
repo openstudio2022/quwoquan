@@ -452,6 +452,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   double _perspectiveSnapshotHorizontal = 0;
   double _perspectiveSnapshotVertical = 0;
 
+  /// 白平衡吸管（点选中性灰反解温度/色调）
+  bool _wbPickerActive = false;
+  Offset? _wbPickerPoint;
+
   /// 旋转精细角度（约 ±45° 或更大，度）
   double _rotateFineDegrees = 0;
 
@@ -675,6 +679,13 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                     onWbTintChanged: (v) =>
                         setState(() => _wbTint = v.clamp(-100.0, 100.0)),
                     onWbAuto: _applyAutoWhiteBalance,
+                    wbPickerActive: _wbPickerActive,
+                    onToggleWbPicker: () => setState(() {
+                      _wbPickerActive = !_wbPickerActive;
+                      if (!_wbPickerActive) {
+                        _wbPickerPoint = null;
+                      }
+                    }),
                     bwWhiteLevel: _bwWhiteLevel,
                     bwBlackLevel: _bwBlackLevel,
                     onBwWhiteLevelChanged: (v) =>

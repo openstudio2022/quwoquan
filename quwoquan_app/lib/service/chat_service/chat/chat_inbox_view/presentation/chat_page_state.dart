@@ -477,9 +477,9 @@ class _ChatPageState extends ConsumerState<ChatPage>
           },
         )
       else if (messageInitialLoading)
-        KeyedSubtree(
-          key: const ValueKey<String>('chat-message-home-loading-section'),
-          child: AppRequestFeedback.section(),
+        const KeyedSubtree(
+          key: ValueKey<String>('chat-message-home-loading-section'),
+          child: AppSkeletonListRows(),
         ),
       if (greetingError != null)
         AppSectionErrorCard(
@@ -622,14 +622,20 @@ class _ChatPageState extends ConsumerState<ChatPage>
             targetKey: message.messageId,
           ),
     );
-    // 促成通知打开（漏斗③体验辅证：域事实只见续发结果，看不到打开行为）。
-    if (message.source.trim() == 'intersection_facilitation') {
+    // 飞轮通知打开辅证：促成通知（漏斗③）与催回顾通知（漏斗②）。
+    // 域事实只见结果（续发/回顾），看不到打开行为，故补 product_action 轨。
+    final flywheelOpenAction = switch (message.source.trim()) {
+      'intersection_facilitation' => 'notification_facilitation_open',
+      'gathering_recap_nudge' => 'notification_recap_nudge_open',
+      _ => null,
+    };
+    if (flywheelOpenAction != null) {
       unawaited(
         ref
             .read(journeyEventTrackerProvider)
             .trackAction(
               journey: 'gathering_flywheel',
-              action: 'notification_facilitation_open',
+              action: flywheelOpenAction,
               pageName: 'chat_list',
               targetType: 'gathering',
               targetKey: message.target.targetId,
@@ -709,35 +715,10 @@ class _ChatPageState extends ConsumerState<ChatPage>
         horizontal: AppSpacing.xl,
         vertical: AppSpacing.containerMd,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            CupertinoIcons.chat_bubble_2,
-            size: AppSpacing.iconButtonMinSizeMd,
-            color: fgSecondary.withValues(alpha: 0.72),
-          ),
-          SizedBox(height: AppSpacing.md),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: AppTypography.iosTitle3,
-              fontWeight: AppTypography.semiBold,
-              color: fgSecondary,
-            ),
-          ),
-          SizedBox(height: AppSpacing.xs),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: AppTypography.iosFootnote,
-              color: fgSecondary.withValues(alpha: 0.82),
-              height: AppTypography.lineHeightCompact,
-            ),
-          ),
-        ],
+      child: AppEmptyState(
+        icon: CupertinoIcons.chat_bubble_2,
+        title: title,
+        subtitle: subtitle,
       ),
     );
   }

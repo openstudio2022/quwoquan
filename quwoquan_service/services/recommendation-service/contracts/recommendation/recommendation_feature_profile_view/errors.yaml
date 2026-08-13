@@ -4,7 +4,7 @@ errors:
   reason: feature_profile_unauthorized
   http_status: 401
   emitted_by:
-  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply, GetRecommendationGatheringSocialProof]}
+  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply, GetRecommendationGatheringSocialProof, GetRecommendationFlywheelFunnel]}
   recovery_action: absorb
   disruption_level: silent
   user_message: {zh: 服务身份无效, en: Invalid service identity}
@@ -12,7 +12,7 @@ errors:
   reason: feature_profile_forbidden
   http_status: 403
   emitted_by:
-  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply, GetRecommendationGatheringSocialProof]}
+  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply, GetRecommendationGatheringSocialProof, GetRecommendationFlywheelFunnel]}
   recovery_action: absorb
   disruption_level: silent
   user_message: {zh: 服务身份无权读取推荐特征, en: Service identity cannot read recommendation features}
@@ -20,7 +20,7 @@ errors:
   reason: feature_profile_invalid_argument
   http_status: 400
   emitted_by:
-  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply, GetRecommendationGatheringSocialProof]}
+  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply, GetRecommendationGatheringSocialProof, GetRecommendationFlywheelFunnel]}
   recovery_action: absorb
   disruption_level: silent
   user_message: {zh: 推荐特征查询参数无效, en: Invalid recommendation feature query}
@@ -36,7 +36,7 @@ errors:
   reason: feature_profile_read_failed
   http_status: 500
   emitted_by:
-  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply, GetRecommendationGatheringSocialProof]}
+  - {surface: http, operations: [GetRecommendationAuthorImpact, ListRecommendationAuthorImpactEvidence, ListRecommendationSubjectIntersections, ListRecommendationObjectIntersections, GetRecommendationIntersectionSupply, GetRecommendationGatheringSocialProof, GetRecommendationFlywheelFunnel]}
   recovery_action: retry
   disruption_level: snackbar
   recovery_after_seconds: 1

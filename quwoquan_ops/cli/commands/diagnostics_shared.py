@@ -270,6 +270,9 @@ def _service_health_checks_for_target(target_name: str) -> list[dict[str, Any]]:
             "name": role_name,
             "scope": "service",
             "url": f"http://127.0.0.1:{port}{path}",
+            # service-core 虚拟 HTTP 路由按 Host 头分发合并模块;独立监听的
+            # 服务忽略该头,因此对全部 service 角色统一携带服务名 Host。
+            "headers": {"Host": role_name},
         }
         if role_name in provider_roles:
             check["url"] = f"https://127.0.0.1:{port}{path}"

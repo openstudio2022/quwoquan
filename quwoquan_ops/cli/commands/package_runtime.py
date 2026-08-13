@@ -33,6 +33,103 @@ from typing import Any, Sequence
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
+def _build_official_skill_package_publication(
+    env_name: str,
+    target_name: str,
+    *,
+    package_source_root: Path,
+    package_environment: dict[str, str],
+) -> dict[str, Any]:
+    """把签名官方 Skill package publication 产物封进 assistant 服务包。
+
+    运行时(assistant 模块 PrepareMigration)在空环境凭该产物幂等自举
+    stage+activate;没有它,readiness 的 active-package 检查会与环境首次
+    启动死锁。产物走 skill-package-build 的既有签名/receipt 链路,
+    build-id 由官方源树 digest 派生,保证同源打包字节幂等。
+    """
+    import shutil
+    import subprocess
+
+    from quwoquan_ops.cli.lib.local_assistant_skill_package_keys import (
+        KEY_ID,
+        prepare_local_assistant_skill_package_keys,
+    )
+    from quwoquan_ops.cli.lib.local_assistant_skill_package_publication import (
+        _private_key_base64,
+        _source_digest,
+    )
+
+    keys = prepare_local_assistant_skill_package_keys(env_name, target_name)
+    source_root = (
+        package_source_root
+        / "quwoquan_service/services/assistant-service/resources/skill_packages/official"
+    )
+    source_digest = _source_digest(source_root)
+    build_id = "local-" + source_digest.removeprefix("sha256:")[:16]
+    from quwoquan_ops.cli import stackctl as _stackctl
+
+    output_root = (
+        _stackctl.service_deployment_package_dir(
+            env_name, "assistant-service", target=target_name
+        )
+        / "skill-packages"
+    )
+    if output_root.exists():
+        shutil.rmtree(output_root)
+    source_revision = str(
+        package_environment.get("QWQ_PACKAGE_SOURCE_REVISION") or ""
+    ).strip() or ("0" * 40)
+    command = [
+        "go",
+        "run",
+        "./services/assistant-service/cmd/skill-package-build",
+        "--source-root",
+        "services/assistant-service/resources/skill_packages/official",
+        "--output-root",
+        str(output_root),
+        "--package-version",
+        "1.0.0",
+        "--build-id",
+        build_id,
+        "--source-repository",
+        "quwoquan",
+        "--source-revision",
+        source_revision,
+        "--built-at",
+        "2026-01-01T00:00:00Z",
+        "--key-id",
+        KEY_ID,
+        "--command-id",
+        f"official-bootstrap-{build_id}",
+        "--expected-revision",
+        "0",
+        "--activated-by",
+        f"service:local-managed-bootstrap:{target_name}",
+    ]
+    result = subprocess.run(
+        command,
+        cwd=str(package_source_root / "quwoquan_service"),
+        env={
+            **os.environ,
+            **package_environment,
+            "ASSISTANT_SKILL_PACKAGE_SIGNING_PRIVATE_KEY_BASE64": _private_key_base64(
+                keys.private_key_path,
+                keys.public_keys_json,
+            ),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return {
+        "name": "assistant-skill-package-publication",
+        "argv": [item for item in command if "PRIVATE" not in item],
+        "exitCode": result.returncode,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }
+
+
 def _validate_runtime_package_identity_readback(
     *,
     report_path: Path,
@@ -465,6 +562,51 @@ def _command_package_unlocked(
                 "service package ready: "
                 f"{_stackctl.relpath(_stackctl.service_deployment_package_dir(env_name, service, target=target_name))}"
             )
+
+    if not args.service and env_name in {"alpha", "beta", "gamma"}:
+        skill_step = _build_official_skill_package_publication(
+            env_name,
+            target_name,
+            package_source_root=package_source_root,
+            package_environment=package_environment,
+        )
+        reports.append(skill_step)
+        if skill_step["exitCode"] != 0:
+            timing = _stackctl._finish_timing(started_monotonic, started_at)
+            _stackctl.write_json(
+                report_dir / "report.json",
+                {"status": "failed", "steps": reports, **timing},
+            )
+            _stackctl._write_summary_bundle(
+                report_dir,
+                command="package",
+                target=target_name,
+                status="failed",
+                summary=(
+                    "stackctl package failed while building the official "
+                    f"Skill package publication for {env_name}"
+                ),
+                details=[
+                    str(skill_step["stderr"]).strip()
+                    or str(skill_step["stdout"]).strip()
+                ],
+                extra={"env": env_name},
+                timing=timing,
+            )
+            return {
+                "exitCode": int(skill_step["exitCode"]),
+                "summary": (
+                    "stackctl package failed while building the official "
+                    f"Skill package publication for {env_name}"
+                ),
+                "details": [
+                    str(skill_step["stderr"]).strip()
+                    or str(skill_step["stdout"]).strip()
+                ],
+                "reportDir": _stackctl.relpath(report_dir),
+                **timing,
+            }
+        details.append("official Skill package publication ready")
 
     materialized_release_evidence: dict[str, str] = {}
     if not args.service:

@@ -51,7 +51,15 @@ class CallTimerNotifier extends Notifier<CallTimerState> {
   Timer? _timer;
 
   @override
-  CallTimerState build() => const CallTimerState();
+  CallTimerState build() {
+    // notifier 回收时必须取消周期计时器，否则残留回调会在容器销毁后
+    // 触碰已释放的 Ref（登出/重启等容器生命周期路径）。
+    ref.onDispose(() {
+      _timer?.cancel();
+      _timer = null;
+    });
+    return const CallTimerState();
+  }
 
   void start() {
     if (state.isRunning) return;

@@ -79,8 +79,16 @@ func (module *Module) ValidateConfig(context.Context) error {
 	return nil
 }
 
-func (module *Module) PrepareMigration(context.Context) error {
-	return nil
+func (module *Module) PrepareMigration(ctx context.Context) error {
+	// 把官方 Skill package 激活收敛到 candidate 挂载的签名 publication:
+	// 空环境首次激活、candidate 更迭受控升级、已收敛零写入,使 readiness
+	// 的 active-package 检查不再与环境启动死锁。
+	return bootstrapOfficialSkillPackage(
+		ctx,
+		module.assistant.skillPackageService,
+		module.infrastructure.dependencies.skillPackageStore,
+		module.runtime.config.SkillPackage.AssetRoot,
+	)
 }
 
 func (module *Module) Bind(context.Context) error {

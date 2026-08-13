@@ -3,6 +3,7 @@ package local_contract
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -145,6 +146,88 @@ func TestExperimentAssignmentHTTPBoundaryOwnsQueriesAndRejectsPublicWrites(t *te
 		t.Fatalf("public write status=%d facts=%d body=%s", publicWrite.Code, store.count(), publicWrite.Body.String())
 	}
 	assertAssignmentRuntimeError(t, publicWrite, "GATEWAY.USER.route_not_found")
+}
+
+// failingAssignmentFactReader 模拟分配事实存储读取故障：Get 恒失败,
+// 其余读路径复用底层 typed double。
+type failingAssignmentFactReader struct {
+	*assignmentStore
+}
+
+func (failingAssignmentFactReader) Get(
+	context.Context,
+	string,
+	int64,
+	string,
+) (assignmentdomain.Fact, error) {
+	return assignmentdomain.Fact{}, errors.New("assignment fact store read timeout")
+}
+
+func TestExperimentAssignmentHTTPBoundaryMapsInvalidArgumentAndStorageReadFailure(t *testing.T) {
+	store := newAssignmentStore()
+	experiments, err := experimentapp.NewFacade(store, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assignments, err := assignmentapp.NewFacade(
+		experiments,
+		store,
+		failingAssignmentFactReader{store},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := assignmenthttp.NewHandler(assignments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	handler.Register(mux)
+	assignmentPath := "/ops/experiments/" + store.experiment.ID + "/assignment"
+
+	withBody := httptest.NewRequest(
+		http.MethodGet,
+		assignmentPath,
+		strings.NewReader(`{"experimentId":"forbidden-body"}`),
+	)
+	withBody = withBody.WithContext(rtauth.WithPrincipal(
+		withBody.Context(),
+		rtauth.Principal{Actor: operation.ActorContext{PersonaID: "observed"}},
+	))
+	invalidArgument := performAssignmentRequest(mux, withBody)
+	if invalidArgument.Code != http.StatusBadRequest {
+		t.Fatalf(
+			"query body status=%d body=%s",
+			invalidArgument.Code,
+			invalidArgument.Body.String(),
+		)
+	}
+	assertAssignmentRuntimeError(
+		t,
+		invalidArgument,
+		"OPS.USER.experiment_assignment_invalid_argument",
+	)
+
+	readFailure := performAssignmentRequest(
+		mux,
+		requestWithAssignmentActor(
+			http.MethodGet,
+			assignmentPath,
+			operation.ActorContext{PersonaID: "observed"},
+		),
+	)
+	if readFailure.Code != http.StatusInternalServerError {
+		t.Fatalf(
+			"storage read failure status=%d body=%s",
+			readFailure.Code,
+			readFailure.Body.String(),
+		)
+	}
+	assertAssignmentRuntimeError(
+		t,
+		readFailure,
+		"OPS.SYSTEM.experiment_assignment_storage_read_failed",
+	)
 }
 
 func requestWithAssignmentActor(

@@ -450,8 +450,15 @@ func (s *MongoChatStore) ListMessages(ctx context.Context, conversationId string
 		}
 	}
 
+	// 纯 afterSeq 是增量补齐语义（sync gap-fill）：必须从缺口最早处按 seq
+	// 递增取满 limit；沿用递减会在缺口大于 limit 时跳过最早的缺口消息，
+	// 造成永久缺号。keyset 历史分页（beforeSeq / 无游标取最近）保持递减。
+	sortDirection := -1
+	if afterSeq > 0 && beforeSeq <= 0 {
+		sortDirection = 1
+	}
 	opts := options.Find().
-		SetSort(bson.D{{Key: "seq", Value: -1}}).
+		SetSort(bson.D{{Key: "seq", Value: sortDirection}}).
 		SetLimit(int64(limit))
 
 	cur, err := s.messages.Find(ctx, filter, opts)

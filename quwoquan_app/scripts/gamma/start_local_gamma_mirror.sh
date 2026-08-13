@@ -1186,6 +1186,19 @@ for ref_field, digest_field, filename in bindings:
         raise SystemExit(f"GraphQL registry runtime copy drifted: {filename}")
 PY
     fi
+    if [[ "$service" == "assistant-service" ]]; then
+      # 官方 Skill package publication 随服务包封装;复制进 config-root
+      # 供 assistant 模块空环境自举(PrepareMigration)读取。缺失时不在
+      # 此处失败:运行时自举会给出更精确的 fail-closed 指引。
+      local skill_package_dir="${package_dir}/skill-packages"
+      if [[ -d "$skill_package_dir" ]]; then
+        # 目标路径与 config override `skill_package.asset_root =
+        # /etc/qwq-config/skill-packages/official` 对齐。
+        rm -rf "$out/skill-packages"
+        mkdir -p "$out/skill-packages"
+        cp -R "$skill_package_dir" "$out/skill-packages/official"
+      fi
+    fi
     local service_env_key
     service_env_key="$(printf '%s' "$service" | tr '[:lower:]-' '[:upper:]_')"
     local version_var="LOCAL_GAMMA_${service_env_key}_CONFIG_VERSION"

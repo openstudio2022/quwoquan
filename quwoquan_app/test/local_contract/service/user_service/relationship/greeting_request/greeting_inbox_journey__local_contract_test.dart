@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/greeting-request-inbox-and-upgrade/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/intersection-native-messaging/greeting-intersection-context/spec.md#gwt-001
+// spec_ref: specs/feature-tree/chat-conversation/intersection-native-messaging/greeting-intersection-context/spec.md#gwt-002
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,5 +66,64 @@ void main() {
     final sent = await repository.listOutbox(status: '');
     expect(sent.single.status, 'cancelled');
     await tester.pump(const Duration(seconds: 4));
+  });
+
+  testWidgets('请求箱展示云侧破冰依据；无依据的问候不伪造依据', (tester) async {
+    final now = DateTime.utc(2026, 8, 13, 12);
+    final repository = alphaGreetingRepository(
+      seedInbox: <GreetingRequestRecord>[
+        GreetingRequestRecord(
+          id: 'greeting_with_context',
+          requesterPersonaId: 'ps_photographer',
+          targetPersonaId: 'ps_me',
+          requestMessage: '周末观星活动认识一下？',
+          intersectionSnapshot: GreetingIntersectionSnapshot(
+            intersectionId: 'intersection_1',
+            evidenceId: 'evidence_1',
+            sourceRef: 'coWishlistedEntity',
+            objectTypeRef: 'entity',
+            objectId: 'entity_star_park',
+            primaryText: '你们都想去五彩池观星营地',
+            resolvedAt: now,
+          ),
+          status: GreetingRequestStatus.pending,
+          source: GreetingRequestSource.recommendation,
+          createdAt: now,
+          updatedAt: now,
+        ),
+        GreetingRequestRecord(
+          id: 'greeting_plain',
+          requesterPersonaId: 'ps_stranger',
+          targetPersonaId: 'ps_me',
+          requestMessage: '你好',
+          status: GreetingRequestStatus.pending,
+          source: GreetingRequestSource.profile,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [greetingRepositoryProvider.overrideWithValue(repository)],
+        child: const CupertinoApp(home: GreetingInboxPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // GWT-001：成立交集的依据整体来自云侧快照原文。
+    expect(
+      find.text('你们都想去五彩池观星营地'),
+      findsOneWidget,
+      reason: '请求箱必须展示云侧破冰依据原文',
+    );
+    // GWT-002：无依据的普通问候不得伪造任何依据文案。
+    expect(find.text('ps_stranger'), findsOneWidget);
+    expect(
+      find.textContaining('都想去'),
+      findsOneWidget,
+      reason: '依据只出现在携带云侧快照的请求上',
+    );
   });
 }

@@ -244,6 +244,6 @@
   一次 alert drill 投递收据，全部落 `.qwq_output/env/<env>/runs/**`。
 - 依赖：环境部署窗口，与 `OPEN-001` 的 ES Provider 证据同窗执行；
   环境包准入已升级为要求 canonical `quwoquan_data.release_attestation`，
-  窗口执行时须由环境 owner 一并携带（自建窗口在 alpha 端口被占、
-  beta/alpha 准入未携带 attestation、gamma 被持续占用下不可行，
-  归因收据见 `.qwq_output/env/alpha/runs/telemetry-alert-window-attempt-20260813/`）。
+  窗口执行时须由环境 owner 一并携带。自建窗口当前不可行：alpha 端口
+  被并行栈占用、alpha/beta 准入缺 attestation、gamma 被持续占用，
+  归因收据在 `.qwq_output/env/alpha/runs/telemetry-alert-window-attempt-20260813/`。

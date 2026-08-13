@@ -173,7 +173,7 @@ def test_handler_emits_observability_slim_wire_shape(tmp_path: Path) -> None:
     assert fields["resourceSourceType"] == "service"
     assert fields["resourceService"] == "recommendation-service"
     assert fields["resourceEnvironment"] == "gamma"
-    assert fields["errorCode"] == "SERVICE.RUNTIME.python_exception"
+    assert fields["errorCode"] == "RECOMMENDATION.SYSTEM.model_runtime_exception"
     assert fields["recordId"].startswith("r.")
 
 

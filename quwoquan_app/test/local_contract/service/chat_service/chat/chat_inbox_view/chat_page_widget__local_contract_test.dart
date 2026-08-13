@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/design_system/navigation/centered_scrollable_tab_bar.dart';
@@ -769,12 +770,18 @@ void main() {
   });
 
   group('ChatPage — 错误态渲染', () {
+    // spec_ref: specs/feature-tree/chat-conversation/chat-experience-optimization/spec.md#open-002
     testWidgets('Repository 返回空列表时安全渲染', (tester) async {
       await tester.pumpWidget(_scopedApp(conversation: _EmptyChatRepository()));
       await tester.pumpAndSettle();
 
       expect(find.byType(ChatPage), findsOneWidget);
       expect(find.text(ChatText.noConversations), findsOneWidget);
+      expect(
+        find.byType(AppEmptyState),
+        findsOneWidget,
+        reason: '会话空态必须使用共享 AppEmptyState 组件',
+      );
     });
 
     testWidgets('群头像 URL 缺失时显示稳定群占位且不拉成员', (tester) async {

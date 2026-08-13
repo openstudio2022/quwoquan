@@ -11,6 +11,7 @@ import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/a
 import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
+import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -641,6 +642,23 @@ void main() {
       expect(settingsRepo.calls.single.pinned, isNull);
     });
 
+    // spec_ref: specs/feature-tree/chat-conversation/chat-experience-optimization/spec.md#open-002
+    testWidgets('群首页初始加载呈现共享骨架屏', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        _scopedApp(groupAdmin: _SlowGroupHomeRepository()),
+      );
+      await tester.pump();
+
+      expect(
+        find.byType(AppSkeletonListRows),
+        findsOneWidget,
+        reason: '群首页初始加载必须使用共享 AppSkeletonListRows 骨架',
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(AppSkeletonListRows), findsNothing);
+    });
+
     // spec_ref: specs/feature-tree/chat-conversation/contact-and-session-governance/spec.md#sit-001
     testWidgets('查找聊天记录入口打开会话内搜索面板', (tester) async {
       _suppressImageErrors();
@@ -744,6 +762,22 @@ class _SeededInboxCache extends Fake implements ChatInboxCache {
 
 /// 记录 ConversationUserState 设置命令；其余读写显式委托对象级 typed double，
 /// 页面装载路径保持真实。
+/// 群首页读取带 200ms 延迟（制造骨架屏可观测窗口），其余委托共享 double。
+class _SlowGroupHomeRepository extends Fake
+    implements ChatGroupAdminRepository {
+  final ChatGroupAdminRepository _delegate = ChatTestFacets().groupAdmin;
+
+  @override
+  Future<GroupHome> getGroupHome(String conversationId) async {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    return _delegate.getGroupHome(conversationId);
+  }
+
+  @override
+  Future<ChatGroupSettingsViewData> getGroupSettings(String conversationId) =>
+      _delegate.getGroupSettings(conversationId);
+}
+
 class _RecordingConversationSettingsRepository
     implements ChatConversationRepository {
   _RecordingConversationSettingsRepository()

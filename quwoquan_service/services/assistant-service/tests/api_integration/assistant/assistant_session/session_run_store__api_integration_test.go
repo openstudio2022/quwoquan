@@ -1,6 +1,15 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/spec.md#sit-001
 // spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001.t3
+// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001.t4
 // spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract/spec.md#gwt-001.t3
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract/spec.md#gwt-001.t4
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/run-sync-contract/spec.md#gwt-001.t5
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/long-term-memory-compaction/spec.md#gwt-002
 // readiness_case: create-assistant-session-api
 // readiness_case: list-assistant-sessions-api

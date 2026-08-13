@@ -9,6 +9,10 @@ const intersectionBindingNotReadyReason = "intersection_reader_binding_not_ready
 // a fallback handler and keeps the affected tools out of the model registry.
 type RuntimeAvailability struct {
 	LocationPublicProviderReady bool
+	// IntersectionReaderReady 只有在 content-service 交集读 binding（delegated
+	// persona client）真实构造成功时为 true；false 时 intersection.read_mine
+	// 留在 unavailable 侧，不建 fallback handler。
+	IntersectionReaderReady bool
 }
 
 // UnavailableCanonicalBindings returns the explicit unavailable side of the
@@ -17,11 +21,12 @@ type RuntimeAvailability struct {
 func UnavailableCanonicalBindings(
 	availability RuntimeAvailability,
 ) map[string]UnavailableBinding {
-	unavailable := map[string]UnavailableBinding{
-		"intersection.read_mine": {
+	unavailable := map[string]UnavailableBinding{}
+	if !availability.IntersectionReaderReady {
+		unavailable["intersection.read_mine"] = UnavailableBinding{
 			BindingKind: "domain_reader",
 			Reason:      intersectionBindingNotReadyReason,
-		},
+		}
 	}
 	if !availability.LocationPublicProviderReady {
 		unavailable["location_poi_search"] = UnavailableBinding{

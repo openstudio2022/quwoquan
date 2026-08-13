@@ -1,5 +1,7 @@
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md#gwt-007
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md#gwt-008
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md#gwt-007.t4
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md#gwt-009.t6
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md#gwt-007.t1
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md#gwt-007.t2
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md#gwt-007.t3
@@ -8,6 +10,7 @@
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md#gwt-008.t2
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md#gwt-008.t3
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/media/filter_catalog_release/presentation/image_editor_export_engine.dart';
@@ -486,6 +489,154 @@ void main() {
       expect(corners[2].dx, closeTo(400, 1e-6));
       expect(corners[2].dy, closeTo(300, 1e-6));
     });
+  });
+
+  test('光感 ambiance：暗部提亮多、亮部微压、灰阶中区变化小于暗部', () {
+    const w = 16, h = 16;
+    Uint8List uniform(int v) {
+      final img = grayImage(w, h, (x, y) => v);
+      ImageEditorExportEngine.applyDetailAdjustmentsToRgbaPixels(
+        img, w, h, const ImageEditorDetailSpec(ambiance: 100),
+      );
+      return img;
+    }
+
+    final dark = uniform(50);
+    final bright = uniform(220);
+    final darkDelta = lumaOf(dark, w, 8, 8) - 50;
+    final brightDelta = lumaOf(bright, w, 8, 8) - 220;
+    expect(darkDelta, greaterThan(4), reason: '正光感必须提亮暗部');
+    expect(
+      brightDelta,
+      lessThanOrEqualTo(0),
+      reason: '正光感对亮部只能微压不提亮',
+    );
+    expect(
+      darkDelta.abs(),
+      greaterThan(brightDelta.abs()),
+      reason: '暗部变化必须大于亮部（非全局亮度）',
+    );
+  });
+
+  test('晕影：正值角部压暗、中心不动；负值角部提亮', () {
+    const w = 64, h = 64;
+    Uint8List apply(double vignette) {
+      final img = grayImage(w, h, (x, y) => 128);
+      ImageEditorExportEngine.applyDetailAdjustmentsToRgbaPixels(
+        img, w, h, ImageEditorDetailSpec(vignette: vignette),
+      );
+      return img;
+    }
+
+    final darkened = apply(100);
+    expect(
+      lumaOf(darkened, w, 1, 1),
+      lessThan(128 - 20),
+      reason: '正晕影角部必须显著压暗',
+    );
+    expect(
+      lumaOf(darkened, w, w ~/ 2, h ~/ 2),
+      inInclusiveRange(126, 130),
+      reason: '晕影中心必须不动',
+    );
+    // 径向单调：角部比边中点更暗。
+    expect(
+      lumaOf(darkened, w, 1, 1),
+      lessThan(lumaOf(darkened, w, w ~/ 2, 1)),
+      reason: '角部（距中心最远）必须最暗',
+    );
+
+    final brightened = apply(-100);
+    expect(
+      lumaOf(brightened, w, 1, 1),
+      greaterThan(128 + 20),
+      reason: '负晕影角部必须提亮',
+    );
+  });
+
+  test('白平衡反解：中性灰采样得零调节，偏色采样反向校正', () {
+    final neutral = ImageEditorExportEngine.resolveWhiteBalanceFromNeutralSample(
+      red: 128, green: 128, blue: 128,
+    );
+    expect(neutral.temperature, closeTo(0, 0.5));
+    expect(neutral.tint, closeTo(0, 0.5));
+
+    // 偏暖（R 高 B 低）的「本应中性」采样 → 需要降温（负温度校正偏暖）。
+    final warmCast = ImageEditorExportEngine.resolveWhiteBalanceFromNeutralSample(
+      red: 150, green: 128, blue: 106,
+    );
+    expect(
+      warmCast.temperature,
+      lessThan(-10),
+      reason: '偏暖采样必须反解出降温校正',
+    );
+
+    // 偏绿（G 高）采样 → tint 为负（向品红校正）。
+    final greenCast = ImageEditorExportEngine.resolveWhiteBalanceFromNeutralSample(
+      red: 118, green: 140, blue: 118,
+    );
+    expect(
+      greenCast.tint,
+      lessThan(-10),
+      reason: '偏绿采样必须反解出品红方向校正',
+    );
+  });
+
+  test('细节管线预览与烘焙同参数逐字节一致（GWT-007.t4）', () async {
+    const w = 48, h = 48;
+    final source = grayImage(w, h, (x, y) => 60 + ((x * 5 + y * 11) % 130));
+    const detail = ImageEditorDetailSpec(
+      sharpen: 40,
+      highlights: -30,
+      shadows: 25,
+      vibrance: 50,
+      denoise: 30,
+      ambiance: 35,
+      vignette: 45,
+      grain: 20,
+    );
+    final matrix = <double>[
+      1.1, 0, 0, 0, 6, //
+      0, 1.05, 0, 0, -4, //
+      0, 0, 0.95, 0, 8, //
+      0, 0, 0, 1, 0, //
+    ];
+
+    // 预览路径：像素函数组合（CPU 预览 session 同一组合）。
+    final previewPixels = Uint8List.fromList(source);
+    ImageEditorExportEngine.applyColorMatrixToRgbaPixels(
+      previewPixels,
+      matrix,
+    );
+    ImageEditorExportEngine.applyDetailAdjustmentsToRgbaPixels(
+      previewPixels, w, h, detail,
+    );
+
+    // 烘焙路径：applyBaseAdjustments 经 ui.Image 编解码往返。
+    final buffer = await ui.ImmutableBuffer.fromUint8List(source);
+    final descriptor = ui.ImageDescriptor.raw(
+      buffer, width: w, height: h, pixelFormat: ui.PixelFormat.rgba8888,
+    );
+    final codec = await descriptor.instantiateCodec();
+    final frame = await codec.getNextFrame();
+    final baked = await ImageEditorExportEngine.applyBaseAdjustments(
+      frame.image,
+      colorMatrix: matrix,
+      detail: detail,
+    );
+    final bakedData = await baked.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    );
+    final bakedPixels = bakedData!.buffer.asUint8List();
+
+    expect(bakedPixels.length, previewPixels.length);
+    for (var i = 0; i < previewPixels.length; i++) {
+      expect(
+        bakedPixels[i],
+        previewPixels[i],
+        reason: '预览与烘焙必须同一管线逐字节一致（byte $i）',
+      );
+    }
   });
 
   test('全零 spec 是恒等变换', () {

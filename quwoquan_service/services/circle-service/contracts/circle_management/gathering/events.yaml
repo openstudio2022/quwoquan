@@ -67,11 +67,11 @@ events:
   payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, outcomeStatus, roomBindingStatus, conversationId, occurredAt]
   no_consumer_reason: 安全撤权与申诉 consumer 属于后续 runtime；当前只保留 owner 事务日志与 outbox 承接结构。
 - name: GatheringCompleted
-  description: temporalPhase=ended 的 Gathering 已完成并提交 owner-calculated Outcome。
+  description: temporalPhase=ended 的 Gathering 已完成并提交 owner-calculated Outcome；携带完成时冻结的 active 参与者名单，供 Notification 在 outcome=occurred 时向双方投递「发布回顾」催发（比例②发动机），不携带申请/邀请等私密事实。
   delivery_semantics: transactional_outbox
   wire_event_type: GatheringCompleted
   payload_entity: GatheringEventPayload
-  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, outcomeStatus, roomBindingStatus, conversationId, occurredAt]
+  payload_fields: [gatheringId, aggregateVersion, lifecycleStatus, actorPersonaId, outcomeStatus, roomBindingStatus, conversationId, participantPersonaIds, occurredAt]
 - name: GatheringOutcomeCalculated
   description: Circle 根据独立参与证据计算并冻结 Outcome。
   delivery_semantics: transactional_event_log

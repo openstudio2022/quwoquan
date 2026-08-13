@@ -59,6 +59,7 @@ const realtimeEventOwnerByWireType = <String, String>{
   'ConversationDissolved': 'chat.conversation',
   'ConversationMemberLeft': 'chat.conversation_membership',
   'ConversationMemberRemoved': 'chat.conversation_membership',
+  'ConversationReadWatermarkAdvanced': 'chat.conversation_user_state',
   'ConversationRosterUpdated': 'chat.conversation',
   'ConversationUserSettingsChanged': 'chat.conversation_user_state',
   'GatheringConversationPolicyChanged': 'chat.conversation',
@@ -103,6 +104,8 @@ RealtimeEventEnvelope decodeRealtimeEventEnvelope(Map<String, Object?> wire, [St
     case 'ConversationMemberLeft':
       return ChatRealtimeEventEnvelope(wireType: wireType, eventId: eventId, occurredAt: occurredAt, payload: decodeChatRealtimeEventPayload(eventType: wireType, payload: payload));
     case 'ConversationMemberRemoved':
+      return ChatRealtimeEventEnvelope(wireType: wireType, eventId: eventId, occurredAt: occurredAt, payload: decodeChatRealtimeEventPayload(eventType: wireType, payload: payload));
+    case 'ConversationReadWatermarkAdvanced':
       return ChatRealtimeEventEnvelope(wireType: wireType, eventId: eventId, occurredAt: occurredAt, payload: decodeChatRealtimeEventPayload(eventType: wireType, payload: payload));
     case 'ConversationRosterUpdated':
       return ChatRealtimeEventEnvelope(wireType: wireType, eventId: eventId, occurredAt: occurredAt, payload: decodeChatRealtimeEventPayload(eventType: wireType, payload: payload));

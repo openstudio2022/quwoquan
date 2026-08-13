@@ -121,9 +121,39 @@ extension _ImageEditorOperationPanelPro on ImageEditorOperationPanel {
             ],
             onChanged: onWbTintChanged,
           ),
-          CupertinoButton(
-            onPressed: onWbAuto,
-            child: Text(MediaText.imageEditorProWhiteBalanceAuto),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CupertinoButton(
+                onPressed: onWbAuto,
+                child: Text(MediaText.imageEditorProWhiteBalanceAuto),
+              ),
+              CupertinoButton(
+                key: const ValueKey<String>('wb-picker-toggle'),
+                onPressed: onToggleWbPicker,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.colorize_outlined,
+                      size: AppSpacing.toolPanelItemIconSize,
+                      color: wbPickerActive
+                          ? AppColors.primaryColor
+                          : foregroundSecondary,
+                    ),
+                    SizedBox(width: AppSpacing.xs / 2),
+                    Text(
+                      MediaText.imageEditorProWbPicker,
+                      style: TextStyle(
+                        color: wbPickerActive
+                            ? AppColors.primaryColor
+                            : foregroundSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

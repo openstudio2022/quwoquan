@@ -172,6 +172,12 @@ const List<ImageEditorProToolEntry> kImageEditorProBaseEntries = [
     label: MediaText.imageEditorProGrain,
   ),
   ImageEditorProToolEntry(
+    type: 'vignette',
+    categoryIndex: kImageEditorProCategoryOverall,
+    icon: Icons.vignette_outlined,
+    label: MediaText.imageEditorProVignette,
+  ),
+  ImageEditorProToolEntry(
     type: 'fade',
     categoryIndex: kImageEditorProCategoryOverall,
     icon: Icons.contrast,

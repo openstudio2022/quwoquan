@@ -177,6 +177,12 @@ def output_layout_issues(root: Path | None = None) -> list[str]:
                             "never under disposable output"
                         )
                         continue
+                    # local/ 一级的 cache/ 与 process/ 是共享形态:AGENTS 把
+                    # bytecode/pytest 等缓存统一重定向到 env/repo/local/cache/**,
+                    # 其内容是 opaque disposable,不再套用 <target>/{process,cache}
+                    # 结构;secret/名字纪律仍由后续全树扫描承担。
+                    if target.name in {"cache", "process"}:
+                        continue
                     for child in sorted(target.iterdir()):
                         if not child.is_dir() or child.name not in {"process", "cache"}:
                             issues.append(
@@ -184,11 +190,33 @@ def output_layout_issues(root: Path | None = None) -> list[str]:
                                 "configuration, TLS and volumes belong to deployment infrastructure"
                             )
     data = path / "data"
+    protected_roots: set[Path] = set()
+    receipt_issue_lines: list[str] = []
     if data.is_dir():
+        protected_roots, receipt_issue_lines = _protected_quarantine_state(
+            data.resolve()
+        )
         for entry in sorted(data.iterdir()):
+            if entry.name == "quarantine" and entry.is_dir() and not entry.is_symlink():
+                # 取证隔离容器:每个 child 必须持有 forensic provenance receipt
+                # (QUARANTINE.json 凭据 + 树摘要冻结);未登记的隔离区不得豁免。
+                for child in sorted(entry.iterdir()):
+                    if (
+                        child.is_dir()
+                        and not child.is_symlink()
+                        and child.resolve() in protected_roots
+                    ):
+                        continue
+                    issues.append(
+                        f"{_rel(child)}: unregistered quarantine is forbidden; "
+                        "register forensic provenance via governance protect-quarantine "
+                        "--provenance forensic, or remove it"
+                    )
+                continue
             if not entry.is_dir() or entry.name not in {"tasks", "releases", "local"}:
                 issues.append(f"{_rel(entry)}: data only permits tasks/releases/local")
-    issues.extend(output_source_truth_issues(path))
+    issues.extend(receipt_issue_lines)
+    issues.extend(output_source_truth_issues(path, protected_roots=protected_roots))
     return issues
 
 
@@ -275,19 +303,30 @@ def _forbidden_output_file(candidate: Path, output_root: Path) -> bool:
     return _contains_secret_material(candidate)
 
 
-def output_source_truth_issues(root: Path) -> list[str]:
-    """Reject reusable configuration, certificate and unredacted secret material."""
-    if not root.is_dir():
-        return []
-    data_root = (root / "data").resolve()
+def _protected_quarantine_state(data_root: Path) -> tuple[set[Path], list[str]]:
     protected, receipt_issues = load_protected_quarantine_receipts(
         data_output_root=data_root
     )
-    protected_roots = set(protected)
-    issues: list[str] = [
+    return set(protected), [
         f"{_rel(data_root)}: invalid protected quarantine evidence: {issue}"
         for issue in receipt_issues
     ]
+
+
+def output_source_truth_issues(
+    root: Path,
+    *,
+    protected_roots: set[Path] | None = None,
+) -> list[str]:
+    """Reject reusable configuration, certificate and unredacted secret material."""
+    if not root.is_dir():
+        return []
+    issues: list[str] = []
+    if protected_roots is None:
+        protected_roots, receipt_issue_lines = _protected_quarantine_state(
+            (root / "data").resolve()
+        )
+        issues.extend(receipt_issue_lines)
     for current, dirnames, filenames in os.walk(root):
         current_path = Path(current)
         retained: list[str] = []

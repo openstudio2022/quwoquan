@@ -21,6 +21,10 @@
 10. 计时/镜像第二真相源：presentation 重新自写 `_formatDuration`，或
     渲染侧绕过 shouldMirrorLocalPreview 各自判断镜像。
 11. 结局遥测粒度回退：_reportCallOutcome 不再消费 endReason 事实。
+12. 重建面回退：shell bindings 整对象 watch activeCallProvider（elapsed
+    每秒 tick 整树重建 MainAppShell），或呼出页顶层 watch callTimerProvider
+    （每秒整页重建）。
+13. 终态反馈回退：ended 跳离前不再经 callEndedFeedbackText 提示超时/被拒。
 """
 
 from __future__ import annotations
@@ -66,6 +70,16 @@ REQUIRED_TESTS = (
     f"{CALL_SESSION_TESTS}/call_controls_sfu_chain__local_contract_test.dart",
     f"{CALL_SESSION_TESTS}/call_lifecycle_edge_cases__local_contract_test.dart",
     f"{CALL_SESSION_TESTS}/callkit_cold_start_pending__local_contract_test.dart",
+    f"{CALL_SESSION_TESTS}/outgoing_call_page_rebuild__local_contract_test.dart",
+    f"{CALL_SESSION_TESTS}/call_ended_timeout_feedback__local_contract_test.dart",
+    f"{CALL_SESSION_TESTS}/call_invite_journey__local_contract_test.dart",
+    f"{CALL_SESSION_TESTS}/video_grid_reflow__local_contract_test.dart",
+)
+
+# shell 重建面契约测试（runtime/shell 树内）。
+SHELL_REBUILD_TEST = (
+    "quwoquan_app/test/local_contract/runtime/shell/"
+    "main_app_shell_bindings_rebuild__local_contract_test.dart"
 )
 
 DURATION_LITERAL_RE = re.compile(r"\bDuration\(")
@@ -254,6 +268,60 @@ def main() -> int:
         errors,
     )
 
+    # 12. 重建面：shell bindings 只允许 select 结构字段；呼出页计时必须隔离。
+    shell_bindings = read(
+        "quwoquan_app/lib/runtime/di/main_app_shell_dependencies.dart"
+    )
+    require(
+        "activeCallProvider.select(" in shell_bindings,
+        "mainAppShellBindingsProvider 必须以 select 订阅 activeCallProvider "
+        "的结构字段（callId/callType）",
+        errors,
+    )
+    require(
+        not re.search(r"ref\.watch\(activeCallProvider\)(?!\.select)", shell_bindings),
+        "mainAppShellBindingsProvider 禁止整对象 watch activeCallProvider"
+        "（elapsed 每秒 tick 会整树重建 MainAppShell）",
+        errors,
+    )
+    require(
+        not re.search(r"ref\.watch\(callParticipantsProvider\)(?!\.)", shell_bindings),
+        "shell bindings 禁止整对象 watch callParticipantsProvider；"
+        "activeSpeaker 经局部 Consumer select 注入 PiP",
+        errors,
+    )
+    outgoing = read(f"{CALL_SESSION_LIB}/presentation/outgoing_call_page.dart")
+    require(
+        not re.search(r"ref\.watch\(callTimerProvider\)", outgoing.split("class _OutgoingCallElapsedText", 1)[0]),
+        "呼出页顶层禁止 watch callTimerProvider（每秒整页重建）；"
+        "计时必须下沉到隔离子组件",
+        errors,
+    )
+    require(
+        "_OutgoingCallElapsedText" in outgoing,
+        "呼出页必须保留 _OutgoingCallElapsedText 隔离计时子组件",
+        errors,
+    )
+    shell_rebuild_test = ROOT / SHELL_REBUILD_TEST
+    require(
+        shell_rebuild_test.is_file()
+        and "spec_ref:" in shell_rebuild_test.read_text(encoding="utf-8")[:400],
+        f"缺少 shell 重建面契约测试：{SHELL_REBUILD_TEST}",
+        errors,
+    )
+
+    # 13. 终态反馈：ended 跳离前必须经 callEndedFeedbackText 单一真相源。
+    incoming = read(f"{CALL_SESSION_LIB}/presentation/incoming_call_page.dart")
+    for rel, text in (
+        (f"{CALL_SESSION_LIB}/presentation/outgoing_call_page.dart", outgoing),
+        (f"{CALL_SESSION_LIB}/presentation/incoming_call_page.dart", incoming),
+    ):
+        require(
+            "callEndedFeedbackText(" in text,
+            f"{rel}: ended 跳离前必须经 callEndedFeedbackText 给出终态反馈",
+            errors,
+        )
+
     if errors:
         print("BLOCK: RTC 通话商用契约回归")
         for item in errors:
@@ -261,7 +329,8 @@ def main() -> int:
         return 1
     print(
         "OK: RTC 通话商用契约一致（铃声单轨/通道恢复补偿/动效 token/常亮/"
-        "音频会话/无障碍/通话中来电/计时镜像单轨/结局粒度/证据链完整）"
+        "音频会话/无障碍/通话中来电/计时镜像单轨/结局粒度/重建面/终态反馈/"
+        "证据链完整）"
     )
     return 0
 

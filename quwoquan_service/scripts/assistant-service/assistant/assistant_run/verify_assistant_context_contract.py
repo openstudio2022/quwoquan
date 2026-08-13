@@ -81,6 +81,19 @@ def assert_field(
         )
 
 
+def assert_absent_field(
+    failures: list[str],
+    entities: dict,
+    entity_name: str,
+    field_name: str,
+) -> None:
+    entity = entities.get(entity_name)
+    if not isinstance(entity, dict):
+        return
+    if field_name in field_map(entity):
+        failures.append(f"{entity_name}: must not accept {field_name}")
+
+
 def main() -> int:
     failures: list[str] = []
     fields = load_yaml(FIELDS_PATH)
@@ -97,18 +110,27 @@ def main() -> int:
         "AssistantUserActionGroundingView",
         "AssistantIntersectionEvidenceRef",
         "AssistantConsentMatrix",
+        "AssistantIntersectionEvidenceRef",
+        "AssistantSearchCitationView",
+        "CitationDestination",
     ]
     for entity_name in required_entities:
         if entity_name not in entities:
             failures.append(f"missing entity {entity_name}")
 
+<<<<<<< Updated upstream:quwoquan_service/scripts/assistant-service/assistant/assistant_run/verify_assistant_context_contract.py
     assert_field(failures, entities, "AssistantContextSnapshot", "pageObjects", "[]AssistantObjectGroundingView")
     assert_field(failures, entities, "AssistantContextSnapshot", "consentMatrix", "AssistantConsentMatrix")
     assert_field(failures, entities, "AssistantContextSnapshot", "userActions", "[]AssistantUserActionGroundingView")
+=======
+    assert_field(failures, entities, "AssistantContextSnapshot", "capturedAt", "datetime")
+    assert_field(failures, entities, "AssistantContextSnapshot", "pageType", "string")
+>>>>>>> Stashed changes:quwoquan_service/scripts/contract/verify_assistant_context_contract.py
     assert_field(
         failures,
         entities,
         "AssistantContextSnapshot",
+<<<<<<< Updated upstream:quwoquan_service/scripts/assistant-service/assistant/assistant_run/verify_assistant_context_contract.py
         "intersectionEvidenceRefs",
         "[]AssistantIntersectionEvidenceRef",
     )
@@ -135,6 +157,52 @@ def main() -> int:
             "AssistantConsentMatrix may only declare current-page read consent; "
             "conversation and proactive-delivery consent belong to their own objects"
         )
+=======
+        "pageObjects",
+        "[]AssistantObjectGroundingView",
+    )
+    assert_field(
+        failures,
+        entities,
+        "AssistantContextSnapshot",
+        "userActions",
+        "[]AssistantUserActionGroundingView",
+    )
+    assert_field(
+        failures,
+        entities,
+        "AssistantContextSnapshot",
+        "intersectionEvidenceRefs",
+        "[]AssistantIntersectionEvidenceRef",
+    )
+    assert_field(
+        failures,
+        entities,
+        "AssistantContextSnapshot",
+        "consentMatrix",
+        "AssistantConsentMatrix",
+    )
+    assert_absent_field(
+        failures,
+        entities,
+        "AssistantContextSnapshot",
+        "conversationGrounding",
+    )
+    assert_field(failures, entities, "AssistantObjectGroundingView", "objectTypeRef", "string")
+    assert_field(failures, entities, "AssistantConsentMatrix", "canReadCurrentPage", "bool")
+    assert_absent_field(
+        failures,
+        entities,
+        "AssistantConsentMatrix",
+        "canReadConversation",
+    )
+    assert_absent_field(
+        failures,
+        entities,
+        "AssistantConsentMatrix",
+        "canDeliverProactively",
+    )
+>>>>>>> Stashed changes:quwoquan_service/scripts/contract/verify_assistant_context_contract.py
 
     for citation_field in ("destination", "score", "recallSource", "objectTypeRef"):
         assert_field(failures, entities, "AssistantSearchCitationView", citation_field)

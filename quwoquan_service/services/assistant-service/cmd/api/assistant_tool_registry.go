@@ -256,10 +256,13 @@ func buildToolRegistry(
 		}
 		handlers[name] = handler
 	}
+	// intersection.read_mine 的 readiness 由真实 handler 是否装配决定：
+	// binding 构造失败时 composition 不注册 handler，工具留在 unavailable 侧。
+	_, intersectionReaderReady := handlers["intersection.read_mine"]
 	if err := tool.RegisterCanonical(
 		&registry,
 		handlers,
-		canonicalToolUnavailability(appEnv, configProvider),
+		canonicalToolUnavailability(appEnv, configProvider, intersectionReaderReady),
 	); err != nil {
 		return tool.Registry{}, err
 	}

@@ -18,7 +18,7 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart'
 import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart'
     show GatheringText;
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
-    show journeyEventTrackerProvider;
+    show intersectionRepositoryProvider, journeyEventTrackerProvider;
 import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
     show
         gatheringDetailGatheringPostsReaderProvider,
@@ -107,6 +107,12 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
   // 不渲染，不伪造。
   GatheringSocialProofSummary? _organizerStats;
 
+  // 邀请候选（婉拒后体面再邀）：发起者的人对人真实交集，点选填入邀请框；
+  // 读取失败或无候选只保留手填兜底，不渲染空态。
+  List<({String personaId, String displayName})> _inviteCandidates =
+      const <({String personaId, String displayName})>[];
+  bool _inviteCandidatesRequested = false;
+
   Color get _primaryTextColor => AppColorsFunctional.getColor(
     CupertinoTheme.of(context).brightness == Brightness.dark,
     ColorType.foregroundPrimary,
@@ -167,6 +173,9 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
       if (result != null) {
         unawaited(_loadRecapPosts());
         unawaited(_loadOrganizerStats(result));
+        if (result.privateDetail?.authority.canInvite ?? false) {
+          unawaited(_loadInviteCandidates());
+        }
       }
     } catch (error) {
       if (!mounted) return;
@@ -901,10 +910,80 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
     );
   }
 
+  /// 邀请候选加载：从发起者的真实人对人交集取最多 5 个候选（displayName 与
+  /// personaId 都齐全才展示）。失败静默——手填框永远是兜底路径。
+  Future<void> _loadInviteCandidates() async {
+    if (_inviteCandidatesRequested) return;
+    _inviteCandidatesRequested = true;
+    try {
+      final reasons = await ref
+          .read(intersectionRepositoryProvider)
+          .listMyIntersections();
+      if (!mounted) return;
+      final seen = <String>{};
+      final candidates = <({String personaId, String displayName})>[];
+      for (final reason in reasons) {
+        if (reason.objectKind.trim() != 'person') continue;
+        final personaId = reason.actionTargetId.trim();
+        final displayName = reason.displayName.trim();
+        if (personaId.isEmpty || displayName.isEmpty) continue;
+        if (!seen.add(personaId)) continue;
+        candidates.add((personaId: personaId, displayName: displayName));
+        if (candidates.length >= 5) break;
+      }
+      setState(() => _inviteCandidates = candidates);
+    } catch (_) {
+      // 候选只是捷径；读取失败保留手填，不打断 host 控制台。
+    }
+  }
+
   Widget _inviteConsole(GatheringDetailPresentationSlice detail) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
+        if (_inviteCandidates.isNotEmpty) ...<Widget>[
+          Text(
+            GatheringText.inviteCandidatesLabel,
+            style: TextStyle(
+              color: _secondaryTextColor,
+              fontSize: AppTypography.sm,
+            ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          Wrap(
+            spacing: AppSpacing.intraGroupSm,
+            runSpacing: AppSpacing.intraGroupSm,
+            children: <Widget>[
+              for (final candidate in _inviteCandidates)
+                CupertinoButton(
+                  key: ValueKey<String>(
+                    'gathering-invite-candidate-${candidate.personaId}',
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.interGroupSm,
+                    vertical: AppSpacing.intraGroupXs,
+                  ),
+                  minimumSize: Size.zero,
+                  color: AppColorsFunctional.getColor(
+                    CupertinoTheme.of(context).brightness == Brightness.dark,
+                    ColorType.backgroundSecondary,
+                  ),
+                  onPressed: () => setState(
+                    () =>
+                        _invitePersonaController.text = candidate.personaId,
+                  ),
+                  child: Text(
+                    candidate.displayName,
+                    style: TextStyle(
+                      color: _primaryTextColor,
+                      fontSize: AppTypography.sm,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+        ],
         GatheringLabeledTextField(
           label: widget.copy.personaIdLabel,
           controller: _invitePersonaController,

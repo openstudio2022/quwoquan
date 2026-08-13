@@ -15,6 +15,8 @@ CI 可选环境变量（由 gate_repo.sh 读取）：GATE_PAGE_ABC_ENFORCE → �
 """
 # spec_ref: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md#gwt-001
 # spec_ref: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md#gwt-002
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md#gwt-002.t1
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md#gwt-002.t2
 
 from __future__ import annotations
 

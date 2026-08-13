@@ -248,6 +248,28 @@ void main() {
       expect(bubble.waveform[1], 0.9);
     });
 
+    // spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/rich-media-message/spec.md#gwt-001
+    testWidgets('图片气泡点击触发大图查看动作', (tester) async {
+      var imageTapped = 0;
+      final imageMessage = _message(
+        id: 'msg_image',
+        type: 'image',
+        mediaUrl: 'https://cdn.example.com/photo.jpg',
+      );
+      await tester.pumpWidget(
+        _wrapBubble(
+          message: imageMessage,
+          isRight: false,
+          onTap: () => imageTapped += 1,
+        ),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(ValueKey('chat_image_open_${imageMessage.id}')),
+      );
+      expect(imageTapped, 1, reason: '图片气泡点击必须绑定大图查看动作');
+    });
+
     // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/list-detail-message-delivery/spec.md
     testWidgets('文件与视频气泡点击触发消费动作', (tester) async {
       var fileTapped = 0;

@@ -1,4 +1,5 @@
 /// 断连恢复事件 → seq 补洞的可靠性契约。
+/// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/realtime-push-and-offline-sync/spec.md#gwt-002.t1
 ///
 /// 覆盖：WS 断连重连成功后 delegate 发出携带活跃会话的 `Reconnected` 恢复
 /// 事件；handler 以端侧已持有的最大 seq 为起点触发补洞（本地为空则整段

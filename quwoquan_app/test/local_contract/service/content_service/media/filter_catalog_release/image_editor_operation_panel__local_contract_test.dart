@@ -244,6 +244,8 @@ Widget _buildPanelHarness({
             bwBlackLevel: 0,
             onBwWhiteLevelChanged: (_) {},
             onBwBlackLevelChanged: (_) {},
+            wbPickerActive: false,
+            onToggleWbPicker: () {},
             perspectiveHorizontal: 0,
             perspectiveVertical: 0,
             onPerspectiveHorizontalChanged: (_) {},

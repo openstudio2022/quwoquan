@@ -73,6 +73,14 @@
 - THEN 当前可视位置保持在原消息上。
 - AND 失败时返回 canonical failure 且保留已加载内容。
 
+<a id="gwt-003"></a>
+### GWT-003 乱序写入下分页与增量同步仍有序无重无缺
+
+- GIVEN 同一会话的消息文档以与 seq 无关的顺序写入持久层。
+- WHEN 客户端经 keyset 分页跨页读取历史,或以某 seq 为起点做增量同步。
+- THEN 跨页合并结果按 seq 有序、无重复、无缺号。
+- AND 增量同步结果同样按 seq 有序、无重复、无缺号。
+
 ## 6. 依赖
 
 - 前置要求：[`message-reliability-foundation`](../spec.md) 的范围、要求与 SIT。

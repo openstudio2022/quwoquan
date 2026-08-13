@@ -391,6 +391,11 @@ class _MyIntersectionInboxPageState
 
   /// 可约分组主行动：经统一 actionHint 分发（dispatch 闭集，未登记 fail-closed）；
   /// 分发失败回落打开交集对象，绝不静默失败。
+  ///
+  /// contextObjectTarget 与他人主页 ObjectIntersectionSection 同轨：人对人交集
+  /// （objectKind=person）携带对方 persona，使「一起去」进入双人邀约预设
+  /// （容量 2 + 邀请制 + 发布后自动邀请）；人对物交集该 target 非 person，
+  /// navigator 按多人公开行动处理，不受影响。
   void _openPrimaryActionHint(
     IntersectionReason reason,
     IntersectionActionHint hint,
@@ -401,6 +406,12 @@ class _MyIntersectionInboxPageState
       sourceRef: _sourceRefFor(reason),
       attribution: _attributionFor(reason),
       evidenceReason: reason,
+      contextObjectTarget: IntersectionTarget(
+        objectType: reason.objectKind,
+        objectId: reason.actionTargetId,
+        objectKind: reason.objectKind,
+        routeId: _routeIdFor(reason),
+      ),
     );
     if (!result.didOpen) {
       _openReason(reason);

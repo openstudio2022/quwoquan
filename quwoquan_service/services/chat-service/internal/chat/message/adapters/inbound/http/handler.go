@@ -10,6 +10,7 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	rterr "quwoquan_service/runtime/errors"
+	chatgenerated "quwoquan_service/services/chat-service/generated/chat/conversation"
 	messageapp "quwoquan_service/services/chat-service/internal/chat/message/application"
 	messagemodel "quwoquan_service/services/chat-service/internal/chat/message/domain/model"
 )
@@ -78,7 +79,11 @@ func (handler *Handler) sendMessage(writer http.ResponseWriter, request *http.Re
 		SenderAvatarURLSnapshot   string                         `json:"senderAvatarUrlSnapshot"`
 	}
 	if err := readStrictJSON(request, &body); err != nil {
-		writeError(writer, request, rterr.NewInvalidArgument(rterr.ModuleChat, "消息请求无效", err.Error()))
+		// SendMessage 契约只声明 message_invalid；未知/非法 wire 键按
+		// 消息契约违规映射，不得泄漏契约外的 invalid_argument。
+		writeError(writer, request, chatgenerated.AppErrorFromMessageInvalid(
+			"message wire payload is invalid: "+err.Error(),
+		))
 		return
 	}
 	response, err := handler.useCases.Send(request.Context(), messageapp.SendMessageRequest{

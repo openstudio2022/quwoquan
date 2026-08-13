@@ -4,10 +4,13 @@ package local_contract
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	eventhttp "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/adapters/inbound/http"
@@ -79,13 +82,92 @@ func TestStartupTelemetryHTTPRejectsUnknownWireFieldAndMissingProof(t *testing.T
 		[]byte(`{"events":[],"accountId":"must-not-be-accepted"}`),
 		"proof_123456789012345678901234",
 	)
-	if unknown.Code != http.StatusBadRequest {
+	if unknown.Code != http.StatusBadRequest ||
+		!strings.Contains(unknown.Body.String(), `"code":"OPS.USER.startup_event_invalid"`) {
 		t.Fatalf("unknown field status=%d body=%s", unknown.Code, unknown.Body.String())
 	}
 
 	missingProof := reportStartupTelemetry(t, mux, []byte(`{"events":[]}`), "")
-	if missingProof.Code != http.StatusBadRequest {
+	if missingProof.Code != http.StatusBadRequest ||
+		!strings.Contains(missingProof.Body.String(), `"code":"OPS.USER.startup_event_invalid"`) {
 		t.Fatalf("missing proof status=%d body=%s", missingProof.Code, missingProof.Body.String())
+	}
+}
+
+func TestStartupTelemetryHTTPMapsStoreFailureToUnavailable(t *testing.T) {
+	memory := eventpersistence.NewMemoryTelemetryStore()
+	failing := &failingStartupDiagnosticStore{MemoryTelemetryStore: memory}
+	mux := http.NewServeMux()
+	eventhttp.NewStartupTelemetryHandler(
+		eventapp.NewTelemetryService(failing, memory),
+		nil,
+	).Register(mux)
+
+	response := reportStartupTelemetry(
+		t,
+		mux,
+		startupTelemetryBody(t, canonicalTerminalStartupFailureEvent(1, "")),
+		"proof_123456789012345678901234",
+	)
+	if response.Code != http.StatusServiceUnavailable ||
+		!strings.Contains(
+			response.Body.String(),
+			`"code":"OPS.SYSTEM.startup_telemetry_unavailable"`,
+		) {
+		t.Fatalf("store failure status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+// App 是 startup_configuration_invalid / startup_initialization_failed /
+// startup_router_unavailable / startup_native_first_frame_timeout 的发射侧;
+// 服务侧的行为承诺是把这些 canonical failureCode 作为有界维度收纳,
+// 并对未登记码 fail-closed,防止匿名入口制造高基数指标。
+func TestStartupTelemetryFailureCodeDimensionAcceptsOnlyCanonicalAppStartupCodes(t *testing.T) {
+	canonicalCodes := []string{
+		"OPS.SYSTEM.startup_configuration_invalid",
+		"OPS.SYSTEM.startup_initialization_failed",
+		"OPS.SYSTEM.startup_router_unavailable",
+		"OPS.SYSTEM.startup_native_first_frame_timeout",
+	}
+	for index, failureCode := range canonicalCodes {
+		t.Run(failureCode, func(t *testing.T) {
+			var accepted eventhttp.StartupTelemetryEventInput
+			store := eventpersistence.NewMemoryTelemetryStore()
+			mux := http.NewServeMux()
+			eventhttp.NewStartupTelemetryHandler(
+				eventapp.NewTelemetryService(store, store),
+				func(event eventhttp.StartupTelemetryEventInput) { accepted = event },
+			).Register(mux)
+			response := reportStartupTelemetry(
+				t,
+				mux,
+				startupTelemetryBody(
+					t,
+					canonicalTerminalStartupFailureEvent(index+1, failureCode),
+				),
+				"proof_123456789012345678901234",
+			)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			if accepted.FailureCode != failureCode {
+				t.Fatalf("accepted failureCode=%q want=%q", accepted.FailureCode, failureCode)
+			}
+		})
+	}
+
+	drifted := reportStartupTelemetry(
+		t,
+		newStartupTelemetryTestHandler(),
+		startupTelemetryBody(
+			t,
+			canonicalTerminalStartupFailureEvent(1, "OPS.SYSTEM.startup_unregistered_failure"),
+		),
+		"proof_123456789012345678901234",
+	)
+	if drifted.Code != http.StatusBadRequest ||
+		!strings.Contains(drifted.Body.String(), `"code":"OPS.USER.startup_event_invalid"`) {
+		t.Fatalf("unregistered code status=%d body=%s", drifted.Code, drifted.Body.String())
 	}
 }
 
@@ -252,6 +334,53 @@ func newStartupTelemetryTestHandler() http.Handler {
 		nil,
 	).Register(mux)
 	return mux
+}
+
+// canonicalTerminalStartupFailureEvent 构造 terminal 阶段事件;failureCode 非空时
+// 携带 App 端上报的启动失败维度（outcome=failed + failureSource=bootstrap）。
+func canonicalTerminalStartupFailureEvent(sequence int, failureCode string) map[string]any {
+	attemptID := "attempt_1234567890123456"
+	event := map[string]any{
+		"eventId":         attemptID + "_" + strconv.Itoa(sequence),
+		"attemptId":       attemptID,
+		"sequence":        sequence,
+		"phase":           "terminal",
+		"phaseDurationMs": 10,
+		"elapsedMs":       1000,
+		"outcome":         "success",
+		"occurredAt":      "2026-07-28T00:00:00Z",
+		"platform":        "android",
+		"runtimeEnv":      "gamma",
+		"appVersion":      "1.0.0",
+		"networkClass":    "wifi",
+	}
+	if failureCode != "" {
+		event["outcome"] = "failed"
+		event["failureCode"] = failureCode
+		event["failureSource"] = "bootstrap"
+	}
+	return event
+}
+
+// failingStartupDiagnosticStore 模拟启动诊断存储写入故障：写入恒失败且不可确认。
+type failingStartupDiagnosticStore struct {
+	*eventpersistence.MemoryTelemetryStore
+}
+
+func (*failingStartupDiagnosticStore) PutStartupDiagnostics(
+	context.Context,
+	string,
+	[]eventapp.StartupDiagnosticRecord,
+) error {
+	return errors.New("startup telemetry store write failed")
+}
+
+func (*failingStartupDiagnosticStore) HasStartupDiagnosticBatch(
+	context.Context,
+	string,
+	int,
+) (bool, error) {
+	return false, nil
 }
 
 func canonicalRecoveryTelemetryEvent(sequence int) map[string]any {

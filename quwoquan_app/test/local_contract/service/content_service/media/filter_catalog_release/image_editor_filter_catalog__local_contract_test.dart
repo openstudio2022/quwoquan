@@ -65,7 +65,15 @@ void main() {
     expect(tester.takeException(), isNull);
 
     catalog.complete(await _canonicalConfig());
-    await tester.pumpAndSettle();
+    // loading 指示器为持续动画，pumpAndSettle 永不收敛；有限 pump 等待
+    // 目录渲染完成即可。
+    await _pumpUntil(
+      tester,
+      () => find
+          .byKey(const ValueKey<String>('image_editor_filter_catalog_loading'))
+          .evaluate()
+          .isEmpty,
+    );
   });
 
   testWidgets(
@@ -87,7 +95,15 @@ void main() {
       await tester.pumpWidget(_editor(imageFile, repository));
       await tester.pump(const Duration(milliseconds: 250));
       await tester.tap(find.text(MediaText.imageEditorFilter));
-      await tester.pumpAndSettle();
+      await _pumpUntil(
+        tester,
+        () => find
+            .byKey(
+              const ValueKey<String>('image_editor_filter_catalog_failure'),
+            )
+            .evaluate()
+            .isNotEmpty,
+      );
 
       expect(
         find.byKey(
@@ -98,7 +114,26 @@ void main() {
       expect(find.text(MediaText.imageEditorFilterLoadFailed), findsOneWidget);
 
       await tester.tap(find.text(ContentText.tryAgain));
-      await tester.pumpAndSettle();
+      await _pumpUntil(
+        tester,
+        () =>
+            find
+                .byKey(
+                  const ValueKey<String>(
+                    'image_editor_filter_catalog_failure',
+                  ),
+                )
+                .evaluate()
+                .isEmpty &&
+            find
+                .byKey(
+                  const ValueKey<String>(
+                    'image_editor_filter_catalog_loading',
+                  ),
+                )
+                .evaluate()
+                .isEmpty,
+      );
 
       expect(attempts, 2);
       expect(
@@ -116,6 +151,20 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+}
+
+/// 有限 pump 等待条件成立（loading 指示器是持续动画，禁用 pumpAndSettle）。
+Future<void> _pumpUntil(
+  WidgetTester tester,
+  bool Function() condition,
+) async {
+  for (var i = 0; i < 100 && !condition(); i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 30)),
+    );
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+  expect(condition(), isTrue, reason: '等待条件在限次 pump 内未成立');
 }
 
 Widget _editor(File imageFile, ImageEditorFilterRepository filterRepository) {

@@ -1,0 +1,311 @@
+# promtool test rules：跨 group critical 告警求值批次 3（管道/基础设施/域对象）。
+# 运行：make verify-prometheus-rule-tests
+rule_files:
+  - ../alerts/quwoquan_alerts.yaml
+
+evaluation_interval: 1m
+
+tests:
+  # ── 遥测日志端口写入错误开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'ops_telemetry_logstore_operation_duration_seconds_count{operation="put_event_batch", result="error"}'
+        values: '0+6x20'
+    alert_rule_test:
+      - eval_time: 13m
+        alertname: ProductTelemetryLogSinkWriteErrors
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l1
+              domain: product-telemetry
+            exp_annotations:
+              summary: "产品遥测日志端口写入出现错误"
+              description: "按 operation 检查 raw/startup 分区；指标不携带 session、batch 或用户标识。"
+
+  # ── 运行日志 DLQ 存在开火（gauge 保留 service 标签）──
+  - interval: 1m
+    input_series:
+      - series: 'runtime_log_export_dead_letter_pending{service="chat-service"}'
+        values: '3+0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: RuntimeLogDeadLetterPresent
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l1
+              domain: runtime-observability
+              service: chat-service
+            exp_annotations:
+              summary: "服务 chat-service 存在运行日志 DLQ"
+              description: "永久 4xx、TTL 过期或容量淘汰已进入 DLQ；修复契约/凭据后按 batch digest 幂等重放。"
+
+  # ── App 启动分母缺失（absent）开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'ops_app_experience_events_total{event_type="page_first_usable"}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: AppExperienceTelemetryMissing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l1
+              domain: app-experience
+              event_type: app_startup
+            exp_annotations:
+              summary: "App 体验黄金指标没有启动分母"
+              description: "检查 App telemetry outbox、product-ops ingest、Elasticsearch 与 Prometheus scrape；缺样本必须显示 unavailable。"
+
+  # ── App 启动分母存在保持安静 ──
+  - interval: 1m
+    input_series:
+      - series: 'ops_app_experience_events_total{event_type="app_startup"}'
+        values: '0+60x40'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: AppExperienceTelemetryMissing
+        exp_alerts: []
+
+  # ── 启动恢复面比例 10% > 0.1% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'ops_startup_phase_total{phase="recovery", platform="ios", runtime_env="prod"}'
+        values: '0+6x20'
+      - series: 'ops_startup_phase_total{phase="native_pre_flutter", platform="ios", runtime_env="prod"}'
+        values: '0+60x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: StartupRecoveryRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l1
+              domain: startup
+              platform: ios
+              runtime_env: prod
+            exp_annotations:
+              summary: "启动恢复面比例超过 0.1%"
+              description: "按 recovery_surface 和 failure code 查询受限启动遥测，确认是 bootstrap、Router 还是 native watchdog。"
+
+  # ── 搜索反馈信号 relay 失败开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'search_feedback_signal_relay_outcomes_total{outcome="publish_error"}'
+        values: '0+6x20'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: SearchFeedbackSignalRelayFailuresSustained
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+            exp_annotations:
+              summary: "搜索反馈信号 relay 持续失败"
+              description: "反馈事实 relay 持续出现读取、发布、确认或事实校验失败；稳定 signalId 可重放，但需在保留期前恢复。"
+
+  # ── outbox 投递持续失败开火（by table）──
+  - interval: 1m
+    input_series:
+      - series: 'pg_outbox_dispatch_failures_total{table="product_ops_outbox"}'
+        values: '0+6x35'
+    alert_rule_test:
+      - eval_time: 26m
+        alertname: PgOutboxDispatchFailuresSustained
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: ops-outbox
+              table: product_ops_outbox
+            exp_annotations:
+              summary: "outbox 事件投递持续失败（table=product_ops_outbox）"
+              description: "事务 outbox（product_ops_outbox / platform_ops_outbox）发布持续失败并进入退避重试；事件滞留可恢复但需尽快检查 Redis 事件总线与 publisher 凭据，防止 ConfigLayerValueSet / ExperimentRolloutUpdated 长期滞留。"
+
+  # ── ConfigLayer 控制面 5xx 比率 ~10% > 5% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_total{service="platform-ops-service", route="/control-plane/platform/configs/main", method="PUT", status="500"}'
+        values: '0+6x35'
+      - series: 'http_server_requests_total{service="platform-ops-service", route="/control-plane/platform/configs/main", method="PUT", status="200"}'
+        values: '0+54x35'
+    alert_rule_test:
+      - eval_time: 22m
+        alertname: ControlPlaneConfigWriteErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: platform-ops
+            exp_annotations:
+              summary: "ConfigLayer 控制面 5xx 比率 > 5%"
+              description: "UpdateServiceConfig/Resolve 服务端错误率异常；检查 PostgreSQL platform_config_layers CAS 提交与 generated guard。"
+
+  # ── FD 使用率 90% > 80% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'process_open_fds{instance="content-service:18083"}'
+        values: '90+0x10'
+      - series: 'process_max_fds{instance="content-service:18083"}'
+        values: '100+0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: HighFDUsage
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l4
+              instance: content-service:18083
+            exp_annotations:
+              summary: "实例 content-service:18083 FD 使用率 > 80%"
+
+  # ── 主机 CPU 毛刺（idle 恒定 → busy 100%；15s 间隔保证 1m rate 窗口有样本）──
+  - interval: 15s
+    input_series:
+      - series: 'node_cpu_seconds_total{mode="idle", cpu="0", instance="prod-host"}'
+        values: '100+0x40'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HostCPUSpike
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l4
+            exp_annotations:
+              summary: "主机 CPU 毛刺 > 95%（1m 窗口持续 2m）"
+
+  # ── 磁盘使用率 90% > 85% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{fstype="ext4", mountpoint="/data", instance="prod-host"}'
+        values: '10+0x15'
+      - series: 'node_filesystem_size_bytes{fstype="ext4", mountpoint="/data", instance="prod-host"}'
+        values: '100+0x15'
+    alert_rule_test:
+      - eval_time: 11m
+        alertname: HostDiskAlmostFull
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l4
+              fstype: ext4
+              mountpoint: /data
+              instance: prod-host
+            exp_annotations:
+              summary: "磁盘 /data 使用率 > 85%"
+
+  # ── exporter 不可达开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'up{job="redis-exporter", instance="redis-exporter:9121"}'
+        values: '0+0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: DataPlaneExporterDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l4
+              job: redis-exporter
+              instance: redis-exporter:9121
+            exp_annotations:
+              summary: "基础设施 exporter redis-exporter 不可达"
+
+  # ── chat Inbox 投影 P95 延迟（样本全落 5-10s 桶）开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'chat_inbox_projection_event_lag_seconds_bucket{le="1"}'
+        values: '0+0x20'
+      - series: 'chat_inbox_projection_event_lag_seconds_bucket{le="5"}'
+        values: '0+0x20'
+      - series: 'chat_inbox_projection_event_lag_seconds_bucket{le="10"}'
+        values: '0+60x20'
+      - series: 'chat_inbox_projection_event_lag_seconds_bucket{le="+Inf"}'
+        values: '0+60x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: ChatInboxProjectionLagHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: chat
+            exp_annotations:
+              summary: "chat Inbox 投影事件 P95 延迟超过 5 秒"
+              description: "MessageSent 到未读/排序投影的 P95 延迟超过商业预算；检查 Message outbox checkpoint、Mongo 读写与 projector 消费循环。"
+
+  # ── chat sync fanout 失败率 ~10% > 1% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'quwoquan_runtime_media_sync_patch_fanout_total{instance="chat-service:18085", result="failure"}'
+        values: '0+6x20'
+      - series: 'quwoquan_runtime_media_sync_patch_fanout_total{instance="chat-service:18085", result="success"}'
+        values: '0+54x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: ChatSyncPatchFanoutFailureRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: chat
+            exp_annotations:
+              summary: "chat durable sync hint fanout 失败率 > 1%"
+              description: "patch 已持久化但 realtime hint 投递失败；客户端只能依赖周期补拉，检查 realtime Redis 与网关订阅。"
+
+  # ── realtime 账号安全 consumer DLQ 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'realtime_account_security_consumer_total{outcome="dlq"}'
+        values: '0+6x10'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: RealtimeAccountSecurityConsumerDeadLettered
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: realtime
+            exp_annotations:
+              summary: "UserAccount 安全终态 consumer 存在待恢复 DLQ"
+              description: "事件只以摘要进入 DLQ，原 events.user.account PEL 保持待恢复；立即修复 authority/Redis 依赖后从原 stream 坐标恢复，并验证 ticket、lease 与 presence 已清理。"
+
+  # ── 媒体处理失败率 ~10% > 0.1% 开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'content_media_processing_jobs_total{result="infrastructure_error"}'
+        values: '0+6x25'
+      - series: 'content_media_processing_jobs_total{result="completed"}'
+        values: '0+54x25'
+    alert_rule_test:
+      - eval_time: 21m
+        alertname: ContentMediaProcessingJobFailureRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: content
+            exp_annotations:
+              summary: "媒体处理 Worker 失败率超过 0.1%"
+              description: "基于 Worker 全链路 job 指标；对象存储、FFmpeg 或结果持久化失败会保留 checkpoint 并重放。"
+
+  # ── 内容投影 health check 不健康开火 ──
+  - interval: 1m
+    input_series:
+      - series: 'runtime_health_check_status{instance="content-service:18083", check="content_projection_relay"}'
+        values: '0+0x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ContentProjectionCheckpointUnhealthy
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              layer: l2
+              domain: content
+              instance: content-service:18083
+              check: content_projection_relay
+            exp_annotations:
+              summary: "内容投影/checkpoint content_projection_relay 持续不健康"
+              description: "health check 直接调用 relay.Healthy；失败表示 scan 出错或 checkpoint 超过 5 秒未成功推进。"

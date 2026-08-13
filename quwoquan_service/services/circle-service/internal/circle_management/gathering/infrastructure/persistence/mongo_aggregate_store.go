@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -454,12 +455,19 @@ func GatheringEventPayloadFor(
 		payload["roomBindingStatus"] = gathering.RoomBindingStatus
 		addConversationPayload(payload, gathering)
 	case gatheringevent.GatheringEndedEarly,
-		gatheringevent.GatheringSafetyTerminated,
-		gatheringevent.GatheringCompleted:
+		gatheringevent.GatheringSafetyTerminated:
 		payload["actorPersonaId"] = actorPersonaID
 		payload["outcomeStatus"] = gathering.Outcome.Status
 		payload["roomBindingStatus"] = gathering.RoomBindingStatus
 		addConversationPayload(payload, gathering)
+	case gatheringevent.GatheringCompleted:
+		payload["actorPersonaId"] = actorPersonaID
+		payload["outcomeStatus"] = gathering.Outcome.Status
+		payload["roomBindingStatus"] = gathering.RoomBindingStatus
+		addConversationPayload(payload, gathering)
+		// 完成时冻结的 active 参与者名单（催回顾投递面）；
+		// 不含 pending/closed 轨迹，不泄露申请与邀请事实。
+		payload["participantPersonaIds"] = activeParticipantIdsPayload(gathering)
 	case gatheringevent.GatheringOutcomeCalculated:
 		payload["outcomeStatus"] = gathering.Outcome.Status
 	case gatheringevent.GatheringAvailabilityWatchChanged:
@@ -467,6 +475,21 @@ func GatheringEventPayloadFor(
 		addAvailabilityWatchPayload(payload, previous, gathering)
 	}
 	return payload
+}
+
+// activeParticipantIdsPayload 提取完成时刻的 active 参与者 personaId（稳定排序）。
+func activeParticipantIdsPayload(gathering model.Gathering) []string {
+	ids := make([]string, 0, len(gathering.Participations))
+	for _, participation := range gathering.Participations {
+		personaID := strings.TrimSpace(participation.PersonaID)
+		if personaID == "" ||
+			participation.State != model.ParticipationStateActive {
+			continue
+		}
+		ids = append(ids, personaID)
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // gatheringSourceRefsPayload 只携带最小 canonical 溯源引用（objectKind + objectId），

@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-003
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-003.t1
 // readiness_case: original_access_quota_reserve_original_image_access_grant_app_local
 
 import 'package:flutter_test/flutter_test.dart';

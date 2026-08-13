@@ -196,6 +196,11 @@ func (projector *ChatInboxViewProjector) applyMessage(ctx context.Context, seque
 		}
 		return nil
 	}
+	if event.Type == "AssistantMentioned" {
+		// message 聚合的助手可靠消费事件：消费者是 assistant-service，
+		// 不影响 inbox 投影，跳过而不是中断整个 drain。
+		return nil
+	}
 	if event.Type != "MessageSent" {
 		return fmt.Errorf("unsupported message event %q", event.Type)
 	}

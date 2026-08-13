@@ -107,6 +107,14 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 		integrationRtcMediaQoeEvent(now.Add(3*time.Second), "connection_lost", true, 200, 2),
 		integrationRtcMediaQoeEvent(now.Add(4*time.Second), "connect_failed", false, 0, 3),
 		integrationRtcMediaQoeEvent(now.Add(5*time.Second), "abandoned", true, 9999, 99),
+		integrationLoginFunnelEvent(now.Add(6*time.Second), "otp_verify", "success"),
+		integrationLoginFunnelEvent(now.Add(7*time.Second), "otp_verify", "failure"),
+		integrationSearchEvent(now.Add(8*time.Second), "search_query_submit", "req-int-1", 0),
+		integrationSearchEvent(now.Add(9*time.Second), "search_result_impression", "req-int-1", 450),
+		integrationSearchEvent(now.Add(10*time.Second), "search_result_click", "req-int-1", 0),
+		integrationAppStartupEvent(now.Add(11*time.Second), 1800),
+		integrationArticleReaderEvent(now.Add(12*time.Second), "article_reader_enter", 700),
+		integrationArticleReaderEvent(now.Add(13*time.Second), "article_reader_exit", 42000),
 	}
 	records := make([]application.EventRecord, len(eventInputs))
 	eventBatchKey := strings.Repeat("a", 64)
@@ -296,6 +304,119 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 	if len(runtimeRows) == 0 {
 		t.Fatal("runtime_diagnostics aggregate rows missing from real Elasticsearch")
 	}
+	// login_lifecycle：两条 login_funnel（success/failure）聚合为按 result
+	// 分组的行，durationHistogram 记录两个样本。
+	loginRows, err := store.ListAggregateAlertRows(ctx, "login_lifecycle", from, to)
+	if err != nil {
+		t.Fatalf("ListAggregateAlertRows(login_lifecycle) error = %v", err)
+	}
+	loginTotal, loginHistogramSamples := 0.0, 0.0
+	for _, row := range loginRows {
+		if count, ok := row["count"].(float64); ok {
+			loginTotal += count
+		}
+		if histogram, ok := row["durationHistogram"].(map[string]any); ok {
+			if samples, ok := histogram["count"].(float64); ok {
+				loginHistogramSamples += samples
+			}
+		}
+	}
+	if loginTotal != 2 || loginHistogramSamples != 2 {
+		t.Fatalf(
+			"login_lifecycle aggregate count=%v histogramSamples=%v; want 2/2",
+			loginTotal, loginHistogramSamples,
+		)
+	}
+
+	// search_funnel：同一 requestId 的提交/曝光/点击 → 三个去重集合各 1，
+	// firstActionableHistogram 只记曝光 1 个样本。
+	searchRows, err := store.ListAggregateAlertRows(ctx, "search_funnel", from, to)
+	if err != nil {
+		t.Fatalf("ListAggregateAlertRows(search_funnel) error = %v", err)
+	}
+	searchHashes := map[string]map[string]struct{}{}
+	searchImpressionSamples := 0.0
+	for _, row := range searchRows {
+		for _, field := range []string{
+			"querySubmitCountHashes",
+			"nonEmptyResultCountHashes",
+			"effectiveActionRequestCountHashes",
+		} {
+			values, _ := row[field].([]any)
+			set := searchHashes[field]
+			if set == nil {
+				set = map[string]struct{}{}
+				searchHashes[field] = set
+			}
+			for _, value := range values {
+				set[fmt.Sprint(value)] = struct{}{}
+			}
+		}
+		if histogram, ok := row["firstActionableHistogram"].(map[string]any); ok {
+			if samples, ok := histogram["count"].(float64); ok {
+				searchImpressionSamples += samples
+			}
+		}
+	}
+	for field, want := range map[string]int{
+		"querySubmitCountHashes":            1,
+		"nonEmptyResultCountHashes":         1,
+		"effectiveActionRequestCountHashes": 1,
+	} {
+		if got := len(searchHashes[field]); got != want {
+			t.Fatalf("search_funnel %s cardinality = %d; want %d", field, got, want)
+		}
+	}
+	if searchImpressionSamples != 1 {
+		t.Fatalf(
+			"search_funnel firstActionableHistogram samples = %v; want 1",
+			searchImpressionSamples,
+		)
+	}
+
+	// performance：app_startup 一条，contentHistogram 承载 1800ms 样本。
+	performanceRows, err := store.ListAggregateAlertRows(ctx, "performance", from, to)
+	if err != nil {
+		t.Fatalf("ListAggregateAlertRows(performance) error = %v", err)
+	}
+	performanceContentSamples, performanceErrors := 0.0, 0.0
+	for _, row := range performanceRows {
+		if histogram, ok := row["contentHistogram"].(map[string]any); ok {
+			if samples, ok := histogram["count"].(float64); ok {
+				performanceContentSamples += samples
+			}
+		}
+		if errCount, ok := row["errorCount"].(float64); ok {
+			performanceErrors += errCount
+		}
+	}
+	if performanceContentSamples != 1 || performanceErrors != 0 {
+		t.Fatalf(
+			"performance aggregate contentSamples=%v errors=%v; want 1/0",
+			performanceContentSamples, performanceErrors,
+		)
+	}
+
+	// article_reader_lifecycle：enter + exit 两条，按 eventType 分组。
+	readerRows, err := store.ListAggregateAlertRows(ctx, "article_reader_lifecycle", from, to)
+	if err != nil {
+		t.Fatalf("ListAggregateAlertRows(article_reader_lifecycle) error = %v", err)
+	}
+	readerByEventType := map[string]float64{}
+	for _, row := range readerRows {
+		eventType, _ := row["eventType"].(string)
+		if count, ok := row["count"].(float64); ok {
+			readerByEventType[eventType] += count
+		}
+	}
+	if readerByEventType["article_reader_enter"] != 1 ||
+		readerByEventType["article_reader_exit"] != 1 {
+		t.Fatalf(
+			"article_reader_lifecycle by eventType = %v; want enter=1 exit=1",
+			readerByEventType,
+		)
+	}
+
 	generatedThrough, hasSamples, err := store.AggregateGeneratedThrough(ctx)
 	if err != nil || !hasSamples {
 		t.Fatalf(
@@ -317,8 +438,9 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 	if err != nil {
 		t.Fatalf("GetEventSummary() error = %v", err)
 	}
+	// 去重会话：page 1 + rtc 4 + login 1 + search 1 + startup 1 + article 1。
 	if eventSummary.TotalCount != int64(len(records)) ||
-		eventSummary.SessionCount != 5 ||
+		eventSummary.SessionCount != 9 ||
 		eventSummary.SourceKind != "hourly_rollup" {
 		t.Fatalf("GetEventSummary() = %+v", eventSummary)
 	}
@@ -391,8 +513,19 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 	if err != nil {
 		t.Fatalf("GetPageExperienceStats() error = %v", err)
 	}
-	if len(pageStats) != 2 {
-		t.Fatalf("GetPageExperienceStats() = %+v", pageStats)
+	// 每个出现过的 pageName 一个桶；chat_detail 承载 page_open/page_return
+	// 的体验数值，其余页面只有非 page 事件因此计数为零。
+	var chatDetailStats *application.PageExperienceStat
+	for index := range pageStats {
+		if pageStats[index].PageName == "chat_detail" {
+			chatDetailStats = &pageStats[index]
+		}
+	}
+	if chatDetailStats == nil ||
+		chatDetailStats.Opens != 1 ||
+		chatDetailStats.ReadySamples != 1 ||
+		chatDetailStats.StaySamples != 1 {
+		t.Fatalf("GetPageExperienceStats() chat_detail = %+v", pageStats)
 	}
 
 	// 黄金指标 percentile/sum_ratio 形态的原始样本统计门面：真实 ES
@@ -415,9 +548,10 @@ func TestElasticsearchLogSinkPersistsAndQueriesCanonicalTelemetry(
 	if err != nil {
 		t.Fatalf("ListDistinctSessions() error = %v", err)
 	}
-	if len(sessions) != 5 || pageViews != 1 {
+	// 去重会话 9 个（page 1 + rtc 4 + login/search/startup/article 各 1）。
+	if len(sessions) != 9 || pageViews != 1 {
 		t.Fatalf(
-			"ListDistinctSessions() = %v, %d; want five sessions and one page view",
+			"ListDistinctSessions() = %v, %d; want nine sessions and one page view",
 			sessions, pageViews,
 		)
 	}
@@ -575,6 +709,127 @@ func integrationElasticsearchPageEvent(
 		input.DurationMS = &durationMS
 	}
 	return input
+}
+
+func integrationLoginFunnelEvent(
+	occurredAt time.Time,
+	step string,
+	result string,
+) application.EventRecordInput {
+	action := "login_step"
+	flowID := "flow-integration"
+	durationMS := 900
+	event := application.EventRecordInput{
+		LogType:            "event",
+		EventType:          "login_funnel",
+		SessionID:          "s.bG9naW4taW50.1",
+		PageName:           "login",
+		OccurredAt:         occurredAt.Format(time.RFC3339Nano),
+		DeviceManufacturer: "Apple",
+		DeviceModel:        "iPhone",
+		AppVersion:         "1.0.0",
+		NetworkClass:       "wifi",
+		DevicePlatform:     "ios",
+	}
+	event.Action = &action
+	event.FlowID = &flowID
+	event.Step = &step
+	event.Result = &result
+	event.DurationMS = &durationMS
+	return event
+}
+
+func integrationSearchEvent(
+	occurredAt time.Time,
+	eventType string,
+	requestID string,
+	durationMS int,
+) application.EventRecordInput {
+	surfaceID := "surface.search.results"
+	objectType := "post"
+	rankPosition := 1
+	resultCount := 12
+	event := application.EventRecordInput{
+		LogType:            "event",
+		EventType:          eventType,
+		SessionID:          "s.c2VhcmNoLWludA.1",
+		PageName:           "search_results",
+		OccurredAt:         occurredAt.Format(time.RFC3339Nano),
+		DeviceManufacturer: "Apple",
+		DeviceModel:        "iPhone",
+		AppVersion:         "1.0.0",
+		NetworkClass:       "wifi",
+		DevicePlatform:     "ios",
+	}
+	event.RequestID = &requestID
+	switch eventType {
+	case "search_query_submit":
+		event.SurfaceID = &surfaceID
+	case "search_result_impression":
+		event.ResultCount = &resultCount
+		event.DurationMS = &durationMS
+	case "search_result_click":
+		event.ObjectType = &objectType
+		event.RankPosition = &rankPosition
+	}
+	return event
+}
+
+func integrationAppStartupEvent(
+	occurredAt time.Time,
+	clickToContentMS int,
+) application.EventRecordInput {
+	firstFrame := 400
+	shell := 600
+	shellToContent := clickToContentMS - firstFrame - shell
+	hasError := false
+	event := application.EventRecordInput{
+		LogType:            "event",
+		EventType:          "app_startup",
+		SessionID:          "s.c3RhcnR1cC1pbnQ.1",
+		PageName:           "startup",
+		OccurredAt:         occurredAt.Format(time.RFC3339Nano),
+		DeviceManufacturer: "Apple",
+		DeviceModel:        "iPhone",
+		AppVersion:         "1.0.0",
+		NetworkClass:       "wifi",
+		DevicePlatform:     "ios",
+	}
+	event.TClickToFirstFrameMS = &firstFrame
+	event.TFirstFrameToShellMS = &shell
+	event.TShellToContentMS = &shellToContent
+	event.TClickToContentMS = &clickToContentMS
+	event.HasError = &hasError
+	return event
+}
+
+func integrationArticleReaderEvent(
+	occurredAt time.Time,
+	eventType string,
+	durationMS int,
+) application.EventRecordInput {
+	surfaceID := "surface.article.reader"
+	objectType := "post"
+	objectID := "post-int-1"
+	result := "success"
+	event := application.EventRecordInput{
+		LogType:            "event",
+		EventType:          eventType,
+		SessionID:          "s.YXJ0aWNsZS1pbnQ.1",
+		PageName:           "article_reader",
+		OccurredAt:         occurredAt.Format(time.RFC3339Nano),
+		DeviceManufacturer: "Apple",
+		DeviceModel:        "iPhone",
+		AppVersion:         "1.0.0",
+		NetworkClass:       "wifi",
+		DevicePlatform:     "ios",
+	}
+	event.SurfaceID = &surfaceID
+	event.ObjectType = &objectType
+	event.ObjectID = &objectID
+	event.DurationMS = &durationMS
+	event.Result = &result
+	return event
 }
 
 func integrationRtcMediaQoeEvent(

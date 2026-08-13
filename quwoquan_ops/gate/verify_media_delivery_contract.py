@@ -723,7 +723,8 @@ def _validate_video_playback_patrol_contract(issues: list[str]) -> None:
     patrol_runner_path = (
         ROOT / "quwoquan_ops" / "cli" / "smoke" / "run_environment_patrol_smoke.py"
     )
-    stackctl_path = ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
+    # stackctl 主体已拆分：环境 smoke 的 canary target 由 verify_profiles 域模块承载。
+    stackctl_path = ROOT / "quwoquan_ops" / "cli" / "commands" / "verify_profiles.py"
     patrol_test_path = ROOT / "quwoquan_app" / target
     patrol_runner_source = patrol_runner_path.read_text(encoding="utf-8")
     stackctl_source = stackctl_path.read_text(encoding="utf-8")

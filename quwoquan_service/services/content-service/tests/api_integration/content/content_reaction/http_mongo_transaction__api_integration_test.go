@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006.t1
 // readiness_case: like-post-api
 // readiness_case: unlike-post-api
 // readiness_case: react-to-comment-api

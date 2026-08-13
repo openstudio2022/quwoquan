@@ -4,6 +4,17 @@ The receipt does not make quarantined policy/template bytes reusable.  It only
 lets the output isolation gate distinguish a byte-exact historical package from
 an active second source of truth.  A quarantine reference can be protected
 once: later tree drift cannot be blessed by issuing a replacement receipt.
+
+Two provenance classes are supported:
+
+- migration: a tree relocated by the one-shot output-layout migration under
+  ``local/workspace/quarantine/<child>``; the credential is the migration
+  apply receipt.
+- forensic: an incident quarantine under ``quarantine/<child>``; the
+  credential is the tree's own ``QUARANTINE.json`` marker, which must declare
+  ``recovery: retain_for_forensics_only``.  The marker file is itself part of
+  the frozen tree digest, so tampering with the credential is tree drift; the
+  receipt artifact lives outside the tree so the digest has no self reference.
 """
 from __future__ import annotations
 
@@ -12,7 +23,7 @@ import hashlib
 import json
 import os
 import stat
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -24,6 +35,13 @@ SCHEMA = "quwoquan_data.protected_quarantine_evidence"
 RECEIPT_DIRECTORY = Path("local/cache/protected-quarantines")
 QUARANTINE_DIRECTORY = Path("local/workspace/quarantine")
 DEFAULT_REASON = "historical release evidence preserved after output layout migration"
+FORENSIC_QUARANTINE_DIRECTORY = Path("quarantine")
+FORENSIC_MARKER_NAME = "QUARANTINE.json"
+FORENSIC_REQUIRED_CONSUMPTION = "forbidden"
+FORENSIC_REQUIRED_RECOVERY = "retain_for_forensics_only"
+FORENSIC_DEFAULT_REASON = (
+    "forensic quarantine preserved as tamper-evident incident evidence"
+)
 
 
 class ProtectedQuarantineEvidenceError(ValueError):
@@ -76,6 +94,64 @@ def _quarantine_ref(path: Path, *, data_output_root: Path) -> str:
     if not path.is_dir():
         raise ProtectedQuarantineEvidenceError(f"quarantine is missing: {path}")
     return relative
+
+
+def _forensic_quarantine_ref(path: Path, *, data_output_root: Path) -> str:
+    if path.is_symlink():
+        raise ProtectedQuarantineEvidenceError("quarantine root must not be a symlink")
+    relative = _relative_to_output(path, data_output_root=data_output_root)
+    parts = Path(relative).parts
+    expected = FORENSIC_QUARANTINE_DIRECTORY.parts
+    if len(parts) != len(expected) + 1 or parts[: len(expected)] != expected:
+        raise ProtectedQuarantineEvidenceError(
+            "forensic quarantine must be one direct child of quarantine"
+        )
+    if not path.is_dir():
+        raise ProtectedQuarantineEvidenceError(f"quarantine is missing: {path}")
+    return relative
+
+
+def _validate_forensic_marker(quarantine_root: Path) -> dict[str, str]:
+    """The quarantine's own ``QUARANTINE.json`` is the provenance credential."""
+    marker = quarantine_root / FORENSIC_MARKER_NAME
+    if marker.is_symlink() or not marker.is_file():
+        raise ProtectedQuarantineEvidenceError(
+            f"forensic marker is missing or not a regular file: {marker}"
+        )
+    body = marker.read_bytes()
+    try:
+        payload = json.loads(body)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ProtectedQuarantineEvidenceError(
+            f"forensic marker is not valid JSON: {marker}: {exc}"
+        ) from exc
+    if not isinstance(payload, Mapping):
+        raise ProtectedQuarantineEvidenceError(
+            f"forensic marker must be a JSON object: {marker}"
+        )
+    decision = payload.get("decision")
+    consumption = payload.get("consumption")
+    recovery = payload.get("recovery")
+    if not isinstance(decision, str) or not decision.strip():
+        raise ProtectedQuarantineEvidenceError(
+            f"forensic marker requires a non-empty decision: {marker}"
+        )
+    if consumption != FORENSIC_REQUIRED_CONSUMPTION:
+        raise ProtectedQuarantineEvidenceError(
+            f"forensic marker must declare consumption: {FORENSIC_REQUIRED_CONSUMPTION}: {marker}"
+        )
+    if recovery != FORENSIC_REQUIRED_RECOVERY:
+        raise ProtectedQuarantineEvidenceError(
+            f"forensic marker must declare recovery: {FORENSIC_REQUIRED_RECOVERY}: {marker}"
+        )
+    return {
+        "provenance": "forensic",
+        "forensicMarkerPath": FORENSIC_MARKER_NAME,
+        "forensicMarkerSha256": _sha256_bytes(body),
+        "forensicDecision": decision,
+        "forensicConsumption": consumption,
+        "forensicRecovery": recovery,
+    }
 
 
 def _safe_symlink_entry(path: Path, *, root: Path) -> dict[str, str]:
@@ -225,29 +301,58 @@ def _validate_migration_receipt(
     }
 
 
+#: migration 变体的冻结字段集不可变动:变动会改变既有 receipt 的 manifestDigest。
+_MIGRATION_MANIFEST_KEYS = (
+    "schema",
+    "status",
+    "quarantineRef",
+    "reason",
+    "reusableSourceTruthAllowed",
+    "migrationApplyReceiptRef",
+    "migrationApplyReceiptSha256",
+    "migrationPlanDigest",
+    "migrationSourceRef",
+    "migrationDestinationRef",
+    "migrationEntryFileCount",
+    "migrationEntryByteCount",
+    "migrationEntryDigest",
+    "directories",
+    "files",
+    "symlinks",
+    "directoryCount",
+    "fileCount",
+    "symlinkCount",
+    "byteCount",
+    "treeDigest",
+)
+_FORENSIC_MANIFEST_KEYS = (
+    "schema",
+    "status",
+    "provenance",
+    "quarantineRef",
+    "reason",
+    "reusableSourceTruthAllowed",
+    "forensicMarkerPath",
+    "forensicMarkerSha256",
+    "forensicDecision",
+    "forensicConsumption",
+    "forensicRecovery",
+    "directories",
+    "files",
+    "symlinks",
+    "directoryCount",
+    "fileCount",
+    "symlinkCount",
+    "byteCount",
+    "treeDigest",
+)
+
+
 def _stable_manifest(payload: Mapping[str, object]) -> dict[str, object]:
     keys = (
-        "schema",
-        "status",
-        "quarantineRef",
-        "reason",
-        "reusableSourceTruthAllowed",
-        "migrationApplyReceiptRef",
-        "migrationApplyReceiptSha256",
-        "migrationPlanDigest",
-        "migrationSourceRef",
-        "migrationDestinationRef",
-        "migrationEntryFileCount",
-        "migrationEntryByteCount",
-        "migrationEntryDigest",
-        "directories",
-        "files",
-        "symlinks",
-        "directoryCount",
-        "fileCount",
-        "symlinkCount",
-        "byteCount",
-        "treeDigest",
+        _FORENSIC_MANIFEST_KEYS
+        if payload.get("provenance") == "forensic"
+        else _MIGRATION_MANIFEST_KEYS
     )
     return {key: payload[key] for key in keys}
 
@@ -283,12 +388,27 @@ def validate_protected_quarantine_receipt(
             "protected quarantine receipt path does not match manifestDigest"
         )
     quarantine_root = root / str(payload["quarantineRef"])
-    if _quarantine_ref(quarantine_root, data_output_root=root) != payload["quarantineRef"]:
-        raise ProtectedQuarantineEvidenceError("quarantine reference is not canonical")
-    provenance = _validate_migration_receipt(
-        root / str(payload["migrationApplyReceiptRef"]),
-        data_output_root=root,
-    )
+    if payload.get("provenance") == "forensic":
+        if (
+            _forensic_quarantine_ref(quarantine_root, data_output_root=root)
+            != payload["quarantineRef"]
+        ):
+            raise ProtectedQuarantineEvidenceError(
+                "quarantine reference is not canonical"
+            )
+        provenance = _validate_forensic_marker(quarantine_root)
+    else:
+        if (
+            _quarantine_ref(quarantine_root, data_output_root=root)
+            != payload["quarantineRef"]
+        ):
+            raise ProtectedQuarantineEvidenceError(
+                "quarantine reference is not canonical"
+            )
+        provenance = _validate_migration_receipt(
+            root / str(payload["migrationApplyReceiptRef"]),
+            data_output_root=root,
+        )
     for key, value in provenance.items():
         if payload.get(key) != value:
             raise ProtectedQuarantineEvidenceError(
@@ -371,31 +491,22 @@ def _write_create_once(path: Path, payload: Mapping[str, object]) -> None:
         os.fsync(handle.fileno())
 
 
-def protect_historical_quarantine(
+def _issue_protection_receipt(
     *,
-    quarantine_root: Path,
-    migration_apply_receipt: Path,
-    data_output_root: Path = DATA_OUTPUT_ROOT,
-    reason: str = DEFAULT_REASON,
+    root: Path,
+    quarantine_path: Path,
+    quarantine_ref: str,
+    provenance: Mapping[str, object],
+    tree: Mapping[str, object],
+    reason: str,
+    recheck_provenance: Callable[[], Mapping[str, object]],
+    provenance_drift_message: str,
 ) -> tuple[dict[str, object], Path]:
-    root = data_output_root.expanduser().resolve()
-    normalized_reason = str(reason).strip()
-    if not normalized_reason:
-        raise ProtectedQuarantineEvidenceError("protection reason must not be empty")
-    quarantine_candidate = quarantine_root.expanduser()
-    quarantine_ref = _quarantine_ref(quarantine_candidate, data_output_root=root)
-    quarantine_path = quarantine_candidate.resolve()
-    tree = _tree_inventory(quarantine_path)
-    migration_receipt_path = migration_apply_receipt.expanduser()
-    provenance = _validate_migration_receipt(
-        migration_receipt_path,
-        data_output_root=root,
-    )
     stable: dict[str, object] = {
         "schema": SCHEMA,
         "status": "protected_read_only",
         "quarantineRef": quarantine_ref,
-        "reason": normalized_reason,
+        "reason": reason,
         "reusableSourceTruthAllowed": False,
         **provenance,
         **tree,
@@ -441,24 +552,90 @@ def protect_historical_quarantine(
             raise ProtectedQuarantineEvidenceError(
                 "quarantine tree drifted while its receipt was being created"
             )
-        if (
-            _validate_migration_receipt(
-                migration_receipt_path,
-                data_output_root=root,
-            )
-            != provenance
-        ):
-            raise ProtectedQuarantineEvidenceError(
-                "migration provenance drifted while the receipt was being created"
-            )
+        if dict(recheck_provenance()) != dict(provenance):
+            raise ProtectedQuarantineEvidenceError(provenance_drift_message)
         _write_create_once(destination, payload)
     return payload, destination
 
 
+def protect_historical_quarantine(
+    *,
+    quarantine_root: Path,
+    migration_apply_receipt: Path,
+    data_output_root: Path = DATA_OUTPUT_ROOT,
+    reason: str = DEFAULT_REASON,
+) -> tuple[dict[str, object], Path]:
+    root = data_output_root.expanduser().resolve()
+    normalized_reason = str(reason).strip()
+    if not normalized_reason:
+        raise ProtectedQuarantineEvidenceError("protection reason must not be empty")
+    quarantine_candidate = quarantine_root.expanduser()
+    quarantine_ref = _quarantine_ref(quarantine_candidate, data_output_root=root)
+    quarantine_path = quarantine_candidate.resolve()
+    tree = _tree_inventory(quarantine_path)
+    migration_receipt_path = migration_apply_receipt.expanduser()
+    provenance = _validate_migration_receipt(
+        migration_receipt_path,
+        data_output_root=root,
+    )
+    return _issue_protection_receipt(
+        root=root,
+        quarantine_path=quarantine_path,
+        quarantine_ref=quarantine_ref,
+        provenance=provenance,
+        tree=tree,
+        reason=normalized_reason,
+        recheck_provenance=lambda: _validate_migration_receipt(
+            migration_receipt_path,
+            data_output_root=root,
+        ),
+        provenance_drift_message=(
+            "migration provenance drifted while the receipt was being created"
+        ),
+    )
+
+
+def protect_forensic_quarantine(
+    *,
+    quarantine_root: Path,
+    data_output_root: Path = DATA_OUTPUT_ROOT,
+    reason: str = FORENSIC_DEFAULT_REASON,
+) -> tuple[dict[str, object], Path]:
+    """Register an incident quarantine with its own QUARANTINE.json as credential."""
+    root = data_output_root.expanduser().resolve()
+    normalized_reason = str(reason).strip()
+    if not normalized_reason:
+        raise ProtectedQuarantineEvidenceError("protection reason must not be empty")
+    quarantine_candidate = quarantine_root.expanduser()
+    quarantine_ref = _forensic_quarantine_ref(
+        quarantine_candidate, data_output_root=root
+    )
+    quarantine_path = quarantine_candidate.resolve()
+    provenance = _validate_forensic_marker(quarantine_path)
+    tree = _tree_inventory(quarantine_path)
+    return _issue_protection_receipt(
+        root=root,
+        quarantine_path=quarantine_path,
+        quarantine_ref=quarantine_ref,
+        provenance=provenance,
+        tree=tree,
+        reason=normalized_reason,
+        recheck_provenance=lambda: _validate_forensic_marker(quarantine_path),
+        provenance_drift_message=(
+            "forensic marker drifted while the receipt was being created"
+        ),
+    )
+
+
 __all__ = [
     "DEFAULT_REASON",
+    "FORENSIC_DEFAULT_REASON",
+    "FORENSIC_MARKER_NAME",
+    "FORENSIC_REQUIRED_CONSUMPTION",
+    "FORENSIC_REQUIRED_RECOVERY",
     "ProtectedQuarantineEvidenceError",
     "load_protected_quarantine_receipts",
+    "protect_forensic_quarantine",
     "protect_historical_quarantine",
     "validate_protected_quarantine_receipt",
 ]

@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -70,6 +71,48 @@ final class _FileMessageRepository extends Fake
         senderName: '对方',
         type: 'file',
         content: '活动报名表.pdf',
+        status: 'sent',
+        timestamp: DateTime.utc(2026, 8, 13, 8),
+      ),
+    ];
+  }
+}
+
+/// 首屏加载带 200ms 延迟的最小 repo（制造骨架屏可观测窗口）。
+final class _SlowFirstPageRepository extends Fake
+    implements ChatMessageRepository {
+  @override
+  Future<List<ChatMessageViewData>> listMessages({
+    required String conversationId,
+    String? before,
+    int limit = _pageSize,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    return <ChatMessageViewData>[_message(1)];
+  }
+}
+
+/// 单页仅一条图片消息（带交付 URL）的最小 repo。
+final class _ImageMessageRepository extends Fake
+    implements ChatMessageRepository {
+  @override
+  Future<List<ChatMessageViewData>> listMessages({
+    required String conversationId,
+    String? before,
+    int limit = _pageSize,
+  }) async {
+    return <ChatMessageViewData>[
+      ChatMessageViewData(
+        id: 'image_msg_1',
+        conversationId: _conversationId,
+        seq: 1,
+        clientMsgId: 'image_client_1',
+        senderId: 'fixture_user_peer',
+        senderName: '对方',
+        type: 'image',
+        content: '',
+        mediaDeliveryUrl: 'https://image.example.test/media/image/photo.jpg',
+        mediaType: 'image',
         status: 'sent',
         timestamp: DateTime.utc(2026, 8, 13, 8),
       ),
@@ -163,7 +206,7 @@ void main() {
     await Hive.deleteFromDisk();
   });
 
-  Future<void> pumpConversationPage(
+  Future<void> pumpConversationPageFirstFrame(
     WidgetTester tester,
     ChatMessageRepository repo,
   ) async {
@@ -216,6 +259,13 @@ void main() {
       ),
     );
     await tester.pump();
+  }
+
+  Future<void> pumpConversationPage(
+    WidgetTester tester,
+    ChatMessageRepository repo,
+  ) async {
+    await pumpConversationPageFirstFrame(tester, repo);
     await tester.pump(const Duration(milliseconds: 400));
   }
 
@@ -261,6 +311,47 @@ void main() {
       anchorTop.dy,
       inInclusiveRange(0, viewportHeight),
       reason: '加载历史后原可视锚点消息必须仍在视口内（位置被补偿保持）',
+    );
+  });
+
+  // spec_ref: specs/feature-tree/chat-conversation/chat-experience-optimization/spec.md#open-002
+  testWidgets('消息初始加载呈现共享骨架屏', (tester) async {
+    final repo = _SlowFirstPageRepository();
+    await pumpConversationPageFirstFrame(tester, repo);
+
+    expect(
+      find.byType(AppSkeletonListRows),
+      findsOneWidget,
+      reason: '消息初始加载必须使用共享 AppSkeletonListRows 骨架',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(AppSkeletonListRows), findsNothing);
+  });
+
+  // spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/rich-media-message/spec.md#gwt-001
+  testWidgets('图片消息点击进入全屏大图查看', (tester) async {
+    await pumpConversationPage(tester, _ImageMessageRepository());
+
+    final imageBubble = find.byKey(
+      const ValueKey<String>('chat_image_open_image_msg_1'),
+    );
+    expect(imageBubble, findsOneWidget, reason: '图片气泡必须绑定大图查看动作');
+    await tester.tap(imageBubble);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('chat_image_viewer_surface')),
+      findsOneWidget,
+      reason: '点击图片必须进入全屏大图查看',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('chat_image_viewer_close')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('chat_image_viewer_surface')),
+      findsNothing,
+      reason: '关闭后回到会话页',
     );
   });
 

@@ -317,7 +317,8 @@ Map<String, double> buildImageEditorFilterDetailValues(
   final scaled = scaledImageEditorFilterValues(preset, strength);
   return <String, double>{
     for (final entry in scaled.entries)
-      if (kImageEditorDetailParamKeys.contains(entry.key)) ...{
+      if (kImageEditorDetailParamKeys.contains(entry.key) &&
+          entry.value.abs() > 0.001) ...{
         entry.key: entry.value,
       },
   };

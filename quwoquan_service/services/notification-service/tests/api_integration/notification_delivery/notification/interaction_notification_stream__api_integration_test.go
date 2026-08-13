@@ -226,10 +226,54 @@ func TestInteractionNotificationStreamProjectsOnce(t *testing.T) {
 		t.Fatalf("xadd homepage status result: %v", err)
 	}
 
+	// 结束催回顾（比例②发动机）：Completed + outcome=occurred → 冻结名单
+	// 每位 active 参与者一条；at-least-once 重放必须收敛。
+	recapPayload, err := json.Marshal(map[string]any{
+		"gatheringId":           "gathering-api-recap-1",
+		"aggregateVersion":      7,
+		"lifecycleStatus":       "completed",
+		"actorPersonaId":        "recipient-recap-a",
+		"outcomeStatus":         "occurred",
+		"roomBindingStatus":     "ready",
+		"conversationId":        "conv-api-recap-1",
+		"participantPersonaIds": []string{"recipient-recap-a", "recipient-recap-b"},
+		"occurredAt":            time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("marshal recap nudge payload: %v", err)
+	}
+	appendRecapEvent := func() {
+		if _, err := redisClient.XAdd(ctx, "events.circle.gatherings", map[string]string{
+			"eventId":          "evt-api-gathering-completed-1",
+			"eventType":        "GatheringCompleted",
+			"aggregateType":    "Gathering",
+			"aggregateId":      "gathering-api-recap-1",
+			"aggregateVersion": "7",
+			"payload":          string(recapPayload),
+			"occurredAt":       time.Now().UTC().Format(time.RFC3339Nano),
+		}); err != nil {
+			t.Fatalf("xadd gathering completed: %v", err)
+		}
+	}
+	appendRecapEvent()
+	appendRecapEvent() // at-least-once 重放收敛
+
 	deadline := time.Now().Add(20 * time.Second)
 	for {
 		if _, err := consumer.ProcessOnce(ctx); err != nil {
 			t.Fatalf("consume: %v", err)
+		}
+		recapAUnread, recapAErr := queries.GetUnreadCount(ctx, "recipient-recap-a")
+		recapBUnread, recapBErr := queries.GetUnreadCount(ctx, "recipient-recap-b")
+		if recapAErr != nil || recapBErr != nil {
+			t.Fatalf("read recap nudge unread: a=%v b=%v", recapAErr, recapBErr)
+		}
+		if recapAUnread.UnreadCount > 1 || recapBUnread.UnreadCount > 1 {
+			t.Fatalf(
+				"recap nudge must converge to one per participant: a=%d b=%d",
+				recapAUnread.UnreadCount,
+				recapBUnread.UnreadCount,
+			)
 		}
 		unread, err := queries.GetUnreadCount(ctx, "recipient-api-1")
 		if err != nil {
@@ -249,7 +293,9 @@ func TestInteractionNotificationStreamProjectsOnce(t *testing.T) {
 		if unread.UnreadCount == 5 &&
 			replyUnread.UnreadCount == 1 &&
 			mentionUnread.UnreadCount == 1 &&
-			pinUnread.UnreadCount == 1 {
+			pinUnread.UnreadCount == 1 &&
+			recapAUnread.UnreadCount == 1 &&
+			recapBUnread.UnreadCount == 1 {
 			break
 		}
 		if time.Now().After(deadline) {

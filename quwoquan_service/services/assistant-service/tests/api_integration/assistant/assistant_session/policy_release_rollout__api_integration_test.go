@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/spec.md#sit-001
 // spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/run-stream-policy/policy-template-routing/spec.md#gwt-001.t3
 package api_integration
 
 import (

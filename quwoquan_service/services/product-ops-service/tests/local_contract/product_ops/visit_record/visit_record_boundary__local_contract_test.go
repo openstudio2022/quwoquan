@@ -158,6 +158,25 @@ func TestVisitHTTPBoundaryRejectsSpoofingAndMapsObjectErrors(t *testing.T) {
 	assertLocalError(t, failureResponse, http.StatusInternalServerError, "OPS.SYSTEM.visit_storage_write_failed")
 }
 
+func TestVisitStatsStorageReadFailureMapsToCanonicalError(t *testing.T) {
+	store := newLocalVisitStore()
+	store.statsErr = errors.New("mongo read timeout")
+	handler := visithttp.NewHandler(visitapplication.NewService(store))
+	mux := http.NewServeMux()
+	handler.Register(mux)
+
+	stats := localRequest(
+		http.MethodGet,
+		"/ops/visits/stats?targetType=page&targetKey=home",
+		"",
+		"",
+		"persona-local",
+	)
+	statsResponse := httptest.NewRecorder()
+	mux.ServeHTTP(statsResponse, stats)
+	assertLocalError(t, statsResponse, http.StatusInternalServerError, "OPS.SYSTEM.visit_storage_read_failed")
+}
+
 func localRequest(
 	method string,
 	path string,
@@ -208,6 +227,7 @@ type localVisitStore struct {
 	receipts  map[string]localReceipt
 	lastInput visitapplication.RecordVisitCommand
 	commitErr error
+	statsErr  error
 }
 
 func newLocalVisitStore() *localVisitStore {
@@ -254,6 +274,9 @@ func (s *localVisitStore) GetVisitStats(
 ) (visitapplication.VisitStats, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.statsErr != nil {
+		return visitapplication.VisitStats{}, s.statsErr
+	}
 	out := visitapplication.VisitStats{Items: []visitapplication.VisitRecord{}}
 	for _, item := range s.visits {
 		if query.TargetType != "" && item.TargetType != query.TargetType {

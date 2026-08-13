@@ -16,6 +16,7 @@ if str(_SCRIPTS_ROOT) not in sys.path:
 from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
 
 # spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-002
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-002.t4
 
 import argparse
 from pathlib import Path

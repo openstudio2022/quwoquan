@@ -25,7 +25,6 @@ import 'package:quwoquan_app/design_system/chat/chat_mention_text_editing_contro
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/customizable_chat_input_bar.dart';
 import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/layout/web_page_max_width_frame.dart';
 import 'package:quwoquan_app/design_system/semantics/design_semantic_constants.dart';
@@ -51,6 +50,8 @@ import 'package:quwoquan_app/runtime/observability/trackers/chat_conversation_pe
 import 'package:quwoquan_app/runtime/observability/trackers/chat_interaction_telemetry_tracker.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
+import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
+import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_conversation_lifecycle.dart';
@@ -355,7 +356,7 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
           _OfflineReadOnlyBanner(isDark: isDark),
         Expanded(
           child: messageState.isLoading && displayMessages.isEmpty
-              ? AppRequestFeedback.section()
+              ? const AppSkeletonListRows(rowCount: 6)
               : messageState.error != null && displayMessages.isEmpty
               ? AppPageErrorState(
                   semantic: runtimeErrorSemantic(
@@ -463,6 +464,8 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
                               ? () => unawaited(_openFileMessage(msg))
                               : msg.type == 'video'
                               ? () => _openVideoMessage(msg)
+                              : msg.type == 'image'
+                              ? () => _openImageMessage(msg)
                               : null,
                           hideAvatarAndName: msg.type == 'system_call_log',
                           useFullWidth: msg.type == 'system_call_log',

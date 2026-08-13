@@ -2,7 +2,7 @@ events:
 - name: ConversationReadWatermarkAdvanced
   delivery_semantics: transactional_outbox
   wire_event_type: ConversationReadWatermarkAdvanced
-  payload_entity: ConversationUserState
+  payload_entity: ConversationReadWatermarkAdvancedEventPayload
   payload_fields:
   - conversationId
   - userId
@@ -12,6 +12,9 @@ events:
   - mentionUnreadCount
   - readAt
   - updatedAt
+  # 已读回执真链：对端读位推进必须实时下发（1v1 双勾、多设备自读收敛
+  # 由 App realtime handler 消费同名 wire 事件）。
+  client_ws_type: ConversationReadWatermarkAdvanced
 - name: ConversationUserSettingsChanged
   delivery_semantics: transactional_outbox
   wire_event_type: ConversationUserSettingsChanged

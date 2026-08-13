@@ -62,6 +62,8 @@ abstract final class MediaText {
   static const String imageEditorProTone = '色调';
   static const String imageEditorProGrain = '颗粒';
   static const String imageEditorProDenoise = '降噪';
+  static const String imageEditorProVignette = '晕影';
+  static const String imageEditorProWbPicker = '吸管';
   static const String imageEditorProFade = '褪色';
   static const String imageEditorProSharpen = '锐化';
   static const String imageEditorProUnsharpen = '反锐化';

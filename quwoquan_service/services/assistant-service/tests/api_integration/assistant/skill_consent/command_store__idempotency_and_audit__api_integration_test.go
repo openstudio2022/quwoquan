@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001
+// spec_ref: specs/feature-tree/assistant-run-learning/assistant-runtime-foundation/assistant-object-runtime/spec.md#gwt-001.t5
 // readiness_case: grant-skill-consent-api
 // readiness_case: revoke-skill-consent-api
 // readiness_case: list-consents-api

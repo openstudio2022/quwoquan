@@ -5,6 +5,8 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     _setEditorState(() {
       _selectedToolIndex = null;
       _hslPickerActive = false;
+      _wbPickerActive = false;
+      _wbPickerPoint = null;
       _hslPickerPoint = null;
       _localAddMode = false;
       _localShowAnchorMenu = false;
@@ -63,6 +65,8 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
             : null;
       }
       _hslPickerActive = false;
+      _wbPickerActive = false;
+      _wbPickerPoint = null;
       _hslPickerPoint = null;
       _localAddMode = false;
       _localShowAnchorMenu = false;
@@ -886,6 +890,8 @@ extension _ImageEditorPageProAdjustments on _ImageEditorPageState {
     if (!mounted) return;
     _setEditorState(() {
       _hslPickerActive = false;
+      _wbPickerActive = false;
+      _wbPickerPoint = null;
       _hslPickerPoint = null;
       _isComparingSessionBaseline = false;
       _selectedToolIndex = null;

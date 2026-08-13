@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006.t1
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-006.t2
 // readiness_case: content_reaction_get_content_reaction_state_app_api
 // readiness_case: content_reaction_like_post_app_api
 // readiness_case: content_reaction_react_to_comment_app_api

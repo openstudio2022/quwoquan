@@ -434,7 +434,45 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
 
   /// 白平衡编辑层：矩阵预览已在 _wrapWithProAdjustments 中生效，仅叠加对比条。
   Widget _buildWbSessionImageLayer(Widget content) {
-    return _buildBwSessionImageLayer(content);
+    // 白平衡吸管：点选中性灰采样反解温度/色调（与灰世界自动同一反解）。
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
+        return GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTapDown: _wbPickerActive
+              ? (details) =>
+                    _handleWbPickerTap(details.localPosition, imageSize)
+              : null,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildBwSessionImageLayer(content),
+              if (_wbPickerPoint != null && _wbPickerActive)
+                Positioned(
+                  left: _wbPickerPoint!.dx - AppSpacing.iconMedium,
+                  top: _wbPickerPoint!.dy - AppSpacing.iconMedium,
+                  child: IgnorePointer(
+                    child: Container(
+                      key: const ValueKey<String>('wb-picker-marker'),
+                      width: AppSpacing.iconLarge,
+                      height: AppSpacing.iconLarge,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.white,
+                          width: AppSpacing.xs / 2,
+                        ),
+                        color: AppColors.transparent,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildLocalSessionImageLayer(Widget content) {

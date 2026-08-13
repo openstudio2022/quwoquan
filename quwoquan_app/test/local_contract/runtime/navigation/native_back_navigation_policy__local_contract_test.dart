@@ -1,6 +1,8 @@
 // spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/spec.md#sit-001
 // spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/global-route-edge-pop-contract/spec.md#gwt-001
 // spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/home-edge-swipe-exit-guard/spec.md#gwt-001
+// spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/home-edge-swipe-exit-guard/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/runtime/native-edge-gesture-navigation/home-edge-swipe-exit-guard/spec.md#gwt-001.t2
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';

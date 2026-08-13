@@ -163,17 +163,36 @@ def handle_governance(args: argparse.Namespace) -> None:
         return
     if cmd == "protect-quarantine":
         from governance.protected_quarantine_evidence import (
+            DEFAULT_REASON,
+            FORENSIC_DEFAULT_REASON,
             ProtectedQuarantineEvidenceError,
+            protect_forensic_quarantine,
             protect_historical_quarantine,
         )
 
         try:
-            payload, destination = protect_historical_quarantine(
-                quarantine_root=Path(args.quarantine),
-                migration_apply_receipt=Path(args.migration_apply_receipt),
-                data_output_root=Path(args.data_output_root).expanduser().resolve(),
-                reason=args.reason,
-            )
+            if args.provenance == "forensic":
+                if args.migration_apply_receipt:
+                    raise ProtectedQuarantineEvidenceError(
+                        "forensic provenance uses the quarantine's own QUARANTINE.json; "
+                        "--migration-apply-receipt is not accepted"
+                    )
+                payload, destination = protect_forensic_quarantine(
+                    quarantine_root=Path(args.quarantine),
+                    data_output_root=Path(args.data_output_root).expanduser().resolve(),
+                    reason=args.reason or FORENSIC_DEFAULT_REASON,
+                )
+            else:
+                if not args.migration_apply_receipt:
+                    raise ProtectedQuarantineEvidenceError(
+                        "migration provenance requires --migration-apply-receipt"
+                    )
+                payload, destination = protect_historical_quarantine(
+                    quarantine_root=Path(args.quarantine),
+                    migration_apply_receipt=Path(args.migration_apply_receipt),
+                    data_output_root=Path(args.data_output_root).expanduser().resolve(),
+                    reason=args.reason or DEFAULT_REASON,
+                )
         except ProtectedQuarantineEvidenceError as exc:
             raise SystemExit(
                 f"[governance protect-quarantine] GATE_BLOCK: {exc}"
@@ -184,6 +203,7 @@ def handle_governance(args: argparse.Namespace) -> None:
                     "manifestDigest": payload["manifestDigest"],
                     "treeDigest": payload["treeDigest"],
                     "quarantineRef": payload["quarantineRef"],
+                    "provenance": payload.get("provenance", "migration"),
                     "status": payload["status"],
                     "path": destination.as_posix(),
                 },
@@ -306,17 +326,26 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     protect_quarantine = sub.add_parser(
         "protect-quarantine",
-        help="将一次迁移后的历史 quarantine 冻结为不可复用的只读证据",
+        help="将历史或取证 quarantine 冻结为不可复用的只读证据",
     )
     protect_quarantine.add_argument("--quarantine", required=True)
-    protect_quarantine.add_argument("--migration-apply-receipt", required=True)
+    protect_quarantine.add_argument(
+        "--provenance",
+        choices=("migration", "forensic"),
+        default="migration",
+        help="migration 绑定迁移 apply receipt;forensic 以隔离区自身 QUARANTINE.json 为凭据",
+    )
+    protect_quarantine.add_argument(
+        "--migration-apply-receipt",
+        help="provenance=migration 时必填",
+    )
     protect_quarantine.add_argument(
         "--data-output-root",
         default=str(Path(".qwq_output/data")),
     )
     protect_quarantine.add_argument(
         "--reason",
-        default="historical release evidence preserved after output layout migration",
+        help="缺省按 provenance 使用对应默认理由",
     )
 
     review = sub.add_parser(

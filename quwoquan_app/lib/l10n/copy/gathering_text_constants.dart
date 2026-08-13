@@ -100,6 +100,7 @@ abstract final class GatheringText {
   static const String invitationCardTitlePrefix = '邀你同行：';
   static const String invitationDeclinedFeedback = '已婉拒邀请';
   static const String invitationActionFailedToast = '操作失败，请稍后重试';
+  static const String inviteCandidatesLabel = '从有交集的同好中选';
 
   static const String detailPageTitle = '活动详情';
   static const String detailEmptyTitle = '暂时无法读取活动';

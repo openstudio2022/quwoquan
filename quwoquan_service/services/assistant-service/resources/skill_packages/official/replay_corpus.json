@@ -2033,7 +2033,7 @@
       "evaluationAssetDigest": "sha256:08d91e865c0dd50ee5dc83ed1a2aa61eed91cdd0779f5749af59228f587c17e0",
       "evaluationProfileRef": "evaluation.gathering_coordinator",
       "skillId": "gathering_coordinator",
-      "skillReleaseDigest": "sha256:189958c562e031b99ff4db29da669fd5420acb84a4c40cd509f15e952145f20f"
+      "skillReleaseDigest": "sha256:0346d6e54141363e95bd73783794c4ebb0a433484d5ad89bd882bff5a9e347ea"
     }
   ]
 }

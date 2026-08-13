@@ -84,6 +84,7 @@ func TestAppealCaseIsExplicitAndCanOnlyIssueRestore(t *testing.T) {
 }
 
 // spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/account-moderation-and-appeal-enforcement/spec.md#gwt-001
+// spec_ref: specs/feature-tree/product-ops-growth/product-control-plane-foundation/account-moderation-and-appeal-enforcement/spec.md#gwt-001.t4
 func TestRejectClosesCaseWithoutDecision(t *testing.T) {
 	now := time.Date(2026, 7, 29, 3, 4, 5, 0, time.UTC)
 	current, err := model.OpenModeration(model.OpenModerationParams{

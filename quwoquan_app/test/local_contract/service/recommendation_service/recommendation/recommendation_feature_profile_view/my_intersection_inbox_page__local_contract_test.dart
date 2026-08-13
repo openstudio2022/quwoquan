@@ -24,6 +24,10 @@ import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_page.dart';
 import 'package:quwoquan_app/runtime/di/author_impact_provider.dart';
+import 'package:quwoquan_app/runtime/di/global_surface_action_dependencies.dart'
+    show startGatheringNavigationBindingProvider;
+import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/gathering_create_navigation_request.dart'
+    show GatheringCreateNavigationRequest;
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/my_intersection_inbox_timeline.dart';
 
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
@@ -577,6 +581,50 @@ void main() {
     expect(find.textContaining('王然'), findsOneWidget);
   });
 
+  testWidgets('可约主行动：人对人交集从收件箱发起结伴携带受邀者（duo 入口一致性）', (
+    tester,
+  ) async {
+    // 与他人主页 ObjectIntersectionSection 同轨：收件箱人对人交集点「一起去」
+    // 必须携带对方 persona 进入双人邀约预设，不得退化为多人公开行动。
+    GatheringCreateNavigationRequest? createRequest;
+    final repo = _PersonActionableIntersectionRepository();
+    final behaviorRepo = RecordingContentBehaviorRepository();
+    final tracker = ContentBehaviorTracker(
+      reporter: behaviorRepo,
+      maxBatchSize: 1,
+      enablePeriodicFlush: false,
+    );
+    addTearDown(tracker.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...sealedCloudBoundaryOverrides(),
+          authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
+          intersectionRepositoryProvider.overrideWithValue(repo),
+          intersectionVisitWriterProvider.overrideWithValue(
+            const _NoopIntersectionVisitWriter(),
+          ),
+          behaviorRepositoryProvider.overrideWithValue(behaviorRepo),
+          contentBehaviorTrackerProvider.overrideWithValue(tracker),
+          startGatheringNavigationBindingProvider.overrideWithValue(
+            (context, [request]) async => createRequest = request,
+          ),
+        ],
+        child: CupertinoApp.router(routerConfig: _router()),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.byType(IntersectionActionablePill), findsOneWidget);
+    await tester.tap(find.text('一起去'));
+    await tester.pumpAndSettle();
+
+    expect(createRequest, isNotNull);
+    expect(createRequest!.inviteePersonaId, 'fixture_user_partner');
+    expect(createRequest!.isDuoInvitation, isTrue);
+  });
+
   testWidgets('filter=impact 时直达打动一级 tab', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
@@ -1000,6 +1048,69 @@ class _LifecycleIntersectionRepository implements IntersectionRepository {
         ],
         representativeName: '王然',
         representativeId: 'fixture_user_photo',
+      ),
+    ];
+  }
+
+  @override
+  Future<List<IntersectionReason>> getObjectIntersections({
+    required String objectId,
+    required String objectType,
+    int limit = 8,
+  }) async => const <IntersectionReason>[];
+}
+
+/// 人对人可约交集 fixture：objectKind=person + start_gathering 主行动，
+/// 复现「我的交集 → 一起去」双人邀约入口。
+class _PersonActionableIntersectionRepository implements IntersectionRepository {
+  @override
+  Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
+    return intersectionInboxSummaryFixture(totalCount: 1);
+  }
+
+  @override
+  Future<List<IntersectionReason>> listMyIntersections({
+    String? dimension,
+    String? filter,
+    String? sourceRef,
+    String? timeBucket,
+    String? cursor,
+    int limit = 50,
+  }) async {
+    return <IntersectionReason>[
+      _displayableInboxReason(
+        dimension: 'place',
+        intersectionId: 'ix_person_duo',
+        objectKind: 'person',
+        source: 'place',
+        displayName: '林清越',
+        actionTargetId: 'fixture_user_partner',
+        iconKey: 'travel',
+        primaryText: '你和林清越都想去顶峰公园',
+        intersectionPoints: <IntersectionPoint>[
+          intersectionPointFixture(
+            pointId: 'p_person_duo',
+            sourceRef: 'coWishlisted',
+            count: 1,
+            dimension: 'place',
+          ),
+        ],
+        actionHints: <IntersectionActionHint>[
+          intersectionActionHintFixture(
+            actionKey: 'start_gathering',
+            dispatch: 'gathering',
+            label: '一起去',
+            isPrimary: true,
+            priority: 1,
+            target: intersectionTargetFixture(
+              objectId: 'fixture_homepage_peak_park',
+              objectKind: 'place',
+              routeId: 'homepageDetail',
+            ),
+          ),
+        ],
+        representativeName: '林清越',
+        representativeId: 'fixture_user_partner',
       ),
     ];
   }

@@ -149,6 +149,14 @@ class ChatMessageBubble extends ConsumerWidget {
           ),
         ),
       );
+      if (onTap != null) {
+        contentWidget = GestureDetector(
+          key: ValueKey<String>('chat_image_open_${message.id}'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: contentWidget,
+        );
+      }
     } else if (type == 'audio') {
       contentWidget = ref.watch(voiceMessageBubbleBuilderProvider)(
         messageId: message.id,

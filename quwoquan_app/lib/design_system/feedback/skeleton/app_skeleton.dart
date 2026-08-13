@@ -137,3 +137,51 @@ class AppSkeletonCircle extends StatelessWidget {
     );
   }
 }
+
+/// 列表初始加载的标准骨架：头像圈 + 主/副两行文字位 × [rowCount] 行，
+/// 整体 shimmer。会话列表、成员列表、消息列表等行式内容共用，页面不得
+/// 再各自拼装私有行骨架。
+class AppSkeletonListRows extends StatelessWidget {
+  const AppSkeletonListRows({
+    super.key,
+    this.rowCount = 4,
+    this.avatarSize = AppSpacing.avatarUserMd,
+  });
+
+  final int rowCount;
+  final double avatarSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppSkeletonShimmer(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var index = 0; index < rowCount; index += 1)
+            Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppSpacing.containerSm,
+                vertical: AppSpacing.intraGroupSm,
+              ),
+              child: Row(
+                children: [
+                  AppSkeletonCircle(size: avatarSize),
+                  SizedBox(width: AppSpacing.intraGroupMd),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppSkeletonLine(width: AppSpacing.oneHundred),
+                        SizedBox(height: AppSpacing.intraGroupXs),
+                        const AppSkeletonLine(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

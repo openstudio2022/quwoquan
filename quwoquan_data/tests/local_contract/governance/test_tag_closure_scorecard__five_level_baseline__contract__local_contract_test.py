@@ -6,6 +6,11 @@
 tagRef，既召回不到也筛选不到。
 
 spec_ref: specs/feature-tree/discovery-content/spec.md#dom-004
+spec_ref: specs/feature-tree/discovery-content/spec.md#dom-004.t1
+spec_ref: specs/feature-tree/discovery-content/spec.md#dom-004.t2
+spec_ref: specs/feature-tree/discovery-content/spec.md#dom-004.t3
+spec_ref: specs/feature-tree/discovery-content/spec.md#dom-004.t4
+spec_ref: specs/feature-tree/discovery-content/spec.md#dom-004.t5
 """
 from __future__ import annotations
 

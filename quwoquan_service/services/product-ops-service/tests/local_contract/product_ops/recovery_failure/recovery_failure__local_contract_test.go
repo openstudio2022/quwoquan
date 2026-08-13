@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -62,6 +63,53 @@ func TestRecoveryFailureRejectsUnknownOrOversizedFields(t *testing.T) {
 	}
 }
 
+func TestRecoveryFailureBoundaryEmitsCanonicalErrorCodes(t *testing.T) {
+	reporter := &captureRecoveryReporter{}
+	handler := httpadapter.NewHandler(recoveryfailure.NewService(reporter), writeTestError)
+	mux := http.NewServeMux()
+	handler.Register(mux)
+
+	unknownField := recoveryPayload()
+	unknownField["accountId"] = "must-not-be-accepted"
+	invalid := postRecoveryFailure(t, mux, unknownField)
+	assertRecoveryFailureErrorCode(
+		t,
+		invalid,
+		http.StatusBadRequest,
+		"OPS.USER.recovery_failure_invalid",
+	)
+
+	reporter.reportErr = errors.New("elasticsearch unavailable")
+	unavailable := postRecoveryFailure(t, mux, recoveryPayload())
+	assertRecoveryFailureErrorCode(
+		t,
+		unavailable,
+		http.StatusServiceUnavailable,
+		"OPS.SYSTEM.recovery_failure_unavailable",
+	)
+}
+
+func assertRecoveryFailureErrorCode(
+	t *testing.T,
+	recorder *httptest.ResponseRecorder,
+	status int,
+	code string,
+) {
+	t.Helper()
+	if recorder.Code != status {
+		t.Fatalf("status=%d want=%d body=%s", recorder.Code, status, recorder.Body.String())
+	}
+	var response struct {
+		Code string `json:"code"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode error response %s: %v", recorder.Body.String(), err)
+	}
+	if response.Code != code {
+		t.Fatalf("code=%q want=%q body=%s", response.Code, code, recorder.Body.String())
+	}
+}
+
 func recoveryPayload() map[string]any {
 	return map[string]any{
 		"occurredAt":   time.Now().UTC().Format(time.RFC3339Nano),
@@ -101,8 +149,9 @@ func writeTestError(
 }
 
 type captureRecoveryReporter struct {
-	batchKey string
-	fields   map[string]string
+	batchKey  string
+	fields    map[string]string
+	reportErr error
 }
 
 func (r *captureRecoveryReporter) ReportRecoveryFailure(
@@ -110,6 +159,9 @@ func (r *captureRecoveryReporter) ReportRecoveryFailure(
 	batchKey string,
 	fields map[string]string,
 ) (eventrecord.EventBatchAck, error) {
+	if r.reportErr != nil {
+		return eventrecord.EventBatchAck{}, r.reportErr
+	}
 	r.batchKey = batchKey
 	r.fields = fields
 	return eventrecord.EventBatchAck{AcceptedCount: 1}, nil

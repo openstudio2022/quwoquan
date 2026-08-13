@@ -772,6 +772,30 @@ def test_layout_gate_forbidden_name_heuristic_uses_content_as_the_real_verdict(
     )
 
 
+def test_layout_gate_treats_top_level_cache_and_process_as_shared_roots(
+    tmp_path: Path,
+) -> None:
+    """local/ 一级的 cache/ 与 process/ 是共享缓存/进程根,不套 target 结构。
+
+    AGENTS 把 bytecode/pytest 缓存统一重定向到 env/repo/local/cache/**;把
+    「cache」解析成 target 名会让这一半约定永久红门。
+    """
+    root = tmp_path / ".qwq_output"
+    shared = root / "env/repo/local/cache/python-pyc/some/module"
+    shared.mkdir(parents=True)
+    (root / "env/repo/local/process").mkdir(parents=True)
+
+    assert output_layout_issues(root) == []
+
+    # 普通 target 目录仍必须只含 process/ 与 cache/。
+    stray = root / "env/repo/local/my-target/notes"
+    stray.mkdir(parents=True)
+    assert any(
+        "only permits process/ and cache/" in issue
+        for issue in output_layout_issues(root)
+    )
+
+
 def test_layout_gate_certificate_suffixes_are_never_content_exempt(
     tmp_path: Path,
 ) -> None:

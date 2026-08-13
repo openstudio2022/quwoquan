@@ -195,6 +195,74 @@ extension _ImageEditorPageCurveWb on _ImageEditorPageState {
   }
 
   /// 灰世界自动白平衡：以降采样图 RGB 均值估计色偏，反向设置色温/色调。
+  /// 白平衡吸管：点选「应为中性灰」的位置，按 3×3 邻域平均反解温度/色调。
+  Future<void> _handleWbPickerTap(Offset localPosition, Size imageSize) async {
+    final imageRect = _resolveImageRect(imageSize);
+    if (!imageRect.contains(localPosition)) {
+      _setEditorState(() => _wbPickerPoint = null);
+      return;
+    }
+    final nx = ((localPosition.dx - imageRect.left) / imageRect.width).clamp(
+      0.0,
+      1.0,
+    );
+    final ny = ((localPosition.dy - imageRect.top) / imageRect.height).clamp(
+      0.0,
+      1.0,
+    );
+    try {
+      final bytes = await _loadImageBytes(_currentPath);
+      if (bytes.isEmpty || !mounted) return;
+      final image = await ImageEditorExportEngine.decodeConstrained(
+        bytes,
+        maxDimension: ImageEditorExportEngine.kPreviewDecodeDimension,
+      );
+      final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final width = image.width;
+      final height = image.height;
+      image.dispose();
+      final rgba = data?.buffer.asUint8List();
+      if (rgba == null || rgba.isEmpty || !mounted) return;
+      final centerX = (nx * (width - 1)).round().clamp(0, width - 1);
+      final centerY = (ny * (height - 1)).round().clamp(0, height - 1);
+      double sumR = 0;
+      double sumG = 0;
+      double sumB = 0;
+      var count = 0;
+      for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+          final x = (centerX + dx).clamp(0, width - 1);
+          final y = (centerY + dy).clamp(0, height - 1);
+          final offset = (y * width + x) * 4;
+          sumR += rgba[offset];
+          sumG += rgba[offset + 1];
+          sumB += rgba[offset + 2];
+          count++;
+        }
+      }
+      if (count == 0) return;
+      final resolved =
+          ImageEditorExportEngine.resolveWhiteBalanceFromNeutralSample(
+            red: sumR / count,
+            green: sumG / count,
+            blue: sumB / count,
+          );
+      _setEditorState(() {
+        _wbPickerPoint = localPosition;
+        _wbTemperature = resolved.temperature;
+        _wbTint = resolved.tint;
+      });
+    } catch (error) {
+      _observability.recordPageState(
+        pageName: _ImageEditorPageState._kPageName,
+        phase: 'failure',
+        surface: _ImageEditorPageState._kSurfaceId,
+        copyKey: 'white_balance_picker',
+        error: error is Exception ? error : null,
+      );
+    }
+  }
+
   Future<void> _applyAutoWhiteBalance() async {
     try {
       final bytes = await _loadImageBytes(_currentPath);
@@ -222,16 +290,15 @@ extension _ImageEditorPageCurveWb on _ImageEditorPageState {
       final avgG = sumG / count;
       final avgB = sumB / count;
       if (avgG <= 1) return;
-      // temperature 矩阵按 ±0.18 缩放 R/B 通道，反解需要的增益。
-      final temperature = (((avgG / math.max(avgR, 1)) - 1) / 0.18 * 100).clamp(
-        -100.0,
-        100.0,
+      // 灰世界假设：全图均值应为中性灰；与吸管共用同一反解纯函数。
+      final resolved = ImageEditorExportEngine.resolveWhiteBalanceFromNeutralSample(
+        red: avgR,
+        green: avgG,
+        blue: avgB,
       );
-      final tint = (((avgR + avgB) / 2 / math.max(avgG, 1) - 1) / 0.12 * 100)
-          .clamp(-100.0, 100.0);
       _setEditorState(() {
-        _wbTemperature = temperature.toDouble();
-        _wbTint = tint.toDouble();
+        _wbTemperature = resolved.temperature;
+        _wbTint = resolved.tint;
       });
     } catch (error) {
       _observability.recordPageState(

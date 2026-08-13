@@ -1,6 +1,9 @@
 // readiness_case: get-helper-read-api
 // readiness_case: generate-article-summary-api
 // spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md#gwt-001
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md#gwt-001.t3
 package api_integration
 
 import (

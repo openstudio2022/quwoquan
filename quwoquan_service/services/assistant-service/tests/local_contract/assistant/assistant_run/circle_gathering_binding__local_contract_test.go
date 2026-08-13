@@ -118,38 +118,15 @@ func TestCircleGatheringBindingBlockedOperationsHaveZeroNetworkImpact(
 		),
 	)
 
-	searchRequest := tooling.GatheringSearchPublicRequest{
-		SourceObjectTypeRef: "circle.post",
-		SourceObjectID:      "post-1",
-		Limit:               20,
-	}
-	searchPacket, err := gatheringclient.EncodeListGatheringsBySource(
-		gatheringclient.GatheringListBySourceQuery{
-			SourceObjectTypeRef: searchRequest.SourceObjectTypeRef,
-			SourceObjectID:      searchRequest.SourceObjectID,
-			Limit:               int64(searchRequest.Limit),
-		},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// circle.gathering.ListGatheringsBySource 契约已翻绿(commercial ready),
+	// 其 typed transport 行为由 TestCircleGatheringBindingUsesTypedTransportAndRejectsWrongGrant
+	// 覆盖;本测试只守护仍处 blocked 的 GatheringPlan 命令面零网络。
 	planRequest := gatheringPlanCommand()
 	planPacket, err := gatheringplanclient.EncodeProposeGatheringPlan(planRequest)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, searchErr := binding.SearchPublic(
-		t.Context(),
-		queryCall(
-			searchPacket,
-			runtimeauth.DelegatedResourceConstraint{
-				Type: "circle.gathering.source",
-				ID:   "circle.post:post-1",
-			},
-		),
-		searchRequest,
-	)
 	_, planErr := binding.ProposeGatheringPlan(
 		t.Context(),
 		planCommandCall(
@@ -164,22 +141,17 @@ func TestCircleGatheringBindingBlockedOperationsHaveZeroNetworkImpact(
 		"idempotency-1",
 	)
 
-	for name, err := range map[string]error{
-		"search": searchErr,
-		"plan":   planErr,
-	} {
-		if !errors.Is(
-			err,
-			gatheringinfrastructure.ErrCircleGatheringGeneratedClientUnavailable,
-		) {
-			t.Errorf("%s error=%v", name, err)
-		}
-		var unavailable gatheringinfrastructure.CircleGatheringUnavailableError
-		if !errors.As(err, &unavailable) ||
-			unavailable.CommercialState != "blocked" ||
-			unavailable.OperationID == "" {
-			t.Errorf("%s unavailable evidence=%+v", name, unavailable)
-		}
+	if !errors.Is(
+		planErr,
+		gatheringinfrastructure.ErrCircleGatheringGeneratedClientUnavailable,
+	) {
+		t.Errorf("plan error=%v", planErr)
+	}
+	var unavailable gatheringinfrastructure.CircleGatheringUnavailableError
+	if !errors.As(planErr, &unavailable) ||
+		unavailable.CommercialState != "blocked" ||
+		unavailable.OperationID == "" {
+		t.Errorf("plan unavailable evidence=%+v", unavailable)
 	}
 	if len(transport.requests) != 0 {
 		t.Fatalf("blocked operations reached transport: %+v", transport.requests)

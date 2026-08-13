@@ -29,6 +29,8 @@ def configure_test_auth_environment() -> None:
         b"recommendation-service:local-contract-config"
     ).hexdigest()
     repo_root = Path(__file__).resolve().parents[5]
+    # 输出布局要求 local/<target>/ 下只有 process/ 与 cache/;测试运行时配置
+    # 是可再生缓存,归 cache/ 子层。
     config_root = (
         repo_root
         / ".qwq_output"
@@ -36,6 +38,7 @@ def configure_test_auth_environment() -> None:
         / "repo"
         / "local"
         / "tests"
+        / "cache"
         / "recommendation-runtime-config"
     )
     config_root.mkdir(parents=True, exist_ok=True)

@@ -480,6 +480,7 @@ class ImageEditorExportEngine {
     final hasVibrance = detail.vibrance.abs() > 0.001;
     final hasDenoise = detail.denoise > 0.001;
     final hasAmbiance = detail.ambiance.abs() > 0.001;
+    final hasVignette = detail.vignette.abs() > 0.001;
     final hasGrain = detail.grain > 0.001;
     if (!hasTonal &&
         !hasSharpen &&
@@ -488,6 +489,7 @@ class ImageEditorExportEngine {
         !hasVibrance &&
         !hasDenoise &&
         !hasAmbiance &&
+        !hasVignette &&
         !hasGrain) {
       return;
     }
@@ -575,6 +577,30 @@ class ImageEditorExportEngine {
         math.max(8, math.min(width, height) ~/ 24),
         kAmbianceLocalContrast,
       );
+    }
+
+    if (hasVignette) {
+      // 晕影：从中心向边角的径向亮度衰减/增强，平滑过渡不产生硬边。
+      final k = detail.vignette / 100 * kVignetteMaxDarken;
+      final centerX = (width - 1) / 2;
+      final centerY = (height - 1) / 2;
+      final maxDistance = math.sqrt(centerX * centerX + centerY * centerY);
+      for (var p = 0; p < count; p++) {
+        final x = p % width;
+        final y = p ~/ width;
+        final dx = x - centerX;
+        final dy = y - centerY;
+        final distance = math.sqrt(dx * dx + dy * dy) / maxDistance;
+        final falloff = _smoothstep(
+          kVignetteInnerRadius,
+          1.0,
+          distance,
+        );
+        if (falloff <= 0) {
+          continue;
+        }
+        gain[p] *= (1 - k * falloff).clamp(0.1, 4.0);
+      }
     }
 
     final grainAmplitude = detail.grain / 100 * kGrainMaxAmplitude;
@@ -728,9 +754,37 @@ class ImageEditorExportEngine {
   static const double kTonalMaxAdjust = 0.35;
 
   /// 光感（ambiance）满值的暗部提亮与亮部压制幅度、局部对比强度。
+  /// 亮部压制系数远小于暗部提亮：乘性 gain 对亮像素绝对变化放大，
+  /// 语义主体是「暗部细节提亮」。
   static const double kAmbianceShadowLift = 0.45;
-  static const double kAmbianceHighlightCompress = 0.18;
+  static const double kAmbianceHighlightCompress = 0.08;
   static const double kAmbianceLocalContrast = 0.35;
+
+  /// 晕影满值的边角最大压暗比例与内圈无衰减半径（归一化距离）。
+  static const double kVignetteMaxDarken = 0.55;
+  static const double kVignetteInnerRadius = 0.35;
+
+  /// 由「应为中性灰」的采样色反解白平衡（温度/色调滑杆值 -100..100）。
+  ///
+  /// 与 `_temperatureMatrix`（R/B ±0.18）、`_tintMatrix`（G ∓0.12）的正向
+  /// 定义互逆：吸管点选与灰世界自动共用同一反解，预览/烘焙同源。
+  static ({double temperature, double tint}) resolveWhiteBalanceFromNeutralSample({
+    required double red,
+    required double green,
+    required double blue,
+  }) {
+    final safeRed = math.max(red, 1.0);
+    final safeGreen = math.max(green, 1.0);
+    final temperature = (((safeGreen / safeRed) - 1) / 0.18 * 100).clamp(
+      -100.0,
+      100.0,
+    );
+    final tint = (((red + blue) / 2 / safeGreen - 1) / 0.12 * 100).clamp(
+      -100.0,
+      100.0,
+    );
+    return (temperature: temperature.toDouble(), tint: tint.toDouble());
+  }
 
   /// 锐化 unsharp 半径（细边缘）与强度。
   static const int kSharpenRadiusPx = 1;
@@ -1339,6 +1393,7 @@ class ImageEditorDetailSpec {
     this.vibrance = 0,
     this.denoise = 0,
     this.ambiance = 0,
+    this.vignette = 0,
     this.grain = 0,
     this.grainSeed = 1,
   });
@@ -1358,6 +1413,9 @@ class ImageEditorDetailSpec {
   /// 光感（ambiance）：暗部提亮 + 亮部微压 + 大半径局部对比；
   /// 替换旧「lightSense × 亮度/对比矩阵系数」近似。
   final double ambiance;
+
+  /// 晕影：正值边角压暗（暗角）、负值边角提亮（亮角），径向平滑过渡。
+  final double vignette;
   final double grain;
   final int grainSeed;
 
@@ -1370,6 +1428,7 @@ class ImageEditorDetailSpec {
       vibrance.abs() <= 0.001 &&
       denoise <= 0.001 &&
       ambiance.abs() <= 0.001 &&
+      vignette.abs() <= 0.001 &&
       grain <= 0.001;
 }
 

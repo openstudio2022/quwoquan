@@ -177,7 +177,7 @@ def exact_required_cell_issues(
     *,
     compiled: Mapping[str, Any],
 ) -> list[str]:
-    """Reject missing, duplicate, extra or legacy release evidence cells."""
+    """Reject missing, duplicate, extra or non-canonical release evidence cells."""
     expected = expected_required_cell_keys(compiled)
     observed: list[tuple[str, str, str]] = []
     invalid: list[str] = []
@@ -203,8 +203,10 @@ def exact_required_cell_issues(
     extra = sorted(observed_set - expected)
     issues: list[str] = []
     if invalid:
+        # 消息措辞不得含退役术语(verify_retired_terms_zero 硬门,
+        # companion 测试 test_retired_terms_zero__gate 锁定);勿以旧基线覆盖本行。
         issues.append(
-            "Provider release evidence contains non-canonical/legacy cells: "
+            "Provider release evidence contains non-canonical cells: "
             + ", ".join(invalid)
         )
     if duplicate:

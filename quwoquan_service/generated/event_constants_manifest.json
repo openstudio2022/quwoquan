@@ -1,6 +1,6 @@
 {
   "generator": "tools/codegen_event_constants",
-  "sourceDigest": "85a7fe6d3739b8293ab02701fef67046b6f74c58f5a203d38dbd76ea0448542f",
+  "sourceDigest": "9c1cd534ec9fedbd38c1ae728b0333925acd12467e0fc10d3dc1a9db210b0d9c",
   "excludedObjects": null,
   "outputs": [
     {
@@ -40,8 +40,8 @@
       "language": "go",
       "owner": "chat.conversation_user_state",
       "emitter": "internal/metadata/codegen.DomainGenerator",
-      "sha256": "5831e8eee15b8cf770edaac7f5a8b5c21857c156dc0d830a259d4c4edbe268a8",
-      "bytes": 553
+      "sha256": "6b0760e181e6e15bdd7204a0cce5d3724a12020a0cfacc491adaec336e9a099e",
+      "bytes": 628
     },
     {
       "path": "services/chat-service/generated/chat/message/contract/event/events.go",

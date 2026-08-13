@@ -122,6 +122,17 @@ fields:
     ops_exposure: read
     role: authoritative_state
 types:
+  ConversationReadWatermarkAdvancedEventPayload:
+    description: 会话读位推进后的 canonical 实时载荷；对端消费推进 peer 读位（1v1 双勾），自读消费收敛未读。
+    fields:
+      - {name: conversationId, type: string, constraints: [NOT_BLANK]}
+      - {name: userId, type: string, constraints: [NOT_BLANK]}
+      - {name: messageId, type: string, constraints: [NULLABLE]}
+      - {name: readSeq, type: int64, constraints: [NOT_NULL, POSITIVE]}
+      - {name: unreadCount, type: int, constraints: [NOT_NULL]}
+      - {name: mentionUnreadCount, type: int, constraints: [NULLABLE]}
+      - {name: readAt, type: timestamp, constraints: [NOT_NULL]}
+      - {name: updatedAt, type: timestamp, constraints: [NOT_NULL]}
   ConversationUserSettingsChangedEventPayload:
     description: 当前用户的会话级静音与置顶状态变化后供端侧定点刷新 owner projection 的 canonical 实时载荷。
     fields:

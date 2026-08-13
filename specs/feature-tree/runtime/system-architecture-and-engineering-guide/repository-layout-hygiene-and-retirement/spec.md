@@ -103,4 +103,14 @@
 - 优先级：`P1`
 - 准出影响：`block`
 - 影响或价值：`.qwq_output/data/quarantine/unauthorized-scale022-pids4167-5219-20260808/` 是一次未授权规模化执行事件的取证隔离区，其 `QUARANTINE.json` 判定为 `decision: GATE_BLOCK/WAIT_CONTENT`、`consumption: forbidden`、`recovery: retain_for_forensics_only`，必须永久保留。但它内含 `specs/`、`quwoquan_ops/policies`、各服务 `contracts/` 与 `quwoquan_data/schema` 的源真相副本，触发 `REQ-003` 的输出边界规则，使 `verify_output_layout.py` 与 `verify_root_layout.py` 永久 FAIL。现有豁免机制 `quwoquan_data/scripts/governance/protected_quarantine_evidence.py` 只认 `local/workspace/quarantine/<child>` 路径且必须绑定一份 output-layout migration apply receipt，是为布局迁移遗留树设计的，取证隔离拿不出这种 provenance。结果是取证保留与输出布局两条规则互斥：保留证据就永远红门，清掉红门就销毁证据。这类冲突不会自己暴露——它表现为一道"反正一直红"的门，久而久之没人再看它输出什么。
-- 完成判定：`GWT-002` 对应行为满足——扩展受保护隔离的 provenance 模型，使取证隔离能以 `QUARANTINE.json` 自身为凭据被登记（同样用树摘要冻结，任何漂移即失配），`verify_output_layout.py` 与 `verify_root_layout.py` 在保留该隔离区的前提下转绿，且真实测试 `spec_ref` 断言：受保护隔离内容一旦变化即 BLOCK，未登记的隔离区不得获得豁免。
+- 现状（时间线见 git 历史）：forensic provenance 机制已完整落地——`protected_quarantine_evidence.py` 新增 `forensic` 类（凭据为 `QUARANTINE.json` 自身，要求 `recovery: retain_for_forensics_only`，整树摘要冻结含凭据本身），两门与 Data 侧同源消费，8 个 local_contract 用例绑定 `GWT-002` 证明漂移即 BLOCK、未登记照拦。但该隔离区本体已在同日被发现从磁盘消失（容器目录 mtime 15:32 后为空，全仓无 `QUARANTINE.json` 残留，本机无 Time Machine 快照），「必须永久保留」的前提已被某次未归因操作破坏——这正是本 OPEN 警告的坏分支。
+- 完成判定：`GWT-002` 对应行为满足——从备份恢复 `unauthorized-scale022-pids4167-5219-20260808` 隔离树后执行 `python3 quwoquan_data/scripts/cli.py governance protect-quarantine --provenance forensic --quarantine .qwq_output/data/quarantine/unauthorized-scale022-pids4167-5219-20260808` 完成登记，两门在保留该隔离区的前提下转绿；若确认无备份可恢复，由 owner 裁决以事件记录（含消失时间线与调查结论）替代原始证据后关闭本条。
+
+<a id="open-004"></a>
+### OPEN-004 输出布局门与对账工具对环境 runtime 目录的辖区认定互斥
+
+- 类型：`risk`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 `verify_output_layout.py` 对 `env/<env>/local/<target>/` 强制「只允许 `process/` 与 `cache/`」，`env/alpha/local/` 下的 `assistant-skill-package-publisher`、`elasticsearch-cjk-supply-chain`（含 OCI 镜像 tar 与 receipt）、`search-owner-backfill` 三个环境作业产物目录因此长期 FAIL；而修复工具 `stackctl repair --fix reconcile-output-layout` 把同一批路径判为「environment runtime and receipts are outside this operation」的 blocker，明确拒绝迁移。两条规则合起来是：门禁要求搬走、工具拒绝搬、人工删除又可能破坏环境 receipt 链——和取证隔离一样表现为一道「反正一直红」的门。
+- 完成判定：`GWT-002` 对应行为满足——对环境作业产物目录的形态做出单一裁决并同源实现：要么 `verify_output_layout.py` 为「带 receipt 的环境作业产物」建立受约束豁免（登记形态 + 内容无 secret 材料），要么 `reconcile-output-layout` 接管此类目录的迁移；裁决后 `env/alpha/local/` 三个现存目录在门禁与工具下同时可判定，且真实测试 `spec_ref` 断言两者对同一路径不再互斥。

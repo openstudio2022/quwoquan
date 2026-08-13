@@ -93,6 +93,8 @@ class ImageEditorOperationPanel extends StatelessWidget {
     required this.onWbTemperatureChanged,
     required this.onWbTintChanged,
     required this.onWbAuto,
+    required this.wbPickerActive,
+    required this.onToggleWbPicker,
     required this.bwWhiteLevel,
     required this.bwBlackLevel,
     required this.onBwWhiteLevelChanged,
@@ -191,6 +193,8 @@ class ImageEditorOperationPanel extends StatelessWidget {
   final ValueChanged<double> onWbTemperatureChanged;
   final ValueChanged<double> onWbTintChanged;
   final VoidCallback onWbAuto;
+  final bool wbPickerActive;
+  final VoidCallback onToggleWbPicker;
   final double bwWhiteLevel;
   final double bwBlackLevel;
   final ValueChanged<double> onBwWhiteLevelChanged;

@@ -90,6 +90,64 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /internal/recommendation/flywheel-funnel:
+        get:
+            operationId: GetRecommendationFlywheelFunnel
+            x-contract-operation-id: recommendation.recommendation_feature_profile_view.GetRecommendationFlywheelFunnel
+            x-object-id: recommendation.recommendation_feature_profile_view
+            x-actor: none
+            x-application:
+                kind: query
+                facet: RecommendationFeatureProfileViewQueryFacade
+                method: getFlywheelFunnel
+                reader: RecommendationFlywheelFunnelReader
+                slice: RecommendationFlywheelFunnelSnapshot
+            parameters:
+                - name: windowFrom
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: windowTo
+                  in: query
+                  required: true
+                  schema:
+                    type: string
+                - name: sourceObjectKind
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: sourceObjectId
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: capacityTier
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: tagRef
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RecommendationFlywheelFunnelSnapshot'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /internal/recommendation/intersection-supply/{supplyKey}:
         get:
             operationId: GetRecommendationIntersectionSupply
@@ -552,6 +610,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: RecommendationAuthorImpactSummary
+            x-contract-placeholder: true
+        RecommendationFlywheelFunnelSnapshot:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: RecommendationFlywheelFunnelSnapshot
             x-contract-placeholder: true
         RecommendationGatheringSocialProofSummary:
             type: object

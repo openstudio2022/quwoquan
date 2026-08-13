@@ -22,6 +22,12 @@ def _is_comment_only_line(line: str) -> bool:
     return stripped.startswith("//") or stripped.startswith("*")
 
 
+def _is_regular_expression_source(line: str, match_start: int) -> bool:
+    """Ignore URL-shaped regex patterns; this gate owns runtime literals only."""
+    prefix = line[:match_start]
+    return re.search(r"RegExp\(\s*r?['\"][^'\"]*$", prefix) is not None
+
+
 def _is_allowed_host(host: str) -> bool:
     normalized = host.strip("[]").lower()
     if normalized in ALLOWED_PUBLIC_HOSTS:
@@ -47,11 +53,19 @@ def _self_test() -> None:
         raise AssertionError("runtime host detector treated a regex pattern as a URL")
 
 
+<<<<<<< Updated upstream
 def main() -> int:
     _self_test()
+=======
+def runtime_host_literal_issues(app_lib: Path | None = None) -> list[str]:
+    source_root = app_lib or APP_LIB
+>>>>>>> Stashed changes
     issues: list[str] = []
-    for path in sorted(APP_LIB.rglob("*.dart")):
-        rel = path.relative_to(ROOT).as_posix()
+    for path in sorted(source_root.rglob("*.dart")):
+        try:
+            rel = path.relative_to(ROOT).as_posix()
+        except ValueError:
+            rel = path.relative_to(source_root).as_posix()
         for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if _is_comment_only_line(line):
                 continue
@@ -61,7 +75,11 @@ def main() -> int:
                 # patterns, not runtime URL literals.  URL_RE intentionally
                 # stays small, so exclude escaped pattern fragments before
                 # handing the candidate to urllib's IPv6-aware parser.
-                if "$" in url or "\\" in url:
+                if (
+                    "$" in url
+                    or "\\" in url
+                    or _is_regular_expression_source(line, match.start())
+                ):
                     continue
                 try:
                     host = urlparse(url).hostname or ""
@@ -71,6 +89,11 @@ def main() -> int:
                 if not host or _is_allowed_host(host):
                     continue
                 issues.append(f"{rel}:{line_no}: {host} ({url})")
+    return issues
+
+
+def main() -> int:
+    issues = runtime_host_literal_issues()
 
     if issues:
         print("[verify_runtime_host_literals] FAIL")

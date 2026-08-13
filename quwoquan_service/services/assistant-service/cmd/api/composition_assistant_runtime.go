@@ -17,6 +17,7 @@ import (
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/feedbackcontext"
 	runorchestration "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/orchestration"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/runruntime"
+	tool "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 	"quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/toolaccess"
 	runports "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/domain/ports"
 	skillcontextinfra "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/infrastructure/skillcontext"
@@ -154,6 +155,20 @@ func wireAssistantRuntime(
 	gatheringHandlers, err := buildGatheringToolHandlers(runtime, infrastructure)
 	if err != nil {
 		return nil, dependencyError("assistant-gathering-tools", "initialization", err)
+	}
+	// intersection.read_mine：content 交集读 binding 真实就绪才注册可执行
+	// handler；缺 binding 时不注册，工具经 UnavailableCanonicalBindings 留在
+	// 不可用侧（fail-closed，不建 fallback）。
+	if externalClients.myIntersectionsReader != nil {
+		readMineHandler, handlerErr := tool.NewIntersectionReadMineHandler(
+			externalClients.myIntersectionsReader,
+		)
+		if handlerErr != nil {
+			return nil, dependencyError(
+				"assistant-intersection-tools", "initialization", handlerErr,
+			)
+		}
+		gatheringHandlers["intersection.read_mine"] = readMineHandler
 	}
 	agentLoop, err := buildAgentLoop(
 		runtime.appEnv,

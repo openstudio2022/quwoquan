@@ -1,4 +1,5 @@
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/call-experience/spec.md#gwt-013
+// spec_ref: specs/feature-tree/chat-conversation/realtime-call/call-experience/spec.md#gwt-013.t1
 //
 // 呼出页重建面契约：
 // 振铃计时每秒 tick 只允许重建隔离的时长子组件，不得整页重建

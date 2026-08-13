@@ -20,6 +20,9 @@ import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import '../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
 
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-002
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-002.t1
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-002.t2
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/spec.md#gwt-002.t3
 
 final MediaEndpointConfig _testMediaEndpointConfig = MediaEndpointConfig(
   avatarBaseUrl: 'https://cdn.alpha.quwoquan.com:17100/media/avatar',

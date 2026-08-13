@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
+import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
+import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_ended_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -47,6 +49,16 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
           : AppRoutePaths.rtcVoice(callId: widget.callId);
       context.go(route);
     } else if (state.status == CallStatus.ended) {
+      // 呼出未接通收尾：停止振铃计时（否则计时器空转到下一通），并把
+      // 超时/被拒的终态原因在跳离前提示出来（跳离会吞掉页内 banner）。
+      ref.read(callTimerProvider.notifier).reset();
+      final feedback = callEndedFeedbackText(
+        endReason: state.session?.endReason,
+        outgoing: true,
+      );
+      if (feedback != null) {
+        AppToast.show(context, feedback);
+      }
       if (context.canPop()) {
         context.pop();
       } else {
@@ -57,7 +69,8 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
 
   @override
   Widget build(BuildContext context) {
-    final timer = ref.watch(callTimerProvider);
+    // 计时 tick 由 _OutgoingCallElapsedText 隔离 watch，页面顶层不订阅
+    // callTimerProvider，避免每秒整页重建。
     final session = ref.watch(callSessionProvider);
 
     ref.listen<CallSessionState>(callSessionProvider, (_, next) {
@@ -161,15 +174,7 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     SizedBox(height: AppSpacing.sm),
-                    Text(
-                      timer.formattedTime,
-                      style: TextStyle(
-                        color: CallStageChrome.timerOnGradient(isDark),
-                        fontSize: AppTypography.sm,
-                        fontWeight: AppTypography.normal,
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                      ),
-                    ),
+                    _OutgoingCallElapsedText(isDark: isDark),
                     SizedBox(height: AppSpacing.md),
                     CallStageBanner(
                       onRetry: () => ref
@@ -226,6 +231,28 @@ class _OutgoingCallPageState extends ConsumerState<OutgoingCallPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 振铃计时的隔离展示：每秒 tick 只重建本组件，不上浮为整页重建
+/// （对齐 voice/video 页 CallDurationBadge 的隔离模式）。
+class _OutgoingCallElapsedText extends ConsumerWidget {
+  const _OutgoingCallElapsedText({required this.isDark});
+
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final timer = ref.watch(callTimerProvider);
+    return Text(
+      timer.formattedTime,
+      style: TextStyle(
+        color: CallStageChrome.timerOnGradient(isDark),
+        fontSize: AppTypography.sm,
+        fontWeight: AppTypography.normal,
+        fontFeatures: const [FontFeature.tabularFigures()],
       ),
     );
   }

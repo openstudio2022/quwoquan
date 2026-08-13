@@ -202,3 +202,12 @@
 - 影响或价值：尚缺 lifecycle/temporal/admission 分离、room-ready publish、GatheringRevision、开场后取消边界、证据化 Outcome，以及校园 canonical 数据 release/import 与 production Remote UAT；metadata/local_contract 已证明旅行与校园 profile 复用同一行为合同。
 - 完成判定：`GWT-001`、`GWT-002`、`GWT-003`、`GWT-004`、`GWT-005`、`GWT-006`、`GWT-007`、`GWT-008`、`GWT-009`、`GWT-010`、`GWT-011`、`GWT-012` 由 Circle local_contract、api_integration 与跨域 user_acceptance 直接覆盖；校园 Post/Entity/tag 绑定同一 immutable release、环境 import receipt 与 Remote readback，且 occurred 误计、第二活动根、自动 mutual、专用校园对象/服务与开场后普通取消均为零。
 - 依赖：父 L2 `OPEN-001`、`OPEN-002`，`quwoquan_data` 校园 canonical release/import，以及后续真实账号 Remote UAT。
+
+<a id="open-002"></a>
+### OPEN-002 gathering_control_required 声明了发射点但实现无业务发射
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：当前 `CIRCLE.USER.gathering_control_required` 在 errors.yaml 声明由 PublishGathering/SafetyTerminateGathering 发射，但 `internal/**` 没有任何业务代码路径发射它——只有 `mapLifecycleError` 的映射分支存在。错误码断言测试已经映射合约锚定该分支（`gathering_error_code_mapping__local_contract_test.go`），但「控制权限不足时拒绝发布/安全终止」这条业务语义本身缺实现或缺契约收敛（删码）。
+- 完成判定：`GWT-012` 相关的控制权限语义二选一收敛——PublishGathering/SafetyTerminateGathering 的授权路径真实发射该码并有真实测试 `spec_ref` 断言业务触发；或契约裁决该码冗余并从 errors.yaml 删除（同步删除映射分支与测试）。

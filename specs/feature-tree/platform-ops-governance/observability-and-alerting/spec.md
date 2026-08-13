@@ -106,17 +106,17 @@
 - 依赖：content media_original_access_fact 并行改造静止。
 
 <a id="open-003"></a>
-### OPEN-003 promtool 告警求值覆盖余量（约 23/193，只增不减）
+### OPEN-003 promtool 告警求值覆盖余量（40/198，只增不减）
 
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：尚缺约 170 条手写告警的表达式求值回归——它们仅有
+- 影响或价值：尚缺约 158 条手写告警的表达式求值回归——它们仅有
   YAML 契约与同源静态校验，阈值或标签打错只能在真实事故中暴露。
   `promtool test rules` 已随 `make gate` 与 Delivery Gate service
-  scope 执行，当前约 23 个 alertname 有注入序列求值，批次为
-  SLO burn-rate、黑盒拨测、跨 group critical 代表、LiveKit 丢包
-  与契约派生链。
+  scope 执行，当前 40 个 alertname 有注入序列求值；批次为
+  SLO burn-rate、黑盒拨测、LiveKit 丢包、契约派生链，以及覆盖
+  管道、基础设施、域对象与投影事实链的跨 group critical 代表两批。
 - 完成判定：`SIT-001` 范围内每个手写告警 group 的全部 critical 告警
   有 promtool 正负例；覆盖 alertname 数只增不减（棘轮基线 23）。
 - 依赖：无外部阻断，按 group 分批补齐。

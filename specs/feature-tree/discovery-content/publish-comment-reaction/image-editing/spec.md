@@ -72,6 +72,18 @@
 - 透视校正必须由 `PerspectiveGeometry` 作为唯一几何真相源：预览 Transform 与
   导出烘焙共用同一 Matrix4 透视核与填充缩放（二分内接测试），禁止预览/导出
   各自构造矩阵形成第二坐标链。
+- 滤镜目录必须与整体面板同源：滤镜纯色彩参数走矩阵、细节类参数
+  （vibrance/texture/sharpen/structure/highlight/shadow/grain/lightSense）
+  走 `ImageEditorDetailSpec` 逐像素管线，禁止折算进 ColorMatrix 冒充；
+  滤镜目录小缩略图允许纯矩阵轻量近似（仅供挑选参考，须注明语义）。
+  fade（褪色）为显式声明的「黑场抬升 + 轻度去饱和」精确线性实现（白点不动）；
+  lightSense（光感）为暗部提亮 + 亮部微压 + 大半径局部对比的
+  逐像素 ambiance 真算法，禁止亮度/对比系数拼凑。
+- 晕影（vignette）必须是径向平滑衰减的逐像素实现：正值边角压暗、负值
+  边角提亮、中心不动、径向单调；走 detail 管线与整体面板同源。
+- 白平衡吸管必须与灰世界自动共用同一「中性灰采样 → 温度/色调」反解
+  纯函数（与温度/色调正向矩阵互逆），点选采样取邻域平均；禁止吸管
+  与自动各自建立第二套解算。
 
 <a id="req-006"></a>
 ### REQ-006 真实 FilterCatalog 读取与发布职责交接
@@ -168,6 +180,18 @@
   边缘；填充缩放保证变换后画面完整覆盖原范围框（无露底）。
 - THEN 确认后入撤销栈；取消恢复面板打开前的参数。
 
+<a id="gwt-009"></a>
+### GWT-009 滤镜目录与整体面板同源
+
+- GIVEN 滤镜目录中的滤镜预设含细节类参数（如 vibrance/锐化/颗粒）。
+- WHEN 用户选中滤镜并确认烘焙。
+- THEN 滤镜纯色彩矩阵不响应细节类参数（仅含细节参数的滤镜矩阵为恒等）；
+  细节类参数经同一缩放导出并走与整体面板同一逐像素管线。
+- THEN 含细节参数的滤镜主预览由 CPU 同管线渲染，确认烘焙不跳变；
+  纯色彩滤镜继续走 GPU 矩阵。
+- THEN fade 满值时黑点精确抬升至 lift×255、白点不动；lightSense 正值提亮
+  暗部、亮部只微压，暗部变化大于亮部。
+
 <a id="gwt-005"></a>
 ### GWT-005 production Remote FilterCatalog 到编辑结果交接
 
@@ -193,12 +217,3 @@
 - 准出影响：`block`
 - 影响或价值：Data/content media sourceDigest 与发布物当前仍冻结，本场景保持 `WAIT_CONTENT`；尚缺绑定同一候选的 active FilterCatalog production Remote readback、真实创作交接以及 Android/iPhone 双物理设备结果，现有像素 local_contract、Widget 或 App Remote 代码不得替代。
 - 完成判定：`GWT-005` 的每条结果均由职责匹配的 production user_acceptance runner 直接 `spec_ref`，且 Android 与 iPhone 物理设备 `ReadinessResultBundle` 绑定同一 commit、ContractGraph、candidate、environment 与真实 Provider 并全部为 passed。
-
-<a id="open-002"></a>
-### OPEN-002 细节管线预览烘焙一致与透视撤销取消缺测试
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：当前 `GWT-007` 的锐化、分区、颗粒三段真算法与 `GWT-008` 的同源矩阵、梯形位移、填充缩放均已有像素级断言；仍缺细节管线「预览与烘焙同一管线不跳变」以及透视「确认入撤销栈、取消恢复面板打开前参数」的测试证据。
-- 完成判定：`GWT-007` 的 `gwt-007.t4` 与 `GWT-008` 的 `gwt-008.t4`、`gwt-008.t5` 各自被真实测试 `spec_ref` 绑定。

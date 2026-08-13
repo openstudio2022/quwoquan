@@ -138,6 +138,7 @@ extension _ImageEditorPageColorMatrices on _ImageEditorPageState {
       vibrance: values['vibrance'] ?? 0,
       denoise: math.max(0, values['denoise'] ?? 0),
       ambiance: values['lightSense'] ?? 0,
+      vignette: values['vignette'] ?? 0,
       grain: math.max(0, values['grain'] ?? 0),
     );
   }
@@ -218,6 +219,18 @@ extension _ImageEditorPageColorMatrices on _ImageEditorPageState {
     final strength = (_filterStrengthByPresetId[preset.id] ?? _filterIntensity)
         .clamp(0, 100);
     if (strength <= 0.001) return imageWidget;
+    // 含细节参数的滤镜：CPU 预览与烘焙同一管线（矩阵+细节逐像素）接管，
+    // 纯色彩滤镜继续走 GPU 矩阵。
+    final cpuPreview = _filterPreviewImage;
+    if (cpuPreview != null && imageEditorFilterHasDetailParams(preset)) {
+      return Center(
+        child: RawImage(
+          image: cpuPreview,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+        ),
+      );
+    }
     return ColorFiltered(
       colorFilter: ColorFilter.matrix(
         _buildFilterColorMatrix(preset, strength.toDouble()),

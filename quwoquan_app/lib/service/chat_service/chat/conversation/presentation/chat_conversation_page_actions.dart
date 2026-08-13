@@ -448,6 +448,69 @@ abstract class _ChatConversationPageActionsState
     }
   }
 
+  /// 图片消息点击：进入全屏大图查看（黑底 + 双指缩放）；
+  /// 交付 URL 缺失时给结构化提示。
+  void _openImageMessage(ChatMessageDisplayItem message) {
+    final rawUrl = message.imageUrl.trim().isNotEmpty
+        ? message.imageUrl.trim()
+        : message.mediaUrl.trim();
+    if (rawUrl.isEmpty) {
+      AppToast.show(context, ChatText.chatMediaUnavailable);
+      return;
+    }
+    unawaited(
+      showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: AppColors.black,
+        pageBuilder: (dialogContext, _, _) {
+          return ColoredBox(
+            key: const ValueKey<String>('chat_image_viewer_surface'),
+            color: AppColors.black,
+            child: SafeArea(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(dialogContext).pop(),
+                      child: InteractiveViewer(
+                        maxScale: 4,
+                        child: Center(
+                          child: AppCachedNetworkImage(
+                            imageUrl: rawUrl,
+                            fit: BoxFit.contain,
+                            errorWidget: Icon(
+                              CupertinoIcons.photo,
+                              color: AppColors.white.withValues(alpha: 0.6),
+                              size: AppSpacing.iconLarge,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: AppSpacing.intraGroupSm,
+                    left: AppSpacing.intraGroupSm,
+                    child: CupertinoButton(
+                      key: const ValueKey<String>('chat_image_viewer_close'),
+                      padding: EdgeInsets.all(AppSpacing.intraGroupXs),
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: Icon(
+                        CupertinoIcons.xmark,
+                        color: AppColors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   /// 视频消息点击：resolve 公开交付引用后进入全屏播放（复用 content 域
   /// VideoPlayerWidget 基建）；引用非法时给结构化提示。
   void _openVideoMessage(ChatMessageDisplayItem message) {

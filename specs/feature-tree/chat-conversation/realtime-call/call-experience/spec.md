@@ -176,6 +176,23 @@
 - AND 远端参与者画面在任何摄像头位姿下都不镜像。
 - AND 镜像决策以单一函数为真相源，翻转往返后结论保持一致，渲染侧不得各自判断。
 
+<a id="gwt-013"></a>
+### GWT-013 通话计时 tick 不放大重建范围
+
+- GIVEN 呼出页或已接通通话的计时器每秒推进。
+- WHEN elapsed tick 或 PiP 显隐切换发生。
+- THEN 计时 tick 只重建时长展示子组件，呼出页不整页重建。
+- AND shell bindings 不因 tick 或 PiP 显隐而重建，导航与结构事实保持可用。
+
+<a id="gwt-014"></a>
+### GWT-014 通话收尾结局向用户给出可理解反馈
+
+- GIVEN 一通呼出或来电以某种结局收尾。
+- WHEN 收尾原因为 no_answer、rejected 或正常挂断。
+- THEN 呼出方对 no_answer 看到「无人接听」、对 rejected 看到「对方已拒绝」的低打扰提示。
+- AND 来电方对 no_answer 看到「未接听」提示。
+- AND 正常挂断收尾不产生打扰性提示。
+
 ## 6. 依赖
 
 - 前置要求：[`realtime-call`](../spec.md) 的范围、要求与 SIT。
@@ -184,33 +201,13 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 群邀完整 UI journey 测试
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：缺一条端到端 widget journey：邀请参与者从控制条入口到 picker 提交、roster 更新目前只有分段对象级测试。
-- 目标：控制条邀请入口 → 联系人 picker → InviteToCall 提交 → roster 断言的单条 journey 测试。
-- 完成判定：journey 测试绿且 `spec_ref` 绑定 GWT-004。
-
-<a id="open-002"></a>
-### OPEN-002 视频网格动态重排断言
-
-- 类型：`capability_gap`
-- 优先级：`P2`
-- 准出影响：`track`
-- 影响或价值：缺参与者加入/离开时视频网格列数与 tile 尺寸重排的行为断言，重排回归只能靠人工发现。
-- 目标：对 2/4/6+ 人网格断言列数与 active speaker 排序。
-- 完成判定：网格重排测试绿并绑定 GWT-001。
-
 <a id="open-003"></a>
 ### OPEN-003 通话页性能预算
 
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：尚无通话页（尤其视频网格与 PiP 动画）的帧时间/掉帧率预算与量测手段，商用性能回归缺防线。
+- 影响或价值：尚无通话页的帧时间/掉帧率预算与量测手段；重建面控制已由 GWT-013 承接（计时 tick 不整页重建、shell bindings 不随 tick 重建），剩余缺口收窄为帧预算量测本身。
 - 目标：为 rtcVoice/rtcVideo surface 声明帧预算并接入既有性能量测通道。
 - 完成判定：`GWT-001` 对应通话页在声明的帧预算断言下保持绿，量测接入 gate/CI。
 

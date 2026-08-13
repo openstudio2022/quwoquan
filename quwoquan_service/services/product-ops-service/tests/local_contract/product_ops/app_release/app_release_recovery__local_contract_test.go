@@ -314,6 +314,37 @@ func TestAppReleaseErrorPathsUseRuntimeErrorEnvelope(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-003
+func TestAppReleaseVersionUnavailablePlatformEmitsCanonicalUnavailableCode(t *testing.T) {
+	catalog := appReleaseCatalog()
+	catalog.IOS = apprelease.Release{}
+	service, err := apprelease.NewService(catalog)
+	if err != nil {
+		t.Fatalf("android/web-only release service: %v", err)
+	}
+	mux := http.NewServeMux()
+	httpadapter.NewHandler(service).Register(mux)
+
+	request := httptest.NewRequest(
+		http.MethodGet,
+		"/ops/app-recovery/version?platform=ios&appVersion=1.8.0&buildNumber=18000",
+		nil,
+	)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var envelope map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+		t.Fatalf("decode error envelope: %v", err)
+	}
+	if envelope["code"] != "OPS.SYSTEM.app_release_unavailable" {
+		t.Fatalf("code=%v want=OPS.SYSTEM.app_release_unavailable", envelope["code"])
+	}
+}
+
 func newAppReleaseService(t *testing.T) *apprelease.Service {
 	t.Helper()
 	service, err := apprelease.NewService(appReleaseCatalog())

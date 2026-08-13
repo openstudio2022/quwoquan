@@ -94,11 +94,11 @@
 
 - GIVEN App 结果页任一 Tab 携带 canonical `objectTypes`（如 `content.post`）与可选 `contentTypes`（如 `video`）发起搜索。
 - WHEN 请求经 api-edge GraphQL `SearchPage` persisted query 转发到 search-service `POST /search`。
-- THEN search-service 接受该词汇并返回 200，结果集只含所选 objectTypes；`contentTypes` 过滤在 `content.post` 命中上生效。
+- THEN search-service 接受该词汇并返回 200，结果集只含所选 objectTypes，`contentTypes` 过滤同时在 `content.post` 命中上生效。
 - THEN 携带内部 target 词汇（如 `photo`）或未登记词汇的请求被结构化拒绝：search-service 返回 `SEARCH.USER.invalid_argument`，GraphQL 层由 `SearchPageObjectType`/`SearchPageContentType` 枚举校验拒绝内部词汇上 wire。
-- THEN App enum、GraphQL schema 枚举、api-edge 映射与 search-service 校验四处词汇由静态门禁证明同源；api-edge 集成测试的 owner 替身与真实 `POST /search` 校验语义同源，不得再出现替身接受、真实拒绝的分裂。
-- THEN 结果投影字段在 wire 上完整：`searchRequestId`、`matchedTerms`、`degradeSignals` 位于 slice 级，`rankPosition`、`contentType`、`rankReason` 位于 item 级。
-- THEN 同 viewer/query/filter 的重复执行 TopN `objectRef` 序列一致；翻页 cursor 序列连续无重复，且全栈装配链（网关 `/graphql` → api-edge persisted query → search-service 真进程 → CJK ES）上述行为由环境冒烟 CaseResult 证明。
+- THEN App enum、GraphQL schema 枚举、api-edge 映射与 search-service 校验四处词汇由静态门禁证明同源，api-edge 集成测试的 owner 替身与真实 `POST /search` 校验语义同源，不得再出现替身接受、真实拒绝的分裂。
+- THEN 结果投影字段在 wire 上完整：slice 级 `searchRequestId`、`matchedTerms`、`degradeSignals` 与 item 级 `rankPosition`、`contentType`、`rankReason` 全部可见。
+- THEN 同 viewer/query/filter 的重复执行 TopN `objectRef` 序列一致、翻页 cursor 序列连续无重复，全栈装配链（网关 `/graphql` → api-edge persisted query → search-service 真进程 → CJK ES）的上述行为由环境冒烟 CaseResult 证明。
 
 ## 6. 依赖
 
@@ -114,5 +114,5 @@
 - 类型：`external_blocker`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：历史断链（api-edge 翻译 canonical 词汇、search-service 只认内部 target 词汇，携带 objectTypes 的正式搜索 100% 返回 400）已修复：search-service 校验切换为 canonical `objectTypes`+`contentTypes`（`TargetsForCanonicalFilter`），词汇同源由 `verify_search_wire_vocabulary_single_track.py` 门禁与 api-edge↔runtime/search 契约测试（`search_page_owner_vocabulary__local_contract_test.go`）钉死，真实 ES 上 `golden_query_relevance__api_integration_test.go` 证明过滤端到端生效。尚缺 gamma-local 全栈（App→Caddy→api-edge→search-service 真进程）冒烟 CaseResult。
-- 完成判定：`GWT-003` 全部子句绑定真实测试 `spec_ref`，且 gamma-local 全栈 `/graphql` SearchPage（含 objectTypes/contentTypes 过滤）冒烟通过。
+- 影响或价值：历史断链（api-edge 翻译 canonical 词汇、search-service 只认内部 target 词汇，携带 objectTypes 的正式搜索 100% 返回 400）已修复：search-service 校验切换为 canonical `objectTypes`+`contentTypes`（`TargetsForCanonicalFilter`），词汇同源由 `verify_search_wire_vocabulary_single_track.py` 门禁与 api-edge↔runtime/search 契约测试（`search_page_owner_vocabulary__local_contract_test.go`）钉死，真实 ES 上 `golden_query_relevance__api_integration_test.go` 证明过滤端到端生效。`GWT-003` 已按子句 `t1..t5` 逐条绑定真实测试。全栈冒烟 runner（`quwoquan_ops/tests/acceptance/user_acceptance/service_ops/search-service/smoke/run_search_fullstack_smoke_probe.py`，readiness case `search_fullstack_smoke_probe_ops_env`：六 Tab 参数矩阵、投影字段、翻页连续、非法词汇拒绝、重复 20 次一致）已实现并登记。gamma-local 实跑证据被并行主线阻断：`quwoquan/elasticsearch-cjk:8.13.4` tag 形态已通过完整 packaging（candidate `sha256:9b9680a2…`），alias 化 EnsureIndex 对遗留卷 legacy 索引按设计 fail-closed（处置步骤：删除 legacy 物理索引 `quwoquan_objects` 或删卷重建，owner backfill 可恢复），user 域 backfill 43 条 enqueue+published 已验证。但 `stackctl up` 收尾期间 service-core 被并行 assistant skill package 资产缺失（`/etc/qwq-config/skill-packages`）反复打崩，mongo 业务数据重灌又被并行数据 release schema 迁移（存量 release 缺 `executionId`/`sourceIdentityDigest`）阻断。
+- 完成判定：`GWT-003.t5` 的全栈冒烟 CaseResult 半区满足——并行主线稳定后 gamma-local `stackctl up` + `health full` 全 healthy，四 owner backfill 后执行上述冒烟 runner（覆盖 `GWT-003.t1`、`GWT-003.t2`、`GWT-003.t4`、`GWT-003.t5`），CaseResult 通过并归档 `.qwq_output/env/repo/runs/search-fullstack-smoke/`。

@@ -125,6 +125,21 @@ final class _PagedMessageRepository extends Fake
     }
     return page;
   }
+
+  @override
+  Future<ChatMessageSyncViewData> syncMessages({
+    required String conversationId,
+    required int lastSeq,
+    int limit = 500,
+  }) async {
+    if (failNextCalls) {
+      throw StateError('remote unavailable');
+    }
+    return const ChatMessageSyncViewData(
+      messages: <ChatMessageViewData>[],
+      hasMore: false,
+    );
+  }
 }
 
 List<Override> _boundaryOverrides({
@@ -183,6 +198,40 @@ void main() {
       );
       expect(state.isLoading, isFalse);
       expect(state.isRefreshing, isFalse);
+    });
+
+    // spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/spec.md#sit-002.t2
+    test('SIT-002 断连补齐失败呈现可重试失败态且不静默截断已有序列', () async {
+      final cache = _SeededTimelineCache();
+      final repo = _PagedMessageRepository(3);
+      final container = ProviderContainer(
+        overrides: _boundaryOverrides(message: repo, timelineCache: cache),
+      );
+      addTearDown(container.dispose);
+
+      final notifier = container
+          .read(chatMessageProvider(_conversationId).notifier);
+      await notifier.loadMessages();
+      expect(
+        container.read(chatMessageProvider(_conversationId)).messages,
+        hasLength(3),
+      );
+
+      // 重连后补洞请求失败：必须呈现失败态，且已有序列原样保留。
+      repo.failNextCalls = true;
+      await notifier.syncFromSeq(3);
+
+      final state = container.read(chatMessageProvider(_conversationId));
+      expect(
+        state.error,
+        isNotNull,
+        reason: '补齐失败必须呈现可重试失败态，不得静默吞掉',
+      );
+      expect(
+        state.messages.map((m) => m.seq).toList(),
+        [1, 2, 3],
+        reason: '补齐失败不得截断或回退已有消息序列',
+      );
     });
 
     test('GWT-002 本地为空且远端失败必须呈现可重试失败态', () async {

@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-004
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-004.t1
+// spec_ref: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-004.t2
 // readiness_case: start-media-image-reprocess-run-local
 // readiness_case: pause-media-image-reprocess-run-local
 // readiness_case: resume-media-image-reprocess-run-local

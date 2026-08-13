@@ -87,16 +87,39 @@ def _legacy_marker_issues(*roots: Path) -> list[str]:
     return issues
 
 
-def _output_layout_issues() -> list[str]:
-    root = DATA_EXECUTIONS_ROOT.parent
-    if not root.exists():
+def _output_layout_issues(root: Path | None = None) -> list[str]:
+    output = root if root is not None else DATA_EXECUTIONS_ROOT.parent
+    if not output.exists():
         return []
     issues: list[str] = []
-    for entry in sorted(root.iterdir()):
+    protected_roots: set[Path] | None = None
+    for entry in sorted(output.iterdir()):
+        if entry.name == "quarantine" and entry.is_dir() and not entry.is_symlink():
+            # 取证隔离容器:child 必须已用自身 QUARANTINE.json 登记 forensic
+            # provenance(树摘要冻结);未登记或漂移的隔离区不得豁免。
+            if protected_roots is None:
+                protected, _receipt_issues = load_protected_quarantine_receipts(
+                    data_output_root=output.expanduser().resolve()
+                )
+                protected_roots = set(protected)
+            for child in sorted(entry.iterdir()):
+                if (
+                    child.is_dir()
+                    and not child.is_symlink()
+                    and child.resolve() in protected_roots
+                ):
+                    continue
+                issues.append(
+                    f"{child}: unregistered quarantine is forbidden; register forensic "
+                    "provenance via governance protect-quarantine --provenance forensic, "
+                    "or remove it"
+                )
+            continue
         if entry.name not in _OUTPUT_CHILDREN:
             issues.append(f"{entry}: data output only allows tasks/, releases/, local/")
-    if DATA_LOCAL_ROOT.exists():
-        for entry in sorted(DATA_LOCAL_ROOT.iterdir()):
+    local_root = output / "local" if root is not None else DATA_LOCAL_ROOT
+    if local_root.exists():
+        for entry in sorted(local_root.iterdir()):
             if entry.name not in _LOCAL_CHILDREN:
                 issues.append(f"{entry}: data/local only allows cache/ and workspace/")
     return issues

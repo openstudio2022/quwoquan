@@ -27,26 +27,51 @@ GO_CONST_RE = re.compile(r"go_const:\s*[\"']?(\w+)")
 DART_CONST_RE = re.compile(r"dart_const:\s*[\"']?(\w+)")
 
 #: 确属测试树内不可触发的兜底码；每条豁免必须写明理由。
-EXEMPT_CODES: dict[str, str] = {}
+EXEMPT_CODES: dict[str, str] = {
+    # errors.yaml 声明 surface: player 且无 http_status,发射侧在 App 端
+    # (quwoquan_app/lib/service/content_service/media/media_asset/ 的
+    # media_playback_failure.dart 与 seek internals),App 测试树已有
+    # media_playback_failure__local_contract_test.dart 等真实断言;
+    # 服务侧 internal/** 无任何发射路径,不为不存在的路径造假测试。
+    "CONTENT.SYSTEM.media_playback_network_unavailable": "App player surface 发射,证据在 quwoquan_app 测试树",
+    "CONTENT.SYSTEM.media_playback_service_busy": "App player surface 发射,证据在 quwoquan_app 测试树",
+    "CONTENT.SYSTEM.media_playback_temporarily_unavailable": "App player surface 发射,证据在 quwoquan_app 测试树",
+    "CONTENT.SYSTEM.media_playback_unsupported": "App player surface 发射,证据在 quwoquan_app 测试树",
+    "CONTENT.USER.media_playback_unavailable": "App player surface 发射,证据在 quwoquan_app 测试树",
+    "CONTENT.SYSTEM.media_seek_failed": "App player surface 发射,证据在 quwoquan_app 测试树",
+    # 唯一发射点是 cmd/api 包私有的 feed inflight admission writer,
+    # 已由同包白盒测试 cmd/api/feed_admission_rejection__local_contract_test.go
+    # 真实断言 wire code/503/Retry-After;本门只扫 tests/** 故按码登记。
+    "CONTENT.SYSTEM.feed_capacity_unavailable": "cmd/api 装配层发射,已有同包白盒断言(门禁不扫 cmd)",
+    # timeoutCode() 的 generic default 分支:validateProviderName 限制该
+    # provider 只能以 sms_otp.send 构造(超时走 sms_provider_timeout),
+    # push 通道另有 push_provider_timeout;测试树内无真实触发路径。
+    "INTEGRATION.MIDDLEWARE.provider_timeout": "generic 超时分支在当前 provider 闭集内不可达",
+    # 契约声明 GetNearbyLocations 发射,但服务端全链路无权限校验路径
+    # (缺坐标用默认坐标 fallback),权限拒绝语义实际在 App 端;
+    # 补服务端实现或删码由 gathering/location 域裁决。
+    "INTEGRATION.USER.location_permission_required": "服务侧无发射实现,声明-实现漂移待域内裁决",
+}
 
 #: 每服务缺失码数棘轮基线；只减不增，补齐批次同步下调。
 #: 基线取建门时实扫值；消化方向见 runtime-test-pyramid OPEN-002。
+# 全服务零缺口:剩余 9 条按码登记于 EXEMPT_CODES(App 端发射/装配层白盒/不可达分支)。
 MISSING_CEILING: dict[str, int] = {
     "api-edge": 0,
-    "assistant-service": 66,
+    "assistant-service": 0,
     "chat-service": 0,
-    "circle-service": 27,
-    "content-service": 37,
+    "circle-service": 0,
+    "content-service": 0,
     "entity-service": 0,
-    "integration-service": 9,
+    "integration-service": 0,
     "notification-service": 0,
-    "product-ops-service": 27,
+    "product-ops-service": 0,
     "realtime-gateway": 0,
-    "recommendation-service": 17,
+    "recommendation-service": 0,
     "rtc-service": 0,
     "search-service": 0,
     "tag-service": 0,
-    "user-service": 48,
+    "user-service": 0,
 }
 
 

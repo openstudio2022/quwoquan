@@ -129,8 +129,10 @@ func TestEventPublish_MessageSent(t *testing.T) {
 				t.Fatalf("unmarshal event: %v", err)
 			}
 			if evt.Type == messageevent.MessageSent {
-				if evt.ConversationID != convId {
-					t.Errorf("expected conversationId=%s, got %s", convId, evt.ConversationID)
+				// canonical client envelope 顶层只有 type/eventId/occurredAt/payload；
+				// 会话锚点由 payload 携带。
+				if evt.Payload["conversationId"] != convId {
+					t.Errorf("expected payload.conversationId=%s, got %v", convId, evt.Payload["conversationId"])
 				}
 				if evt.Payload["content"] != "hello event" {
 					t.Errorf("expected payload.content='hello event', got %v", evt.Payload["content"])
@@ -417,8 +419,14 @@ func TestEventPublish_ConversationReadWatermarkAdvanced(t *testing.T) {
 		if evt.Type != userstateevent.ConversationReadWatermarkAdvanced {
 			t.Errorf("expected type=%s, got %s", userstateevent.ConversationReadWatermarkAdvanced, evt.Type)
 		}
+		if evt.Payload["conversationId"] != convId {
+			t.Errorf("expected payload.conversationId=%s, got %v", convId, evt.Payload["conversationId"])
+		}
 		if evt.Payload["readSeq"] == nil {
 			t.Error("expected readSeq in ConversationReadWatermarkAdvanced payload")
+		}
+		if evt.Payload["userId"] != "user_test_002" {
+			t.Errorf("reader identity must ride the payload, got %v", evt.Payload["userId"])
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("ConversationReadWatermarkAdvanced event not received within timeout")
@@ -449,15 +457,23 @@ func TestEventPublish_AssistantMembershipAdded(t *testing.T) {
 		if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
 			t.Fatalf("unmarshal: %v", err)
 		}
-		if evt.Type != membershipevent.ConversationMemberAdded {
-			t.Errorf("expected type=%s, got %s", membershipevent.ConversationMemberAdded, evt.Type)
+		// MemberAdded 是 server-only 域事件；端上 wire 是 ConversationRosterUpdated
+		// roster 摘要信号，成员明细由 roster Reader 权威提供。
+		if evt.Type != conversationevent.ConversationRosterUpdated {
+			t.Errorf("expected wire type=%s, got %s", conversationevent.ConversationRosterUpdated, evt.Type)
 		}
-		if evt.Payload["memberType"] != "assistant" {
-			t.Errorf("expected assistant member payload, got %v", evt.Payload["memberType"])
+		aspects, _ := evt.Payload["aspects"].([]any)
+		hasMembersAspect := false
+		for _, aspect := range aspects {
+			if aspect == "members" {
+				hasMembersAspect = true
+			}
 		}
-		if evt.Payload["invitedByAccountId"] != "user_test_001" ||
-			evt.Payload["invitedBy"] != "user_test_001" {
-			t.Errorf("assistant membership identity drifted: %#v", evt.Payload)
+		if !hasMembersAspect {
+			t.Errorf("roster summary must flag members aspect: %#v", evt.Payload)
+		}
+		if revision, ok := evt.Payload["membersRosterRevision"].(float64); !ok || revision <= 0 {
+			t.Errorf("roster summary must carry a positive revision: %#v", evt.Payload)
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("ConversationMemberAdded event not received within timeout")
@@ -483,6 +499,9 @@ func TestEventPublish_AssistantMentioned(t *testing.T) {
 
 	sendMessage(t, convId, `{"type":"text","content":"@小趣 总结一下刚才聊的内容","mentions":["assistant"],"clientMsgId":"evt-assistant-mentioned-1"}`)
 
+	// AssistantMentioned 是 server-only 可靠消费事件（durable stream，消费者
+	// 是 assistant-service），绝不进入 client realtime fanout；durable 侧契约
+	// 由 assistant_mentioned_stream_contract 覆盖，这里守住负向边界。
 	for {
 		select {
 		case raw := <-sub.Channel():
@@ -490,28 +509,11 @@ func TestEventPublish_AssistantMentioned(t *testing.T) {
 			if err := json.Unmarshal([]byte(raw.Payload), &evt); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
-			if evt.Type != messageevent.AssistantMentioned {
-				continue
+			if evt.Type == messageevent.AssistantMentioned {
+				t.Fatalf("AssistantMentioned must never enter client realtime fanout: %#v", evt)
 			}
-			if evt.ConversationID != convId {
-				t.Errorf("expected conversationId=%s, got %s", convId, evt.ConversationID)
-			}
-			if evt.Payload["content"] != "@小趣 总结一下刚才聊的内容" {
-				t.Errorf("expected content payload, got %v", evt.Payload["content"])
-			}
-			if evt.Payload["assistantMemberId"] != "assistant" {
-				t.Errorf("expected assistantMemberId=assistant, got %v", evt.Payload["assistantMemberId"])
-			}
-			if evt.Payload["senderAccountId"] != "user_test_001" ||
-				evt.Payload["senderId"] != "user_test_001" {
-				t.Errorf("assistant mention identity drifted: %#v", evt.Payload)
-			}
-			if _, exists := evt.Payload["assistantSkillId"]; exists {
-				t.Errorf("AssistantMentioned must not bind a Skill identity: %#v", evt.Payload)
-			}
-			return
 		case <-ctx.Done():
-			t.Fatal("AssistantMentioned event not received within timeout")
+			return
 		}
 	}
 }
@@ -545,11 +547,8 @@ func TestEventPublish_AssistantMembershipRemoved(t *testing.T) {
 			if evt.Type != membershipevent.ConversationMemberRemoved {
 				continue
 			}
-			if evt.ConversationID != convId {
-				t.Errorf("expected conversationId=%s, got %s", convId, evt.ConversationID)
-			}
-			if evt.ActorID != "user_test_001" {
-				t.Errorf("expected actorId=user_test_001, got %s", evt.ActorID)
+			if evt.Payload["conversationId"] != convId {
+				t.Errorf("expected payload.conversationId=%s, got %v", convId, evt.Payload["conversationId"])
 			}
 			if _, exists := evt.Payload["assistantSkillId"]; exists {
 				t.Errorf("ConversationMemberRemoved must not bind a Skill identity: %#v", evt.Payload)
@@ -595,6 +594,7 @@ func TestEventPublish_DirectPublishRoundTrip(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	evt := mqpkg.DomainEvent{
+		EventID:        "roundtrip-event-1",
 		Type:           messageevent.MessageSent,
 		ConversationID: convId,
 		ActorID:        "user_test_001",
@@ -615,11 +615,9 @@ func TestEventPublish_DirectPublishRoundTrip(t *testing.T) {
 		if received.Type != messageevent.MessageSent {
 			t.Errorf("expected type=%s, got %s", messageevent.MessageSent, received.Type)
 		}
-		if received.ConversationID != convId {
-			t.Errorf("expected conversationId=%s, got %s", convId, received.ConversationID)
-		}
-		if received.ActorID != "user_test_001" {
-			t.Errorf("expected actorId=user_test_001, got %s", received.ActorID)
+		// canonical client envelope 顶层不携带 conversationId/actorId。
+		if received.EventID == "" {
+			t.Error("expected eventId in client realtime envelope")
 		}
 		if received.Payload["messageId"] != "msg-001" {
 			t.Errorf("expected payload.messageId=msg-001, got %v", received.Payload["messageId"])
@@ -651,24 +649,30 @@ func TestEventPublish_BatchPublish(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	events := []mqpkg.DomainEvent{
-		{Type: membershipevent.ConversationMemberAdded, ConversationID: convId, ActorID: "user_a", Timestamp: time.Now()},
-		{Type: messageevent.MessageSent, ConversationID: convId, ActorID: "user_a", Timestamp: time.Now()},
-		{Type: userstateevent.ConversationReadWatermarkAdvanced, ConversationID: convId, ActorID: "user_b", Timestamp: time.Now()},
+		{EventID: "batch-1", Type: membershipevent.ConversationMemberAdded, ConversationID: convId, ActorID: "user_a", Timestamp: time.Now(), Payload: map[string]any{"conversationId": convId}},
+		{EventID: "batch-2", Type: messageevent.MessageSent, ConversationID: convId, ActorID: "user_a", Timestamp: time.Now(), Payload: map[string]any{"conversationId": convId, "seq": int64(1)}},
+		{EventID: "batch-3", Type: userstateevent.ConversationReadWatermarkAdvanced, ConversationID: convId, ActorID: "user_b", Timestamp: time.Now(), Payload: map[string]any{"conversationId": convId, "readSeq": int64(1)}},
 	}
 
 	if err := publisher.PublishBatch(ctx, events); err != nil {
 		t.Fatalf("batch publish failed: %v", err)
 	}
 
-	for i, expected := range events {
+	// MemberAdded 是 server-only 域事件不进 client fanout；批内其余两个
+	// client wire 事件按序送达。
+	expectedWireTypes := []string{
+		messageevent.MessageSent,
+		userstateevent.ConversationReadWatermarkAdvanced,
+	}
+	for i, expectedType := range expectedWireTypes {
 		select {
 		case msg := <-sub.Channel():
 			var received mqpkg.DomainEvent
 			if err := json.Unmarshal([]byte(msg.Payload), &received); err != nil {
 				t.Fatalf("event[%d]: unmarshal: %v", i, err)
 			}
-			if received.Type != expected.Type {
-				t.Errorf("event[%d]: expected type=%s, got %s", i, expected.Type, received.Type)
+			if received.Type != expectedType {
+				t.Errorf("event[%d]: expected type=%s, got %s", i, expectedType, received.Type)
 			}
 		case <-time.After(3 * time.Second):
 			t.Fatalf("event[%d]: did not receive within timeout", i)
@@ -707,8 +711,10 @@ func TestEventPublish_SupportedEventTypesComplete(t *testing.T) {
 
 func TestEventPublish_ChannelFormat(t *testing.T) {
 	evt := mqpkg.DomainEvent{
+		EventID:        "channel-format-1",
 		Type:           messageevent.MessageSent,
 		ConversationID: "abc-123",
+		Payload:        map[string]any{"conversationId": "abc-123"},
 	}
 
 	// 会话事件按可信身份 fan-out 到每个接收者的 per-user 通道

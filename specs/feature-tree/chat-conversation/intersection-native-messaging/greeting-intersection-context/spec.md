@@ -81,10 +81,18 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 打招呼尚不携带交集引用
+### OPEN-001 破冰依据剩四环境真实身份 UAT
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`block`
-- 影响或价值：当前打招呼请求没有交集引用字段，接收方在请求箱看不到任何「为什么是你」，陌生人破冰与骚扰在接收方视角无法区分。
-- 完成判定：`GWT-001` 与 `GWT-002` 对应行为满足且真实测试 `spec_ref` 有效
+- 准出影响：`track`
+- 影响或价值：尚缺四环境真实身份下「交集卡发起 → 请求箱看到依据 → 升级会话保留」的 user_acceptance 留证。
+  契约与实现已闭合：`GreetingRequest` 携带 `intersectionRef`（意图）与
+  `intersectionSnapshot`（服务端重解析后的不可变依据），Send 按当前双方重解析、
+  失效引用与解析失败均降级普通问候不伪造依据，测试
+  `greeting_intersection_resolver__local_contract_test.go` 与
+  `greeting_intersection_fail_open__local_contract_test.go` 绑定 `GWT-001`/`GWT-002`；
+  请求箱展示云侧依据原文且无依据请求不显示
+  （`greeting_inbox_journey__local_contract_test.dart`）；升级后 1v1 会话头
+  保留同一依据由 `conversation-intersection-header` 的 `GWT-002` 承载。
+- 完成判定：`GWT-001` 与 `GWT-002` 的结果子句（`gwt-001.t1..t2`、`gwt-002.t1..t2`）各自被真实测试 `spec_ref` 绑定，且四环境真实身份下「交集卡发起 → 请求箱看到依据 → 升级会话保留」的 user_acceptance readback 留证。

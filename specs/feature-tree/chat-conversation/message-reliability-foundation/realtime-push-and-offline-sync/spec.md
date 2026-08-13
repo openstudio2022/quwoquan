@@ -130,19 +130,35 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 断连补洞剩双端 api_integration 全链证据
+### OPEN-001 网关扩缩告警接线
 
 - 类型：`capability_gap`
-- 优先级：`P0`
-- 准出影响：`block`
-- 影响或价值：尚缺真实 Redis/双进程下「断网期间发送 → 重连补齐无缺号无重复」的
-  api_integration 全链证据，以及网关按连接数/订阅积压扩缩的告警接线。持久流与游标已落地
-  （chat-service 事件经 `rt:resume:chat:user:{accountId}` Redis Stream 持久化，LongPoll 携带 cursor 并回执 nextCursor/transportResumed，App 端 cursor 持久化于 SharedPreferences 并在 resume 时发出一次性 `Reconnected`）；
-  群 fan-out 为批内 goroutine 并行、单点失败隔离（`event_fanout_failure_isolation__local_contract_test.go` 绑定 `GWT-003`）；
-  WS 断连重连成功后由 delegate 发出携带活跃会话的恢复事件，handler
-  以端侧最大 seq 触发 `syncFromSeq` 补洞、与实时推送同链去重；
-  后台切前台重建传输与 WS 重试预算耗尽降级 LongPoll 两条路径同样发出
-  恢复事件并补洞（后台断开窗口与降级窗口的消息不再依赖下一次全量刷新）
-  （`realtime_reconnect_gap_recovery__local_contract_test.dart` 四用例绑定 `GWT-002`）；
-  生产路径的重复 handler 死分支已删除。
-- 完成判定：`GWT-002` 的 api_integration 全链证据有效；扩缩告警在既有规则组内登记。
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺网关按连接数/订阅积压扩缩的告警接线。断连补洞真链的
+  双端证据已闭合：持久流与游标落地——chat-service 事件经
+  `rt:resume:chat:user:{accountId}` Redis Stream 持久化，LongPoll 携带 cursor
+  并回执 nextCursor/transportResumed，App 端 cursor 持久化于 SharedPreferences
+  并在 resume 时发出一次性 `Reconnected`；断连窗口投递在真实 Redis 下
+  无缺号、无重复、有序且支持中间游标续读——
+  `resume_gap_recovery__reliability__api_integration_test.go` 绑定 `SIT-002.t1`，
+  网关侧真实 Redis 游标读回见
+  `connection_operations__api_integration_test.go`；
+  群 fan-out 为批内 goroutine 并行、单点失败隔离
+  （`event_fanout_failure_isolation__local_contract_test.go` 绑定 `GWT-003`）；
+  WS 重连、后台切前台与降级 LongPoll 三路径均发恢复事件并以端侧最大 seq
+  触发 `syncFromSeq` 补洞、与实时推送同链去重
+  （`realtime_reconnect_gap_recovery__local_contract_test.dart` 绑定 `GWT-002`）；
+  补齐失败呈现可重试失败态且不截断已有序列——
+  `message_timeline_persistence_paging__reliability__local_contract_test.dart`
+  绑定 `SIT-002.t2`。
+- 完成判定：`GWT-001` 的实时推送链路具备连接数/订阅积压扩缩告警——告警在既有规则组内登记、有配置证据，且真实测试或可执行门 `spec_ref` 绑定。
+
+<a id="open-002"></a>
+### OPEN-002 补洞失败保留游标的负例缺端侧直接绑定
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：当前 `GWT-002` 的成功路径（重连/切前台/降级三路径按端侧最大 seq 补齐,无缺号无重复有序）已由 `realtime_reconnect_gap_recovery__local_contract_test.dart` 覆盖；仍缺「补齐失败返回 canonical failure 并保留游标、不静默截断时间线」这条结果子句在同一补洞链路上的直接断言（`SIT-002.t2` 的持久层证据存在,但未以 `gwt-002.t2` 绑定到本锚点）。
+- 完成判定：`GWT-002` 的 `gwt-002.t2` 由真实测试 `spec_ref` 绑定，断言补齐失败保留游标且时间线不被截断。

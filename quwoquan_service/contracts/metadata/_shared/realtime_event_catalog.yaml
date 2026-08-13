@@ -7,6 +7,7 @@ events:
   - {wire_type: ConversationDissolved, owner: chat.conversation, event_ref: chat.conversation.ConversationDissolved, payload_entity: ConversationDissolvedEventPayload}
   - {wire_type: ConversationMemberLeft, owner: chat.conversation_membership, event_ref: chat.conversation_membership.ConversationMemberLeft, payload_entity: ConversationMemberLeftEventPayload}
   - {wire_type: ConversationMemberRemoved, owner: chat.conversation_membership, event_ref: chat.conversation_membership.ConversationMemberRemoved, payload_entity: ConversationMemberRemovedEventPayload}
+  - {wire_type: ConversationReadWatermarkAdvanced, owner: chat.conversation_user_state, event_ref: chat.conversation_user_state.ConversationReadWatermarkAdvanced, payload_entity: ConversationReadWatermarkAdvancedEventPayload}
   - {wire_type: ConversationRosterUpdated, owner: chat.conversation, event_ref: chat.conversation.ConversationRosterUpdated, payload_entity: ConversationRosterUpdatedEventPayload}
   - {wire_type: ConversationUserSettingsChanged, owner: chat.conversation_user_state, event_ref: chat.conversation_user_state.ConversationUserSettingsChanged, payload_entity: ConversationUserSettingsChangedEventPayload}
   - {wire_type: GatheringConversationPolicyChanged, owner: chat.conversation, event_ref: chat.conversation.GatheringConversationPolicyChanged, payload_entity: GatheringConversationPolicyChangedEventPayload}

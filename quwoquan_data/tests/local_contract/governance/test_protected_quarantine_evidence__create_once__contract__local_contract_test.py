@@ -145,7 +145,9 @@ def test_same_size_tree_mutation_cannot_be_reprotected(tmp_path: Path) -> None:
     repo_issues = repo_output_gate.output_layout_issues(output.parent)
     assert any("invalid protected quarantine evidence" in issue for issue in repo_issues)
     assert any("reusable source truth is forbidden" in issue for issue in repo_issues)
-    assert any(
+    # config.yaml 命中文件名启发式但内容无 secret:按内容真判据放行,
+    # 不再作为 deployment configuration 误报(见 _contains_secret_material)。
+    assert not any(
         "deployment configuration, TLS or secret material" in issue
         for issue in repo_issues
     )

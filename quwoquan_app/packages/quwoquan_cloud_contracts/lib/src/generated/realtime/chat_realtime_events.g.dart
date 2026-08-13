@@ -217,6 +217,69 @@ final class ConversationMemberRemovedEventPayload extends ChatRealtimeEventPaylo
   };
 }
 
+const chatRealtimeTypeConversationreadwatermarkadvanced = 'ConversationReadWatermarkAdvanced';
+
+final class ConversationReadWatermarkAdvancedEventPayload extends ChatRealtimeEventPayload {
+  const ConversationReadWatermarkAdvancedEventPayload({
+    required this.conversationId,
+    required this.userId,
+    this.messageId,
+    required this.readSeq,
+    required this.unreadCount,
+    this.mentionUnreadCount,
+    required this.readAt,
+    required this.updatedAt,
+  });
+
+  final String conversationId;
+  final String userId;
+  final String? messageId;
+  final int readSeq;
+  final int unreadCount;
+  final int? mentionUnreadCount;
+  final DateTime readAt;
+  final DateTime updatedAt;
+
+  factory ConversationReadWatermarkAdvancedEventPayload.fromWire(Map<String, dynamic> wire) {
+    _chatEventRequireExactFields(
+      wire,
+      const <String>{
+        'conversationId',
+        'userId',
+        'messageId',
+        'readSeq',
+        'unreadCount',
+        'mentionUnreadCount',
+        'readAt',
+        'updatedAt',
+      },
+      'ConversationReadWatermarkAdvancedEventPayload',
+    );
+    return ConversationReadWatermarkAdvancedEventPayload(
+      conversationId: _chatEventRequiredString(wire, 'conversationId', 'ConversationReadWatermarkAdvancedEventPayload.conversationId'),
+      userId: _chatEventRequiredString(wire, 'userId', 'ConversationReadWatermarkAdvancedEventPayload.userId'),
+      messageId: _chatEventOptionalString(wire, 'messageId', 'ConversationReadWatermarkAdvancedEventPayload.messageId'),
+      readSeq: _chatEventRequiredInt(wire, 'readSeq', 'ConversationReadWatermarkAdvancedEventPayload.readSeq', positive: true),
+      unreadCount: _chatEventRequiredInt(wire, 'unreadCount', 'ConversationReadWatermarkAdvancedEventPayload.unreadCount', positive: false),
+      mentionUnreadCount: _chatEventOptionalInt(wire, 'mentionUnreadCount', 'ConversationReadWatermarkAdvancedEventPayload.mentionUnreadCount', positive: false),
+      readAt: _chatEventRequiredTimestamp(wire, 'readAt', 'ConversationReadWatermarkAdvancedEventPayload.readAt'),
+      updatedAt: _chatEventRequiredTimestamp(wire, 'updatedAt', 'ConversationReadWatermarkAdvancedEventPayload.updatedAt'),
+    );
+  }
+
+  @override
+  Map<String, Object?> toWire() => <String, Object?>{
+    'conversationId': conversationId,
+    'userId': userId,
+    if (messageId != null) 'messageId': messageId!,
+    'readSeq': readSeq,
+    'unreadCount': unreadCount,
+    if (mentionUnreadCount != null) 'mentionUnreadCount': mentionUnreadCount!,
+    'readAt': readAt.toUtc().toIso8601String(),
+    'updatedAt': updatedAt.toUtc().toIso8601String(),
+  };
+}
+
 const chatRealtimeTypeConversationrosterupdated = 'ConversationRosterUpdated';
 
 final class ConversationRosterUpdatedEventPayload extends ChatRealtimeEventPayload {
@@ -525,6 +588,8 @@ ChatRealtimeEventPayload decodeChatRealtimeEventPayload({
       return ConversationMemberLeftEventPayload.fromWire(payload);
     case chatRealtimeTypeConversationmemberremoved:
       return ConversationMemberRemovedEventPayload.fromWire(payload);
+    case chatRealtimeTypeConversationreadwatermarkadvanced:
+      return ConversationReadWatermarkAdvancedEventPayload.fromWire(payload);
     case chatRealtimeTypeConversationrosterupdated:
       return ConversationRosterUpdatedEventPayload.fromWire(payload);
     case chatRealtimeTypeConversationusersettingschanged:

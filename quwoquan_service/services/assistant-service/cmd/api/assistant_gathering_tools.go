@@ -120,10 +120,12 @@ func gatheringOptionalProviderState(
 func canonicalToolUnavailability(
 	appEnv string,
 	configProvider runtimeconfig.RuntimeConfigProvider,
+	intersectionReaderReady bool,
 ) map[string]tool.UnavailableBinding {
 	state := gatheringOptionalProviderState(appEnv, configProvider)
 	return tool.UnavailableCanonicalBindings(tool.RuntimeAvailability{
 		LocationPublicProviderReady: state.MapAvailable,
+		IntersectionReaderReady:     intersectionReaderReady,
 	})
 }
 

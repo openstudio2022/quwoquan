@@ -1,5 +1,11 @@
 // spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion/spec.md#gwt-001
+// spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/behavior-ingestion/spec.md#gwt-001.t3
 // spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/spec.md#sit-001
+// spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/spec.md#sit-001.t1
+// spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/spec.md#sit-001.t2
+// spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/spec.md#sit-001.t3
+// spec_ref: specs/feature-tree/circle-community/in-circle-recommendation-loop/spec.md#sit-001.t4
 package api_integration
 
 import (
