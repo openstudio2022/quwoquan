@@ -516,10 +516,9 @@ def test_post_api_verification__binds_releaseimport_posts__contract__local_contr
     assert payload["readinessPhase"] == readiness_phase
     assert queries["typed_video"]["query"] == "identity=work&type=video&limit=2"
     assert queries["typed_video"]["matchedPostIds"] == ["post-video-a"]
-    if readiness_phase == "commercial":
-        assert queries["premium_stream"]["matchedPostIds"] == ["post-video-a"]
-    else:
-        assert "premium_stream" not in queries
+    # App 视频书唯一消费 premium_stream：consumer 与 commercial 都必须携带
+    # premium_stream release-bound 读回证据（typed_video 绿不代表视频书绿）。
+    assert queries["premium_stream"]["matchedPostIds"] == ["post-video-a"]
     assert payload["guestActorHash"] == "sha256:" + "a" * 64
     assert payload["guestLogin"]["pageId"] == "user.login.anonymous"
     assert {request["pageId"] for row in queries.values() for request in row["requests"]} == {

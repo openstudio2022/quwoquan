@@ -41,6 +41,7 @@ import 'package:quwoquan_app/design_system/layout/app_terminal_viewport.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/presentation/chat_page.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_featured_immersive_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
@@ -739,13 +740,13 @@ void main() {
       },
     );
 
-    testWidgets('底部导航展示五栏，视频书成为独立一级入口', (tester) async {
+    testWidgets('底部导航展示五栏，行动（线下行动与发现）成为独立一级入口', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.home));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('首页'), findsWidgets);
-      expect(find.text('视频书'), findsWidgets);
+      expect(find.text(AppConceptConstants.offlineActions), findsWidgets);
       expect(find.text('我'), findsWidgets);
       expect(find.text(FoundationText.bottomNavGuestProfile), findsNothing);
       expect(
@@ -765,8 +766,20 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
+          matching: find.text(AppConceptConstants.offlineActions),
+        ),
+        findsOneWidget,
+      );
+      // 视频书退出底栏，改为首页顶部固定入口（心动供给 → 心动变现的漏斗上游）。
+      expect(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
           matching: find.text('视频书'),
         ),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('home-featured-entry')),
         findsOneWidget,
       );
       expect(
@@ -808,7 +821,7 @@ void main() {
       );
     });
 
-    testWidgets('从首页切到视频书不在 IndexedStack build 期间写 Feed Provider', (
+    testWidgets('从首页顶部固定入口进入视频书，不在 IndexedStack build 期间写 Feed Provider', (
       tester,
     ) async {
       await tester.pumpWidget(_buildShell(AppRoutePaths.home));
@@ -822,16 +835,43 @@ void main() {
       );
 
       await tester.tap(
-        find.descendant(
-          of: find.byType(BottomNavigationWidget),
-          matching: find.text('视频书'),
-        ),
+        find.byKey(const ValueKey<String>('home-featured-entry')),
       );
       await tester.pump();
       await tester.pump();
 
       expect(tester.takeException(), isNull);
       expect(find.byType(HomeFeaturedImmersivePage), findsOneWidget);
+    });
+
+    testWidgets('底栏「行动」进入线下行动与发现页，游客可浏览且保留底栏', (tester) async {
+      _suppressExpectedErrors();
+      await tester.pumpWidget(
+        _buildShell(AppRoutePaths.home, authenticated: false),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.text(AppConceptConstants.offlineActions),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(GatheringActionsDiscoveryPage), findsOneWidget);
+      // 游客可浏览：不弹登录门，底栏保持可见（登录入口无死循环宪法）。
+      expect(find.byType(BottomNavigationWidget), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('actions-guest-login')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('actions-discover-interest')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('圈子路由归并到首页频道', (tester) async {
@@ -864,7 +904,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text('视频书'),
+          matching: find.text(AppConceptConstants.offlineActions),
         ),
         findsOneWidget,
       );
@@ -1269,9 +1309,9 @@ void main() {
         of: navFinder,
         matching: find.byIcon(FluentIcons.home_24_filled),
       );
-      final premiumIcon = find.descendant(
+      final actionsIcon = find.descendant(
         of: navFinder,
-        matching: find.byType(AppOpenWindowIcon),
+        matching: find.byIcon(FluentIcons.people_community_24_regular),
       );
       final contactsIcon = find.descendant(
         of: navFinder,
@@ -1286,15 +1326,8 @@ void main() {
       final iconCenterY = tester.getCenter(homeIcon).dy;
 
       expect(navSize.height, closeTo(expectedHeight, 0.5));
-      expect(
-        tester.widget<AppOpenWindowIcon>(premiumIcon).size,
-        expectedIconSize,
-      );
-      expect(tester.widget<AppOpenWindowIcon>(premiumIcon).filled, isFalse);
-      expect(
-        tester.widget<AppOpenWindowIcon>(premiumIcon).color,
-        inactiveColor,
-      );
+      expect(tester.widget<Icon>(actionsIcon).size, expectedIconSize);
+      expect(tester.widget<Icon>(actionsIcon).color, inactiveColor);
       expect(tester.widget<Icon>(contactsIcon).size, expectedIconSize);
       expect(tester.widget<Icon>(contactsIcon).color, inactiveColor);
       expect(
@@ -1310,7 +1343,7 @@ void main() {
       expect(iconToTop, greaterThanOrEqualTo(0));
       expect(iconToTop, lessThan(navHeight / 2));
       expect(
-        (tester.getCenter(premiumIcon).dy - iconCenterY).abs(),
+        (tester.getCenter(actionsIcon).dy - iconCenterY).abs(),
         lessThan(1),
       );
       expect(
@@ -1439,9 +1472,9 @@ void main() {
       final navElement = tester.element(navFinder);
       final expectedIconSize = AppSpacing.bottomNavBarItemIconSize(navElement);
       final inactiveColor = AppColors.iosSecondaryLabel(navElement);
-      final premiumIcon = find.descendant(
+      final actionsIcon = find.descendant(
         of: navFinder,
-        matching: find.byType(AppOpenWindowIcon),
+        matching: find.byIcon(FluentIcons.people_community_24_regular),
       );
       final contactsIcon = find.descendant(
         of: navFinder,
@@ -1452,20 +1485,19 @@ void main() {
         matching: find.byType(AppProfilePersonIcon),
       );
 
-      final premium = tester.widget<AppOpenWindowIcon>(premiumIcon);
+      final actions = tester.widget<Icon>(actionsIcon);
       final contacts = tester.widget<Icon>(contactsIcon);
       final profile = tester.widget<AppProfilePersonIcon>(profileIcon);
 
-      expect(premium.size, expectedIconSize);
+      expect(actions.size, expectedIconSize);
       expect(contacts.size, expectedIconSize);
       expect(profile.size, expectedIconSize);
-      expect(premium.filled, isFalse);
       expect(profile.filled, isFalse);
-      expect(premium.color, inactiveColor);
+      expect(actions.color, inactiveColor);
       expect(contacts.color, AppColors.primaryColor);
       expect(profile.color, inactiveColor);
       expect(
-        (tester.getCenter(premiumIcon).dy - tester.getCenter(contactsIcon).dy)
+        (tester.getCenter(actionsIcon).dy - tester.getCenter(contactsIcon).dy)
             .abs(),
         lessThan(1),
       );

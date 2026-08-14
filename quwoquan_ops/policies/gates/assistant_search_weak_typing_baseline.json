@@ -9,9 +9,9 @@
   },
   "buckets": {
     "assistant_handwritten": {
-      "map_string_dynamic": 157,
-      "map_string_object_optional": 27,
-      "bare_dynamic": 138
+      "map_string_dynamic": 146,
+      "map_string_object_optional": 20,
+      "bare_dynamic": 126
     },
     "core_search_repository": {
       "map_string_dynamic": 0,

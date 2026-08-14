@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: 760018c440e6f9fffff8b9f820e51930beaa94f2f093aff318150ff084655467
+// ContractGraph SHA256: ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28
 
 part of '../../../chat/chat_operation_contracts.g.dart';
 
@@ -364,6 +364,47 @@ final class ChatListContactsQuery {
 
   Map<String, Object?> toWire() => <String, Object?>{
     if (this.cursor != null) "cursor": this.cursor!,
+    "limit": this.limit,
+  };
+}
+
+final class ChatListConversationAssetsQuery {
+  ChatListConversationAssetsQuery({
+    required String conversationId,
+    required String kind,
+    int? beforeSeq,
+    int limit = 60,
+  }) : conversationId = conversationId.trim(),
+       kind = kind.trim(),
+       beforeSeq = beforeSeq,
+       limit = limit {
+    if (this.conversationId.isEmpty) {
+      throw ArgumentError.value(this.conversationId, "conversationId", 'must not be blank');
+    }
+    if (this.kind.isEmpty) {
+      throw ArgumentError.value(this.kind, "kind", 'must not be blank');
+    }
+  }
+
+  final String conversationId;
+  final String kind;
+  final int? beforeSeq;
+  final int limit;
+
+  factory ChatListConversationAssetsQuery.fromWire(Map<String, Object?> map, [String path = "ChatListConversationAssetsQuery"]) {
+    _generatedRequestRejectUnknownFields(map, const <String>{"conversationId", "kind", "beforeSeq", "limit"}, path);
+    return ChatListConversationAssetsQuery(
+      conversationId: _generatedRequestString(map["conversationId"], '$path.conversationId'),
+      kind: _generatedRequestString(map["kind"], '$path.kind'),
+      beforeSeq: map["beforeSeq"] == null ? null : _generatedRequestInt(map["beforeSeq"], '$path.beforeSeq'),
+      limit: map.containsKey("limit") ? _generatedRequestInt(map["limit"], '$path.limit') : 60,
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "conversationId": this.conversationId,
+    "kind": this.kind,
+    if (this.beforeSeq != null) "beforeSeq": this.beforeSeq!,
     "limit": this.limit,
   };
 }
@@ -1439,6 +1480,19 @@ CloudOperationRequestPayload encodeChatConversationUserStateUpdateConversationSe
     body: <String, Object?>{
       if (request.muted != null) "muted": request.muted!,
       if (request.pinned != null) "pinned": request.pinned!,
+    },
+  );
+}
+
+CloudOperationRequestPayload encodeChatMessageListConversationAssetsGeneratedRequest(ChatListConversationAssetsQuery request) {
+  return CloudOperationRequestPayload(
+    pathParameters: <String, String>{
+      "conversationId": request.conversationId,
+    },
+    queryParameters: <String, String>{
+      "kind": request.kind,
+      "limit": (request.limit).toString(),
+      if (request.beforeSeq != null) "beforeSeq": (request.beforeSeq!).toString(),
     },
   );
 }

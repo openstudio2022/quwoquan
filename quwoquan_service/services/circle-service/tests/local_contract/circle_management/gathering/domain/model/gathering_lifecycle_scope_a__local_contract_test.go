@@ -154,6 +154,13 @@ func TestScopeACompleteAndExplicitTerminalOperationsStayDistinct(t *testing.T) {
 	); !errors.Is(err, gatheringerrors.ErrGatheringOutcomeUnverified) {
 		t.Fatalf("complete without independent evidence error = %v", err)
 	}
+	// 催回顾链路的语义前提：host 完成行动不得关闭参与者 participation，
+	// 否则催回顾通知回链详情后「发布回顾」入口（active 才可见）会消失。
+	current.Participations = append(current.Participations, contract.GatheringParticipation{
+		PersonaID: "persona-joiner",
+		State:     contract.GatheringParticipationStateActive,
+		Version:   1,
+	})
 	completed, err := model.CompleteGathering(
 		current,
 		"persona-owner",
@@ -163,6 +170,14 @@ func TestScopeACompleteAndExplicitTerminalOperationsStayDistinct(t *testing.T) {
 	)
 	if err != nil || completed.Outcome.Status != contract.GatheringOutcomeStatusOccurred {
 		t.Fatalf("complete ended: value=%+v err=%v", completed, err)
+	}
+	if len(completed.Participations) != 1 ||
+		completed.Participations[0].PersonaID != "persona-joiner" ||
+		completed.Participations[0].State != contract.GatheringParticipationStateActive {
+		t.Fatalf(
+			"complete must keep participant state untouched: %+v",
+			completed.Participations,
+		)
 	}
 
 	endedEarly, err := model.EndGatheringEarly(

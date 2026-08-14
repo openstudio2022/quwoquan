@@ -18,21 +18,56 @@
         "description": "共同规划、行中服务、随拍整理与行后分享"
       },
       "targetAudiences": [
-        {"id": "small_group_trip_organizer", "displayText": "自由行组织者"},
-        {"id": "travel_group_owner", "displayText": "旅行群主"},
-        {"id": "trip_participant", "displayText": "同行参与者"},
-        {"id": "tour_leader", "displayText": "领队与活动组织者"},
-        {"id": "licensed_guide", "displayText": "持证导游"},
-        {"id": "travel_creator", "displayText": "旅行创作者与本地专家"}
+        {
+          "id": "small_group_trip_organizer",
+          "displayText": "自由行组织者"
+        },
+        {
+          "id": "travel_group_owner",
+          "displayText": "旅行群主"
+        },
+        {
+          "id": "trip_participant",
+          "displayText": "同行参与者"
+        },
+        {
+          "id": "tour_leader",
+          "displayText": "领队与活动组织者"
+        },
+        {
+          "id": "licensed_guide",
+          "displayText": "持证导游"
+        },
+        {
+          "id": "travel_creator",
+          "displayText": "旅行创作者与本地专家"
+        }
       ],
       "surfaceKinds": [
-        {"id": "personal", "displayText": "个人小趣"},
-        {"id": "conversation", "displayText": "同行群聊"},
-        {"id": "circle", "displayText": "旅行圈子"}
+        {
+          "id": "personal",
+          "displayText": "个人小趣"
+        },
+        {
+          "id": "conversation",
+          "displayText": "同行群聊"
+        },
+        {
+          "id": "circle",
+          "displayText": "旅行圈子"
+        }
       ],
       "consentScopes": [
-        {"id": "assistant.memory.preferences.read", "displayText": "读取已确认的旅行偏好", "description": "只读取用户主动确认保留的偏好"},
-        {"id": "assistant.learning.feedback_context.read", "displayText": "使用脱敏的助手反馈摘要", "description": "仅在个人小趣中使用经策略筛选的聚合计数和质量指标，不读取原始提问、回答或评价文字"}
+        {
+          "id": "assistant.memory.preferences.read",
+          "displayText": "读取已确认的旅行偏好",
+          "description": "只读取用户主动确认保留的偏好"
+        },
+        {
+          "id": "assistant.learning.feedback_context.read",
+          "displayText": "使用脱敏的助手反馈摘要",
+          "description": "仅在个人小趣中使用经策略筛选的聚合计数和质量指标，不读取原始提问、回答或评价文字"
+        }
       ],
       "valueDescription": "把群聊里的需求、吃玩住行计划、现场变化和随拍串成一条共同旅行时间线",
       "examples": [
@@ -71,13 +106,28 @@
         "description": "从共同兴趣来源形成需确认的聚会承诺与 Circle room/chat"
       },
       "targetAudiences": [
-        {"id": "direct_chat_pair", "displayText": "一对一约伴"},
-        {"id": "group_organizer", "displayText": "多人聚会组织者"},
-        {"id": "group_participant", "displayText": "聚会参与者"}
+        {
+          "id": "direct_chat_pair",
+          "displayText": "一对一约伴"
+        },
+        {
+          "id": "group_organizer",
+          "displayText": "多人聚会组织者"
+        },
+        {
+          "id": "group_participant",
+          "displayText": "聚会参与者"
+        }
       ],
       "surfaceKinds": [
-        {"id": "personal", "displayText": "个人小趣"},
-        {"id": "conversation", "displayText": "一对一或多人会话"}
+        {
+          "id": "personal",
+          "displayText": "个人小趣"
+        },
+        {
+          "id": "conversation",
+          "displayText": "一对一或多人会话"
+        }
       ],
       "consentScopes": [],
       "valueDescription": "把内容来源、共同承诺与地点天气等辅助事实整理成可确认的聚会草稿",
@@ -97,8 +147,8 @@
           "templateRef": "assistant.tool_confirmation"
         }
       ],
-      "dataUseSummary": "仅使用当前会话授权的 Gathering、canonical 内容来源和公共 Provider 事实；参与者身份、申请答案、审核备注、grant 与 permit 不进入回答",
-      "assetDigest": "sha256:070c02e629a96aa14a06b3dd59a6acb33a96d550843166553b2a45b7d4d41d2d"
+      "dataUseSummary": "仅使用当前会话授权的 Gathering、canonical 内容来源、经明示同意读取的我的交集只读投影（云侧主句原文透传，不拼句不推测）和公共 Provider 事实；参与者身份、申请答案、审核备注、grant 与 permit 不进入回答",
+      "assetDigest": "sha256:d157a0175293a8343a830560e0aaedaed0e86f9274a9c96ec4e7941e7750caf0"
     }
   ],
   "activationProfiles": [

@@ -13,6 +13,9 @@ enum ArticleDocumentNodeType {
   quote,
   callout,
   codeBlock,
+
+  /// 分隔线（`---`）：无文本内容的结构节点。
+  divider,
 }
 
 enum ArticleDocumentTitleStyle { none, major, minor }
@@ -28,6 +31,9 @@ enum ArticleDocumentBlockType {
   quote,
   callout,
   codeBlock,
+
+  /// 分隔线（`---`）：无文本内容的结构节点。
+  divider,
 }
 
 String _normalizeArticleText(String value) {
@@ -333,6 +339,32 @@ class ArticleInlineSpan {
   }
 }
 
+/// 站内实体链接（数据工程供稿形态 `/entity/<domain>/<etype>/<name>`）转
+/// canonical mention 目标 `entity:<etype>:<name>`。
+///
+/// 与数据工程 `_canonical_entity_id_from_publish_ref` 同一规则（跳过
+/// domain 段、空格转下划线）；不合形态返回空串（调用方按字面量处理）。
+String articleEntityIdFromPublishRef(String ref) {
+  final parts = ref
+      .trim()
+      .split('/')
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+  var segments = parts;
+  if (segments.isNotEmpty && segments.first == 'entity') {
+    segments = segments.sublist(1);
+  }
+  if (segments.length < 3) {
+    return '';
+  }
+  final etype = segments[1].trim().replaceAll(' ', '_');
+  final name = segments.sublist(2).join('/').trim().replaceAll(' ', '_');
+  if (etype.isEmpty || name.isEmpty) {
+    return '';
+  }
+  return 'entity:$etype:$name';
+}
+
 /// 文章行内链接允许的 scheme（恶意 scheme 如 javascript:/data: 在解析期即
 /// 拒绝，不进入 span 真相源）：仅 https/http 外链。
 bool isArticleLinkTargetAllowed(String url) {
@@ -545,6 +577,7 @@ class ArticleDocumentData {
               (node.hasText ||
                   node.hasImage ||
                   node.isDocumentTitle ||
+                  node.type == ArticleDocumentNodeType.divider ||
                   node.type == ArticleDocumentNodeType.paragraph),
         )
         .toList(growable: false);
@@ -691,6 +724,7 @@ List<ArticleDocumentNode> _normalizeDocumentNodes(
             (node.hasText ||
                 node.hasImage ||
                 node.isDocumentTitle ||
+                node.type == ArticleDocumentNodeType.divider ||
                 node.type == ArticleDocumentNodeType.paragraph),
       )
       .map(
@@ -847,6 +881,19 @@ _ArticleDocumentProjection _projectArticleDocument(
           blocks.add(b);
           allBlocks.add(b);
           appendBodyText(node.text);
+        }
+        break;
+      case ArticleDocumentNodeType.divider:
+        // 分隔线：无文本结构块，进入投影供阅读端渲染。
+        orderedIndex = 0;
+        {
+          final b = ArticleDocumentBlock(
+            id: node.id,
+            type: ArticleDocumentBlockType.divider,
+            offset: bodyBuffer.length,
+          );
+          blocks.add(b);
+          allBlocks.add(b);
         }
         break;
       case ArticleDocumentNodeType.figure:

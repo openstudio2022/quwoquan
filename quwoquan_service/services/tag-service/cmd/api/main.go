@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	rterr "quwoquan_service/runtime/errors"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -455,7 +456,16 @@ func (module *Module) admissionHandler(next http.Handler) http.Handler {
 			return
 		}
 		if !module.admission.Load() {
-			http.Error(writer, `{"status":"unavailable"}`, http.StatusServiceUnavailable)
+			rterr.WriteHTTPError(
+				writer,
+				rterr.NewAppError(
+					rterr.NewCode(rterr.ModuleGateway, rterr.KindMiddleware, "upstream_unavailable"),
+					"服务暂不可用，请稍后重试",
+					"service admission is not ready",
+				).WithMetadata("upstream_unavailable", http.StatusServiceUnavailable).
+					WithRecoveryDirective("retry", "snackbar", 1),
+				rterr.HTTPWriteOptionsFromRequest(request),
+			)
 			return
 		}
 		next.ServeHTTP(writer, request)

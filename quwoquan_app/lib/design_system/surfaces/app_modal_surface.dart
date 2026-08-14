@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 
 class AppBottomModalSurface extends StatelessWidget {
@@ -50,10 +51,15 @@ class AppBottomModalSurface extends StatelessWidget {
         child: Stack(
           children: [
             Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onDismiss,
-                child: const SizedBox.expand(),
+              // 遮罩可点关闭：必须携带语义标签，读屏用户才能感知该动作。
+              child: Semantics(
+                label: FoundationText.close,
+                button: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onDismiss,
+                  child: const SizedBox.expand(),
+                ),
               ),
             ),
             Align(
@@ -65,6 +71,7 @@ class AppBottomModalSurface extends StatelessWidget {
                 ),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  excludeFromSemantics: true,
                   onTap: () {},
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
@@ -174,10 +181,15 @@ class AppTopModalSurface extends StatelessWidget {
         child: Stack(
           children: [
             Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onDismiss,
-                child: const SizedBox.expand(),
+              // 遮罩可点关闭：必须携带语义标签，读屏用户才能感知该动作。
+              child: Semantics(
+                label: FoundationText.close,
+                button: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onDismiss,
+                  child: const SizedBox.expand(),
+                ),
               ),
             ),
             Align(
@@ -189,6 +201,7 @@ class AppTopModalSurface extends StatelessWidget {
                 ),
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  excludeFromSemantics: true,
                   onTap: () {},
                   child: SizedBox(
                     width: double.infinity,

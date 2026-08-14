@@ -42,6 +42,7 @@ func main() {
 		AuthEpoch: 1,
 		Scopes: []string{
 			"ops.experiment.read", "ops.experiment.write",
+			"ops.product.dashboard.read",
 			"ops.reco.read", "ops.reco.write", "ops.telemetry.read",
 		},
 		Roles:     []string{"operator"},

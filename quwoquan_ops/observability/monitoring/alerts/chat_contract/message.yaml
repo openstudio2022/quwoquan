@@ -25,6 +25,26 @@ groups:
           slo_availability_percent: "99.95"
       - record: quwoquan_chat_contract_operation_requests_total
         expr: |
+          sum by (status) (http_server_requests_total{service="chat-service",method="GET",route=~"^/chat/conversations/[^/]+/assets$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.message.ListConversationAssets"
+          contract_metric: "chat_conversation_assets_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="chat-service",method="GET",route=~"^/chat/conversations/[^/]+/assets$"})
+        labels:
+          service: "chat-service"
+          operation: "chat.message.ListConversationAssets"
+          contract_metric: "chat_conversation_assets_list"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_chat_contract_operation_requests_total
+        expr: |
           sum by (status) (http_server_requests_total{service="chat-service",method="GET",route=~"^/chat/conversations/[^/]+/messages$"})
         labels:
           service: "chat-service"

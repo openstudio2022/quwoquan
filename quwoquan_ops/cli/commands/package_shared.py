@@ -37,6 +37,22 @@ from typing import Any, Mapping
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
+def _runtime_shared_source_ref(source: Path, source_root: Path) -> str:
+    """Record repo-relative provenance even when packaging from a capsule tree."""
+    resolved = source.resolve()
+    for root in (source_root, _REPO_ROOT):
+        try:
+            return resolved.relative_to(root.resolve()).as_posix()
+        except ValueError:
+            continue
+    text = resolved.as_posix()
+    marker = "/repo/"
+    idx = text.find(marker)
+    if idx != -1:
+        return text[idx + len(marker) :]
+    return text
+
+
 def _build_runtime_shared_package(
     env_name: str,
     *,
@@ -72,7 +88,7 @@ def _build_runtime_shared_package(
         destination = package_dir / source.name
         shutil.copy2(source, destination)
         files[source.name] = {
-            "source": _stackctl.relpath(source),
+            "source": _runtime_shared_source_ref(source, source_root),
             "sha256": _stackctl._sha256_file(destination),
         }
     _stackctl.materialize_runtime_topology_package(

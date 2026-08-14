@@ -126,5 +126,67 @@ void main() {
           (darker.computeLuminance() + 0.05);
       expect(contrast, greaterThanOrEqualTo(4.5));
     });
+
+    testWidgets('dense 密度：次级小字、无图标、紧凑留白（sheet 区块轻空态）', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          const AppEmptyState(
+            icon: CupertinoIcons.doc_plaintext,
+            title: '还没有内容',
+            density: AppEmptyStateDensity.dense,
+          ),
+        ),
+      );
+
+      // dense 形态不渲染图标，标题降为次级小字。
+      expect(find.byIcon(CupertinoIcons.doc_plaintext), findsNothing);
+      final title = tester.widget<Text>(find.text('还没有内容'));
+      final context = tester.element(find.text('还没有内容'));
+      expect(title.style!.fontSize, lessThan(15));
+      expect(title.style!.fontWeight, isNot(FontWeight.w600));
+      // 次级色仍满足正文级对比要求（复用 secondaryLabelAccessible token）。
+      final foreground = CupertinoDynamicColor.resolve(
+        title.style!.color!,
+        context,
+      );
+      final background = CupertinoDynamicColor.resolve(
+        CupertinoColors.systemBackground,
+        context,
+      );
+      final lighter =
+          foreground.computeLuminance() > background.computeLuminance()
+          ? foreground
+          : background;
+      final darker = identical(lighter, foreground) ? background : foreground;
+      final contrast =
+          (lighter.computeLuminance() + 0.05) /
+          (darker.computeLuminance() + 0.05);
+      expect(contrast, greaterThanOrEqualTo(4.5));
+    });
+
+    testWidgets('dense 密度双模式：标题色随深浅主题变化', (tester) async {
+      Future<Color> pumpAndRead(Brightness brightness) async {
+        await tester.pumpWidget(
+          CupertinoApp(
+            theme: CupertinoThemeData(brightness: brightness),
+            home: const Center(
+              child: AppEmptyState(
+                title: '还没有内容',
+                density: AppEmptyStateDensity.dense,
+              ),
+            ),
+          ),
+        );
+        final title = tester.widget<Text>(find.text('还没有内容'));
+        return CupertinoDynamicColor.resolve(
+          title.style!.color!,
+          tester.element(find.text('还没有内容')),
+        );
+      }
+
+      final light = await pumpAndRead(Brightness.light);
+      final dark = await pumpAndRead(Brightness.dark);
+      expect(light, isNot(dark));
+    });
   });
 }

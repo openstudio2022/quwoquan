@@ -22,6 +22,19 @@ export 'package:quwoquan_app/runtime/platform/media/app_image_cache_controller.d
 
 const int appImageDecodeMaxPhysicalExtent = 2048;
 
+/// 三态语义 key：加载成功 / 加载中占位 / 显式失败。
+/// Widget 测试与设备 UAT 用它们区分「真解码成功」与「灰块占位/错误」，
+/// 防止「图片全灰也算通过」的假阳性（自定义 placeholder/errorWidget 同样生效）。
+const ValueKey<String> appImageLoadSuccessKey = ValueKey<String>(
+  'app-image-load-success',
+);
+const ValueKey<String> appImageLoadPlaceholderKey = ValueKey<String>(
+  'app-image-load-placeholder',
+);
+const ValueKey<String> appImageLoadErrorKey = ValueKey<String>(
+  'app-image-load-error',
+);
+
 class AppAvatarImage extends ConsumerWidget {
   const AppAvatarImage({
     super.key,
@@ -199,7 +212,10 @@ class AppCachedNetworkImage extends ConsumerWidget {
       return _ImageLoadFailureReporter(
         onReport: () =>
             onLoadFailed?.call(StateError('image url candidates empty')),
-        child: errorWidget ?? _buildErrorWidget(context),
+        child: KeyedSubtree(
+          key: appImageLoadErrorKey,
+          child: errorWidget ?? _buildErrorWidget(context),
+        ),
       );
     }
     final primaryIdentity = candidates.first;
@@ -214,7 +230,10 @@ class AppCachedNetworkImage extends ConsumerWidget {
       );
       return _ImageLoadFailureReporter(
         onReport: () => onLoadFailed?.call(error),
-        child: errorWidget ?? _buildErrorWidget(context),
+        child: KeyedSubtree(
+          key: appImageLoadErrorKey,
+          child: errorWidget ?? _buildErrorWidget(context),
+        ),
       );
     }
     return _buildCandidateImage(context, ref, candidates, 0);
@@ -267,7 +286,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
                   candidatesTried: index + 1,
                 );
             final builder = imageBuilder;
-            final child = builder != null
+            final decoded = builder != null
                 ? builder(context, imageProvider)
                 : Image(
                     image: imageProvider,
@@ -275,6 +294,10 @@ class AppCachedNetworkImage extends ConsumerWidget {
                     width: width,
                     height: height,
                   );
+            final child = KeyedSubtree(
+              key: appImageLoadSuccessKey,
+              child: decoded,
+            );
             final onSucceeded = onLoadSucceeded;
             if (onSucceeded == null) {
               return child;
@@ -286,9 +309,12 @@ class AppCachedNetworkImage extends ConsumerWidget {
             );
           },
           // 占位色随主题动态解析：深色模式禁止闪白底。
-          placeholder: (context, url) =>
-              placeholder ??
-              Container(color: AppColors.iosGroupedSurface(context)),
+          placeholder: (context, url) => KeyedSubtree(
+            key: appImageLoadPlaceholderKey,
+            child:
+                placeholder ??
+                Container(color: AppColors.iosGroupedSurface(context)),
+          ),
           errorWidget: (context, url, error) {
             final nextIndex = index + 1;
             if (nextIndex < candidates.length) {
@@ -332,7 +358,10 @@ class AppCachedNetworkImage extends ConsumerWidget {
                   candidatesTried: candidates.length,
                 );
             onLoadFailed?.call(error);
-            return errorWidget ?? _buildErrorWidget(context);
+            return KeyedSubtree(
+              key: appImageLoadErrorKey,
+              child: errorWidget ?? _buildErrorWidget(context),
+            );
           },
         );
       },

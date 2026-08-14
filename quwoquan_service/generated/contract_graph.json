@@ -10166,6 +10166,102 @@
       }
     },
     {
+      "id": "chat.message.ListConversationAssets",
+      "localId": "ListConversationAssets",
+      "domain": "chat",
+      "objectId": "chat.message",
+      "method": "GET",
+      "pathTemplate": "/chat/conversations/{conversationId}/assets",
+      "kind": "query",
+      "kindExplicit": true,
+      "facet": "MessageQueryFacet",
+      "facadeMethod": "listConversationAssets",
+      "reader": "MessageHistoryReader",
+      "slice": "ConversationAssetPage",
+      "actorRequirement": "persona",
+      "requestEntity": "ChatListConversationAssetsQuery",
+      "requestBodyKind": "none",
+      "transport": "json",
+      "requestBindings": {
+        "path": [
+          {
+            "name": "conversationId",
+            "field": "conversationId"
+          }
+        ],
+        "query": [
+          {
+            "name": "kind",
+            "field": "kind"
+          },
+          {
+            "name": "limit",
+            "field": "limit",
+            "required": false
+          },
+          {
+            "name": "beforeSeq",
+            "field": "beforeSeq",
+            "required": false
+          }
+        ]
+      },
+      "responseEntity": "ConversationAssetPage",
+      "responseBody": "ConversationAssetClient",
+      "responseBodyKind": "page",
+      "sourcePath": "chat/chat/message/operations.yaml",
+      "security": {
+        "anonymous_policy": "deny",
+        "auth_mode": "required",
+        "principal": "persona",
+        "token_transport": "bearer",
+        "visibility": "private"
+      },
+      "authMode": "required",
+      "principal": "persona",
+      "ownershipPolicy": "conversation_member",
+      "commercial": {
+        "status": "ready",
+        "explicit": true
+      },
+      "reliability": {
+        "timeoutMilliseconds": 1500,
+        "cancellation": "supported",
+        "retryMode": "idempotent",
+        "maxAttempts": 2,
+        "idempotency": "none"
+      },
+      "concurrency": {},
+      "errorCodes": [
+        "CHAT.USER.unauthorized",
+        "CHAT.USER.invalid_argument",
+        "CHAT.USER.conversation_not_found",
+        "CHAT.SYSTEM.internal_error"
+      ],
+      "privacy": {
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE",
+        "logPolicy": "metadata_only"
+      },
+      "telemetry": {
+        "metric": "chat_conversation_assets_list",
+        "trace": true,
+        "attributes": [
+          "conversation_id",
+          "outcome"
+        ]
+      },
+      "slo": {
+        "latencyP95Milliseconds": 500,
+        "availabilityPercent": 99.9
+      },
+      "clientContract": {
+        "dartImport": "../chat/chat_operation_contracts.g.dart",
+        "responseType": "ConversationAssetPage",
+        "responseDecoder": "decodeConversationAssetPage"
+      }
+    },
+    {
       "id": "chat.message.ListMessages",
       "localId": "ListMessages",
       "domain": "chat",
@@ -47839,10 +47935,12 @@
         "creatorId",
         "entityId",
         "gatheringId",
+        "gatheringSourceEventId",
         "gatheringSourceVersion",
         "groupAvatarSourceHash",
         "groupAvatarVersion",
         "id",
+        "intersectionFacts",
         "lastMessageId",
         "lastMessagePreview",
         "lastMessageTime",
@@ -77406,7 +77504,7 @@
         "kind": "operation",
         "id": "content.post.GenerateArticleSummary"
       },
-      "runnerSourcePath": "quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__api_integration_test.go",
+      "runnerSourcePath": "quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__data_consistency__api_integration_test.go",
       "executions": [
         {
           "environment": "beta",
@@ -77670,7 +77768,7 @@
         "kind": "operation",
         "id": "content.post.GetHelperRead"
       },
-      "runnerSourcePath": "quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__api_integration_test.go",
+      "runnerSourcePath": "quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__data_consistency__api_integration_test.go",
       "executions": [
         {
           "environment": "beta",
@@ -101019,7 +101117,7 @@
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/canonical_tool_runtime_availability__local_contract_test.go",
-            "sha256": "12e0234ffe2876598f1e32cad328fb9fe684f933a895ac068cda823603edd8de"
+            "sha256": "35c23aaf6fcf93c52f1df22b41bd1389a676c9ce99757f16ebba9e37c539a349"
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/circle_gathering_binding__local_contract_test.go",
@@ -101275,7 +101373,7 @@
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/tool_catalog_codegen__local_contract_test.go",
-            "sha256": "e3288a8282cb3c8cb04680fad8bb843cd11e77bc10f057f2576711671773bf5d"
+            "sha256": "99602a914b2c905acf9efd3a889183e830d2d345288c2b0356d02e38513049b5"
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_run/tool_failure_metadata__local_contract_test.go",
@@ -101348,10 +101446,6 @@
             "sha256": "8aa85145a60e0cc89d0df7911c7fadbb35609d075f81d0d1cc635f9f8e987df9"
           },
           {
-            "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/domain/assistant_content_filters.dart",
-            "sha256": "2225580dcaab9170cbe10acd171e159705f269ebc0c2ba4865e09c4dd9450759"
-          },
-          {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/domain/assistant_display_state_projection.dart",
             "sha256": "48a2eb69bf49bf038eb8fc51749924b5b2e3eac6d790e8356cc44bb52a2cf18a"
           },
@@ -101362,6 +101456,10 @@
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/domain/assistant_presentation_capability_catalog.dart",
             "sha256": "097fbd74ea3800c5a430ce61a3098c5c8b9be87344455e3311a1def257d471c4"
+          },
+          {
+            "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/domain/assistant_presentation_node_data.dart",
+            "sha256": "efb9e36807d634d018fd176c62100f57085094e3f184e0eb3eca6e82e024dc28"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/domain/assistant_presentation_stream_projection.dart",
@@ -101384,6 +101482,10 @@
             "sha256": "b1c65911d84cc6acfdeedbd4521bf5c1f9c38f22c223df9afb78c080e836b3e4"
           },
           {
+            "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/domain/assistant_structured_card_payload.dart",
+            "sha256": "b80c208b614d3a7b1c76502e49ffeaece582827579d8a74b025dc29d787e576f"
+          },
+          {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/domain/capabilities.dart",
             "sha256": "406f54bd593269e9e7c2b092fb48bd5027fcc0ac914a95c67565e7a7f9e810c4"
           },
@@ -101398,10 +101500,6 @@
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/domain/dialogue_round_script.dart",
             "sha256": "232d4f195ff99df96d160bd237a9bfc8fe154b41c5be8b5a2a3033fe4637d372"
-          },
-          {
-            "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/domain/display_text_classifier.dart",
-            "sha256": "b6ed833c0c9d16d4fb0c88d0c2a5172bdebc133ccb07df53fc2ac93e58e23af3"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",
@@ -101595,11 +101693,11 @@
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/application/personal_assistant_stream_controller_projection.dart",
-            "sha256": "57293cc2af332cc94d18191a0c93954329355d64a652c4441847cd69250f5475"
+            "sha256": "701ebb4246b2f8785c7336ba29d09ae078c024631e513bed55dd1aea230f596a"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/application/personal_assistant_stream_controller_run_lifecycle.dart",
-            "sha256": "a7bacd376f5d1bd536d5d7cef793181c8cb124741b26d3b17b456e0751f8b42f"
+            "sha256": "afbf045c7ead5032a13864abf6a0f8677ac3c8f374b4f52b165d4a498e9af55d"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/application/personal_assistant_stream_controller_telemetry.dart",
@@ -101655,7 +101753,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/presentation/personal_assistant_session_page.dart",
-            "sha256": "a1c14dae18b81f1c4d85045fb4f0e6f3beab6b6e54cd777d6841dc81f7af2ba1"
+            "sha256": "04c027a885adb5fdf6910284beb44a388f3f481a74d923eb3d8f7700b2f13f3a"
           }
         ],
         "localContract": [
@@ -101716,6 +101814,14 @@
             "sha256": "b17c7d8e23e4f0a285f001f9550e49280a7a45118b5f8d8179f86183bfc698e7"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_provider_unavailable_semantics__local_contract_test.dart",
+            "sha256": "9cb4d029876658d0705382c8d94b85cde1278a99825a3d5494f2a8cad0d6e277"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_errors__local_contract_test.dart",
+            "sha256": "85ae83b1bee81fcc924f76a5037a52e47012fd6dce5e25cfd1b9992dbb53de1d"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_run_policy_loader__local_contract_test.dart",
             "sha256": "53c14bc3dad5227e972106c4eab6dcfe0cf2b97be3110211ae77e5b0b56fd090"
           },
@@ -101737,7 +101843,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/assistant_transcript_bubble_envelope__local_contract_test.dart",
-            "sha256": "6054d02347a7c8d259e1e0e68f08aaef81e365e49e6dc9de4f8eb4f73aa3f5ed"
+            "sha256": "3b959e3d55fca73ff3fb6d072f42ae2cc6a189918f3bed18bc6de0372c4585d5"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/chat_assistant_ui_widget__local_contract_test.dart",
@@ -101753,7 +101859,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/personal_assistant_run_concurrency__local_contract_test.dart",
-            "sha256": "9c3dfad506c0430ed3ce6f73cfadc7db5dc990a824546670ff174ffb939ff91b"
+            "sha256": "ed88af5b50ae7b5e2fe0de8a172f89c088d2be346273ee2fd40912ba95e0cde8"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_run/personal_assistant_stream_controller__local_contract_test.dart",
@@ -102302,7 +102408,7 @@
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_session/tool_policy_registry_subset__local_contract_test.go",
-            "sha256": "47bff0d23817210e752c002d4870bb58309abda9c05c00e59f1cb15db6ff4bda"
+            "sha256": "4a99faa85ebc684d331d7ca5e443750ae8293a844fca8bf9a3846d9be47eb018"
           },
           {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/assistant_session/tool_test_support__local_contract_test.go",
@@ -102607,14 +102713,6 @@
       "app": {
         "domain": [
           {
-            "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/domain/assistant_answer_anchor.dart",
-            "sha256": "f488d1bc781c68f9fa5cf792c614ecdeb9fca73bb5528b0b752761357ee3cc5c"
-          },
-          {
-            "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/domain/assistant_citation.dart",
-            "sha256": "2b35c09300ccece606202bbba36b4c1ce6725da4e385d31c66bf7bfaf7a032d1"
-          },
-          {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/domain/assistant_dialogue_runtime_read_view.dart",
             "sha256": "d28dd4e4bb1e8188025eace1852a44702b1ca4675bb21bb03e48a4b58aa929ce"
           },
@@ -102625,10 +102723,6 @@
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/domain/assistant_turn_contract.dart",
             "sha256": "ce4be39723975a7492c442cbc6a8c8d4684095c884b0da8eb4d3ca3928a9031e"
-          },
-          {
-            "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/domain/citation_destination_resolver.dart",
-            "sha256": "263788cb6610c8c7b1c7fdae2d1567b7406a8af99b04cb31758b525a036f9818"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/domain/generated/assistant_turn.g.dart",
@@ -102674,7 +102768,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_transcript_timeline_row.dart",
-            "sha256": "a3ddec7b187c43b3325a0ecb7cdaddd156b45f92a8b28f46bcee13175b85ad67"
+            "sha256": "a861789924678d704c33734775f4e4e2766ffb9dec25eda332b7aea6116d0c03"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_turn_parser.dart",
@@ -102698,7 +102792,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_timeline_turn_codec.dart",
-            "sha256": "4449c9f5a6b0fecab969200cc859617b060f728c23c328ed2bc2b08e30e9b923"
+            "sha256": "61443abe2711540bd16c843c7b29a6d52ef1d54bce3e6e20c2571d18063c4d91"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_turn_view/application/public/progress_text_policy.dart",
@@ -102715,7 +102809,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_turn_view/assistant_turn_message_resolver_transcript_row__local_contract_test.dart",
-            "sha256": "5a1d83d36b623a720fa2c7d4defd14bf8e4042b11942200a8ba54f8de1e162ea"
+            "sha256": "c708469fd8bc5cd9e0674b26b1d8797f17b634f32c5d96e1e93a18b24c09d85c"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/assistant_service/assistant/assistant_turn_view/assistant_turn_parser_single_track__local_contract_test.dart",
@@ -102881,10 +102975,6 @@
             "sha256": "4c59923f92d7c435b70409544acfc77b36be1e04f70ad37a566ed752d96eebd2"
           },
           {
-            "path": "quwoquan_app/lib/service/assistant_service/assistant/page_context/domain/assistant_open_context.dart",
-            "sha256": "99791492d0bcde0b3aac014fb14240cef1ccf29266ff017411fe36170b5cc19f"
-          },
-          {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/page_context/domain/assistant_privacy_policy_hint_read_view.dart",
             "sha256": "bb9b8f0e539245f28fcba73dfc622340ad5b05958157c18d67bd3b901dd65e3b"
           }
@@ -102999,10 +103089,6 @@
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/skill_activity_view/application/public/skill_activity_query.dart",
             "sha256": "2ac1fc39478be917297b4736d67fabfd2c403cf5612ebeb19c6395fabdb0d900"
-          },
-          {
-            "path": "quwoquan_app/lib/service/assistant_service/assistant/skill_activity_view/application/skill_activity_query.dart",
-            "sha256": "6286827d7cd3db10f03cd96ab0c309e1f87d971e4eb7ad01c11f51461a3dfb86"
           }
         ],
         "adapters": [
@@ -103379,7 +103465,7 @@
         "reader": [
           {
             "path": "quwoquan_service/services/assistant-service/internal/assistant/skill_data_control_request/application/outbox_relay.go",
-            "sha256": "cf777a8c4791b67509c075d067cc95c8b1ce09ca4fbf0c2c021cf7a3cc3f2a03"
+            "sha256": "21e28ecb36f04c0ddf6f15186ed64de547273fd0258c44f4850a1741ebeef471"
           },
           {
             "path": "quwoquan_service/services/assistant-service/internal/assistant/skill_data_control_request/application/service.go",
@@ -103577,6 +103663,10 @@
         ],
         "localContract": [
           {
+            "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_package_release/gathering_coordinator_intersection_policy__local_contract_test.go",
+            "sha256": "c2b7f5b61b314f4a4b8ed9a7b21b409dec54df3480f79014e74b296b0bc6eaf4"
+          },
+          {
             "path": "quwoquan_service/services/assistant-service/tests/local_contract/assistant/skill_package_release/http_handler__local_contract_test.go",
             "sha256": "28e1824dcac509fd2b63f3c1e7cd7b62dbe7975afba336f68565e435d857d3c9"
           },
@@ -103691,7 +103781,7 @@
         "reader": [
           {
             "path": "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application/outbox_relay.go",
-            "sha256": "3195112c1f3d3f2436921ff9f1fc2c561ab060c3f122ad7fef41ebbed0a56e40"
+            "sha256": "73d4f1500b82cb3ba9e29b68159f51fcdebe24a63ea5bcc314bab215af6eec6d"
           },
           {
             "path": "quwoquan_service/services/assistant-service/internal/assistant/skill_subscription/application/use_cases.go",
@@ -104001,7 +104091,7 @@
         "reader": [
           {
             "path": "quwoquan_service/services/assistant-service/internal/assistant/skill_user_setting/application/outbox_relay.go",
-            "sha256": "b1793dde87cf018c80b41724e03c79b5576da825b5d7f30d4f47142c8bee3694"
+            "sha256": "4eca8f83d31cc3775f62171ef761de91aaf9da013e82367b11f376357f068fbc"
           },
           {
             "path": "quwoquan_service/services/assistant-service/internal/assistant/skill_user_setting/application/service.go",
@@ -104345,7 +104435,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence/mongo_message_store.go",
-            "sha256": "4dbfaecf6cdf4037aa7cfc8a58e698b5642c1a2c6e77a368b6b96e9d80513493"
+            "sha256": "3b82945252f6d427524b0988861e8449cad6eeb679d14dae95b168ff802335e0"
           },
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence/mongo_user_account_closed_projection.go",
@@ -104476,7 +104566,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/conversation/application/message_service.go",
-            "sha256": "0c6e1f4fd4f212d3cdc08aab605518eb2716e2aa63a1136b4579280edc8f0f7d"
+            "sha256": "2e664230c877de3231884219dc21ff6cdfd7c0a86bf5b60404a9799318607f62"
           },
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/conversation/application/profile_resolver.go",
@@ -104516,7 +104606,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/conversation/application/storage_ports.go",
-            "sha256": "7dfb8ba0e6b2338ecee9067cda667c998a23249de7d3d89adbcb07c954572f6e"
+            "sha256": "7613e078cb4f87f66acc8e5e801fd1247cffa4d637f4b1502df0c2553f436bb0"
           },
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/conversation/application/user_account_closed_projection.go",
@@ -104530,7 +104620,7 @@
         "transport": [
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/http/chat_handler.go",
-            "sha256": "380c62f7ae10db12d3674d45509a981efe514875a32b6478fd82106d0f74eb9b"
+            "sha256": "29f876ff3ad18dd6e34110daa99acc52ba42eb487584d51ed53bf9a7a8041ae9"
           },
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/http/chat_handler_helpers.go",
@@ -104542,7 +104632,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/http/chat_handler_support.go",
-            "sha256": "1ffca23601b24356365364bb5ee7f95804bbf7f8b1c2b0f4f7e37d52b9810df2"
+            "sha256": "e633145815e674a9cddc569c2c64ff7e877226391bd29e1e6c3c331d2671bcce"
           },
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/http/circle_list_resolver_client.go",
@@ -104675,6 +104765,10 @@
             "sha256": "76e950c87e4eea291a6d3aa5d7900ee2840fb6c4d1f5ee5770f0965bdca302e9"
           },
           {
+            "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/conversation_intersection_facts__local_contract_test.go",
+            "sha256": "8d4ff27eb0a2e8f570c2720e06f20e22e511e590db7654912e9480ede0efc1fc"
+          },
+          {
             "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/conversation_pagination__contract__local_contract_test.go",
             "sha256": "a9cbad58ae141103e0ea165e6dc06f4d4f8aa2ceb97716cee0bdc8c41cf83a94"
           },
@@ -104692,7 +104786,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/gathering_icebreaker_projector__local_contract_test.go",
-            "sha256": "04516c1de98a4d1a4348d39b51b3e6648fd3b27d3c0e7d4c7c85754646559c13"
+            "sha256": "1d179f34327fa1eeb5c7b494e573e28e3439d9bea76b973e0849809b17befbd5"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/gathering_projection__local_contract_test.go",
@@ -104724,7 +104818,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/rtc_call_log_projector__local_contract_test.go",
-            "sha256": "7df1768f8045fe03e7de941c5e05ea1c179cc1a105305900e0887921ad48bd11"
+            "sha256": "221a4923d6369ec22747c150f40e5a1366215d3e805382f18d1e4c863108b53d"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/conversation/runtime_media_status__local_contract_test.go",
@@ -104770,7 +104864,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/chat_inbox_view_runtime__support__api_integration_test.go",
-            "sha256": "30469218757724e5bf318160f665b16f2b2ea25a9baf64b1026c4aadd26e5819"
+            "sha256": "1f33fa8f2e475425cf7543ccafec0438cd13b723379d5fabac4056d8f52e0d47"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/circle_group_chat_binding__data_consistency__api_integration_test.go",
@@ -104797,6 +104891,10 @@
             "sha256": "9f329620b8206eb972bceaee9acd4862a0b592b6b84309c1dfd1401154430cb6"
           },
           {
+            "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/conversation_assets_contract__api_integration_test.go",
+            "sha256": "6095d023066d04ab546b988e9bc0dd459a9d2e35922434930c957edd5663c50d"
+          },
+          {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/conversation_crud_contract__api_integration_test.go",
             "sha256": "34efc12cefd27fe7d7278a3694f14aedcfbff8a20b6d9b8f2e5f1ddd2cd8fc24"
           },
@@ -104818,7 +104916,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/event_publish_contract__api_integration_test.go",
-            "sha256": "174647d76cae6aaa11ec62c4a3dd88ba678b105c39d7caf2f49aa2ae6945c474"
+            "sha256": "98e1268658f3d30a635e5a3e09d2d8c9a38d4e3acbf075fabd12d7ed11f73482"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/event_publisher_rejects_unknown_event__contract__api_integration_test.go",
@@ -104834,7 +104932,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_avatar_async_contract__api_integration_test.go",
-            "sha256": "dfefa2470e218b8bf8069c4852089172d2350eb35bdbc89e49c0d9fcf6bb02c9"
+            "sha256": "b80899446b9b8f454813b30c6b63fe528d921d57b3c857d5a8e745ff577dc59b"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_avatar_contract__api_integration_test.go",
@@ -104854,22 +104952,22 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_governance_authorization__security__api_integration_test.go",
-            "sha256": "f218085fc27a7c77d8ab98d94676d07e9763eeb79e40b744980b4aa90d23d5b7"
+            "sha256": "77d0bbaa4c6fc1ef38accfc1338765bf278ada17e737a15b70fbbf74fcc0f16f"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/group_lifecycle_contract__api_integration_test.go",
             "sha256": "8ef3451b8abcb00cf425efd645e59632731eddbb5a0a9cdad7673f3291b4092f"
           },
           {
-            "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/helpers__api_integration_test.go",
-            "sha256": "265c22732de510e8b5ba38d6ec23ef87c92406990b286b0795c6247bc260a07f"
+            "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/helpers__support__api_integration_test.go",
+            "sha256": "f2f6722f354c3a63601fda527c77a1ab2f59d8f3449393e3187c04c2a246e148"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/inbox_projection_contract__api_integration_test.go",
             "sha256": "a556f5fcf067811dc0e55f24698809a032321e070f475c0c40b26c3efc36ad97"
           },
           {
-            "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/member_management_contract__api_integration_test.go",
+            "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/member_management_contract__data_consistency__api_integration_test.go",
             "sha256": "21be787bc292db2c1ef6bd9b9134fbb5d5d61a37d37c01cca8c5ce9dc5b0e512"
           },
           {
@@ -104885,8 +104983,8 @@
             "sha256": "7da6cb777b02405c81bbdfb37f57c95a41055e7ad6342e3baff259698ddc730d"
           },
           {
-            "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/message_paging_disorder_contract__api_integration_test.go",
-            "sha256": "854247620d3b3aeb4e45b78c290cecc99e0e2a8716ef34be095a6da7f48735e4"
+            "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/message_paging_disorder_contract__data_consistency__api_integration_test.go",
+            "sha256": "f3491ee56175574912f2567135a45885bbd6c96d1caf87827c50d35815cb94b0"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/message_reply_target_contract__api_integration_test.go",
@@ -104906,7 +105004,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/resume_gap_recovery__reliability__api_integration_test.go",
-            "sha256": "af881eee5d0ce0fdb8faf0aca73bc57240b3320c79312cb01b868e02b4d48210"
+            "sha256": "2ffd4cc7962a8e5388fa08fe0970e4e6a86c988f00a7124f8bdf41ce5adffae7"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/rtc_call_log_projection__api_integration_test.go",
@@ -104918,7 +105016,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/selectable_group_contract__api_integration_test.go",
-            "sha256": "70b29940c13f2520ac7b538d664cbd781e4e5adf77beb22b4409b99ee4480a83"
+            "sha256": "4a38b56c527eaacb62469b63489a8d93a621ce3944f32764ec420b684f890e3a"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/send_message_relationship_gate__api_integration_test.go",
@@ -104930,7 +105028,7 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/testmain__api_integration_test.go",
-            "sha256": "29162c214725618313acf51ec5f1a13e629b0537666895292b0e7cbd086ee73f"
+            "sha256": "0a93c8823c0eefece8f0672791d3f7661892807d7a8d030205d10e1b6e367fd9"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/conversation/user_account_closed_projection__security__data_consistency__api_integration_test.go",
@@ -104954,7 +105052,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/domain/conversation_dto.dart",
-            "sha256": "6734a0118bce4da8cbfd49cd4bf327b413bb38486a6c093dfe3decf64e8952c0"
+            "sha256": "9b9dda37aa60c35959eff41251c45d84599d38c1780395adaa300a8adcb86114"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/domain/start_group_chat_route_extra.dart",
@@ -105072,11 +105170,11 @@
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/presentation/chat_conversation_page.dart",
-            "sha256": "03011650b9da8b532eed8a3d5cc509db366c74832f3ad4c67a83e8e58a92733e"
+            "sha256": "344e5aff7da9fab987d54fec29392f5bb43a9d97b29a36933498cbbc15ca5bf3"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/presentation/chat_settings_page.dart",
-            "sha256": "80e990487e62234709d0c35605226701da2eef24b774a99132d8f583027f2dc4"
+            "sha256": "cc570fcfb7bbc222bf78d41e0ae04de256df36b8baa3cc0a2a68b6d3f55f070e"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/presentation/gathering_board_page.dart",
@@ -105118,7 +105216,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_error_code_contract__local_contract_test.dart",
-            "sha256": "4ff1e925eedbb5b44aae0613949054ccfcf782c1784013ea5f9f85896ae88390"
+            "sha256": "31fb2025c0febdd3b2aff3c3835d6ee4f82228bcad2e324c9c4c760031bbf287"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_errors__local_contract_test.dart",
+            "sha256": "b887143a66cf22ae833d69313b3a6312832ec7729434f1ae0e564c853f825401"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_group_create_journey__local_contract_test.dart",
@@ -105154,7 +105256,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_settings_page_widget__local_contract_test.dart",
-            "sha256": "b423dc4b6a6a487135bda5a37eed97cebe0c08e581c209870cb6c29bceda419a"
+            "sha256": "251f89a5d7926b4c8149207bf8422a2e5ad0caafa28ef62a61e45e837a8c29af"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_avatar__local_contract_test.dart",
@@ -105190,7 +105292,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_intersection_header__local_contract_test.dart",
-            "sha256": "f638f4e3c9e8f4061a49cb8bd20be3f9cd4e3415b1c01ba6eb375be0495bbe8e"
+            "sha256": "82be6940fc1a51ff40ad3ddb895e5986ec5e63953b6e3aa91df04ddc08d20d7c"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_remote__local_contract_test.dart",
@@ -105630,6 +105732,7 @@
       "objectId": "chat.message",
       "operationIds": [
         "chat.message.ListAssistantGroundingMessages",
+        "chat.message.ListConversationAssets",
         "chat.message.ListMessages",
         "chat.message.RecallMessage",
         "chat.message.SendAssistantDeliveryMessage",
@@ -105662,7 +105765,7 @@
             "storage": "messages_outbox",
             "artifact": {
               "path": "quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence/mongo_message_store.go",
-              "sha256": "4dbfaecf6cdf4037aa7cfc8a58e698b5642c1a2c6e77a368b6b96e9d80513493"
+              "sha256": "3b82945252f6d427524b0988861e8449cad6eeb679d14dae95b168ff802335e0"
             }
           }
         ],
@@ -105677,13 +105780,13 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/message/application/use_cases.go",
-            "sha256": "1612ba6e10dcea1d0ed4a36ae9e456ef708344f41b148f218f656adb567370c9"
+            "sha256": "c894f21583f050b13f13c018197c477ef6bbb12b906629110771f7334d2e78f9"
           }
         ],
         "transport": [
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/message/adapters/inbound/http/handler.go",
-            "sha256": "26e5951daa1b3927be4b2f4213e638b41f3ce0ec63df6c2370638decadcd8dfc"
+            "sha256": "7c423fe8a1f42d135370e3711e76055aeec404300717d215a854ce4d7d264b79"
           }
         ],
         "localContract": [
@@ -105705,11 +105808,11 @@
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/message/operation_facades__local_contract_test.go",
-            "sha256": "94b73178612d5aa43d9c0510cbadf7e0d532e1514163492ab090ed87f7c1d224"
+            "sha256": "51d44d7f02e3dac0aec63c92242c1aacb068531aad149ec7e998081901d9f6e3"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/message/rtc_call_log_consumer__local_contract_test.go",
-            "sha256": "0a39d128a1bfde78582ed76e26e3862544d9dfb88836a4edf4bff0a446946c01"
+            "sha256": "89b2445017dbe80123c77801d49187e5035fa1f75c97c221a2c565ad7768e172"
           }
         ],
         "apiIntegration": [
@@ -105745,7 +105848,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/message/application/chat_message_repository.dart",
-            "sha256": "b91792e3b8427ebd78c90df4d6f9c0bdd05cca75d527d7513890998b77391006"
+            "sha256": "5aa7f132e75d6937363b2fa933a5be99f6dac66ee4fd47150265f23583165ec3"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/message/application/chat_send_outbox.dart",
@@ -105793,21 +105896,21 @@
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/message/application/voice_player_manager.dart",
-            "sha256": "d28a262e9ec2edbbb6fc3a157816ff28aa4223132cdb31e92f03842883a0ec02"
+            "sha256": "c5ffb8580d1c35cc09e9c1d3229e4d8f1eb7ba61fe6ef059873a6d5f81937f0a"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/message/application/voice_send_provider.dart",
-            "sha256": "71b7191c16d85641c8e8d8f02162a1a2c31f57821127d3b4160e216979089e19"
+            "sha256": "9501755e9daee9a4a64788abfbf049b21a87c260d5661f8f20706c914fc22c80"
           }
         ],
         "adapters": [
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/message/adapters/chat_message_repository_remote.dart",
-            "sha256": "10908cf807c426594643783c4fc9c1c7db06a6d30b3a9df8384bb816455b260a"
+            "sha256": "5b364d007f0bf8d8da8c0a953564b2e68c74839913eec90ac174b75592c87051"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/message/adapters/message_remote.dart",
-            "sha256": "6811ba471fa0e1ff43b96ac60d7e5c81ad48e16ea351070b105da95fd76c0ac5"
+            "sha256": "a874b06f9d8798dad1154a8cc225fcaedf5a93c8e5317c601a5f86d89025de3b"
           }
         ],
         "presentation": [],
@@ -105894,7 +105997,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/message/message_paging_scroll_anchor__local_contract_test.dart",
-            "sha256": "f1ca2b046480614e2ece58673bbeaa5cf7db93dee27f59214f1a00406fa82455"
+            "sha256": "fe24458547f4114a0e6e148aeb4d7a6a3ac5331f989a86789cf6b8eb75c314d5"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/message/message_remote__local_contract_test.dart",
@@ -105902,7 +106005,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/message/message_timeline_persistence_paging__reliability__local_contract_test.dart",
-            "sha256": "1f98418dccfb9a63e950c4828013961071126a3f87f1bba5e09b9c9236ffbdd3"
+            "sha256": "d09856385d8c8859a83ec95852e29ca985102e47593c599b67eb73f53a772ae6"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/message/message_timeline_scroll_send_budget__performance__local_contract_test.dart",
@@ -105923,12 +106026,24 @@
         ],
         "apiIntegration": [
           {
+            "path": "quwoquan_app/test/api_integration/service/chat_service/chat/message/message_media_reply_remote__api_integration_test.dart",
+            "sha256": "b960a03d812c3a2fd452ace35a8cb7b03d094977be4b23a1b7369f3774079425"
+          },
+          {
             "path": "quwoquan_app/test/api_integration/service/chat_service/chat/message/message_remote__api_integration_test.dart",
             "sha256": "ad4a318d9cc561f0c4a316e3be9b609ea089446fb5e8d4e378311c41781d6d0d"
           },
           {
             "path": "quwoquan_app/test/api_integration/service/chat_service/chat/message/message_timeline_cold_start__api_integration_test.dart",
             "sha256": "d92e1a58748a11d240fa6143e4d6f43fae7d823f16af0a70b966c84ce9046cf4"
+          },
+          {
+            "path": "quwoquan_app/test/api_integration/service/chat_service/chat/message/message_timeline_cold_start_writer__api_integration_test.dart",
+            "sha256": "c5cf3462e28bed08e0b3aa72395acf46c551282103a9016b689f4eb93e729112"
+          },
+          {
+            "path": "quwoquan_app/test/api_integration/service/chat_service/chat/message/message_timeline_cross_process_cold_start__api_integration_test.dart",
+            "sha256": "621c8363c0e8d55f5c634b645671b57eae24f159f71d901d380d7048a538ef13"
           }
         ],
         "userAcceptance": [],
@@ -105951,7 +106066,7 @@
           "storage": "messages_outbox",
           "artifact": {
             "path": "quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence/mongo_message_store.go",
-            "sha256": "4dbfaecf6cdf4037aa7cfc8a58e698b5642c1a2c6e77a368b6b96e9d80513493"
+            "sha256": "3b82945252f6d427524b0988861e8449cad6eeb679d14dae95b168ff802335e0"
           }
         }
       ],
@@ -106404,7 +106519,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/circle/application/circle_state_provider.dart",
-            "sha256": "ab671d1a2c9371abaedc59f4c1efa94df8c2132d981cd5fd0820e404af225b39"
+            "sha256": "91ee92224dacdef02885b1052e171c7c1e62442352ce3791af24d597d7d27987"
           },
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart",
@@ -106501,6 +106616,10 @@
             "sha256": "7bad957f6ffc319fe41ceb583b72e79c9cfce6d700cc95d20809aa259a60fbde"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_client_boundary_remote_failure__local_contract_test.dart",
+            "sha256": "99b5deced11c6734eae95b3216862b53d6cbcd8206aac1b83ccf4fea0707e3ba"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_content_identity_widget__local_contract_test.dart",
             "sha256": "d0df318f58f090a828896afdc16c21dccf9dd54d2658b41af9d9445ddb61543d"
           },
@@ -106519,6 +106638,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_edit_settings_page_widget__local_contract_test.dart",
             "sha256": "4651c5963580698b284cf3e207372b55b6b6aefad82680046733ff4fa8c1ddff"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_errors__local_contract_test.dart",
+            "sha256": "b7b94950074556ab1f498281d0f3efb1bbccf2e125179bb110838bde1a0e5e97"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_generated_remote_readiness__local_contract_test.dart",
@@ -106554,11 +106677,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_shell_widget__local_contract_test.dart",
-            "sha256": "1bdec412c9dd400955dcd64b8f9815a058eae267ee607fa99a30222c741087d6"
+            "sha256": "ca34d8ad68ae1cc52a5ceb5fedeaf8dfe6eab62ab97ab96407176b8ca036ed61"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circle_stats_page_widget__local_contract_test.dart",
-            "sha256": "a3a2ead07086c3a51b0fb3f889094e85a840cd07611cf710a3e483b58f44aea7"
+            "sha256": "aee7f5ebaabc703d43050d65c0488f5763699f3b4c0a471b62824988f684d416"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle/circles_page_widget__local_contract_test.dart",
@@ -107416,6 +107539,10 @@
             "sha256": "3312c7920bfb999e05892db35ccf0c7ee0a20d9e22e6511f4625f86af97f671a"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_errors__local_contract_test.dart",
+            "sha256": "1c7d187a4b1e4b4eb24a43539b15e9e40da04333d5f4eaa5dbeb9b6c7d33087a"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_membership/circle_membership_generated_abi__contract__local_contract_test.dart",
             "sha256": "917e01bfce0bd9da4cf85e7a49c8f15048f304b38589d9067b364b6b9b4a37c7"
           },
@@ -107437,7 +107564,7 @@
         "userAcceptance": [
           {
             "path": "quwoquan_app/test/user_acceptance/service/circle_service/circle_management/circle_membership/circle_membership_approval_remote__user_acceptance_test.dart",
-            "sha256": "f28875eb367c875d7e411c1bf254100fae978a6833d165133c1d6b41adb07a3d"
+            "sha256": "9e6a67830c9a03d70492d5f38e363ed93abec1507630e024813f1931a4c4e895"
           }
         ],
         "pageParticipant": true,
@@ -107892,7 +108019,7 @@
           },
           {
             "path": "quwoquan_service/services/circle-service/internal/circle_management/gathering/application/outbox_relay.go",
-            "sha256": "f1654ff5f118cd485765b1825303c91721a99768754fe4b72e37453eb7a66e40"
+            "sha256": "9fe98906a8cfdb0ddffccc26668d1d567c05797caef0133b2c9ee70865124331"
           },
           {
             "path": "quwoquan_service/services/circle-service/internal/circle_management/gathering/application/reconciler.go",
@@ -107988,7 +108115,7 @@
           },
           {
             "path": "quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/application/outbox_relay__reliability__local_contract_test.go",
-            "sha256": "b58ada6169eaaf4ff9c6b9b3641d3d40ed18f1fc082cdb05850f0ddd14ff39e4"
+            "sha256": "39bcf70fbcf95ca6e608e7cb2329a2b356858cee42cb1763c4b1f54394b8e304"
           },
           {
             "path": "quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/domain/model/admission_control_scope_b__local_contract_test.go",
@@ -108004,7 +108131,7 @@
           },
           {
             "path": "quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/domain/model/error_code_negative_paths__local_contract_test.go",
-            "sha256": "0e15819eec59842ad8a492c4b773275fbbb0bfba27c725727304643a33e1dac1"
+            "sha256": "65a02538e7d260ac62a7845f24753c4144f020de3c6ff290002731049956b7c5"
           },
           {
             "path": "quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/domain/model/gathering_attendance_scope_c__local_contract_test.go",
@@ -108016,7 +108143,7 @@
           },
           {
             "path": "quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/domain/model/gathering_lifecycle_scope_a__local_contract_test.go",
-            "sha256": "326b86a984063bf72479f22cbef7b91b218be5d38038f33d2993fe32fc6c4485"
+            "sha256": "f79cf06306dcad0aaa65ac4730872e4ee7a242feb102de30ba234cc9bd874c2a"
           },
           {
             "path": "quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering/domain/model/gathering_outcome_scope_c__local_contract_test.go",
@@ -108107,12 +108234,16 @@
         ],
         "presentation": [
           {
+            "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart",
+            "sha256": "30b7fa762d41001fcff35b7a2a51938749b4cf7997a88197fd8ccfb9171e648b"
+          },
+          {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/gathering_create_page.dart",
             "sha256": "cd5fb347a53cfa19f66662645d947c027b2bd3609d5266068537a2901e9cbfbc"
           },
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/gathering_detail_page.dart",
-            "sha256": "852bbcd973d6244b84f9c37b531d764910f940272562958082be3a17847be3b2"
+            "sha256": "a303443e9f33f9a88c22766332a9e4b0f876621e53289903cb91bfa051d789db"
           },
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/my_gatherings_page.dart",
@@ -108120,6 +108251,10 @@
           }
         ],
         "localContract": [
+          {
+            "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_actions_discovery_page__local_contract_test.dart",
+            "sha256": "858dd941ad2d0095fd03d32934f28bea0bb463f47cf8d51e5dad0872df438e02"
+          },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_create_composer__local_contract_test.dart",
             "sha256": "f7442515df2c83a8425c19baff04b099ebf17fa7ad35a1b5039c7d3de04bb2e7"
@@ -108154,7 +108289,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_shared_experience__local_contract_test.dart",
-            "sha256": "8b20d26bd85357cfbeff9b5f563a9927a098f1a3df84619a4502ad6bba21f3b3"
+            "sha256": "40602704626faece84194335d29efd18b97b8e84cb98dd6cca30d45dabc3bed7"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_social_proof_display__local_contract_test.dart",
@@ -108309,7 +108444,7 @@
           },
           {
             "path": "quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering_plan/stable_error_code_negative_paths__local_contract_test.go",
-            "sha256": "0cbe6aba9ad164c0e3f1ffb588daf5eb6ed0a4de18c49e7ca3f0a59a8ebf0e18"
+            "sha256": "76aa55baa8dd55e628eb215963ef554737e5a2965995b2e788a7cf353b653594"
           },
           {
             "path": "quwoquan_service/services/circle-service/tests/local_contract/circle_management/gathering_plan/support_harness__local_contract_test.go",
@@ -108597,7 +108732,7 @@
         "adapters": [
           {
             "path": "quwoquan_app/lib/service/content_service/content/comment/adapters/comment_draft_store.dart",
-            "sha256": "4f57f66fc1c7e52101090947c4d27e60d186e8c93c68bc1d2591a9ab1fa398f0"
+            "sha256": "7b94f05b89a70b632432b513c3b4818b160836838ae09621b0a28ddd8ca84061"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/comment/adapters/comment_facets_remote.dart",
@@ -108628,7 +108763,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_contract__local_contract_test.dart",
-            "sha256": "2d9675b1a4f3f02048f24d52f6760beb5190af39f30bf97e151c30c5229aca01"
+            "sha256": "490efda7b12497f745a4e58c7445ee26c8f12c5bb9b016d89dd2743553a043e6"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_errors__local_contract_test.dart",
+            "sha256": "c5157c3d1583ef2acf0152ceb73ba5931f07ee6839f963838a903690152fe716"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_facet__local_contract_test.dart",
@@ -108640,7 +108779,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/comment/content_comment_remote__local_contract_test.dart",
-            "sha256": "ec8efa25d7c476a17abd3d67beffa776f1f64f7af04b0c86efb1933b37a56451"
+            "sha256": "25f114db8bfef3bd94764b38093e5326ee304a0a7554c541eadaeb1f293c4b12"
           }
         ],
         "apiIntegration": [
@@ -109196,6 +109335,10 @@
             "sha256": "8b2e182b2665e8397a7389e8c392f77a46b4bc9f5e953d31b038e4a7ff037177"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/content_service/content/content_reaction/content_reaction_errors__local_contract_test.dart",
+            "sha256": "960c99adbec26c7ccea2e23bfe241496daba5b6f938da1f261b9233e36618bc5"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/content_reaction/content_reaction_remote_api_path__local_contract_test.dart",
             "sha256": "22ad2a31e3cbc8e57463be72392e77ddf40f7daa0d380cab759faf4a757df762"
           }
@@ -109683,6 +109826,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/filter_catalog_release/filter_catalog_coordinator__local_contract_test.dart",
             "sha256": "64c47fec5dd63cfbdfeca5e8c02723a613721758eeba8d004ad99db51c44bc64"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/content_service/media/filter_catalog_release/filter_catalog_release_errors__local_contract_test.dart",
+            "sha256": "b517ec5a002c4bc9b83e1fb4458a2bc9864708b725e6779073342c16b7d9f27a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/filter_catalog_release/image_editor_annotation_models__functional__local_contract_test.dart",
@@ -110317,6 +110464,10 @@
             "sha256": "6161cd0ee97e8d7445ab6be9e0757d7c095b7bed0e32b6bf7cc03ab9dcf18b0a"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/media_asset_errors__local_contract_test.dart",
+            "sha256": "56a580178364a5432673a0babb5269058b7c6d2f18a92c70ed3f52131349ac28"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/media_asset_remote__contract__local_contract_test.dart",
             "sha256": "90c5cce0000548ed7cc5ea1e42864e15fa8327594642c41e49d60f51fed5b39c"
           },
@@ -110382,11 +110533,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/video_player_widget__delivery_binding__local_contract_test.dart",
-            "sha256": "4d938d01f776b48271e4e73f9472b3ef80612c5f39ba33c77cce1c5fd6c5f14f"
+            "sha256": "8eed6df52117f6254e0b35a8c733bbad27cc463e2a4e7b69ee479362b170db1e"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/video_player_widget__failure_experience__local_contract_test.dart",
-            "sha256": "ece295f8d0b8bb9ec314c8e560003f46acc496686e0e37c0c644715be7fc0bb2"
+            "sha256": "ed4e1336f7591a8d9db33800e2d7b295ee076165287a61c305e8ea3b116afb7a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/video_preview_track_remote__local_contract_test.dart",
@@ -110406,11 +110557,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_widget__local_contract_test.dart",
-            "sha256": "e006ddb3ee64b6f25124936a54c24ecae68bb3431c8065dad38bdd3b3b693c8a"
+            "sha256": "e327a257c161d84e65016d59a9d9ee56c83e31739776d76396ebbe4e99d06b51"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_immersive_viewer_wishlist__local_contract_test.dart",
-            "sha256": "f9dd00b91e46bc8d000bda1a247e1cbdfd8bed5eeb3bd3674ae2b1b998b7b6be"
+            "sha256": "0aa70cf2e1664f160f693df77b7ea1c70403f4d5758d1adda9a93bf365ef4c98"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_asset/works_video_episode_identity__local_contract_test.dart",
@@ -110568,7 +110719,7 @@
         "reader": [
           {
             "path": "quwoquan_service/services/content-service/internal/media/media_original_access_fact/application/service.go",
-            "sha256": "e45a44739a75883dad3beea1018524590db2ad1c6d492a52315f4ac39d8c16f5"
+            "sha256": "68c268d67c4d831409fb726fae1a5b9946140bb769eae184a3129de36db18860"
           }
         ],
         "transport": [
@@ -110922,6 +111073,10 @@
             "sha256": "0a35d1d1e3c0454472d144835197c7156f53d5fce99114698d055a040f239d91"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/content_service/media/media_upload_session/media_upload_session_errors__local_contract_test.dart",
+            "sha256": "d120a66c0c492ac51370d1bfcc28653501b1f4625abd035eaac198f32faed9ed"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/media_upload_session/media_upload_session_remote__contract__local_contract_test.dart",
             "sha256": "daa6d5b520df3e442b68bcdbc0a826747be4f343bb17ec3c6d2226b2b0466d0d"
           },
@@ -111080,6 +111235,10 @@
         ],
         "presentation": [],
         "localContract": [
+          {
+            "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/original_access_quota_errors__local_contract_test.dart",
+            "sha256": "6c76be56109b9e420f37c921ec3f00aa31d05130941762763b61c3367c95b244"
+          },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/original_access_quota/original_access_quota_remote__contract__local_contract_test.dart",
             "sha256": "fb8db667c3bf397d25af437eba9557a34de29a424e3052d5f78f061be91d1a60"
@@ -111268,7 +111427,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/ports/query.go",
-            "sha256": "a9e10a65a278568cfb7d668cf3cf017688115b5e7a1e7b2f7c9e3335785d0b57"
+            "sha256": "b5cf7e791980a2d04cc066894df7400631cd0d0158c48c8f15135b80d3bc0d72"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/domain/semantic/mentions.go",
@@ -111427,6 +111586,10 @@
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation/projector_event.go",
             "sha256": "0f93037bb0ccac63c15ff2fb88976a07923e72a9b03c9087487c2b8bf6a4f2f1"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation/recommend_feature.go",
+            "sha256": "cfbcefc1e0f2cc10afdeab6e21ad9f7d12e3c71d9b203ab21c1b164354b67866"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation/redis_client.go",
@@ -111735,11 +111898,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb/markdown_body.go",
-            "sha256": "5494f41f7a3ff93661efb39f0ee9b74365fe878b34c5862d14af20219cbdb34a"
+            "sha256": "15262ced88d5040b7ac43bdb2eb3ca854a60c8dc6c0a26f3b299fb6a09b3037d"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/publicweb/public_web_handler.go",
-            "sha256": "58ad733978879514cbf80e0f62db4b674ef80015bd7ade072301b207f8878b7f"
+            "sha256": "d09349ea8c04af4380b1925516a0bc7f0054c7e65831c3ae50e5b9d3f17ce73f"
           }
         ],
         "localContract": [
@@ -111757,7 +111920,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go",
-            "sha256": "1d2fdcccce83f19f6495f5916b189e60537975b3ea435d5ecca71e1560ac695b"
+            "sha256": "2d8968d35dceb4f3791839049ce9d0f6e34cf037dc72779070d80d406377d325"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler_helpers__security__local_contract_test.go",
@@ -111781,11 +111944,11 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/publicweb/public_web_handler__local_contract_test.go",
-            "sha256": "e6bf98eab285975c0431309d308a9b9561135a1ea72b7849f2ddc2426b91f66e"
+            "sha256": "e69f9575c4ff647ce8490fcbe39db2eea78b0aafc96a216407483de3feee88b3"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/app_config__contract__local_contract_test.go",
-            "sha256": "d6e6a425314f3a11c262cdf01a0782d13e75a0962ec615f03a36feb698c56ce2"
+            "sha256": "c2601513086e3afc2f991a8b4b36eaa5f103d64191f630ea4896aaa47eaed2fa"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/application/authorimpact/author_impact_travel__local_contract_test.go",
@@ -112145,7 +112308,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/searchindex/startup_readiness__local_contract_test.go",
-            "sha256": "74c2f818a457788411cfa19a76ad467f517237b3c9bca05f79ad9523a9f7f7b5"
+            "sha256": "bcbe2788979a1211015cda98b0d0b7f5afc6b76a19ee2735b2451b93f7537077"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/infrastructure/sharedtags/http_shared_tag_reader__local_contract_test.go",
@@ -112294,12 +112457,12 @@
             "sha256": "60b3d5c27efa502096d673519c3e54e9b84c2dd57a17918e89df56f2bd75f9e5"
           },
           {
-            "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__api_integration_test.go",
+            "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__data_consistency__api_integration_test.go",
             "sha256": "0d8202e8feb4355338d47dfaf3e6a0c2fca51ea1004fef5e56d485985fff4bdd"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/helpers__api_integration_test.go",
-            "sha256": "83f10ecc2ca0644c954b9189b977090a57fdbcd38338011ffb060ea241ebf2d8"
+            "sha256": "ddba690cbf3956a9a9e8d74118e0ad7aef4a2a73aeadbaf44acfe2e9d95af97d"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/hls_cmaf_object_storage__api_integration_test.go",
@@ -112330,7 +112493,7 @@
             "sha256": "b68d344150ff665958c961eb15ec2be58041c16f6e74dd3348aa1735853c25c8"
           },
           {
-            "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/media_commercial_operations__api_integration_test.go",
+            "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/media_commercial_operations__data_consistency__api_integration_test.go",
             "sha256": "76f1cd3f492860a7dfa9edde5bfe0652ddc056752dc775e04e60ac1a4fc2753b"
           },
           {
@@ -112367,7 +112530,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/post_behavior_contract__api_integration_test.go",
-            "sha256": "d293ae5c7a2af4b35829639e4c8b7706614d640979719d091fe94daff546426c"
+            "sha256": "bb3d34f6292c670086b3d5781d74e909408bdc6abb6e30d040b2bc8f5aad2b55"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/post_comment_contract__api_integration_test.go",
@@ -112406,6 +112569,10 @@
             "sha256": "c75fd9ad25cc2c74d695ce01444febaa50a9f7566cd049932548b604b322d444"
           },
           {
+            "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/post_media_lifecycle_journey__api_integration_test.go",
+            "sha256": "b1a744472f6f68ed9d57f855f9e4171260a926c4a729d7d9e5ba3acad2d27c6e"
+          },
+          {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/post_profile_interaction_contract__api_integration_test.go",
             "sha256": "7fabe4f4689582f3e3e7e032e79a1b062c522b33750a702da08d41717f093d15"
           },
@@ -112435,7 +112602,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/post_user_list_contract__api_integration_test.go",
-            "sha256": "52d11c3a42a5193a355ed7e8e74397fda31f0cc1a112621449f6cc3bac8eb7bd"
+            "sha256": "153137ce0257c84eecd4d1a08a47bb94453c4a8ac106fa52688e6c8d6a9a972e"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/redis_router_contract__api_integration_test.go",
@@ -112450,8 +112617,8 @@
             "sha256": "64f2f7af7df84c62133577b842f2d78365f94c7a1808b62fc8ccfa270a20221c"
           },
           {
-            "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/testmain__api_integration_test.go",
-            "sha256": "3092858446b6e52df443197428b369c42fa6abe21c262bfa14a4fc8939ca0c8c"
+            "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/testmain__support__api_integration_test.go",
+            "sha256": "ae9f4bc8d354ecd95747862a9687e081bf1f27cda4562ea0924177f25c70f305"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/user_account_closed_cleanup__data_consistency__api_integration_test.go",
@@ -112467,7 +112634,7 @@
         "domain": [
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/domain/article_document_models.dart",
-            "sha256": "e330ea2ae86d7c7c1c79d22e6b665a4c07adad006aa42b38dfd97c65341d0391"
+            "sha256": "b7f4aebfcf8eeca8655354f3dab2654b4141da1a27713700b1187bfb9fa5642d"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/domain/article_editor_projection.dart",
@@ -112585,7 +112752,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/create_editor_provider_node_editing_operations.dart",
-            "sha256": "de087594ff4ee4537f6304bbddce73d8bd9bb69322d3b39b5d396842ee00ef4f"
+            "sha256": "335a404c7694af9ffc5e022a9a444efb8102b1778728e9d1f55095fbe821fd61"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/create_editor_provider_node_structure_operations.dart",
@@ -112669,7 +112836,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/article_document_models.dart",
-            "sha256": "118662af58af1ef6507272cdade21a64dfd9cd1fa0f429dd2bf76c377c622176"
+            "sha256": "479002fd3dfea4020c3cfba9cdc39025283a0b477a1bb8dd2efbc1508a3d2f11"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/article_presentation_values.dart",
@@ -112871,7 +113038,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/post_view_projection.dart",
-            "sha256": "750dd85171163e37c85fd280735a00b75a4c98b45ca21be34346b20ead1668bc"
+            "sha256": "5c904aeaa24d79a29f9ba288b78e0e157eec2f100d35d87adcb5aeeb9ba6f450"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/prepared_post_publication_payload.dart",
@@ -112913,7 +113080,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/home_page.dart",
-            "sha256": "a48e70452a6f55de58258dcda88f5085e927118a2f075e898cc32dd760f46047"
+            "sha256": "4aecb4e850b43883845bbc86c74b64272dcae07b723f4081f612c82302ca1d72"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/presentation/interest_onboarding_page.dart",
@@ -112971,7 +113138,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_markdown_codec__local_contract_test.dart",
-            "sha256": "a98e7d179030649ddd220bd918ee9c689cf45e2446df02fb2a42a1a344844cd7"
+            "sha256": "a2247d6638c4d5b324b5c1ec674b242c3e895bb7faf9c0e894fe4d44551b2ffe"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_pagination_engine__local_contract_test.dart",
@@ -113046,6 +113213,10 @@
             "sha256": "3e9be283357b26e0fd1ebf3015ce88c1a2c20cf45bdb28635c7e0ee35b87ee75"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_post_errors__local_contract_test.dart",
+            "sha256": "299e3bf6b0b9da29a708953a04674f03b70a615f25bc409424e4ff39c16c0a32"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_post_facet_composition__contract__local_contract_test.dart",
             "sha256": "f469998713c6cf865743e41a96a21c50a6cfd436f812b3828d8d6bcbc008e767"
           },
@@ -113087,7 +113258,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_share_template_public_link__local_contract_test.dart",
-            "sha256": "981b42a30f97f40d7df2a9ee39ad425a44899de878cfdb1ba8c23379932845c0"
+            "sha256": "3721c0019dbc6ca1997779ac4d5a63885fd5fab1b88bf5832cdee98446499ae7"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_surface_view_mapper__local_contract_test.dart",
@@ -113479,7 +113650,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/work_browser_entry_page__local_contract_test.dart",
-            "sha256": "4b8f7d0a71f85dedf801f32b83343e6a06d9578855472ece7bcbd63aae8ae7af"
+            "sha256": "5edc90b3e0751aa69448f6a582e641f445e08b495fc373213458d373958fc49f"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/work_detail_fault_recovery__reliability__local_contract_test.dart",
@@ -113505,7 +113676,7 @@
           },
           {
             "path": "quwoquan_app/test/api_integration/service/content_service/content/post/recommend_channel_feed_roundtrip__api_integration_test.dart",
-            "sha256": "7555dc0c7d9f774802962334607600c8366f221fed7d4bc2004c9b04891244a6"
+            "sha256": "08a775b6527c716ee32ad66ef447667bc31ef2b8fc8d1dc600084d0760997f03"
           }
         ],
         "userAcceptance": [
@@ -113677,7 +113848,12 @@
         "application": [],
         "adapters": [],
         "presentation": [],
-        "localContract": [],
+        "localContract": [
+          {
+            "path": "quwoquan_app/test/local_contract/service/content_service/trust_safety/post_moderation_case/post_moderation_case_errors__local_contract_test.dart",
+            "sha256": "3d04876ce785fcde3f7ef28d634fc476a64427029a6cdc3af11939899a8e12a6"
+          }
+        ],
         "apiIntegration": [],
         "userAcceptance": [],
         "pageParticipant": false,
@@ -113930,6 +114106,10 @@
         "presentation": [],
         "localContract": [
           {
+            "path": "quwoquan_app/test/local_contract/service/content_service/content/profile_interaction_read_fact/profile_interaction_read_fact_errors__local_contract_test.dart",
+            "sha256": "9f94b422700685e308650616186a35614db7ed91ca3beb4c244ee89e6991b952"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/profile_interaction_read_fact/profile_interaction_read_fact_remote_api_path__local_contract_test.dart",
             "sha256": "da83a0b6115ce9503f770648a14429488bfaa09d8fc21a8e17ebf872d4a46bc2"
           }
@@ -114118,6 +114298,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/trust_safety/report/report_remote__local_contract_test.dart",
             "sha256": "0f0fbefd475a7cd55c91b7466f8d625e3461a6afaa8d223351a58913c8bdfd3b"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/content_service/trust_safety/report/trust_safety_report_errors__local_contract_test.dart",
+            "sha256": "5f9ecf3a357ea5a779fd93a1e81cf8c1f41e85ea4b3b00664785aa35b2d78633"
           }
         ],
         "apiIntegration": [
@@ -114564,6 +114748,10 @@
           }
         ],
         "localContract": [
+          {
+            "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/entity_errors__local_contract_test.dart",
+            "sha256": "a49b6382773bf6b031bc025b795f09ee488ac5aca43e0de545070a60a92525e1"
+          },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_claim_page__functional__local_contract_test.dart",
             "sha256": "903ded4159bc3ef4094b7e70067bda134b16b9a4158c64ff7695b9be45852c04"
@@ -115253,7 +115441,7 @@
           },
           {
             "path": "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/owner/search_page_query_executor.go",
-            "sha256": "651e3391022554abd4a85c14b90a6865cb87a5dfabccc60dbe058fd4401356fe"
+            "sha256": "30d7c692fe5b3b0c1dfc6c7378312acbe310f858afb3e76535e3122978d50831"
           },
           {
             "path": "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/infrastructure/owner/search_page_query_response.go",
@@ -117034,6 +117222,10 @@
             "sha256": "cb7f94a4804065b4229da3e51452fa7f5ba2ea62ba6044a25e935db46d1c66f5"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/notification_service/notification_delivery/notification/notification_errors__local_contract_test.dart",
+            "sha256": "f37b69203c8b62ce748eb6148381646b8f95a372aa08a5100e8ab73e22abbeb6"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/notification_service/notification_delivery/notification/notification_inbox_read__local_contract_test.dart",
             "sha256": "4fec7499d8d18379738aa47ca50010045ce45095df49c3c86c42354b67c39ac6"
           },
@@ -117712,7 +117904,7 @@
           },
           {
             "path": "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence/elasticsearch_event_log_store.go",
-            "sha256": "9b555d2f7861e2e7410474db4593264a5c800ec847cfd5d67400e96ed40ce7af"
+            "sha256": "b4d7e18699d7d7a2ecfdf7c84ccba4d69f823eed0b517726f530fb45d0638d68"
           },
           {
             "path": "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence/elasticsearch_queries.go",
@@ -117771,7 +117963,7 @@
           },
           {
             "path": "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application/l1l4_metrics_service.go",
-            "sha256": "d19994d21d63c49439495bd58000c25f70b0f6b103fe70b4ca590eb763658606"
+            "sha256": "2e8e550c12fc5ac8991f0b8454043e712fcd06c71485491036a72fdcb00e0ae8"
           },
           {
             "path": "quwoquan_service/services/product-ops-service/internal/product_ops/event_record/application/prometheus_query.go",
@@ -117855,7 +118047,7 @@
           },
           {
             "path": "quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/golden_metric_calculator__local_contract_test.go",
-            "sha256": "adbbdf11bb32fc5db104d16199787290aca2f198e12f1cb7669302d60a8fdf87"
+            "sha256": "c80e7f3bc584f50fafedf10afdd888435e40376bef3c5c21dd3329e749d7aa4a"
           },
           {
             "path": "quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/growth_overview__local_contract_test.go",
@@ -117864,6 +118056,10 @@
           {
             "path": "quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/premium_pool_event_publisher__local_contract_test.go",
             "sha256": "86e7e8c8f727c72ebab0b65a68eb9032bd1f117e4b86d9b753f255fd85778277"
+          },
+          {
+            "path": "quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/raw_index_numeric_mapping__local_contract_test.go",
+            "sha256": "787433939420e6c58ff21827e5f7568fc04d3314fc2c5cc7746c3509609e0e5c"
           },
           {
             "path": "quwoquan_service/services/product-ops-service/tests/local_contract/product_ops/event_record/rollup_catalog_pipeline__local_contract_test.go",
@@ -117952,6 +118148,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/product_ops_service/product_ops/event_record/event_record_batch_remote__local_contract_test.dart",
             "sha256": "89a296964c05a8191b87ee043f01b96d9a1bc78c52a45f0e76053cd79d567b11"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/product_ops_service/product_ops/event_record/ops_event_record_errors__local_contract_test.dart",
+            "sha256": "da54784de159b1c83076659f79da32f9da9c31e14ab1871908cdcab37e0de69a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/product_ops_service/product_ops/event_record/startup_telemetry_remote__local_contract_test.dart",
@@ -118951,7 +119151,7 @@
         "environmentAcceptance": [
           {
             "path": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/recommendation-service/smoke/run_ranked_window_feed_journey_probe.py",
-            "sha256": "5e7f903680dc7d97e60af2d1dba4253ab257f91538dde60d7da1bb4756d6ea1d"
+            "sha256": "369a71ae38b026d08d2c36daae90c65f9307e858424b81fd5caf403c6268adcb"
           }
         ],
         "rollbackRunner": [],
@@ -118978,7 +119178,27 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/infrastructure/mongo_store.py",
-            "sha256": "b6b574ee668962386c720bf0643d01c3527bb25194d3cde5a03a6c2972ef5741"
+            "sha256": "563cb8836ded6676c082d7fd8fb090105a3b24bca75ccb4c6f775c6f0f811cab"
+          },
+          {
+            "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/infrastructure/mongo_store_audience_writes.py",
+            "sha256": "d83e3ecd99b5207b62494de32a97165c2130f0cd43e2637a68f451503cae6901"
+          },
+          {
+            "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/infrastructure/mongo_store_core.py",
+            "sha256": "d3f4dcbeda4e6c062d79b26f1321a8f55c080fae20781f5fa7533a94bd621916"
+          },
+          {
+            "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/infrastructure/mongo_store_gathering_writes.py",
+            "sha256": "5eb4cdae8d8c27c893c1658b0598f17c027ae70f7c1cc68a85634f8543c572f8"
+          },
+          {
+            "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/infrastructure/mongo_store_lifecycle_writes.py",
+            "sha256": "8e5e338add18a405d7c2fadafc18daa685cd82fd60515fa19757b25815df1fb8"
+          },
+          {
+            "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/infrastructure/mongo_store_ranking_reads.py",
+            "sha256": "faa58adb73a26f5090840fcf103ab90adc8ef914d3a7e0f92e546277f8b932f1"
           }
         ],
         "outbox": [],
@@ -121011,6 +121231,10 @@
             "sha256": "9bc5228bb165eb7cbc2e4df9f9bb837f422daa36e780c83765a415422d30854a"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/search_service/search/recent_search_state/search_errors__local_contract_test.dart",
+            "sha256": "8a345122094c4acdd8187e3bf21e950de517e1652a3bfd5071305c8497622188"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/recent_search_state/search_recent_history_store__local_contract_test.dart",
             "sha256": "29eccce937c5d58320e10551274ac37ec5ee8630a78d009cd15260da09379ce1"
           }
@@ -121259,7 +121483,7 @@
           },
           {
             "path": "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/userprofile/mongo_projection.go",
-            "sha256": "4b51c6d712a4f08eae16f58eaecabe32b3fc9e4f712e40ede2de50e60ae6d4ef"
+            "sha256": "d79842a1bf7793c3ae3d547d38270c5addf37032cd775cdfa1e23f93ab36435e"
           }
         ],
         "outbox": [],
@@ -121547,7 +121771,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/search_service/search/search_index_view/adapters/remote_search_repository.dart",
-            "sha256": "ee56cfb4909172c4f78f42e2519dfba42bd9de857a07ff4bd19679a621a917fc"
+            "sha256": "667245d811af78bded6c6875a7b5f52ef330d544aa77c9a90372a6b0857000a2"
           },
           {
             "path": "quwoquan_app/lib/service/search_service/search/search_index_view/adapters/search_page_query_remote.dart",
@@ -121587,7 +121811,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/hybrid_search_repository__functional__local_contract_test.dart",
-            "sha256": "4a350aba99dc56a9d127b320288f41325a61ad2269e6173f0545ec771333df93"
+            "sha256": "7680827bfdb2ca3a64a0fa77552744db7b988e5ac127aa8dc643c09919055d44"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/local_chat_search_store__local_contract_test.dart",
@@ -121607,7 +121831,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/retrieve_request_mapper__local_contract_test.dart",
-            "sha256": "e15f026b951072509084364ba61b05bce48529a8872adc3bbb89e927bde3f8eb"
+            "sha256": "12a8117c4a7d14f18e9981b840d941117a6ae99d6dc767cabc4b96c6b20c76d4"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_launch_context_equality__local_contract_test.dart",
@@ -121623,15 +121847,15 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_page_graphql_repository__local_contract_test.dart",
-            "sha256": "95f80d9562b19cb9190dca835bf4699f4f0a1e6db3bbf3b9186e99e05b3679b1"
+            "sha256": "65116e17e9ba8cfc5e578e83dc4e1e268288f5a55e482e2e4a4347b16de375cf"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_page_production_composition__local_contract_test.dart",
-            "sha256": "32a497c57f6cca25038aa4fe311ab488571d6fa55af602d04e72b92c6195bbf7"
+            "sha256": "a752cc25496ba36fc1c2ea5d5b7abe7a1656292cbb54bbe657345228c6430750"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_remote_api_path__local_contract_test.dart",
-            "sha256": "46a4ae4f89765b1b6d512747af8b4515034ce48eb05b1eab9f85dc886a96f3a2"
+            "sha256": "5b63d4ef71558a96041b9c5162c29b391a7913ef883d3bc4096e731f07971f62"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_repository__local_contract_test.dart",
@@ -121645,7 +121869,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_app/test/api_integration/service/search_service/search/search_index_view/search_remote_roundtrip__api_integration_test.dart",
-            "sha256": "92eb96ec9d5779875e1c4dbe3cfa31177be91d3094b5daf9b67ff51d5fc4cad9"
+            "sha256": "9b68363f9a5cf8aedfd4e67029bf13e95bf3cd69f366836e50a02c4e634e2a5a"
           }
         ],
         "userAcceptance": [
@@ -121661,7 +121885,7 @@
         "environmentAcceptance": [
           {
             "path": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/search-service/smoke/run_search_fullstack_smoke_probe.py",
-            "sha256": "57875337cf19280b178ef479701e8a5cf43e0eab6f8434380c6105c4400ad922"
+            "sha256": "f17565f6129a9e14a7aaf02c6ad3778d0bfc4fa29ca4ad0dd89888405abe479e"
           }
         ],
         "rollbackRunner": [],
@@ -122201,6 +122425,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/tag_service/tag/tag_node_view/tag_catalog_typed_double_parity__local_contract_test.dart",
             "sha256": "56faa5355e2613d64389f083d34907505c59b1266ae8dcde5fc0811269dcddb0"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/tag_service/tag/tag_node_view/tag_errors__local_contract_test.dart",
+            "sha256": "16f690bbb462d5ba868447c677879f3ef0e684566c84b3a0c55be9b2e42110ff"
           }
         ],
         "apiIntegration": [
@@ -122570,6 +122798,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/account_session/account_identity_facets__contract__local_contract_test.dart",
             "sha256": "ab9b4435bb69ef15f9de9fb27b9b05826ffee986dc79ed0c8ddd47558fd0492b"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/user_service/account/account_session/account_session_errors__local_contract_test.dart",
+            "sha256": "a9c501ba5a06ab42aeae705f57b1407870ed4c05fe707cb46d74c0a01b640a86"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/account_session/auth_test_double_identity__local_contract_test.dart",
@@ -123288,6 +123520,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/device_registration/device_push_endpoint__local_contract_test.dart",
             "sha256": "39c5ca20829526c78fe414e08ba22fc7d90123558b82353cd4f3989dfd051ca9"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/user_service/account/device_registration/device_push_errors__local_contract_test.dart",
+            "sha256": "c2baa7d0b74b251479d1c16607187df70feebaec1db7a6f5485649c0929e7a91"
           }
         ],
         "apiIntegration": [
@@ -123695,6 +123931,10 @@
             "sha256": "05b7cd8de41b889b33047c7a708e56bf0ba2f46928383a105be00106a5227433"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/user_service/relationship/greeting_request/greeting_request_errors__local_contract_test.dart",
+            "sha256": "fd1fcb7af40b12909df36990f56fbe81e762c4bf87a9b54f5c2793cb8e621052"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/user_service/relationship/greeting_request/greeting_request_generated_client__contract__local_contract_test.dart",
             "sha256": "616ee13caa2addc5a23bae29a1e3bf1ef473aacc7baa4c8419e742ec67bdcd87"
           }
@@ -124086,12 +124326,16 @@
             "sha256": "9a9568edb3419b403f6d543b3e23d6de1118a9b464382675d228f2060e0bd851"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/persona_errors__local_contract_test.dart",
+            "sha256": "a3ab503954a5a609753bbebd358b6f30b58ddcf753995d1108a47445c457a878"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/persona_generated_remote_readiness__local_contract_test.dart",
             "sha256": "1983e3feb2902a3bf8e091dd6017d62f00caf92640bf958a2d0c261dbc5d1835"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/persona_management_journey__local_contract_test.dart",
-            "sha256": "f7ce605a771dfb18ba7197ee7c8a7df0f65b51cfa008829c944f1658b64a3b3b"
+            "sha256": "221f185485ccac49bc57fd3fa6de33da79931eb19acdd6cabd0322bcbc22b5f1"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/persona_management_page__local_contract_test.dart",
@@ -124123,7 +124367,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_creations_tab__local_contract_test.dart",
-            "sha256": "4989521091e83788c7f00eda250c753abe40ddeaab205d5eb93f7ae277dae8f4"
+            "sha256": "104c566a5b28bb015abef9da2190eb1525af39eabc3360be3a3221ad435cf10e"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_interaction_tab__local_contract_test.dart",
@@ -124154,6 +124398,10 @@
             "sha256": "154ec114a61ccdfc328523efaba7f8062b5a2f018d7b5c6fd56f4e4ed0babf40"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/profile_works_count_row__local_contract_test.dart",
+            "sha256": "f9f8a6b527d0b3564dba767e4e0133795aae567dee8f95cceb44a45e80439b1a"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/share_interaction_provider__local_contract_test.dart",
             "sha256": "f47d0e05740761749765671935adfdab8fa3f08e3b11cc42c4c268d33ece22b4"
           },
@@ -124164,6 +124412,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/user_profile_dto_contract__local_contract_test.dart",
             "sha256": "75b3e5ef2e7d172d3a06d3ce9123fd6ad8ed6256c80028d5481b9d3f78c33daa"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/user_profile_errors__local_contract_test.dart",
+            "sha256": "1fca7699e87b46a85f433122a2f85f572312830a3fc652774bcc09ea6518945a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/user_profile_query_facets__local_contract_test.dart",
@@ -124430,6 +124682,10 @@
             "sha256": "0eebd2fe6d5d7f012218d976ae9cbf2e8a3a42480e8b79715609eab3158dcafe"
           },
           {
+            "path": "quwoquan_app/test/local_contract/service/user_service/relationship/persona_relationship/persona_relationship_errors__local_contract_test.dart",
+            "sha256": "113d9d61adeaa1b0ec8333d6aebcba730be94f1784a267afa36b49a4af9f2a29"
+          },
+          {
             "path": "quwoquan_app/test/local_contract/service/user_service/relationship/persona_relationship/persona_relationship_follow_facets__contract__local_contract_test.dart",
             "sha256": "26ea88dbb604c757b916aae3a9a1f852407dea7c3ba1bbd84cae86a22c2926c3"
           },
@@ -124593,6 +124849,10 @@
         ],
         "presentation": [],
         "localContract": [
+          {
+            "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_errors__local_contract_test.dart",
+            "sha256": "1aaee8651f5dcf561275929f49d4886e597ee341dd5348205517f6afcbdd39f5"
+          },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/profile_update_proposal/profile_update_proposal_facets__local_contract_test.dart",
             "sha256": "41ef27e035ad2152d6611b70339797f2e32f10806e294754fe999fc514d46abe"
@@ -124839,7 +125099,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports/user_profile_store.go",
-            "sha256": "510ddb704fc6575e921bdce987a63f3dc751ae5364a97657ffde0baea6340bbe"
+            "sha256": "6dcda6453830c0387f8ddb97c001cc6b1b0d0524012f440a0a702ff03f08590b"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/domain/user/telemetry/persona_rollout_metrics.go",
@@ -124953,7 +125213,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence/pg_profile_store_ext.go",
-            "sha256": "9b99e6495c2aadc4c388de1e213c51936700e55ae25c98786823a2d0d99d9a6a"
+            "sha256": "37e1dd173c0d4b382d672d4f9f36273827f5b89b4dd79ea077f46343b45a9be5"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence/profile_search_outbox_store.go",
@@ -125016,7 +125276,7 @@
             "storage": "user_profile_search_outbox",
             "artifact": {
               "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence/pg_profile_store_ext.go",
-              "sha256": "9b99e6495c2aadc4c388de1e213c51936700e55ae25c98786823a2d0d99d9a6a"
+              "sha256": "37e1dd173c0d4b382d672d4f9f36273827f5b89b4dd79ea077f46343b45a9be5"
             }
           }
         ],
@@ -125243,7 +125503,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/close_account_facade__lifecycle__contract__local_contract_test.go",
-            "sha256": "26a17e87a67d24feb5a0624a4c02d7615a1df923bd3da4d709edc221378ef18b"
+            "sha256": "28882747e6c97df165c3c6f6224631af82409039606233d9a5be2a2f4d8092ef"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/close_account_outbox_relay__reliability__local_contract_test.go",
@@ -125721,7 +125981,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/user_account/user_error_code_contract__local_contract_test.dart",
-            "sha256": "652c3b4bcb6475e7dadbfae9a2de1b87eec42b93e34fd1430ccf734f74f5ed74"
+            "sha256": "f9ddcdf703f171732b7d861e9f15e9bf89cee5a95a34fda80a18adb37b6d4690"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/user_account/user_profile_remote_api_path__local_contract_test.dart",
@@ -125925,7 +126185,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/user_settings/b1_settings_pages__local_contract_test.dart",
-            "sha256": "722ceb25e2e68ba66f4d492a6f6f1f27433d9114694959ff74b11d092f05b8b7"
+            "sha256": "129ea57840e74786196c05e898e49104888ed7652bc04bde6735c1c2f7a5364c"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/user_settings/blocked_keyword_snapshot_cache__performance__local_contract_test.dart",
@@ -125958,6 +126218,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/user_settings/settings_read_fault_recovery__reliability__local_contract_test.dart",
             "sha256": "e0e98a2c16d4d38b7c372678b79fb3aca5d8e5710d5593d4cc7ba629cf1ed175"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/user_service/account/user_settings/user_settings_errors__local_contract_test.dart",
+            "sha256": "1ca57b6573d039596b9dacd0a1d365f0da085ff296b59cffdc67d1d030f0ca9f"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/user_settings/user_settings_facets__contract__local_contract_test.dart",
@@ -127570,7 +127834,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "5ec0d237e37209a037b1796325808cbfb2f0ab0de9346becf84cd386dac882bb"
+      "sha256": "9388e526ed6125437cb428728e3d1b48fb0f768ca2f0526d9e304c30505f8467"
     },
     {
       "path": "_shared/realtime_event_catalog.yaml",
@@ -127598,7 +127862,7 @@
     },
     {
       "path": "_shared/test_fixtures/media/media/video/s/media-canary-hour-boundary-3595s/v1/descriptor.json",
-      "sha256": "b5e071648cbadd72fc18f7c3e5ff5c022c45218d53b4afe80f5580e2ca4f4d23"
+      "sha256": "5ad5ecf64d633975a904e575e398d1bef0a49c42444ed215c2f0848b1a1b505f"
     },
     {
       "path": "_shared/test_fixtures/media/media/video/s/media-canary-over-limit-3605s/v1/descriptor.json",
@@ -127630,7 +127894,7 @@
     },
     {
       "path": "_shared/ui_surfaces.yaml",
-      "sha256": "54ea9b02981394e55fadd57e2188be1fb31042d64d7e74c08c5d892a670f04ed"
+      "sha256": "a195bbe064527b6aa5a608279593c55175e055bef3db54ea4a5ed80d92411726"
     },
     {
       "path": "_shared/workflow.yaml",
@@ -128298,7 +128562,7 @@
     },
     {
       "path": "chat/chat/conversation/errors.yaml",
-      "sha256": "fb45afef559d163da6ab6b86b92cca3f3f49f4983937bdf7eb923e53f5746c03"
+      "sha256": "48e4f27097d7e027d4f85feac4c9fa4de9b415c498caf378fa18103ebe7039f2"
     },
     {
       "path": "chat/chat/conversation/events.yaml",
@@ -128322,7 +128586,7 @@
     },
     {
       "path": "chat/chat/conversation/projections/chat_conversation.yaml",
-      "sha256": "b794cbf07c9421a007cd0b1bce5bb6d611f1ef0252accb8af7e954881119c23c"
+      "sha256": "32b1164896d3637683506de1566aca66ecfbd3a52cad87a0e77eea6ea6850191"
     },
     {
       "path": "chat/chat/conversation/projections/chat_conversation_timestamp.yaml",
@@ -128402,7 +128666,7 @@
     },
     {
       "path": "chat/chat/message/fields.yaml",
-      "sha256": "20d35a060b91ee82a66152107e86e128f5232981df1ff333f7a0fdc41d24d99a"
+      "sha256": "705600080fe6f3fa66d7be93a1ccc936a06533afd0081ab113754b28a2022ba7"
     },
     {
       "path": "chat/chat/message/object.yaml",
@@ -128410,7 +128674,7 @@
     },
     {
       "path": "chat/chat/message/operations.yaml",
-      "sha256": "65c72dc1e134156a66c3aadd2313bf6df651f7d38a344a0062e736a7b56bad6d"
+      "sha256": "6237163035bbca06c62f41e5fc5224a63e7c6bb6b98261af896aa0032c3c155a"
     },
     {
       "path": "chat/chat/message/projections/chat_message_sync_slice.yaml",
@@ -128454,7 +128718,7 @@
     },
     {
       "path": "chat/openapi.yaml",
-      "sha256": "f69f3a2e73cff733fc9493fd98e0304c7882e690e29984c94b688d5977f80574"
+      "sha256": "66414ddd3a74f8dcd4db4e6e1380aeef960b139aab1346f17e7175fdb6914f44"
     },
     {
       "path": "circle/circle_management/circle/dart_type_mapping.yaml",
@@ -128978,7 +129242,7 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "e3fd6c3477d714f04cfcf4bae875dccd82424d87e2c4ab3b6779d4b7b685bc86"
+      "sha256": "1953e30690d174f9dde7d30d551fe8700927fa7a0041c3a4469b9efb7bb65b30"
     },
     {
       "path": "content/content/post/persisted_queries/content_post_detail.yaml",
@@ -130150,7 +130414,7 @@
     },
     {
       "path": "ops/product_ops/event_record/golden_metric_catalog.yaml",
-      "sha256": "05d7fcdef5330d5cdeacb546bafd7ec8e134e6b3073bf148b06af69c9d6bb73e"
+      "sha256": "0047a0c75a3fc9558f8167f339f9258efa8fdbfff31561df35ca6ce3c271cb31"
     },
     {
       "path": "ops/product_ops/event_record/object.yaml",
@@ -135741,7 +136005,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "5ec0d237e37209a037b1796325808cbfb2f0ab0de9346becf84cd386dac882bb",
+      "sha256": "9388e526ed6125437cb428728e3d1b48fb0f768ca2f0526d9e304c30505f8467",
       "mediaType": "application/yaml",
       "content": {
         "contract_id": "app_page_object_contract",
@@ -136566,6 +136830,32 @@
                   "journey": "notification_inbox",
                   "object_ids": [
                     "notification.notification"
+                  ],
+                  "required_dimensions": [
+                    "result",
+                    "durationMs",
+                    "failReasonCode",
+                    "recoveryAction",
+                    "requestId",
+                    "traceId"
+                  ],
+                  "telemetry_page_name": "chat_list"
+                },
+                {
+                  "actions": [
+                    "notification_facilitation_open",
+                    "notification_recap_nudge_open"
+                  ],
+                  "aggregate_row_kind": "product_action_funnel",
+                  "alerts": [
+                    "product-action-longtail-failure-rate-high"
+                  ],
+                  "instrumentation_evidence": [
+                    "lib/service/chat_service/chat/chat_inbox_view/presentation/chat_page_state.dart"
+                  ],
+                  "journey": "gathering_flywheel",
+                  "object_ids": [
+                    "circle.gathering"
                   ],
                   "required_dimensions": [
                     "result",
@@ -138734,6 +139024,33 @@
                 "retry",
                 "published",
                 "failure"
+              ],
+              "product_actions": [
+                {
+                  "actions": [
+                    "gathering_published"
+                  ],
+                  "aggregate_row_kind": "product_action_funnel",
+                  "alerts": [
+                    "product-action-longtail-failure-rate-high"
+                  ],
+                  "instrumentation_evidence": [
+                    "lib/service/circle_service/circle_management/gathering/presentation/gathering_route_hosts.dart"
+                  ],
+                  "journey": "gathering_flywheel",
+                  "object_ids": [
+                    "circle.gathering"
+                  ],
+                  "required_dimensions": [
+                    "result",
+                    "durationMs",
+                    "failReasonCode",
+                    "recoveryAction",
+                    "requestId",
+                    "traceId"
+                  ],
+                  "telemetry_page_name": "gathering_create"
+                }
               ]
             },
             "typed_presentation": "none"
@@ -138774,11 +139091,92 @@
                 "primary_action",
                 "host_action",
                 "failure"
+              ],
+              "product_actions": [
+                {
+                  "actions": [
+                    "gathering_join_succeeded",
+                    "gathering_apply_succeeded",
+                    "gathering_accept_invitation_succeeded",
+                    "gathering_watch_availability_succeeded",
+                    "gathering_approve_succeeded",
+                    "gathering_reject_succeeded",
+                    "gathering_remove_succeeded",
+                    "gathering_invite_succeeded",
+                    "gathering_change_capacity_succeeded",
+                    "gathering_change_admission_succeeded",
+                    "gathering_material_update_succeeded",
+                    "gathering_cancel_succeeded",
+                    "gathering_start_succeeded",
+                    "gathering_outcome_succeeded"
+                  ],
+                  "aggregate_row_kind": "product_action_funnel",
+                  "alerts": [
+                    "product-action-longtail-failure-rate-high"
+                  ],
+                  "instrumentation_evidence": [
+                    "lib/service/circle_service/circle_management/gathering/presentation/gathering_detail_page.dart"
+                  ],
+                  "journey": "gathering_flywheel",
+                  "object_ids": [
+                    "circle.gathering"
+                  ],
+                  "required_dimensions": [
+                    "result",
+                    "durationMs",
+                    "failReasonCode",
+                    "recoveryAction",
+                    "requestId",
+                    "traceId"
+                  ],
+                  "telemetry_page_name": "gathering_detail"
+                }
               ]
             },
             "typed_presentation": [
               "GatheringPublicCardSlice",
               "GatheringPrivateDetailSlice"
+            ]
+          },
+          {
+            "auth_requirement": "optional",
+            "capability_requirements": {
+              "all_of": [],
+              "any_of": []
+            },
+            "data_owners": [
+              "circle",
+              "recommendation"
+            ],
+            "entry_widget": "GatheringActionsDiscoveryPage",
+            "experience_owner": "circle",
+            "mount_evidence": [
+              "lib/runtime/di/main_app_shell_dependencies.dart"
+            ],
+            "object_ids": [
+              "circle.gathering",
+              "recommendation.recommendation_feature_profile_view"
+            ],
+            "page_id": "circle.gathering_actions_discovery",
+            "page_kind": "embedded",
+            "parent_page_id": "app.main_shell",
+            "query_slices": [
+              "circle.gathering"
+            ],
+            "source_path": "lib/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart",
+            "surface_ids": [
+              "homeActionsDiscovery"
+            ],
+            "telemetry_descriptor": {
+              "event_namespace": "page.circle.gathering_actions_discovery",
+              "lifecycle": [
+                "enter",
+                "exit",
+                "failure"
+              ]
+            },
+            "typed_presentation": [
+              "GatheringPublicCardSlice"
             ]
           },
           {
@@ -144766,7 +145164,7 @@
     },
     {
       "path": "_shared/ui_surfaces.yaml",
-      "sha256": "54ea9b02981394e55fadd57e2188be1fb31042d64d7e74c08c5d892a670f04ed",
+      "sha256": "a195bbe064527b6aa5a608279593c55175e055bef3db54ea4a5ed80d92411726",
       "mediaType": "application/yaml",
       "content": {
         "surfaces": [
@@ -144849,7 +145247,7 @@
             "route_id": "chatDetail"
           },
           {
-            "description": "会话设置页",
+            "description": "会话设置页（含群空间相册/文件宫格）",
             "id": "chatSettings",
             "operation_ids": [
               "GetConversation",
@@ -144858,7 +145256,8 @@
               "UpdateAnnouncement",
               "ListMembers",
               "RemoveMember",
-              "LeaveConversation"
+              "LeaveConversation",
+              "ListConversationAssets"
             ],
             "owner": "chat",
             "path_template": "/chat/{id}/settings",
@@ -145927,6 +146326,18 @@
             "owner": "user",
             "path_template": "/profile/gatherings",
             "route_id": "myGatherings"
+          },
+          {
+            "description": "底栏「行动」——线下行动与发现（交集收件箱、我的行动、兴趣配对与发起行动入口；视频书已改为首页顶部固定入口）",
+            "id": "homeActionsDiscovery",
+            "operation_ids": [
+              "ListMyHostedGatherings",
+              "GetMyIntersectionSummary",
+              "ListMyIntersections"
+            ],
+            "owner": "circle",
+            "path_template": "/",
+            "route_id": "home"
           },
           {
             "description": "呼出等待页",
@@ -190259,7 +190670,7 @@
     },
     {
       "path": "chat/chat/conversation/errors.yaml",
-      "sha256": "fb45afef559d163da6ab6b86b92cca3f3f49f4983937bdf7eb923e53f5746c03",
+      "sha256": "48e4f27097d7e027d4f85feac4c9fa4de9b415c498caf378fa18103ebe7039f2",
       "mediaType": "application/yaml",
       "content": {
         "description": "chat 域结构化错误码声明。格式：MODULE.KIND.REASON。\ncodegen 从本文件生成 Dart ChatErrorCode enum + ChatErrorMessages，\n以及 Go errors.go 常量。\n",
@@ -190280,6 +190691,7 @@
                   "chat.conversation_membership.ProjectGatheringConversationMembership",
                   "chat.conversation_membership.ResolveAssistantDeliveryMembership",
                   "chat.message.ListAssistantGroundingMessages",
+                  "chat.message.ListConversationAssets",
                   "chat.message.SendAssistantDeliveryMessage"
                 ],
                 "surface": "http"
@@ -190366,6 +190778,7 @@
                   "chat.conversation_user_state.UpdateConversationSettings",
                   "chat.message.ListAssistantGroundingMessages",
                   "chat.message.ListMessages",
+                  "chat.message.ListConversationAssets",
                   "chat.message.SyncMessages"
                 ],
                 "surface": "http"
@@ -190422,6 +190835,7 @@
                   "chat.conversation_user_state.UpdateConversationSettings",
                   "chat.message.ListAssistantGroundingMessages",
                   "chat.message.ListMessages",
+                  "chat.message.ListConversationAssets",
                   "chat.message.RecallMessage",
                   "chat.message.SendAssistantDeliveryMessage",
                   "chat.message.SendMessage",
@@ -190937,6 +191351,7 @@
                   "chat.conversation_user_state.UpdateConversationSettings",
                   "chat.message.ListAssistantGroundingMessages",
                   "chat.message.ListMessages",
+                  "chat.message.ListConversationAssets",
                   "chat.message.RecallMessage",
                   "chat.message.SendAssistantDeliveryMessage",
                   "chat.message.SendMessage",
@@ -196108,7 +196523,7 @@
     },
     {
       "path": "chat/chat/conversation/projections/chat_conversation.yaml",
-      "sha256": "b794cbf07c9421a007cd0b1bce5bb6d611f1ef0252accb8af7e954881119c23c",
+      "sha256": "32b1164896d3637683506de1566aca66ecfbd3a52cad87a0e77eea6ea6850191",
       "mediaType": "application/yaml",
       "content": {
         "collection": "conversations",
@@ -196164,6 +196579,10 @@
             "type": "int64"
           },
           {
+            "name": "gatheringSourceEventId",
+            "type": "string"
+          },
+          {
             "enum_ref": "ConversationAccessMode",
             "name": "accessMode",
             "type": "enum"
@@ -196185,6 +196604,10 @@
             "name": "originIntersectionSnapshot",
             "nullable": true,
             "type": "GreetingIntersectionSnapshot"
+          },
+          {
+            "name": "intersectionFacts",
+            "type": "[]ContactIntersectionFact"
           },
           {
             "name": "maxSeq",
@@ -196216,6 +196639,7 @@
           },
           {
             "name": "announcementUpdatedAt",
+            "nullable": true,
             "type": "timestamp"
           },
           {
@@ -200296,7 +200720,7 @@
     },
     {
       "path": "chat/chat/message/fields.yaml",
-      "sha256": "20d35a060b91ee82a66152107e86e128f5232981df1ff333f7a0fdc41d24d99a",
+      "sha256": "705600080fe6f3fa66d7be93a1ccc936a06533afd0081ab113754b28a2022ba7",
       "mediaType": "application/yaml",
       "content": {
         "description": "消息（使用 seq + clientMsgId 保证顺序与幂等）",
@@ -200571,6 +200995,44 @@
           }
         ],
         "types": {
+          "ChatListConversationAssetsQuery": {
+            "description": "普通群「群空间」相册/文件宫格的会话媒体索引查询。",
+            "fields": [
+              {
+                "client_dart_type": "String",
+                "client_normalization": "trim",
+                "constraints": [
+                  "NOT_BLANK"
+                ],
+                "name": "conversationId",
+                "type": "string"
+              },
+              {
+                "client_dart_type": "String",
+                "client_normalization": "trim",
+                "constraints": [
+                  "NOT_BLANK"
+                ],
+                "description": "资产类别过滤；仅接受 image 或 file。",
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "client_dart_type": "int?",
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "name": "beforeSeq",
+                "type": "int64"
+              },
+              {
+                "client_dart_type": "int",
+                "client_default": "60",
+                "name": "limit",
+                "type": "int"
+              }
+            ]
+          },
           "ChatListMessagesQuery": {
             "fields": [
               {
@@ -200825,6 +201287,109 @@
                 "client_default": "500",
                 "name": "limit",
                 "type": "int"
+              }
+            ]
+          },
+          "ConversationAssetPage": {
+            "description": "会话媒体索引的稳定序号分页响应（按 seq DESC）。",
+            "fields": [
+              {
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "name": "items",
+                "type": "[]ConversationAssetView"
+              },
+              {
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "name": "nextBeforeSeq",
+                "type": "int64"
+              }
+            ]
+          },
+          "ConversationAssetView": {
+            "description": "会话内媒体消息的只读索引行 + MediaAsset delivery Reader 组合的交付字段；不复制媒体生命周期。",
+            "fields": [
+              {
+                "constraints": [
+                  "NOT_BLANK"
+                ],
+                "name": "messageId",
+                "type": "string"
+              },
+              {
+                "constraints": [
+                  "NOT_NULL",
+                  "POSITIVE"
+                ],
+                "name": "seq",
+                "type": "int64"
+              },
+              {
+                "constraints": [
+                  "NOT_BLANK"
+                ],
+                "name": "mediaAssetId",
+                "type": "string"
+              },
+              {
+                "constraints": [
+                  "NOT_BLANK"
+                ],
+                "name": "messageType",
+                "type": "string"
+              },
+              {
+                "constraints": [
+                  "NOT_BLANK"
+                ],
+                "name": "senderId",
+                "type": "string"
+              },
+              {
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "name": "senderName",
+                "type": "string"
+              },
+              {
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "description": "file 消息的展示名（Message.content 快照）。",
+                "name": "fileName",
+                "type": "string"
+              },
+              {
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "name": "mediaDeliveryUrl",
+                "type": "string"
+              },
+              {
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "name": "mediaContentType",
+                "type": "string"
+              },
+              {
+                "constraints": [
+                  "NULLABLE"
+                ],
+                "name": "mediaFileSizeBytes",
+                "type": "int64"
+              },
+              {
+                "constraints": [
+                  "NOT_NULL"
+                ],
+                "name": "createdAt",
+                "type": "timestamp"
               }
             ]
           },
@@ -201363,7 +201928,7 @@
     },
     {
       "path": "chat/chat/message/operations.yaml",
-      "sha256": "65c72dc1e134156a66c3aadd2313bf6df651f7d38a344a0062e736a7b56bad6d",
+      "sha256": "6237163035bbca06c62f41e5fc5224a63e7c6bb6b98261af896aa0032c3c155a",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -201785,6 +202350,93 @@
                 "outcome"
               ],
               "metric": "chat_message_list",
+              "trace": true
+            }
+          },
+          {
+            "actor": "persona",
+            "application": {
+              "facet": "MessageQueryFacet",
+              "kind": "query",
+              "method": "listConversationAssets",
+              "reader": "MessageHistoryReader",
+              "slice": "ConversationAssetPage"
+            },
+            "authorization": {
+              "ownership_policy": "conversation_member",
+              "principal": "persona"
+            },
+            "commercial": {
+              "status": "ready"
+            },
+            "description": "群空间相册/文件索引（kind=image|file，按 seq DESC keyset 分页）；\n每行由 Message owner 事实与 MediaAsset delivery Reader 组合，交付字段随行返回，\nApp 相册/文件宫格直接渲染，不再各自扫描消息列表。\n",
+            "error_codes": [
+              "CHAT.USER.unauthorized",
+              "CHAT.USER.invalid_argument",
+              "CHAT.USER.conversation_not_found",
+              "CHAT.SYSTEM.internal_error"
+            ],
+            "method": "GET",
+            "operation": "ListConversationAssets",
+            "path": "/chat/conversations/{conversationId}/assets",
+            "privacy": {
+              "log_policy": "metadata_only",
+              "request_classification": "INTERNAL",
+              "response_classification": "SENSITIVE"
+            },
+            "reliability": {
+              "cancellation": "supported",
+              "idempotency": "none",
+              "max_attempts": 2,
+              "retry_mode": "idempotent",
+              "timeout_ms": 1500
+            },
+            "request_bindings": {
+              "path": [
+                {
+                  "field": "conversationId",
+                  "name": "conversationId"
+                }
+              ],
+              "query": [
+                {
+                  "field": "kind",
+                  "name": "kind"
+                },
+                {
+                  "field": "limit",
+                  "name": "limit",
+                  "required": false
+                },
+                {
+                  "field": "beforeSeq",
+                  "name": "beforeSeq",
+                  "required": false
+                }
+              ]
+            },
+            "request_body_kind": "none",
+            "request_entity": "ChatListConversationAssetsQuery",
+            "response_body": "ConversationAssetClient",
+            "response_body_kind": "page",
+            "response_entity": "ConversationAssetPage",
+            "security": {
+              "anonymous_policy": "deny",
+              "auth_mode": "required",
+              "principal": "persona",
+              "token_transport": "bearer",
+              "visibility": "private"
+            },
+            "slo": {
+              "availability_percent": 99.9,
+              "latency_p95_ms": 500
+            },
+            "telemetry": {
+              "attributes": [
+                "conversation_id",
+                "outcome"
+              ],
+              "metric": "chat_conversation_assets_list",
               "trace": true
             }
           },
@@ -203026,7 +203678,7 @@
     },
     {
       "path": "chat/openapi.yaml",
-      "sha256": "f69f3a2e73cff733fc9493fd98e0304c7882e690e29984c94b688d5977f80574",
+      "sha256": "66414ddd3a74f8dcd4db4e6e1380aeef960b139aab1346f17e7175fdb6914f44",
       "mediaType": "application/yaml",
       "content": {
         "components": {
@@ -203155,6 +203807,12 @@
               "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
               "type": "object",
               "x-contract-entity": "ContactPageSlice",
+              "x-contract-placeholder": true
+            },
+            "ConversationAssetPage": {
+              "description": "字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。",
+              "type": "object",
+              "x-contract-entity": "ConversationAssetPage",
               "x-contract-placeholder": true
             },
             "ConversationBatchSlice": {
@@ -203946,6 +204604,82 @@
               },
               "x-contract-operation-id": "chat.conversation.UpdateAnnouncement",
               "x-object-id": "chat.conversation"
+            }
+          },
+          "/chat/conversations/{conversationId}/assets": {
+            "get": {
+              "operationId": "ListConversationAssets",
+              "parameters": [
+                {
+                  "in": "path",
+                  "name": "conversationId",
+                  "required": true,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "in": "query",
+                  "name": "kind",
+                  "required": false,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "in": "query",
+                  "name": "limit",
+                  "required": false,
+                  "schema": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "in": "query",
+                  "name": "beforeSeq",
+                  "required": false,
+                  "schema": {
+                    "type": "string"
+                  }
+                }
+              ],
+              "responses": {
+                "200": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "#/components/schemas/ConversationAssetPage"
+                      }
+                    }
+                  },
+                  "description": "OK"
+                },
+                "default": {
+                  "content": {
+                    "application/json": {
+                      "schema": {
+                        "$ref": "../_shared/openapi_common.yaml#/components/schemas/ErrorResponse"
+                      }
+                    }
+                  },
+                  "description": "Runtime failure"
+                }
+              },
+              "security": [
+                {
+                  "bearerAuth": []
+                }
+              ],
+              "x-actor": "persona",
+              "x-application": {
+                "facet": "MessageQueryFacet",
+                "kind": "query",
+                "method": "listConversationAssets",
+                "reader": "MessageHistoryReader",
+                "slice": "ConversationAssetPage"
+              },
+              "x-contract-operation-id": "chat.message.ListConversationAssets",
+              "x-object-id": "chat.message"
             }
           },
           "/chat/conversations/{conversationId}/assistant": {
@@ -259463,7 +260197,7 @@
     },
     {
       "path": "content/content/post/operations.yaml",
-      "sha256": "e3fd6c3477d714f04cfcf4bae875dccd82424d87e2c4ab3b6779d4b7b685bc86",
+      "sha256": "1953e30690d174f9dde7d30d551fe8700927fa7a0041c3a4469b9efb7bb65b30",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -261660,7 +262394,7 @@
             ],
             "layer": "api_integration",
             "producer": "service",
-            "runner_source_path": "quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__api_integration_test.go",
+            "runner_source_path": "quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__data_consistency__api_integration_test.go",
             "spec_ref": "specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md#gwt-001",
             "target": {
               "id": "GenerateArticleSummary",
@@ -261700,7 +262434,7 @@
             ],
             "layer": "api_integration",
             "producer": "service",
-            "runner_source_path": "quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__api_integration_test.go",
+            "runner_source_path": "quwoquan_service/services/content-service/tests/api_integration/content/post/helper_read_summary__data_consistency__api_integration_test.go",
             "spec_ref": "specs/feature-tree/discovery-content/media-processing-helper-read/helper-read-summary/spec.md#gwt-001",
             "target": {
               "id": "GetHelperRead",
@@ -337737,7 +338471,7 @@
     },
     {
       "path": "ops/product_ops/event_record/golden_metric_catalog.yaml",
-      "sha256": "05d7fcdef5330d5cdeacb546bafd7ec8e134e6b3073bf148b06af69c9d6bb73e",
+      "sha256": "0047a0c75a3fc9558f8167f339f9258efa8fdbfff31561df35ca6ce3c271cb31",
       "mediaType": "application/yaml",
       "content": {
         "alerting_policies": {
@@ -338203,7 +338937,8 @@
         "registration_rules": {
           "allowed_source_tracks": [
             "product_telemetry",
-            "behavior_attribution"
+            "behavior_attribution",
+            "domain_fact_readface"
           ],
           "forbidden_dimensions": [
             "sessionId",

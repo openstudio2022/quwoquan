@@ -162,20 +162,7 @@ func TestAddMembers_AssistantDoesNotConsumeUserCapacity(t *testing.T) {
 		`{"type":"group","title":"assistant capacity","maxGroupSize":2}`,
 	)
 	convID := conv["id"].(string)
-	if _, err := requireMongoDB(t).Collection("conversation_memberships").InsertOne(
-		context.Background(),
-		bson.M{
-			"_id":            "assistant-capacity-membership",
-			"conversationId": convID,
-			"userId":         "assistant-capacity-member",
-			"displayName":    "小趣",
-			"role":           "member",
-			"memberType":     "assistant",
-			"joinedAt":       time.Now().UTC(),
-		},
-	); err != nil {
-		t.Fatalf("insert assistant membership: %v", err)
-	}
+	seedAssistantMembership(t, convID)
 
 	doPost(
 		t,

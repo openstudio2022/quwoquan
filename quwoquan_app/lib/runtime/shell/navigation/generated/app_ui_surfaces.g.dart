@@ -109,7 +109,7 @@ class AppUiSurfaces {
     owner: 'chat',
     routeId: 'chatSettings',
     pathTemplate: '/chat/{id}/settings',
-    description: '会话设置页',
+    description: '会话设置页（含群空间相册/文件宫格）',
     operationIds: <String>[
       'GetConversation',
       'UpdateConversationTitle',
@@ -118,6 +118,7 @@ class AppUiSurfaces {
       'ListMembers',
       'RemoveMember',
       'LeaveConversation',
+      'ListConversationAssets',
     ],
   );
 
@@ -1267,6 +1268,19 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface homeActionsDiscovery = AppUiSurface(
+    id: 'homeActionsDiscovery',
+    owner: 'circle',
+    routeId: 'home',
+    pathTemplate: '/',
+    description: '底栏「行动」——线下行动与发现（交集收件箱、我的行动、兴趣配对与发起行动入口；视频书已改为首页顶部固定入口）',
+    operationIds: <String>[
+      'ListMyHostedGatherings',
+      'GetMyIntersectionSummary',
+      'ListMyIntersections',
+    ],
+  );
+
   static const AppUiSurface rtcOutgoing = AppUiSurface(
     id: 'rtcOutgoing',
     owner: 'rtc',
@@ -1421,6 +1435,7 @@ class AppUiSurfaces {
     myIntersections,
     objectIntersections,
     myGatherings,
+    homeActionsDiscovery,
     rtcOutgoing,
     rtcIncoming,
     rtcVoice,
@@ -1506,6 +1521,7 @@ class AppUiSurfaces {
     'myIntersections': myIntersections,
     'objectIntersections': objectIntersections,
     'myGatherings': myGatherings,
+    'homeActionsDiscovery': homeActionsDiscovery,
     'rtcOutgoing': rtcOutgoing,
     'rtcIncoming': rtcIncoming,
     'rtcVoice': rtcVoice,

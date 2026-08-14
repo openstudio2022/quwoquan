@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
+import time
 
 import quwoquan_ops.cli.lib.local_environment_auth as _pkg
 
@@ -74,6 +75,11 @@ def open_local_phone_acceptance_session(
         "platform": "acceptance",
         "appVersion": "1.0.0",
     }
+    # 幂等键作用域是「本次会话开启」而非 instance 终身：同一 instance id 复开
+    # 会话必须触发新 OTP 下发；固定键会被服务端幂等重放旧 challenge，导致
+    # sms substitute 无新 OTP 可读（readback 404 直至超时）。会话 nonce 用
+    # 时间成分承载，同一进程内重试仍靠 sms 侧 latest 读取收敛。
+    session_nonce = time.time_ns()
     send_otp_idempotency_key = hashlib.sha256(
         (
             target_name
@@ -83,6 +89,7 @@ def open_local_phone_acceptance_session(
             + canonical_role
             + "/user.authentication_challenge.SendOtp/send-otp-"
             + f"{actor_index:03d}"
+            + f"/session-{session_nonce}"
         ).encode("utf-8")
     ).hexdigest()
     otp = _pkg.request_local_environment_public_json(

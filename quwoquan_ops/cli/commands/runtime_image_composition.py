@@ -54,6 +54,41 @@ def _packaged_service_source_image_ref(env_name: str, service: str) -> str:
     return _stackctl.packaged_runtime_source_image_ref(env_name, service)
 
 
+def candidate_service_config_versions(target: str = "gamma-local") -> dict[str, str]:
+    """服务 CONFIG_VERSION 的唯一真相源：active candidate 内各服务 provenance。
+
+    compose 模板对每个服务强制声明 `QWQ_COMPOSE_<SERVICE>_CONFIG_VERSION`；
+    该值只能来自 candidate 包，不接受手写。candidate 缺席时返回空集，
+    up 保持不注入由 compose fail-closed。
+    """
+    from quwoquan_ops.cli.lib.output_paths import active_candidate_manifest_path
+
+    versions: dict[str, str] = {}
+    try:
+        pointer = active_candidate_manifest_path(target)
+        if not pointer.is_file():
+            return versions
+        candidate_dir = Path(
+            json.loads(pointer.read_text(encoding="utf-8")).get("candidateDir", "")
+        )
+        services_root = candidate_dir / "packages" / "services"
+        if not services_root.is_dir():
+            return versions
+        for provenance_path in sorted(services_root.glob("*/provenance.json")):
+            payload = json.loads(provenance_path.read_text(encoding="utf-8"))
+            service = str(payload.get("service", "")).strip()
+            version = str(payload.get("configVersion", "")).strip()
+            if service and version:
+                versions[service] = version
+    except (OSError, ValueError, json.JSONDecodeError):
+        return {}
+    return versions
+
+
+def compose_config_version_environment_key(service: str) -> str:
+    return "QWQ_COMPOSE_" + service.upper().replace("-", "_") + "_CONFIG_VERSION"
+
+
 def _bind_gamma_build_service_image_refs(
     env_name: str,
     environment: dict[str, str],
@@ -82,6 +117,10 @@ def _bind_gamma_build_service_image_refs(
     environment["LOCAL_GAMMA_IMAGE_VERSION"] = composition_version
     environment["QWQ_COMPOSE_IMAGE_VERSION"] = composition_version
     environment["QWQ_COMPOSE_IMAGE_TAG"] = composition_version.removeprefix("sha256:")
+    # compose 模板对每个服务强制声明配置版本；唯一真相源是 active candidate 包
+    # 内各服务 provenance.configVersion，缺席时保持不注入由 compose fail-closed。
+    for service, version in candidate_service_config_versions().items():
+        environment[compose_config_version_environment_key(service)] = version
     composition: dict[str, Any] = {
         "imageVersion": composition_version,
         "images": {

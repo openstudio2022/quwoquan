@@ -21,6 +21,7 @@ import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 import 'package:quwoquan_app/runtime/shell/interest_match/interest_match_page.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart';
 import 'package:quwoquan_app/runtime/shell/welcome/welcome_appearance.dart';
 import 'package:quwoquan_app/runtime/shell/welcome/welcome_flower_mark.dart';
 
@@ -547,6 +548,13 @@ class _WebPrimaryActions extends StatelessWidget {
           label: DiscoveryText.webPcPrimaryHome,
           icon: CupertinoIcons.house,
           selected: selected == MainTabDestination.home,
+          onTap: onSelected,
+        ),
+        _WebPrimaryActionButton(
+          destination: MainTabDestination.actions,
+          label: AppConceptConstants.offlineActions,
+          icon: CupertinoIcons.flag,
+          selected: selected == MainTabDestination.actions,
           onTap: onSelected,
         ),
         _WebPrimaryActionButton(

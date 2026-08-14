@@ -196,6 +196,7 @@ class QwqMarkdownBlock {
     this.level = 0,
     this.language = '',
     this.listDepth = 0,
+    this.textAlign = '',
     this.inlines = const <QwqMarkdownInline>[],
     this.assetRef,
     this.assetRefs = const <QwqMarkdownAssetRef>[],
@@ -213,6 +214,9 @@ class QwqMarkdownBlock {
 
   /// 列表嵌套级别（0 = 顶层；两空格缩进为一级，最多 2 级）。
   final int listDepth;
+
+  /// 段落对齐（'' 默认 / center / right），由 `:::align` 指令承载。
+  final String textAlign;
   final List<QwqMarkdownInline> inlines;
   final QwqMarkdownAssetRef? assetRef;
   final List<QwqMarkdownAssetRef> assetRefs;

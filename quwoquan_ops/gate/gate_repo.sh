@@ -277,11 +277,14 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/observability/verify_journey_action_declaration_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/page/verify_component_reuse_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/error/verify_unified_error_semantics_ratchet.py || exit 1
+    # App 侧生成错误码的测试断言覆盖棘轮：未断言码只减不增。
+    python3 quwoquan_app/scripts/runtime/error/verify_app_error_code_assertion_coverage.py || exit 1
     python3 quwoquan_app/scripts/runtime/page/verify_settings_canonical.py || exit 1
     python3 quwoquan_app/scripts/runtime/page/verify_conversation_sheet_canonical.py || exit 1
     python3 quwoquan_app/scripts/chat_service/chat/verify_chat_group_roster_consistency.py || exit 1
     python3 quwoquan_app/scripts/runtime/error/verify_error_code_semantic.py || exit 1
     python3 quwoquan_app/scripts/runtime/error/verify_error_code_endcloud_parity.py || exit 1
+    python3 quwoquan_app/scripts/runtime/error/verify_app_error_code_assertion_coverage.py || exit 1
     python3 quwoquan_app/scripts/runtime/error/verify_domain_error_code_registry.py || exit 1
     python3 quwoquan_app/scripts/runtime/error/verify_behavior_error_stack_convergence.py || exit 1
     python3 quwoquan_app/scripts/runtime/cloud/verify_cloud_services_semantic.py || exit 1
@@ -391,7 +394,7 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/architecture/verify_file_line_budget.py || exit 1
     # R02 Repository 接口方法数预算（ratchet；伞组合接口免登记）
     python3 quwoquan_app/scripts/runtime/architecture/verify_repository_interface_method_budget.py || exit 1
-    # lib/ui 内 Map<String,dynamic> 字面量预算（ratchet 只降不升）
+    # UI 层 Map<String,dynamic> 字面量零容忍（存量已清零，命中即 FAIL）
     python3 quwoquan_app/scripts/runtime/page/verify_ui_map_literal_budget.py || exit 1
     # 性能预算聚合门禁：会话滚动/发送确认与 feed 查询 p95 超预算即阻断合入，
     # 与静态同相位执行，避免每个 tests shard 重复。

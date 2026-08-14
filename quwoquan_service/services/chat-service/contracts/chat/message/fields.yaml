@@ -624,3 +624,74 @@ types:
       - name: nextBeforeSeq
         type: int64
         constraints: [NULLABLE]
+  ChatListConversationAssetsQuery:
+    description: 普通群「群空间」相册/文件宫格的会话媒体索引查询。
+    fields:
+      - name: conversationId
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+      - name: kind
+        type: string
+        constraints:
+          - NOT_BLANK
+        client_dart_type: String
+        client_normalization: trim
+        description: 资产类别过滤；仅接受 image 或 file。
+      - name: beforeSeq
+        type: int64
+        constraints:
+          - NULLABLE
+        client_dart_type: int?
+      - name: limit
+        type: int
+        client_dart_type: int
+        client_default: "60"
+  ConversationAssetView:
+    description: 会话内媒体消息的只读索引行 + MediaAsset delivery Reader 组合的交付字段；不复制媒体生命周期。
+    fields:
+      - name: messageId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: seq
+        type: int64
+        constraints: [NOT_NULL, POSITIVE]
+      - name: mediaAssetId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: messageType
+        type: string
+        constraints: [NOT_BLANK]
+      - name: senderId
+        type: string
+        constraints: [NOT_BLANK]
+      - name: senderName
+        type: string
+        constraints: [NULLABLE]
+      - name: fileName
+        type: string
+        constraints: [NULLABLE]
+        description: file 消息的展示名（Message.content 快照）。
+      - name: mediaDeliveryUrl
+        type: string
+        constraints: [NULLABLE]
+      - name: mediaContentType
+        type: string
+        constraints: [NULLABLE]
+      - name: mediaFileSizeBytes
+        type: int64
+        constraints: [NULLABLE]
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+  ConversationAssetPage:
+    description: 会话媒体索引的稳定序号分页响应（按 seq DESC）。
+    fields:
+      - name: items
+        type: '[]ConversationAssetView'
+        constraints: [NOT_NULL]
+      - name: nextBeforeSeq
+        type: int64
+        constraints: [NULLABLE]

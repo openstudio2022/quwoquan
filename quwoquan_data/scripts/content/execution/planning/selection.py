@@ -283,7 +283,16 @@ def select_targets(
             add(str(row["name"]))
             if len(selected) >= limit:
                 break
-    if len(selected) < quota:
+    # 与 qualify_source_ready_targets 的非 persist 语义保持同一真相源：
+    # persist lane（homepage）把 quota 当交付承诺的准入门；非 persist lane
+    # （video 等）的真实供给由冻结外部输入 receipt 决定，qualification 只是
+    # precheck，approvedQuota 是 scale milestone 而非 lane 级 veto。内层已对
+    # persist 或零供给 fail-closed，这里不得对非 persist 的部分供给二次 veto。
+    non_persist_source_ready = (
+        target_selector is TargetSelector.SOURCE_READY_PRIORITY
+        and not persist_qualified_source
+    )
+    if len(selected) < quota and (not non_persist_source_ready or not selected):
         raise _candidate_pool_exhausted(
             selected_count=len(selected),
             quota=quota,

@@ -321,10 +321,27 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             f"target local port topology is unavailable: {exc}"
         )
     public_bases = target.get("publicBases") or {}
+    # service-core 虚拟 HTTP 路由按逻辑服务 Host 分发；直连 127.0.0.1 的服务
+    # 探测必须携带服务名 Host，否则统一返回 421 misdirected_request。
     checks = [
-        ("api-edge", f"{str(public_bases.get('api') or '').rstrip('/')}/healthz", ""),
-        ("user-service", f"http://127.0.0.1:{ports.get('user-service', 0)}/healthz", ""),
-        ("integration-service", f"http://127.0.0.1:{ports.get('integration-service', 0)}/healthz", ""),
+        (
+            "api-edge",
+            f"{str(public_bases.get('api') or '').rstrip('/')}/healthz",
+            "",
+            None,
+        ),
+        (
+            "user-service",
+            f"http://127.0.0.1:{ports.get('user-service', 0)}/healthz",
+            "",
+            {"Host": "user-service"},
+        ),
+        (
+            "integration-service",
+            f"http://127.0.0.1:{ports.get('integration-service', 0)}/healthz",
+            "",
+            {"Host": "integration-service"},
+        ),
     ]
     provider_roles: list[str] = []
     sms_capture_roles: set[str] = set()
@@ -355,6 +372,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                     role,
                     f"https://127.0.0.1:{ports.get(role, 0)}/healthz",
                     provider_ca_file,
+                    None,
                 )
                 for role in provider_roles
             )
@@ -364,7 +382,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
             )
     provider_readback: dict[str, Any] = {}
     check_receipts: list[dict[str, Any]] = []
-    for name, url, ca_file in checks:
+    for name, url, ca_file, headers in checks:
         if url.endswith(":0/healthz") or url == "/healthz":
             check_receipts.append(
                 {"name": name, "ready": False, "statusCode": None}
@@ -378,6 +396,7 @@ def command_app_debug_preflight(args: argparse.Namespace) -> dict[str, Any]:
                 timeout=2.0,
                 retry_attempts=3,
                 retry_sleep_seconds=0.5,
+                headers=headers,
                 ca_file=ca_file,
             )
         except (OSError, RuntimeError, TypeError, ValueError) as exc:

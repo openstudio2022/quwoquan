@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import ipaddress
 import json
@@ -602,9 +603,12 @@ def _validate_consumer_boundary(issues: list[str]) -> None:
             issues.append(f"content_media_url.dart 重新引入禁止分支: {symbol}")
 
 
-def _validate_runtime_config_authority_parity(issues: list[str]) -> None:
+def _validate_runtime_config_authority_parity(
+    issues: list[str],
+    environments: tuple[str, ...] = tuple(ENVIRONMENTS),
+) -> None:
     topology = load_environment_topology()
-    for env_name in ENVIRONMENTS:
+    for env_name in environments:
         config_path = APP_RUNTIME_CONFIG_DIR / env_name / "app_runtime.yaml"
         if not config_path.is_file():
             issues.append(f"{env_name}: 缺少 App runtime config: {config_path.relative_to(ROOT)}")
@@ -815,6 +819,9 @@ def _validate_public_ca_tls_boundary(issues: list[str]) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env", choices=tuple(ENVIRONMENTS))
+    args = parser.parse_args()
     issues: list[str] = []
     _validate_topology_urls(issues)
     _validate_playback_canary_topology(issues)
@@ -823,7 +830,10 @@ def main() -> int:
     _scan_forbidden_paths(issues)
     _validate_fixture_media_fields(issues)
     _validate_consumer_boundary(issues)
-    _validate_runtime_config_authority_parity(issues)
+    _validate_runtime_config_authority_parity(
+        issues,
+        (args.env,) if args.env else tuple(ENVIRONMENTS),
+    )
     _validate_video_playback_patrol_contract(issues)
     _validate_avatar_media_patrol_contract(issues)
     _validate_public_ca_tls_boundary(issues)

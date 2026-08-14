@@ -19,6 +19,7 @@ import (
 	"quwoquan_service/runtime/operation"
 	"quwoquan_service/runtime/reliabletask"
 	runtimesync "quwoquan_service/runtime/sync"
+	inboxhttp "quwoquan_service/services/chat-service/internal/chat/chat_inbox_view/adapters/inbound/http"
 	chathttp "quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/http"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/mq"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
@@ -319,6 +320,9 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 	routes := http.NewServeMux()
 	membershiphttp.NewHandler(memberSvc).Register(routes)
 	chatHandler.RegisterRoutes(routes)
+	// GET /chat/inbox 由 chat_inbox_view 对象的 http adapter 拥有
+	//（inbox 路由已从 chatHandler 迁出），测试装配保持与生产同构。
+	inboxhttp.NewHandler(testInboxViewStore).Register(routes)
 	return routes, userSyncService, scheduler
 }
 
@@ -422,6 +426,10 @@ func TestGroupAvatar_DeprecatedMemberAvatarURLFallsBackToCreatorAvatar(t *testin
 	)
 	if got, want := strings.TrimSpace(detail["avatarUrl"].(string)), "https://127.0.0.1:18081/media/avatar/s/archived-avatar/user/user_test_001/v1/avatar.png"; got != want {
 		t.Fatalf("expected creator avatar fallback, got %q want %q", got, want)
+	}
+	// inbox 是事件投影：自建 handler 不经共享 doGet 的自动 drain。
+	if _, err := testInboxViewProjector.Drain(context.Background(), 100); err != nil {
+		t.Fatalf("drain inbox projector: %v", err)
 	}
 	inbox := doHandlerJSON(
 		t,
@@ -1138,6 +1146,9 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 		}
 		if got := patchIntValue(patch.Payload["groupAvatarVersion"]); got != addVersion {
 			t.Fatalf("user %s patch version = %d want %d", userID, got, addVersion)
+		}
+		if _, err := testInboxViewProjector.Drain(context.Background(), 100); err != nil {
+			t.Fatalf("drain inbox projector: %v", err)
 		}
 		inbox := doHandlerJSON(t, handler, http.MethodGet, "/chat/inbox?limit=20", "", userID, http.StatusOK)
 		row := findInboxRow(t, inbox["items"], convID)

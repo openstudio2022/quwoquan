@@ -217,3 +217,18 @@
 - 准出影响：`block`
 - 影响或价值：Data/content media sourceDigest 与发布物当前仍冻结，本场景保持 `WAIT_CONTENT`；尚缺绑定同一候选的 active FilterCatalog production Remote readback、真实创作交接以及 Android/iPhone 双物理设备结果，现有像素 local_contract、Widget 或 App Remote 代码不得替代。
 - 完成判定：`GWT-005` 的每条结果均由职责匹配的 production user_acceptance runner 直接 `spec_ref`，且 Android 与 iPhone 物理设备 `ReadinessResultBundle` 绑定同一 commit、ContractGraph、candidate、environment 与真实 Provider 并全部为 passed。
+
+<a id="open-003"></a>
+### OPEN-003 滤镜目录 loading/failure 两条 widget 测试存量挂死
+
+- 类型：`capability_gap`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：当前 `image_editor_filter_catalog__local_contract_test.dart` 的
+  「catalog loading keeps filter panel explicit and non-blocking」与
+  「catalog failure exposes retry and recovers to canonical presets」两条
+  用例存在 10 分钟硬超时的存量挂死；疑因测试用裸 `ProviderScope`（未注入 sealed cloud boundary overrides）使真实 provider 在 fake async 下挂死。
+  目录 loading/failure 的行为语义仍由页面实现承载，尚缺可信测试证据。
+- 完成判定：两条测试以 sealed overrides 或对象级 typed double 修复后稳定
+  通过，且 `GWT-001` 中滤镜目录 loading/失败重试行为被真实测试
+  `spec_ref` 绑定。

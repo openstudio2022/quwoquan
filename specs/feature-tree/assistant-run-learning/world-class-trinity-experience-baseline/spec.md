@@ -90,9 +90,17 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：尚缺受管 Remote 启动、三环境同候选、双端物理真机和 Prod 发布证据，源码与本地门禁不能替代商业准出。
+- 影响或价值：尚缺三环境同候选、双端物理真机和 Prod 发布证据，源码与本地门禁不能替代商业准出。
   - 真实 MongoDB Assistant API integration 全包执行收据已取得（19/19 包，`.qwq_output/env/repo/runs/assistant-acceptance/assistant_service_api_integration_full_20260812.log`）。assistant Provider material 已以 protocol substitute 登记进 alpha `externalBindings`。
-  - 缺绑定最终冻结 snapshot 的唯一 immutable candidate 的启动收据。打包链已可产出 service-core 形态 candidate（package/compose 投影、伴生迁移 job 删除、镜像 build-arg 接线与 `product_telemetry_alerts.yaml` 封装清单均已修通，`stackctl package` 通过）。service-core 模块运行时已实证健康：在依赖就绪的暖启动下 11 个模块的全部健康检查通过（含 user-service 三个心跳组件与 assistant `assistant_skill_package`），容器达到 docker healthy 并稳定运行；曾观察到的 readiness 失败源于全栈冷启动竞态与环境数据障碍（canonical ES 遗留索引 `quwoquan_objects` 占用 read-alias，已按模块指引删除）。剩余阻断为本机多会话并发施工的调度冲突：另一活跃改造会话持续对同一 target 发起 package/up/dev-session 并与本收据序列互相争锁，需人工协调会话调度后按既有命令序列一次重放即可取得启动/健康收据。也缺 Alpha/Beta/Gamma 对同一 active Skill package digest 的 activation、Provider、Run/Tool/Presentation 与 rollback readback。
+  - Alpha canonical 启动与健康收据已取得：官方 SkillPackage 空环境自举后，`stackctl up` 对 alpha-local 首次 status ok，`stackctl health --scope full` 达 29/29（run `20260813T160518410673Z-d38bed3e0945497980753e19bcb051e5-health-alpha-local`）。
+  - 官方包激活收据已取得（`activatedBy: service:local-managed-bootstrap:alpha-local`，`packageId: assistant.session.skills`，`activeReleaseDigest: sha256:ec6fc1eb1eff0db87a1aed15a50dc13de67db8ec32689a5db8013f40b37f0a06`）。
+  - `provider-conformance` 已消费 stackctl 绑定的 runtime_environment 读回 `ASSISTANT_*` injected keys。live Alpha bind 已给出 `ASSISTANT_MODEL_COMPLETION_URL=https://provider-protocol-substitute:18089/v1/chat/completions`。
+  - 全量 environment-matrix 仍被脏树 candidate `assistant-service` package stale 阻断，且平台所有的 `CONTENT_OSS_*` 与 `PRODUCT_OPS_ELASTICSEARCH_ENDPOINT` 未进入 conformance 绑定增量。
+  - Gamma 同 digest 复制尚未取得：`stackctl up --env gamma` GATE_BLOCK（run `20260813T165117596635Z-05f1f7ae24b149f187e67df4127e90fd-up-gamma`），并行会话持有 `beta-local` 操作锁。
+  - 即使锁释放，`gamma-local` 与 `alpha-local` 共享 `workstation-commercial-runtime`，Alpha 在场时 Gamma 不能启动。不循环重试、不拆 Alpha。
   - 缺公开 URL、主动 Skill、Adaptive Presentation 和后台恢复的 Android/iPhone 物理真机 Remote UAT。
-  - 缺 Prod 法务真值、受保护审批、`canary→5→20→50→100` rollout 与 ≤300 秒 rollback readback；模拟器、本地测试、未绑定最终 snapshot 的 package 或未执行的 Patrol 均不能替代。
+  - Android emulator `device-trust install` 已通过（run `20260813T165814876821Z-9efef44158ec46f3aca6e5aae7bdb954-device-trust-alpha-local`）。
+  - App `assistant_session_remote` 对 Alpha 的 `LoginAnonymous` 经 curl 与 local CA 为 200，但 Flutter VM 因本机 login.keychain 仍是过期 `quwoquan alpha local root`、与当前 `Quwoquan local-managed CA (alpha-local)` 指纹不一致而映射为 `APP.SYSTEM.unknown_error`。
+  - 唯一 assistant Patrol（`assistant_preference_remote__user_acceptance_test.dart`）硬性要求 gamma，而 Gamma 在 Alpha 在场互斥下无法启动，故不把 skip 当通过。
+  - 缺 Prod 法务真值、受保护审批、`canary→5→20→50→100` rollout 与 ≤300 秒 rollback readback。模拟器、本地测试、未绑定最终 snapshot 的 package 或未执行的 Patrol 均不能替代。
 - 完成判定：`SIT-001` 对应行为满足，冻结 current source 后重新通过 ContractGraph、Assistant local contract、真实 Mongo/Redis API integration 与 service architecture。生成唯一 immutable candidate，并在 Alpha/Beta/Gamma 取得同 digest 的 package activation、Provider、Run/Tool/Presentation 与 rollback receipts。随后在 Android/iPhone 物理真机执行 Remote UAT，补齐 Prod 法务真值并完成受保护的 `canary→5→20→50→100` rollout 与 ≤300 秒 rollback readback。全部直属 Story 的阻断 OPEN 满足各自完成判定后方可删除本 OPEN。

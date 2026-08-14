@@ -4,6 +4,7 @@ import 'package:quwoquan_app/service/recommendation_service/recommendation/recom
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
@@ -258,15 +259,9 @@ class IntersectionTimelineEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
-      child: Center(
-        child: Text(
-          DiscoveryFeedText.intersectionTimeBucketEmpty,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            color: AppColors.iosSecondaryLabel(context),
-          ),
-        ),
+      child: const AppEmptyState(
+        title: DiscoveryFeedText.intersectionTimeBucketEmpty,
+        density: AppEmptyStateDensity.dense,
       ),
     );
   }

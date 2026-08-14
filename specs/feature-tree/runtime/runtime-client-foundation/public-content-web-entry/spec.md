@@ -140,17 +140,25 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺 circle/user/entity_homepage 三类对象页与公网部署接线
-  （gateway 路由、`CONTENT_PUBLIC_WEB_ORIGIN` 环境配置、公网域名证据）；post
-  对象页第一段已落地——content-service `/public-web/post/{postId}` 输出
-  canonical/OG/JSON-LD envelope 与 `articleMarkdown` 派生的安全正文 HTML，
-  robots.txt 与 post sitemap 同面暴露，非公开对象 fail-closed 404，XSS 转义、
-  行内样式/列表/引用语义标签均有 local_contract
-  （`public_web_handler__local_contract_test.go`）。第二段已补：正文图片经
-  `articleAssetManifest` 渲染为 `<figure><img alt>`——公网地址取 cdnUrl 优先、
-  否则由 `PublicSliceKey` + `CONTENT_PUBLIC_WEB_CDN_ORIGIN` 派生，无公网
-  URL 的 asset fail-closed 跳过；行内链接按 https/http 白名单渲染
-  `<a rel="noopener">`，恶意 scheme 保持字面量。
+- 影响或价值：尚缺 circle/user/entity_homepage 三类对象页与四环境公网运行
+  时证据，即 gamma-local 全栈 verify 与公网域名/DNS/TLS 证据，需要独占的
+  本地环境窗口执行；post 对象页第一段已落地——content-service
+  `/public-web/post/{postId}` 输出 canonical/OG/JSON-LD envelope 与
+  `articleMarkdown` 派生的安全正文 HTML，robots.txt 与 post sitemap 同面
+  暴露，非公开对象 fail-closed 404，XSS 转义、行内样式/列表/引用语义标签
+  均有 local_contract（`public_web_handler__local_contract_test.go`）。
+  第二段已补：正文图片经 `articleAssetManifest` 渲染为
+  `<figure><img alt>`——公网地址取 cdnUrl 优先、否则由 `PublicSliceKey` +
+  `CONTENT_PUBLIC_WEB_CDN_ORIGIN` 派生，无公网 URL 的 asset fail-closed
+  跳过；行内链接按 https/http 白名单渲染 `<a rel="noopener">`，恶意
+  scheme 保持字面量。第三段部署接线已完成：content-service compose 消费
+  `QWQ_COMPOSE_PUBLIC_WEB_BASE_URL`/`QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL`
+  注入两 origin（空值 fail-closed 不挂载读面），gamma-local Caddyfile 把
+  publicWeb host 的 `/post/*`、`/robots.txt`、`/sitemap-posts.xml`、
+  `/open`、`/s/*` rewrite 到 `content-service:18080` 的 `/public-web/*`
+  （caddy validate 通过），接线由 ops local_contract
+  （`test_public_web_seo_routes_bind_content_service_public_web_plane`）
+  防回退。
 - 完成判定：`GWT-003` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>

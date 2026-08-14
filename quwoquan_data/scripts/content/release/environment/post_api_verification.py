@@ -516,7 +516,11 @@ def write_post_api_verification(
             client,
             cases,
             creators_by_author,
-            include_premium_stream=readiness_phase in {"research", "commercial"},
+            # App 视频书唯一消费 premium_stream 池；consumer readiness 同样必须
+            # 证明 premium_stream release-bound 非空读回（environment-topology-
+            # and-packaging spec），否则 typed_video 绿会被误当成视频书绿。
+            include_premium_stream=readiness_phase
+            in {"research", "consumer", "commercial"},
         )
         creator_rows = [
             _verify_author_profile(client, creator)

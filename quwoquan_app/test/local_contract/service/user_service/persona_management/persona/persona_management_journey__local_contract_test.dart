@@ -1,5 +1,11 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-002
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-002.t1
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-002.t2
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md#gwt-002.t3
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/persona_query.dart';
@@ -169,6 +175,44 @@ DateTime? _dateTime(Object? value) {
   if (value is DateTime) return value;
   if (value is String && value.isNotEmpty) return DateTime.parse(value);
   return null;
+}
+
+/// summary 首次返回结构化失败，重试后恢复：验证错误态与恢复动作语义。
+class _FlakySummaryRepository extends _JourneyUserRepository {
+  _FlakySummaryRepository(super.store);
+
+  int summaryCalls = 0;
+  int failuresRemaining = 1;
+
+  @override
+  Future<PersonaManagementSummaryViewData> getPersonaManagementSummary() {
+    summaryCalls++;
+    if (failuresRemaining > 0) {
+      failuresRemaining--;
+      throw CloudException(
+        type: CloudErrorType.server,
+        message: 'persona summary unavailable',
+        statusCode: 503,
+        code: 'USER.SYSTEM.internal_error',
+        runtimeFailure: const RuntimeFailure(
+          code: 'USER.SYSTEM.internal_error',
+          semanticReason: 'summary_unavailable',
+          transportStatus: 503,
+          origin: RuntimeFailureOrigin.remoteDependency,
+          kind: RuntimeFailureKind.unavailable,
+          nature: RuntimeFailureNature.transient,
+          location: RuntimeFailureLocation(
+            businessObject: 'user.persona',
+            functionModule: 'persona_management_journey_test',
+          ),
+          context: RuntimeFailureContext(
+            attributes: <RuntimeContextAttribute>[],
+          ),
+        ),
+      );
+    }
+    return super.getPersonaManagementSummary();
+  }
 }
 
 class _JourneyPersonaCommandWriter
@@ -436,6 +480,55 @@ void main() {
     expect(
       find.descendant(
         of: photoStatus,
+        matching: find.text(ProfileText.personaCurrentUsing),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('首屏结构化失败只保留宿主返回，恢复动作重读 summary 不造假数据', (tester) async {
+    final store = _JourneyPersonaStore(_seed());
+    final repository = _FlakySummaryRepository(store);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          personaQueryProvider.overrideWith((ref, surface) => repository),
+          personaCommandWriterProvider.overrideWithValue(
+            _JourneyPersonaCommandWriter(store),
+          ),
+        ],
+        child: const CupertinoApp(home: PersonaManagementPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 标题保持分身管理业务语义，错误载体与恢复动作由 UiErrorSemantic 解析
+    // （pageLoad 类别的重试动作文案是 SearchText.reload）。
+    expect(find.text(ProfileText.personaManage), findsOneWidget);
+    expect(find.byType(AppPageErrorState), findsOneWidget);
+    expect(find.text(SearchText.reload), findsOneWidget);
+    // 顶部导航只有一个宿主返回按钮，没有错误 X 或额外“返回” CTA。
+    expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
+    expect(find.byIcon(CupertinoIcons.clear), findsNothing);
+    // 失败期间不渲染任何伪造 persona 行。
+    expect(
+      find.byKey(const ValueKey<String>('persona-status-persona_primary')),
+      findsNothing,
+    );
+
+    final callsBeforeRetry = repository.summaryCalls;
+    await tester.tap(find.text(SearchText.reload));
+    await tester.pumpAndSettle();
+
+    // “再试一次”重新读取 summary，恢复后展示服务端真实数据。
+    expect(repository.summaryCalls, greaterThan(callsBeforeRetry));
+    expect(find.byType(AppPageErrorState), findsNothing);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('persona-status-persona_primary'),
+        ),
         matching: find.text(ProfileText.personaCurrentUsing),
       ),
       findsOneWidget,

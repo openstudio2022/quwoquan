@@ -20,6 +20,7 @@ import 'package:quwoquan_app/service/user_service/account/account_session/adapte
 import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import 'api_contract_environment.dart';
 import 'production_cloud_operation_telemetry_evidence.dart';
 
 const _apiContractEnv = String.fromEnvironment(
@@ -27,6 +28,7 @@ const _apiContractEnv = String.fromEnvironment(
   defaultValue: 'gamma',
 );
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
+
 const contentApiContractDeviceId = 'content-api-contract-device';
 
 /// Real generated-client -> production object adapters -> process harness.
@@ -52,6 +54,7 @@ final class ContentApiContractHarness {
     if (_apiBase.isEmpty) {
       throw StateError('L3: API_CONTRACT_BASE_URL not set');
     }
+    ApiContractEnvironment.ensureLocalTlsRootTrusted();
     final tokenProvider = _MutableAccessTokenProvider();
     final httpClient = CloudHttpClient(authTokenProvider: tokenProvider);
     late ContentApiContractHarness harness;

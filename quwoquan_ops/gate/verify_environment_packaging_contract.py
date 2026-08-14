@@ -33,7 +33,30 @@ _PRODUCT_TELEMETRY_SECRET_RUNTIME_VARIABLES = (
 )
 
 SHA256_RE = re.compile(r"sha256:[0-9a-f]{64}")
-RUNTIME_SHARED_FILES = frozenset({"module_catalog.yaml", "retention_policy.yaml"})
+RUNTIME_SHARED_FILES = frozenset(
+    {
+        "Caddyfile",
+        "livekit.yaml",
+        "module_catalog.yaml",
+        "object-storage-lifecycle.json",
+        "retention_policy.yaml",
+    }
+)
+RUNTIME_SHARED_SOURCE_PREFIXES = {
+    "Caddyfile": "quwoquan_ops/environments/",
+    "livekit.yaml": "quwoquan_ops/external/livekit/",
+    "module_catalog.yaml": "quwoquan_service/runtime/",
+    "object-storage-lifecycle.json": "quwoquan_ops/environments/compose/",
+    "retention_policy.yaml": "quwoquan_service/runtime/",
+}
+RUNTIME_SHARED_EXTRA_TOP_LEVEL = frozenset(
+    {
+        "oci-images.json",
+        "observability-log-sink",
+        "provider-runtime",
+        "runtime-topology",
+    }
+)
 
 
 def expected_services() -> list[str]:
@@ -149,12 +172,22 @@ def validate_runtime_shared_package(
     if not isinstance(files, dict) or set(files) != RUNTIME_SHARED_FILES:
         return [*issues, "runtime-shared package provenance files mismatch"]
     required_files = {*RUNTIME_SHARED_FILES, "manifest.json"}
-    allowed_files = {*required_files, "oci-images.json"}
     actual_files = {
         path.relative_to(package_dir).as_posix()
         for path in package_dir.rglob("*")
         if path.is_file()
     }
+    allowed_files = set(required_files)
+    for extra in RUNTIME_SHARED_EXTRA_TOP_LEVEL:
+        extra_path = package_dir / extra
+        if extra_path.is_file():
+            allowed_files.add(extra)
+        elif extra_path.is_dir():
+            allowed_files.update(
+                path.relative_to(package_dir).as_posix()
+                for path in extra_path.rglob("*")
+                if path.is_file()
+            )
     if not required_files.issubset(actual_files) or not actual_files.issubset(
         allowed_files
     ):
@@ -167,7 +200,11 @@ def validate_runtime_shared_package(
             continue
         source = entry.get("source")
         expected = entry.get("sha256")
-        if not isinstance(source, str) or not source.startswith("quwoquan_service/runtime/"):
+        prefix = RUNTIME_SHARED_SOURCE_PREFIXES[name]
+        normalized = str(source or "").replace("\\", "/")
+        if not isinstance(source, str) or (
+            not normalized.startswith(prefix) and f"/repo/{prefix}" not in normalized
+        ):
             issues.append(f"runtime-shared provenance source invalid for {name}")
         if not isinstance(expected, str) or not SHA256_RE.fullmatch(expected):
             issues.append(f"runtime-shared provenance digest invalid for {name}")
@@ -205,16 +242,29 @@ def validate_runtime_shared_package(
                 issues.append("package OCI image manifest images are missing")
             else:
                 for service, descriptor in images.items():
+                    descriptor_keys = (
+                        set(descriptor) if isinstance(descriptor, dict) else set()
+                    )
                     if (
                         not isinstance(service, str)
                         or not service
                         or not isinstance(descriptor, dict)
-                        or set(descriptor) != {"ref", "imageDigest"}
+                        or not {"ref", "imageDigest"}.issubset(descriptor_keys)
+                        or not descriptor_keys.issubset(
+                            {"ref", "imageDigest", "buildInputDigest"}
+                        )
                         or not str(descriptor.get("ref") or "").strip()
                         or SHA256_RE.fullmatch(
                             str(descriptor.get("imageDigest") or "")
                         )
                         is None
+                        or (
+                            "buildInputDigest" in descriptor
+                            and SHA256_RE.fullmatch(
+                                str(descriptor.get("buildInputDigest") or "")
+                            )
+                            is None
+                        )
                     ):
                         issues.append(
                             f"package OCI image identity is invalid for {service}"

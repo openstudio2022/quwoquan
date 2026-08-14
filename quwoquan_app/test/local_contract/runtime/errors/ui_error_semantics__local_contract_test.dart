@@ -647,4 +647,177 @@ void main() {
       expect(semantic.presentation, isNot(UiErrorPresentation.emptyPage));
     });
   });
+
+  group('恢复动作派生矩阵（_deriveRecoveryAction 全分支语义锁）', () {
+    Future<UiErrorSemantic> resolveRecovery(
+      WidgetTester tester, {
+      required CloudException error,
+      UiErrorCategory category = UiErrorCategory.pageLoad,
+      bool allowRetry = true,
+      bool allowOpenSettings = false,
+    }) async {
+      final context = await pumpContext(tester);
+      return UiErrorSemanticResolver.resolve(
+        context,
+        error: error,
+        category: category,
+        scope: UiErrorScope.page,
+        allowRetry: allowRetry,
+        allowOpenSettings: allowOpenSettings,
+      );
+    }
+
+    testWidgets('权限类失败派生 surface（引导去设置而非盲目重试）', (tester) async {
+      final semantic = await resolveRecovery(
+        tester,
+        error: CloudException(
+          type: CloudErrorType.forbidden,
+          message: 'permission',
+          runtimeFailure: testRuntimeFailure(
+            code: 'APP.PERMISSION.denied',
+            kind: RuntimeFailureKind.auth,
+            nature: RuntimeFailureNature.requiresPermission,
+          ),
+        ),
+        allowOpenSettings: true,
+      );
+      expect(semantic.recoveryAction, RuntimeRecoveryAction.surface);
+    });
+
+    testWidgets('未授权派生 surface（进入登录门而非重试）', (tester) async {
+      final semantic = await resolveRecovery(
+        tester,
+        error: CloudException(
+          type: CloudErrorType.unauthorized,
+          message: 'unauthorized',
+          runtimeFailure: testRuntimeFailure(
+            code: 'APP.AUTH.unauthorized',
+            kind: RuntimeFailureKind.auth,
+            nature: RuntimeFailureNature.requiresUserAction,
+          ),
+        ),
+      );
+      expect(semantic.recoveryAction, RuntimeRecoveryAction.surface);
+    });
+
+    testWidgets('校验失败在 submit 类目派生 compensate（修正后重交）', (tester) async {
+      final semantic = await resolveRecovery(
+        tester,
+        error: CloudException(
+          type: CloudErrorType.invalidResponse,
+          message: 'validation',
+          runtimeFailure: testRuntimeFailure(
+            code: 'APP.VALIDATION.invalid',
+            kind: RuntimeFailureKind.validation,
+            nature: RuntimeFailureNature.permanent,
+          ),
+        ),
+        category: UiErrorCategory.submit,
+      );
+      expect(semantic.recoveryAction, RuntimeRecoveryAction.compensate);
+    });
+
+    testWidgets('校验失败在 validation 类目派生 surface（不经用户恢复合约）', (
+      tester,
+    ) async {
+      final semantic = await resolveRecovery(
+        tester,
+        error: CloudException(
+          type: CloudErrorType.invalidResponse,
+          message: 'validation',
+          runtimeFailure: testRuntimeFailure(
+            code: 'APP.VALIDATION.invalid',
+            kind: RuntimeFailureKind.validation,
+            nature: RuntimeFailureNature.permanent,
+          ),
+        ),
+        category: UiErrorCategory.validation,
+      );
+      expect(semantic.recoveryAction, RuntimeRecoveryAction.surface);
+    });
+
+    testWidgets('瞬时网络/超时/限流在允许重试时派生 retry', (tester) async {
+      for (final type in [
+        CloudErrorType.timeout,
+        CloudErrorType.server,
+        CloudErrorType.rateLimited,
+      ]) {
+        final semantic = await resolveRecovery(
+          tester,
+          error: CloudException(
+            type: type,
+            message: type.name,
+            runtimeFailure: testRuntimeFailure(
+              code: 'APP.SYSTEM.${type.name}',
+              nature: RuntimeFailureNature.transient,
+            ),
+          ),
+        );
+        expect(
+          semantic.recoveryAction,
+          RuntimeRecoveryAction.retry,
+          reason: '$type 属可重试云端失败',
+        );
+      }
+    });
+
+    testWidgets('submit 类目下 allowRetry=false 时不得派生 retry', (tester) async {
+      // pageLoad 等类目走 AppUserRecoveryContract（不消费 allowRetry）；
+      // allowRetry 只约束 submit/validation 的派生路径。
+      final semantic = await resolveRecovery(
+        tester,
+        error: CloudException(
+          type: CloudErrorType.timeout,
+          message: 'timeout',
+          runtimeFailure: testRuntimeFailure(
+            code: 'APP.SYSTEM.timeout',
+            kind: RuntimeFailureKind.timeout,
+            nature: RuntimeFailureNature.transient,
+          ),
+        ),
+        category: UiErrorCategory.submit,
+        allowRetry: false,
+      );
+      expect(semantic.recoveryAction, isNot(RuntimeRecoveryAction.retry));
+    });
+
+    testWidgets('not_found 与 forbidden 派生 surface（重试不可能改变结果）', (
+      tester,
+    ) async {
+      for (final type in [CloudErrorType.notFound, CloudErrorType.forbidden]) {
+        final semantic = await resolveRecovery(
+          tester,
+          error: CloudException(
+            type: type,
+            message: type.name,
+            runtimeFailure: testRuntimeFailure(
+              code: 'APP.SYSTEM.${type.name}',
+              nature: RuntimeFailureNature.transient,
+            ),
+          ),
+        );
+        expect(
+          semantic.recoveryAction,
+          RuntimeRecoveryAction.surface,
+          reason: '$type 是确定性失败',
+        );
+      }
+    });
+
+    testWidgets('unavailable 类运行时失败在允许重试时派生 retry', (tester) async {
+      final semantic = await resolveRecovery(
+        tester,
+        error: CloudException(
+          type: CloudErrorType.unknown,
+          message: 'unavailable',
+          runtimeFailure: testRuntimeFailure(
+            code: 'APP.DEPENDENCY.unavailable',
+            kind: RuntimeFailureKind.unavailable,
+            nature: RuntimeFailureNature.transient,
+          ),
+        ),
+      );
+      expect(semantic.recoveryAction, RuntimeRecoveryAction.retry);
+    });
+  });
 }

@@ -120,4 +120,21 @@ final class RemoteChatMessageRepository implements ChatMessageRepository {
     );
     return page.items;
   }
+
+  @override
+  Future<ConversationAssetPage> listConversationAssets({
+    required String conversationId,
+    required String kind,
+    int? beforeSeq,
+    int limit = 60,
+  }) {
+    return _messageQuery.listConversationAssets(
+      ChatListConversationAssetsQuery(
+        conversationId: conversationId,
+        kind: kind,
+        beforeSeq: beforeSeq,
+        limit: limit,
+      ),
+    );
+  }
 }

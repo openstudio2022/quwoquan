@@ -326,6 +326,76 @@ api_routes:
       visibility: private
     request_entity: ChatListMessagesQuery
     request_body_kind: none
+  - method: GET
+    path: /chat/conversations/{conversationId}/assets
+    operation: ListConversationAssets
+    request_bindings:
+      path:
+        - name: conversationId
+          field: conversationId
+      query:
+        - name: kind
+          field: kind
+        - name: limit
+          field: limit
+          required: false
+        - name: beforeSeq
+          field: beforeSeq
+          required: false
+    actor: persona
+    commercial:
+      status: ready
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes:
+      - CHAT.USER.unauthorized
+      - CHAT.USER.invalid_argument
+      - CHAT.USER.conversation_not_found
+      - CHAT.SYSTEM.internal_error
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_conversation_assets_list
+      trace: true
+      attributes:
+        - conversation_id
+        - outcome
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    application:
+      kind: query
+      facet: MessageQueryFacet
+      method: listConversationAssets
+      reader: MessageHistoryReader
+      slice: ConversationAssetPage
+    description: '群空间相册/文件索引（kind=image|file，按 seq DESC keyset 分页）；
+
+      每行由 Message owner 事实与 MediaAsset delivery Reader 组合，交付字段随行返回，
+
+      App 相册/文件宫格直接渲染，不再各自扫描消息列表。
+
+'
+    response_entity: ConversationAssetPage
+    response_body: ConversationAssetClient
+    response_body_kind: page
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+    request_entity: ChatListConversationAssetsQuery
+    request_body_kind: none
   - method: POST
     path: /chat/conversations/{conversationId}/sync
     operation: SyncMessages

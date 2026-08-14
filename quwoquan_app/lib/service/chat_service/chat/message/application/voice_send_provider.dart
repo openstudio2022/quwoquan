@@ -28,7 +28,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState>
   @override
   Future<void> sendVoice(VoiceRecordResult result) async {
     state = state.copyWith(status: VoiceSendStatus.uploading, error: null);
-    _observability.trackAction(
+    _observability.trackVoiceEvent(
       eventName: VoiceMessageEventNames.uploadStarted,
       conversationId: conversationId,
       durationMs: result.durationMs,
@@ -38,7 +38,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState>
 
     try {
       if (result.fileSize <= 0 || result.filePath.trim().isEmpty) {
-        _observability.trackAction(
+        _observability.trackVoiceEvent(
           eventName: VoiceMessageEventNames.recordInvalid,
           conversationId: conversationId,
           durationMs: result.durationMs,
@@ -107,7 +107,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState>
         }
       }
     } catch (e) {
-      _observability.trackAction(
+      _observability.trackVoiceEvent(
         eventName: VoiceMessageEventNames.sendFailed,
         conversationId: conversationId,
         durationMs: result.durationMs,
@@ -127,7 +127,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState>
     VoiceRecordResult result,
   ) async {
     state = state.copyWith(status: VoiceSendStatus.sending);
-    _observability.trackAction(
+    _observability.trackVoiceEvent(
       eventName: VoiceMessageEventNames.uploadSucceeded,
       conversationId: conversationId,
       durationMs: result.durationMs,
@@ -156,7 +156,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState>
       waveform: _compactWaveform(result.waveform),
     );
 
-    _observability.trackAction(
+    _observability.trackVoiceEvent(
       eventName: VoiceMessageEventNames.sendStarted,
       conversationId: conversationId,
       durationMs: result.durationMs,
@@ -169,7 +169,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState>
       media: mediaPayload,
     );
     if (!sent) {
-      _observability.trackAction(
+      _observability.trackVoiceEvent(
         eventName: VoiceMessageEventNames.sendFailed,
         conversationId: conversationId,
         durationMs: result.durationMs,
@@ -184,7 +184,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState>
       return;
     }
 
-    _observability.trackAction(
+    _observability.trackVoiceEvent(
       eventName: VoiceMessageEventNames.sendSucceeded,
       conversationId: conversationId,
       durationMs: result.durationMs,
@@ -204,7 +204,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState>
   }
 
   void _trackUploadFailed(String? raw) {
-    _observability.trackAction(
+    _observability.trackVoiceEvent(
       eventName: VoiceMessageEventNames.uploadFailed,
       conversationId: conversationId,
       failureKind: (raw ?? '').trim().isEmpty ? 'unknown' : raw!.trim(),

@@ -407,11 +407,28 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _binding_runtime_material(
+    runtime_environment: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Read injected keys from the bound runtime delta, not leftover host env.
+
+    service-core 把 assistant 等模块收进单进程后, ASSISTANT_* 只存在于
+    stackctl 绑定的 runtime_environment, 不再出现在宿主机 os.environ。
+    """
+    material = {str(key): str(value) for key, value in os.environ.items()}
+    if runtime_environment:
+        material.update(
+            {str(key): str(value) for key, value in runtime_environment.items()}
+        )
+    return material
+
+
 def _require_binding_runtime_material(
     binding: Mapping[str, Any],
     *,
     environment: str,
     layer: str,
+    runtime_environment: Mapping[str, str] | None = None,
 ) -> None:
     if layer == "local_contract":
         return
@@ -422,7 +439,8 @@ def _require_binding_runtime_material(
     endpoint_keys = sorted(str(value) for value in endpoint_envs.values())
     secret_keys = sorted(str(value) for value in secret_refs)
     required_keys = sorted(set(endpoint_keys) | set(secret_keys))
-    missing = [key for key in required_keys if not os.environ.get(key, "").strip()]
+    material = _binding_runtime_material(runtime_environment)
+    missing = [key for key in required_keys if not material.get(key, "").strip()]
     if missing:
         raise ValueError(
             f"{environment} selected Binding is missing injected runtime keys: "
@@ -440,7 +458,7 @@ def _require_binding_runtime_material(
             key
             for key in endpoint_keys
             if any(
-                marker in os.environ[key].strip().lower()
+                marker in material[key].strip().lower()
                 for marker in local_markers
             )
         ]
@@ -452,7 +470,7 @@ def _require_binding_runtime_material(
     missing_files = [
         key
         for key in secret_keys
-        if key.endswith("_FILE") and not Path(os.environ[key]).expanduser().is_file()
+        if key.endswith("_FILE") and not Path(material[key]).expanduser().is_file()
     ]
     if missing_files:
         raise ValueError(
@@ -515,6 +533,7 @@ def preflight_environment_matrix(
                     binding,
                     environment=environment,
                     layer="api_integration",
+                    runtime_environment=runtime_environment,
                 )
             except ValueError as exc:
                 issues.append(str(exc))

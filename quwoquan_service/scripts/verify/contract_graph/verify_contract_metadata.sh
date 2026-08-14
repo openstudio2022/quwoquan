@@ -9,12 +9,7 @@ echo "[verify] contract metadata"
 
 BASE="${ROOT}/quwoquan_service/contracts/metadata"
 [[ -d "$BASE" ]] || { echo "[verify] FAIL: missing $BASE"; exit 1; }
-<<<<<<< Updated upstream:quwoquan_service/scripts/verify/contract_graph/verify_contract_metadata.sh
 CONTRACT_VIEW_CACHE="${ROOT}/.qwq_output/env/repo/local/service-contract-view/cache"
-=======
-CONTRACT_VIEW_PARENT="${ROOT}/.qwq_output/env/repo/local/service-contract-view"
-CONTRACT_VIEW_CACHE="${CONTRACT_VIEW_PARENT}/cache"
->>>>>>> Stashed changes:quwoquan_service/scripts/contract/verify_contract_metadata.sh
 mkdir -p "$CONTRACT_VIEW_CACHE"
 CONTRACT_VIEW="$(mktemp -d "${CONTRACT_VIEW_CACHE}/verify.XXXXXX")"
 rmdir "$CONTRACT_VIEW"

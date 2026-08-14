@@ -9,7 +9,9 @@
 """搜索全栈冒烟：经网关 persisted GraphQL SearchPage 验证生产装配链。
 
 App wire → Caddy 网关 → api-edge persisted query → search-service → CJK ES：
-- 六 Tab 参数矩阵（objectTypes/contentTypes 组合）返回 200 且过滤生效
+- 与 App 结果 Tab 同构的 all/article/image/video 矩阵返回 200、过滤生效且非空
+- circle/user 仅作 objectTypes 过滤附属断言（泄漏即败；circle 非 release 数据，
+  空结果登记 skipped_empty 不判失败）
 - searchRequestId/rankPosition/matchedTerms/degradeSignals 投影在 wire 上
 - 翻页 cursor 连续且无重复
 - 非法词汇按 GraphQL enum 校验结构化拒绝
@@ -34,24 +36,46 @@ SCHEMA = "search-fullstack-smoke-probe-report"
 SCENARIO = "search.search_index_view.fullstack_smoke"
 SEARCH_PAGE_SHA256 = "111b715594655786eba342c5cbebe7ea1338a9cf016ed0f35f54096802583478"
 
-# 六 Tab 参数矩阵：与 App 搜索页 Tab 语义一一对应（objectTypes/contentTypes 组合）。
+# 与 App SearchNetworkResultsPage 一级结果 Tab 同构（不含小趣 assistant、不含交集分组）。
 TAB_MATRIX: list[dict[str, Any]] = [
-    {"tab": "all", "objectTypes": None, "contentTypes": None},
-    {"tab": "article", "objectTypes": ["CONTENT_POST"], "contentTypes": ["ARTICLE"]},
-    {"tab": "image", "objectTypes": ["CONTENT_POST"], "contentTypes": ["IMAGE"]},
-    {"tab": "video", "objectTypes": ["CONTENT_POST"], "contentTypes": ["VIDEO"]},
-    {"tab": "circle", "objectTypes": ["CIRCLE"], "contentTypes": None},
-    {"tab": "user", "objectTypes": ["USER_PROFILE", "ENTITY_HOMEPAGE"], "contentTypes": None},
+    {
+        "tab": "all",
+        "objectTypes": ["CONTENT_POST", "USER_PROFILE", "ENTITY_HOMEPAGE", "LOCATION_PLACE"],
+        "contentTypes": None,
+        "requireHits": True,
+    },
+    {
+        "tab": "article",
+        "objectTypes": ["CONTENT_POST"],
+        "contentTypes": ["ARTICLE"],
+        "requireHits": True,
+    },
+    {
+        "tab": "image",
+        "objectTypes": ["CONTENT_POST"],
+        "contentTypes": ["IMAGE"],
+        "requireHits": True,
+    },
+    {
+        "tab": "video",
+        "objectTypes": ["CONTENT_POST"],
+        "contentTypes": ["VIDEO"],
+        "requireHits": True,
+    },
 ]
 
-OBJECT_TYPE_BY_RESULT_PREFIX = {
-    "CONTENT_POST": "content.post",
-    "CIRCLE": "circle.circle",
-    "CIRCLE_GROUP": "circle.circle_group",
-    "ENTITY_HOMEPAGE": "entity.homepage",
-    "LOCATION_PLACE": "integration.location_place",
-    "USER_PROFILE": "user.user_profile",
-}
+# 过滤生效附属断言：不是 App 一级 Tab，只证明 objectTypes 收窄无泄漏。
+# circle 不是 Data release 对象（只能经 Circle 域公开 command 创建），空结果
+# 登记 skipped_empty 而非失败；user/entity 由 release + backfill 保证非空。
+FILTER_ASSERTIONS: list[dict[str, Any]] = [
+    {"tab": "circle_filter", "objectTypes": ["CIRCLE"], "contentTypes": None, "requireHits": False},
+    {
+        "tab": "user_filter",
+        "objectTypes": ["USER_PROFILE", "ENTITY_HOMEPAGE"],
+        "contentTypes": None,
+        "requireHits": True,
+    },
+]
 
 
 class ProbeFailure(Exception):
@@ -68,7 +92,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env", choices=("beta", "gamma"), default="gamma")
     parser.add_argument("--base-url", required=True, help="网关 public base，例如 https://api.gamma.quwoquan.com:PORT")
-    parser.add_argument("--query", default="大理", help="预期在环境激活数据中可命中的中文关键词")
+    parser.add_argument("--query", default="西湖", help="预期在环境激活数据中可命中的中文关键词")
     parser.add_argument("--repeat", type=int, default=20, help="重复一致性执行次数")
     parser.add_argument("--insecure", action="store_true", help="local-managed TLS 下跳过证书校验")
     parser.add_argument(
@@ -144,46 +168,63 @@ def _item_refs(slice_payload: dict[str, Any]) -> list[str]:
     return [str(item.get("objectRef") or "") for item in slice_payload.get("items") or []]
 
 
-def _check_tab_matrix(client: GraphQLClient, query: str, report: dict[str, Any]) -> None:
-    for tab in TAB_MATRIX:
-        context = f"tab={tab['tab']}"
-        slice_payload, errors = client.search_page(_search_input(query, tab=tab))
-        slice_payload = _require_slice(slice_payload, errors, context=context)
-        items = slice_payload.get("items") or []
-        if not str(slice_payload.get("searchRequestId") or "").strip():
-            raise ProbeFailure("contract_mismatch", f"{context}: searchRequestId missing on wire")
-        if not isinstance(slice_payload.get("matchedTerms"), list):
-            raise ProbeFailure("contract_mismatch", f"{context}: matchedTerms missing on wire")
-        if not isinstance(slice_payload.get("degradeSignals"), list):
-            raise ProbeFailure("contract_mismatch", f"{context}: degradeSignals missing on wire")
-        allowed_result_types = set(tab["objectTypes"] or OBJECT_TYPE_BY_RESULT_PREFIX.keys())
-        for position, item in enumerate(items):
-            result_type = str(item.get("resultType") or "")
-            if result_type not in allowed_result_types:
-                raise ProbeFailure(
-                    "filter_leak",
-                    f"{context}: item resultType {result_type} escaped the objectTypes filter",
-                )
-            if tab.get("contentTypes"):
-                content_type = str(item.get("contentType") or "").upper()
-                if content_type not in set(tab["contentTypes"]):
-                    raise ProbeFailure(
-                        "filter_leak",
-                        f"{context}: item contentType {content_type} escaped the contentTypes filter",
-                    )
-            rank_position = item.get("rankPosition")
-            if not isinstance(rank_position, int) or rank_position < 0:
-                raise ProbeFailure(
-                    "contract_mismatch",
-                    f"{context}: rankPosition missing or invalid at index {position}",
-                )
+def _check_slice_filter(client: GraphQLClient, query: str, tab: dict[str, Any], report: dict[str, Any]) -> None:
+    context = f"tab={tab['tab']}"
+    slice_payload, errors = client.search_page(_search_input(query, tab=tab))
+    slice_payload = _require_slice(slice_payload, errors, context=context)
+    items = slice_payload.get("items") or []
+    if not str(slice_payload.get("searchRequestId") or "").strip():
+        raise ProbeFailure("contract_mismatch", f"{context}: searchRequestId missing on wire")
+    if not isinstance(slice_payload.get("matchedTerms"), list):
+        raise ProbeFailure("contract_mismatch", f"{context}: matchedTerms missing on wire")
+    if not isinstance(slice_payload.get("degradeSignals"), list):
+        raise ProbeFailure("contract_mismatch", f"{context}: degradeSignals missing on wire")
+    if not items:
+        if tab.get("requireHits"):
+            raise ProbeFailure("empty_index", f"{context}: empty result is not commercial evidence")
         report["steps"].append(
             {
                 "name": f"tab_matrix_{tab['tab']}",
-                "status": "passed",
-                "itemCount": len(items),
+                "status": "skipped_empty",
+                "reason": "no corpus for this optional filter; leak assertion vacuously holds",
             }
         )
+        return
+    allowed_result_types = set(tab["objectTypes"] or [])
+    for position, item in enumerate(items):
+        result_type = str(item.get("resultType") or "")
+        if allowed_result_types and result_type not in allowed_result_types:
+            raise ProbeFailure(
+                "filter_leak",
+                f"{context}: item resultType {result_type} escaped the objectTypes filter",
+            )
+        if tab.get("contentTypes"):
+            content_type = str(item.get("contentType") or "").upper()
+            if content_type not in set(tab["contentTypes"]):
+                raise ProbeFailure(
+                    "filter_leak",
+                    f"{context}: item contentType {content_type} escaped the contentTypes filter",
+                )
+        rank_position = item.get("rankPosition")
+        if not isinstance(rank_position, int) or rank_position < 0:
+            raise ProbeFailure(
+                "contract_mismatch",
+                f"{context}: rankPosition missing or invalid at index {position}",
+            )
+    report["steps"].append(
+        {
+            "name": f"tab_matrix_{tab['tab']}",
+            "status": "passed",
+            "itemCount": len(items),
+        }
+    )
+
+
+def _check_tab_matrix(client: GraphQLClient, query: str, report: dict[str, Any]) -> None:
+    for tab in TAB_MATRIX:
+        _check_slice_filter(client, query, tab, report)
+    for tab in FILTER_ASSERTIONS:
+        _check_slice_filter(client, query, tab, report)
 
 
 def _check_pagination(client: GraphQLClient, query: str, report: dict[str, Any]) -> None:
@@ -237,6 +278,8 @@ def _check_repeat_consistency(client: GraphQLClient, query: str, repeat: int, re
         refs = _item_refs(slice_payload)
         if baseline is None:
             baseline = refs
+            if not baseline:
+                raise ProbeFailure("empty_index", "repeat consistency has no hits to compare")
         elif refs != baseline:
             raise ProbeFailure(
                 "repeatability_drift",

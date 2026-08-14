@@ -114,7 +114,7 @@
 - THEN 已连接区按聊天记录、联系人、已加入圈子、已关注地点、已关注的人、已互动内容顺序展示，每类最多一组。
 - THEN 未连接发现区按交集、圈子、地点、人、图片、视频、长文同类成组，并按匹配池数量与相关度比例混排。
 - THEN 发现区不展示“查看更多”，继续下滑加载下一批组。
-- THEN 当前 query/tab generation 只调用一次 canonical `POST /search`，App 不做顺序 fan-out。
+- THEN 当前 query/tab generation 只调用一次 canonical `SearchPage` persisted query，App 不做顺序 fan-out。
 
 <a id="gwt-004"></a>
 ### GWT-004 指定类别 Tab 只展示该类别的消费流

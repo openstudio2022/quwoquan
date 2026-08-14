@@ -430,11 +430,11 @@ def build_envelope(
             "campaign targetNames must contain at least the governed quota "
             f"({quota_value}); got {len(names)}"
         )
-    if len(names) > count:
-        raise ValueError(
-            "campaign targetNames must fit inside the current-wave candidate count "
-            f"({count}); got {len(names)}"
-        )
+    # 四载体共享同一份 current-wave targetNames。小目标载体（如 M100 video 目标
+    # 10、oversample 池 18）只从大名单中挑 quota 个交付；名单大于该载体候选池是
+    # 共享名单的预期形态，唯一有效的上限是名单收缩 quota 时的下限校验（上方）。
+    # 名单不足 remaining_quota 时 quota == len(names) <= count 恒成立，因此
+    # per-carrier 的 len(names) > count 上限只会错误拒绝共享大名单，不再保留。
     providers = sorted(
         {str(item).strip() for item in (source_providers or []) if str(item).strip()}
     )

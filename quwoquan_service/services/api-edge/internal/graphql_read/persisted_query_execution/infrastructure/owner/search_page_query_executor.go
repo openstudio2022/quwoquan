@@ -129,6 +129,12 @@ func NewSearchPageQueryExecutor(
 	if contractGraphSHA256 == "" {
 		return nil, errors.New("SearchPage executor ContractGraph SHA-256 is required")
 	}
+	// search-service 的 owner/retrieval 分支按 canonical `sha256:<hex>` 形态校验并
+	// 回写 X-Contract-Graph-SHA256（与 assistant retrieval 链同轨）。构造期一次性
+	// 规范化，发送与响应校验共用同一 wire 值，避免替身与真实 owner 的形态分裂。
+	if !strings.HasPrefix(contractGraphSHA256, "sha256:") {
+		contractGraphSHA256 = "sha256:" + contractGraphSHA256
+	}
 	if serviceCredentials == nil || accountCredentials == nil {
 		return nil, errors.New("SearchPage owner service and account credentials are required")
 	}

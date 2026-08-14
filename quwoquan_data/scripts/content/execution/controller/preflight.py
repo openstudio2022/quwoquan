@@ -13,7 +13,12 @@ def _managed_preflight(execution_id: str, spec: dict, args: argparse.Namespace) 
     agent_provider = _normalize_managed_agent_provider(getattr(args, "agent_provider", None))
     if str(spec.get("status") or "") != "active":
         issues.append(f"task status must be active for --managed, got {spec.get('status')!r}")
-    issues.extend(execution_branch_issues(spec, cwd=Path.cwd()))
+    # 分支门必须锚定代码树根（主树或 campaign capsule 根），不能用进程 cwd：
+    # capsule lane 子进程的 cwd 是 execution root（.qwq_output/data/tasks/<id>），
+    # 那里既没有 branch_policy.yaml 也没有 capsule manifest，Path.cwd() 会让
+    # 商业分支门错误地 fail-closed。execution_branch 的 capsule fallback
+    # （.qwq_campaign_capsule.json 的 gitBranch/gitCommitSha）也以树根为锚。
+    issues.extend(execution_branch_issues(spec))
     from content.post.content_plan_validation import validate_content_plan
     quotas = ((spec.get("content") or {}).get("quotas") or {})
     targets = (spec.get("scope") or {}).get("coverageTargets") or []

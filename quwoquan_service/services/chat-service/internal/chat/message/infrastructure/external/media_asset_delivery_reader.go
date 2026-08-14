@@ -79,14 +79,43 @@ func (reader *MediaAssetDeliveryReader) ReadOwnedReadyAsset(
 	if response.StatusCode != http.StatusOK {
 		return messageports.MediaAssetDeliverySlice{}, false, decodeRuntimeFailure(response)
 	}
+	// 字段集与 content-service MediaAssetDeliveryReferenceSlice 严格对齐
+	// （content 侧 wire 是 mimeType，非 contentType；曾因漂移导致真实环境
+	// audio 发送 503，App api_integration 抓出）。保持 DisallowUnknownFields
+	// 拒绝存储 objectKey 等非 canonical 字段泄漏；content 侧新增交付字段
+	// 必须在此同步登记。
 	var payload struct {
 		AssetID          string `json:"assetId"`
 		OwnerPersonaID   string `json:"ownerPersonaId"`
 		ProcessingStatus string `json:"processingStatus"`
 		MediaType        string `json:"mediaType"`
-		ContentType      string `json:"contentType"`
+		ContentType      string `json:"mimeType"`
 		FileSize         int64  `json:"fileSize"`
 		DeliveryURL      string `json:"cdnUrl"`
+		// content 契约允许的交付扩展字段（omitempty；chat 不消费但必须容纳）。
+		PublicSliceKey                string `json:"publicSliceKey"`
+		ImageWidth                    int    `json:"imageWidth"`
+		ImageHeight                   int    `json:"imageHeight"`
+		ImageDeliveryMimeType         string `json:"imageDeliveryMimeType"`
+		ImageDominantColor            string `json:"imageDominantColor"`
+		ImageLQIP                     string `json:"imageLqip"`
+		ImageContentProfile           string `json:"imageContentProfile"`
+		ImageDerivativePolicyVersion  int    `json:"imageDerivativePolicyVersion"`
+		VerifiedDurationMs            int64  `json:"verifiedDurationMs"`
+		VideoWidth                    int    `json:"videoWidth"`
+		VideoHeight                   int    `json:"videoHeight"`
+		VideoAudioCodec               string `json:"videoAudioCodec"`
+		VideoKeyframeIntervalMs       int    `json:"videoKeyframeIntervalMs"`
+		VideoFastStart                bool   `json:"videoFastStart"`
+		VideoPublicSliceKey           string `json:"videoPublicSliceKey"`
+		CoverPublicSliceKey           string `json:"coverPublicSliceKey"`
+		PreviewTrackVersion           int    `json:"previewTrackVersion"`
+		PreviewTrackManifestSliceKey  string `json:"previewTrackManifestSliceKey"`
+		HLSCMAFDescriptorVersion      int    `json:"hlsCmafDescriptorVersion"`
+		HLSCMAFDescriptorSliceKey     string `json:"hlsCmafDescriptorSliceKey"`
+		HLSCMAFMasterManifestSliceKey string `json:"hlsCmafMasterManifestSliceKey"`
+		HLSCMAFRenditionCount         int    `json:"hlsCmafRenditionCount"`
+		ExpiresAt                     string `json:"expiresAt"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(response.Body, 1<<20))
 	decoder.DisallowUnknownFields()

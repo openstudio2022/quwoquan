@@ -255,11 +255,4 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 沉浸深色语境仍有固定白 indicator 残量待 token 化
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：当前并行热点文件中尚有固定白 indicator 未经语义 token 声明，缺对应实现与验收证据。共享沉浸失败组件 `ImmersiveMediaFailureContent`、media_asset 沉浸 loading 面（image_book_canvas、video_player_surface_builder）与 rtc 沉浸面（video_call_screen_share_surface、call_stage_banner）已全部经 `AppColors.immersiveForeground` 声明前景并纳入 `GWT-017` 绑定测试扫描清单；经语境核实，assistant_skill_lifecycle_sheet_sections、circle_group_membership_panel、circle_edit_settings_page_state 三处为 accent 填充按钮内前景白（合理惯例，与 section_storage 上传按钮同类），剔除出范围。残量仅剩并行占据的 gathering（gathering_detail_page 两处、gathering_create_page）与 works_immersive_viewer_build、video_editor_page_state 的固定深色壳。
-- 完成判定：`GWT-017` 对应行为满足且残量文件的沉浸语境 indicator 全部改为 `AppColors.immersiveForeground` 并纳入既有 token 契约测试的扫描清单。
+- 无。

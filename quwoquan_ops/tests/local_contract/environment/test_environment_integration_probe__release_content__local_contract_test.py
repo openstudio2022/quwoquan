@@ -302,3 +302,346 @@ def test_release_media_probe__missing_readiness_is_gate_block__local_contract() 
 
     with pytest.raises(probe.ReleaseVideoDeliveryError, match="required"):
         probe._release_probe_identity(args)
+
+
+def test_author_posts_contract__accepts_contract_subset_page__local_contract() -> None:
+    issue, count = probe._author_posts_semantic_result(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "postId": "article-001",
+                        "contentType": "article",
+                        "authorId": "persona-a",
+                        "authorDisplayName": "灯塔观察员",
+                        "likeCount": 0,
+                        "commentCount": 0,
+                        "shareCount": 0,
+                    }
+                ],
+                "hasMore": False,
+            }
+        )
+    )
+
+    assert issue is None
+    assert count == 1
+
+
+@pytest.mark.parametrize(
+    "unknown_field",
+    ["status", "visibility", "viewCount", "authorDisplayNameSnapshot"],
+)
+def test_author_posts_contract__rejects_leaked_internal_fields__local_contract(
+    unknown_field: str,
+) -> None:
+    # 回归 gamma 真实事故：ListUserPosts 泄露契约外字段导致 App
+    # ContentPostProjection decoder 整页失败（作者主页「记录」错误态）。
+    issue, count = probe._author_posts_semantic_result(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "postId": "article-001",
+                        unknown_field: "must-not-pass",
+                    }
+                ],
+                "hasMore": False,
+            }
+        )
+    )
+
+    assert issue == (
+        "response items[0] has unknown ContentPostProjection fields: "
+        f"{unknown_field}"
+    )
+    assert count is None
+
+
+def test_author_posts_contract__rejects_unknown_page_wrapper_field__local_contract() -> (
+    None
+):
+    issue, count = probe._author_posts_semantic_result(
+        '{"items":[],"hasMore":false,"totalCount":3}'
+    )
+
+    assert issue == "response has unknown AuthorPostPageSlice fields: totalCount"
+    assert count is None
+
+
+def test_author_posts_contract__chains_from_release_sample_author__local_contract() -> (
+    None
+):
+    args = _args()
+    args.release_sample = [
+        json.dumps(
+            {
+                "sampleId": "m100-article-001",
+                "carrier": "article",
+                "sourceReadback": "feedQueries.typed_article",
+                "sourceObjectId": "article-001",
+                "ordinal": 1,
+                "readObjectId": "article-001",
+                "expectedContentType": "article",
+            }
+        ),
+    ]
+    args.only_check = [
+        "release_sample",
+        probe.AUTHOR_POSTS_CHECK_NAME,
+    ]
+
+    author_page = json.dumps(
+        {
+            "items": [
+                {
+                    "postId": "article-001",
+                    "contentType": "article",
+                    "authorId": "persona-a",
+                    "likeCount": 0,
+                    "commentCount": 0,
+                    "shareCount": 0,
+                }
+            ],
+            "hasMore": False,
+        }
+    )
+
+    def _fake_request(method, url, **kwargs):
+        if url.endswith("/content/posts/article-001"):
+            return True, 200, json.dumps(
+                {
+                    "postId": "article-001",
+                    "contentType": "article",
+                    "authorId": "persona-a",
+                }
+            )
+        if "/content/personas/persona-a/posts" in url:
+            return True, 200, author_page
+        raise AssertionError(f"unexpected probe request: {url}")
+
+    original_request = probe.request
+    probe.request = _fake_request
+    try:
+        report = probe.run_checks(args)
+    finally:
+        probe.request = original_request
+
+    names = [item["name"] for item in report["checks"]]
+    assert probe.AUTHOR_POSTS_CHECK_NAME in names
+    author_entry = next(
+        item
+        for item in report["checks"]
+        if item["name"] == probe.AUTHOR_POSTS_CHECK_NAME
+    )
+    assert author_entry["ok"] is True
+    assert author_entry["authorPersonaId"] == "persona-a"
+    assert author_entry["contentItemCount"] == 1
+    assert report["status"] == "passed"
+
+
+def test_feed_media_slices__collects_all_media_urls_from_feed_items__local_contract() -> (
+    None
+):
+    urls = probe._feed_media_slice_urls(
+        json.dumps(
+            {
+                "items": [
+                    {
+                        "postId": "post-image-a",
+                        "mediaUrls": [
+                            "media/image/s/asset/a/v1/source.webp",
+                            "media/image/s/asset/b/v1/source.webp",
+                        ],
+                        "coverUrl": "media/image/s/asset/a/v1/source.webp",
+                    },
+                    {
+                        "postId": "post-video-a",
+                        "videoUrl": "media/video/s/asset/c/v1/source.mp4",
+                        "thumbnailUrl": (
+                            "https://cdn.gamma.quwoquan.com:19100/media/video/s/"
+                            "asset/c/v1/source.mp4?variant=thumb"
+                        ),
+                    },
+                ],
+                "objectCards": [],
+            }
+        ),
+        "https://cdn.gamma.quwoquan.com:19100",
+    )
+
+    assert urls == {
+        "https://cdn.gamma.quwoquan.com:19100/media/image/s/asset/a/v1/source.webp": "image",
+        "https://cdn.gamma.quwoquan.com:19100/media/image/s/asset/b/v1/source.webp": "image",
+        "https://cdn.gamma.quwoquan.com:19100/media/video/s/asset/c/v1/source.mp4": "video",
+        "https://cdn.gamma.quwoquan.com:19100/media/video/s/asset/c/v1/source.mp4?variant=thumb": "image",
+    }
+
+
+def test_feed_media_slices__missing_object_fails_run__local_contract() -> None:
+    # 回归首页真实事故：feed items 正常返回，但 media-edge 缺对象导致
+    # 图片灰块/视频黑屏；items 非空绝不等于媒体可显示。
+    args = _args()
+    args.media_image_base_url = "https://cdn.gamma.quwoquan.com:19100/media/image"
+    args.release_readiness = ""
+    args.only_check = ["content_feed", probe.FEED_MEDIA_SLICES_CHECK_NAME]
+
+    feed_payload = json.dumps(
+        {
+            "items": [
+                {
+                    "postId": "post-image-a",
+                    "contentType": "image",
+                    "mediaUrls": ["media/image/s/asset/a/v1/source.webp"],
+                    "likeCount": 0,
+                    "commentCount": 0,
+                    "shareCount": 0,
+                },
+                {
+                    "postId": "post-video-a",
+                    "contentType": "video",
+                    "videoUrl": "media/video/s/asset/c/v1/source.mp4",
+                    "likeCount": 0,
+                    "commentCount": 0,
+                    "shareCount": 0,
+                },
+            ],
+            "objectCards": [],
+        }
+    )
+
+    def _fake_request(method, url, **kwargs):
+        if "/content/feed" in url:
+            return True, 200, feed_payload
+        if url.endswith("source.webp"):
+            return True, 200, "bytes"
+        if url.endswith("source.mp4"):
+            return True, 404, "missing"
+        raise AssertionError(f"unexpected probe request: {url}")
+
+    original_request = probe.request
+    original_identity = probe._release_probe_identity
+    probe.request = _fake_request
+    probe._release_probe_identity = lambda _args: None
+    try:
+        report = probe.run_checks(args)
+    finally:
+        probe.request = original_request
+        probe._release_probe_identity = original_identity
+
+    entry = next(
+        item
+        for item in report["checks"]
+        if item["name"] == probe.FEED_MEDIA_SLICES_CHECK_NAME
+    )
+    assert entry["ok"] is False
+    assert entry["sliceCount"] == 2
+    assert any("source.mp4" in failure for failure in entry["sliceFailures"])
+    assert report["status"] == "failed"
+    assert any(
+        probe.FEED_MEDIA_SLICES_CHECK_NAME in finding
+        and "unreadable" in finding
+        for finding in report["findings"]
+    )
+
+
+def test_feed_media_slices__all_readable_passes__local_contract() -> None:
+    args = _args()
+    args.media_image_base_url = "https://cdn.gamma.quwoquan.com:19100/media/image"
+    args.release_readiness = ""
+    args.only_check = ["content_feed", probe.FEED_MEDIA_SLICES_CHECK_NAME]
+
+    feed_payload = json.dumps(
+        {
+            "items": [
+                {
+                    "postId": "post-image-a",
+                    "contentType": "image",
+                    "mediaUrls": ["media/image/s/asset/a/v1/source.webp"],
+                    "likeCount": 0,
+                    "commentCount": 0,
+                    "shareCount": 0,
+                }
+            ],
+            "objectCards": [],
+        }
+    )
+
+    def _fake_request(method, url, **kwargs):
+        if "/content/feed" in url:
+            return True, 200, feed_payload
+        if url.endswith("source.webp"):
+            return True, 200, "bytes"
+        raise AssertionError(f"unexpected probe request: {url}")
+
+    original_request = probe.request
+    original_identity = probe._release_probe_identity
+    probe.request = _fake_request
+    probe._release_probe_identity = lambda _args: None
+    try:
+        report = probe.run_checks(args)
+    finally:
+        probe.request = original_request
+        probe._release_probe_identity = original_identity
+
+    entry = next(
+        item
+        for item in report["checks"]
+        if item["name"] == probe.FEED_MEDIA_SLICES_CHECK_NAME
+    )
+    assert entry["ok"] is True
+    assert entry["sliceCount"] == 1
+    assert report["status"] == "passed"
+
+
+def test_author_posts_contract__leaked_field_fails_run__local_contract() -> None:
+    args = _args()
+    args.release_sample = [
+        json.dumps(
+            {
+                "sampleId": "m100-article-001",
+                "carrier": "article",
+                "sourceReadback": "feedQueries.typed_article",
+                "sourceObjectId": "article-001",
+                "ordinal": 1,
+                "readObjectId": "article-001",
+                "expectedContentType": "article",
+            }
+        ),
+    ]
+    args.only_check = [
+        "release_sample",
+        probe.AUTHOR_POSTS_CHECK_NAME,
+    ]
+
+    def _fake_request(method, url, **kwargs):
+        if url.endswith("/content/posts/article-001"):
+            return True, 200, json.dumps(
+                {
+                    "postId": "article-001",
+                    "contentType": "article",
+                    "authorId": "persona-a",
+                }
+            )
+        if "/content/personas/persona-a/posts" in url:
+            return True, 200, json.dumps(
+                {
+                    "items": [{"postId": "article-001", "status": "published"}],
+                    "hasMore": False,
+                }
+            )
+        raise AssertionError(f"unexpected probe request: {url}")
+
+    original_request = probe.request
+    probe.request = _fake_request
+    try:
+        report = probe.run_checks(args)
+    finally:
+        probe.request = original_request
+
+    assert report["status"] == "failed"
+    assert any(
+        probe.AUTHOR_POSTS_CHECK_NAME in finding
+        and "unknown ContentPostProjection fields: status" in finding
+        for finding in report["findings"]
+    )

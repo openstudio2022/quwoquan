@@ -149,7 +149,7 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
     }
     final Widget child;
     if (_isLoadingMore) {
-      child = const CupertinoActivityIndicator();
+      child = AppRequestFeedback.inline();
     } else if (_loadMoreErrorSemantic != null) {
       child = Text(
         CommunityText.circleCreationsLoadMoreFailed,

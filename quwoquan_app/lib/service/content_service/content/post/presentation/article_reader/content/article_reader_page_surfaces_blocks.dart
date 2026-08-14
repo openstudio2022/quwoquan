@@ -15,6 +15,17 @@ class _ArticleSemanticBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final titleFont = typography.titleStyle.fontSize ?? AppTypography.xl;
     final bodyFont = typography.bodyStyle.fontSize ?? AppTypography.base;
+    if (block.type == ArticleDocumentBlockType.divider) {
+      final dividerColor =
+          (typography.bodyStyle.color ?? AppColors.worksTitle).withValues(
+        alpha: 0.18,
+      );
+      return Padding(
+        key: const ValueKey<String>('article-divider'),
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Container(height: AppSpacing.hairline, color: dividerColor),
+      );
+    }
     final style = switch (block.type) {
       ArticleDocumentBlockType.heading2 => typography.titleStyle.copyWith(
         fontSize: titleFont * 0.82,
@@ -35,10 +46,17 @@ class _ArticleSemanticBlock extends StatelessWidget {
         ArticleRichBlockChrome.textStyleFor(block.type, typography.bodyStyle),
       _ => typography.bodyStyle,
     };
+    // 段落对齐（GWT-004）：textAlign 由 :::align 指令经模型贯通到渲染。
+    final blockTextAlign = switch (block.textAlign) {
+      'center' => TextAlign.center,
+      'right' => TextAlign.right,
+      _ => null,
+    };
     final inlineText = _ArticleInlineText(
       text: block.text.trim(),
       spans: block.spans,
       style: style,
+      textAlign: blockTextAlign,
       onEntityTap: onEntityTap,
     );
     // 嵌套列表缩进（GWT-004）：listDepth 与 codec 缩进同一约定。
@@ -103,18 +121,20 @@ class _ArticleInlineText extends StatelessWidget {
     required this.text,
     required this.spans,
     required this.style,
+    this.textAlign,
     this.onEntityTap,
   });
 
   final String text;
   final List<ArticleInlineSpan> spans;
   final TextStyle style;
+  final TextAlign? textAlign;
   final ValueChanged<ArticleInlineSpan>? onEntityTap;
 
   @override
   Widget build(BuildContext context) {
     if (spans.isEmpty) {
-      return Text(text, style: style);
+      return Text(text, style: style, textAlign: textAlign);
     }
     // 行内分段唯一真相源（GWT-002）：与序列化共用同一字符级合成，
     // mention 原子段可点，样式段按 span 布尔渲染，无第二套切分。
@@ -167,6 +187,7 @@ class _ArticleInlineText extends StatelessWidget {
     }
     return RichText(
       key: const ValueKey<String>('article-entity-rich-text'),
+      textAlign: textAlign ?? TextAlign.start,
       text: TextSpan(style: style, children: children),
     );
   }

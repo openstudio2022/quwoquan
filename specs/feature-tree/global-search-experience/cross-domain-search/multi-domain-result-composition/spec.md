@@ -15,7 +15,7 @@
 ### In Scope
 
 - 本地分段与云实体并行、部分失败和终态映射。
-- 正式结果页 canonical `POST /search` 单请求。
+- 正式结果页 canonical `SearchPage` persisted GraphQL 单请求。
 - 3 秒慢提示、6 秒取消、supersede/dispose 与旧内容保留。
 
 ### Out of Scope
@@ -61,7 +61,7 @@
 - GIVEN 用户输入 query，本地域与云域响应时延或失败情况不同。
 - WHEN 联想页或正式结果页执行搜索，随后发生完成、部分失败、超时、query 替换或 dispose。
 - THEN 本地结果先展示，云实体只在“搜索网络结果”段局部等待。
-- THEN 正式结果每个 generation 只调用一次 canonical `/search`。
+- THEN 正式结果每个 generation 只调用一次 canonical `SearchPage` persisted query。
 - THEN 3 秒只在空白阻塞时显示一次提示；6 秒真实取消 transport 并进入可重试终态。
 - THEN empty、partial、timeout、failure 分开映射；旧 completion 不得回写。
 

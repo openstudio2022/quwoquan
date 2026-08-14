@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"strings"
+	"time"
 
 	rterr "quwoquan_service/runtime/errors"
 	messagemodel "quwoquan_service/services/chat-service/internal/chat/message/domain/model"
@@ -91,6 +92,35 @@ type SyncMessagesResponse struct {
 	HasMore  bool           `json:"hasMore"`
 }
 
+type ListConversationAssetsRequest struct {
+	ConversationId string
+	ViewerID       string
+	Kind           string
+	BeforeSeq      int64
+	Limit          int
+}
+
+// ConversationAssetRow 是群空间相册/文件宫格的索引行 + 交付字段。
+type ConversationAssetRow struct {
+	MessageID          string
+	Seq                int64
+	MediaAssetID       string
+	MessageType        string
+	SenderID           string
+	SenderName         string
+	FileName           string
+	MediaDeliveryURL   string
+	MediaContentType   string
+	MediaFileSizeBytes int64
+	CreatedAt          time.Time
+}
+
+type ConversationAssetsPage struct {
+	Items         []ConversationAssetRow
+	HasMore       bool
+	NextBeforeSeq *int64
+}
+
 type Backend interface {
 	SendMessage(context.Context, SendMessageRequest) (*SendMessageResponse, error)
 	SendAssistantDeliveryMessage(
@@ -107,6 +137,10 @@ type Backend interface {
 		int,
 	) ([]MessageSlice, error)
 	SyncMessages(context.Context, SyncMessagesRequest) (*SyncMessagesResponse, error)
+	ListConversationAssets(
+		context.Context,
+		ListConversationAssetsRequest,
+	) (*ConversationAssetsPage, error)
 }
 
 type UseCases struct{ backend Backend }
@@ -159,4 +193,11 @@ func (s *UseCases) ListAssistantGrounding(
 }
 func (s *UseCases) Sync(ctx context.Context, req SyncMessagesRequest) (*SyncMessagesResponse, error) {
 	return s.backend.SyncMessages(ctx, req)
+}
+
+func (s *UseCases) ListConversationAssets(
+	ctx context.Context,
+	req ListConversationAssetsRequest,
+) (*ConversationAssetsPage, error) {
+	return s.backend.ListConversationAssets(ctx, req)
 }

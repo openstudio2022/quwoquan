@@ -50,10 +50,10 @@ DIRECT_WRITE_RE = re.compile(
 #: 基线随扫描口径收紧重定（补齐 Mongo Update/Replace/FindOneAnd*/BulkWrite
 #: 与跨行 SQL 写句形态），并随 user_account 首批 harness 归并下调；
 #: circle `file_owner/placement_owner` 两件为口径收紧同窗口的并行增量，
-#: 与同包 owner contract 同族并入留置批次。剩余存量为 harness 改造批次
-#: 留置项（chat 会话组、content 供给组、user/circle 多处直插 contract
-#: seed），见 runtime-test-pyramid OPEN-002。
-DIRECT_STORAGE_FILE_CEILING = 28
+#: 与同包 owner contract 同族并入留置批次；chat 会话组与 content 供给组
+#: 已随第二批 harness 归并/专项声明消化。剩余存量为 user/circle 多处直插
+#: contract seed 留置项，见 runtime-test-pyramid OPEN-002。
+DIRECT_STORAGE_FILE_CEILING = 20
 
 
 def is_declared_specialised(name: str) -> bool:

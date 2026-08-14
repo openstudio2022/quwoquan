@@ -402,6 +402,11 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
             .read(createEditorProvider.notifier)
             .updateArticleNodeImageLayout(nodeId, layout);
       },
+      onUpdateNodeAlignment: (nodeId, alignment) {
+        ref
+            .read(createEditorProvider.notifier)
+            .updateArticleNodeAlignment(nodeId, alignment);
+      },
       onUpdateNodeCaption: (nodeId, caption) {
         ref
             .read(createEditorProvider.notifier)

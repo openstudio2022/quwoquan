@@ -1,4 +1,6 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md#gwt-002
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md#gwt-002.t1
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md#gwt-002.t2
 package publicweb
 
 import (
@@ -31,6 +33,34 @@ func TestRenderObjectHTMLIncludesSeoMetadata(t *testing.T) {
 		if !strings.Contains(doc.HTML, want) {
 			t.Fatalf("html missing %q: %s", want, doc.HTML)
 		}
+	}
+}
+
+func TestRenderObjectHTMLEscapesInjectedMarkup(t *testing.T) {
+	doc := RenderObjectHTML("https://quwoquan.app", ObjectPage{
+		ObjectType:   "content.post",
+		ObjectID:     `post_1"><script>alert(2)</script>`,
+		Path:         "post/post_1",
+		Title:        `<script>alert(1)</script>攻略`,
+		Description:  `"><img src=x onerror=alert(3)>`,
+		CoverURL:     `https://cdn.example/cover.jpg" onload="alert(4)`,
+		Visibility:   "public",
+		PublishedISO: "2026-06-08T12:00:00Z",
+		AuthorName:   `</script><script>alert(5)</script>`,
+	})
+	for _, forbidden := range []string{
+		"<script>alert(1)</script>",
+		"<script>alert(2)</script>",
+		"<img src=x onerror=alert(3)>",
+		`" onload="alert(4)`,
+		"<script>alert(5)</script>",
+	} {
+		if strings.Contains(doc.HTML, forbidden) {
+			t.Fatalf("html leaked unescaped injection %q: %s", forbidden, doc.HTML)
+		}
+	}
+	if !strings.Contains(doc.HTML, "&lt;script&gt;alert(1)&lt;/script&gt;攻略") {
+		t.Fatalf("title should be escaped instead of dropped: %s", doc.HTML)
 	}
 }
 

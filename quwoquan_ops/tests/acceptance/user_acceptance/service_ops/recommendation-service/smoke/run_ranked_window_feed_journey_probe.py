@@ -39,6 +39,7 @@ import hashlib
 import json
 import os
 import re
+import ssl
 import sys
 import urllib.error
 import urllib.parse
@@ -98,6 +99,11 @@ def parse_args() -> argparse.Namespace:
         "--candidate-binding-digest",
         default=os.environ.get("QWQ_TEST_DATA_CANDIDATE_BINDING_DIGEST", ""),
     )
+    parser.add_argument(
+        "--ca-file",
+        default=os.environ.get("QWQ_PROBE_CA_FILE", ""),
+        help="本地管理 TLS 环境（alpha/beta/gamma-local）的根证书路径",
+    )
     parser.add_argument("--limit", type=int, default=10)
     parser.add_argument(
         "--min-pages",
@@ -139,6 +145,7 @@ def fetch_feed(
     timeout: int,
     cursor: str = "",
     feed_request_id: str = "",
+    ca_file: str = "",
 ) -> tuple[int, dict[str, Any] | None, str]:
     params: dict[str, str] = {
         "channelId": "recommend",
@@ -158,8 +165,11 @@ def fetch_feed(
         request.add_header("X-Client-User-Id", viewer_id)
     if token:
         request.add_header("Authorization", f"Bearer {token}")
+    # 本地管理 TLS 环境（*-local）的网关证书由 target 私有根签发；
+    # 传入根证书即可走正常验证，绝不关闭校验。
+    context = ssl.create_default_context(cafile=ca_file) if ca_file else None
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
             body = response.read().decode("utf-8", errors="replace")
             try:
                 return response.status, json.loads(body), ""
@@ -260,6 +270,7 @@ def main() -> int:
             timeout=args.timeout_seconds,
             cursor=cursor,
             feed_request_id=feed_request_id,
+            ca_file=args.ca_file,
         )
         page_report: dict[str, Any] = {"ordinal": ordinal, "httpStatus": status, "errors": []}
         if status != 200 or payload is None:
@@ -329,6 +340,7 @@ def main() -> int:
                 timeout=args.timeout_seconds,
                 cursor=previous_cursor,
                 feed_request_id=feed_request_id,
+                ca_file=args.ca_file,
             )
             replay_report["httpStatus"] = status
             if status != 200 or payload is None:

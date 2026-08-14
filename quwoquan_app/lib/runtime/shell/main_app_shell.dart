@@ -23,6 +23,7 @@ import 'package:quwoquan_app/runtime/di/ops_event_dependencies.dart';
 import 'package:quwoquan_app/runtime/di/navigation/push_tap_navigation.dart';
 import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/main_tab_activation.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/main_tab_registry.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/page_access_log_util.dart';
 import 'package:quwoquan_app/runtime/shell/shell_immersive_providers.dart';
@@ -259,6 +260,14 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         );
       },
     );
+    // 视频书已退出底栏：首页顶部固定入口经激活信号请求壳切换到 featured
+    // 内存态目的地（避免页面直接持有壳内部 tab 状态）。
+    ref.listen<int>(featuredImmersiveActivationProvider, (previous, next) {
+      if (!mounted || next == (previous ?? 0)) {
+        return;
+      }
+      _selectMainTab(MainTabDestination.featured);
+    });
     final themeDark = ref.watch(isDarkProvider);
     final isFeaturedActive = _currentDestination == MainTabDestination.featured;
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;
@@ -351,6 +360,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                                       ),
                                     ),
                                   ),
+                                  _buildTabBody(
+                                    destination: MainTabDestination.actions,
+                                    child: shellBindings.buildActionsDiscovery(),
+                                  ),
                                   const SizedBox.shrink(),
                                   _buildTabBody(
                                     destination: MainTabDestination.chat,
@@ -418,11 +431,6 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     // 形成死循环；MyProfilePage 的游客占位仅作为深链兜底。
     if (nextTab == MainTabDestination.profile &&
         !_ensureLoggedInFor(AuthGateReason.profileTab, AppRoutePaths.profile)) {
-      return;
-    }
-
-    if (nextTab == MainTabDestination.featured) {
-      _selectMainTab(nextTab);
       return;
     }
 
@@ -497,6 +505,11 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       case MainTabDestination.featured:
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
         ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
+        break;
+      case MainTabDestination.actions:
+        // 线下行动与发现：壳内存态 tab（无独立路由），保留底栏与常规明暗。
+        ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
+        ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         break;
       case MainTabDestination.chat:
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);

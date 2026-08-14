@@ -1,3 +1,9 @@
+// 圈子主页交集重做：标题「圈子打动的人 / 我的交集」、只读云侧 primaryText、
+// 无事实不占位、失败走 canonical 恢复面且不伪造成功；头部不挂四列统计与成员头像簇。
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/circle-homepage-intersection-redesign/spec.md#gwt-001
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/circle-homepage-intersection-redesign/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/circle-homepage-intersection-redesign/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/circle-homepage-intersection-redesign/spec.md#gwt-001.t3
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,13 +21,23 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
+import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
+    show currentUserIdProvider;
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/domain_error_code.dart';
+import 'package:quwoquan_app/runtime/errors/generated/circle/circle_errors.g.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
+import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_behavior_fact/application/public/circle_behavior_fact_appender.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_group/application/public/circle_group_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_membership/application/public/circle_membership_ports.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_surface.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+import 'package:quwoquan_app/design_system/object_page/object_stats_row.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circle_action_bar.dart';
+import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circle_header.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/presentation/circle_shell.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle_file/presentation/section_storage.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/call_permission_guard.dart';
@@ -442,6 +458,98 @@ void main() {
       );
     });
 
+    testWidgets('我的交集只读云侧主句并展示查看全部', (tester) async {
+      const circleId = 'fixture_circle_photo';
+      const viewerId = 'user_001';
+      const query = ObjectIntersectionQuery(
+        objectAId: viewerId,
+        objectAType: 'user',
+        objectBId: circleId,
+        objectBType: 'circle',
+      );
+      const primaryText = '你和阿哲都在这个圈子';
+      await _pumpShell(
+        tester,
+        circleQuery: _ImpactCircleQuery(),
+        circleId: circleId,
+        overrides: <Override>[
+          objectSharedReasonsProvider(query).overrideWith(
+            (_) async => <IntersectionReason>[
+              intersectionReasonFixture(
+                kind: 'sharedCircle',
+                dimension: 'circle',
+                objectKind: 'circle',
+                relationObjectId: circleId,
+                primaryText: primaryText,
+                displayBinding: 'explicit_link',
+              ),
+            ],
+          ),
+        ],
+      );
+
+      expect(
+        find.text(ObjectHomepageText.objectMyIntersectionsTitle),
+        findsOneWidget,
+      );
+      expect(find.text(primaryText), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('circle-my-intersection-card')),
+          matching: find.text(DiscoveryFeedText.intersectionViewAll),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(ObjectHomepageText.objectImpactTitleCircle),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('交集读取失败保留恢复入口且不伪造主句', (tester) async {
+      const circleId = 'fixture_circle_photo';
+      const viewerId = 'user_001';
+      const query = ObjectIntersectionQuery(
+        objectAId: viewerId,
+        objectAType: 'user',
+        objectBId: circleId,
+        objectBType: 'circle',
+      );
+      await _pumpShell(
+        tester,
+        circleId: circleId,
+        overrides: <Override>[
+          objectSharedReasonsProvider(query).overrideWith((_) async {
+            throw _circleInternalException();
+          }),
+        ],
+      );
+
+      expect(find.byType(CircleShell), findsOneWidget);
+      expect(find.byType(AppSectionErrorCard), findsWidgets);
+      expect(find.text('你和阿哲都在这个圈子'), findsNothing);
+      expect(find.textContaining('成为第一个'), findsNothing);
+    });
+
+    testWidgets('头部不挂四列统计、成员头像簇或 demo dock', (tester) async {
+      await _pumpShell(tester);
+
+      expect(find.byType(ObjectStatsRow), findsOneWidget);
+      final statsRow = tester.widget<ObjectStatsRow>(find.byType(ObjectStatsRow));
+      expect(statsRow.items.length, lessThan(4));
+      expect(find.byType(CircleHeader), findsOneWidget);
+      expect(find.textContaining('你认识的人'), findsNothing);
+      expect(find.textContaining('demo'), findsNothing);
+      expect(find.textContaining('Demo'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(CircleActionBar),
+          matching: find.text(ObjectHomepageText.circleActionEnterDiscussion),
+        ),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('私密圈子游客访问时显示内容门禁', (tester) async {
       await _pumpShell(
         tester,
@@ -740,4 +848,32 @@ class _ErrorCircleQuery extends CircleQueryReaderTestDouble {
   Future<CircleStatsWire> stats(CircleStatsQuery query) async {
     throw Exception('Network error');
   }
+}
+
+CloudException _circleInternalException() {
+  const errorCode = CircleErrorCode.internalError;
+  return CloudException(
+    type: CloudErrorType.server,
+    message: errorCode.code,
+    statusCode: errorCode.httpStatus,
+    code: errorCode.code,
+    domainErrorCode: DomainErrorCodeRegistry.fromCode(errorCode.code),
+    runtimeFailure: RuntimeFailure(
+      code: errorCode.code,
+      semanticReason: 'internal_error',
+      transportStatus: errorCode.httpStatus,
+      origin: RuntimeFailureOrigin.remoteDependency,
+      kind: RuntimeFailureKind.internal,
+      nature: RuntimeFailureNature.transient,
+      location: const RuntimeFailureLocation(
+        businessObject: 'circle.circle',
+        functionModule: 'circle_shell_widget_test',
+      ),
+      context: const RuntimeFailureContext(
+        attributes: <RuntimeContextAttribute>[],
+      ),
+      recovery: const RuntimeRecoveryDirective.none(),
+    ),
+    userMessage: errorCode.defaultMessage,
+  );
 }

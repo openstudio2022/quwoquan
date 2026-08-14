@@ -16,7 +16,11 @@ var (
 	inlineUnderlinePattern = regexp.MustCompile(`\+\+([^+]+)\+\+`)
 	inlineStrikePattern    = regexp.MustCompile(`~~([^~]+)~~`)
 	inlineLinkPattern      = regexp.MustCompile(`\[([^\]]+)\]\((https?://[^)\s]+)\)`)
+	// 站内相对链接（数据工程供稿 `/entity/...` 等）：实体落地页 SEO 未上线
+	// 前渲染纯文本，fail-closed 不产生死链。
+	inlineInternalLinkPattern = regexp.MustCompile(`\[([^\]]+)\]\(/[^)\s]*\)`)
 	directiveCaptionPattern = regexp.MustCompile(`caption="((?:[^"\\]|\\.)*)"`)
+	horizontalRulePattern   = regexp.MustCompile(`^-{3,}$`)
 )
 
 // BodyAsset 是正文图片的公网渲染输入（articleAssetManifest 派生）。
@@ -110,6 +114,9 @@ func RenderQwqMarkdownBodyHTML(markdown string, assets map[string]BodyAsset) str
 			continue
 		}
 		switch {
+		case horizontalRulePattern.MatchString(line):
+			closeList()
+			b.WriteString("<hr>")
 		case strings.HasPrefix(line, "# "):
 			// 文档标题由 envelope 的 <h1> 承载，跳过避免重复 H1。
 			closeList()
@@ -153,6 +160,7 @@ func RenderQwqMarkdownBodyHTML(markdown string, assets map[string]BodyAsset) str
 // https/http scheme（与 App 端解析白名单一致），恶意 scheme 保持字面量。
 func renderInlineText(text string) string {
 	escaped := html.EscapeString(inlineMentionPattern.ReplaceAllString(text, "$1"))
+	escaped = inlineInternalLinkPattern.ReplaceAllString(escaped, "$1")
 	escaped = inlineLinkPattern.ReplaceAllString(
 		escaped,
 		`<a href="$2" rel="noopener">$1</a>`,

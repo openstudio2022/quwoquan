@@ -77,5 +77,5 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前仍缺可启动的受管 Remote 环境，以及 Android/iPhone 真机上的 Adaptive Presentation 跨端执行收据。服务端模板选择、schema/action/media/capability 校验、持久 `presentation_snapshot/commit`、SSE revision 投影、Flutter Renderer Registry、typed action、未知节点非空 Markdown fallback、语义/窄宽屏/大字体 local contract 与 fallback 遥测已经接线，真实 Mongo Worker API integration 和 Patrol UAT 定义也已补齐。Provider material 已以 protocol substitute 登记进 alpha `externalBindings`；Remote 启动当前受并行 service-core 组合根改造的 candidate 服务集合切换阻断，本机也没有 Android/iPhone 真机，因此不能把 Flutter local contract、iOS simulator 或被跳过的 Patrol 当成跨端完成。
+- 影响或价值：仍缺 Android/iPhone 真机上的 Adaptive Presentation 跨端执行收据。Alpha canonical 启动与 health 29/29 已取得（run `20260813T160518410673Z-d38bed3e0945497980753e19bcb051e5-health-alpha-local`）。服务端模板选择、schema/action/media/capability 校验与持久 `presentation_snapshot/commit` 已经接线。本机没有 Android/iPhone 真机，因此不能把 Flutter local contract、iOS simulator 或被跳过的 Patrol 当成跨端完成。
 - 完成判定：`GWT-001` 与 `GWT-002` 在同一候选 baseline 的 Android/iPhone 真机上成立——执行合法文档原生渲染、非法文档非空 fallback、未知 action 零执行、light/dark、大字体、减少动画、宽窄屏和离线恢复；fallback 指标与告警可回读，direct `spec_ref` 保持有效。

@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
@@ -75,6 +76,47 @@ Widget _wrap(_ForwardJourneyChatRepository repository) {
 }
 
 void main() {
+  // spec_ref: specs/feature-tree/chat-conversation/chat-experience-optimization/spec.md#open-002
+  testWidgets('转发面板最近会话加载中呈现共享骨架屏', (tester) async {
+    final repository = _ForwardJourneyChatRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          ...chatTestRepositoryOverrides(
+            conversation: _SlowForwardConversationRepository(
+              repository.conversation,
+            ),
+            contact: repository.contact,
+          ),
+          chatMessageCommandWriterProvider.overrideWithValue(
+            repository.writer,
+          ),
+          authSessionControllerProvider.overrideWith(
+            _AuthenticatedSession.new,
+          ),
+        ],
+        child: const CupertinoApp(
+          home: ForwardShareSheet(
+            payload: AppForwardPayload(
+              kind: AppForwardSubjectKind.chatMessage,
+              title: '骨架断言样本',
+              shareText: '骨架断言样本',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byType(AppSkeletonListRows),
+      findsOneWidget,
+      reason: '最近会话加载中必须使用共享列表骨架',
+    );
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('我的二维码应用内转发旅程发送 card 消息', (tester) async {
     final repository = _ForwardJourneyChatRepository();
     await tester.pumpWidget(_wrap(repository));
@@ -391,6 +433,22 @@ class _ForwardJourneyChatRepository {
   String? get lastType => writer.lastCommand?.type;
   String? get lastContent => writer.lastCommand?.content;
   MessageCard? get lastCard => writer.lastCommand?.card;
+}
+
+final class _SlowForwardConversationRepository extends Fake
+    implements ChatConversationRepository {
+  _SlowForwardConversationRepository(this._delegate);
+
+  final ChatConversationRepository _delegate;
+
+  @override
+  Future<List<ChatInboxViewData>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    return _delegate.listConversations(cursor: cursor, limit: limit);
+  }
 }
 
 final class _ForwardJourneyConversationRepository

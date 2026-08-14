@@ -13,6 +13,7 @@ package local_contract
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
 	"testing"
@@ -314,6 +315,51 @@ func TestGoldenSumRatioMetricFiresAboveBoundThreshold(t *testing.T) {
 	alert := jank["alert"].(map[string]any)
 	if alert["state"] != "firing" || alert["alertId"] != "AppJankFrameRateHigh" {
 		t.Fatalf("6%% > 5%% bound threshold must fire: %+v", alert)
+	}
+}
+
+// valueStatsFailingStore 模拟 raw 索引 mapping 漂移导致数值聚合失败
+// （alpha 实测：keyword 字段 sum 聚合 400）。
+type valueStatsFailingStore struct {
+	*eventpersistence.MemoryTelemetryStore
+}
+
+func (store *valueStatsFailingStore) GetEventValueStats(
+	context.Context, eventapp.EventValueStatsQuery,
+) (eventapp.EventValueStats, error) {
+	return eventapp.EventValueStats{}, errSimulatedValueStats
+}
+
+var errSimulatedValueStats = errors.New("simulated mapping drift: sum aggregation on keyword field")
+
+// 单个黄金指标派生失败必须降级为该指标 unavailable，不得拖垮整页
+// L1-L4 快照（不返回 503）；不依赖 raw value stats 的指标照常输出。
+func TestGoldenValueStatsFailureDegradesSingleMetricWithoutFailingSnapshot(t *testing.T) {
+	failing := &valueStatsFailingStore{
+		MemoryTelemetryStore: eventpersistence.NewMemoryTelemetryStore(),
+	}
+	telemetry := eventapp.NewTelemetryService(failing, failing.MemoryTelemetryStore)
+	metrics := eventapp.NewMetricQueryService(
+		telemetry, &recordingPrometheusReader{value: 99},
+	)
+	payload, err := metrics.ListL1L4MetricSnapshots(
+		context.Background(),
+		eventapp.L1L4MetricsScope{Environment: "alpha"},
+	)
+	if err != nil {
+		t.Fatalf("single golden metric failure must not fail the whole snapshot: %v", err)
+	}
+	items := decodeMetricItems(t, payload)
+	for _, metric := range []string{"page_first_usable_p95_ms", "app_jank_frame_rate"} {
+		if _, exists := items[metric]; exists {
+			t.Fatalf("%s must be unavailable when raw value stats fail: %v", metric, metricIDs(items))
+		}
+	}
+	if _, exists := items["feed_click_through_rate"]; !exists {
+		t.Fatalf(
+			"prometheus-backed metric must stay live despite value stats failure: %v",
+			metricIDs(items),
+		)
 	}
 }
 

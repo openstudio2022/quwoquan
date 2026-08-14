@@ -63,7 +63,7 @@ func (relay *OutboxRelay) Drain(ctx context.Context, limit int) (int, error) {
 			return published, err
 		}
 		if !found {
-			relay.recordSuccessfulScan(now, published > 0)
+			relay.recordSuccessfulScan(now)
 			return published, nil
 		}
 		if err := validateDataControlOutboxEvent(event); err != nil {
@@ -100,7 +100,7 @@ func (relay *OutboxRelay) Drain(ctx context.Context, limit int) (int, error) {
 		}
 		published++
 	}
-	relay.recordSuccessfulScan(relay.now().UTC(), published > 0)
+	relay.recordSuccessfulScan(relay.now().UTC())
 	return published, nil
 }
 
@@ -302,12 +302,12 @@ func outboxRetryDelay(attempt int) time.Duration {
 	return time.Second * time.Duration(1<<(attempt-1))
 }
 
-func (relay *OutboxRelay) recordSuccessfulScan(at time.Time, recovered bool) {
+// recordSuccessfulScan 无条件清除失败态：一次成功扫描已证明存储链路恢复；
+// 空 outbox 的服务不得因瞬时故障永久卡在 unhealthy。
+func (relay *OutboxRelay) recordSuccessfulScan(at time.Time) {
 	relay.healthMu.Lock()
 	relay.lastSuccessfulScan = at
-	if recovered {
-		relay.lastFailure = nil
-	}
+	relay.lastFailure = nil
 	relay.healthMu.Unlock()
 }
 

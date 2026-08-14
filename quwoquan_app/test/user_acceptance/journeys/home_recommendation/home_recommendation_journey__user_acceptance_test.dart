@@ -25,6 +25,8 @@ library;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
+import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart'
+    show appImageLoadErrorKey, appImageLoadSuccessKey;
 import 'package:quwoquan_app/l10n/copy/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import '../../../support/runtime/patrol/patrol_test_support.dart';
@@ -88,6 +90,25 @@ void main() {
         _existsInTree($, find.byKey(_kRelationActions)),
         isTrue,
         reason: '推荐卡片必须渲染互动操作行（点赞/评论/分享/更多）',
+      );
+
+      // 图片证据：卡片存在不等于媒体可显示（media-edge 缺对象会呈现整片
+      // 灰块/失败态）。首屏必须有至少一张 feed 图片真实解码成功，且不得
+      // 残留显式图片失败态。
+      final imageDecoded = await _waitForFinderInTree(
+        $,
+        find.byKey(appImageLoadSuccessKey),
+        timeout: const Duration(seconds: 20),
+      );
+      expect(
+        imageDecoded,
+        isTrue,
+        reason: '首屏必须有至少一张 feed 图片真实解码成功（非灰占位）',
+      );
+      expect(
+        _existsInTree($, find.byKey(appImageLoadErrorKey)),
+        isFalse,
+        reason: 'feed 图片不得停留在显式加载失败态（media-edge 媒体对象必须可读）',
       );
     },
   );

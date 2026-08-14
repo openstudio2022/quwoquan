@@ -70,9 +70,22 @@
   即链接地址；仅白名单 scheme（https/http）进入 span 真相源，恶意 scheme
   如 javascript:/data: 按字面量输出不产生 span；序列化按原形写回；
   阅读端链接段可点，经系统浏览器打开外链。
+- 站内实体链接——数据工程供稿形态为方括号 label 加圆括号
+  `/entity/<domain>/<etype>/<name>` 路径——
+  必须在解析期转为 canonical entity mention span——targetId 按与数据工程
+  `_canonical_entity_id_from_publish_ref` 同一规则得 `entity:<etype>:<name>`，
+  与 `@[label](entity:...)` 记号同一渲染与跳转通道，序列化统一写回 mention
+  记号；H1 与 title 的跳过比较以剥离行内记号后的纯文本为准。不合形态的
+  站内路径按字面量保留。SEO HTML 端在实体落地页上线前把站内链接渲染为
+  纯文本，fail-closed 不产生死链。
 - 嵌套列表：`listDepth` 语义为嵌套级别 0–2（0 = 顶层），序列化按两空格/级
   写缩进、解析按缩进还原、阅读端按级别渲染缩进；parser、codec 与渲染共用
   同一约定，禁止第二套缩进映射。
+- 段落对齐：`textAlign`（'' 默认 / center / right）经 `:::align value="…"`
+  指令承载，只作用于正文段落；编辑器对齐面板 → provider → codec → 阅读端
+  渲染全链同一字段，SEO HTML 端按普通段落降级（不承载版式）。
+- 分隔线：`---` 解析为 `divider` 结构节点进入 Document 模型，阅读端渲染
+  细分隔线、SEO 端渲染 `<hr>`，序列化原样写回；禁止静默丢弃。
 
 ## 4. 契约引用
 

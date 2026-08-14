@@ -7,7 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/startup/app_startup_runtime.dart';
+import 'package:quwoquan_app/design_system/icons/app_custom_icons.dart';
+import 'package:quwoquan_app/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/main_tab_activation.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_primary_tab_strip.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/navigation/tab_swipe_switch_region.dart';
@@ -523,9 +527,19 @@ class _HomePageState extends ConsumerState<HomePage>
                     padding: EdgeInsets.symmetric(
                       horizontal: AppSpacing.feedContentHorizontal(context),
                     ),
-                    child: GlobalXiaoquSearchBar(
-                      initialSearchScope: GlobalSearchScope.content,
-                      surface: searchChromeSurface,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GlobalXiaoquSearchBar(
+                            initialSearchScope: GlobalSearchScope.content,
+                            surface: searchChromeSurface,
+                          ),
+                        ),
+                        SizedBox(width: AppSpacing.intraGroupSm),
+                        // 视频书固定入口：视频书退出底栏后由此进入沉浸流
+                        //（心动供给），底栏第二格让位给线下行动与发现。
+                        const _HomeFeaturedEntryButton(),
+                      ],
                     ),
                   ),
                 ),
@@ -645,3 +659,40 @@ class _HomePageState extends ConsumerState<HomePage>
 
 // HomeFeaturedImmersivePage 已迁移至 home_featured_immersive_page.dart
 // （页面契约 content.home_featured_immersive 唯一拥有）。
+
+/// 视频书顶部固定入口：请求主壳切换到 featured 内存态目的地。
+class _HomeFeaturedEntryButton extends ConsumerWidget {
+  const _HomeFeaturedEntryButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Semantics(
+      button: true,
+      label: AppConceptConstants.premium,
+      child: CupertinoButton(
+        key: const ValueKey<String>('home-featured-entry'),
+        padding: EdgeInsets.zero,
+        minimumSize: Size.square(AppSpacing.minInteractiveSize),
+        onPressed: () =>
+            ref.read(featuredImmersiveActivationProvider.notifier).request(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppOpenWindowIcon(
+              size: AppSpacing.iconSmall,
+              color: AppColors.white,
+            ),
+            Text(
+              AppConceptConstants.premium,
+              style: TextStyle(
+                fontSize: AppTypography.iosCaption2,
+                color: AppColors.white,
+                height: AppTypography.lineHeightTight,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

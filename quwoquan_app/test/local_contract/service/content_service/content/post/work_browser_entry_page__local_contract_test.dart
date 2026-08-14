@@ -131,6 +131,19 @@ void main() {
       find.byKey(const ValueKey('work-browser-entry-loading')),
       findsNothing,
     );
+    // 错误码契约：不可读详情必须携带 canonical post_not_found 语义，
+    // 且确定性失败不得给出会误导用户的重试主动作。
+    final notFoundState = tester.widget<AppPageErrorState>(
+      find.byKey(const ValueKey('work-browser-entry-error')),
+    );
+    expect(
+      notFoundState.semantic.sourceCode,
+      ContentErrorCode.postNotFound.code,
+    );
+    expect(
+      notFoundState.semantic.primaryAction?.type,
+      isNot(UiErrorActionType.retry),
+    );
   });
 
   testWidgets('直达入口：软删除内容按 410 墓碑展示删除态', (tester) async {
@@ -172,6 +185,14 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('work-browser-entry-error-back')),
       findsOneWidget,
+    );
+    // 错误码契约：软删除内容必须携带 canonical content_deleted 语义。
+    final tombstoneState = tester.widget<AppPageErrorState>(
+      find.byKey(const ValueKey('work-browser-entry-error')),
+    );
+    expect(
+      tombstoneState.semantic.sourceCode,
+      ContentErrorCode.contentDeleted.code,
     );
   });
 

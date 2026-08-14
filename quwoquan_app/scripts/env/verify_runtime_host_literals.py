@@ -53,13 +53,9 @@ def _self_test() -> None:
         raise AssertionError("runtime host detector treated a regex pattern as a URL")
 
 
-<<<<<<< Updated upstream
-def main() -> int:
-    _self_test()
-=======
 def runtime_host_literal_issues(app_lib: Path | None = None) -> list[str]:
+    _self_test()
     source_root = app_lib or APP_LIB
->>>>>>> Stashed changes
     issues: list[str] = []
     for path in sorted(source_root.rglob("*.dart")):
         try:

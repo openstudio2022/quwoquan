@@ -603,32 +603,17 @@ extension PersonalAssistantRunStreamLifecycle
         !_isAssistantTerminalRunStatus(_actionsState.runStatus);
   }
 
+  /// 结构解析已收敛到 Codec 边界（非法工件 fail-soft 置 null），
+  /// 此处直读 typed 字段，不再有 FormatException 路径。
   AssistantPresentationDocumentWire? _presentationDocumentFromRow(
     AssistantAnswerTranscriptRow row,
   ) {
-    final raw = row.runArtifacts['presentationDocument'];
-    if (raw is! Map) {
-      return null;
-    }
-    return AssistantPresentationDocumentWire.fromJson(
-      raw.cast<String, dynamic>(),
-    );
+    return row.runArtifacts?.presentationDocument;
   }
 
   AssistantPresentationDocumentWire? _presentationDocumentFromRowOrFallback(
     AssistantAnswerTranscriptRow row,
   ) {
-    try {
-      return _presentationDocumentFromRow(row);
-    } on FormatException catch (error, stackTrace) {
-      developer.log(
-        'assistant persisted presentation degraded',
-        name: 'assistant.presentation',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      recordPresentationFallback(_assistantPresentationInvalidStreamFallback);
-      return null;
-    }
+    return _presentationDocumentFromRow(row);
   }
 }

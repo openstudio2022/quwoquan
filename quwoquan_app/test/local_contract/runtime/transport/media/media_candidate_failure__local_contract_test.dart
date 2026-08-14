@@ -119,5 +119,103 @@ void main() {
         MediaCandidateFailureKind.connectionRefused,
       );
     });
+
+    test('classifies canonical NSError description with Code= form', () {
+      // iOS 真机 PlatformException 常携带 NSError description 形态
+      //（`Error Domain=... Code=-1202`，Code 后带等号）；既往正则匹配不到
+      // 等号导致证书/DNS/超时全部落入 other → 「这次没能打开内容」。
+      const candidate =
+          'https://cdn.gamma.quwoquan.com:19100/media/video/s/sample.mp4';
+      expect(
+        classifyMediaCandidateLoadFailure(
+          Exception(
+            'PlatformException(VideoError, Failed to load video: '
+            'Error Domain=NSURLErrorDomain Code=-1202 '
+            '"The certificate for this server is invalid.", null, null)',
+          ),
+          candidateUrl: candidate,
+        ),
+        MediaCandidateFailureKind.certificateVerifyFailed,
+      );
+      expect(
+        classifyMediaCandidateLoadFailure(
+          Exception('Error Domain=NSURLErrorDomain Code=-1003 '
+              '"A server with the specified hostname could not be found."'),
+          candidateUrl: candidate,
+        ),
+        MediaCandidateFailureKind.dnsNxdomain,
+      );
+      expect(
+        classifyMediaCandidateLoadFailure(
+          Exception('Error Domain=NSURLErrorDomain Code=-1009 '
+              '"The Internet connection appears to be offline."'),
+          candidateUrl: candidate,
+        ),
+        MediaCandidateFailureKind.networkUnavailable,
+      );
+    });
+
+    test('classifies CoreMedia wrapped HTTP status codes', () {
+      const candidate =
+          'https://cdn.gamma.quwoquan.com:19100/media/video/s/missing.mp4';
+      expect(
+        classifyMediaCandidateLoadFailure(
+          Exception(
+            'Error Domain=CoreMediaErrorDomain Code=-12938 '
+            '"HTTP 404: File Not Found"',
+          ),
+          candidateUrl: candidate,
+        ),
+        MediaCandidateFailureKind.http404,
+      );
+      expect(
+        classifyMediaCandidateLoadFailure(
+          Exception(
+            'Error Domain=CoreMediaErrorDomain Code=-12939 '
+            '"byte range length mismatch"',
+          ),
+          candidateUrl: candidate,
+        ),
+        MediaCandidateFailureKind.http4xx,
+      );
+      expect(
+        classifyMediaCandidateLoadFailure(
+          Exception('Error Domain=CoreMediaErrorDomain Code=-12660'),
+          candidateUrl: candidate,
+        ),
+        MediaCandidateFailureKind.http4xx,
+      );
+    });
+
+    test('classifies AVFoundation media-body failures as decoder errors', () {
+      const candidate =
+          'https://cdn.gamma.quwoquan.com:19100/media/video/s/broken.mp4';
+      expect(
+        classifyMediaCandidateLoadFailure(
+          Exception(
+            'Error Domain=AVFoundationErrorDomain Code=-11828 '
+            '"Cannot Open" (format not recognized)',
+          ),
+          candidateUrl: candidate,
+        ),
+        MediaCandidateFailureKind.decoderInitialization,
+      );
+      expect(
+        classifyMediaCandidateLoadFailure(
+          Exception('Error Domain=AVFoundationErrorDomain Code=-11821 '
+              '"Cannot Decode"'),
+          candidateUrl: candidate,
+        ),
+        MediaCandidateFailureKind.decoderInitialization,
+      );
+      expect(
+        classifyMediaCandidateLoadFailure(
+          Exception('Error Domain=AVFoundationErrorDomain Code=-11850 '
+              '"Operation Stopped" (server incorrectly configured)'),
+          candidateUrl: candidate,
+        ),
+        MediaCandidateFailureKind.http5xx,
+      );
+    });
   });
 }

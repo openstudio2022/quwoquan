@@ -52,9 +52,15 @@ func TestMessageUseCasesExecuteEveryHTTPApplicationFacet(t *testing.T) {
 	if err != nil || !synced.HasMore || len(synced.Messages) != 1 {
 		t.Fatalf("SyncMessages result=%+v err=%v", synced, err)
 	}
+	assets, err := useCases.ListConversationAssets(ctx, messageapp.ListConversationAssetsRequest{
+		ConversationId: "conversation-1", ViewerID: "persona-1", Kind: "image", Limit: 60,
+	})
+	if err != nil || len(assets.Items) != 1 || assets.Items[0].MediaAssetID != "asset-1" {
+		t.Fatalf("ListConversationAssets result=%+v err=%v", assets, err)
+	}
 	for _, name := range []string{
 		"SendMessage", "SendAssistantDeliveryMessage", "RecallMessage", "ListMessages",
-		"ListAssistantGroundingMessages", "SyncMessages",
+		"ListAssistantGroundingMessages", "SyncMessages", "ListConversationAssets",
 	} {
 		if backend.calls[name] != 1 {
 			t.Fatalf("%s call count=%d want=1", name, backend.calls[name])
@@ -87,6 +93,19 @@ func (backend *messageOperationBackend) SendAssistantDeliveryMessage(
 func (backend *messageOperationBackend) RecallMessage(context.Context, string, string, string) error {
 	backend.record("RecallMessage")
 	return nil
+}
+
+func (backend *messageOperationBackend) ListConversationAssets(
+	context.Context,
+	messageapp.ListConversationAssetsRequest,
+) (*messageapp.ConversationAssetsPage, error) {
+	backend.record("ListConversationAssets")
+	return &messageapp.ConversationAssetsPage{
+		Items: []messageapp.ConversationAssetRow{{
+			MessageID: "asset-message-1", Seq: 5, MediaAssetID: "asset-1",
+			MessageType: "image", SenderID: "persona-1",
+		}},
+	}, nil
 }
 
 func (backend *messageOperationBackend) ListMessages(

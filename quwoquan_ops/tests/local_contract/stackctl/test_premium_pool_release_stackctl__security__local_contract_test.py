@@ -98,6 +98,7 @@ class PremiumPoolReleaseStackctlSecurityLocalContractTest(unittest.TestCase):
                 "roles": ["operator"],
                 "scope": (
                     "ops.experiment.read ops.experiment.write "
+                    "ops.product.dashboard.read "
                     "ops.reco.read ops.reco.write ops.telemetry.read"
                 ),
                 "iss": "quwoquan.alpha.local",

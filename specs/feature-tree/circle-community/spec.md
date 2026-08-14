@@ -212,9 +212,9 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
+- 影响或价值：尚缺 DOM-001 t5 的 circle 属地证据：Circle↔MediaAsset 引用完整性须由 tombstone 关系承载，不得声明不存在的 `MediaAssetDeleted` 消费者。对象 packet、BOLA、CirclePostPlacement 写入口、hub 有界扇出已有 Go/Dart 测试绑定 `#dom-001`，content tombstone 不替代本子句。禁止硬绑关闭。
 - 目标：领域边界、上下游依赖、工程映射和服务治理清晰。
-- 完成判定：`DOM-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 完成判定：`DOM-001` 全部结果子句（含 t5 MediaAsset tombstone 关系）由真实测试 `spec_ref` 绑定。
 
 <a id="open-003"></a>
 ### OPEN-003 Gathering 目标所有权与跨域闭环尚未准出

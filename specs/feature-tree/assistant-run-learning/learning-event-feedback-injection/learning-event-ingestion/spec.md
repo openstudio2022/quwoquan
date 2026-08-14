@@ -85,5 +85,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺可用 Gamma Remote 与获批 Prod release 的全局 Provider conformance 回执；`AppendAssistantLearningFact`、可信请求头归因、端侧 actor-scoped encrypted outbox、服务端幂等 append、脱敏投影与 durable relay 已实现并有 local/API 证据，但 gamma-local health gate 当前为 0/28，未取得当前 receipt、Redis stream ref 与 Mongo outbox published ref，Alpha/Beta 包可重建也不能替代该证据。
+- 影响或价值：仍缺可用 Gamma Remote 与获批 Prod release 的全局 Provider conformance 回执。`AppendAssistantLearningFact`、可信请求头归因、端侧 actor-scoped encrypted outbox、服务端幂等 append、脱敏投影与 durable relay 已实现并有 local/API 证据。Alpha canonical health 已达 29/29（run `20260813T160518410673Z-d38bed3e0945497980753e19bcb051e5-health-alpha-local`）。gamma-local 尚未以当前 candidate 启动（最近 health 为 Provider runtime identity 非当前导致的 0/1），因此未取得当前 receipt、Redis stream ref 与 Mongo outbox published ref，Alpha 包可重建也不能替代该证据。
 - 完成判定：`GWT-001` 对应行为满足，且四环境回执均由真实测试和可用环境执行证明。

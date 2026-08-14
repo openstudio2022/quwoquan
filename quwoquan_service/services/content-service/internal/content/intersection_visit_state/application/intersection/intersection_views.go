@@ -182,8 +182,10 @@ type IntersectionDimensionTallyView struct {
 
 // IntersectionInboxSummaryView 我的交集聚合摘要（与 intersection_inbox_summary.yaml 对齐）。
 type IntersectionInboxSummaryView struct {
-	TotalCount    int                              `json:"totalCount"`
-	TotalNewCount int                              `json:"totalNewCount"`
-	Dimensions    []IntersectionDimensionTallyView `json:"dimensions"`
-	GeneratedAt   string                           `json:"generatedAt"`
+	TotalCount             int                              `json:"totalCount"`
+	TotalNewCount          int                              `json:"totalNewCount"`
+	Dimensions             []IntersectionDimensionTallyView `json:"dimensions"`
+	GeneratedAt            string                           `json:"generatedAt"`
+	TotalStrengthenedCount int                              `json:"totalStrengthenedCount"`
+	TotalReactivatedCount  int                              `json:"totalReactivatedCount"`
 }

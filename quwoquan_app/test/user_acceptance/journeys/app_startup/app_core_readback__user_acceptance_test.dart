@@ -301,6 +301,23 @@ Future<void> _expectFeaturedVideoBook(PatrolIntegrationTester $) async {
     isTrue,
     reason: 'video book tab must show a real video stage',
   );
+  // 视频书唯一消费 premium_stream 池：canonical 空态（「暂无内容/内容加载
+  // 完毕」黑屏）意味着 premium 供给缺失，属于环境 readiness 回归而非可通过态。
+  expect(
+    find
+        .byWidgetPredicate(
+          (widget) =>
+              widget.key is ValueKey<String> &&
+              (widget.key! as ValueKey<String>).value.startsWith(
+                'works-internal-feed-empty-',
+              ),
+          description: 'video book canonical empty state',
+        )
+        .evaluate(),
+    isEmpty,
+    reason: 'video book must not settle on the canonical empty state '
+        '(premium_stream pool must be release-bound non-empty)',
+  );
 }
 
 Future<void> _expectVideoPlayback(PatrolIntegrationTester $) async {

@@ -69,10 +69,18 @@ final class EntityApiContractHarness {
         ),
       );
 
+      // 登录请求发生在会话建立前，必须使用匿名 actor context；
+      // 带 session 断言的共享 context 只服务登录后的对象操作。
       final accountSessions = RemoteAccountSessionCommandWriter(
         client: client,
-        invocationContext: (clientPageId) =>
-            invocationContext(AppUiSurfaces.appShell, clientPageId),
+        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          surfaceId: AppUiSurfaces.appShell.id,
+          routeId: AppUiSurfaces.appShell.routeId,
+          clientPageId: clientPageId,
+          actor: const CloudOperationActorContext(
+            deviceActorId: entityApiContractDeviceId,
+          ),
+        ),
       );
       session = await accountSessions.loginAnonymous(
         LoginAnonymousCommand(

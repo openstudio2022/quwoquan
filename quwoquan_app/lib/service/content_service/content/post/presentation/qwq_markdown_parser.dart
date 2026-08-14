@@ -479,6 +479,29 @@ _ParsedDirective _parseDirective(
         diagnostics: diagnostics,
         nextIndex: nextIndex,
       );
+    case 'align':
+      // 段落对齐指令：:::align value="center|right"，内容为段落文本。
+      final alignText = content.join('\n').trim();
+      final alignValue = switch (_stringAttr(attributes, 'value')) {
+        'center' => 'center',
+        'right' => 'right',
+        _ => '',
+      };
+      return _ParsedDirective(
+        block: QwqMarkdownBlock(
+          id: nextId('paragraph'),
+          kind: QwqMarkdownBlockKind.paragraph,
+          text: alignText,
+          textAlign: alignValue,
+          inlines: _parseInlines(alignText),
+          attributes: attributes,
+          sourceStartLine: openerLine,
+          sourceEndLine: endLine,
+        ),
+        assetRefs: const <QwqMarkdownAssetRef>[],
+        diagnostics: diagnostics,
+        nextIndex: nextIndex,
+      );
     case 'section':
       return _ParsedDirective(
         block: QwqMarkdownBlock(

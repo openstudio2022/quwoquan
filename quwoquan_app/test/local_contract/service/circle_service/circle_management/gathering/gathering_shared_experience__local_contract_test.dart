@@ -217,5 +217,48 @@ void main() {
       expect(recapGatheringId, 'gathering-1');
       expect(recapTitle, 'Public Gathering');
     });
+
+    testWidgets('completed 后 active 非 host 参与者仍可见发布回顾入口（催回顾回链契约）', (
+      tester,
+    ) async {
+      // 结束催回顾通知回链行动详情后，参与者必须能真的发出回顾：
+      // host 完成行动不关闭 participation（云侧契约同源断言），
+      // completed + active 的入口可见性在此钉死。
+      String? recapGatheringId;
+      await _pumpDetail(
+        tester,
+        publicDetail: publicGatheringDetail(
+          lifecycle: GatheringLifecycleStatus.completed,
+          temporal: GatheringTemporalPhase.ended,
+          participationState: GatheringParticipationState.active,
+          outcome: GatheringOutcomeStatus.occurred,
+        ),
+        recapReader: _GatheringPostsReaderDouble(),
+        onPublishRecap: (gatheringId, title) => recapGatheringId = gatheringId,
+      );
+
+      final recapButton = find.byKey(GatheringDetailPage.publishRecapKey);
+      expect(recapButton, findsOneWidget);
+      await tester.ensureVisible(recapButton);
+      await tester.tap(recapButton);
+      await tester.pump();
+      expect(recapGatheringId, 'gathering-1');
+    });
+
+    testWidgets('completed 后非参与者不出现发布回顾入口', (tester) async {
+      await _pumpDetail(
+        tester,
+        publicDetail: publicGatheringDetail(
+          lifecycle: GatheringLifecycleStatus.completed,
+          temporal: GatheringTemporalPhase.ended,
+          outcome: GatheringOutcomeStatus.occurred,
+        ),
+        recapReader: _GatheringPostsReaderDouble(),
+      );
+      expect(
+        find.byKey(GatheringDetailPage.publishRecapKey),
+        findsNothing,
+      );
+    });
   });
 }

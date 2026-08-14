@@ -16,6 +16,7 @@ final class ConversationViewData {
     this.circleGroupId,
     this.originType = 'direct_init',
     this.originIntersectionSnapshot,
+    this.intersectionFacts = const <ContactIntersectionFact>[],
     required this.maxSeq,
     required this.memberCount,
     required this.maxGroupSize,
@@ -46,6 +47,7 @@ final class ConversationViewData {
       circleGroupId: _optional(source.circleGroupId),
       originType: source.originType,
       originIntersectionSnapshot: source.originIntersectionSnapshot,
+      intersectionFacts: source.intersectionFacts,
       maxSeq: source.maxSeq,
       memberCount: source.memberCount,
       maxGroupSize: source.maxGroupSize,
@@ -73,6 +75,9 @@ final class ConversationViewData {
   final String? circleGroupId;
   final String originType;
   final GreetingIntersectionSnapshot? originIntersectionSnapshot;
+
+  /// 非破冰 1v1 的常驻交集摘要（≤2 条云侧只读快照）。
+  final List<ContactIntersectionFact> intersectionFacts;
   final int maxSeq;
   final int memberCount;
   final int maxGroupSize;

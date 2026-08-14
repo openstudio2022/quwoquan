@@ -7,6 +7,8 @@ class _GroupCapabilityGrid extends StatelessWidget {
     required this.onVoiceCall,
     required this.onVideoCall,
     this.onOpenBoard,
+    this.onOpenAlbum,
+    this.onOpenFiles,
   });
 
   final bool isDark;
@@ -17,6 +19,10 @@ class _GroupCapabilityGrid extends StatelessWidget {
   /// 活动群（gatheringId 绑定）直达 Board；普通群不展示活动格。
   final VoidCallback? onOpenBoard;
 
+  /// 群空间相册/文件宫格的真实承接（ListConversationAssets 读面）。
+  final VoidCallback? onOpenAlbum;
+  final VoidCallback? onOpenFiles;
+
   bool _enabled(String capability) {
     return enabledCapabilities.isEmpty ||
         enabledCapabilities.contains(capability);
@@ -26,14 +32,18 @@ class _GroupCapabilityGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_GroupCapabilityItem>[
       _GroupCapabilityItem(
+        key: const ValueKey<String>('chat_settings_album_entry'),
         label: ChatText.groupCapabilityAlbum,
         icon: CupertinoIcons.photo,
-        enabled: _enabled('album'),
+        enabled: _enabled('album') && onOpenAlbum != null,
+        onPressed: _enabled('album') ? onOpenAlbum : null,
       ),
       _GroupCapabilityItem(
+        key: const ValueKey<String>('chat_settings_files_entry'),
         label: ChatText.groupCapabilityFile,
         icon: CupertinoIcons.folder,
-        enabled: _enabled('file'),
+        enabled: _enabled('file') && onOpenFiles != null,
+        onPressed: _enabled('file') ? onOpenFiles : null,
       ),
       if (onOpenBoard != null)
         _GroupCapabilityItem(

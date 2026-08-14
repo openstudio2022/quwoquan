@@ -331,6 +331,7 @@ func (h *ChatHandler) conversationToWire(ctx context.Context, conv model.Convers
 		"entityId":                   conv.EntityId,
 		"originType":                 conv.OriginType,
 		"originIntersectionSnapshot": conv.OriginIntersectionSnapshot,
+		"intersectionFacts":          []map[string]any{},
 		"maxSeq":                     conv.MaxSeq,
 		"memberCount":                conv.MemberCount,
 		"membersRosterRevision":      conv.MembersRosterRevision,

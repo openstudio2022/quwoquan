@@ -1,5 +1,8 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-001
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-002
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-002.t1
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-002.t2
+// spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-002.t3
 // readiness_case: close-account-local
 package local_contract
 
@@ -133,6 +136,33 @@ func TestCloseAccount_MissingAccountMapsToNotFound(t *testing.T) {
 	app := rterr.NormalizeError(err)
 	if app.Code.Reason != "not_found" {
 		t.Fatalf("expected USER not_found, got %+v", app.Code)
+	}
+}
+
+// 事务中任一步骤失败：返回结构化失败，不产生部分注销。closed 终态与
+// UserAccountClosed outbox 在 CommitClose 同一事务内提交，事务未提交即
+// 两者都不存在；派生的会话/凭证缓存也必须保持原状。
+func TestCloseAccount_CommitFailureLeavesStateUntouched(t *testing.T) {
+	store := &fakeCloseStore{err: errors.New("close transaction aborted")}
+	cache := &fakeCloseCache{}
+	facade := useraccountapp.NewCloseAccountFacade(store, cache)
+
+	outcome, err := facade.CloseAccount(
+		context.Background(),
+		useraccountapp.CloseCommand{AccountID: "acct_txn_fail"},
+	)
+	if err == nil {
+		t.Fatal("expected structured failure when the close transaction aborts")
+	}
+	app := rterr.NormalizeError(err)
+	if app.Code.Module == "" || app.Code.Reason == "" {
+		t.Fatalf("failure must map to a canonical structured code, got %+v", app.Code)
+	}
+	if outcome.AccountState == "closed" {
+		t.Fatalf("aborted close must not fabricate a closed outcome: %+v", outcome)
+	}
+	if len(cache.accountIDs) != 0 {
+		t.Fatalf("aborted close must keep sessions/credentials untouched, got %+v", cache)
 	}
 }
 

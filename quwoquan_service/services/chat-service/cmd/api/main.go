@@ -477,7 +477,11 @@ func NewModule() (_ *Module, resultErr error) {
 	inboxViewProjector := inboxapp.NewProjector(
 		inboxViewStore,
 		inboxViewStore,
-		chatInboxSnapshotSource{conversations: chatStore, states: userStateStore},
+		chatInboxSnapshotSource{
+			conversations: chatStore,
+			states:        userStateStore,
+			members:       membershipStore,
+		},
 		chatInboxMembershipReader{store: membershipStore},
 		chatInboxStateAdvancer{store: userStateStore},
 		map[string]inboxapp.EventSource{
@@ -1032,7 +1036,16 @@ func (module *Module) admissionHandler(next http.Handler) http.Handler {
 			return
 		}
 		if !module.admission.Load() {
-			http.Error(writer, `{"status":"unavailable"}`, http.StatusServiceUnavailable)
+			rterr.WriteHTTPError(
+				writer,
+				rterr.NewAppError(
+					rterr.NewCode(rterr.ModuleGateway, rterr.KindMiddleware, "upstream_unavailable"),
+					"服务暂不可用，请稍后重试",
+					"service admission is not ready",
+				).WithMetadata("upstream_unavailable", http.StatusServiceUnavailable).
+					WithRecoveryDirective("retry", "snackbar", 1),
+				rterr.HTTPWriteOptionsFromRequest(request),
+			)
 			return
 		}
 		next.ServeHTTP(writer, request)

@@ -693,14 +693,11 @@ def _convert_fixture_to_research(paths: dict[str, Path]) -> str:
 
 
 def _convert_fixture_to_consumer(paths: dict[str, Path]) -> None:
+    # consumer 与 commercial 一样必须携带 premium_stream 读回证据（App 视频书
+    # 唯一消费 premium 池），因此只翻转阶段、不剥离 premium query。
     post_path = paths["verify"] / "post-api-verification.json"
     post_report = json.loads(post_path.read_text(encoding="utf-8"))
     post_report["readinessPhase"] = "consumer"
-    post_report["feedQueries"] = [
-        row
-        for row in post_report["feedQueries"]
-        if row["name"] != "premium_stream"
-    ]
     write_json(post_path, post_report)
 
 

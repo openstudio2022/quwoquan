@@ -73,7 +73,7 @@ func (relay *OutboxRelay) Drain(ctx context.Context, limit int) (int, error) {
 		}
 		checkpoint = event.Sequence
 	}
-	relay.recordSuccessfulScan(relay.now().UTC(), len(events) > 0)
+	relay.recordSuccessfulScan(relay.now().UTC())
 	return len(events), nil
 }
 
@@ -143,12 +143,13 @@ func validateGatheringOutboxEvent(event ports.OutboxEvent, checkpoint int64) err
 	return nil
 }
 
-func (relay *OutboxRelay) recordSuccessfulScan(at time.Time, recovered bool) {
+// recordSuccessfulScan 无条件清除失败态：一次成功扫描已证明 checkpoint 与
+// outbox 存储链路恢复；空 outbox 的服务不得因瞬时故障永久卡在 unhealthy。
+// 若发布链路仍不可用，下一个事件会重新记录失败。
+func (relay *OutboxRelay) recordSuccessfulScan(at time.Time) {
 	relay.healthMu.Lock()
 	relay.lastSuccessfulScan = at
-	if recovered {
-		relay.lastFailure = nil
-	}
+	relay.lastFailure = nil
 	relay.healthMu.Unlock()
 }
 

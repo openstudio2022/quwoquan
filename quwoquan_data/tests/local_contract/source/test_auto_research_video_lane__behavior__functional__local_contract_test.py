@@ -40,6 +40,50 @@ def test_video_lane_writes_only_direct_video_candidates(tmp_path) -> None:
     ]
 
 
+def test_video_lane_matches_frozen_receipt_by_entity_alias(
+    tmp_path, monkeypatch
+) -> None:
+    """frozen receipt 的 entityId 允许是 canonical 名的别名。
+
+    receipt 在「西湖」名下采集，catalog canonical 名是「杭州西湖」；名字
+    归一化按 canonical 名 -> aliases 依次匹配（历史缺陷：M100 video lane
+    对齐 receipt 时 0 匹配导致零供给 fail-closed）。
+    """
+    queried: list[str] = []
+    spec = {
+        "sourceId": "wikimedia_commons_video",
+        "assetUrl": "https://upload.wikimedia.org/wikipedia/commons/westlake.webm",
+        "sourcePostUrl": "https://commons.wikimedia.org/wiki/File:Westlake.webm",
+        "professionalContentSha256": "sha256:" + "c" * 64,
+    }
+
+    def fake_specs(receipt_refs, *, entity_id, root=None, **_kwargs):
+        queried.append(entity_id)
+        return [dict(spec)] if entity_id == "西湖" else []
+
+    monkeypatch.setattr(
+        auto_plan_video, "acquired_video_specs_for_entity", fake_specs
+    )
+    report: dict[str, object] = {"sourceUnavailable": []}
+    updated: list[dict[str, object]] = []
+
+    write_video_lane(
+        entity_id="杭州西湖",
+        plan_dir=tmp_path,
+        force=True,
+        report=report,
+        updated=updated,
+        sourced_video_pool=[],
+        acquisition_receipt_refs=["receipts/receipt-a.json"],
+        entity_aliases=("西湖", "West Lake"),
+    )
+
+    assert queried == ["杭州西湖", "西湖"]
+    payload = read_json(tmp_path / "video_source_plan.json")["payload"]
+    assert payload["videos"] == [spec]
+    assert updated == [{"entityId": "杭州西湖", "lane": "video", "videos": 1}]
+
+
 def test_video_lane_shortfall_never_falls_back_to_images(tmp_path) -> None:
     report: dict[str, object] = {"sourceUnavailable": []}
 

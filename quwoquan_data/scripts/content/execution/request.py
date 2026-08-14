@@ -93,11 +93,12 @@ class RuntimeExecutionRequest:
             raise ValueError("targetNames must be deduplicated")
         if any(not name.strip() for name in self.target_names):
             raise ValueError("targetNames must contain non-empty values")
-        if self.target_names and not (
-            self.quota <= len(self.target_names) <= self.count
-        ):
+        # 四载体 campaign 共享同一份 current-wave targetNames：小目标载体（如
+        # M100 video quota=10、count=18）从大名单挑 quota 个交付，名单大于该载体
+        # 候选池是共享名单的预期形态。唯一的硬下限是名单不得小于交付承诺。
+        if self.target_names and len(self.target_names) < self.quota:
             raise ValueError(
-                "targetNames size must fall inside the [quota, count] candidate pool range"
+                "targetNames must contain at least the governed quota"
             )
         if self.rewrite is not None:
             from content.execution.planning.rewrite import RewriteBinding

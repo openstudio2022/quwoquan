@@ -315,7 +315,7 @@ func TestMain(m *testing.M) {
 	testInboxViewProjector = inboxapp.NewProjector(
 		testInboxViewStore,
 		testInboxViewStore,
-		testInboxSnapshotSource{conversations: chatStore, states: userStateStore},
+		testInboxSnapshotSource{conversations: chatStore, states: userStateStore, members: membershipStore},
 		testInboxMembershipReader{store: membershipStore},
 		testInboxStateAdvancer{store: userStateStore},
 		map[string]inboxapp.EventSource{

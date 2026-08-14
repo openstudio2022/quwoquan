@@ -104,6 +104,7 @@ func (advancer chatInboxStateAdvancer) AdvanceUnread(
 type chatInboxSnapshotSource struct {
 	conversations conversationapp.ConversationStore
 	states        *userstatepersistence.MongoStore
+	members       conversationapp.MemberStore
 }
 
 type chatInboxConversationReader struct{ reader *inboxapp.Reader }
@@ -161,7 +162,35 @@ func (source chatInboxSnapshotSource) Load(
 	if conversation.Status != "" && conversation.Status != conversationmodel.ConversationStatusActive {
 		return inboxapp.Item{}, false, nil
 	}
-	return inboxItemFromSnapshots(*conversation, *state), true, nil
+	item := inboxItemFromSnapshots(*conversation, *state)
+	item.AvatarURL = source.resolveGroupAvatarWithFallback(ctx, *conversation)
+	return item, true, nil
+}
+
+// resolveGroupAvatarWithFallback 与会话详情读面共用同一 avatar resolver：
+// 群会话缺有效 group avatar（含 deprecated 成员头像残留）时回退 creator
+// 头像，消息列表与详情不得出现两种头像口径。
+func (source chatInboxSnapshotSource) resolveGroupAvatarWithFallback(
+	ctx context.Context,
+	conversation conversationmodel.Conversation,
+) string {
+	if strings.TrimSpace(conversation.Type) != "group" ||
+		conversationapp.ResolveGroupAvatarURL(conversation) != "" ||
+		source.members == nil {
+		return conversationapp.ResolveConversationAvatarURL(conversation)
+	}
+	members, err := source.members.ListMembers(
+		ctx,
+		conversation.ID,
+		conversationapp.ListMembersQuery{
+			Limit: 200,
+			Sort:  conversationapp.MemberListSortJoinedAsc,
+		},
+	)
+	if err != nil {
+		return conversationapp.ResolveConversationAvatarURL(conversation)
+	}
+	return conversationapp.ResolveConversationAvatarURLWithMembers(conversation, members)
 }
 
 func (source chatInboxSnapshotSource) ListIdentities(

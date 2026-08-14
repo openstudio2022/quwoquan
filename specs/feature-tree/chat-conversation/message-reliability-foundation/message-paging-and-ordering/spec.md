@@ -80,6 +80,7 @@
 - WHEN 客户端经 keyset 分页跨页读取历史,或以某 seq 为起点做增量同步。
 - THEN 跨页合并结果按 seq 有序、无重复、无缺号。
 - AND 增量同步结果同样按 seq 有序、无重复、无缺号。
+- AND 增量补齐从缺口最早处按 seq 递增取满限额；限额小于缺口时不得跳过最早的缺口消息。
 
 ## 6. 依赖
 
@@ -89,19 +90,3 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 历史分页剩可视位置保持的 widget 证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`block`
-- 影响或价值：尚缺跨页去重与乱序注入的 api_integration 层证据补强。
-  `GWT-002` 前半句「加载历史不改变当前可视位置」的 widget 级证据已落地——
-  `message_paging_scroll_anchor__local_contract_test.dart` 断言滚到顶触发分页、
-  更早历史插入后原可视锚点消息经 offset 补偿仍在视口内，无补偿时会被推出
-  视口约 900px 以上。滚动触发接线已存在——
-  会话页接近顶端触发、防并发重入、加载后 offset 补偿，
-  keyset 游标连续翻页有序无重复、终止判定明确、翻页失败保留已
-  加载内容均有 local_contract 证据
-  （`message_timeline_persistence_paging__reliability__local_contract_test.dart`）。
-- 完成判定：`GWT-001` 已闭合；`GWT-002` 的可视位置保持由 widget 测试断言后闭合。

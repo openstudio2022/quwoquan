@@ -293,7 +293,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
           },
         );
       }
-      return _HomeFeedCompletedEmptyState(isDark: isDark);
+      return _HomeFeedCompletedNotice(isDark: isDark);
     }
 
     // 任务 B · 首屏 TTI：内容首帧落地时上报首屏可交互耗时（每 channel 一次）。

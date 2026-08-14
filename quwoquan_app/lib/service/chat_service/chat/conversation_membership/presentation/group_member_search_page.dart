@@ -1,16 +1,15 @@
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
+import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
 // settings-canonical-shell: search_embedded — 见 scripts/runtime/page/settings_canonical_manifest.yaml 与 page-layout-semantics L3 spec。
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/design_system/colors/app_colors.dart';
-import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/search/search_embedded.dart';
 import 'package:quwoquan_app/design_system/semantics/search_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
@@ -65,14 +64,10 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
     final filteredMembers = filterMemberDtosByQuery(members, _searchQuery);
     final sections = buildGroupedMemberDtoSections(filteredMembers);
 
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
 
     Widget listContent;
     if (membersState.isLoading) {
-      listContent = AppRequestFeedback.section();
+      listContent = const AppSkeletonListRows(rowCount: 6);
     } else if (membersState.error case final error?
         when membersState.members.isEmpty) {
       listContent = AppPageErrorState(
@@ -117,19 +112,10 @@ class _GroupMemberSearchPageState extends ConsumerState<GroupMemberSearchPage> {
                 await _retryLoad(action);
               },
             ),
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.all(AppSpacing.xl),
-                child: Text(
-                  ChatText.noMatchingMembers,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: AppTypography.base,
-                    color: fgSecondary,
-                  ),
-                ),
-              ),
+          const Expanded(
+            child: AppEmptyState(
+              icon: CupertinoIcons.person_2,
+              title: ChatText.noMatchingMembers,
             ),
           ),
         ],

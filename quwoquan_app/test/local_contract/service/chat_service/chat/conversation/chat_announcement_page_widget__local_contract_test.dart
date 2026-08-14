@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
@@ -113,6 +114,25 @@ void main() {
         findsOneWidget,
       );
       expect(find.text(ChatText.groupAnnouncementViewOnlyNote), findsOneWidget);
+    });
+
+    // spec_ref: specs/feature-tree/chat-conversation/chat-experience-optimization/spec.md#open-002
+    testWidgets('普通成员只读且无公告时呈现标准空态组件', (tester) async {
+      await tester.pumpWidget(
+        _scopedApp(
+          member: _MemberRoleAnnouncementRepository(),
+          groupAdmin: _RecordingAnnouncementRepository(),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(
+        find.byType(AppEmptyState),
+        findsOneWidget,
+        reason: '只读无公告必须使用 design system 标准空态',
+      );
+      expect(find.text(ChatText.groupAnnouncementEmpty), findsOneWidget);
     });
 
     testWidgets('取消确认不调用发布契约', (tester) async {

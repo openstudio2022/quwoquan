@@ -489,6 +489,139 @@ title: "t"
       expect(reparsedBullets.map((node) => node.listDepth), <int>[0, 1, 2]);
     });
 
+    test('站内实体链接转 canonical entity mention（数据工程真实供稿形态）', () {
+      // fixture 取自 quwoquan_data 真实发布物形态：H1 与正文均含
+      // [label](/entity/<domain>/<etype>/<name>) 站内链接。
+      const markdown = '''
+---
+title: "杭州西湖攻略"
+markdownDialect: qwq-rich-md
+---
+
+# [杭州西湖](/entity/地点/景区/杭州西湖)攻略
+
+真正牵动期待的却是[杭州西湖](/entity/地点/景区/杭州西湖)——湖面与堤桥叠在一起。
+''';
+      final parsed = ArticleMarkdownCodec.parseDocument(markdown);
+      // H1 剥离链接记号后与 frontmatter title 相同：跳过重复标题，
+      // 不再渲染裸记号 heading。
+      expect(
+        parsed.nodes.where(
+          (node) =>
+              node.type == ArticleDocumentNodeType.headingMajor &&
+              node.text.contains('杭州西湖攻略'),
+        ),
+        isEmpty,
+        reason: 'H1 与 title 相同时必须跳过（链接记号不参与比较）',
+      );
+      expect(parsed.title, '杭州西湖攻略');
+
+      final paragraph = parsed.nodes
+          .where((node) => node.text.contains('湖面与堤桥'))
+          .single;
+      expect(paragraph.text, contains('真正牵动期待的却是杭州西湖——'));
+      expect(paragraph.text, isNot(contains('[')));
+      final mention = paragraph.spans.single;
+      expect(mention.kind, 'entity');
+      expect(mention.isInlineMention, isTrue);
+      expect(
+        mention.targetId,
+        'entity:景区:杭州西湖',
+        reason: '必须与数据工程 canonical 规则一致（跳过 domain 段）',
+      );
+      expect(
+        paragraph.text.substring(mention.start, mention.end),
+        '杭州西湖',
+      );
+
+      // 序列化统一写回 canonical mention 记号。
+      final reserialized = ArticleMarkdownCodec.serializeDocument(
+        ArticleDocumentData(nodes: parsed.nodes),
+      );
+      expect(reserialized, contains('@[杭州西湖](entity:景区:杭州西湖)'));
+      expect(reserialized, isNot(contains('](/entity/')));
+    });
+
+    test('不合形态的站内路径按字面量保留，不产生 span', () {
+      const markdown = '''
+---
+title: "t"
+---
+
+破损链接 [某地](/entity/只有一段) 保持字面量。
+''';
+      final parsed = ArticleMarkdownCodec.parseDocument(markdown);
+      final paragraph = parsed.nodes
+          .where((node) => node.text.contains('某地'))
+          .single;
+      expect(paragraph.spans, isEmpty);
+      expect(paragraph.text, contains('[某地](/entity/只有一段)'));
+    });
+
+    test('段落对齐 :::align 指令与分隔线 --- roundtrip', () {
+      const markdown = '''
+---
+title: "t"
+---
+
+普通段落。
+
+:::align value="center"
+居中的段落文本
+:::
+
+---
+
+:::align value="right"
+右对齐段落
+:::
+''';
+      final parsed = ArticleMarkdownCodec.parseDocument(markdown);
+      final centered = parsed.nodes
+          .where((node) => node.text.contains('居中的段落文本'))
+          .single;
+      expect(centered.type, ArticleDocumentNodeType.paragraph);
+      expect(centered.textAlign, 'center');
+      final right = parsed.nodes
+          .where((node) => node.text.contains('右对齐段落'))
+          .single;
+      expect(right.textAlign, 'right');
+      final plain = parsed.nodes
+          .where((node) => node.text.contains('普通段落'))
+          .single;
+      expect(plain.textAlign, '');
+      expect(
+        parsed.nodes.where(
+          (node) => node.type == ArticleDocumentNodeType.divider,
+        ),
+        hasLength(1),
+        reason: '--- 必须进入 Document 模型为 divider 节点',
+      );
+
+      final reserialized = ArticleMarkdownCodec.serializeDocument(
+        ArticleDocumentData(nodes: parsed.nodes),
+      );
+      expect(reserialized, contains(':::align value="center"'));
+      expect(reserialized, contains(':::align value="right"'));
+      expect(reserialized, contains('\n---\n'));
+
+      final reparsed = ArticleMarkdownCodec.parseDocument(reserialized);
+      expect(
+        reparsed.nodes
+            .where((node) => node.text.contains('居中的段落文本'))
+            .single
+            .textAlign,
+        'center',
+        reason: '对齐 roundtrip 不得漂移',
+      );
+      expect(
+        reparsed.nodes.where(
+          (node) => node.type == ArticleDocumentNodeType.divider,
+        ),
+        hasLength(1),
+      );
+    });
+
     test('超深缩进夹紧到 2 级，不产生越界深度', () {
       const markdown = '''
 ---

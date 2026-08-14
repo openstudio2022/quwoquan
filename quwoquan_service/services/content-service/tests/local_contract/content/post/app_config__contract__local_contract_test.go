@@ -1,5 +1,6 @@
 // spec_ref: specs/feature-tree/discovery-content/content-service-contract-foundation/privacy-ui-config-contract/spec.md#gwt-001
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-004
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-004.t3
 package local_contract
 
 import (
@@ -105,5 +106,34 @@ func TestGetAppConfigUsesGenericCanaryMatrixPayload(t *testing.T) {
 	}
 	if len(response.Content.GrayRelease.CanaryMatrix) != 2 {
 		t.Fatalf("unexpected typed canary matrix: %#v", response.Content.GrayRelease.CanaryMatrix)
+	}
+}
+
+// 回滚语义：configHash 只由配置内容决定。运营回滚到旧配置后，新会话拉取到的
+// configHash 必须等于旧版本 hash，且与被回滚版本可区分——不存在第二套版本身份。
+func TestAppConfigRollbackRestoresThePreviousConfigHash(t *testing.T) {
+	buildService := func(enableReader bool) *postapp.PostService {
+		return postapp.NewPostService(
+			postapp.BindDataPorts(testsupport.NewPostStore(nil)),
+			postapp.WithStoryRuntimeConfig(postapp.StoryRuntimeConfig{
+				FeatureFlags: map[string]bool{
+					"enable_article_book_reader": enableReader,
+				},
+				ExperimentBucket: "control",
+				CurrentStage:     "control",
+			}),
+		)
+	}
+
+	previous := buildService(true).GetAppConfig()
+	rolledOut := buildService(false).GetAppConfig()
+	if previous.ConfigHash == rolledOut.ConfigHash {
+		t.Fatal("different config content must produce distinguishable configHash")
+	}
+
+	rolledBack := buildService(true).GetAppConfig()
+	if rolledBack.ConfigHash != previous.ConfigHash {
+		t.Fatalf("rollback must restore the previous configHash: got %q want %q",
+			rolledBack.ConfigHash, previous.ConfigHash)
 	}
 }

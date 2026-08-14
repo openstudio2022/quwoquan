@@ -35,11 +35,15 @@ import hashlib
 import json
 import os
 import re
+import ssl
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+
+# 本地管理 TLS 环境（*-local）的网关根证书；由 --ca-file 注入，走正常验证。
+_SSL_CONTEXT: ssl.SSLContext | None = None
 from typing import Any
 
 
@@ -101,6 +105,11 @@ def parse_args() -> argparse.Namespace:
         "--candidate-binding-digest",
         default=os.environ.get("QWQ_TEST_DATA_CANDIDATE_BINDING_DIGEST", ""),
     )
+    parser.add_argument(
+        "--ca-file",
+        default=os.environ.get("QWQ_PROBE_CA_FILE", ""),
+        help="本地管理 TLS 环境（*-local）的根证书路径",
+    )
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--timeout-seconds", type=int, default=15)
     parser.add_argument(
@@ -145,17 +154,25 @@ def fetch_feed(
     token: str,
     limit: int,
     timeout: int,
+    session_id: str,
 ) -> tuple[int, dict[str, Any] | None, str]:
-    query = urllib.parse.urlencode({"channelId": channel_id, "limit": str(limit)})
+    # 推荐路由契约要求 X-Client-Session-Id（GetFeed request_bindings），
+    # 缺失时 fail-closed 400。
+    query = urllib.parse.urlencode(
+        {"channelId": channel_id, "limit": str(limit), "sessionId": session_id}
+    )
     url = f"{base_url.rstrip('/')}/content/feed?{query}"
     request = urllib.request.Request(url, method="GET")
     request.add_header("Accept", "application/json")
+    request.add_header("X-Client-Session-Id", session_id)
     if viewer_id:
         request.add_header("X-Client-User-Id", viewer_id)
     if token:
         request.add_header("Authorization", f"Bearer {token}")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with urllib.request.urlopen(
+            request, timeout=timeout, context=_SSL_CONTEXT
+        ) as response:
             body = response.read().decode("utf-8", errors="replace")
             try:
                 return response.status, json.loads(body), ""
@@ -239,6 +256,9 @@ def check_non_empty_items(payload: dict[str, Any], *, required: bool) -> list[st
 
 def main() -> int:
     args = parse_args()
+    if args.ca_file:
+        global _SSL_CONTEXT
+        _SSL_CONTEXT = ssl.create_default_context(cafile=args.ca_file)
     report: dict[str, Any] = {
         "schema": REPORT_SCHEMA,
         "scenario": SCENARIO,
@@ -269,6 +289,9 @@ def main() -> int:
 
     failures: list[str] = []
     for name, channel_id, with_viewer, assert_cards in surfaces:
+        session_id = hashlib.sha256(
+            f"{args.test_data_instance_id}\0{name}".encode("utf-8")
+        ).hexdigest()[:32]
         status, payload, detail = fetch_feed(
             args.base_url,
             channel_id,
@@ -276,6 +299,7 @@ def main() -> int:
             args.test_auth_token,
             args.limit,
             args.timeout_seconds,
+            session_id,
         )
         surface_report: dict[str, Any] = {
             "channelId": channel_id,

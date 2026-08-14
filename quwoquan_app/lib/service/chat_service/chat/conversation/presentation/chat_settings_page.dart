@@ -11,6 +11,11 @@ import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
+import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/conversation_assets_sheet.dart';
+import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
+import 'package:quwoquan_app/runtime/platform/platform_providers.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart' show ConversationAssetView;
 import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/conversation_message_search_sheet.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
@@ -163,6 +168,86 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       _memberColumns * _memberRowsCollapsed - 1;
 
   /// 退出群聊：二次确认 → LeaveConversation（自愿离开语义；owner 须先转让）。
+  /// 相册资产点击：全屏大图（与会话页图片消息同一消费链）。
+  void _openAssetImage(ConversationAssetView asset) {
+    final rawUrl = asset.mediaDeliveryUrl?.trim() ?? '';
+    if (rawUrl.isEmpty) {
+      AppToast.show(context, ChatText.chatMediaUnavailable);
+      return;
+    }
+    unawaited(
+      showGeneralDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        barrierColor: AppColors.black,
+        pageBuilder: (dialogContext, _, _) {
+          return ColoredBox(
+            key: const ValueKey<String>('chat_image_viewer_surface'),
+            color: AppColors.black,
+            child: SafeArea(
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(dialogContext).pop(),
+                      child: InteractiveViewer(
+                        maxScale: 4,
+                        child: Center(
+                          child: AppCachedNetworkImage(
+                            imageUrl: rawUrl,
+                            fit: BoxFit.contain,
+                            errorWidget: Icon(
+                              CupertinoIcons.photo,
+                              color: AppColors.white.withValues(alpha: 0.6),
+                              size: AppSpacing.iconLarge,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: AppSpacing.intraGroupSm,
+                    left: AppSpacing.intraGroupSm,
+                    child: CupertinoButton(
+                      key: const ValueKey<String>('chat_image_viewer_close'),
+                      padding: EdgeInsets.all(AppSpacing.intraGroupXs),
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: Icon(CupertinoIcons.xmark, color: AppColors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// 文件资产点击：经平台能力打开交付 URL（与会话页文件消息同一消费链）。
+  Future<void> _openAssetFile(ConversationAssetView asset) async {
+    final rawUrl = asset.mediaDeliveryUrl?.trim() ?? '';
+    if (rawUrl.isEmpty) {
+      AppToast.show(context, ChatText.chatMediaUnavailable);
+      return;
+    }
+    try {
+      final launched = await launchUrl(
+        Uri.parse(rawUrl),
+        mode: ref.read(platformCapabilitiesProvider).hasLocalFileSystem
+            ? LaunchMode.externalApplication
+            : LaunchMode.platformDefault,
+      );
+      if (!launched) {
+        throw StateError('platform rejected the file delivery URL');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.show(context, ChatText.chatFileOpenFailed);
+    }
+  }
+
   Future<void> _confirmExitGroup() async {
     final confirmed = await showAppCupertinoDialog<bool>(
       context: context,
@@ -480,6 +565,22 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                           ),
                         )
                       : null,
+                  onOpenAlbum: () => unawaited(
+                    ConversationAssetsSheet.show(
+                      context,
+                      conversationId: widget.conversationId,
+                      kind: 'image',
+                      onOpenImage: _openAssetImage,
+                    ),
+                  ),
+                  onOpenFiles: () => unawaited(
+                    ConversationAssetsSheet.show(
+                      context,
+                      conversationId: widget.conversationId,
+                      kind: 'file',
+                      onOpenFile: _openAssetFile,
+                    ),
+                  ),
                 ),
               ),
               SizedBox(

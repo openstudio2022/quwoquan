@@ -18,6 +18,30 @@ from typing import Any
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+# 本探针由 stackctl 以子进程直跑（python3 <script>），子进程的 sys.path 只含
+# 脚本目录而不含仓库根；绝对包导入必须先自举仓库根，否则 health/verify 的
+# integration-readonly 检查会以 ModuleNotFoundError 假性失败。
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+# 响应语义判定家族已迁至 environment_probe_semantics；此处 re-export 保持
+# 测试与消费者的 `probe.<符号>` 读取面不变。
+from quwoquan_ops.cli.probes.environment_probe_semantics import (  # noqa: E402
+    AUTHOR_POSTS_CHECK_NAME,
+    CONTENT_POST_PROJECTION_PATH,
+    FEED_MEDIA_SLICES_CHECK_NAME,
+    FEED_MEDIA_SOURCE_CHECK_NAMES,
+    _author_posts_semantic_result,
+    _content_feed_semantic_issue,
+    _content_feed_semantic_result,
+    _content_post_projection_fields,
+    _expected_release_post_ids,
+    _feed_media_slice_urls,
+    _media_origin,
+    _release_sample_semantic_result,
+    _search_semantic_issue,
+)
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -37,17 +61,6 @@ DEFAULT_REPORT = (
     / "integration-probe"
     / "report.json"
 )
-CONTENT_POST_PROJECTION_PATH = (
-    REPO_ROOT
-    / "quwoquan_service"
-    / "services"
-    / "content-service"
-    / "contracts"
-    / "content"
-    / "post"
-    / "projections"
-    / "content_post_projection.yaml"
-)
 
 
 def utc_now() -> str:
@@ -55,42 +68,6 @@ def utc_now() -> str:
 
 
 @lru_cache(maxsize=1)
-def _content_post_projection_fields() -> frozenset[str]:
-    """Load public feed-item keys from the canonical projection contract."""
-    try:
-        document = yaml.safe_load(
-            CONTENT_POST_PROJECTION_PATH.read_text(encoding="utf-8")
-        )
-    except (OSError, yaml.YAMLError) as exc:
-        raise ValueError(
-            "canonical ContentPostProjection contract is unreadable: "
-            f"{CONTENT_POST_PROJECTION_PATH}"
-        ) from exc
-    if (
-        not isinstance(document, dict)
-        or document.get("read_model") != "ContentPostProjection"
-    ):
-        raise ValueError("canonical ContentPostProjection contract has invalid read_model")
-    raw_fields = document.get("fields")
-    if not isinstance(raw_fields, list) or not raw_fields:
-        raise ValueError(
-            "canonical ContentPostProjection contract fields must be a non-empty array"
-        )
-    fields: set[str] = set()
-    for index, raw_field in enumerate(raw_fields):
-        if not isinstance(raw_field, dict):
-            raise ValueError(
-                f"canonical ContentPostProjection field {index} must be an object"
-            )
-        name = str(raw_field.get("name") or "").strip()
-        if not name or name in fields:
-            raise ValueError(
-                f"canonical ContentPostProjection field {index} has invalid name"
-            )
-        fields.add(name)
-    return frozenset(fields)
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run readonly integration probes for alpha/beta/gamma/prod environments.",
@@ -619,146 +596,6 @@ def build_checks(
     return checks
 
 
-def _content_feed_semantic_issue(payload: str) -> tuple[str | None, int | None]:
-    issue, count, _post_ids = _content_feed_semantic_result(payload)
-    return issue, count
-
-
-def _content_feed_semantic_result(
-    payload: str,
-    *,
-    expected_post_ids: set[str] | None = None,
-) -> tuple[str | None, int | None, set[str]]:
-    body = payload.strip()
-    if not body:
-        return "response body is empty", 0, set()
-    try:
-        decoded = json.loads(body)
-    except json.JSONDecodeError as exc:
-        return f"response body is not valid JSON: {exc.msg}", None, set()
-    if not isinstance(decoded, dict):
-        return "response payload must be a JSON object", None, set()
-    object_cards = decoded.get("objectCards")
-    if not isinstance(object_cards, list):
-        return 'response payload is missing array "objectCards"', None, set()
-    items: list[Any] | None = None
-    candidate_items = decoded.get("items")
-    if isinstance(candidate_items, list):
-        items = candidate_items
-    if items is None:
-        return None, None, set()
-    if not items:
-        return 'response payload has empty "items"', 0, set()
-    try:
-        allowed_item_fields = _content_post_projection_fields()
-    except ValueError as exc:
-        return str(exc), None, set()
-    for index, item in enumerate(items):
-        if not isinstance(item, dict):
-            return f"response items[{index}] must be a JSON object", None, set()
-        unknown = sorted(set(item) - allowed_item_fields)
-        if unknown:
-            return (
-                f"response items[{index}] has unknown ContentPostProjection fields: "
-                + ", ".join(unknown),
-                None,
-                set(),
-            )
-    returned_post_ids = {
-        str(item.get("postId") or "").strip()
-        for item in items
-        if isinstance(item, dict) and str(item.get("postId") or "").strip()
-    }
-    expected = {
-        str(item).strip() for item in (expected_post_ids or set()) if str(item).strip()
-    }
-    if expected and not returned_post_ids.intersection(expected):
-        return (
-            "response has no postId bound to the expected immutable release",
-            len(items),
-            returned_post_ids,
-        )
-    return None, len(items), returned_post_ids
-
-
-def _expected_release_post_ids(args: argparse.Namespace, check_name: str) -> set[str]:
-    argument_names = {
-        "content_feed": "expected_discovery_post_id",
-        "video_book_feed": "expected_video_post_id",
-        "premium_feed": "expected_premium_video_post_id",
-    }
-    argument_name = argument_names.get(check_name)
-    if argument_name is None:
-        return set()
-    return {
-        str(item).strip()
-        for item in getattr(args, argument_name, [])
-        if str(item).strip()
-    }
-
-
-def _search_semantic_issue(
-    payload: str,
-    *,
-    expected_object_type: str = "",
-    expected_object_id: str = "",
-) -> tuple[str | None, int | None]:
-    body = payload.strip()
-    if not body:
-        return "response body is empty", None
-    try:
-        decoded = json.loads(body)
-    except json.JSONDecodeError as exc:
-        return f"response body is not valid JSON: {exc.msg}", None
-    if not isinstance(decoded, dict):
-        return "response payload must be a JSON object", None
-    request_id = decoded.get("requestId")
-    if not isinstance(request_id, str) or not request_id.strip():
-        return 'response payload is missing non-empty "requestId"', None
-    hits = decoded.get("hits")
-    if not isinstance(hits, list):
-        return 'response payload is missing array "hits"', None
-    expected_type = expected_object_type.strip()
-    expected_id = expected_object_id.strip()
-    if expected_type and expected_id and not any(
-        isinstance(hit, dict)
-        and str(hit.get("objectType") or "").strip() == expected_type
-        and str(hit.get("objectId") or "").strip() == expected_id
-        for hit in hits
-    ):
-        return (
-            "response has no exact release-bound "
-            f"{expected_type}/{expected_id} hit",
-            len(hits),
-        )
-    return None, len(hits)
-
-
-def _release_sample_semantic_result(
-    payload: str,
-    *,
-    carrier: str,
-    read_object_id: str,
-    expected_content_type: str,
-) -> tuple[str | None, str, str]:
-    try:
-        decoded = json.loads(payload)
-    except json.JSONDecodeError as exc:
-        return f"response body is not valid JSON: {exc.msg}", "", ""
-    if not isinstance(decoded, dict):
-        return "response payload must be a JSON object", "", ""
-    id_field = "homepageId" if carrier == "homepage" else "postId"
-    returned_id = str(decoded.get(id_field) or "").strip()
-    returned_type = (
-        "" if carrier == "homepage" else str(decoded.get("contentType") or "").strip()
-    )
-    if returned_id != read_object_id:
-        return f"response {id_field} is not the exact release sample", returned_id, returned_type
-    if carrier != "homepage" and returned_type != expected_content_type:
-        return "response contentType is not the exact release sample type", returned_id, returned_type
-    return None, returned_id, returned_type
-
-
 def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     started_at = utc_now()
     findings: list[str] = []
@@ -795,6 +632,12 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         if str(value).strip()
     }
     available_names = {check["name"] for check in available_checks}
+    # author_posts_contract 是 release_sample(post) 的链式派生检查：
+    # 从样本详情响应提取 authorId 后请求 ListUserPosts 并做契约白名单校验。
+    available_names.add(AUTHOR_POSTS_CHECK_NAME)
+    # feed_media_slices 是 feed 检查的链式派生检查：从 feed items 收集全部
+    # 公开媒体 slice 并逐个字节读回（items 非空不等于媒体可显示）。
+    available_names.add(FEED_MEDIA_SLICES_CHECK_NAME)
     unknown_checks = sorted(only_checks - available_names)
     if unknown_checks:
         findings.append(
@@ -805,6 +648,9 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         for check in available_checks
         if not only_checks or check["name"] in only_checks
     ]
+    author_persona_id = ""
+    feed_media_slices: dict[str, str] = {}
+    feed_media_origin = _media_origin(media_image_base_url)
     for check in selected_checks:
         ok, status_code, payload = request(
             check["method"],
@@ -848,6 +694,15 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 matched = False
                 entry["ok"] = False
                 entry["semanticError"] = semantic_issue
+        if (
+            matched
+            and feed_media_origin
+            and check["name"] in FEED_MEDIA_SOURCE_CHECK_NAMES
+        ):
+            for slice_url, slice_kind in _feed_media_slice_urls(
+                payload, feed_media_origin
+            ).items():
+                feed_media_slices.setdefault(slice_url, slice_kind)
         if matched and check["name"] == "global_search":
             semantic_issue, hit_count = _search_semantic_issue(
                 payload,
@@ -900,6 +755,19 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 matched = False
                 entry["ok"] = False
                 entry["semanticError"] = semantic_issue
+            if (
+                matched
+                and not author_persona_id
+                and str(check.get("carrier") or "") in {"article", "image", "video"}
+            ):
+                try:
+                    decoded_sample = json.loads(payload)
+                except json.JSONDecodeError:
+                    decoded_sample = None
+                if isinstance(decoded_sample, dict):
+                    author_persona_id = str(
+                        decoded_sample.get("authorId") or ""
+                    ).strip()
         results.append(entry)
         if not matched:
             detail = entry.get("semanticError")
@@ -907,6 +775,114 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
                 f"{check['name']} failed: {status_code or 'ERR'} {check['url']}"
                 + (f" ({detail})" if detail else "")
             )
+
+    author_posts_selected = (
+        not only_checks or AUTHOR_POSTS_CHECK_NAME in only_checks
+    )
+    if author_posts_selected and (
+        author_persona_id or AUTHOR_POSTS_CHECK_NAME in only_checks
+    ):
+        if not author_persona_id:
+            findings.append(
+                f"{AUTHOR_POSTS_CHECK_NAME} failed: requires a successful "
+                "release_sample post readback in the same run"
+            )
+        else:
+            author_posts_url = (
+                f"{args.base_url.rstrip('/')}/content/personas/"
+                f"{urllib.parse.quote(author_persona_id, safe='')}/posts?limit=5"
+            )
+            ok, status_code, payload = request(
+                "GET",
+                author_posts_url,
+                headers=_common_headers(args.test_auth_token),
+                timeout=max(1, request_timeout_seconds),
+                retry_attempts=max(1, retry_attempts),
+                retry_sleep_seconds=max(0.0, retry_sleep_seconds),
+            )
+            matched = ok and status_code == 200
+            entry = {
+                "name": AUTHOR_POSTS_CHECK_NAME,
+                "method": "GET",
+                "url": author_posts_url,
+                "statusCode": status_code,
+                "ok": matched,
+                "bodyPreview": payload[:1200],
+                "authorPersonaId": author_persona_id,
+            }
+            if matched:
+                semantic_issue, item_count = _author_posts_semantic_result(payload)
+                if item_count is not None:
+                    entry["contentItemCount"] = item_count
+                if semantic_issue:
+                    matched = False
+                    entry["ok"] = False
+                    entry["semanticError"] = semantic_issue
+            results.append(entry)
+            if not matched:
+                detail = entry.get("semanticError")
+                findings.append(
+                    f"{AUTHOR_POSTS_CHECK_NAME} failed: "
+                    f"{status_code or 'ERR'} {author_posts_url}"
+                    + (f" ({detail})" if detail else "")
+                )
+
+    feed_media_selected = (
+        not only_checks or FEED_MEDIA_SLICES_CHECK_NAME in only_checks
+    )
+    if feed_media_selected and (
+        feed_media_slices or FEED_MEDIA_SLICES_CHECK_NAME in only_checks
+    ):
+        if not feed_media_origin:
+            findings.append(
+                f"{FEED_MEDIA_SLICES_CHECK_NAME} failed: requires a media base URL"
+            )
+        elif not feed_media_slices:
+            findings.append(
+                f"{FEED_MEDIA_SLICES_CHECK_NAME} failed: requires at least one "
+                "successful feed check with media slices in the same run"
+            )
+        else:
+            slice_failures: list[str] = []
+            checked = 0
+            for slice_url in sorted(feed_media_slices):
+                slice_kind = feed_media_slices[slice_url]
+                slice_headers = dict(_common_headers(args.test_auth_token))
+                expected = [200]
+                if slice_kind == "video":
+                    # 视频以 Range 读首字节，验证 media-edge 支持分段拉流。
+                    slice_headers["Range"] = "bytes=0-1"
+                    expected = [200, 206]
+                ok, status_code, _payload = request(
+                    "GET",
+                    slice_url,
+                    headers=slice_headers,
+                    timeout=max(1, request_timeout_seconds),
+                    retry_attempts=max(1, retry_attempts),
+                    retry_sleep_seconds=max(0.0, retry_sleep_seconds),
+                )
+                checked += 1
+                if not ok or status_code not in expected:
+                    slice_failures.append(
+                        f"{status_code or 'ERR'} {slice_kind} {slice_url}"
+                    )
+            entry = {
+                "name": FEED_MEDIA_SLICES_CHECK_NAME,
+                "method": "GET",
+                "url": feed_media_origin,
+                "statusCode": 200 if not slice_failures else 0,
+                "ok": not slice_failures,
+                "bodyPreview": "",
+                "sliceCount": checked,
+                "sliceFailures": slice_failures,
+            }
+            results.append(entry)
+            if slice_failures:
+                findings.append(
+                    f"{FEED_MEDIA_SLICES_CHECK_NAME} failed: "
+                    f"{len(slice_failures)}/{checked} feed media slices are "
+                    "unreadable: " + "; ".join(slice_failures[:5])
+                )
     return {
         "schema": "environment-integration-probe-report",
         "status": "passed" if not findings else "failed",

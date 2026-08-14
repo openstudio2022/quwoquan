@@ -473,11 +473,28 @@ def _command_mutable_test_live_down(
         published_ports = receipt.get("publishedPorts")
         if not isinstance(published_ports, Mapping) or not published_ports:
             raise ValueError("mutable test-live receipt publishedPorts are invalid")
-        occupied_ports = _stackctl._wait_for_exact_tcp_ports_released(
-            [int(port) for port in published_ports.values()]
+        # Data ReliableTask 专属 fleet（environments/data_execution_fleet.json）
+        # 拥有其声明端口角色的独立生命周期；mutable test-live down 不拥有也
+        # 不得要求释放这些端口。
+        from quwoquan_ops.cli.lib.data_execution_fleet import (
+            load_data_execution_fleet_config,
         )
-        for role, port in published_ports.items():
-            if int(port) in occupied_ports:
+
+        fleet_config = load_data_execution_fleet_config()
+        fleet_owned_roles = {
+            fleet_config.mongo_port_role,
+            fleet_config.redis_port_role,
+        }
+        release_scope = {
+            str(role): int(port)
+            for role, port in published_ports.items()
+            if str(role) not in fleet_owned_roles
+        }
+        occupied_ports = _stackctl._wait_for_exact_tcp_ports_released(
+            list(release_scope.values())
+        )
+        for role, port in release_scope.items():
+            if port in occupied_ports:
                 resource_release_issues.append(
                     f"canonical port remains occupied after mutable down: {role}:{port}"
                 )

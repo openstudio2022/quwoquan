@@ -294,6 +294,69 @@ void main() {
     expect(find.byKey(ImmersiveEngagementBar.wishlistActionKey), findsNothing);
   });
 
+  testWidgets('文章形态同一锚点门控：有锚点渲染想去按钮（种草主载体入口契约）', (
+    tester,
+  ) async {
+    // 文章从 feed 点开进同一 works 沉浸消费，想去入口由统一 engagement bar
+    // 承载——锚点门控与形态无关，不为文章另造第二入口。
+    final post = ContentPostViewData.fromWire(
+      ContentPostProjection(
+        postId: 'article-wish-1',
+        contentType: 'article',
+        contentIdentity: 'work',
+        assistantUsePolicy: AssistantUsePolicy.inherit,
+        authorId: 'author-2',
+        authorDisplayName: '路书作者',
+        authorAvatarUrl: 'https://example.com/avatar2.jpg',
+        authorRoleLabel: '',
+        authorIdentityTags: const <String>[],
+        authorVerified: false,
+        body: '都江堰攻略正文',
+        coverUrl: '',
+        mediaUrls: const <String>[],
+        likeCount: 0,
+        commentCount: 0,
+        shareCount: 0,
+        createdAt: DateTime.now(),
+      ),
+    );
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: <ContentPostViewData>[post],
+          rawPostsById: <String, MediaViewerPostWireRow>{
+            post.id: MediaViewerPostWireRow.fromDynamicMap(<String, dynamic>{
+              'postId': post.id,
+              'contentType': 'article',
+              'authorId': post.authorId,
+              'authorDisplayName': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'body': post.body,
+              'primaryHomepageId': 'homepage-dujiangyan',
+              'primaryHomepageType': 'sight',
+              'primaryHomepageSnapshot': <String, Object?>{'title': '都江堰'},
+            }),
+          },
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: <Override>[
+          workBrowserEntityWishlistStateReaderProvider.overrideWithValue(
+            _WishlistStateReaderDouble(),
+          ),
+        ],
+      ),
+    );
+    await _pumpFrames(tester);
+
+    expect(
+      find.byKey(ImmersiveEngagementBar.wishlistActionKey),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('有锚点时想去成功且无交集 → 诚实确认，不伪造社会证明', (tester) async {
     final behaviorRepo = RecordingContentBehaviorRepository();
     final tracker = ContentBehaviorTracker(

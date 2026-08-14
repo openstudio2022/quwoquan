@@ -6,6 +6,7 @@ package api_integration
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,6 +16,46 @@ import (
 
 	accessinfra "quwoquan_service/services/content-service/internal/content/post/infrastructure/accesscontrol"
 )
+
+// contentPostProjectionWireFields 是 contracts/content/post/projections/
+// content_post_projection.yaml 声明的 wire 白名单。App generated decoder
+// （ContentPostProjection.fromWire）reject unknown fields，因此服务端响应
+// item 出现任何白名单之外的键都会让作者主页整页解码失败。
+var contentPostProjectionWireFields = map[string]struct{}{
+	"postId": {}, "contentType": {}, "contentIdentity": {}, "assistantUsePolicy": {},
+	"authorId": {}, "authorDisplayName": {}, "authorAvatarUrl": {}, "authorBackgroundUrl": {},
+	"authorRoleLabel": {}, "authorIdentityTags": {}, "authorVerified": {},
+	"title": {}, "body": {}, "summary": {}, "coverUrl": {},
+	"articleTemplate": {}, "articleFontPreset": {},
+	"mediaUrls": {}, "videoUrl": {}, "mediaAssetId": {}, "mediaAssetVersion": {},
+	"hlsCmafMasterManifestUrl": {}, "hlsCmafDescriptorVersion": {},
+	"thumbnailUrl": {}, "width": {}, "height": {}, "durationMs": {},
+	"likeCount": {}, "commentCount": {}, "shareCount": {}, "viewerLiked": {},
+	"primaryHomepageId": {}, "primaryHomepageType": {}, "gatheringRef": {},
+	"createdAt": {}, "updatedAt": {}, "publishedAt": {},
+	"contentVertical": {}, "recallPath": {}, "supplySource": {}, "intersectionReasons": {},
+}
+
+// assertContentPostProjectionWire 断言单个 wire item 是 ContentPostProjection
+// 契约子集且必填字段在位；契约外字段（如既往泄露的 status/visibility/viewCount/
+// authorDisplayNameSnapshot）出现即失败。
+func assertContentPostProjectionWire(t *testing.T, item map[string]any, path string) {
+	t.Helper()
+	for key := range item {
+		if _, ok := contentPostProjectionWireFields[key]; !ok {
+			t.Errorf(
+				"%s carries non-contract wire field %q; "+
+					"App ContentPostProjection decoder rejects unknown fields",
+				path, key,
+			)
+		}
+	}
+	for _, required := range []string{"postId", "contentType", "likeCount", "commentCount", "shareCount"} {
+		if _, ok := item[required]; !ok {
+			t.Errorf("%s is missing required contract field %q", path, required)
+		}
+	}
+}
 
 func TestListUserPosts(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
@@ -38,6 +79,22 @@ func TestListUserPosts(t *testing.T) {
 	items, _ := resp["items"].([]any)
 	if len(items) != 3 {
 		t.Errorf("expected 3 user posts, got %d", len(items))
+	}
+
+	// wire 契约：页 wrapper 与逐 item 白名单必须是 AuthorPostPageSlice /
+	// ContentPostProjection 契约子集（App decoder fail-closed）。
+	pageWireFields := map[string]struct{}{"items": {}, "nextCursor": {}, "hasMore": {}}
+	for key := range resp {
+		if _, ok := pageWireFields[key]; !ok {
+			t.Errorf("AuthorPostPageSlice carries non-contract wire field %q", key)
+		}
+	}
+	for i, raw := range items {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("items[%d] is not an object: %T", i, raw)
+		}
+		assertContentPostProjectionWire(t, item, fmt.Sprintf("items[%d]", i))
 	}
 }
 

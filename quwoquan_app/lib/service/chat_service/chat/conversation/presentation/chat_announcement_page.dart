@@ -1,3 +1,4 @@
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -289,19 +290,28 @@ class _ChatAnnouncementPageState extends ConsumerState<ChatAnnouncementPage> {
                 SettingsInsetGroupedSection(
                   isDark: isDark,
                   density: SettingsInsetSectionDensity.standard,
-                  child: Padding(
-                    padding: EdgeInsets.all(AppSpacing.md),
-                    child: Text(
-                      announcement.isEmpty
-                          ? ChatText.groupAnnouncementEmpty
-                          : announcement,
-                      key: const ValueKey('chat_announcement_readonly_body'),
-                      style: TextStyle(
-                        fontSize: AppTypography.base,
-                        color: SettingsSemanticConstants.labelColor(isDark),
-                      ),
-                    ),
-                  ),
+                  child: announcement.isEmpty
+                      ? const AppEmptyState(
+                          key: ValueKey('chat_announcement_readonly_body'),
+                          icon: CupertinoIcons.doc_plaintext,
+                          title: ChatText.groupAnnouncementEmpty,
+                          density: AppEmptyStateDensity.dense,
+                        )
+                      : Padding(
+                          padding: EdgeInsets.all(AppSpacing.md),
+                          child: Text(
+                            announcement,
+                            key: const ValueKey(
+                              'chat_announcement_readonly_body',
+                            ),
+                            style: TextStyle(
+                              fontSize: AppTypography.base,
+                              color: SettingsSemanticConstants.labelColor(
+                                isDark,
+                              ),
+                            ),
+                          ),
+                        ),
                 ),
                 SizedBox(height: AppSpacing.intraGroupSm),
                 Padding(

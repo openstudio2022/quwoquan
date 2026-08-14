@@ -202,9 +202,12 @@ content_vertical_usage:
   - path: quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/application/projector.py
     count: 1
     digest: sha256:967fa914660878b008cb538b24d6bfb18cedd878f36df9a8e9bb297a0b980421
-  - path: quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/infrastructure/mongo_store.py
-    count: 3
-    digest: sha256:ae1a167d733ffcc431fed22db577a2d3348ac8f831a3a20b6cb85b2d20cb36f6
+  - path: quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/infrastructure/mongo_store_lifecycle_writes.py
+    count: 2
+    digest: sha256:9447d0a41888199219e7197ddd6b376af3560928079e7d3bb072f4f06a8d90b7
+  - path: quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_candidate_index_view/infrastructure/mongo_store_ranking_reads.py
+    count: 1
+    digest: sha256:33fda006fae5890cc84337726ea51257228e6b13ce085dda485b669788646bb4
   - path: quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/feature_registry.yaml
     count: 2
     digest: sha256:33384517d84ea17cba602481e79f11b5cf308ae45375b776f702d7d95ea2c366

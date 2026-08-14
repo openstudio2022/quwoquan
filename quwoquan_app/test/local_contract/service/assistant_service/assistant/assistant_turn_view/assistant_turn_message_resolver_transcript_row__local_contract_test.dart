@@ -155,6 +155,58 @@ void main() {
       );
     });
 
+    test('typed runArtifacts 经 codec 往返读数不变', () {
+      final row = AssistantAnswerTranscriptRow(
+        id: 'm4',
+        sessionId: 'c1',
+        content: 'hello',
+        senderId: 'assistant',
+        senderName: 'Assistant',
+        runArtifacts: const RunArtifacts(
+          diagnostics: RunArtifactsDiagnosticsPartitioned(
+            extensions: <String, dynamic>{
+              'lastEventType': 'completed',
+              'processedCount': 3,
+            },
+          ),
+        ),
+      );
+
+      final decoded =
+          PersistedTimelineTurnCodec.decode(
+                PersistedTimelineTurnCodec.encode(row),
+              )
+              as AssistantAnswerTranscriptRow;
+
+      expect(decoded.runArtifacts, isNotNull);
+      expect(
+        decoded.runArtifacts!.diagnostics.extensions['lastEventType'],
+        'completed',
+      );
+      expect(
+        decoded.runArtifacts!.diagnostics.extensions['processedCount'],
+        3,
+      );
+    });
+
+    test('非法 runArtifacts 袋 fail-soft 置 null 而不炸整行', () {
+      final decoded =
+          PersistedTimelineTurnCodec.decode(<String, dynamic>{
+                'id': 'm5',
+                'sessionId': 'c1',
+                'content': 'hello',
+                'senderId': 'assistant',
+                'senderName': 'Assistant',
+                'runArtifacts': <String, dynamic>{
+                  'displayMarkdown': 42,
+                },
+              })
+              as AssistantAnswerTranscriptRow;
+
+      expect(decoded.runArtifacts, isNull);
+      expect(decoded.content, 'hello');
+    });
+
     test('退役键 dialogueState/uiActions/assistantBoundaryOutcome 被丢弃且不进 extra',
         () {
       final decoded =

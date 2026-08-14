@@ -360,11 +360,9 @@ void main() {
         final assistantRow = state.transcript
             .whereType<AssistantAnswerTranscriptRow>()
             .lastWhere((row) => row.anchor.runId == 'arn_test_personal');
-        final document = AssistantPresentationDocumentWire.fromJson(
-          (assistantRow.runArtifacts['presentationDocument'] as Map)
-              .cast<String, dynamic>(),
-        );
-        expect(document.revision, 2);
+        final document = assistantRow.runArtifacts?.presentationDocument;
+        expect(document, isNotNull);
+        expect(document!.revision, 2);
         expect(document.committedAt, '2026-08-08T00:00:02Z');
       },
     );

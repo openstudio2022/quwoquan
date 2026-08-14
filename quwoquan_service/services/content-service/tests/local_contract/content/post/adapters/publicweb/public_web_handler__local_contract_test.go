@@ -254,6 +254,50 @@ func TestPublicPostHTMLRendersInlineLinksWithSchemeAllowlist(t *testing.T) {
 	assertContains(t, html, "[中奖](javascript:alert(1))")
 }
 
+func TestPublicPostHTMLStripsInternalEntityLinks(t *testing.T) {
+	// 数据工程真实供稿形态：正文含站内实体相对链接；实体落地页 SEO 未
+	// 上线前渲染纯文本，不产生死链、不裸露记号。
+	detail := publicArticleDetail()
+	detail.ArticleMarkdown = "---\ntitle: t\n---\n\n" +
+		"真正牵动期待的却是[杭州西湖](/entity/地点/景区/杭州西湖)——湖面与堤桥叠在一起。\n"
+	handler := newHandler(t, map[string]postports.PostDetailSlice{
+		"post-web-1": detail,
+	}, fixedSitemapLister{})
+
+	recorder := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(recorder, httptest.NewRequest("GET", "/public-web/post/post-web-1", nil))
+	html := recorder.Body.String()
+
+	assertContains(t, html, "<p>真正牵动期待的却是杭州西湖——湖面与堤桥叠在一起。</p>")
+	if strings.Contains(html, "/entity/") || strings.Contains(html, "[杭州西湖]") {
+		t.Fatalf("internal link markup leaked: %s", html)
+	}
+}
+
+func TestPublicPostHTMLRendersHorizontalRuleAndAlignedParagraph(t *testing.T) {
+	detail := publicArticleDetail()
+	detail.ArticleMarkdown = "---\ntitle: t\n---\n\n" +
+		"上一段。\n\n" +
+		"---\n\n" +
+		":::align value=\"center\"\n" +
+		"居中的段落文本\n" +
+		":::\n"
+	handler := newHandler(t, map[string]postports.PostDetailSlice{
+		"post-web-1": detail,
+	}, fixedSitemapLister{})
+
+	recorder := httptest.NewRecorder()
+	handler.Routes().ServeHTTP(recorder, httptest.NewRequest("GET", "/public-web/post/post-web-1", nil))
+	html := recorder.Body.String()
+
+	assertContains(t, html, "<hr>")
+	// align 指令块内文本按段落降级渲染（SEO 端不承载版式）。
+	assertContains(t, html, "<p>居中的段落文本</p>")
+	if strings.Contains(html, ":::") {
+		t.Fatalf("directive markup leaked: %s", html)
+	}
+}
+
 func TestTransferRedirectsCrawlerAndUnknownUAToObjectPage(t *testing.T) {
 	handler := newHandler(t, map[string]postports.PostDetailSlice{}, fixedSitemapLister{})
 

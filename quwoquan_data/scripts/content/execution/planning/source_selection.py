@@ -135,9 +135,13 @@ def qualify_source_ready_targets(
     requested_target_names = tuple(name.strip() for name in target_names if name.strip())
     if len(set(requested_target_names)) != len(requested_target_names):
         raise ValueError("explicit target names must not contain duplicates")
-    if requested_target_names and not quota <= len(requested_target_names) <= limit:
+    # 四载体 campaign 共享同一份 current-wave targetNames：小配额载体（如 M100
+    # video quota=10、count=18）从大名单中挑 quota 个交付，名单大于该载体候选池
+    # 是共享名单的预期形态。唯一的硬下限是名单不得小于交付承诺（与
+    # request.py / request_envelope_build.py 的同名校验保持同一语义）。
+    if requested_target_names and len(requested_target_names) < quota:
         raise ValueError(
-            "explicit target count must fall inside the [--quota, --count] candidate pool range"
+            "explicit target count must reach the approved --quota"
         )
     if requested_target_names:
         scoped_rows = _restrict_to_requested_targets(candidate_rows, requested_target_names)
@@ -205,7 +209,13 @@ def qualify_source_ready_targets(
                 break
             if stop_after_quota and len(accepted) >= quota:
                 break
-    if len(accepted) < quota:
+    supply_shortfall = max(0, quota - len(accepted))
+    # persist_qualified_source（homepage）把 qualification 当作交付承诺的准入门，
+    # 不足配额必须 fail-closed。非 persist lane（video 等）的真实供给由冻结的外部
+    # 输入 receipt 决定，qualification 只是 precheck；与 download 阶段
+    # absorb_download_shortfall_if_any_ready 同一语义——approvedQuota 是 scale
+    # milestone 而非 lane 级 veto，只有零供给才是阻断性 shortfall。
+    if supply_shortfall and (persist_qualified_source or not accepted):
         raise DataIssueError(
             (
                 data_issue(
@@ -225,7 +235,11 @@ def qualify_source_ready_targets(
             )
         )
     selected = list(accepted[:limit])
-    if len(selected) < limit:
+    # persist lane（homepage）的 frozen coverage targets 必须逐行携带
+    # qualifiedHomepageSource（spec_contract fail-closed）；用 rejected 行凑满
+    # oversample 池会把不合格实体写进交付承诺。oversample 填充只属于非
+    # persist lane（download admission 会对填充行重新验证）。
+    if len(selected) < limit and not persist_qualified_source:
         seen = {str(row.get("name") or "") for row in selected}
         for row in rejected:
             name = str(row.get("name") or "")
@@ -266,6 +280,8 @@ def qualify_source_ready_targets(
             "rejectedCount": sum(1 for row in qualification_rows if not row["accepted"]),
             "candidates": qualification_rows,
             "oversampleFilled": len(selected) - len(accepted[:limit]),
+            "approvedQuota": quota,
+            "supplyShortfallCount": supply_shortfall,
         },
         requested_target_names,
     )

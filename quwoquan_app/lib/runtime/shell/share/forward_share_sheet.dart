@@ -1,5 +1,6 @@
+import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
@@ -97,10 +98,7 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
             future: _recentFuture,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
-                return SizedBox(
-                  height: AppSpacing.avatarUserXl + AppSpacing.containerLg,
-                  child: AppRequestFeedback.section(),
-                );
+                return const AppSkeletonListRows(rowCount: 1);
               }
               if (snapshot.hasError) {
                 return AppSectionErrorCard(
@@ -125,7 +123,13 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
               }
               final recipients = snapshot.data ?? const <AppForwardRecipient>[];
               if (recipients.isEmpty) {
-                return _RecentEmptyState(isDark: isDark);
+                return SizedBox(
+                  height: AppSpacing.avatarUserXl + AppSpacing.containerLg,
+                  child: const AppEmptyState(
+                    title: ChatText.forwardNoRecentChats,
+                    density: AppEmptyStateDensity.dense,
+                  ),
+                );
               }
               return ForwardRecentRecipientRail(
                 isDark: isDark,
@@ -252,31 +256,6 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
       tone: result.delivery == ForwardExternalShareDelivery.unavailable
           ? UiErrorTone.caution
           : UiErrorTone.neutral,
-    );
-  }
-}
-
-class _RecentEmptyState extends StatelessWidget {
-  const _RecentEmptyState({required this.isDark});
-
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: AppSpacing.avatarUserXl + AppSpacing.containerLg,
-      child: Center(
-        child: Text(
-          ChatText.forwardNoRecentChats,
-          style: TextStyle(
-            fontSize: AppTypography.iosFootnote,
-            color:
-                SettingsSemanticConstants.conversationSheetSecondaryLabelColor(
-                  isDark,
-                ),
-          ),
-        ),
-      ),
     );
   }
 }

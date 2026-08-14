@@ -213,17 +213,7 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
       await operation(writer, detail);
       // 漏斗辅证埋点（product_action 轨）：只记成功事实；分子分母真相源
       // 仍是域事实投影，埋点失败不阻断主流程。
-      unawaited(
-        ref
-            .read(journeyEventTrackerProvider)
-            .trackAction(
-              journey: 'gathering_flywheel',
-              action: 'gathering_${action.replaceAll('-', '_')}_succeeded',
-              pageName: 'gathering_detail',
-              targetType: 'gathering',
-              targetKey: detail.publicDetail.gatheringId,
-            ),
-      );
+      _trackActionSucceeded(action, detail.publicDetail.gatheringId);
       if (!mounted) return;
       setState(() => _busyActions.remove(action));
       await _load();
@@ -234,6 +224,64 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
         _actionError = error;
       });
     }
+  }
+
+  /// 漏斗埋点集中收口：busy-key 可能携带 `-<personaId>` 后缀用于同屏去重，
+  /// 但埋点 action 必须是 metadata 已声明的有限字面量集，禁止把实体 ID
+  /// 插值进 action 名。每个分支保持字面量 trackAction 调用以满足埋点
+  /// 闭集棘轮的静态扫描口径。
+  void _trackActionSucceeded(String action, String gatheringId) {
+    final t = ref.read(journeyEventTrackerProvider);
+    final stem = switch (action) {
+      _ when action.startsWith('approve-') => 'approve',
+      _ when action.startsWith('reject-') => 'reject',
+      _ when action.startsWith('remove-') => 'remove',
+      _ => action,
+    };
+    final done = switch (stem) {
+      'join' => t.trackAction(journey: 'gathering_flywheel', action: 'gathering_join_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'apply' => t.trackAction(journey: 'gathering_flywheel', action: 'gathering_apply_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'accept-invitation' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_accept_invitation_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'watch-availability' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_watch_availability_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'approve' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_approve_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'reject' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_reject_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'remove' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_remove_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'invite' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_invite_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'change-capacity' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_change_capacity_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'change-admission' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_change_admission_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'material-update' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_material_update_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'cancel' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_cancel_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'start' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_start_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      'outcome' => t.trackAction(journey: 'gathering_flywheel',
+          action: 'gathering_outcome_succeeded',
+          pageName: 'gathering_detail', targetType: 'gathering', targetKey: gatheringId),
+      _ => Future<void>.value(),
+    };
+    unawaited(done);
   }
 
   Future<void> _runPrimaryAction() async {
@@ -932,8 +980,18 @@ class _GatheringDetailPageState extends ConsumerState<GatheringDetailPage> {
         if (candidates.length >= 5) break;
       }
       setState(() => _inviteCandidates = candidates);
-    } catch (_) {
-      // 候选只是捷径；读取失败保留手填，不打断 host 控制台。
+    } catch (error, stackTrace) {
+      // 候选只是捷径；读取失败保留手填，不打断 host 控制台，但降级
+      // 事实必须结构化上报（自带去重）。
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'circle.gathering_detail.invite_candidates_load',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+      );
     }
   }
 

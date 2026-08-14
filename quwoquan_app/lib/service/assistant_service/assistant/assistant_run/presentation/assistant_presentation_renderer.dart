@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/assistant_presentation_action_dispatcher.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_presentation_capability_catalog.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_presentation_node_data.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -594,21 +595,27 @@ class _AssistantPresentationRendererRegistry {
     );
   }
 
-  Widget _routeMap(AssistantPresentationNodeWire node) =>
-      _AssistantRouteMapNode(
-        node: node,
-        textColor: textColor,
-        colors: _themeColors,
-        toneColor: _toneColor(node.style.tone),
-        compact:
-            capabilities.viewportClass ==
-            AssistantPresentationViewportClass.compact,
-      );
+  Widget _routeMap(AssistantPresentationNodeWire node) {
+    // 文档校验阶段已确保 route_map data 可解析；此处兜底与校验同源。
+    final data = AssistantRouteMapData.tryParse(node.data);
+    if (data == null) {
+      return _text(node);
+    }
+    return _AssistantRouteMapNode(
+      data: data,
+      title: node.title,
+      textColor: textColor,
+      colors: _themeColors,
+      toneColor: _toneColor(node.style.tone),
+      compact:
+          capabilities.viewportClass ==
+          AssistantPresentationViewportClass.compact,
+    );
+  }
 
   Widget _comparisonTable(AssistantPresentationNodeWire node) {
-    final columns = _stringList(node.data['columns']);
-    final rows = _mapList(node.data['rows']);
-    if (columns.isEmpty || rows.isEmpty) {
+    final table = AssistantComparisonTableData.tryParse(node.data);
+    if (table == null) {
       return _text(node);
     }
     final textStyle = _bodyStyle(node).copyWith(fontSize: AppTypography.sm);
@@ -626,7 +633,7 @@ class _AssistantPresentationRendererRegistry {
             ),
             children: [
               TableRow(
-                children: columns
+                children: table.columns
                     .map(
                       (column) => Padding(
                         padding: EdgeInsets.all(AppSpacing.intraGroupSm),
@@ -640,16 +647,13 @@ class _AssistantPresentationRendererRegistry {
                     )
                     .toList(growable: false),
               ),
-              ...rows.map(
+              ...table.rows.map(
                 (row) => TableRow(
-                  children: columns
+                  children: table.columns
                       .map(
                         (column) => Padding(
                           padding: EdgeInsets.all(AppSpacing.intraGroupSm),
-                          child: Text(
-                            row[column]?.toString() ?? '',
-                            style: textStyle,
-                          ),
+                          child: Text(row.cellText(column), style: textStyle),
                         ),
                       )
                       .toList(growable: false),
@@ -908,7 +912,7 @@ _PresentationValidation _validateDocument(
       return const _PresentationValidation(reason: 'action_unavailable');
     }
     if (node.kind == AssistantPresentationNodeKind.routeMap &&
-        !_validRouteMapData(node.data)) {
+        AssistantRouteMapData.tryParse(node.data) == null) {
       return const _PresentationValidation(reason: 'invalid_route_map');
     }
   }

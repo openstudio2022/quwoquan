@@ -152,13 +152,15 @@ class ProviderConformanceEvidenceContractTest(unittest.TestCase):
             compiled=compiled,
         )
         self.assertTrue(any("duplicate" in issue for issue in duplicate))
-        legacy = dict(evidence[0])
-        legacy.pop("candidateReceiptDigest")
-        legacy_issues = provider_conformance.exact_required_cell_issues(
-            [legacy, *evidence[1:]],
+        # 缺 candidateReceiptDigest 的旧格式单元格必须按 non-canonical 拒绝；
+        # 消息措辞受退役术语硬门约束，只断言 canonical 拒绝语。
+        stale_cell = dict(evidence[0])
+        stale_cell.pop("candidateReceiptDigest")
+        stale_issues = provider_conformance.exact_required_cell_issues(
+            [stale_cell, *evidence[1:]],
             compiled=compiled,
         )
-        self.assertTrue(any("legacy" in issue for issue in legacy_issues))
+        self.assertTrue(any("non-canonical" in issue for issue in stale_issues))
 
     def test_empty_evidence_cannot_satisfy_release_readiness(self) -> None:
         report = {

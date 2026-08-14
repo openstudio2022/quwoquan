@@ -34,6 +34,8 @@ ConversationViewData _conversation({
   required String id,
   required String type,
   GreetingIntersectionSnapshot? snapshot,
+  List<ContactIntersectionFact> intersectionFacts =
+      const <ContactIntersectionFact>[],
 }) => ConversationViewData(
   id: id,
   type: type,
@@ -41,6 +43,7 @@ ConversationViewData _conversation({
   creatorId: 'user_peer',
   originType: snapshot == null ? 'direct_init' : 'greeting_reply',
   originIntersectionSnapshot: snapshot,
+  intersectionFacts: intersectionFacts,
   maxSeq: 0,
   memberCount: type == 'group' ? 5 : 2,
   maxGroupSize: 200,
@@ -177,6 +180,8 @@ void main() {
     await Hive.deleteFromDisk();
   });
 
+  // spec_ref: specs/feature-tree/chat-conversation/intersection-native-messaging/conversation-intersection-header/spec.md#gwt-002.t1
+  // spec_ref: specs/feature-tree/chat-conversation/intersection-native-messaging/conversation-intersection-header/spec.md#gwt-002.t2
   testWidgets('GWT-002 打招呼升级的 1v1 会话头部保留云侧破冰依据原句', (tester) async {
     final repo = _HeaderConversationRepository({
       'conv_direct_greeting': _conversation(
@@ -212,6 +217,69 @@ void main() {
 
     expect(find.text('产品共创群'), findsOneWidget);
     expect(find.text(_icebreakSentence), findsNothing);
+  });
+
+  // spec_ref: specs/feature-tree/chat-conversation/intersection-native-messaging/conversation-intersection-header/spec.md#gwt-001.t1
+  // spec_ref: specs/feature-tree/chat-conversation/intersection-native-messaging/conversation-intersection-header/spec.md#gwt-001.t2
+  testWidgets('GWT-001 非破冰 1v1 会话头展示云侧常驻交集摘要原文', (tester) async {
+    final repo = _HeaderConversationRepository({
+      'conv_direct_persistent': _conversation(
+        id: 'conv_direct_persistent',
+        type: 'direct',
+        intersectionFacts: <ContactIntersectionFact>[
+          ContactIntersectionFact(
+            intersectionId: 'ix_persist_1',
+            kind: 'coWishlistedEntity',
+            dimension: 'entity',
+            intersectionClass: 'fact',
+            primaryText: '你们都想去五彩池观星营地',
+          ),
+          ContactIntersectionFact(
+            intersectionId: 'ix_persist_2',
+            kind: 'coExperiencedGathering',
+            dimension: 'gathering',
+            intersectionClass: 'fact',
+            primaryText: '一起参加过周末观星聚会',
+          ),
+        ],
+      ),
+    });
+    await tester.pumpWidget(
+      _scopedPage(conversation: repo, conversationId: 'conv_direct_persistent'),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(find.text('小满'), findsOneWidget);
+    // 端只透传云侧聚合的首条 primaryText，不拼句、不改写。
+    expect(find.text('你们都想去五彩池观星营地'), findsOneWidget);
+  });
+
+  testWidgets('破冰快照优先于常驻交集摘要', (tester) async {
+    final repo = _HeaderConversationRepository({
+      'conv_direct_both': _conversation(
+        id: 'conv_direct_both',
+        type: 'direct',
+        snapshot: _snapshot,
+        intersectionFacts: <ContactIntersectionFact>[
+          ContactIntersectionFact(
+            intersectionId: 'ix_persist_x',
+            kind: 'coWishlistedEntity',
+            dimension: 'entity',
+            intersectionClass: 'fact',
+            primaryText: '常驻摘要不该抢占',
+          ),
+        ],
+      ),
+    });
+    await tester.pumpWidget(
+      _scopedPage(conversation: repo, conversationId: 'conv_direct_both'),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(find.text(_icebreakSentence), findsOneWidget);
+    expect(find.text('常驻摘要不该抢占'), findsNothing);
   });
 
   testWidgets('无成立交集且无破冰依据时头部不占位', (tester) async {

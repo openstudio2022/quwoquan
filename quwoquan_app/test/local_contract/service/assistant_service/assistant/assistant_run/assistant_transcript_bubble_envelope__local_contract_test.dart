@@ -1,10 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_transcript_bubble_envelope.dart';
 
 void main() {
-  test('task_card: envelope matches codec map for tasks', () {
+  test('task_card: envelope 从时间轴行解析 typed 任务列表', () {
     final row = UserTranscriptTimelineRow(
       id: 'r1',
       sessionId: 'c1',
@@ -18,10 +17,11 @@ void main() {
         ],
       },
     );
-    final map = PersistedTimelineTurnCodec.encode(row);
-    final env = AssistantTranscriptBubbleEnvelope.fromCodecMap(map);
+    final env = AssistantTranscriptBubbleEnvelope.fromTimelineRow(row);
     expect(env.taskItems.length, 1);
-    expect(env.taskItems.first['title'], 'T1');
+    expect(env.taskItems.first.title, 'T1');
+    expect(env.taskItems.first.status, 'pending');
+    expect(env.taskItems.first.isCompleted, isFalse);
   });
 
   test('image: thumbnailUrl and imageUrl fallbacks', () {
@@ -34,12 +34,11 @@ void main() {
       senderName: 'U',
       extra: <String, dynamic>{'thumbnailUrl': ' https://img/thumb '},
     );
-    final map = PersistedTimelineTurnCodec.encode(row);
-    final env = AssistantTranscriptBubbleEnvelope.fromCodecMap(map);
+    final env = AssistantTranscriptBubbleEnvelope.fromTimelineRow(row);
     expect(env.imageUrl, 'https://img/thumb');
   });
 
-  test('audio: media map and current fields', () {
+  test('audio: typed media fields from timeline row', () {
     final row = UserTranscriptTimelineRow(
       id: 'r3',
       sessionId: 'c1',
@@ -57,8 +56,7 @@ void main() {
         },
       },
     );
-    final map = PersistedTimelineTurnCodec.encode(row);
-    final env = AssistantTranscriptBubbleEnvelope.fromCodecMap(map);
+    final env = AssistantTranscriptBubbleEnvelope.fromTimelineRow(row);
     expect(env.audioMediaUrl, 'https://a/audio');
     expect(env.audioDurationMs, 1200);
     expect(env.audioWaveform, [0.1, 0.2]);

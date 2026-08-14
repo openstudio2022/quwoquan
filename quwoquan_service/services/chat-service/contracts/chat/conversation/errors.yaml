@@ -20,6 +20,7 @@ errors:
     - chat.conversation_membership.ProjectGatheringConversationMembership
     - chat.conversation_membership.ResolveAssistantDeliveryMembership
     - chat.message.ListAssistantGroundingMessages
+    - chat.message.ListConversationAssets
     - chat.message.SendAssistantDeliveryMessage
   http_status: 400
   recovery_action: surface
@@ -85,6 +86,7 @@ errors:
     - chat.conversation_user_state.UpdateConversationSettings
     - chat.message.ListAssistantGroundingMessages
     - chat.message.ListMessages
+    - chat.message.ListConversationAssets
     - chat.message.SyncMessages
   http_status: 404
   recovery_action: surface
@@ -134,6 +136,7 @@ errors:
     - chat.conversation_user_state.UpdateConversationSettings
     - chat.message.ListAssistantGroundingMessages
     - chat.message.ListMessages
+    - chat.message.ListConversationAssets
     - chat.message.RecallMessage
     - chat.message.SendAssistantDeliveryMessage
     - chat.message.SendMessage
@@ -503,6 +506,7 @@ errors:
     - chat.conversation_user_state.UpdateConversationSettings
     - chat.message.ListAssistantGroundingMessages
     - chat.message.ListMessages
+    - chat.message.ListConversationAssets
     - chat.message.RecallMessage
     - chat.message.SendAssistantDeliveryMessage
     - chat.message.SendMessage

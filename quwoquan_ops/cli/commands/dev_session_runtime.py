@@ -793,6 +793,26 @@ def _dev_session_render_runtime_inputs(
             / name,
         )
 
+    # service-core 镜像不再内嵌 skill release 资产;mutable test_live 与
+    # immutable package 走同一条 skill-package-build 签名链路,把官方
+    # publication 物化进 config-root 供 assistant asset-reader 消费。
+    from quwoquan_ops.cli.commands.package_runtime import (
+        _build_official_skill_package_publication,
+    )
+
+    skill_publication = _build_official_skill_package_publication(
+        environment,
+        target,
+        package_source_root=_stackctl.ROOT,
+        package_environment={},
+        output_root=config_root / "skill-packages" / "official",
+    )
+    if int(skill_publication.get("exitCode") or 0) != 0:
+        raise ValueError(
+            "mutable official Skill package publication failed: "
+            + str(skill_publication.get("stderr") or "")[:500]
+        )
+
     try:
         tls_profile_name, profile_kind, _ = _stackctl.tls_profile(target)
         if profile_kind != "local-managed":

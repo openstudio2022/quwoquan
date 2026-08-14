@@ -198,6 +198,14 @@ Future<ActivePersonaContextViewData> _activePersonaContext() async =>
     );
 
 class _CountingMessageRepository implements ChatMessageRepository {
+  @override
+  Future<ConversationAssetPage> listConversationAssets({
+    required String conversationId,
+    required String kind,
+    int? beforeSeq,
+    int limit = 60,
+  }) async => const ConversationAssetPage(items: <ConversationAssetView>[]);
+
   _CountingMessageRepository(this._delegate);
 
   final ChatMessageRepository _delegate;

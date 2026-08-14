@@ -29,6 +29,12 @@ abstract final class MessageRuntimePerformanceBudgets {
 
   /// 发送一条消息到时间线出现已发送气泡的确认耗时预算（测试环境 wall time）。
   static const double sendConfirmBudgetMs = 2000;
+
+  /// 消息首页（Inbox）打开到首行会话可见预算。
+  static const double inboxOpenToFirstRowBudgetMs = 3000;
+
+  /// 消息首页滚动中位 pump 预算。
+  static const double inboxScrollMedianPumpBudgetMs = 80;
 }
 
 /// 重复采样 + 中位数比较的性能探针。

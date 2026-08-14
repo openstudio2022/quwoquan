@@ -2,14 +2,16 @@ part of 'assistant_presentation_renderer.dart';
 
 class _AssistantRouteMapNode extends StatelessWidget {
   const _AssistantRouteMapNode({
-    required this.node,
+    required this.data,
+    required this.title,
     required this.textColor,
     required this.colors,
     required this.toneColor,
     required this.compact,
   });
 
-  final AssistantPresentationNodeWire node;
+  final AssistantRouteMapData data;
+  final String title;
   final Color textColor;
   final AppColorsTheme colors;
   final Color toneColor;
@@ -17,25 +19,19 @@ class _AssistantRouteMapNode extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stops = _routeMapObjects(node.data['stops']);
-    final segments = _routeMapObjects(node.data['segments']);
-    final segmentByOrigin = <String, Map<String, dynamic>>{
-      for (final segment in segments)
-        _routeMapPlaceKey(segment['fromPlaceRef']): segment,
+    final segmentByOrigin = <String, AssistantRouteMapSegment>{
+      for (final segment in data.segments)
+        segment.fromPlaceRef.placeKey: segment,
     };
-    final orderedStops = [...stops]
+    final orderedStops = [...data.stops]
       ..sort((left, right) {
-        final day = (left['dayIndex'] as num).toInt().compareTo(
-          (right['dayIndex'] as num).toInt(),
-        );
+        final day = left.dayIndex.compareTo(right.dayIndex);
         if (day != 0) return day;
-        return (left['order'] as num).toInt().compareTo(
-          (right['order'] as num).toInt(),
-        );
+        return left.order.compareTo(right.order);
       });
     final markerCounts = <String, int>{};
-    for (final marker in _routeMapObjects(node.data['markers'])) {
-      final key = _routeMapPlaceKey(marker['placeRef']);
+    for (final marker in data.markers) {
+      final key = marker.placeRef.placeKey;
       markerCounts[key] = (markerCounts[key] ?? 0) + 1;
     }
 
@@ -43,11 +39,11 @@ class _AssistantRouteMapNode extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (node.title.isNotEmpty)
+        if (title.isNotEmpty)
           Padding(
             padding: EdgeInsets.only(bottom: AppSpacing.intraGroupSm),
             child: SelectableText(
-              node.title,
+              title,
               style: TextStyle(
                 color: textColor,
                 fontSize: AppTypography.base,
@@ -74,12 +70,10 @@ class _AssistantRouteMapNode extends StatelessWidget {
                 _stop(
                   entry.$1,
                   entry.$2,
-                  markerCounts[_routeMapPlaceKey(entry.$2['placeRef'])] ?? 0,
+                  markerCounts[entry.$2.placeRef.placeKey] ?? 0,
                 ),
                 if (entry.$1 < orderedStops.length - 1)
-                  _segment(
-                    segmentByOrigin[_routeMapPlaceKey(entry.$2['placeRef'])],
-                  ),
+                  _segment(segmentByOrigin[entry.$2.placeRef.placeKey]),
               ],
             ],
           ),
@@ -88,12 +82,8 @@ class _AssistantRouteMapNode extends StatelessWidget {
     );
   }
 
-  Widget _stop(int index, Map<String, dynamic> stop, int markerCount) {
-    final placeRef = (stop['placeRef'] as Map).cast<String, dynamic>();
-    final title = (stop['title'] as String?)?.trim();
-    final label = title?.isNotEmpty == true
-        ? title!
-        : (placeRef['objectId'] as String);
+  Widget _stop(int index, AssistantRouteMapStop stop, int markerCount) {
+    final label = stop.title.isNotEmpty ? stop.title : stop.placeRef.objectId;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -145,9 +135,8 @@ class _AssistantRouteMapNode extends StatelessWidget {
     );
   }
 
-  Widget _segment(Map<String, dynamic>? segment) {
-    final token = (segment?['modeToken'] as String?) ?? '';
-    final icon = switch (token) {
+  Widget _segment(AssistantRouteMapSegment? segment) {
+    final icon = switch (segment?.modeToken ?? '') {
       'walk' => CupertinoIcons.person,
       'bicycle' => Icons.directions_bike_outlined,
       'transit' || 'rail' => CupertinoIcons.tram_fill,

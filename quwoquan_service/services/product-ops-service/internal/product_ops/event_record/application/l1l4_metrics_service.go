@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strconv"
 	"strings"
@@ -165,7 +166,14 @@ func (s *MetricQueryService) ListL1L4MetricSnapshots(ctx context.Context, scope 
 		if golden, isGolden := goldenMetricByID(definition.Metric); isGolden {
 			derived, ok, err = s.deriveGoldenMetricState(ctx, definition, golden)
 			if err != nil {
-				return l1l4MetricsResponse{}, err
+				// 单个黄金指标派生失败（如个别字段 mapping 漂移）降级为该指标
+				// unavailable，不拖垮整页快照；日志存储整体不可用仍由上方
+				// SnapshotEvents 的错误路径返回 503。
+				log.Printf(
+					"product-ops l1l4 golden metric %s derivation degraded: %v",
+					definition.Metric, err,
+				)
+				ok = false
 			}
 		} else {
 			derived, ok = deriveL1L4MetricState(definition, prometheusValues)

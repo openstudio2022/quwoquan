@@ -1,3 +1,8 @@
+// 未完成主线的编译隔离：本 projector 依赖的 InterestProfileAggregator、
+// rtrec.ClassifyAndWeightTags 与 ProjectorEvent.ID 尚未落地，且没有任何
+// composition 接线；在符号补齐并接线前以 build tag 排除出常规构建。
+//go:build recommend_feature_wip
+
 package recommendation
 
 import (
@@ -14,7 +19,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	rtrec "quwoquan_service/runtime/recommendation"
-	postevent "quwoquan_service/services/content-service/internal/content/post/domain/event"
+	postevent "quwoquan_service/services/content-service/generated/content/post/contract/event"
 )
 
 // RecommendFeatureProjector maintains the rm_recommend_feature read model.

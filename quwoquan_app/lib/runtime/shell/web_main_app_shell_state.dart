@@ -6,6 +6,7 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
   static const String _defaultCreateTabId = 'gallery';
   static const String _defaultMessageTabId = 'messages';
   static const String _interestMatchContextId = 'interest_match';
+  static const String _actionsContextId = 'actions';
   static const String _profileContextId = 'profile';
 
   final ScrollController _scrollController = ScrollController();
@@ -156,6 +157,13 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
               ),
             )
             .toList(growable: false);
+      case MainTabDestination.actions:
+        return const <_WebContextTabSpec>[
+          _WebContextTabSpec(
+            id: _actionsContextId,
+            label: AppConceptConstants.offlineActionsPageTitle,
+          ),
+        ];
       case MainTabDestination.create:
         return const <_WebContextTabSpec>[
           _WebContextTabSpec(
@@ -213,6 +221,8 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
         return _homeChannelId;
       case MainTabDestination.featured:
         return _featuredFilterId;
+      case MainTabDestination.actions:
+        return _actionsContextId;
       case MainTabDestination.create:
         return _createTabId;
       case MainTabDestination.chat:
@@ -230,6 +240,8 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
         return DiscoveryText.webPcSearchHintHome;
       case MainTabDestination.featured:
         return DiscoveryText.webPcSearchHintFeatured;
+      case MainTabDestination.actions:
+        return DiscoveryText.webPcSearchHintHome;
       case MainTabDestination.create:
         return DiscoveryText.webPcSearchHintCreate;
       case MainTabDestination.chat:
@@ -249,6 +261,8 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
           break;
         case MainTabDestination.featured:
           _featuredFilterId = id;
+          break;
+        case MainTabDestination.actions:
           break;
         case MainTabDestination.create:
           _createTabId = id;
@@ -276,6 +290,8 @@ class _WebMainAppShellState extends ConsumerState<WebMainAppShell> {
           filterId: _featuredFilterId,
           dependencies: widget.dependencies,
         );
+      case MainTabDestination.actions:
+        return const _WebDesktopFrame(child: GatheringActionsDiscoveryPage());
       case MainTabDestination.create:
         return _WebCreateWorkspace(
           activeTabId: _createTabId,

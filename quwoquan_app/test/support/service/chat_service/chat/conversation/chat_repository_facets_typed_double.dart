@@ -212,6 +212,18 @@ final class InMemoryChatMessageRepository implements ChatMessageRepository {
       .getReceipts(conversationId: conversationId, messageId: messageId)
       .map((row) => ChatMessageReceipt.fromWire(_appMap(row)))
       .toList(growable: false);
+
+  @override
+  Future<ConversationAssetPage> listConversationAssets({
+    required String conversationId,
+    required String kind,
+    int? beforeSeq,
+    int limit = 60,
+  }) async {
+    // 最小共享 seed 无媒体消息；索引为空但形状 canonical，
+    // 用例需要行数据时自治注入专属 double。
+    return const ConversationAssetPage(items: <ConversationAssetView>[]);
+  }
 }
 
 final class InMemoryChatMemberRepository implements ChatMemberRepository {
@@ -476,7 +488,9 @@ ChatConversation _chatConversation(ChatFixtureObject row) {
       'ChatConversation.postingPolicy',
     ),
     entityId: _textValue(row['entityId']),
+    gatheringSourceEventId: _textValue(row['gatheringSourceEventId']),
     originType: _textValue(row['originType'], fallback: 'direct_init'),
+    intersectionFacts: const <ContactIntersectionFact>[],
     maxSeq: _intValue(row['maxSeq']),
     memberCount: _intValue(row['memberCount']),
     membersRosterRevision: _intValue(row['membersRosterRevision'], fallback: 1),

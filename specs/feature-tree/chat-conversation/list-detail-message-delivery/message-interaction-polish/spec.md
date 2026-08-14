@@ -137,14 +137,15 @@
 - 完成判定：`GWT-003` 的提及路径证据补齐后闭合；引用回复路径已闭合。
 
 <a id="open-004"></a>
-### OPEN-004 服务端目标校验与提及未读
+### OPEN-004 服务端目标校验与提及未读（已收窄至 GWT 绑定核对）
 
 - 类型：`capability_gap`
-- 优先级：`P1`
+- 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：尚缺 HTTP、Mongo Message、outbox 与 ConversationUserState 的 api_integration 级一致性与重放幂等证据。
-  `replyToMessageId` 服务端目标校验已落地：SendMessage 校验引用消息存在且属同一会话，非法返回 canonical MessageInvalid，已撤回目标允许引用；
-  正负例见 `send_message_reply_target__local_contract_test.go`。
+- 影响或价值：尚缺 `GWT-004` 的子句级 `spec_ref` 绑定核对。api_integration 级一致性与重放幂等证据已落地：
+  `replyToMessageId` 的 HTTP→Mongo→outbox 一致性与同 clientMsgId 重放幂等、不存在/跨会话引用返回 canonical MessageInvalid 且失败不写成功事实见 `message_reply_target_contract__api_integration_test.go`（真实 Mongo）；
+  提及未读投影、重放不重开读位与非法目标拒绝见 `message_mention_contract__data_consistency__api_integration_test.go`；
+  服务级正负例见 `send_message_reply_target__local_contract_test.go`。
 - 完成判定：`GWT-004` 对应行为满足且真实测试 `spec_ref` 有效。
 
 <a id="open-005"></a>

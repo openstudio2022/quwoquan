@@ -7,6 +7,8 @@
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
 // readiness_case: get-feed-local
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-004
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-004.t1
+// spec_ref: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md#gwt-004.t2
 // readiness_case: get-app-config-local
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/spec.md#sit-005
 // readiness_case: get-author-impact-local
@@ -412,6 +414,9 @@ func TestAppConfigEndpointIsImplemented(t *testing.T) {
 	}
 	if typed.Schema != "app_remote_config" || typed.ConfigHash == "" {
 		t.Fatalf("invalid typed app config identity: %+v", typed)
+	}
+	if typed.MaxAgeSec <= 0 {
+		t.Fatalf("app config response must declare a positive maxAgeSec: %+v", typed)
 	}
 	content, _ := body["content"].(map[string]any)
 	if content == nil {

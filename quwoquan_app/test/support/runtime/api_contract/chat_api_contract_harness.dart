@@ -8,6 +8,13 @@ import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_f
 import 'package:quwoquan_app/runtime/transport/generated/chat/chat_request_page_ids.g.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
 import 'package:quwoquan_app/service/chat_service/chat/chat_inbox_view/adapters/chat_inbox_remote.dart';
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/media_asset_remote.dart';
+import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/content_media_object_uploader.dart';
+import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/media_upload_session_remote.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_user_state/adapters/conversation_user_state_remote.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_user_state/application/public/conversation_user_state_command_writer.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message_receipt_fact/application/public/message_receipt_fact_query.dart';
@@ -15,6 +22,7 @@ import 'package:quwoquan_app/service/user_service/account/account_session/adapte
 import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import 'api_contract_environment.dart';
 import 'production_cloud_operation_telemetry_evidence.dart';
 
 const _apiContractEnv = String.fromEnvironment(
@@ -36,11 +44,14 @@ final class ChatApiContractHarness {
     required this.inbox,
     required this.userStateCommands,
     required this.receipts,
+    required this.mediaUploads,
+    required this.mediaAssets,
     required this._accountLifecycle,
     required this.session,
   });
 
   static Future<ChatApiContractHarness> create() async {
+    ApiContractEnvironment.ensureLocalTlsRootTrusted();
     if (_apiBase.isEmpty) {
       throw StateError(
         'L3: API_CONTRACT_BASE_URL was not injected by the canonical '
@@ -141,6 +152,16 @@ final class ChatApiContractHarness {
           client: client,
           invocationContext: invocationContext,
         ),
+        mediaUploads: RemoteContentMediaUploadSessionAdapter(
+          client: client,
+          invocationContext: (clientPageId, {required bool command}) =>
+              invocationContext(AppUiSurfaces.chatDetail, clientPageId),
+        ),
+        mediaAssets: RemoteContentMediaAssetAdapter(
+          client: client,
+          invocationContext: (clientPageId, {required bool command}) =>
+              invocationContext(AppUiSurfaces.chatDetail, clientPageId),
+        ),
         accountLifecycle: RemoteAccountLifecycleCommandWriter(
           client: client,
           invocationContext: (clientPageId) => invocationContext(
@@ -165,6 +186,8 @@ final class ChatApiContractHarness {
   final ChatInboxQuery inbox;
   final ConversationUserStateCommandWriter userStateCommands;
   final MessageReceiptFactQuery receipts;
+  final RemoteContentMediaUploadSessionAdapter mediaUploads;
+  final RemoteContentMediaAssetAdapter mediaAssets;
   final RemoteAccountLifecycleCommandWriter _accountLifecycle;
   final AuthSessionGrant session;
 
@@ -194,6 +217,82 @@ final class ChatApiContractHarness {
         mentions: const <String>[],
       ),
     );
+  }
+
+  /// 经生产上传链（init -> data-plane PUT -> complete -> ready 轮询）产出
+  /// owner-scoped ready 的 audio MediaAsset，返回 assetId。
+  Future<String> uploadReadyAudioAsset() async {
+    final bytes = Uint8List.fromList(
+      utf8.encode(
+        'quwoquan-audio-l3-${DateTime.now().microsecondsSinceEpoch}',
+      ),
+    );
+    final sha = sha256.convert(bytes).toString();
+    final init = await mediaUploads.initUpload(
+      InitContentMediaUploadCommand(
+        mediaType: MediaType.audio,
+        mimeType: 'audio/mp4',
+        fileSize: bytes.length,
+        expectedSha256: sha,
+      ),
+      ContentMediaUploadCommandContext(
+        idempotencyKey:
+            'chat-audio-init-${DateTime.now().microsecondsSinceEpoch}',
+      ),
+    );
+    final uploadUrl = init.uploadUrl;
+    if (uploadUrl == null) {
+      throw StateError('InitMediaUpload returned no uploadUrl');
+    }
+
+    final dataPlaneClient = CloudHttpClient(authTokenProvider: null);
+    try {
+      final uploader = RemoteContentMediaObjectUploader(
+        client: dataPlaneClient,
+        uploadBaseUrl: uploadUrl.replace(path: '/', query: '').toString(),
+      );
+      await uploader.stream(
+        uploadUrl,
+        Stream<List<int>>.value(bytes),
+        contentLength: bytes.length,
+        mimeType: 'audio/mp4',
+        expectedSha256: sha,
+      );
+    } finally {
+      dataPlaneClient.close();
+    }
+
+    final completed = await mediaUploads.completeUpload(
+      CompleteContentMediaUploadCommand(sessionId: init.sessionId),
+      ContentMediaUploadCommandContext(
+        idempotencyKey: 'chat-audio-complete-${init.sessionId}',
+      ),
+    );
+    var assetId = completed.assetId?.trim() ?? '';
+    if (assetId.isEmpty) {
+      final session = await mediaUploads.getUploadSession(
+        GetContentMediaUploadSessionQuery(sessionId: init.sessionId),
+      );
+      assetId = session.assetId?.trim() ?? '';
+    }
+    if (assetId.isEmpty) {
+      throw StateError('CompleteMediaUpload produced no MediaAsset');
+    }
+
+    var processing = completed.assetProcessingStatus;
+    final deadline = DateTime.now().add(const Duration(seconds: 30));
+    while (processing != MediaAssetStatus.ready &&
+        DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      final asset = await mediaAssets.getMediaAsset(
+        GetContentMediaAssetQuery(mediaId: assetId),
+      );
+      processing = asset.status;
+    }
+    if (processing != MediaAssetStatus.ready) {
+      throw StateError('audio MediaAsset did not become ready in budget');
+    }
+    return assetId;
   }
 
   Future<void> close() async {

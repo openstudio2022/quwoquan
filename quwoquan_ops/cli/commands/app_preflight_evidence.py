@@ -379,6 +379,11 @@ def _run_app_content_release_probe(
         video_page_size=20,
         only_checks=(
             "video_book_feed",
+            # App 视频书页真实消费 premium_stream 频道；typed_video 绿不代表
+            # 视频书绿，设备 UAT 前必须同时证明 premium 池非空。
+            "premium_feed",
+            # feed items 非空不等于媒体可显示：设备 UAT 前逐 slice 字节读回。
+            "feed_media_slices",
             "global_search",
             "media_sample",
             *(("release_sample",) if sample_resolution else ()),

@@ -6053,6 +6053,105 @@
       "actorRequirement": "persona",
       "aggregateOwner": "",
       "authMode": "required",
+      "canonicalOperationId": "chat.message.ListConversationAssets",
+      "clientContract": {
+        "dartImport": "../chat/chat_operation_contracts.g.dart",
+        "responseDecoder": "decodeConversationAssetPage",
+        "responseType": "ConversationAssetPage"
+      },
+      "commercial": {
+        "explicit": true,
+        "status": "ready"
+      },
+      "concurrency": {},
+      "domain": "chat",
+      "errorCodes": [
+        "CHAT.USER.unauthorized",
+        "CHAT.USER.invalid_argument",
+        "CHAT.USER.conversation_not_found",
+        "CHAT.SYSTEM.internal_error"
+      ],
+      "facadeMethod": "listConversationAssets",
+      "facet": "MessageQueryFacet",
+      "invariantTarget": "",
+      "kind": "query",
+      "localOperationId": "ListConversationAssets",
+      "method": "GET",
+      "mutationTarget": "",
+      "objectId": "chat.message",
+      "ownershipPolicy": "conversation_member",
+      "pagination": null,
+      "pathTemplate": "/chat/conversations/{conversationId}/assets",
+      "permissions": [],
+      "principal": "persona",
+      "privacy": {
+        "logPolicy": "metadata_only",
+        "requestClassification": "INTERNAL",
+        "responseClassification": "SENSITIVE"
+      },
+      "reliability": {
+        "cancellation": "supported",
+        "idempotency": "none",
+        "maxAttempts": 2,
+        "retryMode": "idempotent",
+        "timeoutMilliseconds": 1500
+      },
+      "requestBindings": {
+        "path": [
+          {
+            "field": "conversationId",
+            "name": "conversationId"
+          }
+        ],
+        "query": [
+          {
+            "field": "kind",
+            "name": "kind"
+          },
+          {
+            "field": "limit",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "field": "beforeSeq",
+            "name": "beforeSeq",
+            "required": false
+          }
+        ]
+      },
+      "requestBodyKind": "none",
+      "requestConstants": null,
+      "requestEntity": "ChatListConversationAssetsQuery",
+      "responseAdmission": null,
+      "responseBody": "ConversationAssetClient",
+      "responseBodyKind": "page",
+      "responseEntity": "ConversationAssetPage",
+      "scopes": [],
+      "slo": {
+        "availabilityPercent": 99.9,
+        "latencyP95Milliseconds": 500
+      },
+      "sourcePath": "chat/chat/message/operations.yaml",
+      "streaming": null,
+      "successStatus": null,
+      "surfaceIds": [
+        "chatSettings"
+      ],
+      "telemetry": {
+        "attributes": [
+          "conversation_id",
+          "outcome"
+        ],
+        "metric": "chat_conversation_assets_list",
+        "trace": true
+      },
+      "transport": "json"
+    },
+    {
+      "actorRequirement": "persona",
+      "aggregateOwner": "",
+      "authMode": "required",
       "canonicalOperationId": "chat.message.ListMessages",
       "clientContract": {
         "dartImport": "../chat/chat_operation_contracts.g.dart",
@@ -11919,6 +12018,7 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
+        "homeActionsDiscovery",
         "myGatherings"
       ],
       "telemetry": {
@@ -14013,6 +14113,7 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
+        "homeActionsDiscovery",
         "myIntersections"
       ],
       "telemetry": {
@@ -14220,6 +14321,7 @@
       "streaming": null,
       "successStatus": null,
       "surfaceIds": [
+        "homeActionsDiscovery",
         "myIntersections"
       ],
       "telemetry": {
@@ -29577,13 +29679,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "3e7507d90f4d8529f010f3406066b0d20183fc183b2408de0df265e508977304"
+    "sha256": "16b31c5973f2a26d5399bb3d9a11e98f6e2caadf7a254f7ea90aa2129c19228a"
   },
   "contractGraph": {
     "compilerHash": "sha256:88eda096929822ed15dc83b01bf7dd3fd60051e241d98548a7f90dd0794b0196",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "760018c440e6f9fffff8b9f820e51930beaa94f2f093aff318150ff084655467",
-    "sourceDigestSetSha256": "58f286a13658a3790a8a1e6d6182ec954c105f3e53e113db79428b4f17b2f171"
+    "sha256": "ae0fd0a3a81ca25ad321276e82c2668626920098032d6fa00232e4637c87fa28",
+    "sourceDigestSetSha256": "e8b67aeda10257a22e20583cb760c129f3fb1e066b68e14974fc1a8ce9cf5307"
   },
   "generator": "app-cloud-handoff"
 }

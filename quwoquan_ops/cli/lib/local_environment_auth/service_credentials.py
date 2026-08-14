@@ -146,6 +146,7 @@ def mint_local_product_ops_operator_token(
         != [
             "ops.experiment.read",
             "ops.experiment.write",
+            "ops.product.dashboard.read",
             "ops.reco.read",
             "ops.reco.write",
             "ops.telemetry.read",

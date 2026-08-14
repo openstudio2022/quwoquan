@@ -24,7 +24,7 @@ class VoiceMessageObservability {
 
   final AnalyticsService _analytics;
 
-  void trackAction({
+  void trackVoiceEvent({
     required String eventName,
     String? conversationId,
     String? messageId,

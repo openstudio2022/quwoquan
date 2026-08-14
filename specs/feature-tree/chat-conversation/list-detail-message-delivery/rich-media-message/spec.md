@@ -70,7 +70,10 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺 api_integration 层富媒体交付证据。
+- 影响或价值：尚缺 image/file/video 的 App Remote api_integration 读回证据（audio 已闭合）。
+  App Remote 媒体链首条 api_integration 证据已落地：真实 MediaAsset 上传
+  （init → data-plane PUT → complete → ready）后经 production Remote 发送 audio 消息，
+  list/sync 读回交付字段与元数据，见 `message_media_reply_remote__api_integration_test.dart`（gamma-local 真实环境）。
   图片、文件与视频消费入口均已闭环并有 widget 证据：图片气泡点击进入全屏大图查看（黑底 + 双指缩放，关闭回会话页）；
   文件气泡点击经平台能力打开交付 URL（无本地文件系统平台走 platform default）；
   交付 URL 缺失时给结构化不可用提示；
