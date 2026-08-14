@@ -6,6 +6,10 @@
 ///
 /// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/message-timeline-local-persistence/spec.md#gwt-001
 /// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/message-timeline-local-persistence/spec.md#gwt-002
+/// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/message-paging-and-ordering/spec.md#gwt-001.t1
+/// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/message-paging-and-ordering/spec.md#gwt-001.t2
+/// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/message-paging-and-ordering/spec.md#gwt-002.t2
+/// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/message-paging-and-ordering/spec.md#gwt-002.t2
 /// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/message-paging-and-ordering/spec.md#gwt-001
 /// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/message-paging-and-ordering/spec.md#gwt-002
 library;

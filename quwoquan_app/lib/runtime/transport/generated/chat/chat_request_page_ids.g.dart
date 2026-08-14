@@ -18,6 +18,7 @@ class ChatRequestPageIds {
     'ListAssistantGroundingMessages': 'chat.list.assistant.grounding.messages',
     'ListContactHome': 'chat.list.contact.home',
     'ListContacts': 'chat.contacts.list',
+    'ListConversationAssets': 'chat.list.conversation.assets',
     'ListConversationTimestamps': 'chat.conversation.timestamps',
     'ListConversations': 'chat.conversation.list',
     'ListGroupCandidates': 'chat.list.group.candidates',
@@ -59,6 +60,7 @@ class ChatRequestPageIds {
   static const String listAssistantGroundingMessages = 'chat.list.assistant.grounding.messages';
   static const String listContactHome = 'chat.list.contact.home';
   static const String listContacts = 'chat.contacts.list';
+  static const String listConversationAssets = 'chat.list.conversation.assets';
   static const String listConversationTimestamps = 'chat.conversation.timestamps';
   static const String listConversations = 'chat.conversation.list';
   static const String listGroupCandidates = 'chat.list.group.candidates';

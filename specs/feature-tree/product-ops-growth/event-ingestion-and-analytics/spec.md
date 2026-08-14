@@ -232,18 +232,19 @@
 - 类型：`capability_gap`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：尚缺四环境的告警链启用运行收据。已具备的能力：
+- 影响或价值：尚缺 beta/prod 的告警链启用运行收据。已具备的能力：
   rollups.yaml 全部 13 个 rowKind 的写侧聚合、product-ops 内建的
   ES 告警评估循环，均有 local_contract 代数测试与真实 ES 容器按
-  rowKind 读回证据。尚缺的证据：评估循环按配置关闭启动，四环境
-  尚未投放策略 configMap 与 telemetry_alerts 配置，线上告警面未激活，
-  没有任何环境的启动日志与投递演练收据。
-- 完成判定：`SIT-002` 的告警分项在四环境逐一通过，gamma 起步。
-  每个环境需要三份证据：投放 `product-ops-telemetry-alert-policy`
-  configMap 与 telemetry_alerts 配置的部署记录、评估循环启动日志、
-  一次 alert drill 投递收据，全部落 `.qwq_output/env/<env>/runs/**`。
-- 依赖：环境部署窗口，与 `OPEN-001` 的 ES Provider 证据同窗执行；
-  环境包准入已升级为要求 canonical `quwoquan_data.release_attestation`，
-  窗口执行时须由环境 owner 一并携带。自建窗口当前不可行：alpha 端口
-  被并行栈占用、alpha/beta 准入缺 attestation、gamma 被持续占用，
-  归因收据在 `.qwq_output/env/alpha/runs/telemetry-alert-window-attempt-20260813/`。
+  rowKind 读回证据。本机 alpha/gamma 分量已闭合：评估循环以生产同源
+  策略启动（policy=app-product-telemetry，33 条告警）、真实 firing
+  （`product-telemetry-aggregate-stale`，control_plane 轨）投递宿主机
+  Alertmanager 实收（received firing 计数递增、invalid=0）、alert drill
+  端到端 PASS，三件套收据在
+  `.qwq_output/env/alpha/runs/round10-alert-receipts/`。
+- 完成判定：`SIT-002` 的告警分项在其余环境逐一通过。每个环境需要
+  三份证据：投放 `product-ops-telemetry-alert-policy` configMap 与
+  telemetry_alerts 配置的部署记录、评估循环启动日志、一次 alert drill
+  投递收据，全部落 `.qwq_output/env/<env>/runs/**`。
+- 依赖：beta/prod 环境部署窗口，与 `OPEN-001` 的 ES Provider 证据
+  同窗执行；环境包准入已升级为要求 canonical
+  `quwoquan_data.release_attestation`，窗口执行时须由环境 owner 一并携带。

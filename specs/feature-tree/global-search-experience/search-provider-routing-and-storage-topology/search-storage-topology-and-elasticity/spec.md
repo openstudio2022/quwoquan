@@ -53,7 +53,7 @@
 - 新建**独立可部署 `search-service`** 承载统一 `POST /search`（`mode=suggest|result`）与 `POST /search/feedback`，单趟 `runtime/search.Retrieve` 跨类型排序。
 - 各域（content/entity/circle/user/integration）经统一 indexer 灌入同一 ES 索引；原各域 `/.../search` 只读路由收敛为 indexer 数据源/内部回退。
 - 收口统一 `search-service` + ES 集群的搜索读路径护栏、metadata 对齐、请求头审计与验证证据。
-- App 主搜索路径走统一 `POST /search`（search-service + ES）；私有对象（`chat.*`）仍 `local_only`，绝不上云。
+- App 结果页主搜索路径走 persisted GraphQL `SearchPage`（search-service + ES）；`POST /search` 只服务 assistant 与 owner projection。私有对象（`chat.*`）仍 `local_only`，绝不上云。
 - 搜索读请求不得长期依赖扫描业务主集合。
 - **各域灌数**：`content.post / entity.homepage / circle.circle / circle.group / user.profile` 经各域写时 `Projector` + `Backfill` 灌入统一 ES 索引 `quwoquan_objects`；第一方地点对象 `location.place` 由 content 域 `place_snapshots` 派生，复用 geo 维度并与 `entity.homepage` 互斥单源。搜索读模型可重建，各域写模型仍是唯一写真相源。
 - **根 Go module 可复现**：search-service 与其余服务统一消费 `quwoquan_service/go.mod` 与 `quwoquan_service/go.sum`，独立二进制从根 package path 构建；单模块门禁阻断嵌套 module。
@@ -101,11 +101,11 @@
 - AND up --env gamma --skip-app（含 backfill）
 - AND health --target gamma-local --scope full
 - AND verify --env gamma --kind all --profile release。
-- WHEN 经 Caddy 网关 POST /search 与 POST /search/feedback。
+- WHEN 经 Caddy 网关 POST /graphql 执行 `SearchPage` persisted query，并 POST /search/feedback。
 - THEN up 阶段 quwoquan_objects backfill 完成（total/indexed），places 投影完成
 - AND health 全 healthy（search-service -> 200）
 - AND verify 全 checks passed。
-- THEN /search 返回 200，信封含 requestId/experimentBucket 与 hit 级 rankReasons/rankPosition；/search/feedback 返回 202 accepted。
+- THEN `SearchPage` 返回 typed slice（`searchRequestId`、item 级 `rankPosition`/`rankReason`）；/search/feedback 返回 202 accepted（反馈是 command，保持 REST 写入口）。
 
 <a id="gwt-003"></a>
 ### GWT-003 真集群高并发容量、稳定性与可重复性准出

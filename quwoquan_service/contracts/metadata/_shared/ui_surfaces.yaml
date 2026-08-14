@@ -74,7 +74,7 @@ surfaces:
     owner: chat
     route_id: chatSettings
     path_template: /chat/{id}/settings
-    description: 会话设置页
+    description: 会话设置页（含群空间相册/文件宫格）
     operation_ids:
       - GetConversation
       - UpdateConversationTitle
@@ -83,6 +83,7 @@ surfaces:
       - ListMembers
       - RemoveMember
       - LeaveConversation
+      - ListConversationAssets
 
   - id: chatManage
     owner: chat
@@ -1020,6 +1021,16 @@ surfaces:
     operation_ids:
       - ListMyHostedGatherings
       - ListGatheringsByHost
+
+  - id: homeActionsDiscovery
+    owner: circle
+    route_id: home
+    path_template: /
+    description: 底栏「行动」——线下行动与发现（交集收件箱、我的行动、兴趣配对与发起行动入口；视频书已改为首页顶部固定入口）
+    operation_ids:
+      - ListMyHostedGatherings
+      - GetMyIntersectionSummary
+      - ListMyIntersections
 
   - id: rtcOutgoing
     owner: rtc

@@ -78,10 +78,6 @@ entries:
 - spec: specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md
   anchor: GWT-002
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
-  anchor: GWT-004
-- spec: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
-  anchor: GWT-010
-- spec: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
   anchor: GWT-011
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
   anchor: GWT-012
@@ -89,8 +85,6 @@ entries:
   anchor: GWT-013
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md
   anchor: GWT-003
-- spec: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md
   anchor: GWT-002
 - spec: specs/feature-tree/discovery-content/publish-comment-reaction/image-editing/spec.md
@@ -109,17 +103,9 @@ entries:
   anchor: GWT-003
 - spec: specs/feature-tree/global-search-experience/cross-domain-search/full-screen-search-shell-and-entry/spec.md
   anchor: GWT-004
-- spec: specs/feature-tree/global-search-experience/cross-domain-search/local-chat-search-contract/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/global-search-experience/cross-domain-search/recent-search-sync-and-voice-asr/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md
-  anchor: GWT-002
-- spec: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/circle-group-hybrid-fallback-contract/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-object-taxonomy-and-provider-registry/spec.md
   anchor: GWT-002
@@ -151,24 +137,12 @@ entries:
   anchor: GWT-003
 - spec: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md
   anchor: GWT-004
-- spec: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/runtime/native-edge-gesture-navigation/immersive-media-edge-swipe-back/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/runtime/native-edge-gesture-navigation/spec.md
   anchor: SIT-001
-- spec: specs/feature-tree/runtime/runtime-agentpack/feature-context-discovery/spec.md
-  anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-assistant/context-grounded-answering/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md
-  anchor: GWT-002
-- spec: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md
-  anchor: GWT-003
-- spec: specs/feature-tree/runtime/runtime-client-foundation/app-remote-config/spec.md
-  anchor: GWT-004
 - spec: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md
@@ -179,10 +153,6 @@ entries:
   anchor: GWT-009
 - spec: specs/feature-tree/runtime/runtime-client-foundation/error-permission-display-semantics/spec.md
   anchor: GWT-013
-- spec: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md
-  anchor: GWT-001
-- spec: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md
-  anchor: GWT-002
 - spec: specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/spec.md
@@ -220,8 +190,6 @@ entries:
 - spec: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md
   anchor: GWT-001
 - spec: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md
-  anchor: GWT-002
-- spec: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/spec.md
   anchor: GWT-003
 - spec: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/career-interest-profile-editor/spec.md
   anchor: GWT-002
@@ -249,7 +217,5 @@ entries:
   anchor: GWT-002
 - spec: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md
   anchor: GWT-001
-- spec: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md
-  anchor: GWT-002
 - spec: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/spec.md
   anchor: SIT-003

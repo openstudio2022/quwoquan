@@ -626,9 +626,16 @@ class _ChatConversationPageState extends _ChatConversationPageActionsState
     }
     // 交集常驻只在 1v1 会话头；群会话头部不得展示交集
     //（intersection-native-messaging REQ-003 / header REQ-001）。
-    final intersectionText = _isGroupChat
+    // 破冰快照优先；非破冰会话回退云侧常驻交集摘要首条（≤2 条读面事实）。
+    var intersectionText = _isGroupChat
         ? null
         : _conversationDto?.originIntersectionSnapshot?.primaryText.trim();
+    if (!_isGroupChat && (intersectionText == null || intersectionText.isEmpty)) {
+      final facts = _conversationDto?.intersectionFacts;
+      if (facts != null && facts.isNotEmpty) {
+        intersectionText = facts.first.primaryText.trim();
+      }
+    }
     if (intersectionText == null || intersectionText.isEmpty) {
       return Text(
         _conversationTitle,

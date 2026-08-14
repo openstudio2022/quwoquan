@@ -331,6 +331,130 @@ def test_environment_matrix_mutable_preflight_does_not_read_active_candidate() -
     resolve_immutable.assert_not_called()
 
 
+def test_environment_matrix_preflight_reads_injected_keys_from_runtime_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for key in (
+        "ASSISTANT_MODEL_COMPLETION_URL",
+        "ASSISTANT_PUBLIC_SEARCH_URL",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    binding = {
+        "adapter_id": "ext.model.protocol_fixture",
+        "state": "enabled",
+        "endpoint_envs": {
+            "completion": "ASSISTANT_MODEL_COMPLETION_URL",
+            "search": "ASSISTANT_PUBLIC_SEARCH_URL",
+        },
+        "secret_refs": [],
+    }
+    with (
+        mock.patch.object(
+            provider_conformance_runner.provider_conformance,
+            "candidate_image_digest",
+            return_value="sha256:" + "1" * 64,
+        ),
+        mock.patch.object(
+            provider_conformance_runner,
+            "_resolve_immutable_execution_candidate",
+            return_value={"candidateDigest": _CANDIDATE_A},
+        ),
+        mock.patch.object(
+            provider_conformance_runner,
+            "_current_commit",
+            return_value="a" * 40,
+        ),
+        mock.patch.object(
+            provider_conformance_runner,
+            "_contract_graph_digest",
+            return_value="sha256:" + "2" * 64,
+        ),
+        mock.patch.object(
+            provider_conformance_runner.provider_conformance,
+            "source_for_cell",
+            return_value={"typedPort": "assistant.model.complete"},
+        ),
+    ):
+        image_digest = provider_conformance_runner.preflight_environment_matrix(
+            environment="alpha",
+            registry={"capabilities": []},
+            compiled={
+                "selectedBindings": {
+                    "alpha": {"assistant.model.complete": binding}
+                }
+            },
+            sources={},
+            runtime_environment={
+                _RUNTIME_IDENTITY_ENV: _immutable_runtime_handoff(),
+                "ASSISTANT_MODEL_COMPLETION_URL": (
+                    "https://provider-protocol-substitute:18089/v1/chat/completions"
+                ),
+                "ASSISTANT_PUBLIC_SEARCH_URL": (
+                    "https://provider-protocol-substitute:18089/search/html"
+                ),
+            },
+        )
+
+    assert image_digest == "sha256:" + "1" * 64
+    assert "ASSISTANT_MODEL_COMPLETION_URL" not in os.environ
+
+
+def test_environment_matrix_preflight_still_blocks_when_runtime_keys_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ASSISTANT_MODEL_COMPLETION_URL", raising=False)
+    binding = {
+        "adapter_id": "ext.model.protocol_fixture",
+        "state": "enabled",
+        "endpoint_envs": {"completion": "ASSISTANT_MODEL_COMPLETION_URL"},
+        "secret_refs": [],
+    }
+    with (
+        mock.patch.object(
+            provider_conformance_runner.provider_conformance,
+            "candidate_image_digest",
+            return_value="sha256:" + "1" * 64,
+        ),
+        mock.patch.object(
+            provider_conformance_runner,
+            "_resolve_immutable_execution_candidate",
+            return_value={"candidateDigest": _CANDIDATE_A},
+        ),
+        mock.patch.object(
+            provider_conformance_runner,
+            "_current_commit",
+            return_value="a" * 40,
+        ),
+        mock.patch.object(
+            provider_conformance_runner,
+            "_contract_graph_digest",
+            return_value="sha256:" + "2" * 64,
+        ),
+        mock.patch.object(
+            provider_conformance_runner.provider_conformance,
+            "source_for_cell",
+            return_value={"typedPort": "assistant.model.complete"},
+        ),
+        pytest.raises(
+            ValueError,
+            match="missing injected runtime keys: ASSISTANT_MODEL_COMPLETION_URL",
+        ),
+    ):
+        provider_conformance_runner.preflight_environment_matrix(
+            environment="alpha",
+            registry={"capabilities": []},
+            compiled={
+                "selectedBindings": {
+                    "alpha": {"assistant.model.complete": binding}
+                }
+            },
+            sources={},
+            runtime_environment={
+                _RUNTIME_IDENTITY_ENV: _immutable_runtime_handoff(),
+            },
+        )
+
+
 def test_candidate_image_digest_is_derived_from_environment_packages() -> None:
     commit = "a" * 40
     service_digest = f"sha256:{'b' * 64}"

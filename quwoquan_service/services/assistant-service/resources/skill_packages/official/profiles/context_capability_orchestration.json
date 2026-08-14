@@ -637,6 +637,7 @@
           "gathering.propose_update",
           "gathering.watch_availability",
           "gathering.propose_plan",
+          "intersection.read_mine",
           "location_poi_search",
           "location_route_read",
           "weather_lookup",
@@ -645,6 +646,7 @@
           "calendar_delete_event"
         ],
         "preferredTools": [
+          "intersection.read_mine",
           "gathering.search_public",
           "gathering.read_public",
           "gathering.propose_create_draft",
@@ -654,7 +656,7 @@
         "maxToolCalls": 12,
         "allowDeviceActionProposal": true
       },
-      "assetDigest": "sha256:7b85e5662abfec12a41628b36d2c6fb9b6a6c936f474c150e1f7d12d9ac15839"
+      "assetDigest": "sha256:b3028c5f7550e3f7e03dd5cfc9b9078568cd82c52c52099c8840131f5933e6ac"
     }
   ],
   "orchestrationProfiles": [

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -200,7 +201,57 @@ func (h *ChatHandler) handleGetConversation(w http.ResponseWriter, r *http.Reque
 		writeHTTPError(w, r, newNotFound("会话", convId))
 		return
 	}
-	writeJSON(w, http.StatusOK, h.conversationToWire(r.Context(), *conv))
+	wire := h.conversationToWire(r.Context(), *conv)
+	wire["intersectionFacts"] = h.resolveConversationIntersectionFacts(
+		r.Context(),
+		*conv,
+		resolvePersonaID(r),
+	)
+	writeJSON(w, http.StatusOK, wire)
+}
+
+// resolveConversationIntersectionFacts 组装非破冰 1v1 会话头的常驻交集
+// 摘要（≤2 条云侧 ContactIntersectionFact）；破冰会话由
+// originIntersectionSnapshot 承载，群会话不聚合，解析失败降级为空。
+func (h *ChatHandler) resolveConversationIntersectionFacts(
+	ctx context.Context,
+	conv conversationmodel.Conversation,
+	viewerPersonaID string,
+) []map[string]any {
+	empty := []map[string]any{}
+	if conv.Type != "direct" ||
+		conv.OriginIntersectionSnapshot != nil ||
+		strings.TrimSpace(viewerPersonaID) == "" ||
+		h.memberService == nil {
+		return empty
+	}
+	members, err := h.memberService.ListMembers(ctx, application.ListMembersRequest{
+		ConversationId: conv.ID,
+		Limit:          10,
+		Sort:           "joined_asc",
+	})
+	if err != nil {
+		return empty
+	}
+	peerID := ""
+	for _, member := range members {
+		if member.UserId != viewerPersonaID && member.MemberType == "user" {
+			peerID = member.UserId
+			break
+		}
+	}
+	if peerID == "" {
+		return empty
+	}
+	summaries, err := h.memberService.ListContactIntersectionSummaries(
+		ctx,
+		viewerPersonaID,
+		peerID,
+	)
+	if err != nil {
+		return empty
+	}
+	return application.ContactIntersectionFacts(summaries)
 }
 
 func (h *ChatHandler) handleGetGatheringChatBoard(w http.ResponseWriter, r *http.Request) {

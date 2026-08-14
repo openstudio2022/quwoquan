@@ -118,5 +118,5 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：当前仍缺 `assistant.public.search` 等 Provider 的 conformance 执行收据（material 已按防腐层规范以 `ext.search.protocol_fixture` 等登记进 alpha `externalBindings`，绑定 `provider-protocol-substitute`），以及真实 Provider 与 Android/iPhone 真机执行收据。`web_search/web_open/web_find` 已由 canonical Tool Catalog 注册并接入 AgentLoop；authoritative Mongo Artifact/Document/Source Ledger、Run budget CAS、来源血缘、HTTPS/凭证/端口/IP/DNS rebinding/重定向/响应预算防线、prompt-injection/failure replay 及持久化 API integration 已有 direct 证据，公开 URL→引用答案 Patrol UAT 也已定义。Alpha Remote 启动当前受并行 service-core 组合根改造的 candidate 服务集合切换阻断。
+- 影响或价值：当前仍缺 `assistant.public.search` 等 Provider 的 conformance 执行收据，以及真实 Provider 与 Android/iPhone 真机执行收据。material 已按防腐层规范以 `ext.search.protocol_fixture` 等登记进 alpha `externalBindings`。`web_search/web_open/web_find` 已由 canonical Tool Catalog 注册并接入 AgentLoop。Alpha canonical 启动与 health 29/29 已取得（run `20260813T160518410673Z-d38bed3e0945497980753e19bcb051e5-health-alpha-local`）。剩余缺 Gamma 同 digest 与全量 conformance 执行回执。
 - 完成判定：`GWT-001` 与 `GWT-002` 在受管非生产 Provider 与同一候选 baseline 上成立——执行真实公开 HTTPS、重定向、引用回查、预算耗尽和攻击 corpus API integration，并在 Android/iPhone 真机完成公开 URL→引用答案 UAT；引用必须 100% 回查 authoritative ledger。

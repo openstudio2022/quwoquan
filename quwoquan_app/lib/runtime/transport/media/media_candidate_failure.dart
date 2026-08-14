@@ -64,18 +64,28 @@ int? extractHttpStatusCode(Object error) {
   return int.tryParse(match.group(1)!);
 }
 
+/// 从 iOS NSError 文本中提取指定 domain 的错误码。
+///
+/// 同时覆盖两种真实序列化形态：
+/// - localizedDescription 尾注：`(NSURLErrorDomain error -1202.)`
+/// - NSError description：`Error Domain=NSURLErrorDomain Code=-1202 "..."`
+int? _nsErrorCode(String lowerText, String lowerDomain) {
+  final match = RegExp(
+    '(?:$lowerDomain\\s+error|error\\s+domain\\s*=\\s*$lowerDomain'
+    '\\s*,?\\s*code)\\s*[=:]?\\s*(-?\\d+)',
+  ).firstMatch(lowerText);
+  if (match == null) {
+    return null;
+  }
+  return int.tryParse(match.group(1)!);
+}
+
 MediaCandidateFailureKind classifyMediaCandidateLoadFailure(
   Object error, {
   String? candidateUrl,
 }) {
   final text = error.toString().toLowerCase();
-  final nativeUrlErrorCode = RegExp(
-    r'(?:nsurlerrordomain\s+error|error\s+domain\s*=\s*nsurlerrordomain'
-    r'\s*,?\s*code)\s*(-?\d+)',
-  ).firstMatch(text);
-  final urlErrorCode = nativeUrlErrorCode == null
-      ? null
-      : int.tryParse(nativeUrlErrorCode.group(1)!);
+  final urlErrorCode = _nsErrorCode(text, 'nsurlerrordomain');
   switch (urlErrorCode) {
     case -1200: // NSURLErrorSecureConnectionFailed
     case -1202: // NSURLErrorServerCertificateUntrusted
@@ -88,6 +98,24 @@ MediaCandidateFailureKind classifyMediaCandidateLoadFailure(
       return MediaCandidateFailureKind.connectionRefused;
     case -1009: // NSURLErrorNotConnectedToInternet
       return MediaCandidateFailureKind.networkUnavailable;
+  }
+  // AVPlayer/HLS 栈以 CoreMediaErrorDomain 包装 HTTP 状态（-12938=404、
+  // -12939=byte-range/416、-12660=403），AVFoundationErrorDomain 表达
+  // 媒体本体不可解（格式不识别/解码失败/媒体数据加载失败）。
+  switch (_nsErrorCode(text, 'coremediaerrordomain')) {
+    case -12938: // HTTP 404: File Not Found
+      return MediaCandidateFailureKind.http404;
+    case -12939: // HTTP 416: byte-range request failed
+    case -12660: // HTTP 403: Forbidden
+      return MediaCandidateFailureKind.http4xx;
+  }
+  switch (_nsErrorCode(text, 'avfoundationerrordomain')) {
+    case -11828: // AVErrorFileFormatNotRecognized
+    case -11821: // AVErrorDecodeFailed
+    case -11829: // AVErrorFailedToLoadMediaData
+      return MediaCandidateFailureKind.decoderInitialization;
+    case -11850: // AVErrorServerIncorrectlyConfigured
+      return MediaCandidateFailureKind.http5xx;
   }
   final statusCode = extractHttpStatusCode(error);
   if (statusCode == 404) {

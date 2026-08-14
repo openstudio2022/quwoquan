@@ -15,11 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"go.mongodb.org/mongo-driver/v2/bson"
-
 	chathttp "quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/http"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/application"
-	model "quwoquan_service/services/chat-service/internal/chat/conversation/domain/model"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/cache"
 	"quwoquan_service/services/chat-service/internal/chat/conversation/infrastructure/persistence"
 )
@@ -85,93 +82,6 @@ func socialMutualServer(viewer string, contactIDs ...string) *httptest.Server {
 			writeTestUserNotFound(w, r, "unexpected "+r.Method+" "+r.URL.Path)
 		}
 	}))
-}
-
-func seedSelectableGroup(
-	t *testing.T,
-	conversationID string,
-	viewer string,
-	title string,
-	memberIDs []string,
-) {
-	t.Helper()
-	db := requireMongoDB(t)
-	ctx := context.Background()
-	now := time.Now().UTC()
-	conversation := &model.Conversation{
-		ID:             conversationID,
-		Type:           "group",
-		Title:          title,
-		AvatarUrl:      "media/avatar/s/archived-avatar/conversation/" + conversationID + "/mock.png",
-		CreatorId:      viewer,
-		MemberCount:    len(memberIDs) + 1,
-		MaxGroupSize:   500,
-		ReceiptEnabled: true,
-		Status:         "active",
-		CreatedAt:      now,
-		UpdatedAt:      now,
-	}
-	if _, err := db.Collection("conversations").InsertOne(ctx, conversation); err != nil {
-		t.Fatalf("seed conversation %s: %v", conversationID, err)
-	}
-	owner := &model.ConversationMember{
-		ID:             conversationID + "_owner",
-		ConversationId: conversationID,
-		UserId:         viewer,
-		UserHandle:     "handle_" + viewer,
-		DisplayName:    "Display_" + viewer,
-		AvatarUrl:      "media/avatar/s/mock/user/" + viewer + "/avatar.png",
-		MemberType:     "user",
-		Role:           "owner",
-		JoinedAt:       now,
-	}
-	if _, err := db.Collection("conversation_memberships").InsertOne(ctx, owner); err != nil {
-		t.Fatalf("seed owner member %s: %v", conversationID, err)
-	}
-	for i, id := range memberIDs {
-		member := &model.ConversationMember{
-			ID:             conversationID + "_" + id,
-			ConversationId: conversationID,
-			UserId:         id,
-			UserHandle:     "handle_" + id,
-			DisplayName:    "Display_" + id,
-			AvatarUrl:      "media/avatar/s/mock/user/" + id + "/avatar.png",
-			MemberType:     "user",
-			Role:           "member",
-			InvitedBy:      viewer,
-			JoinedAt:       now.Add(time.Duration(i+1) * time.Second),
-		}
-		if _, err := db.Collection("conversation_memberships").InsertOne(ctx, member); err != nil {
-			t.Fatalf("seed member %s in %s: %v", id, conversationID, err)
-		}
-	}
-	state := &model.ConversationUserState{
-		ID:             conversationID + "_state_" + viewer,
-		UserId:         viewer,
-		ConversationId: conversationID,
-	}
-	if _, err := db.Collection("conversation_user_states").InsertOne(ctx, state); err != nil {
-		t.Fatalf("seed user state %s: %v", conversationID, err)
-	}
-}
-
-func bindSelectableGroupToCircle(
-	t *testing.T,
-	conversationID string,
-	circleID string,
-) {
-	t.Helper()
-	result, err := requireMongoDB(t).Collection("conversations").UpdateOne(
-		context.Background(),
-		bson.M{"_id": conversationID},
-		bson.M{"$set": bson.M{"circleId": circleID}},
-	)
-	if err != nil {
-		t.Fatalf("bind selectable group %s to circle: %v", conversationID, err)
-	}
-	if result.MatchedCount != 1 {
-		t.Fatalf("selectable group %s missing while binding circle", conversationID)
-	}
 }
 
 func newSelectableGroupHandler(t *testing.T, viewer string, mutual map[string]bool, contactIDs ...string) http.Handler {

@@ -118,11 +118,24 @@ def test_runtime_shared_package_requires_complete_provenance_and_digests(
     package_dir = tmp_path / "runtime-shared"
     package_dir.mkdir()
     files: dict[str, dict[str, str]] = {}
+    source_by_name = {
+        "Caddyfile": "quwoquan_ops/environments/gamma/local/Caddyfile",
+        "livekit.yaml": "quwoquan_ops/external/livekit/base/livekit.yaml",
+        "module_catalog.yaml": (
+            "quwoquan_service/runtime/reliabletask/resources/module_catalog.yaml"
+        ),
+        "object-storage-lifecycle.json": (
+            "quwoquan_ops/environments/compose/object-storage-lifecycle.json"
+        ),
+        "retention_policy.yaml": (
+            "quwoquan_service/runtime/reliabletask/resources/retention_policy.yaml"
+        ),
+    }
     for name in sorted(packaging.RUNTIME_SHARED_FILES):
         path = package_dir / name
         path.write_text(f"{name}\n", encoding="utf-8")
         files[name] = {
-            "source": f"quwoquan_service/runtime/reliabletask/resources/{name}",
+            "source": source_by_name[name],
             "sha256": _sha256(path),
         }
     (package_dir / "manifest.json").write_text(
@@ -131,6 +144,35 @@ def test_runtime_shared_package_requires_complete_provenance_and_digests(
                 "schema": "qwq.runtime_shared_package",
                 "environment": "beta",
                 "provenance": {"files": files},
+            }
+        ),
+        encoding="utf-8",
+    )
+    images = {
+        "provider-protocol-substitute": {
+            "buildInputDigest": "sha256:" + "a" * 64,
+            "imageDigest": "sha256:" + "b" * 64,
+            "ref": "quwoquan/provider-protocol-substitute:build",
+        }
+    }
+    image_digest = "sha256:" + hashlib.sha256(
+        json.dumps(
+            images,
+            ensure_ascii=True,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    (package_dir / "oci-images.json").write_text(
+        json.dumps(
+            {
+                "schema": "stackctl-package-oci-images",
+                "environment": "beta",
+                "target": "beta-local",
+                "configurationDigest": "sha256:" + "c" * 64,
+                "buildInputDigest": "sha256:" + "d" * 64,
+                "imageDigest": image_digest,
+                "images": images,
             }
         ),
         encoding="utf-8",

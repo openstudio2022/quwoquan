@@ -89,6 +89,16 @@ type rtcCallLogStore struct {
 	persisted int
 }
 
+func (*rtcCallLogStore) ListMediaMessages(
+	context.Context,
+	string,
+	string,
+	int,
+	int64,
+) ([]messagemodel.Message, error) {
+	return nil, nil
+}
+
 func (store *rtcCallLogStore) CommitMessage(
 	_ context.Context,
 	commit conversationapp.MessageCommit,

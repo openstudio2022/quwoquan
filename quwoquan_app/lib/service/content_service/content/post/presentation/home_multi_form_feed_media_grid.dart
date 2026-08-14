@@ -158,7 +158,7 @@ class _HomeMomentGridTile extends ConsumerWidget {
             cdnPreset: CdnImagePreset.thumbnail,
             fit: BoxFit.cover,
             placeholder: _mediaPlaceholder(isDark),
-            errorWidget: _mediaPlaceholder(isDark),
+            // 失败态走 AppCachedNetworkImage 显式失败件，与加载占位可区分。
           ),
           if (showMore)
             Positioned.fill(
@@ -266,7 +266,7 @@ class _HomeFeedImageCarouselState
                     cdnPreset: CdnImagePreset.cover,
                     fit: BoxFit.cover,
                     placeholder: _placeholder(),
-                    errorWidget: _placeholder(),
+                    // 失败态走显式失败件，与加载占位可区分。
                   ),
                 );
               },
@@ -518,7 +518,7 @@ class _HomeFeedVideoCard extends ConsumerWidget {
                 cdnPreset: CdnImagePreset.cover,
                 fit: BoxFit.cover,
                 placeholder: _mediaPlaceholder(isDark),
-                errorWidget: _mediaPlaceholder(isDark),
+                // 失败态走显式失败件，与加载占位可区分。
               ),
             // 中央播放标识只属于完全未初始化的静态封面态；预热/初始化后由
             // VideoPlayerWidget 自己呈现加载或画面，避免长按时叠出两个播放按钮。

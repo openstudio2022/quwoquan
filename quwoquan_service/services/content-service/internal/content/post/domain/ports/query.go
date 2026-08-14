@@ -441,6 +441,11 @@ type PostDetailSlice struct {
 
 // AuthorPostItemSlice 是个人主页创作页的紧凑卡片白名单。它不会载入详情
 // 正文 Markdown、manifest 或其他大字段。
+//
+// wire 契约：JSON 形状必须是 contracts/content/post/projections/
+// content_post_projection.yaml 声明的 ContentPostProjection 子集（App generated
+// decoder reject unknown fields）。Status/Visibility/ViewCount 等仅供
+// application 校验与排序使用的内部字段一律 `json:"-"`，不得进入 wire。
 type AuthorPostItemSlice struct {
 	PostID                PostID          `json:"postId" bson:"_id"`
 	AuthorPersonaID       PersonaID       `json:"authorId" bson:"authorId"`
@@ -456,23 +461,23 @@ type AuthorPostItemSlice struct {
 	ArticleTemplate       string          `json:"articleTemplate,omitempty" bson:"articleTemplate,omitempty"`
 	ArticleFontPreset     string          `json:"articleFontPreset,omitempty" bson:"articleFontPreset,omitempty"`
 	ContentVertical       string          `json:"contentVertical,omitempty" bson:"contentVertical,omitempty"`
-	LocationName          string          `json:"locationName,omitempty" bson:"locationName,omitempty"`
-	GeoTagRef             string          `json:"geoTagRef,omitempty" bson:"geoTagRef,omitempty"`
+	LocationName          string          `json:"-" bson:"locationName,omitempty"`
+	GeoTagRef             string          `json:"-" bson:"geoTagRef,omitempty"`
 	PrimaryHomepageID     string          `json:"primaryHomepageId,omitempty" bson:"primaryHomepageId,omitempty"`
-	CanonicalEntityID     string          `json:"canonicalEntityId,omitempty" bson:"canonicalEntityId,omitempty"`
-	Status                PostStatus      `json:"status" bson:"status"`
-	Visibility            PostVisibility  `json:"visibility" bson:"visibility"`
+	CanonicalEntityID     string          `json:"-" bson:"canonicalEntityId,omitempty"`
+	Status                PostStatus      `json:"-" bson:"status"`
+	Visibility            PostVisibility  `json:"-" bson:"visibility"`
 	LikeCount             int64           `json:"likeCount" bson:"likeCount"`
 	CommentCount          int64           `json:"commentCount" bson:"commentCount"`
 	ShareCount            int64           `json:"shareCount" bson:"shareCount"`
-	ViewCount             int64           `json:"viewCount" bson:"viewCount"`
+	ViewCount             int64           `json:"-" bson:"viewCount"`
 	CreatedAt             time.Time       `json:"createdAt" bson:"createdAt"`
 	UpdatedAt             time.Time       `json:"updatedAt" bson:"updatedAt"`
 	PublishedAt           time.Time       `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
-	LastActiveAt          time.Time       `json:"lastActiveAt,omitempty" bson:"lastActiveAt,omitempty"`
-	AuthorDisplayName     string          `json:"authorDisplayNameSnapshot,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
-	AuthorAvatarURL       string          `json:"authorAvatarUrlSnapshot,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
-	PersonaContextVersion int64           `json:"personaContextVersion,omitempty" bson:"personaContextVersion,omitempty"`
+	LastActiveAt          time.Time       `json:"-" bson:"lastActiveAt,omitempty"`
+	AuthorDisplayName     string          `json:"authorDisplayName,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
+	AuthorAvatarURL       string          `json:"authorAvatarUrl,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
+	PersonaContextVersion int64           `json:"-" bson:"personaContextVersion,omitempty"`
 }
 
 type AuthorPostPageSlice struct {

@@ -3,6 +3,15 @@
 /// 页面仍通过 typed copy model 消费这些常量；local_contract 的探针文案只留在
 /// test/support，不进入 production `lib/**`。
 abstract final class GatheringText {
+  // 线下行动与发现（底栏「行动」tab）。
+  static const String actionsDiscoverySubtitle = '把线上遇见的心动，变成线下一起完成的事';
+  static const String actionsDiscoverInterestTitle = '发现同趣的人';
+  static const String actionsDiscoverInterestSubtitle = '按兴趣找到想一起行动的人';
+  static const String actionsCreateEntryTitle = '发起行动';
+  static const String actionsCreateEntrySubtitle = '定好时间地点，邀同趣的人一起去';
+  static const String actionsGuestIntroTitle = '登录后查看我的交集与行动';
+  static const String actionsGuestIntroSubtitle = '交集收件箱与我的行动记录需要登录后可见';
+
   static const String createPageTitle = '发起活动';
   static const String createPurposeSection = '活动内容';
   static const String createTitleLabel = '活动标题';

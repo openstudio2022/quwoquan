@@ -53,6 +53,31 @@ upload.gamma.quwoquan.com
 和受管设备信任回执；Prod package 必须拒绝这些材料。禁止 Caddy 自发签发、
 `mkcert`、关闭证书校验或临时 HTTP runtime define。
 
+## 真机登录取验证码（OTP）
+
+本地 Gamma 的短信 Provider 是 `ext.sms.local_capture` 替代实现：验证码为安全随机
+6 位，不真发短信，也不写入日志、API 回包或 receipt。规格明确禁止固定万能码与
+App `debugCode`（见 `four-environment-commercial-login-maturity` L3 spec）。
+
+真机手机号登录步骤：
+
+1. 在设备 App 上输入手机号并点发送，进入验证码页。
+2. **立即**在本机交互终端执行：
+
+   ```bash
+   python3 quwoquan_ops/cli/stackctl.py provider-debug otp-read --target gamma-local
+   ```
+
+3. 按提示输入同一手机号（隐藏输入；`180xxxxxxxx` 或 `+86180xxxxxxxx` 均可）。
+4. 终端 TTY 显示一行 `OTP: ******`，把 6 位码填进设备 App。
+
+注意：
+
+- 读取是**一次性**的，读完即从 substitute 内存删除；超时或读空先在 App 重发再读。
+- 只支持 `alpha-local|beta-local|gamma-local`，且要求交互 TTY；OTP 只写 `/dev/tty`，
+  不进入命令 JSON 输出。
+- 输错会得到 `USER.AUTH.otp_mismatch`（「验证码不正确，请重新输入」），重发后重读即可。
+
 ## 本地覆盖边界
 
 本地 mirror 覆盖提交前 repository gate 到 device-UAT 左移：

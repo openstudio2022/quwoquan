@@ -293,47 +293,22 @@
       }
     },
     {
-      "if": {
-        "properties": {"readinessPhase": {"enum": ["research", "commercial"]}},
-        "required": ["readinessPhase"]
-      },
-      "then": {
-        "required": ["appUatEnvelope"],
-        "properties": {
-          "counts": {
-            "properties": {
-              "premiumPlayableVideos": {"minimum": 1}
-            }
-          },
-          "feedQueries": {
-            "minItems": 6,
-            "contains": {
-              "type": "object",
-              "properties": {
-                "name": {"const": "premium_stream"},
-                "query": {"pattern": "^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$"}
-              },
-              "required": ["name", "query"]
-            }
+      "required": ["appUatEnvelope"],
+      "properties": {
+        "counts": {
+          "properties": {
+            "premiumPlayableVideos": {"minimum": 1}
           }
-        }
-      },
-      "else": {
-        "properties": {
-          "counts": {
+        },
+        "feedQueries": {
+          "minItems": 6,
+          "contains": {
+            "type": "object",
             "properties": {
-              "premiumPlayableVideos": {"const": 0}
-            }
-          },
-          "feedQueries": {
-            "maxItems": 5,
-            "not": {
-              "contains": {
-                "type": "object",
-                "properties": {"name": {"const": "premium_stream"}},
-                "required": ["name"]
-              }
-            }
+              "name": {"const": "premium_stream"},
+              "query": {"pattern": "^sort=recommend&channelId=premium_stream&limit=[1-9][0-9]*$"}
+            },
+            "required": ["name", "query"]
           }
         }
       }

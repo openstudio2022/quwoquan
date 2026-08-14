@@ -27,6 +27,13 @@ type messageBackend struct {
 	calls map[string]int
 }
 
+func (*messageBackend) ListConversationAssets(
+	context.Context,
+	messageapp.ListConversationAssetsRequest,
+) (*messageapp.ConversationAssetsPage, error) {
+	return &messageapp.ConversationAssetsPage{Items: []messageapp.ConversationAssetRow{}}, nil
+}
+
 func (backend *messageBackend) record(name string) {
 	if backend.calls == nil {
 		backend.calls = map[string]int{}

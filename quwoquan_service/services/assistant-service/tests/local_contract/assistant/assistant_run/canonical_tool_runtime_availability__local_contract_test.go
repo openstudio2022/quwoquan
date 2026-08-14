@@ -8,7 +8,8 @@ import (
 	toolpkg "quwoquan_service/services/assistant-service/internal/assistant/assistant_run/application/tool"
 )
 
-// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-002
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-002.t2
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-002.t3
 func TestCanonicalRegistryRequiresHandlerOrExplicitUnavailableBinding(t *testing.T) {
 	const (
 		poiTool   = "location_poi_search"

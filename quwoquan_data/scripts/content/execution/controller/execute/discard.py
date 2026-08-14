@@ -118,7 +118,13 @@ def discard_execution(
                 "GATE_BLOCK active task execute process owns execution: "
                 + "; ".join(active_processes)
             )
-        archive_frozen_target_set(normalized_id)
+        # retry archive 只保全「已冻结的交付承诺」。qualification/spec 阶段
+        # 就失败的 execution 从未冻结 target set，没有承诺需要归档；若因此
+        # fail-closed，失败的 campaign lane 将永远无法 discard/reconcile。
+        from content.execution.workspace import execution_target_set_path
+
+        if execution_target_set_path(normalized_id).is_file():
+            archive_frozen_target_set(normalized_id)
         if (root / "evidence" / "reliabletask").is_dir():
             from content.execution.queue.reliabletask.fleet import (
                 discard_reliabletask_execution,

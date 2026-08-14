@@ -15,6 +15,7 @@ import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
 import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/circle/application/public/circle_detail_page_route_extra.dart';
@@ -104,7 +105,11 @@ class FollowingSubjectStrip extends ConsumerWidget {
                 ),
                 data: (items) {
                   if (items.isEmpty) {
-                    return _FollowingSubjectEmptyState(isDark: isDark);
+                    return const AppEmptyState(
+                      title: DiscoveryText.followingSubjectEmptyTitle,
+                      subtitle: DiscoveryText.followingSubjectEmptySubtitle,
+                      density: AppEmptyStateDensity.dense,
+                    );
                   }
                   return SizedBox(
                     height: AppSpacing.avatarRailHeight,
@@ -446,42 +451,3 @@ class _FollowingSubjectSkeletonStrip extends StatelessWidget {
   }
 }
 
-class _FollowingSubjectEmptyState extends StatelessWidget {
-  const _FollowingSubjectEmptyState({required this.isDark});
-
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            DiscoveryText.followingSubjectEmptyTitle,
-            style: TextStyle(
-              fontSize: AppTypography.iosSubheadline,
-              fontWeight: AppTypography.semiBold,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundPrimary,
-              ),
-            ),
-          ),
-          SizedBox(height: AppSpacing.intraGroupXs),
-          Text(
-            DiscoveryText.followingSubjectEmptySubtitle,
-            style: TextStyle(
-              fontSize: AppTypography.iosFootnote,
-              color: AppColorsFunctional.getColor(
-                isDark,
-                ColorType.foregroundSecondary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

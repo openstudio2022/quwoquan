@@ -461,13 +461,17 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 	wm := s.Watermarks(ctx, userID)
 	kindGate := s.newIntersectionKindGate("inbox")
 	type agg struct {
-		count    int
-		newCount int
+		count             int
+		newCount          int
+		strengthenedCount int
+		reactivatedCount  int
 	}
 	byDim := map[string]*agg{}
 	order := []string{}
 	total := 0
 	totalNew := 0
+	totalStrengthened := 0
+	totalReactivated := 0
 	for _, raw := range reasons {
 		// 红点计数与 List 可见条目共用同一 kind 闸门：供给不足的点
 		// 在两侧同时消失，否则会出现「有红点、点进去空列表」的计数漂移。
@@ -488,6 +492,9 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 			s.metrics.ObserveInboxFiltered("display_incomplete")
 			continue
 		}
+		// 生命周期计数与红点同源：同一条可见 reason 的 lifecycle 态
+		// 按其归属维度逐点累加，与 count/newCount 保持同一过滤闸门。
+		lifecycle := LifecycleStateForReason(r)
 		for _, point := range r.IntersectionPoints {
 			dim := point.Dimension
 			if dim == "" {
@@ -505,15 +512,25 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 				a.newCount++
 				totalNew++
 			}
+			switch lifecycle {
+			case "strengthened":
+				a.strengthenedCount++
+				totalStrengthened++
+			case "reactivated":
+				a.reactivatedCount++
+				totalReactivated++
+			}
 		}
 	}
 	dims := make([]IntersectionDimensionTallyView, 0, len(order))
 	for _, d := range order {
 		dims = append(dims, IntersectionDimensionTallyView{
-			Dimension: d,
-			Label:     dimensionLabelText(d),
-			Count:     byDim[d].count,
-			NewCount:  byDim[d].newCount,
+			Dimension:         d,
+			Label:             dimensionLabelText(d),
+			Count:             byDim[d].count,
+			NewCount:          byDim[d].newCount,
+			StrengthenedCount: byDim[d].strengthenedCount,
+			ReactivatedCount:  byDim[d].reactivatedCount,
 		})
 	}
 	// 未读多的维度优先，便于端侧"最多 3 个维度"截断时优先展示有新增的维度。
@@ -524,10 +541,12 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 		return dims[i].Count > dims[j].Count
 	})
 	return IntersectionInboxSummaryView{
-		TotalCount:    total,
-		TotalNewCount: totalNew,
-		Dimensions:    dims,
-		GeneratedAt:   s.now().UTC().Format(time.RFC3339),
+		TotalCount:             total,
+		TotalNewCount:          totalNew,
+		Dimensions:             dims,
+		GeneratedAt:            s.now().UTC().Format(time.RFC3339),
+		TotalStrengthenedCount: totalStrengthened,
+		TotalReactivatedCount:  totalReactivated,
 	}, nil
 }
 

@@ -7,7 +7,6 @@ import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/d
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_journey.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_display_state_projection.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_citation.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_timeline_turn_codec.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_transcript_timeline_row.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_display_text_resolver.dart';
 import 'package:quwoquan_app/design_system/avatar/assistant_avatar.dart';
@@ -74,15 +73,7 @@ AssistantPresentationDocumentWire? _resolveAssistantPresentation(
   AssistantTranscriptTimelineRow row,
 ) {
   if (row is! AssistantAnswerTranscriptRow) return null;
-  final raw = row.runArtifacts['presentationDocument'];
-  if (raw is! Map) return null;
-  try {
-    return AssistantPresentationDocumentWire.fromJson(
-      raw.cast<String, dynamic>(),
-    );
-  } on FormatException {
-    return null;
-  }
+  return row.runArtifacts?.presentationDocument;
 }
 
 const double assistantBubbleMaxWidth = 280.0;
@@ -168,10 +159,6 @@ class AssistantMessageBubble extends ConsumerWidget {
   final void Function(String reason)? onPresentationFallback;
   final void Function(AssistantCitation reference)? onReferenceTap;
 
-  /// 单测与协议断言用 Map 视图（与 [PersistedTimelineTurnCodec.encode] 一致）。
-  Map<String, dynamic> get asTimelineProtocolMap =>
-      PersistedTimelineTurnCodec.encode(transcriptRow);
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final row = transcriptRow;
@@ -205,9 +192,7 @@ class AssistantMessageBubble extends ConsumerWidget {
     };
     final transcriptEnvelope =
         (type == 'task_card' || type == 'image' || type == 'audio')
-        ? AssistantTranscriptBubbleEnvelope.fromCodecMap(
-            PersistedTimelineTurnCodec.encode(row),
-          )
+        ? AssistantTranscriptBubbleEnvelope.fromTimelineRow(row)
         : null;
     final viewportWidth = MediaQuery.of(context).size.width;
     const horizontalPadding = 24.0;
@@ -325,16 +310,13 @@ class AssistantMessageBubble extends ConsumerWidget {
               ),
             ),
             SizedBox(height: AppSpacing.sm),
-            ...tasks.map<Widget>((map) {
-              final title = map['title'] as String? ?? '';
-              final time = map['time'] as String? ?? '';
-              final status = map['status'] as String? ?? 'pending';
+            ...tasks.map<Widget>((task) {
               return Padding(
                 padding: EdgeInsets.only(bottom: AppSpacing.xs),
                 child: Row(
                   children: [
                     Icon(
-                      status == 'completed'
+                      task.isCompleted
                           ? Icons.check_circle
                           : Icons.radio_button_unchecked,
                       size: AppSpacing.iconSmall,
@@ -343,7 +325,7 @@ class AssistantMessageBubble extends ConsumerWidget {
                     SizedBox(width: AppSpacing.intraGroupSm),
                     Expanded(
                       child: Text(
-                        '$title · $time',
+                        '${task.title} · ${task.time}',
                         style: TextStyle(
                           fontSize: AppTypography.sm,
                           color: textColor,

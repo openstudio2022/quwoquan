@@ -412,6 +412,58 @@ void main() {
     );
 
     testWidgets(
+      '三态语义 key：加载占位 / 显式失败 / 解码成功可被测试与 UAT 区分',
+      (tester) async {
+        // 失败态（候选为空）：必须暴露 error key，不得与占位混同。
+        await tester.pumpWidget(
+          _wrap(const AppCachedNetworkImage(imageUrl: '')),
+        );
+        await tester.pump();
+        expect(find.byKey(appImageLoadErrorKey), findsOneWidget);
+        expect(find.byKey(appImageLoadPlaceholderKey), findsNothing);
+        expect(find.byKey(appImageLoadSuccessKey), findsNothing);
+
+        // 自定义 errorWidget（如 feed 灰块）同样必须携带 error key：
+        // 这是「图片全灰」可被 UAT 检出的前提。
+        await tester.pumpWidget(
+          _wrap(
+            AppCachedNetworkImage(
+              imageUrl: '',
+              errorWidget: Container(color: CupertinoColors.systemGrey5),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.byKey(appImageLoadErrorKey), findsOneWidget);
+
+        // 加载中：placeholder key 可见，error/success 不可见。
+        await tester.pumpWidget(
+          _wrap(
+            const AppCachedNetworkImage(
+              imageUrl:
+                  'media/image/s/archived-image/post/loading/v1/cover.png',
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.byKey(appImageLoadPlaceholderKey), findsOneWidget);
+        expect(find.byKey(appImageLoadErrorKey), findsNothing);
+
+        // 成功态：imageBuilder 产物必须携带 success key。
+        final cachedFinder = find.byType(CachedNetworkImage);
+        final cachedImage = tester.widget<CachedNetworkImage>(cachedFinder);
+        final decoded = cachedImage.imageBuilder!(
+          tester.element(cachedFinder),
+          MemoryImage(_transparentImage),
+        );
+        await tester.pumpWidget(_wrap(decoded));
+        await tester.pump();
+        expect(find.byKey(appImageLoadSuccessKey), findsOneWidget);
+        expect(find.byKey(appImageLoadErrorKey), findsNothing);
+      },
+    );
+
+    testWidgets(
       'avatar reports successful decode once and rejects raw provider URL',
       (tester) async {
         var succeededCount = 0;

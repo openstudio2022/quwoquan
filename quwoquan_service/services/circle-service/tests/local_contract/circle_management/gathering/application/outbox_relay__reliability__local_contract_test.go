@@ -106,3 +106,37 @@ func TestGatheringRelayUsesPublicationCheckpointAfterDurableHandoff(t *testing.T
 		t.Fatalf("Healthy() after recovery error = %v", err)
 	}
 }
+
+func TestGatheringRelayRecoversHealthAfterEmptySuccessfulScan(t *testing.T) {
+	event := gatheringports.OutboxEvent{
+		EventID: "gathering-1:GatheringDraftCreated:1", EventType: "GatheringDraftCreated",
+		AggregateID: "gathering-1", AggregateVersion: 1, Sequence: 7,
+		Payload:    []byte(`{}`),
+		OccurredAt: time.Date(2026, 8, 5, 12, 0, 0, 0, time.UTC),
+	}
+	outbox := &gatheringOutboxFixture{event: event, available: true}
+	transport := &gatheringTransportFixture{fail: true}
+	publisher, err := gatheringmessaging.NewEventPublisher(transport)
+	if err != nil {
+		t.Fatalf("NewEventPublisher() error = %v", err)
+	}
+	relay, err := gatheringapp.NewOutboxRelay(outbox, publisher)
+	if err != nil {
+		t.Fatalf("NewOutboxRelay() error = %v", err)
+	}
+	if _, err := relay.Drain(context.Background(), 1); err == nil {
+		t.Fatal("failed Drain() must return an error")
+	}
+	if relay.Healthy(context.Background(), time.Minute) == nil {
+		t.Fatal("Healthy() must fail right after a drain failure")
+	}
+	// 瞬时故障结束后 outbox 为空：一次成功的空扫描必须恢复健康态，
+	// 不得把空 outbox 的服务永久卡在 unhealthy。
+	outbox.available = false
+	if count, err := relay.Drain(context.Background(), 1); err != nil || count != 0 {
+		t.Fatalf("empty Drain() = (%d, %v), want (0, nil)", count, err)
+	}
+	if err := relay.Healthy(context.Background(), time.Minute); err != nil {
+		t.Fatalf("Healthy() after empty successful scan error = %v", err)
+	}
+}

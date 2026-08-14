@@ -75,6 +75,10 @@ APP_CORE_READBACK_UAT_TEST_TARGET = (
     "test/user_acceptance/journeys/app_startup/"
     "app_core_readback__user_acceptance_test.dart"
 )
+PROFILE_JOURNEY_UAT_TEST_TARGET = (
+    "test/user_acceptance/journeys/profile/"
+    "profile_journey__user_acceptance_test.dart"
+)
 IOS_DIRECT_FLUTTER_RUN_UAT = (
     _REPO_ROOT / "quwoquan_app/scripts/device/verify_ios_hot_restart.py"
 )
@@ -129,6 +133,8 @@ def register_parser(
 _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
     {
         DISCOVERY_FEED_UAT_TEST_TARGET,
+        # 作者主页旅程含关注/取关真实往返，需要真实非生产身份。
+        PROFILE_JOURNEY_UAT_TEST_TARGET,
         APP_CORE_READBACK_UAT_TEST_TARGET,
         HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
         VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
@@ -137,6 +143,7 @@ _ALPHA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
 )
 _BETA_GAMMA_APP_CONTENT_TYPED_ACTOR_TARGETS = frozenset(
     {
+        PROFILE_JOURNEY_UAT_TEST_TARGET,
         APP_CORE_READBACK_UAT_TEST_TARGET,
         HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET,
     }
@@ -385,6 +392,14 @@ def _command_app_content_uat(
                 break
             suite_plan: list[tuple[str, str, bool, str]] = [
                 ("homepage-feed", _stackctl.DISCOVERY_FEED_UAT_TEST_TARGET, False, ""),
+                # 作者主页旅程：他人主页「记录」列表必须真实解码渲染（回归
+                # ListUserPosts 契约漂移导致的「共有 0 条记录」+错误态事故）。
+                (
+                    "profile-journey",
+                    PROFILE_JOURNEY_UAT_TEST_TARGET,
+                    False,
+                    "",
+                ),
                 (
                     "app-core-readback",
                     _stackctl.APP_CORE_READBACK_UAT_TEST_TARGET,

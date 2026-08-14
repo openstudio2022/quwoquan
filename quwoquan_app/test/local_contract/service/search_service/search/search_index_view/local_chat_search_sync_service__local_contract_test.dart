@@ -494,6 +494,14 @@ final class _ChatConversationAdapter implements ChatConversationRepository {
 }
 
 final class _ChatMessageAdapter implements ChatMessageRepository {
+  @override
+  Future<ConversationAssetPage> listConversationAssets({
+    required String conversationId,
+    required String kind,
+    int? beforeSeq,
+    int limit = 60,
+  }) async => const ConversationAssetPage(items: <ConversationAssetView>[]);
+
   const _ChatMessageAdapter(this._delegate, {this.syncMessagesOverride});
 
   final ChatMessageRepository _delegate;

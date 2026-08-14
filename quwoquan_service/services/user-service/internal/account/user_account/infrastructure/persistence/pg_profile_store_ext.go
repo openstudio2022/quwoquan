@@ -18,6 +18,8 @@ import (
 	repository "quwoquan_service/services/user-service/internal/account/user_account/domain/user/ports"
 )
 
+const userProfileSearchBackfillEventType = "UserProfileSearchBackfillRequested"
+
 // PgProfileStore extends the object-local generated base with domain queries.
 type PgProfileStore struct {
 	pool *pgxpool.Pool
@@ -232,9 +234,14 @@ func (s *PgProfileStore) EnqueueUserProfileSearchBackfill(
 		operation = "delete"
 	}
 	projection := repository.UserProfileSearchProjection{
+		EventID: userProfileSearchBackfillEventID(
+			profile.UserID,
+			int64(profile.ProfileVersion),
+			occurredAt,
+		),
 		UserID:         profile.UserID,
 		ProfileVersion: int64(profile.ProfileVersion),
-		EventType:      userevent.UserProfileUpdated,
+		EventType:      userProfileSearchBackfillEventType,
 		OccurredAt:     occurredAt,
 		Payload: repository.UserProfileSearchProjectionPayload{
 			Operation:     operation,
@@ -244,7 +251,7 @@ func (s *PgProfileStore) EnqueueUserProfileSearchBackfill(
 			IdentityTags:  parsePgTextArray(profile.IdentityTags),
 			FollowerCount: profile.FollowerCount,
 			PostCount:     profile.PostCount,
-			UpdatedAt:     occurredAt,
+			UpdatedAt:     profile.UpdatedAt,
 		},
 	}
 	tx, err := s.pool.Begin(ctx)
@@ -290,11 +297,14 @@ func appendUserProfileSearchProjections(
 			!isUserProfileSearchProjectionEvent(projection.EventType) {
 			return errors.New("invalid user profile search projection")
 		}
-		eventID := userProfileSearchProjectionEventID(
-			projection.UserID,
-			projection.ProfileVersion,
-			projection.EventType,
-		)
+		eventID := strings.TrimSpace(projection.EventID)
+		if eventID == "" {
+			eventID = userProfileSearchProjectionEventID(
+				projection.UserID,
+				projection.ProfileVersion,
+				projection.EventType,
+			)
+		}
 		payload := projection.Payload
 		payload.EventID = eventID
 		payload.UserID = strings.TrimSpace(projection.UserID)
@@ -345,11 +355,26 @@ func userProfileSearchProjectionEventID(
 	return "ups_" + hex.EncodeToString(digest[:24])
 }
 
+func userProfileSearchBackfillEventID(
+	userID string,
+	profileVersion int64,
+	occurredAt time.Time,
+) string {
+	digest := sha256.Sum256([]byte(fmt.Sprintf(
+		"user-profile-search-backfill\x00%s\x00%d\x00%d",
+		strings.TrimSpace(userID),
+		profileVersion,
+		occurredAt.UTC().UnixNano(),
+	)))
+	return "ups_" + hex.EncodeToString(digest[:24])
+}
+
 func isUserProfileSearchProjectionEvent(eventType string) bool {
 	switch eventType {
 	case userevent.UserProfileUpdated,
 		userevent.UserAvatarUpdated,
-		userevent.UserAccountClosed:
+		userevent.UserAccountClosed,
+		userProfileSearchBackfillEventType:
 		return true
 	default:
 		return false

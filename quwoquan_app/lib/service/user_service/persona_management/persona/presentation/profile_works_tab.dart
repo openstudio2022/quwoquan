@@ -81,6 +81,13 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
             scope: UiErrorScope.section,
           );
 
+    // 「共有 N 条记录」只允许表达真实结算结果：首屏加载中或列表请求失败且
+    // 无缓存数据时，`creations.length == 0` 不是事实计数，必须隐藏而不是
+    // 显示「共有 0 条记录」冒充真实空态。
+    final int? settledTotalCount = (isLoading || blockingFailure != null)
+        ? null
+        : state.creations.length;
+
     if (widget.inlineScroll) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -88,7 +95,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
           _buildCreationFilters(
             notifier,
             state,
-            totalCount: state.creations.length,
+            totalCount: settledTotalCount,
           ),
           if (isLoading)
             AppRequestFeedback.section(showSlowHint: state.isWorksSlow)
@@ -172,7 +179,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         _buildCreationFilters(
           notifier,
           state,
-          totalCount: state.creations.length,
+          totalCount: settledTotalCount,
         ),
         Expanded(
           child: isLoading
@@ -274,10 +281,13 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
 
   /// 二级过滤（全部/图片/视频/长文）：与互动页同源的横滑二级页签，
   /// 记录总数放到二级页签「下方」。
+  ///
+  /// [totalCount] 为 null 表示列表尚未成功结算（加载中/阻断失败），此时
+  /// 不渲染计数行——错误态与「共有 0 条记录」不得同屏出现。
   Widget _buildCreationFilters(
     ProfileNotifier notifier,
     ProfileState state, {
-    required int totalCount,
+    required int? totalCount,
   }) {
     final selectedFilterId = _creationFilters
         .firstWhere(
@@ -305,24 +315,25 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
           scrollKey: widget.secondaryTabBarKey,
           onHorizontalDragEnd: widget.onSecondaryHorizontalDragEnd,
         ),
-        Padding(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerMd,
-            AppSpacing.zero,
-            AppSpacing.containerMd,
-            AppSpacing.intraGroupXs,
-          ),
-          child: Text(
-            UITextConstants.profileRecordsTotal(totalCount),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: AppTypography.iosFootnote,
-              color: AppColors.iosSecondaryLabel(context),
-              letterSpacing: -0.04,
+        if (totalCount != null)
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.containerMd,
+              AppSpacing.zero,
+              AppSpacing.containerMd,
+              AppSpacing.intraGroupXs,
+            ),
+            child: Text(
+              UITextConstants.profileRecordsTotal(totalCount),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.iosFootnote,
+                color: AppColors.iosSecondaryLabel(context),
+                letterSpacing: -0.04,
+              ),
             ),
           ),
-        ),
       ],
     );
   }

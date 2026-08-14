@@ -978,6 +978,19 @@ groups:
         annotations:
           summary: "recommendation ready operation P95 超出 SLO（1000ms）"
           description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1000。"
+      - alert: RecommendationContractOperationLatencyP95Above1500Ms
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(quwoquan_recommendation_contract_operation_duration_seconds_bucket{service="recommendation-service",operation=~"recommendation\\..+",contract_metric=~"recommendation_.+",commercial_status="ready",slo_latency_p95_ms="1500"}[5m])) by (le, operation, contract_metric)
+          ) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+          layer: l2
+          domain: recommendation
+        annotations:
+          summary: "recommendation ready operation P95 超出 SLO（1500ms）"
+          description: "{{ $labels.operation }}（{{ $labels.contract_metric }}）P95 = {{ $value | humanizeDuration }} 超出 ContractGraph 声明的 slo.latencyP95Milliseconds=1500。"
   - name: quwoquan_rtc_contract_object_coverage
     rules:
       - alert: RtcContractOperationAvailabilityBelow99p9Percent

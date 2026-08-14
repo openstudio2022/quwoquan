@@ -328,8 +328,12 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                 result["appUatEnvelopeDigest"],
                 r"^sha256:[0-9a-f]{64}$",
             )
-            self.assertEqual(len(result["runs"]), 27)
-            self.assertEqual(run.call_count, 24)
+            # 套件矩阵：homepage-feed / profile-journey / app-core-readback /
+            # home-video-playback / video-playback-{start,middle,end} /
+            # controlled-edge-recovery = 8 suites + 1 direct-flutter-run，
+            # 共 9 runs × 3 环境。
+            self.assertEqual(len(result["runs"]), 30)
+            self.assertEqual(run.call_count, 27)
             self.assertEqual(result["appUatPlan"], uat_plan)
             direct_calls = [
                 call
@@ -365,6 +369,17 @@ class AppContentPreflightUatActorsTest(unittest.TestCase):
                     call.args[0],
                 )
                 self.assertIn("avatar-a", call.args[0])
+            profile_journey_calls = [
+                call
+                for call in smoke_profile.call_args_list
+                if call.kwargs.get("suite_name") == "app-content-profile-journey"
+            ]
+            self.assertEqual(len(profile_journey_calls), 3)
+            for call in profile_journey_calls:
+                self.assertEqual(
+                    call.kwargs.get("patrol_target"),
+                    stackctl.PROFILE_JOURNEY_UAT_TEST_TARGET,
+                )
             home_video_calls = [
                 call
                 for call in smoke_profile.call_args_list

@@ -474,6 +474,40 @@ func (s *MongoChatStore) ListMessages(ctx context.Context, conversationId string
 	return msgs, nil
 }
 
+func (s *MongoChatStore) ListMediaMessages(
+	ctx context.Context,
+	conversationId string,
+	messageType string,
+	limit int,
+	beforeSeq int64,
+) ([]messagemodel.Message, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 60
+	}
+	filter := bson.M{
+		"conversationId": conversationId,
+		"type":           messageType,
+		"mediaAssetId":   bson.M{"$exists": true, "$ne": ""},
+		"status":         bson.M{"$ne": "recalled"},
+	}
+	if beforeSeq > 0 {
+		filter["seq"] = bson.M{"$lt": beforeSeq}
+	}
+	opts := options.Find().
+		SetSort(bson.D{{Key: "seq", Value: -1}}).
+		SetLimit(int64(limit))
+	cur, err := s.messages.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	var msgs []messagemodel.Message
+	if err := cur.All(ctx, &msgs); err != nil {
+		return nil, err
+	}
+	return msgs, nil
+}
+
 func (s *MongoChatStore) CountUnreadMessages(
 	ctx context.Context,
 	conversationID string,

@@ -9,10 +9,14 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
+	rtobs "quwoquan_service/runtime/observability"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	originalaccessmodel "quwoquan_service/services/content-service/internal/media/media_original_access_fact/domain/model"
 	originalaccessports "quwoquan_service/services/content-service/internal/media/media_original_access_fact/domain/ports"
 )
+
+// 契约 runtime_entrypoints[].telemetry.metric 同名计数器（outcome=ok|error）。
+var auditAppendOutcomes = rtobs.NewEntrypointOutcomeCounter("content_media_original_access_audit_append")
 
 // Decision is one already-made original media access outcome that must be
 // audited. Every mutable input (grant deadline included) is decided by
@@ -52,6 +56,7 @@ func NewService(store originalaccessports.Store) *Service {
 
 func (service *Service) AppendAudit(ctx context.Context, decision Decision) (Record, error) {
 	if strings.TrimSpace(decision.CommandDigest) == "" {
+		auditAppendOutcomes.WithLabelValues("error").Inc()
 		return Record{}, rterr.NewInvalidArgument(
 			rterr.ModuleContent,
 			"审计事实缺少命令摘要",
@@ -76,8 +81,10 @@ func (service *Service) AppendAudit(ctx context.Context, decision Decision) (Rec
 		CommandDigest: strings.TrimSpace(decision.CommandDigest),
 	})
 	if err != nil {
+		auditAppendOutcomes.WithLabelValues("error").Inc()
 		return Record{}, Unavailable(err)
 	}
+	auditAppendOutcomes.WithLabelValues("ok").Inc()
 	return Record{
 		AuditID:   appended.Fact.AuditID,
 		Outcome:   appended.Fact.Outcome,

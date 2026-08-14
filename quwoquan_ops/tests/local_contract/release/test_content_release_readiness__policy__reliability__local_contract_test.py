@@ -331,6 +331,12 @@ def test_non_prod_verify__binds_prod_purity_to_prod_target__local_contract() -> 
         if any(part.endswith("verify_prod_package_purity.py") for part in command)
     )
     assert purity_command[-2:] == ["--target", "prod-hosted"]
+    media_command = next(
+        command
+        for command in commands
+        if any(part.endswith("verify_media_delivery_contract.py") for part in command)
+    )
+    assert media_command[-2:] == ["--env", "alpha"]
 
 
 def test_prod_verify__passes_prod_target_to_prod_purity__local_contract() -> None:

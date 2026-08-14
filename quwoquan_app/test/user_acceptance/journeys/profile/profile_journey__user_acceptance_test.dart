@@ -125,6 +125,31 @@ void main() {
       );
       expect(reachedProfile, isTrue, reason: '作者头像应跳转到用户主页');
 
+      // 记录 tab（默认二级容器）：feed 作者必有已发布作品，ListUserPosts 真实
+      // wire 必须能被 generated decoder 解码并渲染作品网格。回归背景：契约
+      // 漂移曾让有作品作者的主页整页解码失败，同时显示「共有 0 条记录」+
+      // 「内容暂时无法显示」的矛盾组合。
+      final worksGridRendered = await _waitForKeyInTree(
+        $,
+        const ValueKey<String>('profile-works-grid'),
+        timeout: const Duration(seconds: 20),
+      );
+      expect(
+        worksGridRendered,
+        isTrue,
+        reason: 'feed 作者主页「记录」必须渲染作品网格（ListUserPosts 可解码且非空）',
+      );
+      expect(
+        find.text(SearchText.recoveryInvalidContentTitle).evaluate(),
+        isEmpty,
+        reason: '「记录」列表不得进入「内容暂时无法显示」契约错误态',
+      );
+      expect(
+        find.text(UITextConstants.profileRecordsTotal(0)).evaluate(),
+        isEmpty,
+        reason: '有作品作者不得显示「共有 0 条记录」伪空态',
+      );
+
       // 关注/取关真实往返：无论 seed 初态如何，都先归一为未关注，再验证完整往返。
       final followEntry = find.text(FoundationText.follow);
       final followingEntry = find.text(FoundationText.following);

@@ -165,6 +165,19 @@ final class ComposedChatRepository implements ChatRepository {
   );
 
   @override
+  Future<ConversationAssetPage> listConversationAssets({
+    required String conversationId,
+    required String kind,
+    int? beforeSeq,
+    int limit = 60,
+  }) => _message.listConversationAssets(
+    conversationId: conversationId,
+    kind: kind,
+    beforeSeq: beforeSeq,
+    limit: limit,
+  );
+
+  @override
   Future<List<ConversationMemberListRow>> listMembers({
     required String conversationId,
     String? cursor,

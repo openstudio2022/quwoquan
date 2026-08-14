@@ -55,6 +55,16 @@ final class RemoteChatMessageQuery implements ChatMessageQuery {
       context: invocationContext(ChatRequestPageIds.syncMessages),
     );
   }
+
+  @override
+  Future<ConversationAssetPage> listConversationAssets(
+    ChatListConversationAssetsQuery query,
+  ) {
+    return client.chatMessageListConversationAssets(
+      query,
+      context: invocationContext(ChatRequestPageIds.listConversationAssets),
+    );
+  }
 }
 
 final class RemoteChatMessageMutationWriter

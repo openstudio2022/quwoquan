@@ -83,6 +83,10 @@
         {
           "expr": "sum(rate(integration_external_interaction_dead_letter_append[5m])) by (outcome)",
           "legendFormat": "external_dead_letter {{ outcome }}"
+        },
+        {
+          "expr": "sum(rate(content_media_original_access_audit_append[5m])) by (outcome)",
+          "legendFormat": "media_original_access_audit {{ outcome }}"
         }
       ]
     },

@@ -30,7 +30,7 @@ import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_reference_webview_page.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/personal_assistant_stream_controller.dart';
-import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_session_empty_state.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_session_welcome_panel.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_session_inline_error.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_history_sheet.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/presentation/assistant_message_bubble.dart';
@@ -349,7 +349,7 @@ class _PersonalAssistantSessionBody extends ConsumerWidget {
             child: state.historyLoading && state.transcript.isEmpty
                 ? AppRequestFeedback.section()
                 : state.transcript.isEmpty && !hasRetryError
-                ? AssistantSessionEmptyState(
+                ? AssistantSessionWelcomePanel(
                     openContext: openContext,
                     foreground: foreground,
                     onSuggestionSelected: (value) {

@@ -12,6 +12,8 @@ import 'package:quwoquan_app/runtime/di/rtc_call_entry_dependencies.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/rtc_call_entry_presenter.dart';
 import 'package:quwoquan_app/design_system/forms/settings/settings_inset_form_page.dart';
 import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
+import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_repository.dart';
+import 'package:quwoquan_cloud_contracts/generated/chat_contracts.dart' show ConversationAssetPage, ConversationAssetView;
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -30,11 +32,13 @@ List<Override> _chatTestOverrides({
   ChatMemberRepository? member,
   ChatGroupAdminRepository? groupAdmin,
   ChatConversationRepository? conversation,
+  ChatMessageRepository? message,
 }) => [
   ...chatTestRepositoryOverrides(
     member: member,
     groupAdmin: groupAdmin,
     conversation: conversation,
+    message: message,
   ),
   currentUserIdProvider.overrideWithValue(chatCurrentUserProfileId()),
 ];
@@ -43,6 +47,7 @@ Widget _scopedApp({
   ChatMemberRepository? member,
   ChatGroupAdminRepository? groupAdmin,
   ChatConversationRepository? conversation,
+  ChatMessageRepository? message,
   List<Override> overrides = const <Override>[],
 }) {
   return ProviderScope(
@@ -51,6 +56,7 @@ Widget _scopedApp({
         member: member,
         groupAdmin: groupAdmin,
         conversation: conversation,
+        message: message,
       ),
       ...overrides,
     ],
@@ -642,6 +648,74 @@ void main() {
       expect(settingsRepo.calls.single.pinned, isNull);
     });
 
+    // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/spec.md#sit-004
+    testWidgets('相册宫格打开群空间相册并渲染真实媒体索引', (tester) async {
+      _suppressImageErrors();
+      await tester.binding.setSurfaceSize(const Size(390, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _scopedApp(message: _AssetsMessageRepository()),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      final albumEntry = find.byKey(
+        const ValueKey<String>('chat_settings_album_entry'),
+      );
+      await tester.scrollUntilVisible(
+        albumEntry,
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ChatSettingsPage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(albumEntry);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const ValueKey<String>('conversation_asset_asset_msg_img')),
+        findsOneWidget,
+        reason: '相册面板必须渲染 ListConversationAssets 读面的真实行',
+      );
+    });
+
+    // spec_ref: specs/feature-tree/chat-conversation/commercial-message-system/spec.md#sit-004
+    testWidgets('文件宫格打开群空间文件列表并显示文件名', (tester) async {
+      _suppressImageErrors();
+      await tester.binding.setSurfaceSize(const Size(390, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _scopedApp(message: _AssetsMessageRepository()),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      final filesEntry = find.byKey(
+        const ValueKey<String>('chat_settings_files_entry'),
+      );
+      await tester.scrollUntilVisible(
+        filesEntry,
+        200,
+        scrollable: find
+            .descendant(
+              of: find.byType(ChatSettingsPage),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.tap(filesEntry);
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('观星路线图.pdf'),
+        findsOneWidget,
+        reason: '文件面板必须展示云侧交付的文件名',
+      );
+    });
+
     // spec_ref: specs/feature-tree/chat-conversation/chat-experience-optimization/spec.md#open-002
     testWidgets('群首页初始加载呈现共享骨架屏', (tester) async {
       _suppressImageErrors();
@@ -912,6 +986,49 @@ class _ErrorChatRepository extends Fake implements ChatMemberRepository {
 }
 
 /// 当前用户为普通成员
+/// 群空间媒体索引 double：相册一行图片、文件一行 PDF。
+class _AssetsMessageRepository extends Fake implements ChatMessageRepository {
+  @override
+  Future<ConversationAssetPage> listConversationAssets({
+    required String conversationId,
+    required String kind,
+    int? beforeSeq,
+    int limit = 60,
+  }) async {
+    if (kind == 'image') {
+      return ConversationAssetPage(
+        items: <ConversationAssetView>[
+          ConversationAssetView(
+            messageId: 'asset_msg_img',
+            seq: 9,
+            mediaAssetId: 'asset-image-1',
+            messageType: 'image',
+            senderId: 'fixture_user_peer',
+            senderName: '契约摄影师',
+            mediaDeliveryUrl: 'https://image.example.test/media/image/p.jpg',
+            createdAt: DateTime.utc(2026, 8, 14, 1),
+          ),
+        ],
+      );
+    }
+    return ConversationAssetPage(
+      items: <ConversationAssetView>[
+        ConversationAssetView(
+          messageId: 'asset_msg_file',
+          seq: 8,
+          mediaAssetId: 'asset-file-1',
+          messageType: 'file',
+          senderId: 'fixture_user_peer',
+          senderName: '契约好友',
+          fileName: '观星路线图.pdf',
+          mediaDeliveryUrl: 'https://image.example.test/media/image/f.pdf',
+          createdAt: DateTime.utc(2026, 8, 14, 1),
+        ),
+      ],
+    );
+  }
+}
+
 /// 摄影圈子群的三名成员（圈群标题人数与成员网格一致性用例的自治输入）。
 class _PhotoCircleChatRepository extends Fake implements ChatMemberRepository {
   @override

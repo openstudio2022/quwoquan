@@ -87,7 +87,7 @@ func TestAssistantToolCatalogIsGeneratedClosedAndRequiresExplicitMutationConfirm
 	}
 }
 
-// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-002
+// spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-002.t3
 // spec_ref: specs/feature-tree/assistant-run-learning/world-class-trinity-experience-baseline/tool-fabric-runtime/spec.md#gwt-003
 func TestCanonicalRegistryRegistersDeviceActionsWithoutCloudHandlers(t *testing.T) {
 	registry := toolpkg.BaseRegistry()

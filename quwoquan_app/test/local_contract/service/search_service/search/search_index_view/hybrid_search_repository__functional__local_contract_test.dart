@@ -1,6 +1,14 @@
 // spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/spec.md#sit-001
 // spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/local-chat-search-contract/spec.md#gwt-001
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/local-chat-search-contract/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/local-chat-search-contract/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/global-search-experience/cross-domain-search/local-chat-search-contract/spec.md#gwt-001.t3
 // spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/circle-group-hybrid-fallback-contract/spec.md#gwt-001
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/circle-group-hybrid-fallback-contract/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/circle-group-hybrid-fallback-contract/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/circle-group-hybrid-fallback-contract/spec.md#gwt-001.t3
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_view_data.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
@@ -197,6 +205,61 @@ void main() {
     expect(groupHit.asCircleGroupItem?.circleId, 'circle-photo');
     expect(groupHit.asCircleGroupItem?.circleName, '契约摄影社');
     expect(telemetry.events, contains('search_hybrid_degraded'));
+  });
+
+  test('result 模式 Remote 失败原样抛出 canonical failure，不合成伪成功响应', () async {
+    final telemetry = _TelemetrySpy();
+    final local = _LocalReader();
+    final circleGroups = _CircleGroupIndexSpy();
+    final repository = HybridSearchRepository(
+      _RecordingRemoteRepository(failure: StateError('remote unavailable')),
+      local,
+      _SyncSpy(),
+      circleGroups,
+      _personaContext,
+      telemetry,
+    );
+
+    await expectLater(
+      repository.search(SearchRequest(query: '西湖', mode: CanonicalSearchMode.result)),
+      throwsA(isA<StateError>()),
+    );
+    // 失败不得回退到本地命名空间或本地讨论索引伪造 result 结果。
+    expect(local.calls, isEmpty);
+    expect(circleGroups.searchCalls, 0);
+  });
+
+  test('全局搜索页面与业务层不直接依赖聊天域搜索方法名，只消费 canonical search(request)', () {
+    const forbidden = <String>[
+      'searchContacts(',
+      'searchConversations(',
+      'searchMessages(',
+    ];
+    final offenders = <String>[];
+    for (final root in <String>[
+      'lib/service/search_service/search/search_index_view/presentation',
+      'lib/service/search_service/search/search_index_view/application',
+    ]) {
+      final dir = Directory(root);
+      expect(dir.existsSync(), isTrue, reason: '$root 必须存在');
+      for (final entity in dir.listSync(recursive: true)) {
+        if (entity is! File || !entity.path.endsWith('.dart')) {
+          continue;
+        }
+        final content = entity.readAsStringSync();
+        for (final symbol in forbidden) {
+          if (content.contains(symbol)) {
+            offenders.add('${entity.path}: $symbol');
+          }
+        }
+      }
+    }
+    expect(
+      offenders,
+      isEmpty,
+      reason: '页面与业务层只允许调用 canonical search(request)；'
+          '聊天域搜索方法只能由 search_index_view/adapters 消费',
+    );
   });
 }
 

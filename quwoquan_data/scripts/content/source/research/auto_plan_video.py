@@ -274,12 +274,20 @@ def write_video_lane(
     sourced_video_pool: list[dict[str, Any]],
     acquisition_receipt_refs: list[str] | None = None,
     acquisition_root: Path | None = None,
+    entity_aliases: tuple[str, ...] = (),
 ) -> None:
-    professional_videos = acquired_video_specs_for_entity(
-        acquisition_receipt_refs or [],
-        entity_id=entity_id,
-        root=acquisition_root,
-    )
+    # receipt 的 entityId 可能是 canonical 名的别名（如「西湖」对
+    # 「杭州西湖」）。与 qualification 侧同一归一化语义：canonical 名
+    # 优先，其后按 aliases 依次匹配；不改变 frozen receipt 集合。
+    professional_videos: list[dict[str, Any]] = []
+    for entity_name in dict.fromkeys([entity_id, *entity_aliases]):
+        professional_videos = acquired_video_specs_for_entity(
+            acquisition_receipt_refs or [],
+            entity_id=entity_name,
+            root=acquisition_root,
+        )
+        if professional_videos:
+            break
     merged: list[dict[str, Any]] = []
     seen: set[str] = set()
     for candidate in [*professional_videos, *sourced_video_pool]:

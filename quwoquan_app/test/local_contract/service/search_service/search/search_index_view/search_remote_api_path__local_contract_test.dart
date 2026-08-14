@@ -1,7 +1,10 @@
 // spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-002
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-002.t2
+// spec_ref: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/canonical-search-contract/spec.md#gwt-002.t3
 // readiness_case: search_index_view_search_app_local
 
-/// 对象级端云契约：Remote adapter 的 HTTP path 与 generated metadata 对齐。
+/// owner/assistant REST 适配器：`RemoteSearchRepository` 的 HTTP path 与 generated
+/// metadata 对齐。App 结果页生产装配走 SearchPage GraphQL，不走本适配器。
 library;
 
 import 'package:flutter_test/flutter_test.dart';

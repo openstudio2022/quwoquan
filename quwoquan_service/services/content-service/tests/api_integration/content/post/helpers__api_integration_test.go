@@ -158,6 +158,23 @@ func createReadyPublicationMediaAsset(
 	mediaType string,
 ) string {
 	t.Helper()
+	assetID := createCompletedUnprocessedMediaAsset(t, ownerID, mediaType)
+	if mediaType == "video" {
+		markVideoAssetProcessingReady(t, ownerID, assetID)
+	} else {
+		markImageAssetProcessingReady(t, ownerID, assetID)
+	}
+	return assetID
+}
+
+// createCompletedUnprocessedMediaAsset 只走 init/complete 公开 command，
+// 不注入处理结果——供 media_not_ready fail-closed 分支使用。
+func createCompletedUnprocessedMediaAsset(
+	t *testing.T,
+	ownerID string,
+	mediaType string,
+) string {
+	t.Helper()
 	sequence := helperRequestSequence.Add(1)
 	contentType := "image/jpeg"
 	if mediaType == "video" {
@@ -224,72 +241,87 @@ func createReadyPublicationMediaAsset(
 	if err := json.Unmarshal(completeResponse.Body.Bytes(), &completed); err != nil {
 		t.Fatal(err)
 	}
-	assetID := asTestString(completed["assetId"])
-	const processingTargetVersion int64 = 2
-	if mediaType == "video" {
-		videoPublicSliceKey := runtimemedia.BuildContentMediaPublicSliceKey(
-			"video",
-			assetID,
-			processingTargetVersion,
-			"video/mp4",
-		)
-		videoPublicPrefix := strings.TrimSuffix(videoPublicSliceKey, "/source.mp4")
-		performMediaCommand(
-			t,
-			http.MethodPost,
-			"/internal/content/media/"+assetID+":processing-result",
-			fmt.Sprintf(`{
-				"processingStatus":"ready",
-				"processorProfile":"media_canary_progressive_mp4",
-				"verifiedDurationMs":125000,
-				"videoWidth":540,
-				"videoHeight":960,
-				"videoCodec":"h264",
-				"videoContainer":"mp4",
-				"videoAudioCodec":"aac",
-				"videoKeyframeIntervalMs":2000,
-				"videoFastStart":true,
-				"videoPublicSliceKey":%q,
-				"coverPublicSliceKey":%q,
-				"previewTrackVersion":1,
-				"previewTrackManifestSliceKey":%q
-			}`,
-				videoPublicSliceKey,
-				videoPublicPrefix+"/cover.webp",
-				videoPublicPrefix+"/preview/manifest.json",
-			),
-			ownerID,
-			fmt.Sprintf("media-processing-%d", sequence),
-		)
-	} else if mediaType == "image" {
-		imagePublicSliceKey := runtimemedia.BuildContentMediaPublicSliceKey(
-			"image",
-			assetID,
-			processingTargetVersion,
-			contentType,
-		)
-		performMediaCommand(
-			t,
-			http.MethodPost,
-			"/internal/content/media/"+assetID+":processing-result",
-			fmt.Sprintf(`{
-				"processingStatus":"ready",
-				"processorProfile":"content_image_normalization",
-				"imageWidth":540,
-				"imageHeight":960,
-				"imageDeliveryMimeType":"image/jpeg",
-				"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.jpg",
-				"imagePublicSliceKey":%q,
-				"imageDominantColor":"#1A2B3C",
-				"imageLqip":"data:image/jpeg;base64,/9j/2Q==",
-				"imageContentProfile":"photographic",
-				"imageDerivativePolicyVersion":1
-			}`, assetID, imagePublicSliceKey),
-			ownerID,
-			fmt.Sprintf("media-processing-%d", sequence),
-		)
-	}
-	return assetID
+	return asTestString(completed["assetId"])
+}
+
+const publicationMediaProcessingTargetVersion int64 = 2
+
+func markVideoAssetProcessingReady(
+	t *testing.T,
+	ownerID string,
+	assetID string,
+) {
+	t.Helper()
+	sequence := helperRequestSequence.Add(1)
+	videoPublicSliceKey := runtimemedia.BuildContentMediaPublicSliceKey(
+		"video",
+		assetID,
+		publicationMediaProcessingTargetVersion,
+		"video/mp4",
+	)
+	videoPublicPrefix := strings.TrimSuffix(videoPublicSliceKey, "/source.mp4")
+	performMediaCommand(
+		t,
+		http.MethodPost,
+		"/internal/content/media/"+assetID+":processing-result",
+		fmt.Sprintf(`{
+			"processingStatus":"ready",
+			"processorProfile":"media_canary_progressive_mp4",
+			"verifiedDurationMs":125000,
+			"videoWidth":540,
+			"videoHeight":960,
+			"videoCodec":"h264",
+			"videoContainer":"mp4",
+			"videoAudioCodec":"aac",
+			"videoKeyframeIntervalMs":2000,
+			"videoFastStart":true,
+			"videoPublicSliceKey":%q,
+			"coverPublicSliceKey":%q,
+			"previewTrackVersion":1,
+			"previewTrackManifestSliceKey":%q
+		}`,
+			videoPublicSliceKey,
+			videoPublicPrefix+"/cover.webp",
+			videoPublicPrefix+"/preview/manifest.json",
+		),
+		ownerID,
+		fmt.Sprintf("media-processing-%d", sequence),
+	)
+}
+
+func markImageAssetProcessingReady(
+	t *testing.T,
+	ownerID string,
+	assetID string,
+) {
+	t.Helper()
+	sequence := helperRequestSequence.Add(1)
+	imagePublicSliceKey := runtimemedia.BuildContentMediaPublicSliceKey(
+		"image",
+		assetID,
+		publicationMediaProcessingTargetVersion,
+		"image/jpeg",
+	)
+	performMediaCommand(
+		t,
+		http.MethodPost,
+		"/internal/content/media/"+assetID+":processing-result",
+		fmt.Sprintf(`{
+			"processingStatus":"ready",
+			"processorProfile":"content_image_normalization",
+			"imageWidth":540,
+			"imageHeight":960,
+			"imageDeliveryMimeType":"image/jpeg",
+			"imageNormalizedObjectKey":"media/processed/image/%s/v2/source.jpg",
+			"imagePublicSliceKey":%q,
+			"imageDominantColor":"#1A2B3C",
+			"imageLqip":"data:image/jpeg;base64,/9j/2Q==",
+			"imageContentProfile":"photographic",
+			"imageDerivativePolicyVersion":1
+		}`, assetID, imagePublicSliceKey),
+		ownerID,
+		fmt.Sprintf("media-processing-%d", sequence),
+	)
 }
 
 func asTestStringSlice(value any) []string {

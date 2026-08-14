@@ -292,6 +292,16 @@ List<ArticleLayoutFragment> _fragmentsFromDocument(
         );
         bodyCursor += node.text.length + 1;
         break;
+      case ArticleDocumentNodeType.divider:
+        // 分隔线：无文本结构块（GWT-004）。
+        fragments.add(
+          ArticleLayoutFragment(
+            kind: ArticleLayoutFragmentKind.semanticBlock,
+            block: _blockFromNode(node, bodyCursor),
+            textStyleKey: 'divider',
+          ),
+        );
+        break;
     }
   }
   return fragments;
@@ -309,6 +319,7 @@ ArticleDocumentBlock _blockFromNode(ArticleDocumentNode node, int offset) {
       ArticleDocumentNodeType.quote => ArticleDocumentBlockType.quote,
       ArticleDocumentNodeType.callout => ArticleDocumentBlockType.callout,
       ArticleDocumentNodeType.codeBlock => ArticleDocumentBlockType.codeBlock,
+      ArticleDocumentNodeType.divider => ArticleDocumentBlockType.divider,
       _ => ArticleDocumentBlockType.paragraph,
     },
     offset: offset,
@@ -438,6 +449,10 @@ List<ArticleContentBlockView> _projectArticleContentBlocksFromDocument(
                   : text,
             ),
           );
+          break;
+        case ArticleDocumentNodeType.divider:
+          orderedIndex = 0;
+          blocks.add(const ArticleContentBlockView(type: 'divider'));
           break;
         case ArticleDocumentNodeType.documentTitle:
           break;

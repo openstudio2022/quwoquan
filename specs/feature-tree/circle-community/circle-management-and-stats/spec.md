@@ -84,8 +84,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：为圈子治理与运营提供权限受控的处置、固定口径指标和可下钻运营视图。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+- 影响或价值：尚缺 SIT-001 t2 的对象专属错误唯一 owner 证据，不能用页面测试硬绑。t1（权限受控处置、固定口径指标、可下钻运营视图）可由 kpi-reporting 与 membership 覆盖。本能力不阻塞 SCN-014 商用主旅程。
+- 完成判定：`SIT-001` 两条结果子句均由真实测试 `spec_ref` 绑定。
 
 <a id="open-002"></a>
 ### OPEN-002 圈子类目缺可引用的 canonical 值域
@@ -96,6 +96,7 @@
 - 影响或价值：当前 `quwoquan_service/services/circle-service/contracts/circle_management/circle_membership/fields.yaml` 的 `PersonaCircleSlice.category` 与 `subCategory` 仍是裸 string，端侧只能自行约定类目取值，未知值无法失败关闭。
 - 根因是 `quwoquan_service/contracts/metadata/_shared/domain_taxonomy.yaml` 的自述已失效，它声称由 codegen 产出 Go 与 Dart 的领域标签类型，但仓库内既没有该生成器也没有这两个符号，唯一读取它的脚本只校验 `user_tag_ref`。
 - 该文件的子类目是按 domain 分组的本地化标签文案且没有稳定 id，直接压成扁平枚举会把 locale 文案写进 wire 取值，形成不可演进的对外契约。
+- 迭代七曾尝试启动 enum_ref 单轨收敛：工作树存在并行 cloud_contracts / search / assistant / content codegen 锁，按计划中止，禁止半截收敛。
 - 裁决补充：类目一级 id 闭集事实上已稳定存在
   （`meet/campus/car/humanity/life/sports/tech/travel/food`），但散落为 App 页面
   私有 const（`circle_edit_settings_page_state.dart` 九项闭集、hub 页五垂类子集），

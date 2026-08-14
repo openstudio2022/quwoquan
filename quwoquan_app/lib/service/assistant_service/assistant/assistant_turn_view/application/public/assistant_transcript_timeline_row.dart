@@ -1,4 +1,6 @@
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_ui_usage_stats_view_data.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_persisted_value_types.dart'
+    show RunArtifacts;
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_answer_anchor.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_citation.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/domain/transcript_line_id.dart';
@@ -120,7 +122,7 @@ final class AssistantAnswerTranscriptRow
     this.terminalSnapshot,
     PersistedAssistantTimelinePayload? persisted,
     this.uiReferences = const <AssistantCitation>[],
-    this.runArtifacts = const <String, dynamic>{},
+    this.runArtifacts,
     this.uiUsageStats = AssistantUiUsageStatsViewData.empty,
     this.extra = const <String, dynamic>{},
   }) : persisted = persisted ?? PersistedAssistantTimelinePayload.empty();
@@ -142,8 +144,9 @@ final class AssistantAnswerTranscriptRow
 
   final List<AssistantCitation> uiReferences;
 
-  /// 运行时诊断开放袋（含 `presentationDocument`），提键收敛见 OPEN-003。
-  final Map<String, dynamic> runArtifacts;
+  /// 运行工件（含 `presentationDocument` 与 partitioned diagnostics）；
+  /// null 表示无工件，解析失败在 Codec 边界 fail-soft 置 null。
+  final RunArtifacts? runArtifacts;
   final AssistantUiUsageStatsViewData uiUsageStats;
   final Map<String, dynamic> extra;
 
@@ -162,7 +165,7 @@ final class AssistantAnswerTranscriptRow
     AssistantRunTerminalSnapshotView? terminalSnapshot,
     PersistedAssistantTimelinePayload? persisted,
     List<AssistantCitation>? uiReferences,
-    Map<String, dynamic>? runArtifacts,
+    RunArtifacts? runArtifacts,
     AssistantUiUsageStatsViewData? uiUsageStats,
     Map<String, dynamic>? extra,
   }) {

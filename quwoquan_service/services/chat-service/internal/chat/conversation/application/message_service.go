@@ -878,6 +878,85 @@ func (s *MessageService) ListMessages(ctx context.Context, req ListMessagesReque
 	return s.hydrateMessageSlices(ctx, messages)
 }
 
+type ListConversationAssetsRequest = messageapp.ListConversationAssetsRequest
+type ConversationAssetRow = messageapp.ConversationAssetRow
+type ConversationAssetsPage = messageapp.ConversationAssetsPage
+
+// ListConversationAssets 是群空间相册/文件宫格的媒体索引读面：
+// Message owner 事实 + MediaAsset delivery Reader 组合，App 直接渲染。
+func (s *MessageService) ListConversationAssets(
+	ctx context.Context,
+	req ListConversationAssetsRequest,
+) (_ *ConversationAssetsPage, err error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "chat.ListConversationAssets",
+		attribute.String("conversation.id", req.ConversationId),
+		attribute.String("assets.kind", req.Kind))
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	kind := strings.TrimSpace(req.Kind)
+	var messageType string
+	switch kind {
+	case "image":
+		messageType = "image"
+	case "file":
+		messageType = "file"
+	default:
+		return nil, generated.AppErrorFromInvalidArgument(
+			"assets kind must be image or file",
+		)
+	}
+	if err := s.requireConversationMembership(ctx, req.ConversationId, req.ViewerID); err != nil {
+		return nil, err
+	}
+	limit := req.Limit
+	if limit <= 0 || limit > 200 {
+		limit = 60
+	}
+	messages, err := s.messages.ListMediaMessages(
+		ctx,
+		req.ConversationId,
+		messageType,
+		limit+1,
+		req.BeforeSeq,
+	)
+	if err != nil {
+		return nil, err
+	}
+	hasMore := len(messages) > limit
+	if hasMore {
+		messages = messages[:limit]
+	}
+	slices, err := s.hydrateMessageSlices(ctx, messages)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]ConversationAssetRow, 0, len(slices))
+	for _, slice := range slices {
+		row := ConversationAssetRow{
+			MessageID:   slice.Message.ID,
+			Seq:         slice.Message.Seq,
+			MediaAssetID: slice.Message.MediaAssetID,
+			MessageType: slice.Message.Type,
+			SenderID:    slice.Message.SenderID,
+			SenderName:  slice.Message.SenderDisplayNameSnapshot,
+			FileName:    slice.Message.Content,
+			CreatedAt:   slice.Message.Timestamp,
+		}
+		if slice.Media != nil {
+			row.MediaDeliveryURL = slice.Media.DeliveryURL
+			row.MediaContentType = slice.Media.ContentType
+			row.MediaFileSizeBytes = slice.Media.FileSize
+		}
+		rows = append(rows, row)
+	}
+	page := &ConversationAssetsPage{Items: rows, HasMore: hasMore}
+	if hasMore && len(rows) > 0 {
+		next := rows[len(rows)-1].Seq
+		page.NextBeforeSeq = &next
+	}
+	return page, nil
+}
+
 func (s *MessageService) hydrateMessageSlices(
 	ctx context.Context,
 	messages []messagemodel.Message,

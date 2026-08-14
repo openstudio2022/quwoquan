@@ -15,11 +15,13 @@ import (
 )
 
 func TestSearchIndexStartupWaitsForDelayedRecoverableDependency(t *testing.T) {
-	var headAttempts atomic.Int32
+	// alias 版本化启动序列：GET /_alias/{index} -> HEAD /{index} ->
+	// PUT /{index}-v1。可恢复依赖抖动发生在第一步的 alias 解析上。
+	var aliasAttempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
-		case request.Method == http.MethodHead && request.URL.Path == "/"+es.DefaultIndex:
-			switch headAttempts.Add(1) {
+		case request.Method == http.MethodGet && request.URL.Path == "/_alias/"+es.DefaultIndex:
+			switch aliasAttempts.Add(1) {
 			case 1:
 				writer.WriteHeader(http.StatusTooManyRequests)
 				return
@@ -28,7 +30,9 @@ func TestSearchIndexStartupWaitsForDelayedRecoverableDependency(t *testing.T) {
 				return
 			}
 			writer.WriteHeader(http.StatusNotFound)
-		case request.Method == http.MethodPut && request.URL.Path == "/"+es.DefaultIndex:
+		case request.Method == http.MethodHead && request.URL.Path == "/"+es.DefaultIndex:
+			writer.WriteHeader(http.StatusNotFound)
+		case request.Method == http.MethodPut && request.URL.Path == "/"+es.DefaultIndex+"-v1":
 			writer.WriteHeader(http.StatusOK)
 		default:
 			http.Error(writer, "unexpected request", http.StatusTeapot)
@@ -50,8 +54,8 @@ func TestSearchIndexStartupWaitsForDelayedRecoverableDependency(t *testing.T) {
 	if err := built.EnsureIndexReady(context.Background()); err != nil {
 		t.Fatalf("ensure delayed search index: %v", err)
 	}
-	if got := headAttempts.Load(); got != 3 {
-		t.Fatalf("head attempts=%d want=3", got)
+	if got := aliasAttempts.Load(); got != 3 {
+		t.Fatalf("alias attempts=%d want=3", got)
 	}
 }
 
@@ -112,6 +116,13 @@ func TestSearchIndexStartupDoesNotRetrySchemaOrAuthorizationFailures(t *testing.
 			var calls atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 				calls.Add(1)
+				// schema 分支：alias 解析出唯一物理索引后，additive
+				// mapping 更新命中 mapper conflict，fail closed 不重试。
+				if request.Method == http.MethodGet &&
+					request.URL.Path == "/_alias/"+es.DefaultIndex && test.mapping {
+					_, _ = writer.Write([]byte(`{"` + es.DefaultIndex + `-v1":{"aliases":{}}}`))
+					return
+				}
 				if request.Method == http.MethodPut && test.mapping {
 					writer.WriteHeader(http.StatusBadRequest)
 					_, _ = writer.Write([]byte(`{"error":"mapper conflict"}`))

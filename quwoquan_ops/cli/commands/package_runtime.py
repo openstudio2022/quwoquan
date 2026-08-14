@@ -39,6 +39,7 @@ def _build_official_skill_package_publication(
     *,
     package_source_root: Path,
     package_environment: dict[str, str],
+    output_root: Path | None = None,
 ) -> dict[str, Any]:
     """把签名官方 Skill package publication 产物封进 assistant 服务包。
 
@@ -68,12 +69,13 @@ def _build_official_skill_package_publication(
     build_id = "local-" + source_digest.removeprefix("sha256:")[:16]
     from quwoquan_ops.cli import stackctl as _stackctl
 
-    output_root = (
-        _stackctl.service_deployment_package_dir(
-            env_name, "assistant-service", target=target_name
+    if output_root is None:
+        output_root = (
+            _stackctl.service_deployment_package_dir(
+                env_name, "assistant-service", target=target_name
+            )
+            / "skill-packages"
         )
-        / "skill-packages"
-    )
     if output_root.exists():
         shutil.rmtree(output_root)
     source_revision = str(

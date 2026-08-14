@@ -191,7 +191,8 @@
   - 创建页产品化（隐藏 host/授权/风控/ISO 内部字段、DateTime picker、安全默认模板）。
   - publish 义务（policyDecisionRef/policyDigest/obligationDigest）由 Circle owner 侧对实际 policy 内容确定性派生（端不再伪造治理证据）。
   - 行动详情/Board 已有「发布回顾」入口。
-  - 双人邀约（1对1 同好邀约，DEC-001 同一 Gathering 形态）：人对人交集发起时导航请求携带受邀者，composer 预设收紧为 capacity=2 + audience/admission=invite_only 且不套对象名标题模板，发布成功后经 `InviteToGathering` 自动发出披露安全邀请（失败不阻断发布、可在 Host 控制台重发）。
+  - 双人邀约（1对1 同好邀约，DEC-001 同一 Gathering 形态）：人对人交集发起时导航请求携带受邀者，composer 预设收紧为 capacity=2 + audience/admission=invite_only 且不套对象名标题模板，发布成功后经 `InviteToGathering` 自动发出披露安全邀请（失败不阻断发布、可在 Host 控制台重发）。「我的交集」收件箱可约主行动与他人主页同轨携带人对人上下文，duo 预设在两个主入口一致生效。
+  - 仍缺：duo 面向未注册用户的外溢邀请（分享深链 / 短信 → 登录续接 → token 化接受）——受邀 UI 当前只经 AppMessage 触达注册用户；外链邀请涉及披露安全与 token 设计，待产品裁决后另立实现，在该裁决落地前 1对1 场景只覆盖站内用户。
 - 完成判定：`SIT-001` 由 local_contract、api_integration、user_acceptance 直接覆盖，游客关闭登录不循环、成功续接原发起/响应动作。
 - 依赖：[`creation-mode-and-surface-ia-unification`](../../discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md) 及后续 contracts/metadata 准入。
 
@@ -201,7 +202,7 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺唯一 contextual room 的 Publish 前置、Participation/Organizer membership 投影、Board typed projection、Announcement/AssetIndex、取消/完成 access mode 与退出/Block/移除撤权的同一候选证据；消息离线可靠性仍是上层准出前置。
+- 影响或价值：尚缺唯一 contextual room 的 Publish 前置、Participation/Organizer membership 投影、Board typed projection、Announcement/AssetIndex、取消/完成 access mode 与退出/Block/移除撤权的同一候选证据；消息离线可靠性仍是上层准出前置。另缺行动结束态的会话内回顾轻引导（Board 活动头已有「发布回顾」入口、结束催回顾通知已回链详情，普通会话气泡区尚无结束态引导——是否需要以 Board/通知为准的产品裁决待此收口）。
 - 完成判定：`SIT-001`、`SIT-003` 与 [`gathering-conversation-binding`](./gathering-conversation-binding/spec.md) 的 GWT 在杀进程、重连、重复事件和依赖恢复下通过。
 - 依赖：Chat message reliability、Circle outbox/reconciler、Calendar/Plan capability。
 

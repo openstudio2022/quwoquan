@@ -114,9 +114,22 @@ func (projection *MongoUserProfileSearchProjection) Apply(
 			return application.UserProfileSearchProjectionResult{},
 				application.ErrUserProfileSearchProjectionConflict
 		}
+		if err := projection.applyProviderProjection(ctx, event); err != nil {
+			return application.UserProfileSearchProjectionResult{}, err
+		}
 		return projection.commitCheckpoint(ctx, event, false, true)
 	}
 
+	if err := projection.applyProviderProjection(ctx, event); err != nil {
+		return application.UserProfileSearchProjectionResult{}, err
+	}
+	return projection.commitCheckpoint(ctx, event, false, false)
+}
+
+func (projection *MongoUserProfileSearchProjection) applyProviderProjection(
+	ctx context.Context,
+	event application.UserProfileSearchProjectionEvent,
+) error {
 	op := es.OpUpsert
 	if event.Operation == "delete" {
 		op = es.OpDelete
@@ -124,11 +137,11 @@ func (projection *MongoUserProfileSearchProjection) Apply(
 	if err := projection.writer.Apply(ctx, es.ChangeEvent{Op: op, Doc: event.Document()}); err != nil {
 		// The Search checkpoint is deliberately not advanced. Provider upserts and
 		// deletes use a stable object ID, so the pending stream event can replay.
-		return application.UserProfileSearchProjectionResult{}, fmt.Errorf(
+		return fmt.Errorf(
 			"write Search UserProfile provider projection: %w", err,
 		)
 	}
-	return projection.commitCheckpoint(ctx, event, false, false)
+	return nil
 }
 
 func (projection *MongoUserProfileSearchProjection) commitCheckpoint(

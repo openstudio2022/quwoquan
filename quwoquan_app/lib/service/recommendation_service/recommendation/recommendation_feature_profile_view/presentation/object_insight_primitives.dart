@@ -4,6 +4,7 @@ import 'package:quwoquan_app/service/recommendation_service/recommendation/recom
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/interactive_intersection_text.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/design_system/feedback/app_empty_state.dart';
 import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
@@ -282,14 +283,7 @@ class ProfileIntersectionEmptyState extends StatelessWidget {
         horizontal: AppSpacing.containerSm,
         vertical: AppSpacing.containerMd,
       ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: AppTypography.iosSubheadline,
-          height: AppSpacing.textLineHeightFootnote,
-          color: AppColors.iosSecondaryLabel(context),
-        ),
-      ),
+      child: AppEmptyState(title: text, density: AppEmptyStateDensity.dense),
     );
   }
 }

@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""组件复用棘轮门禁：页面私有空态/骨架实现只减不增。
+"""组件复用零缺口门禁：页面禁止私有空态/骨架轮子。
 
 组件收敛主线：空态统一走 `design_system/feedback/app_empty_state.dart` 的
 `AppEmptyState`（错误态 `AppPageErrorState`、加载态 `AppRequestFeedback` 同属
-反馈层三态积木）；页面不得再新增私有 `_XxxEmptyState` / `XxxSkeleton` 轮子。
+反馈层三态积木），骨架统一消费 `AppSkeleton*` 原语。
 
 - 扫描 `lib/**`（`design_system` 除外）的 `class ..EmptyState` / `class ..Skeleton..`；
-- 与 `component_reuse_baseline.json` 按文件比较，超出即 BLOCK；
-- 下降后运行 `--update-baseline` 固化（基线只减不增）。
+- 类体已消费统一原语（`AppEmptyState` / `AppSkeleton*`）的页面形状组合类
+  不算轮子：骨架行形状必须匹配各页内容布局，组合类正是原语的合法消费形态，
+  轮子的判据是「自绘空态结构 / 自绘 shimmer 与灰块」；
+- 存量已于基线归零后转为零缺口门：任何命中即 BLOCK，不存在 allowlist。
 """
 
 from __future__ import annotations
@@ -25,14 +27,35 @@ if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
 from _common.paths import APP_ROOT
-from _common.ratchet_baseline import load_counts, write_counts
 
 LIB_ROOT = APP_ROOT / "lib"
-BASELINE_PATH = Path(__file__).with_name("component_reuse_baseline.json")
 
 _PRIVATE_WHEEL = re.compile(
     r"class\s+_?\w*(?:EmptyState|Skeleton)\w*\s+extends\s"
 )
+_UNIFIED_PRIMITIVES = re.compile(r"\bApp(?:EmptyState|Skeleton\w*)\b")
+
+
+def _wheel_count(text: str) -> int:
+    """统计真轮子：命中命名模式且类体未消费统一原语的类。
+
+    类体按下一个 top-level `class ` 声明（或文件尾）切段；段内出现
+    `AppEmptyState` / `AppSkeleton*` 即视为原语组合类，不计数。
+    """
+
+    count = 0
+    matches = list(_PRIVATE_WHEEL.finditer(text))
+    boundaries = [match.start() for match in re.finditer(r"^class\s", text, re.M)]
+    for match in matches:
+        end = len(text)
+        for boundary in boundaries:
+            if boundary > match.start():
+                end = boundary
+                break
+        body = text[match.start() : end]
+        if not _UNIFIED_PRIMITIVES.search(body):
+            count += 1
+    return count
 
 
 def scan() -> dict[str, int]:
@@ -43,49 +66,23 @@ def scan() -> dict[str, int]:
             continue
         if "/generated/" in rel or rel.endswith(".g.dart"):
             continue
-        count = len(_PRIVATE_WHEEL.findall(path.read_text(encoding="utf-8")))
+        count = _wheel_count(path.read_text(encoding="utf-8"))
         if count:
             counts[rel] = count
     return counts
 
 
 def main() -> int:
-    update = "--update-baseline" in sys.argv
     counts = scan()
-    if update:
-        write_counts(BASELINE_PATH, counts)
-        print(
-            f"OK: 组件复用基线已更新（私有空态/骨架 {sum(counts.values())} 个 / "
-            f"{len(counts)} 文件）"
-        )
-        return 0
-
-    if not BASELINE_PATH.is_file():
-        print("FAIL: 缺少 component_reuse_baseline.json，先运行 --update-baseline")
-        return 1
-    baseline = load_counts(BASELINE_PATH)
-
-    errors: list[str] = []
-    for rel, count in sorted(counts.items()):
-        allowed = baseline.get(rel, 0)
-        if count > allowed:
-            errors.append(
-                f"{rel}: 私有空态/骨架 {count} 个，超出基线 {allowed}；"
-                "空态请使用 design_system 的 AppEmptyState"
+    if counts:
+        print("FAIL: 发现私有空态/骨架轮子（零缺口门，禁止新增）：")
+        for rel, count in sorted(counts.items()):
+            print(
+                f"  - {rel}: {count} 个；空态用 AppEmptyState"
+                "（区块轻空态用 dense 密度），骨架消费 AppSkeleton* 原语"
             )
-    if errors:
-        print("FAIL: 组件复用棘轮未通过（禁止新增私有空态/骨架轮子）：")
-        for error in errors:
-            print(f"  - {error}")
         return 1
-    total_now = sum(counts.values())
-    total_baseline = sum(baseline.values())
-    suffix = (
-        f"（基线 {total_baseline}，已下降；可运行 --update-baseline 固化战果）"
-        if total_now < total_baseline
-        else ""
-    )
-    print(f"OK: 私有空态/骨架未超出基线（{total_now} 个）{suffix}")
+    print("OK: 无私有空态/骨架轮子（零缺口）")
     return 0
 
 

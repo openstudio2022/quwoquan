@@ -106,6 +106,15 @@ load_model:
         - windows_per_subject<=8          # 同 subject 窗口配额
         - window_value_bytes<=2MiB        # 单窗口 wire bytes 预算（超限 fail-closed）
         - page_limit<=20                  # GetFeed default/max=20
+      # gamma-local 单机实测（20260813T174733Z，并发 20/20s，Colima 单 VM 全栈共存，
+      # 供给为空基线+3 post 导入的窗口链路；不代表生产多实例容量，仅作调优基线）：
+      # report: .qwq_output/env/gamma/observability/recommendation-load/recommendation_load_all_20260813T174733Z.json
+      measured_gamma_local:
+        achieved_rps: 43.2
+        server_latency_ms: { p50: 441.0, p95: 704.0, p99: 800.7 }
+        error_rate: 0.0
+        shed_rate: 0.0
+        samples: 864
     feed_pagination:
       description: 续页/回翻（cursor 续接不可变 RankedFeedWindow / FeedDeliveryPage 回放，只读）
       path: GET /content/feed (cursor continuation)
@@ -118,6 +127,17 @@ load_model:
       cost_guard:
         - no_live_recompute               # 续页禁止重新召回/打分（契约 fail-closed）
         - replay_bulk_hydrate_only        # 回翻只按已交付页原序 hydrate
+      # gamma-local 单机实测（20260813T180145Z，limit=20 非空供给、真实续页口径，
+      # 21 条候选的浅窗口下并发 20 复用 cursor 产生大量越界/竞争 4xx，err 不代表
+      # 服务缺陷，深供给后需重测）：
+      # report: .qwq_output/env/gamma/observability/recommendation-load/recommendation_load_pagination_20260813T180145Z.json
+      measured_gamma_local:
+        achieved_rps: 24.6
+        server_latency_ms: { p50: 409.5, p95: 586.0, p99: 627.8 }
+        error_rate: 0.88
+        shed_rate: 0.0
+        samples: 492
+        caveat: shallow_window_cursor_contention_under_load_tool
     model_score:
       description: 内部打分（content/circle/search → ScoreRecommendationCandidates，含 batch）
       path: POST /internal/recommendation/model-releases:score
@@ -143,6 +163,13 @@ load_model:
         - client_event_id_idempotent      # clientEventId 幂等去重
         - weak_signal_sampled_batched     # 弱信号采样合并（feedback-ingestion-sampling）
         - exposure_filter_membership_only # 曝光过滤只用点查/短 Bloom，禁全量 SMembers
+      # gamma-local 单机实测（20260813T174733Z，并发 20/20s）：
+      measured_gamma_local:
+        achieved_rps: 42.7
+        server_latency_ms: { p50: 450.4, p95: 688.1, p99: 841.8 }
+        error_rate: 0.0
+        shed_rate: 0.0
+        samples: 854
 
 dashboards:
   recommendation_commercial_maturity: quwoquan_ops/observability/monitoring/dashboards/l2_recommendation_commercial_maturity.json

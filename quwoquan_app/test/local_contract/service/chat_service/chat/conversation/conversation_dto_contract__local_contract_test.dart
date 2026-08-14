@@ -137,6 +137,8 @@ Map<String, Object?> _conversationWire([
     // canonical ChatConversation 不接受缺字段。
     'gatheringId': '',
     'gatheringSourceVersion': 0,
+    'gatheringSourceEventId': '',
+    'intersectionFacts': <Object?>[],
     'accessMode': 'active',
     'postingPolicy': 'member_chat',
     'entityId': '',

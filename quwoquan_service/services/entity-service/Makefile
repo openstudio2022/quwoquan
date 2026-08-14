@@ -5,11 +5,7 @@ BUILD_OUTPUT_DIR := $(QWQ_OUTPUT_ROOT)/env/repo/local/service-build/cache/$(notd
 SERVICE_PACKAGE := ./services/entity-service/...
 COMMAND_PACKAGE := ./services/entity-service/cmd/...
 TEST_PACKAGE := ./services/entity-service/tests/...
-<<<<<<< Updated upstream
 CONTRACT_VIEW := $(SERVICE_ROOT)/../.qwq_output/env/repo/local/service-contract-view/cache/entity-service
-=======
-CONTRACT_VIEW ?= $(QWQ_OUTPUT_ROOT)/env/repo/local/service-contract-view/cache/$(shell printf %s "$$PPID")
->>>>>>> Stashed changes
 
 .PHONY: build test verify-codegen gate
 

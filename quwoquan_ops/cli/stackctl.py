@@ -328,7 +328,8 @@ from quwoquan_ops.cli.commands.app_preflight_uat import (
     _ios_direct_flutter_log_reader_retryable, command_app_content_uat,
     APP_CONTENT_UAT_ENVELOPE_ARGUMENTS, APP_CORE_READBACK_UAT_TEST_TARGET,
     CONTROLLED_EDGE_RECOVERY_UAT_TEST_TARGET, DISCOVERY_FEED_UAT_TEST_TARGET,
-    HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET, IOS_DIRECT_FLUTTER_RUN_UAT, STARTUP_FIRST_FRAME_UAT,
+    HOME_VIDEO_PLAYBACK_UAT_TEST_TARGET, IOS_DIRECT_FLUTTER_RUN_UAT,
+    PROFILE_JOURNEY_UAT_TEST_TARGET, STARTUP_FIRST_FRAME_UAT,
     VIDEO_PLAYBACK_CANARY_UAT_TEST_TARGET,
 )
 from quwoquan_ops.cli.commands.assistant_skill_package import command_assistant_skill_package
@@ -509,8 +510,9 @@ from quwoquan_ops.cli.commands.up_domain import (
     _command_up_impl, _fixed_candidate_runtime_identity, _reuse_running_full_for_bounded_workload,
     _runtime_identity_mismatches, command_up,
 )
-from quwoquan_ops.cli.commands.verify_domain import (
-    _selected_profile_commands, _selected_verify_commands, command_verify,
+from quwoquan_ops.cli.commands.verify_domain import command_verify
+from quwoquan_ops.cli.commands.verify_selection import (
+    _selected_profile_commands, _selected_verify_commands,
 )
 from quwoquan_ops.cli.commands.verify_kinds import (
     _command_verify_config_slo, _command_verify_content_delivery, _command_verify_distribution,

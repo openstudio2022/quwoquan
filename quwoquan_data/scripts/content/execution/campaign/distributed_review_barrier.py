@@ -14,6 +14,14 @@ ClaimReader = Callable[
     Mapping[str, Any] | None,
 ]
 
+_RUNNABLE_CLAIM_STATUSES = frozenset({"active", "starting", "running"})
+# lane 级失败隔离：单 lane 的终态（失败或已完成）不得阻断其余 lane 的
+# review。终态 lane 已退出并行协调，其 typed 失败证据保留在 claim 里；
+# 只有身份漂移或未知状态才是需要 fail-closed 的异常。
+_SETTLED_CLAIM_STATUSES = frozenset(
+    {"failed", "interrupted", "completed", "delivery_pending", "superseded"}
+)
+
 
 def wait_for_parallel_review_claims(
     runtime: CampaignRuntimePaths,
@@ -23,7 +31,7 @@ def wait_for_parallel_review_claims(
     timeout_seconds: float,
     read_claim: ClaimReader,
 ) -> None:
-    """Start review only after every frozen lane owns its matching claim."""
+    """Start review only after every frozen lane owns its claim or has settled."""
 
     distributed = plan["distributedRun"]
     deadline = time.monotonic() + timeout_seconds
@@ -46,10 +54,12 @@ def wait_for_parallel_review_claims(
                 or claim.get("executionId") != plan["executionIds"].get(carrier)
             ):
                 raise ValueError(f"{carrier} review barrier claim identity drift")
-            if claim.get("status") not in {"active", "starting", "running"}:
+            status = str(claim.get("status") or "")
+            if status in _SETTLED_CLAIM_STATUSES:
+                continue
+            if status not in _RUNNABLE_CLAIM_STATUSES:
                 raise RuntimeError(
-                    f"{carrier} review barrier claim is not runnable: "
-                    f"{claim.get('status')}"
+                    f"{carrier} review barrier claim is not runnable: {status}"
                 )
         if not missing:
             return

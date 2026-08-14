@@ -48,6 +48,7 @@ type UserProfileTagProjection struct {
 // UserProfileSearchProjection is a durable coordinate plus the exact public
 // snapshot that must be committed with it.
 type UserProfileSearchProjection struct {
+	EventID        string
 	UserID         string
 	ProfileVersion int64
 	EventType      string

@@ -624,23 +624,32 @@ class _ChatPageState extends ConsumerState<ChatPage>
     );
     // 飞轮通知打开辅证：促成通知（漏斗③）与催回顾通知（漏斗②）。
     // 域事实只见结果（续发/回顾），看不到打开行为，故补 product_action 轨。
-    final flywheelOpenAction = switch (message.source.trim()) {
-      'intersection_facilitation' => 'notification_facilitation_open',
-      'gathering_recap_nudge' => 'notification_recap_nudge_open',
-      _ => null,
-    };
-    if (flywheelOpenAction != null) {
-      unawaited(
-        ref
-            .read(journeyEventTrackerProvider)
-            .trackAction(
-              journey: 'gathering_flywheel',
-              action: flywheelOpenAction,
-              pageName: 'chat_list',
-              targetType: 'gathering',
-              targetKey: message.target.targetId,
-            ),
-      );
+    // action 分支各自保持字面量以满足埋点闭集棘轮的静态扫描口径。
+    switch (message.source.trim()) {
+      case 'intersection_facilitation':
+        unawaited(
+          ref
+              .read(journeyEventTrackerProvider)
+              .trackAction(
+                journey: 'gathering_flywheel',
+                action: 'notification_facilitation_open',
+                pageName: 'chat_list',
+                targetType: 'gathering',
+                targetKey: message.target.targetId,
+              ),
+        );
+      case 'gathering_recap_nudge':
+        unawaited(
+          ref
+              .read(journeyEventTrackerProvider)
+              .trackAction(
+                journey: 'gathering_flywheel',
+                action: 'notification_recap_nudge_open',
+                pageName: 'chat_list',
+                targetType: 'gathering',
+                targetKey: message.target.targetId,
+              ),
+        );
     }
     final navigation = AppMessageNavigationTarget.fromMessage(message);
     if (navigation != null && context.mounted) {

@@ -8,6 +8,9 @@
 #   * product_telemetry：ES 权威事件（event_catalog.yaml 定义的 eventType）。
 #   * behavior_attribution：推荐行为归因 Prometheus series（BehaviorSignal 轨，
 #     禁止伪装成 Ops 事件；这里只登记指标口径，不搬事实）。
+#   * domain_fact_readface：领域事实读面的读时聚合比例（readface_ratio），
+#     numerator/denominator series 登记读面响应字段名（lowerCamelCase），
+#     不指向 Ops 事件也不指向 Prometheus series；空数据为零、无预聚合缓存。
 # - alerting 声明该指标绑定的告警名与触发阈值；阈值必须落在 target 的违反侧，
 #   且与告警定义文件中的数值逐字一致（由 verify_metric_threshold_homology 门禁校验）。
 #   未声明 alerting 的 primary 指标属于待补告警缺口，禁止新增第二处阈值真相源。
@@ -18,6 +21,7 @@ registration_rules:
   allowed_source_tracks:
   - product_telemetry
   - behavior_attribution
+  - domain_fact_readface
   forbidden_dimensions:
   - sessionId
   - requestId

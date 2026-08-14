@@ -34,6 +34,7 @@
 
 ## 5. 验收场景
 
+<a id="gwt-001"></a>
 ### GWT-001 Remote 失败不回退 Mock
 
 - GIVEN App 运行于 Remote 模式且已展示一份服务端确认的圈子快照。
@@ -49,10 +50,4 @@
 
 ## 7. 开放事项
 
-### OPEN-001 端侧模式隔离证据
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺直接绑定本节点的 Remote/Mock 隔离测试。
-- 完成判定：`GWT-001` 在 provider/widget local_contract 中有直接 `spec_ref`。
+（当前无开放事项：GWT-001 已由圈子详情快照保留与 sealed cloud boundary widget 测试子句级绑定。）

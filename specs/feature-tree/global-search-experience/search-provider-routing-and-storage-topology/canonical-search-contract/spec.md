@@ -20,7 +20,7 @@
 - 搜索实验 assignment unit 只使用可信登录主体或匿名稳定 `X-Session-Id`；禁止空主体默认为 control，也禁止用逐请求 requestId 重分桶。
 - 未投影或未激活实验策略时，搜索可按显式 control 语义降级；该 control 语义必须拥有稳定策略摘要并与候选、查询、筛选和主体共同绑定分页 cursor，不得因命中超过首屏而退化为 `SEARCH.USER.invalid_argument`。
 - Search runtime 必须从受管部署入口接收当前 immutable candidate digest；不得以空候选身份签发分页 cursor，也不得仅在单页查询中形成假绿。
-- App RemoteSearchRepository + RetrieveRequest 映射；assistant search tool 桥接 canonical。
+- App result 唯一消费 `SearchPage` persisted GraphQL；`POST /search` 与 RetrieveRequest 只服务 assistant retrieval 与 api-edge owner projection。
 - 错误响应经 CloudException/runtimeFailure 结构化。
 
 ### Out of Scope
@@ -36,9 +36,9 @@
 - 页面与业务层只看到一个 contract，商用字段以 metadata 为唯一真相源。
 
 <a id="req-002"></a>
-### REQ-002 App result 只消费 canonical 响应（RemoteSearchRepository + RetrieveRequest 映射 + 错误响应）
+### REQ-002 App result 只消费 SearchPage persisted GraphQL 响应
 
-- App result 阶段唯一消费 canonical search(request) 响应。
+- App result 阶段唯一消费 `SearchPage` persisted query 的 typed slice；`POST /search` 不得再作为结果页生产读入口。
 
 <a id="req-003"></a>
 ### REQ-003 统一 search(request) 作为页面与业务层唯一入口
@@ -81,13 +81,14 @@
 - AND UserProfile/Persona 更新与删除由同一 Search-owned durable consumer 投影；相同 eventId 重放幂等，旧版本不覆盖新版本，Provider 失败保留 pending stream checkpoint。
 
 <a id="gwt-002"></a>
-### GWT-002 App result 只消费 canonical 响应（RemoteSearchRepository + RetrieveRequest 映射 + 错误响应）
+### GWT-002 App result 只消费 SearchPage persisted GraphQL 响应
 
-- GIVEN alpha/beta/gamma/prod composition 中 searchRepositoryProvider 只返回 RemoteSearchRepository；搜索 typed double 仅存在测试树。
-- GIVEN RetrieveRequest.fromSearchRequest() 单源映射 targets 并剔除 chat 本地命名空间对象。
-- WHEN result 阶段 POST /search（CloudHttpClient + codegen path），解析 RetrieveResponse。
-- THEN App 透传 rankReasons/rankPosition/coverWidth/coverHeight/connectionState/intersectionReason/relatedTerms，不再消费分域搜索接口。
+- GIVEN alpha/beta/gamma/prod composition 中 result 远程仓库只返回 `RemoteSearchPageRepository`（经 `HybridSearchRepository` 包装）；搜索 typed double 仅存在测试树。
+- GIVEN assistant retrieval 仍经 RetrieveRequest 映射 targets 并剔除 chat 本地命名空间对象；api-edge owner 仍调用 search-service `POST /search`。
+- WHEN result 阶段 POST `/graphql` 执行 `SearchPage` persisted query，解析 typed `SearchPageSlice`。
+- THEN App 只读消费 slice 级 `searchRequestId`/`matchedTerms`/`degradeSignals`/`suggestions` 与 item 级 `objectRef`/`rankPosition`/`rankReason`/`contentType`/`action`，不再消费分域搜索接口，也不得把 opaque `objectRef` 合成旧 hit envelope。
 - THEN 错误经 CloudException/runtimeFailure 结构化，不吞异常、不暴露原始异常字符串。
+- AND `POST /search` 仅作为 owner/assistant 内部口保持 typed 契约，不得回到 App 结果页生产装配。
 
 <a id="gwt-003"></a>
 ### GWT-003 请求过滤词汇单轨端到端生效（objectTypes + contentTypes）
@@ -114,5 +115,5 @@
 - 类型：`external_blocker`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：历史断链（api-edge 翻译 canonical 词汇、search-service 只认内部 target 词汇，携带 objectTypes 的正式搜索 100% 返回 400）已修复：search-service 校验切换为 canonical `objectTypes`+`contentTypes`（`TargetsForCanonicalFilter`），词汇同源由 `verify_search_wire_vocabulary_single_track.py` 门禁与 api-edge↔runtime/search 契约测试（`search_page_owner_vocabulary__local_contract_test.go`）钉死，真实 ES 上 `golden_query_relevance__api_integration_test.go` 证明过滤端到端生效。`GWT-003` 已按子句 `t1..t5` 逐条绑定真实测试。全栈冒烟 runner（`quwoquan_ops/tests/acceptance/user_acceptance/service_ops/search-service/smoke/run_search_fullstack_smoke_probe.py`，readiness case `search_fullstack_smoke_probe_ops_env`：六 Tab 参数矩阵、投影字段、翻页连续、非法词汇拒绝、重复 20 次一致）已实现并登记。gamma-local 实跑证据被并行主线阻断：`quwoquan/elasticsearch-cjk:8.13.4` tag 形态已通过完整 packaging（candidate `sha256:9b9680a2…`），alias 化 EnsureIndex 对遗留卷 legacy 索引按设计 fail-closed（处置步骤：删除 legacy 物理索引 `quwoquan_objects` 或删卷重建，owner backfill 可恢复），user 域 backfill 43 条 enqueue+published 已验证。但 `stackctl up` 收尾期间 service-core 被并行 assistant skill package 资产缺失（`/etc/qwq-config/skill-packages`）反复打崩，mongo 业务数据重灌又被并行数据 release schema 迁移（存量 release 缺 `executionId`/`sourceIdentityDigest`）阻断。
-- 完成判定：`GWT-003.t5` 的全栈冒烟 CaseResult 半区满足——并行主线稳定后 gamma-local `stackctl up` + `health full` 全 healthy，四 owner backfill 后执行上述冒烟 runner（覆盖 `GWT-003.t1`、`GWT-003.t2`、`GWT-003.t4`、`GWT-003.t5`），CaseResult 通过并归档 `.qwq_output/env/repo/runs/search-fullstack-smoke/`。
+- 影响或价值：词汇单轨、PIT、黄金查询与 SearchPage GraphQL 生产装配已在分层测试闭合。gamma 实跑（candidate 前缀 `328189ca` 已部署，全栈 healthy）确认正式 GraphQL 搜索存在两级「替身规整、真实拒绝」断链。第一级已修复：api-edge `SearchPage` executor 的 `X-Contract-Graph-SHA256` wire 形态在构造期规范化为 canonical `sha256:<hex>`（`search_page_query_executor.go`），生产同款 service token 探针已证明 owner 分支 200 + typed OwnerSearchResponse（opaque `objectRef`、`searchRequestId`、`rankPosition`、响应头咬合）。第二级尚未修复：全部 owner 生产投影（content post/place、user、entity、circle）都不写 `Document.DeepLink`，owner hit 的 `action` 为空，api-edge 按契约（fields.yaml `action NOT_NULL`）整片 fail-closed，网关对任何真实文档仍 503；既有绿灯全部来自测试 fixture 自带 DeepLink，且 fixture 形态 `quwoquan://content/posts/{id}` 与 canonical `link_templates.yaml` 的 `quwoquan://content/post/{postId}` 不一致。修复路线：各 owner 投影按 `contracts/metadata/_shared/link_templates.yaml` 补 canonical DeepLink；`user.profile` 深链键为 `userHandle`，投影事件需 contracts-first 增加该字段再 codegen 与 backfill 重放。数据面独立阻断：canonical release 导入被数据迁移双重阻断（存量 release header 缺 `executionId`/`sourceIdentityDigest`；重建 release 被 `DATA.POOL.AUTHOR_NOT_ADMITTED` 与池账本 `DATA.POOL.RECORD_SEQUENCE_MISSING` 挡住），ES `article`/`image`/`video` 语料为零。已归档证据：`.qwq_output/env/repo/runs/search-fullstack-smoke/report.json`（`contract_mismatch`）与 `report-prefix-bug-baseline.json`（第一级修复前基线）；ES 现状 `user.profile` 12、`content.post` 21（micro）、`entity.homepage` 1。
+- 完成判定：`GWT-003.t5` 的全栈冒烟 CaseResult 半区满足——各 owner 投影补齐 canonical DeepLink（user 侧 contracts-first 加 `userHandle`）并 backfill 重放、api-edge 集成测试 owner 替身与真实 search-service handler 同源化、数据迁移收口后 canonical release 导入使 ES `content.post`（article/image/video）、`entity.homepage`、`user.profile` doc count > 0，执行冒烟 runner（覆盖 `GWT-003.t1`、`GWT-003.t2`、`GWT-003.t4`、`GWT-003.t5`），`status=passed` 且非空命中，归档 `.qwq_output/env/repo/runs/search-fullstack-smoke/`。

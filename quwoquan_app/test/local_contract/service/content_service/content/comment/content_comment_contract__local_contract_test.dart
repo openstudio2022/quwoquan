@@ -1,5 +1,10 @@
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-004
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-004.t1
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-010
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-010.t1
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md#gwt-010.t2
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -22,6 +27,7 @@ void main() {
               },
             ],
             replies: <Object?>[_wireItem(id: 'reply-1')],
+            replyNextCursor: 'replies-cursor-1',
           ),
         ],
         'nextCursor': 'cursor-2',
@@ -37,7 +43,10 @@ void main() {
       );
       expect(item.attachments.single.width, 1200);
       expect(item.attachments.single.height, 800);
+      // 一级项自带回复分页三元组：replyCount / replyPreview / replyNextCursor。
+      expect(item.replyCount, 1);
       expect(item.replyPreview.single.id, 'reply-1');
+      expect(item.replyNextCursor, 'replies-cursor-1');
       expect(item.viewerReaction, CommentReactionType.like);
       expect(item.canDelete, isTrue);
       expect(item.canPin, isTrue);
@@ -105,6 +114,34 @@ void main() {
       });
     });
 
+    test('退役 CommentDto / CommentPage 符号在生产代码不可达', () {
+      const retired = <String>['CommentDto', 'CommentPage'];
+      final offenders = <String>[];
+      for (final root in <String>[
+        'lib/service/content_service/content/comment',
+        'packages/quwoquan_cloud_contracts/lib',
+      ]) {
+        final dir = Directory(root);
+        expect(dir.existsSync(), isTrue, reason: '$root 必须存在');
+        for (final entity in dir.listSync(recursive: true)) {
+          if (entity is! File || !entity.path.endsWith('.dart')) {
+            continue;
+          }
+          final content = entity.readAsStringSync();
+          for (final symbol in retired) {
+            if (RegExp('\\b$symbol\\b').hasMatch(content)) {
+              offenders.add('${entity.path}: $symbol');
+            }
+          }
+        }
+      }
+      expect(
+        offenders,
+        isEmpty,
+        reason: '旧 DTO 符号必须保持不可达，评论只消费 pure contracts 严格解码投影',
+      );
+    });
+
     test('创建评论 operation 声明频控的结构化恢复语义', () {
       final operation =
           appCloudOperationContracts[AppCloudOperationIds
@@ -125,6 +162,7 @@ Map<String, Object?> _wireItem({
   required String id,
   List<Object?> attachments = const <Object?>[],
   List<Object?> replies = const <Object?>[],
+  String? replyNextCursor,
 }) {
   return <String, Object?>{
     'id': id,
@@ -152,7 +190,7 @@ Map<String, Object?> _wireItem({
     'deletedAt': null,
     'replyCount': replies.length,
     'replyPreview': replies,
-    'replyNextCursor': null,
+    'replyNextCursor': replyNextCursor,
     'likeCount': 12,
     'dislikeCount': 2,
     'viewerReaction': 'like',

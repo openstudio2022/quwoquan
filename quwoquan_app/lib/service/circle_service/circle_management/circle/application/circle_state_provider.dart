@@ -104,13 +104,18 @@ class CircleStateNotifier extends Notifier<CircleState> {
 
   Future<void> loadCircle() async {
     if (!ref.mounted) return;
-    state = CircleState(circleId: _circleId).copyWith(isLoading: true);
+    if (state.circleData == null) {
+      state = CircleState(circleId: _circleId).copyWith(isLoading: true);
+    } else {
+      state = state.copyWith(isLoading: true, clearLoadError: true);
+    }
     try {
       final circleQuery = ref.read(circleDetailQueryProvider);
       final detail = await circleQuery.get(
         CircleDetailQuery(circleId: _circleId),
       );
       if (!ref.mounted) return;
+      state = state.copyWith(circleData: detail);
       final stats = await circleQuery.stats(
         CircleStatsQuery(circleId: _circleId),
       );

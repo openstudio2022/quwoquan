@@ -28,6 +28,7 @@ func (handler *Handler) Register(mux *http.ServeMux) {
 		panic("message route mux is required")
 	}
 	mux.HandleFunc("GET /chat/conversations/{conversationId}/messages", handler.listMessages)
+	mux.HandleFunc("GET /chat/conversations/{conversationId}/assets", handler.listConversationAssets)
 	mux.HandleFunc("POST /chat/conversations/{conversationId}/messages", handler.sendMessage)
 	mux.HandleFunc("POST /chat/conversations/{conversationId}/messages/{messageId}/recall", handler.recallMessage)
 	mux.HandleFunc("POST /chat/conversations/{conversationId}/sync", handler.syncMessages)
@@ -121,6 +122,58 @@ func (handler *Handler) recallMessage(writer http.ResponseWriter, request *http.
 		return
 	}
 	writeJSON(writer, http.StatusOK, map[string]any{"status": "recalled"})
+}
+
+func (handler *Handler) listConversationAssets(writer http.ResponseWriter, request *http.Request) {
+	query := request.URL.Query()
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	beforeSeq, _ := strconv.ParseInt(query.Get("beforeSeq"), 10, 64)
+	page, err := handler.useCases.ListConversationAssets(
+		request.Context(),
+		messageapp.ListConversationAssetsRequest{
+			ConversationId: request.PathValue("conversationId"),
+			ViewerID:       personaID(request),
+			Kind:           query.Get("kind"),
+			BeforeSeq:      beforeSeq,
+			Limit:          limit,
+		},
+	)
+	if err != nil {
+		writeError(writer, request, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(page.Items))
+	for _, row := range page.Items {
+		wire := map[string]any{
+			"messageId":    row.MessageID,
+			"seq":          row.Seq,
+			"mediaAssetId": row.MediaAssetID,
+			"messageType":  row.MessageType,
+			"senderId":     row.SenderID,
+			"createdAt":    row.CreatedAt,
+		}
+		if strings.TrimSpace(row.SenderName) != "" {
+			wire["senderName"] = row.SenderName
+		}
+		if strings.TrimSpace(row.FileName) != "" {
+			wire["fileName"] = row.FileName
+		}
+		if strings.TrimSpace(row.MediaDeliveryURL) != "" {
+			wire["mediaDeliveryUrl"] = row.MediaDeliveryURL
+		}
+		if strings.TrimSpace(row.MediaContentType) != "" {
+			wire["mediaContentType"] = row.MediaContentType
+		}
+		if row.MediaFileSizeBytes > 0 {
+			wire["mediaFileSizeBytes"] = row.MediaFileSizeBytes
+		}
+		items = append(items, wire)
+	}
+	response := map[string]any{"items": items}
+	if page.NextBeforeSeq != nil {
+		response["nextBeforeSeq"] = *page.NextBeforeSeq
+	}
+	writeJSON(writer, http.StatusOK, response)
 }
 
 func (handler *Handler) syncMessages(writer http.ResponseWriter, request *http.Request) {

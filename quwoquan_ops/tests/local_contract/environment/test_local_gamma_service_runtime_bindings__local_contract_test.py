@@ -535,3 +535,32 @@ class LocalGammaServiceRuntimeBindingsTest(unittest.TestCase):
             start_script,
         )
 
+    def test_public_web_seo_routes_bind_content_service_public_web_plane(self) -> None:
+        """公开 SEO 读面接线（public-content-web-entry）不可回退。
+
+        publicWeb host 的对象页 / robots / sitemap / 中转页必须经 edge
+        rewrite 到 content-service `/public-web/*`；content-service compose
+        必须消费 publicWeb origin 与媒体 CDN origin（origin 为空时服务侧
+        fail-closed 不挂载该读面）。
+        """
+        caddy = CADDYFILE.read_text(encoding="utf-8")
+        self.assertIn("@public_web_seo", caddy)
+        self.assertIn(
+            "path /post/* /robots.txt /sitemap-posts.xml /open /s/*",
+            caddy,
+        )
+        self.assertIn("rewrite * /public-web{uri}", caddy)
+        self.assertIn("reverse_proxy content-service:18080", caddy)
+
+        content_compose = (
+            CONTENT_SERVICE_ROOT / "deploy/compose.yaml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'CONTENT_PUBLIC_WEB_ORIGIN: "${QWQ_COMPOSE_PUBLIC_WEB_BASE_URL:-}"',
+            content_compose,
+        )
+        self.assertIn(
+            'CONTENT_PUBLIC_WEB_CDN_ORIGIN: "${QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL:-}"',
+            content_compose,
+        )
+

@@ -1,4 +1,4 @@
-// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/message-paging-and-ordering/spec.md#gwt-002
+// spec_ref: specs/feature-tree/chat-conversation/message-reliability-foundation/message-paging-and-ordering/spec.md#gwt-002.t1
 //
 // 会话页整页 widget 证据：
 // 1. 历史分页的可视位置保持（GWT-002 前半句）：滚动到顶部触发加载更早

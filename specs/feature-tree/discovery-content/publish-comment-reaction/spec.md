@@ -165,6 +165,12 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`。
-- 目标：图片编辑器全部可见工具为真实像素实现；裁剪、旋转/翻转、颜色矩阵、局部径向调整、曲线、马赛克和文字共用 ImageEditorExportEngine。
+- 影响或价值：尚缺 gamma-local 真实环境「选择/拍照→编辑→上传→发布→回读」
+  user_acceptance 证据，等待环境窗口。已落地：图片编辑器可见工具全部真实
+  像素实现且共用 `ImageEditorExportEngine`，由 image-editing REQ-005 及其
+  local_contract 承载；图/视频「上传 init/complete→处理 ready→发布准入→
+  另一 viewer 作品 feed 可见→详情媒体可读」组合联程与「媒体未 ready
+  发布 fail-closed 返回 media_not_ready、ready 后同 publishIntentId 重试
+  成功」轮询契约均有真实进程 api_integration，见
+  `post_media_lifecycle_journey__api_integration_test.go`。
 - 完成判定：`SIT-003` 对应行为满足且真实测试 `spec_ref` 有效

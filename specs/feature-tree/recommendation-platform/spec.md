@@ -101,8 +101,14 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`block`
-- 影响或价值：当前 `recommendation.ranked_recommendation_window` 的窗口创建与稳定续页已具备打真实 redis-server 与真实 mongod 副本集的端云集成证据并转为 ready，剩余缺口只有缺用户验收执行证据与缺 alpha/beta/gamma/prod 四环境证据两项。
-- 这两个 operation 的可见性为 internal 且 principal 为 service，由 content-service 消费而端侧没有直接页面，因此用户验收锚点只能挂在 content feed 旅程上。锚点已落地：`ranked_window_feed_journey_probe_ops_env`（`quwoquan_ops/tests/acceptance/user_acceptance/service_ops/recommendation-service/smoke/run_ranked_window_feed_journey_probe.py`，经 `GET /content/feed?channelId=recommend` 验证首刷创建、稳定续页与 previousCursor 回翻），尚缺 gamma 真实执行 CaseResult。
+- 影响或价值：当前 `recommendation.ranked_recommendation_window` 的窗口创建与稳定续页已具备打真实 redis-server 与真实 mongod 副本集的端云集成证据并转为 ready；**gamma 用户验收执行证据已落地**，剩余缺口收窄为 alpha/beta 同候选执行与 prod 环境证据。
+- 这两个 operation 的可见性为 internal 且 principal 为 service，由 content-service 消费而端侧没有直接页面，因此用户验收锚点挂在 content feed 旅程上。`ranked_window_feed_journey_probe_ops_env`
+ （`quwoquan_ops/tests/acceptance/user_acceptance/service_ops/recommendation-service/smoke/run_ranked_window_feed_journey_probe.py`）
+ 已于 gamma-local 真实执行 `status: passed`（首刷非空、连续续页、previousCursor 保序回翻；
+ 报告 `.qwq_output/env/gamma/runs/ranked-window-probe/ranked-window-feed-journey-report.json`，
+ 供给为 canonical release `travel-research-m1-20260809-ca7cefd4-epoch6` + 真实测试身份经
+ 公开命令发布并走完 PostModerationCase 人工审核状态机的 UGC）。同轮 App generated Remote
+ 的推荐频道 roundtrip（首刷 envelope/续页归因/behavior 闭环）三例打同一 gamma 网关全绿。
 - 该对象的 HTTP 集成测试已从进程内 ASGI 替身替换为真实 uvicorn 服务器 + 真实网络传输（`test_ranked_window_runtime__api_integration_test.py`），按三层测试的依赖真实度口径可计为端云集成证据。
 - 完成判定：`DOM-001` 的 4 条 THEN 组全部具备子句级 `spec_ref`（`dom-001.t1..t4`）绑定的真实测试证据，且用户验收与四环境证据来自 `ranked_window_feed_journey_probe_ops_env` 同一候选的执行产物。
-- 依赖：`ranked_window_feed_journey_probe_ops_env` 的 gamma 执行证据与同一候选四环境证据产物。
+- 依赖：alpha/beta 的同候选执行证据（受本机 alpha/gamma 运行时互斥约束需分窗口采集）与 prod 环境证据（外部依赖：prod-hosted 凭据与放量流程）。

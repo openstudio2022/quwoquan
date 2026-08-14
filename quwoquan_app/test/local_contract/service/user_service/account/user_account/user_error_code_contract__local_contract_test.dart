@@ -1,5 +1,9 @@
 import 'package:test/test.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/runtime/errors/generated/user/user_errors.g.dart';
+
+import '../../../../../support/runtime/errors/error_chain_probe.dart'
+    show canonicalRuntimeErrorBody;
 
 void main() {
   group('UserErrorCode — 常规契约', () {
@@ -140,6 +144,240 @@ void main() {
     test('fromCode 对未知 code 返回 null', () {
       expect(UserErrorCode.fromCode('NONEXISTENT.CODE'), isNull);
       expect(UserErrorCode.fromCode(''), isNull);
+    });
+  });
+
+  group('UserErrorCode — 账号申诉与处置契约(USER.ACCOUNT)', () {
+    test('申诉凭据三态:invalid 可重验、expired 下发即失效、consumed 一次性', () {
+      expect(
+        UserErrorCode.fromCode(
+          'USER.ACCOUNT.account_appeal_credential_invalid',
+        ),
+        UserErrorCode.accountAppealCredentialInvalid,
+      );
+      expect(UserErrorCode.accountAppealCredentialInvalid.httpStatus, 400);
+      expect(
+        UserErrorCode.accountAppealCredentialInvalid.recoveryAction,
+        'retry',
+      );
+
+      // 凭据过期属于「下发即失效」:410 Gone,恢复动作是重新验证身份。
+      expect(
+        UserErrorCode.fromCode(
+          'USER.ACCOUNT.account_appeal_credential_expired',
+        ),
+        UserErrorCode.accountAppealCredentialExpired,
+      );
+      expect(UserErrorCode.accountAppealCredentialExpired.httpStatus, 410);
+      expect(
+        UserErrorCode.accountAppealCredentialExpired.recoveryAction,
+        'retry',
+      );
+
+      // 凭据已使用是一次性资源冲突:重试同一凭据无意义,只能 surface。
+      expect(
+        UserErrorCode.fromCode(
+          'USER.ACCOUNT.account_appeal_credential_consumed',
+        ),
+        UserErrorCode.accountAppealCredentialConsumed,
+      );
+      expect(UserErrorCode.accountAppealCredentialConsumed.httpStatus, 409);
+      expect(
+        UserErrorCode.accountAppealCredentialConsumed.recoveryAction,
+        'surface',
+      );
+    });
+
+    test('申诉 intake 三态:not_found/account_mismatch/claimed', () {
+      expect(
+        UserErrorCode.fromCode('USER.ACCOUNT.account_appeal_intake_not_found'),
+        UserErrorCode.accountAppealIntakeNotFound,
+      );
+      expect(UserErrorCode.accountAppealIntakeNotFound.httpStatus, 404);
+      expect(
+        UserErrorCode.accountAppealIntakeNotFound.recoveryAction,
+        'surface',
+      );
+
+      expect(
+        UserErrorCode.fromCode(
+          'USER.ACCOUNT.account_appeal_intake_account_mismatch',
+        ),
+        UserErrorCode.accountAppealIntakeAccountMismatch,
+      );
+      expect(UserErrorCode.accountAppealIntakeAccountMismatch.httpStatus, 409);
+      expect(
+        UserErrorCode.accountAppealIntakeAccountMismatch.recoveryAction,
+        'surface',
+      );
+
+      expect(
+        UserErrorCode.fromCode('USER.ACCOUNT.account_appeal_intake_claimed'),
+        UserErrorCode.accountAppealIntakeClaimed,
+      );
+      expect(UserErrorCode.accountAppealIntakeClaimed.httpStatus, 409);
+      expect(UserErrorCode.accountAppealIntakeClaimed.recoveryAction, 'surface');
+    });
+
+    test('申诉前置状态与幂等冲突均为 409 surface', () {
+      expect(
+        UserErrorCode.fromCode('USER.ACCOUNT.account_appeal_not_suspended'),
+        UserErrorCode.accountAppealNotSuspended,
+      );
+      expect(UserErrorCode.accountAppealNotSuspended.httpStatus, 409);
+      expect(UserErrorCode.accountAppealNotSuspended.recoveryAction, 'surface');
+
+      expect(
+        UserErrorCode.fromCode(
+          'USER.ACCOUNT.account_appeal_idempotency_conflict',
+        ),
+        UserErrorCode.accountAppealIdempotencyConflict,
+      );
+      expect(UserErrorCode.accountAppealIdempotencyConflict.httpStatus, 409);
+      expect(
+        UserErrorCode.accountAppealIdempotencyConflict.recoveryAction,
+        'surface',
+      );
+    });
+
+    test('账号处置:决策无效 400、状态冲突 409,均 surface', () {
+      expect(
+        UserErrorCode.fromCode('USER.ACCOUNT.enforcement_decision_invalid'),
+        UserErrorCode.accountEnforcementDecisionInvalid,
+      );
+      expect(UserErrorCode.accountEnforcementDecisionInvalid.httpStatus, 400);
+      expect(
+        UserErrorCode.accountEnforcementDecisionInvalid.recoveryAction,
+        'surface',
+      );
+
+      expect(
+        UserErrorCode.fromCode('USER.ACCOUNT.state_conflict'),
+        UserErrorCode.accountStateConflict,
+      );
+      expect(UserErrorCode.accountStateConflict.httpStatus, 409);
+      expect(UserErrorCode.accountStateConflict.recoveryAction, 'surface');
+    });
+
+    test('申诉限流:429 必须 retry 且带正退避秒数', () {
+      expect(
+        UserErrorCode.fromCode('USER.ACCOUNT.account_appeal_rate_limited'),
+        UserErrorCode.accountAppealRateLimited,
+      );
+      expect(UserErrorCode.accountAppealRateLimited.httpStatus, 429);
+      expect(UserErrorCode.accountAppealRateLimited.recoveryAction, 'retry');
+      expect(
+        UserErrorCode.accountAppealRateLimited.recoveryAfterSeconds,
+        greaterThan(0),
+      );
+      expect(UserErrorCode.accountAppealRateLimited.recoveryAfterSeconds, 600);
+    });
+
+    test('CloudErrorMapper 负例:申诉限流响应解析为 typed user 域错误', () {
+      final exception = CloudErrorMapper.fromStatusCode(
+        UserErrorCode.accountAppealRateLimited.httpStatus,
+        body: canonicalRuntimeErrorBody(
+          code: UserErrorCode.accountAppealRateLimited.code,
+          origin: 'user',
+          kind: 'rateLimited',
+          nature: 'transient',
+          businessObject: 'user_account',
+          functionModule: 'user',
+          userMessage: UserErrorCode.accountAppealRateLimited.defaultMessageZh,
+          recoveryAction: UserErrorCode.accountAppealRateLimited.recoveryAction,
+          recoveryAfterSeconds:
+              UserErrorCode.accountAppealRateLimited.recoveryAfterSeconds,
+          disruptionLevel:
+              UserErrorCode.accountAppealRateLimited.disruptionLevel,
+        ),
+        requestPath: '/user/account/appeal',
+      );
+
+      expect(exception.domainErrorCode?.domain, 'user');
+      expect(
+        exception.domainErrorCode?.code,
+        UserErrorCode.accountAppealRateLimited.code,
+      );
+      final recovery = exception.runtimeFailure.recovery;
+      expect(recovery.isPresent, isTrue);
+      expect(recovery.action, 'retry');
+      expect(recovery.afterSeconds, 600);
+    });
+  });
+
+  group('UserErrorCode — 邀请契约(USER.INVITATION)', () {
+    test('邀请不存在/已过期:404 与 410,均 surface', () {
+      expect(
+        UserErrorCode.fromCode('USER.INVITATION.not_found'),
+        UserErrorCode.invitationNotFound,
+      );
+      expect(UserErrorCode.invitationNotFound.httpStatus, 404);
+      expect(UserErrorCode.invitationNotFound.recoveryAction, 'surface');
+
+      // 过期邀请属于「下发即失效」:重试同一邀请无意义,只能 surface。
+      expect(
+        UserErrorCode.fromCode('USER.INVITATION.expired'),
+        UserErrorCode.invitationExpired,
+      );
+      expect(UserErrorCode.invitationExpired.httpStatus, 410);
+      expect(UserErrorCode.invitationExpired.recoveryAction, 'surface');
+    });
+
+    test('邀请状态迁移冲突:409 surface', () {
+      expect(
+        UserErrorCode.fromCode('USER.INVITATION.invalid_transition'),
+        UserErrorCode.invitationInvalidTransition,
+      );
+      expect(UserErrorCode.invitationInvalidTransition.httpStatus, 409);
+      expect(
+        UserErrorCode.invitationInvalidTransition.recoveryAction,
+        'surface',
+      );
+    });
+
+    test('邀请每日限额:429 retry 且退避一天', () {
+      expect(
+        UserErrorCode.fromCode('USER.INVITATION.daily_limit_exceeded'),
+        UserErrorCode.invitationDailyLimitExceeded,
+      );
+      expect(UserErrorCode.invitationDailyLimitExceeded.httpStatus, 429);
+      expect(
+        UserErrorCode.invitationDailyLimitExceeded.recoveryAction,
+        'retry',
+      );
+      expect(
+        UserErrorCode.invitationDailyLimitExceeded.recoveryAfterSeconds,
+        greaterThan(0),
+      );
+      expect(
+        UserErrorCode.invitationDailyLimitExceeded.recoveryAfterSeconds,
+        86400,
+      );
+    });
+
+    test('CloudErrorMapper 负例:过期邀请响应解析为 typed user 域错误', () {
+      final exception = CloudErrorMapper.fromStatusCode(
+        UserErrorCode.invitationExpired.httpStatus,
+        body: canonicalRuntimeErrorBody(
+          code: UserErrorCode.invitationExpired.code,
+          origin: 'user',
+          kind: 'validation',
+          nature: 'permanent',
+          businessObject: 'invitation',
+          functionModule: 'user',
+          userMessage: UserErrorCode.invitationExpired.defaultMessageZh,
+          recoveryAction: UserErrorCode.invitationExpired.recoveryAction,
+          disruptionLevel: UserErrorCode.invitationExpired.disruptionLevel,
+        ),
+        requestPath: '/user/invitations',
+      );
+
+      expect(exception.domainErrorCode?.domain, 'user');
+      expect(
+        exception.domainErrorCode?.code,
+        UserErrorCode.invitationExpired.code,
+      );
+      expect(exception.runtimeFailure.recovery.action, 'surface');
     });
   });
 

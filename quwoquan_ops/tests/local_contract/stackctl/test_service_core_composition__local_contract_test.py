@@ -81,6 +81,46 @@ class ServiceCoreCompositionContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "every module exactly once"):
             service_core_source_digest(changed)
 
+    def test_assistant_injected_runtime_keys_merge_into_service_core_environment(
+        self,
+    ) -> None:
+        services = {
+            service: {
+                "image": f"${{{service}_IMAGE}}",
+                "environment": {"APP_ENV": "alpha"},
+            }
+            for service in SERVICE_CORE_MODULES
+        }
+        services["assistant-service"]["environment"].update(
+            {
+                "ASSISTANT_MODEL_COMPLETION_URL": (
+                    "${ASSISTANT_MODEL_COMPLETION_URL:-}"
+                ),
+                "ASSISTANT_PUBLIC_SEARCH_URL": "${ASSISTANT_PUBLIC_SEARCH_URL:-}",
+                "ASSISTANT_WEATHER_GEOCODING_URL": (
+                    "${ASSISTANT_WEATHER_GEOCODING_URL:-}"
+                ),
+                "ASSISTANT_WEATHER_FORECAST_URL": (
+                    "${ASSISTANT_WEATHER_FORECAST_URL:-}"
+                ),
+                "ASSISTANT_FINANCE_CHART_URL": "${ASSISTANT_FINANCE_CHART_URL:-}",
+            }
+        )
+
+        projected = project_compose_document({"services": services})
+        core_env = projected["services"][SERVICE_CORE_WORKLOAD]["environment"]
+
+        self.assertNotIn("assistant-service", projected["services"])
+        for key in (
+            "ASSISTANT_MODEL_COMPLETION_URL",
+            "ASSISTANT_PUBLIC_SEARCH_URL",
+            "ASSISTANT_WEATHER_GEOCODING_URL",
+            "ASSISTANT_WEATHER_FORECAST_URL",
+            "ASSISTANT_FINANCE_CHART_URL",
+        ):
+            self.assertIn(key, core_env)
+            self.assertEqual(core_env[key], f"${{{key}:-}}")
+
 
 if __name__ == "__main__":
     unittest.main()

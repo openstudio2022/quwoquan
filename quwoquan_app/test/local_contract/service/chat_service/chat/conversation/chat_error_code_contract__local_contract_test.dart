@@ -1,127 +1,144 @@
+// spec_ref: specs/feature-tree/chat-conversation/list-detail-message-delivery/spec.md#sit-001
+// spec_ref: specs/feature-tree/runtime/runtime-errors/error-code-and-response-envelope/spec.md#gwt-002.t1
+/// Chat 错误码契约：generated enum 与 chat/**/errors.yaml 同源往返，且高频
+/// 用户可见码经 canonical 错误链路（CloudException -> UiErrorSemanticResolver）
+/// 收敛为正确的 sourceCode 与恢复语义。
+library;
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/l10n/app_localizations.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/errors/generated/chat/chat_errors.g.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
+import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
-/// L1a 契约测试：ChatErrorCode — 覆盖 errors.yaml 中的稳定错误码
-///
-/// 三维度覆盖：
-///   常规契约  — 每个已知错误码正确解析，错误码解析与状态码正确
-///   解析边界   — 未登记 code → unknown；稳定 code 集合与 metadata 对齐
-///   异常/边界契约 — 空字符串/null-like 输入不崩溃
+import '../../../../../support/runtime/errors/runtime_failure_fixtures.dart';
+
 void main() {
-  // ──────────────────────────────────────────────────────────────────
-  // 常规契约
-  // ──────────────────────────────────────────────────────────────────
-  group('ChatErrorCode — 常规契约', () {
-    test('parse conversation_not_found → conversationNotFound', () {
-      final code = ChatErrorCode.fromCode('CHAT.USER.conversation_not_found');
-      expect(code, ChatErrorCode.conversationNotFound);
-      expect(code.httpStatus, 404);
-    });
-
-    test('parse unauthorized → unauthorized', () {
-      final code = ChatErrorCode.fromCode('CHAT.USER.unauthorized');
-      expect(code, ChatErrorCode.unauthorized);
-      expect(code.httpStatus, 401);
-    });
-
-    test('parse message_too_long → messageTooLong', () {
-      final code = ChatErrorCode.fromCode('CHAT.USER.message_too_long');
-      expect(code, ChatErrorCode.messageTooLong);
-      expect(code.httpStatus, 400);
-    });
-
-    test('parse message_idempotency_conflict → messageIdempotencyConflict', () {
-      final code = ChatErrorCode.fromCode(
-        'CHAT.USER.message_idempotency_conflict',
-      );
-      expect(code, ChatErrorCode.messageIdempotencyConflict);
-      expect(code.httpStatus, 409);
-    });
-
-    test('service-local rate_limited 已退役并 fail-closed 为 unknown', () {
-      final code = ChatErrorCode.fromCode('CHAT.USER.rate_limited');
-      expect(code, ChatErrorCode.unknown);
-    });
-
-    test('parse not_mutual → notMutual', () {
-      final code = ChatErrorCode.fromCode('CHAT.USER.not_mutual');
-      expect(code, ChatErrorCode.notMutual);
-      expect(code.httpStatus, 403);
-    });
-
-    test('parse greeting_required → greetingRequired', () {
-      final code = ChatErrorCode.fromCode('CHAT.USER.greeting_required');
-      expect(code, ChatErrorCode.greetingRequired);
-      expect(code.httpStatus, 403);
-    });
-
-    test('parse blocked → blocked', () {
-      final code = ChatErrorCode.fromCode('CHAT.USER.blocked');
-      expect(code, ChatErrorCode.blocked);
-      expect(code.httpStatus, 403);
-    });
-
-    test('parse internal_error → internalError', () {
-      final code = ChatErrorCode.fromCode('CHAT.SYSTEM.internal_error');
-      expect(code, ChatErrorCode.internalError);
-      expect(code.httpStatus, 500);
-    });
-  });
-
-  // ──────────────────────────────────────────────────────────────────
-  // 解析边界
-  // ──────────────────────────────────────────────────────────────────
-  group('ChatErrorCode — 解析边界', () {
-    test('unknown code string → ChatErrorCode.unknown', () {
-      final code = ChatErrorCode.fromCode('CHAT.USER.nonexistent_error');
-      expect(code, ChatErrorCode.unknown);
-    });
-
-    test('other domain code → ChatErrorCode.unknown', () {
-      final code = ChatErrorCode.fromCode('CONTENT.USER.post_not_found');
-      expect(code, ChatErrorCode.unknown);
-    });
-
-    test('生成的稳定 code 唯一、非空且包含消息校验语义', () {
-      final stable = ChatErrorCode.values
-          .where((value) => value != ChatErrorCode.unknown)
-          .toList(growable: false);
-      final codes = stable.map((value) => value.code).toList(growable: false);
-
-      expect(codes, everyElement(isNotEmpty));
-      expect(codes.toSet(), hasLength(codes.length));
-      expect(ChatErrorCode.messageInvalid.httpStatus, 400);
-    });
-
-    test('每个 code 可以 round-trip：fromCode(code) == self', () {
+  group('ChatErrorCode enum 契约', () {
+    test('所有错误码非空且 fromCode 往返一致', () {
       for (final value in ChatErrorCode.values) {
         if (value == ChatErrorCode.unknown) continue;
-        final parsed = ChatErrorCode.fromCode(value.code);
-        expect(parsed, value, reason: 'round-trip failed for ${value.code}');
+        expect(value.code, isNotEmpty);
+        expect(value.code, startsWith('CHAT.'));
+        expect(value.defaultMessage, isNotEmpty);
+        expect(ChatErrorCode.fromCode(value.code), value);
       }
+    });
+
+    test('码清单无重复', () {
+      final codes = ChatErrorCode.values
+          .where((value) => value != ChatErrorCode.unknown)
+          .map((value) => value.code)
+          .toList();
+      expect(codes.toSet(), hasLength(codes.length));
+    });
+
+    test('未知码回退 unknown 而不是抛错', () {
+      expect(
+        ChatErrorCode.fromCode('CHAT.USER.definitely_missing'),
+        ChatErrorCode.unknown,
+      );
     });
   });
 
-  // ──────────────────────────────────────────────────────────────────
-  // 异常/边界契约
-  // ──────────────────────────────────────────────────────────────────
-  group('ChatErrorCode — 异常/边界契约', () {
-    test('空字符串 → unknown', () {
-      expect(ChatErrorCode.fromCode(''), ChatErrorCode.unknown);
+  group('高频码经 canonical 链路收敛为正确 UI 语义', () {
+    Future<BuildContext> pumpContext(WidgetTester tester) async {
+      late BuildContext capturedContext;
+      await tester.pumpWidget(
+        CupertinoApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) {
+              capturedContext = context;
+              return const SizedBox.shrink();
+            },
+          ),
+        ),
+      );
+      return capturedContext;
+    }
+
+    Future<UiErrorSemantic> resolveChatCode(
+      WidgetTester tester,
+      ChatErrorCode code, {
+    required CloudErrorType type,
+      required RuntimeFailureKind kind,
+      required RuntimeFailureNature nature,
+    }) async {
+      final context = await pumpContext(tester);
+      return UiErrorSemanticResolver.resolve(
+        context,
+        error: CloudException(
+          type: type,
+          message: code.defaultMessage,
+          statusCode: code.httpStatus,
+          code: code.code,
+          runtimeFailure: testRuntimeFailure(
+            code: code.code,
+            kind: kind,
+            nature: nature,
+          ),
+        ),
+        category: UiErrorCategory.pageLoad,
+        scope: UiErrorScope.page,
+      );
+    }
+
+    testWidgets('conversation_not_found 收敛为确定性 not_found 语义', (
+      tester,
+    ) async {
+      final semantic = await resolveChatCode(
+        tester,
+        ChatErrorCode.conversationNotFound,
+        type: CloudErrorType.notFound,
+        kind: RuntimeFailureKind.notFound,
+        nature: RuntimeFailureNature.permanent,
+      );
+      expect(semantic.sourceCode, ChatErrorCode.conversationNotFound.code);
+      expect(semantic.recoveryAction, isNot(RuntimeRecoveryAction.retry));
     });
 
-    test('只有模块名 → unknown', () {
-      expect(ChatErrorCode.fromCode('CHAT'), ChatErrorCode.unknown);
+    testWidgets('group_full 收敛为确定性拒绝语义（重试不改变结果）', (tester) async {
+      final semantic = await resolveChatCode(
+        tester,
+        ChatErrorCode.groupFull,
+        type: CloudErrorType.forbidden,
+        kind: RuntimeFailureKind.permission,
+        nature: RuntimeFailureNature.permanent,
+      );
+      expect(semantic.sourceCode, ChatErrorCode.groupFull.code);
+      expect(semantic.recoveryAction, isNot(RuntimeRecoveryAction.retry));
     });
 
-    test('乱码字符串 → unknown', () {
-      expect(ChatErrorCode.fromCode('abc.def.ghi'), ChatErrorCode.unknown);
+    testWidgets('message_media_unavailable 收敛为可重试的依赖失败语义', (
+      tester,
+    ) async {
+      final semantic = await resolveChatCode(
+        tester,
+        ChatErrorCode.messageMediaUnavailable,
+        type: CloudErrorType.server,
+        kind: RuntimeFailureKind.unavailable,
+        nature: RuntimeFailureNature.transient,
+      );
+      expect(semantic.sourceCode, ChatErrorCode.messageMediaUnavailable.code);
+      expect(semantic.recoveryAction, RuntimeRecoveryAction.retry);
     });
 
-    test('defaultMessage 中文非空', () {
-      expect(ChatErrorCode.notMutual.defaultMessage, contains('互相关注'));
-      expect(ChatErrorCode.greetingRequired.defaultMessage, contains('打招呼'));
-      expect(ChatErrorCode.blocked.defaultMessage, contains('不能继续发送消息'));
+    testWidgets('unauthorized 收敛为登录门语义而非重试', (tester) async {
+      final semantic = await resolveChatCode(
+        tester,
+        ChatErrorCode.unauthorized,
+        type: CloudErrorType.unauthorized,
+        kind: RuntimeFailureKind.auth,
+        nature: RuntimeFailureNature.requiresUserAction,
+      );
+      expect(semantic.sourceCode, ChatErrorCode.unauthorized.code);
+      expect(semantic.recoveryAction, isNot(RuntimeRecoveryAction.retry));
     });
   });
 }

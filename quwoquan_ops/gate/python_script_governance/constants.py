@@ -150,5 +150,5 @@ ACCEPTANCE_ROOT = Path(
 #: 默认值）。``quwoquan_data/scripts/**`` 不在本预算内：它由
 #: ``verify_script_architecture.py`` 的 600/500/400 更严硬顶单轨负责。
 PYTHON_LINE_BUDGET_MAX_LINES = 1000
-#: ``warn`` 阶段仅输出 WARN 不阻断；存量清零后切 ``block`` 进入 check 阻断。
-PYTHON_LINE_BUDGET_ENFORCEMENT = "warn"
+#: 存量已清零（2026-08），行数硬顶进入 ``block``：check 模式下超标即阻断。
+PYTHON_LINE_BUDGET_ENFORCEMENT = "block"

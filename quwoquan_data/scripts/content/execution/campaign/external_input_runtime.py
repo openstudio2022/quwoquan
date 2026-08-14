@@ -256,7 +256,24 @@ def bound_runtime_external_input_context(
     with _BOUND_CONTEXTS_LOCK:
         context = _BOUND_CONTEXTS.get(normalized)
     if context is None:
-        return None
+        # 进程内缓存缺失不代表非 campaign 执行：controller 重试/恢复进程
+        # 不经过 lane 启动的 bind 入口。canonical envelope 是唯一真相源——
+        # 它存在就必须 resolve+bind，否则会静默降级为公开 discovery，
+        # 破坏 frozen external input 语义（历史缺陷：image lane 重试后
+        # 写出 acquisitionReceiptRefs=[] 的 plan，fetch 阶段 UNDECLARED）。
+        runtime = _runtime_paths()
+        envelope_path = execution_external_input_envelope_path(
+            runtime.output_root / "data" / "tasks" / normalized
+        )
+        if not envelope_path.is_file():
+            return None
+        context = bind_runtime_external_input_context(
+            resolve_runtime_external_input_context(
+                normalized,
+                carrier,
+                runtime_paths=runtime,
+            )
+        )
     if context.envelope.get("carrier") != carrier:
         raise _typed("IDENTITY_DRIFT", "bound runtime carrier drift")
     return context

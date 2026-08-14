@@ -46,13 +46,10 @@ class CommentDraftStore implements CommentDraftTerminalAccountPurger {
   const CommentDraftStore({required String actorScope})
     : _terminalActorScope = actorScope;
 
-<<<<<<< Updated upstream:quwoquan_app/lib/service/content_service/content/comment/adapters/comment_draft_store.dart
   final String _terminalActorScope;
 
+  // 单轨:本地持久化 key 使用稳定语义名,禁止 v1/v2 第二条存储轨。
   static const String _keyPrefix = 'comment_draft:';
-=======
-  static const String _keyPrefix = 'comment_draft:v2:';
->>>>>>> Stashed changes:quwoquan_app/lib/components/comment_system/comment_draft_store.dart
 
   static String _actorPrefix(String actorScope) {
     final normalized = actorScope.trim().isEmpty ? 'guest' : actorScope.trim();
@@ -117,13 +114,7 @@ class CommentDraftStore implements CommentDraftTerminalAccountPurger {
     final actorPrefix = _actorPrefix(actorScope);
     final keys = preferences
         .getKeys()
-<<<<<<< Updated upstream:quwoquan_app/lib/service/content_service/content/comment/adapters/comment_draft_store.dart
-        .where((key) {
-          return key.startsWith(actorPrefix);
-        })
-=======
         .where((key) => key.startsWith(actorPrefix))
->>>>>>> Stashed changes:quwoquan_app/lib/components/comment_system/comment_draft_store.dart
         .toList(growable: false);
     for (final key in keys) {
       await preferences.remove(key);
@@ -132,11 +123,8 @@ class CommentDraftStore implements CommentDraftTerminalAccountPurger {
       throw StateError('comment draft cleanup verification failed');
     }
   }
-<<<<<<< Updated upstream:quwoquan_app/lib/service/content_service/content/comment/adapters/comment_draft_store.dart
 
   @override
   Future<void> purgeForTerminalAccountClosure() =>
       clearForTerminalAccountClosure(_terminalActorScope);
-=======
->>>>>>> Stashed changes:quwoquan_app/lib/components/comment_system/comment_draft_store.dart
 }

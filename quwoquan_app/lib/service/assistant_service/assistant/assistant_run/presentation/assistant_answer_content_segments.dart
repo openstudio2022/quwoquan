@@ -1,4 +1,3 @@
-// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — Markdown card payload 是受校验的开放 JSON。
 part of 'assistant_answer_content.dart';
 
 class _MarkdownSegment {
@@ -6,13 +5,13 @@ class _MarkdownSegment {
     required this.content,
     required this.isCard,
     this.cardType = '',
-    this.cardPayload = const <String, dynamic>{},
+    this.cardPayload,
   });
 
   final String content;
   final bool isCard;
   final String cardType;
-  final Map<String, dynamic> cardPayload;
+  final AssistantStructuredCardPayload? cardPayload;
 
   static const Set<String> _supportedCardTypes = <String>{
     'compare',
@@ -34,8 +33,8 @@ class _MarkdownSegment {
     if (!_supportedCardTypes.contains(type)) {
       return _MarkdownSegment.hidden();
     }
-    final decoded = _tryDecode(payload);
-    if (decoded == null || decoded.isEmpty) {
+    final decoded = AssistantStructuredCardPayload.tryParse(payload);
+    if (decoded == null) {
       return _MarkdownSegment.hidden();
     }
     return _MarkdownSegment._(
@@ -82,24 +81,20 @@ class _MarkdownSegment {
   }
 
   String toCardMarkdown() {
-    if (!isCard || cardPayload.isEmpty) return content;
-    final title = (cardPayload['title'] as String?)?.trim();
+    final payload = cardPayload;
+    if (!isCard || payload == null) return content;
     final lines = <String>[
-      '### ${title?.isNotEmpty == true ? title! : _fallbackTitle()}',
+      '### ${payload.title.isNotEmpty ? payload.title : _fallbackTitle()}',
     ];
-    if (cardType == 'diagram') {
-      final mermaid = (cardPayload['mermaid'] as String?)?.trim() ?? '';
-      if (mermaid.isNotEmpty) {
-        lines
-          ..add('```mermaid')
-          ..add(mermaid)
-          ..add('```');
-      }
+    if (cardType == 'diagram' && payload.mermaid.isNotEmpty) {
+      lines
+        ..add('```mermaid')
+        ..add(payload.mermaid)
+        ..add('```');
     }
-    cardPayload.forEach((key, value) {
-      if (key == 'title' || key == 'mermaid') return;
-      lines.add('- **$key**: ${_valueText(value)}');
-    });
+    for (final entry in payload.entries) {
+      lines.add('- **${entry.key}**: ${entry.valueText}');
+    }
     return lines.join('\n');
   }
 
@@ -114,30 +109,5 @@ class _MarkdownSegment {
       default:
         return cardType;
     }
-  }
-
-  static Map<String, dynamic>? _tryDecode(String payload) {
-    try {
-      final decoded = jsonDecode(payload);
-      if (decoded is Map<String, dynamic>) return decoded;
-      if (decoded is Map) return decoded.cast<String, dynamic>();
-      return null;
-    } catch (error, stackTrace) {
-      developer.log(
-        'assistant structured card payload could not be decoded',
-        name: 'assistant.answer_content',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      return null;
-    }
-  }
-
-  static String _valueText(Object? value) {
-    if (value == null) return '';
-    if (value is num || value is bool || value is String) {
-      return value.toString();
-    }
-    return jsonEncode(value);
   }
 }

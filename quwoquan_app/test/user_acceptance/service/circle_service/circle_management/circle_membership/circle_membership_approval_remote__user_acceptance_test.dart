@@ -4,8 +4,9 @@
 /// membership，再由 production App 审批并以 Remote 队列、成员版本和 memberCount
 /// 权威读回确认收敛。
 ///
-/// 当前 Gamma 尚无受治理的并发管理员、越权与 selective failure orchestration，
-/// 且没有同一 candidate 的 Android+iPhone ResultBundle，因此不登记 readiness_case。
+/// readiness_case 已登记（operations.yaml `circle_membership_approval_app_uat`）。
+/// 执行仍要求健康 gamma-local 与 Android/iPhone 物理 ResultBundle；环境或真机
+/// 缺失时保持 OPEN-004 BLOCK，不得用模拟器或 fixture 冒充。
 library;
 
 import 'package:flutter/cupertino.dart';

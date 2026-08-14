@@ -101,6 +101,9 @@ type MessageStore interface {
 	CommitMessage(ctx context.Context, commit MessageCommit) (MessageCommitResult, error)
 	FindMessageByID(ctx context.Context, id string) (*messagemodel.Message, error)
 	ListMessages(ctx context.Context, conversationID string, limit int, afterSeq, beforeSeq int64) ([]messagemodel.Message, error)
+	// ListMediaMessages 是群空间相册/文件宫格的媒体索引读面：只返回指定
+	// 消息类型且绑定 MediaAsset、未撤回的消息，按 seq DESC keyset 分页。
+	ListMediaMessages(ctx context.Context, conversationID, messageType string, limit int, beforeSeq int64) ([]messagemodel.Message, error)
 	CountUnreadMessages(ctx context.Context, conversationID, userID string, afterSeq, throughSeq int64) (UnreadMessageCounts, error)
 	SetMessageRecalled(ctx context.Context, id string) error
 	// AppendMessageOutboxEvent 供 Recall 等已提交消息上的命名迁移在事务内

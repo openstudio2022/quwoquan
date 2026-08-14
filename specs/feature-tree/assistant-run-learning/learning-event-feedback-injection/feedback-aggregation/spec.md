@@ -63,5 +63,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺可用 Gamma 与获批 Prod 发布后对 shadow rebuild、原子切换和运行时 projector 健康的当前只读运营回执。append-only `AssistantLearningFact`、带 receipt/watermark 的 canonical projector 与 replay 已由本地契约证明。唯一 projection definition 将投影 owner 收敛为 account + persona，并在 definition digest 不一致时拒绝读取、从 canonical fact stream 原子重建。gamma-local health gate 当前为 0/28，不能沿用历史回执准出。
+- 影响或价值：仍缺可用 Gamma 与获批 Prod 发布后对 shadow rebuild、原子切换和运行时 projector 健康的当前只读运营回执。append-only `AssistantLearningFact`、带 receipt/watermark 的 canonical projector 与 replay 已由本地契约证明。唯一 projection definition 将投影 owner 收敛为 account + persona，并在 definition digest 不一致时拒绝读取、从 canonical fact stream 原子重建。Alpha canonical health 已达 29/29（run `20260813T160518410673Z-d38bed3e0945497980753e19bcb051e5-health-alpha-local`）；gamma-local 尚未以当前 candidate 启动，不能沿用历史回执准出。
 - 完成判定：append-only typed learning event 是唯一输入。canonical projector 以 eventId 幂等消费，并以 payloadDigest 检测身份冲突、以 appendSequence 保存顺序和 watermark、以 definition digest 固化投影定义。同一回放不重复计数、清空投影后可从事实重建；每次 generationId 只表示该次 rebuild，切换 active 时同事务清理非 active generation，且 API/运营视图只读 active projection。`GWT-001` 对应行为满足且真实测试 `spec_ref` 有效。

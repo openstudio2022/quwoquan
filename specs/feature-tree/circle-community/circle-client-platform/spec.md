@@ -61,11 +61,4 @@
 
 ## 8. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 circle client platform 能力 SIT
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺实现或直接 `spec_ref`；目标：统一圈子端侧领域模型、Repository 边界与页面状态。
-- 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
+（当前无开放事项：SIT-001 已由圈子端侧快照保留、Remote 失败不回退 Mock 的 widget 测试绑定。）

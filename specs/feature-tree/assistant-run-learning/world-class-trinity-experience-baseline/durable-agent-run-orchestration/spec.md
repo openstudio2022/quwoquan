@@ -92,8 +92,9 @@
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺受管 Remote 启动收据和 Android/iPhone 真机后台恢复收据，因此长任务不能进入商业准出。
-- 已完成实现：Mongo journal/CAS、durable queue、lease/heartbeat/fencing、Checkpoint、SSE replay、Pause/Resume/Steer/Cancel、Verifier 及工具/Subagent 级联取消已接入 composition root；canonical Run 是唯一公开 request/envelope。
-- 已完成本地证据：定向跨 Worker、结构化失败 SSE、主动 Trigger 和 local contract 已有覆盖。`assistant_session` API integration 包按 canonical Run wire 编译通过，旧 `input` 只用于断言废弃请求被拒绝，`AssistantTurn` 只用于内部执行与只读历史投影。`verify-service-architecture` 通过 119/119 对象检查。current-source 真实 MongoDB 全包 API integration 已全量通过（19/19 包，含 `assistant_run`、`assistant_session`、`skill_package_release` 等，收据 `.qwq_output/env/repo/runs/assistant-acceptance/assistant_service_api_integration_full_20260812.log`）。
-- 尚缺验收证据：受管 Remote 启动收据（当前受并行 service-core 组合根改造的 cutover 占用与 candidate 服务集合切换阻断）及 Android/iPhone 受管真机后台、断网、杀进程恢复尚未取得，不能以 compile-only、模拟器或被跳过的 Patrol 代替。
-- 完成判定：`GWT-001`、`GWT-002` 与 `GWT-003` 在同一候选 baseline 上成立——先通过 current-source 真实 Mongo/Redis Assistant API integration，再启动受管 Remote 环境，执行 Android/iPhone 真机后台/断网/杀进程恢复与 pause/steer/cancel UAT，证明 30 秒内接管、5 秒内暂停确认、10 秒内取消收敛、唯一终态及 active tool/subagent 为 0。
+- 影响或价值：仍缺 Gamma 同 digest 跨实例恢复收据和 Android/iPhone 真机后台恢复收据，因此长任务不能进入商业准出。Alpha canonical 启动与 health 29/29 已取得（run `20260813T160518410673Z-d38bed3e0945497980753e19bcb051e5-health-alpha-local`）。
+- 已完成实现：Mongo journal/CAS、durable queue、lease/heartbeat/fencing、Checkpoint、SSE replay、Pause/Resume/Steer/Cancel、Verifier 及工具/Subagent 级联取消已接入 composition root。canonical Run 是唯一公开 request/envelope。
+- 已完成本地证据：定向跨 Worker、结构化失败 SSE、主动 Trigger 和 local contract 已有覆盖。current-source 真实 MongoDB 全包 API integration 已全量通过（19/19 包，收据 `.qwq_output/env/repo/runs/assistant-acceptance/assistant_service_api_integration_full_20260812.log`）。
+- 尚缺验收证据：同一 candidate digest 的 Gamma 跨实例恢复收据，以及 Android/iPhone 受管真机后台、断网、杀进程恢复尚未取得。最近一次 Gamma 启动被并行 `beta-local` 操作锁与 Alpha 占用的 `workstation-commercial-runtime` 阻断（up run `20260813T165117596635Z-05f1f7ae24b149f187e67df4127e90fd-up-gamma`）。
+- 契约状态：`PauseAssistantRun` / `ResumeAssistantRun` / `SteerAssistantRun` 在 `operations.yaml` 保持 `commercial.status: blocked`。当前没有跨实例恢复收据，因此不翻绿。`ApproveAssistantToolUse` / `SubmitDeviceActionReceipt` 继续由 tool-fabric OPEN-001 保持 blocked。
+- 完成判定：`GWT-001`、`GWT-002` 与 `GWT-003` 在同一候选 baseline 上成立——先通过 current-source 真实 Mongo/Redis Assistant API integration，再启动受管 Remote 环境，执行 Android/iPhone 真机后台/断网/杀进程恢复与 pause/steer/cancel UAT，证明 30 秒内接管、5 秒内暂停确认、10 秒内取消收敛、唯一终态及 active tool/subagent 为 0。凭 Gamma 或 Alpha 跨实例恢复收据后，才把上述三条 durable op 改为 `commercial: ready`。

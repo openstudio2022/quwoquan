@@ -202,6 +202,8 @@ Map<String, Object?> _conversationWire() => <String, Object?>{
   'circleGroupId': '',
   'gatheringId': '',
   'gatheringSourceVersion': 0,
+  'gatheringSourceEventId': '',
+  'intersectionFacts': <Object?>[],
   'accessMode': 'active',
   'postingPolicy': 'member_chat',
   'entityId': '',

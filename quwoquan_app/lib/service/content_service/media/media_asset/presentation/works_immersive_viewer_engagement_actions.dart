@@ -815,6 +815,9 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       return;
     }
     unawaited(() async {
+      // 本函数可在 build 期被调用；先让出一拍，保证包括 provider 装配
+      // 同步抛错在内的全部路径都在 build 之外执行（catch 里有 setState）。
+      await null;
       try {
         final state = await ref
             .read(workBrowserEntityWishlistStateReaderProvider)

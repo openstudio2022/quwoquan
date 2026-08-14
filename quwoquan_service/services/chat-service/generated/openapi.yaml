@@ -357,6 +357,54 @@ paths:
                                 $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
             security:
                 - bearerAuth: []
+    /chat/conversations/{conversationId}/assets:
+        get:
+            operationId: ListConversationAssets
+            x-contract-operation-id: chat.message.ListConversationAssets
+            x-object-id: chat.message
+            x-actor: persona
+            x-application:
+                kind: query
+                facet: MessageQueryFacet
+                method: listConversationAssets
+                reader: MessageHistoryReader
+                slice: ConversationAssetPage
+            parameters:
+                - name: conversationId
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+                - name: kind
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: limit
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+                - name: beforeSeq
+                  in: query
+                  required: false
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConversationAssetPage'
+                default:
+                    description: Runtime failure
+                    content:
+                        application/json:
+                            schema:
+                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
+            security:
+                - bearerAuth: []
     /chat/conversations/{conversationId}/assistant:
         post:
             operationId: InviteAssistant
@@ -1722,6 +1770,11 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ContactPageSlice
+            x-contract-placeholder: true
+        ConversationAssetPage:
+            type: object
+            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
+            x-contract-entity: ConversationAssetPage
             x-contract-placeholder: true
         ConversationBatchSlice:
             type: object

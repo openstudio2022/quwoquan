@@ -284,11 +284,10 @@ AssistantAnswerTranscriptRow _personalAssistantAssistantRow({
   final projection = _personalAssistantTurnProjection(
     processSummary: processSummary,
   );
-  final runArtifacts = <String, dynamic>{
-    ...projection.toRuntimeDiagnosticsJson(eventType: eventType),
-    if (presentationDocument != null)
-      'presentationDocument': presentationDocument.toJson(),
-  };
+  final runArtifacts = RunArtifacts(
+    diagnostics: projection.toRuntimeDiagnostics(eventType: eventType),
+    presentationDocument: presentationDocument,
+  );
   final persisted = PersistedAssistantTimelinePayload(
     displayMarkdown: text,
     displayPlainText: text,
@@ -364,15 +363,19 @@ class _PersonalAssistantTurnProjection {
   final int searchCount;
   final int acceptedCount;
 
-  Map<String, Object?> toRuntimeDiagnosticsJson({String eventType = ''}) {
-    return <String, Object?>{
-      'diagnostics': <String, Object?>{
+  /// 运行期诊断键不在 DiagnosticsCore 白名单内，按 partition 机制
+  /// 落 extensions 登记扩展槽（round-trip 由 codec 测试锁定）。
+  RunArtifactsDiagnosticsPartitioned toRuntimeDiagnostics({
+    String eventType = '',
+  }) {
+    return RunArtifactsDiagnosticsPartitioned(
+      extensions: <String, dynamic>{
         if (eventType.isNotEmpty) 'lastEventType': eventType,
         'processedCount': processedCount,
         'searchCount': searchCount,
         'acceptedCount': acceptedCount,
       },
-    };
+    );
   }
 }
 

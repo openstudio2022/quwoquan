@@ -101,6 +101,7 @@ func (advancer testInboxStateAdvancer) AdvanceUnread(
 type testInboxSnapshotSource struct {
 	conversations conversationReader
 	states        *userstatepersistence.MongoStore
+	members       conversationapp.MemberStore
 }
 
 type testInboxProjectionReader struct{ reader *inboxapp.Reader }
@@ -165,9 +166,23 @@ func (source testInboxSnapshotSource) Load(ctx context.Context, identity inboxap
 	if conversation.Status != "" && conversation.Status != conversationmodel.ConversationStatusActive {
 		return inboxapp.Item{}, false, nil
 	}
+	avatarURL := conversationapp.ResolveConversationAvatarURL(*conversation)
+	if strings.TrimSpace(conversation.Type) == "group" &&
+		conversationapp.ResolveGroupAvatarURL(*conversation) == "" {
+		if members, membersErr := source.members.ListMembers(
+			ctx,
+			conversation.ID,
+			conversationapp.ListMembersQuery{
+				Limit: 200,
+				Sort:  conversationapp.MemberListSortJoinedAsc,
+			},
+		); membersErr == nil {
+			avatarURL = conversationapp.ResolveConversationAvatarURLWithMembers(*conversation, members)
+		}
+	}
 	return inboxapp.Item{
 		UserID: state.UserId, ConversationID: conversation.ID,
-		Type: conversation.Type, Title: conversation.Title, AvatarURL: conversation.AvatarUrl,
+		Type: conversation.Type, Title: conversation.Title, AvatarURL: avatarURL,
 		GroupAvatarVersion: conversation.GroupAvatarVersion, LastMessageID: conversation.LastMessageId,
 		LastMessagePreview: conversation.LastMessagePreview, LastMessageType: conversation.LastMessageType,
 		LastMessageTime: conversation.LastMessageTime, LastSeq: conversation.MaxSeq,

@@ -882,13 +882,12 @@ func elasticsearchDynamicTemplates() []any {
 	}
 }
 
-func elasticsearchRawIndexDefinition() map[string]any {
-	properties := map[string]any{
-		"occurredAt":  map[string]any{"type": "date", "format": "strict_date_optional_time_nanos"},
-		"ingestedAt":  map[string]any{"type": "date", "format": "strict_date_optional_time_nanos"},
-		"_batchIndex": map[string]any{"type": "integer"},
-	}
-	for _, field := range []string{
+// ElasticsearchRawNumericExtensionFields 是 raw 索引显式声明为 long 的
+// 扩展字段清单，也是黄金指标 raw 统计（percentile_p95 / sum_ratio）的
+// mapping 合约面：catalog 引用的 value 字段一旦缺席，会落入 keyword
+// 动态模板并让数值聚合 400。
+func ElasticsearchRawNumericExtensionFields() []string {
+	return []string{
 		"durationMs",
 		"httpStatus",
 		"tClickToFirstFrameMs",
@@ -911,7 +910,24 @@ func elasticsearchRawIndexDefinition() map[string]any {
 		"observedDurationMs",
 		"connectTimeMs",
 		"reconnectCount",
-	} {
+		// app_frame_jank_outcome 的全部数值扩展：jankyFrames/sampledFrames 是
+		// app_jank_frame_rate 黄金指标 sum_ratio 的分子分母。
+		"sampledFrames",
+		"jankyFrames",
+		"worstFrameMs",
+		"worstBuildFrameMs",
+		"worstRasterFrameMs",
+		"jankThresholdMs",
+	}
+}
+
+func elasticsearchRawIndexDefinition() map[string]any {
+	properties := map[string]any{
+		"occurredAt":  map[string]any{"type": "date", "format": "strict_date_optional_time_nanos"},
+		"ingestedAt":  map[string]any{"type": "date", "format": "strict_date_optional_time_nanos"},
+		"_batchIndex": map[string]any{"type": "integer"},
+	}
+	for _, field := range ElasticsearchRawNumericExtensionFields() {
 		properties[field] = map[string]any{"type": "long", "coerce": true}
 	}
 	for _, field := range []string{

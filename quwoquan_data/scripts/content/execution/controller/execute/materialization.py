@@ -95,11 +95,19 @@ def _video_source_qualifier(
             PROFESSIONAL_VIDEO_ACQUISITION_KIND
         )
         try:
-            videos = acquired_video_specs_for_entity(
-                receipt_refs,
-                entity_id=target.name,
-                root=acquisition_root,
-            )
+            # receipt 的 entityId 可能是 catalog canonical 名的别名
+            # （例如 receipt「西湖」对应 catalog「杭州西湖」）。按 canonical
+            # 名 + aliases 依次归一化匹配；这是名字规范化，不改变
+            # frozen receipt 集合，也不绕过安全审查结论。
+            videos: list[dict[str, Any]] = []
+            for entity_name in dict.fromkeys([target.name, *target.aliases]):
+                videos = acquired_video_specs_for_entity(
+                    receipt_refs,
+                    entity_id=entity_name,
+                    root=acquisition_root,
+                )
+                if videos:
+                    break
         except (OSError, TypeError, ValueError):
             return TargetSourceQualification(
                 accepted=False,

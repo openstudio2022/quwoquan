@@ -753,24 +753,6 @@ func nilLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-func setPostTagRefsForAuthorImpactTest(t *testing.T, postID string, tagRefs []string) {
-	t.Helper()
-	result, err := mongoDB.Collection("posts").UpdateOne(
-		t.Context(),
-		bson.M{"_id": postID},
-		bson.M{"$set": bson.M{"tagRefs": tagRefs}},
-	)
-	if err != nil {
-		t.Fatalf("set authoritative post tagRefs: %v", err)
-	}
-	if result.MatchedCount != 1 {
-		t.Fatalf("set authoritative post tagRefs matched %d posts for %q", result.MatchedCount, postID)
-	}
-}
-
-// TestBehaviorBatchRejectsLike verifies that server-authoritative actions
-// (like/comment/report, N0-3) are rejected by the generic behavior batch
-// endpoint — they are injected from object command outbox facts instead.
 func TestBehaviorBatchRejectsLike(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	created := submitPublishedPost(t, `{"contentType":"image","title":"Like batch target"}`)

@@ -88,6 +88,29 @@ mixin _CreateEditorNodeEditingOperations
   }
 
   /// 更新指定 figure node 的图片布局。
+  /// 更新段落对齐（'' / left / center / right；空串与 left 等价为默认）。
+  /// 只作用于正文段落节点——qwq 方言的 :::align 指令只承载段落对齐。
+  void updateArticleNodeAlignment(String nodeId, String alignment) {
+    final id = nodeId.trim();
+    if (id.isEmpty) return;
+    final normalized = switch (alignment.trim()) {
+      'center' => 'center',
+      'right' => 'right',
+      _ => '',
+    };
+    final doc = state.articleDocument;
+    final nextNodes = doc.nodes
+        .map((node) {
+          if (node.id == id &&
+              node.type == ArticleDocumentNodeType.paragraph) {
+            return node.copyWith(textAlign: normalized);
+          }
+          return node;
+        })
+        .toList(growable: false);
+    _applyArticleDocument(doc.copyWith(nodes: nextNodes));
+  }
+
   void updateArticleNodeImageLayout(String nodeId, String layout) {
     final id = nodeId.trim();
     if (id.isEmpty) return;

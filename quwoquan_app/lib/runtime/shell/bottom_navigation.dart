@@ -51,9 +51,11 @@ class BottomNavigationWidget extends ConsumerWidget {
         selectedIcon: FluentIcons.home_24_filled,
       ),
       _BottomDestination(
-        label: AppConceptConstants.premium,
-        iconBuilder: (color, selected, size) =>
-            AppOpenWindowIcon(size: size, color: color, filled: selected),
+        // 线下行动与发现：视频书已改为首页顶部固定入口（心动供给），
+        // 底栏第二格承载交集主线的线下行动目的地（心动变现）。
+        label: AppConceptConstants.offlineActions,
+        icon: FluentIcons.people_community_24_regular,
+        selectedIcon: FluentIcons.people_community_24_filled,
       ),
       _BottomDestination(
         label: '',

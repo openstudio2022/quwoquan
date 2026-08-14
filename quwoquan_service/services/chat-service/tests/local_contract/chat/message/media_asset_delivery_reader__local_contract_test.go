@@ -40,7 +40,7 @@ func TestMediaAssetDeliveryReaderUsesScopedCredentialAndStrictSlice(t *testing.T
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"assetId":"asset-audio","ownerPersonaId":"persona-owner","processingStatus":"ready","mediaType":"audio","contentType":"audio/mp4","fileSize":2048,"cdnUrl":"https://media.test/asset-audio"}`))
+		_, _ = w.Write([]byte(`{"assetId":"asset-audio","ownerPersonaId":"persona-owner","processingStatus":"ready","mediaType":"audio","mimeType":"audio/mp4","fileSize":2048,"cdnUrl":"https://media.test/asset-audio"}`))
 	}))
 	defer server.Close()
 
@@ -86,7 +86,7 @@ func TestMediaAssetDeliveryReaderFailsClosed(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 		default:
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"assetId":"asset","ownerPersonaId":"persona-owner","processingStatus":"ready","mediaType":"image","contentType":"image/png","fileSize":10,"cdnUrl":"https://media.test/asset","objectKey":"must-not-pass"}`))
+			_, _ = w.Write([]byte(`{"assetId":"asset","ownerPersonaId":"persona-owner","processingStatus":"ready","mediaType":"image","mimeType":"image/png","fileSize":10,"cdnUrl":"https://media.test/asset","objectKey":"must-not-pass"}`))
 		}
 	}))
 	defer server.Close()

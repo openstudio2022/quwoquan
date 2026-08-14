@@ -72,6 +72,8 @@ class AppConceptConstants {
   static const String discovery = '首页';
   static const String circles = '圈子';
   static const String premium = '视频书';
+  static const String offlineActions = '行动';
+  static const String offlineActionsPageTitle = '线下行动与发现';
   static const String create = '创作';
   static const String chat = '消息';
   static const String profile = '我';

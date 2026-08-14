@@ -56,12 +56,4 @@
 
 ## 7. 开放事项
 
-<a id="open-001"></a>
-### OPEN-001 KPI 报告结果子句尚未逐条绑定
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：缺 `GWT-001` 两条结果子句的逐条证据，3 条绑定测试均无失败路径断言，t2 的 canonical failure 语义没有证据支撑。
-- `circle.stats` 页主面板（圈子与成员统计）已由 `circle-membership` typed capability 供数；点赞排行、`circle_group` 等次级子列表依赖成员行为累积（reaction/群组活动），测试数据控制面暂不承诺确定性 provision，UAT 将子列表空态视为合法冷启动验收态，待行为供给能力落地后收紧。
-- 完成判定：`GWT-001.t1` 与 `GWT-001.t2` 各自被真实测试 `spec_ref` 绑定。
+（当前无开放事项：GWT-001 已由 generated Remote 读面与 stats 页失败路径 widget 测试子句级绑定。点赞排行等次级子列表冷启动空态仍为合法验收态。）

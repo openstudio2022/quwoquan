@@ -23,6 +23,9 @@ import '../../../../../support/service/recommendation_service/recommendation/rec
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
+import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
+import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
 /// 创作 Tab（V5）：二级子页恰为 全部/图片/视频/长文，全链路无「微趣/moment」概念。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
@@ -41,6 +44,22 @@ Widget _scopedApp() {
   return ProviderScope(
     overrides: [
       ...sealedCloudBoundaryOverrides(),
+      // 记录 Tab 计数行只在列表成功结算后渲染（见 profile_works_count_row
+      // 契约测试）；本用例断言计数行常驻位置，因此必须提供真实成功的
+      // 作者作品读面，而不是让 works 请求撞封印边界失败。
+      ...mockContentFacetOverrides(
+        store: InMemoryContentPostStore(
+          posts: [
+            contentPostViewDataBuilder(
+              postId: 'creations-tab-photo',
+              contentType: 'image',
+              authorId: 'nature_photographer',
+              title: '光影的节奏',
+              mediaUrls: const [testContentImageUrl],
+            ),
+          ],
+        ),
+      ),
       behaviorRepositoryProvider.overrideWithValue(
         RecordingContentBehaviorRepository(),
       ),

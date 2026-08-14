@@ -585,6 +585,7 @@ def _write_auto_research_plans_impl(
                 sourced_video_pool=sourced_video_pool,
                 acquisition_receipt_refs=acquisition_receipt_refs,
                 acquisition_root=acquisition_root,
+                entity_aliases=tuple(entity_aliases),
             )
     report["sourceAvailability"] = _source_availability_summary(report, entity_ids)
     if write_shared_report:

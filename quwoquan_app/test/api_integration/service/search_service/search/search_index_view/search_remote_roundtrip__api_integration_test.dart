@@ -62,7 +62,7 @@ void main() {
   });
 
   test(
-    'generated RemoteSearchRepository 通过 gateway 返回真实 canonical hits',
+    'generated RemoteSearchRepository 通过 gateway 返回真实 canonical hits（owner/assistant REST，非 App 结果页生产路径）',
     () async {
       final httpClient = _buildGammaHttpClient();
       final telemetry = await ProductionCloudOperationTelemetryEvidence.start(

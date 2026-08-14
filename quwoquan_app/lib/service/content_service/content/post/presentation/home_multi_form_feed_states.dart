@@ -114,8 +114,11 @@ class _HomeFollowingFeedEmptyState extends StatelessWidget {
 }
 
 /// Remote 查询健康完成但当前没有可展示内容时的中性终态。
-class _HomeFeedCompletedEmptyState extends StatelessWidget {
-  const _HomeFeedCompletedEmptyState({required this.isDark});
+///
+/// 按规格条款这是「完成态小字」而非业务空态（内容区只显示次级灰色小字
+/// 「内容加载完毕」，不并入统一空态组件），类名与语义保持一致。
+class _HomeFeedCompletedNotice extends StatelessWidget {
+  const _HomeFeedCompletedNotice({required this.isDark});
 
   final bool isDark;
 

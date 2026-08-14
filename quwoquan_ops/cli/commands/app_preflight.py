@@ -373,6 +373,17 @@ def command_app_domain_api_integration(args: argparse.Namespace) -> dict[str, An
     )
 
     if not issues:
+        # *-local 网关证书由 target 私有根签发；Dart VM 不读系统钥匙串，测试进程
+        # 必须经 define 注入根证书并走正常 TLS 校验（resolver 单点消费，绝不关闭
+        # 校验）。根证书缺席时保持不注入，测试将以系统信任链 fail-closed。
+        from quwoquan_ops.cli.lib.public_domain_tls import root_certificate_path
+
+        tls_defines: list[str] = []
+        local_tls_root = root_certificate_path(target_name, require_ready=False)
+        if local_tls_root.is_file():
+            tls_defines.append(
+                f"--dart-define=QWQ_LOCAL_TLS_ROOT_FILE={local_tls_root}"
+            )
         command = [
             "flutter",
             "test",
@@ -380,6 +391,7 @@ def command_app_domain_api_integration(args: argparse.Namespace) -> dict[str, An
             "--concurrency=1",
             "--dart-define=API_CONTRACT_ENV=gamma",
             f"--dart-define=API_CONTRACT_BASE_URL={api_base_url}",
+            *tls_defines,
             *[
                 str((_stackctl.ROOT / case.test_path).relative_to(_stackctl.ROOT / "quwoquan_app"))
                 for case in cases

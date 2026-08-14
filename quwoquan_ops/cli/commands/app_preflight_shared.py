@@ -48,6 +48,9 @@ _DATA_READINESS_SCHEMA = "quwoquan_data.environment_release_readiness"
 _DATA_ACTIVATION_SCHEMA = "quwoquan_data.environment_activation_envelope"
 _DATA_LIFECYCLE_EXIT_SCHEMA = "quwoquan_data.environment_release_lifecycle_exit"
 _DATA_READINESS_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+# App 视频书唯一消费 premium_stream 池：consumer 与 commercial readiness 都
+# 必须证明 premium_stream release-bound 非空读回（对齐 environment-topology-
+# and-packaging spec；typed_video 绿不代表视频书绿）。
 _DATA_CONSUMER_READINESS_QUERY_NAMES = frozenset(
     {
         "discovery_work",
@@ -55,10 +58,11 @@ _DATA_CONSUMER_READINESS_QUERY_NAMES = frozenset(
         "typed_image",
         "typed_video",
         "homepage_recommend",
+        "premium_stream",
     }
 )
 _DATA_COMMERCIAL_READINESS_QUERY_NAMES = frozenset(
-    {*_DATA_CONSUMER_READINESS_QUERY_NAMES, "premium_stream"}
+    {*_DATA_CONSUMER_READINESS_QUERY_NAMES}
 )
 
 

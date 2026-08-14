@@ -654,6 +654,39 @@ def _bind_gamma_down_parse_environment(environment: dict[str, str]) -> None:
             "QWQ_COMPOSE_PROVIDER_SUBSTITUTE_TLS_KEY_FILE": "/tmp/down-not-used",
         }
     )
+    # compose 模板对每个服务强制声明 CONFIG_VERSION；down 只需确定性插值，
+    # 优先取 active candidate provenance 真值，candidate 缺席时用占位。
+    # 变量名以模板声明为准（目录名与变量名不同构，如 control-plane/platform-ops
+    # 声明 PLATFORM_OPS_SERVICE），服务名由变量名反推后查 provenance。
+    import re as _re
+
+    import quwoquan_ops.cli.stackctl as _stackctl
+    from quwoquan_ops.cli.commands.runtime_image_composition import (
+        candidate_service_config_versions,
+    )
+
+    config_versions = candidate_service_config_versions()
+    compose_paths = sorted(
+        (_stackctl.ROOT / "quwoquan_service").glob("services/*/deploy/compose.yaml")
+    ) + sorted(
+        (_stackctl.ROOT / "quwoquan_service").glob(
+            "control-plane/*/deploy/compose.yaml"
+        )
+    )
+    for compose_path in compose_paths:
+        body = compose_path.read_text(encoding="utf-8")
+        for key in set(
+            _re.findall(r"QWQ_COMPOSE_[A-Z_]+_CONFIG_VERSION", body)
+        ):
+            service = (
+                key.removeprefix("QWQ_COMPOSE_")
+                .removesuffix("_CONFIG_VERSION")
+                .lower()
+                .replace("_", "-")
+            )
+            environment.setdefault(
+                key, config_versions.get(service, "down-not-used")
+            )
     if environment.get("LOCAL_GAMMA_SMS_SUBSTITUTE_PORT"):
         environment["QWQ_COMPOSE_SMS_SUBSTITUTE_PORT"] = environment[
             "LOCAL_GAMMA_SMS_SUBSTITUTE_PORT"

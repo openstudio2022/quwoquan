@@ -97,7 +97,25 @@ class ArticleMarkdownCodec {
           break;
         case ArticleDocumentNodeType.paragraph:
           orderedIndex = 0;
+          if (node.textAlign == 'center' || node.textAlign == 'right') {
+            // 段落对齐经 :::align 指令承载（GWT-004）。
+            final value = node.text.trim();
+            if (value.isNotEmpty) {
+              buffer
+                ..writeln(':::align value="${node.textAlign}"')
+                ..writeln(_serializeInlineText(value, node.spans))
+                ..writeln(':::')
+                ..writeln();
+            }
+            break;
+          }
           _writeParagraph(buffer, node.text, spans: node.spans);
+          break;
+        case ArticleDocumentNodeType.divider:
+          orderedIndex = 0;
+          buffer
+            ..writeln('---')
+            ..writeln();
           break;
         case ArticleDocumentNodeType.orderedItem:
           orderedIndex += 1;
@@ -227,6 +245,7 @@ class ArticleMarkdownCodec {
                 id: block.id.isNotEmpty ? block.id : 'paragraph_${seed++}',
                 type: ArticleDocumentNodeType.paragraph,
                 text: inline.text,
+                textAlign: block.textAlign,
                 spans: inline.spans,
               ),
             );
@@ -297,9 +316,17 @@ class ArticleMarkdownCodec {
             nodes.add(_figureNodeFromAssetRef(ref, block.id, assetsById));
           }
           break;
+        case QwqMarkdownBlockKind.horizontalRule:
+          // 分隔线进入 Document 模型（GWT-004），阅读端渲染 divider。
+          nodes.add(
+            ArticleDocumentNode(
+              id: block.id.isNotEmpty ? block.id : 'divider_${seed++}',
+              type: ArticleDocumentNodeType.divider,
+            ),
+          );
+          break;
         case QwqMarkdownBlockKind.section:
         case QwqMarkdownBlockKind.spacer:
-        case QwqMarkdownBlockKind.horizontalRule:
           break;
       }
     }
@@ -383,6 +410,27 @@ class ArticleMarkdownCodec {
         if (link != null) {
           final label = (link.group(1) ?? '').trim();
           final url = (link.group(2) ?? '').trim();
+          // 站内实体链接（数据工程供稿 `/entity/...`）转 canonical entity
+          // mention，与 `@[label](entity:...)` 记号同一渲染与跳转通道。
+          if (label.isNotEmpty && url.startsWith('/entity/')) {
+            final entityId = articleEntityIdFromPublishRef(url);
+            if (entityId.isNotEmpty) {
+              final start = buffer.length;
+              buffer.write(label);
+              spans.add(
+                ArticleInlineSpan(
+                  start: start,
+                  end: buffer.length,
+                  kind: 'entity',
+                  targetType: 'entity',
+                  targetId: entityId,
+                  displayText: label,
+                ),
+              );
+              i = link.end;
+              continue;
+            }
+          }
           if (label.isNotEmpty && isArticleLinkTargetAllowed(url)) {
             final start = buffer.length;
             buffer.write(label);

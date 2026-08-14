@@ -10,6 +10,10 @@ abstract interface class ChatMessageQuery {
   Future<MessagePageSlice> listMessages(ChatListMessagesQuery query);
 
   Future<ChatMessageSyncSlice> syncMessages(ChatSyncMessagesQuery query);
+
+  Future<ConversationAssetPage> listConversationAssets(
+    ChatListConversationAssetsQuery query,
+  );
 }
 
 abstract interface class ChatMessageMutationWriter {

@@ -336,7 +336,10 @@ def write_environment_release_readiness(
         "typed_video",
         "homepage_recommend",
     }
-    if readiness_phase in {"research", "commercial"}:
+    # App 视频书唯一消费 premium_stream 池：consumer/research/commercial 三个
+    # 非 import 阶段都必须携带并证明 premium_stream 读回（对齐 environment-
+    # topology-and-packaging spec；typed_video 绿不代表视频书绿）。
+    if readiness_phase in {"research", "consumer", "commercial"}:
         required_query_names.add("premium_stream")
     if set(queries_by_name) != required_query_names:
         raise EnvironmentReleaseReadinessError(
@@ -384,14 +387,17 @@ def write_environment_release_readiness(
         raise EnvironmentReleaseReadinessError(
             "identity=work&type=video does not prove a release-bound video postId"
         )
-    if readiness_phase in {"research", "commercial"} and (
+    if readiness_phase in {"research", "consumer", "commercial"} and (
         not premium_ids or not premium_ids.issubset(release_post_ids)
     ):
         raise EnvironmentReleaseReadinessError(
             "premium_stream does not prove a release-bound postId"
         )
     premium_playable_video_ids = premium_ids & video_ids & verified_playable_video_ids
-    if readiness_phase in {"research", "commercial"} and not premium_playable_video_ids:
+    if (
+        readiness_phase in {"research", "consumer", "commercial"}
+        and not premium_playable_video_ids
+    ):
         raise EnvironmentReleaseReadinessError(
             "premium_stream does not expose a release-bound video with a playable media probe"
         )

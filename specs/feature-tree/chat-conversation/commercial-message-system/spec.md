@@ -250,13 +250,16 @@
 - 完成判定：`SIT-002` 对应通知 inbox 行为满足，且 [`message-reliability-foundation` SIT-003](../message-reliability-foundation/spec.md#sit-003) 的真实设备投递与打开直达证据有效。
 
 <a id="open-008"></a>
-### OPEN-008 群空间首页四宫格未实施
+### OPEN-008 群空间首页四宫格剩共享 Skill 挂载
 
 - 类型：`capability_gap`
 - 优先级：`P1`
-- 准出影响：`block`
-- 影响或价值：尚缺相册/文件宫格的真实承接——普通群的 Chat AssetIndex 读面尚无 operation（现有 `GetGatheringChatBoard.assets` 仅活动群可用），
-  需 contracts 演进后接线，宫格当前保持禁用态诚实展示；尚缺共享 Skill 挂载入口的群空间接线。
+- 准出影响：`track`
+- 影响或价值：尚缺共享 Skill 挂载入口的群空间接线。相册/文件宫格已真实承接：
+  `ListConversationAssets` 读面（kind=image|file、seq DESC keyset 分页、撤回消息不出现在索引、交付字段随行）经 contracts 演进落地，
+  云侧正负例与分页去重见 `conversation_assets_contract__api_integration_test.go`（真实 Mongo）；
+  宫格点击打开相册网格/文件列表并复用大图查看与系统打开消费链，
+  App 证据见 `chat_settings_page_widget__local_contract_test.dart` 的相册/文件宫格用例。
   已闭合部分（证据见 `chat_group_space_entries__local_contract_test.dart`）：活动群（gatheringId 绑定）能力宫格展示「活动」格直达 Gathering Board；
   普通群不展示活动格（三类群差异化）；成员网格新增搜索入口格直达成员搜索页；`gatheringBoard` 与 `chatMemberSearch` 两个无入口路由已消灭。
 - 完成判定：`SIT-004` 对应行为满足（含相册/文件承接与三类群差异化展示）且真实测试 `spec_ref` 有效。

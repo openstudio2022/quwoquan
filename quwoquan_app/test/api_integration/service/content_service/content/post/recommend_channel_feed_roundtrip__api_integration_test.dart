@@ -31,7 +31,7 @@ void main() {
       category: 'recommended',
       channelId: 'recommend',
       sessionId: sessionId,
-      limit: 10,
+      limit: 20,
     );
 
     expect(page.items, isNotEmpty);
@@ -51,7 +51,7 @@ void main() {
       category: 'recommended',
       channelId: 'recommend',
       sessionId: sessionId,
-      limit: 10,
+      limit: 20,
     );
     expect(first.nextCursor, allOf(isNotNull, isNotEmpty));
 
@@ -61,7 +61,7 @@ void main() {
       sessionId: sessionId,
       cursor: first.nextCursor,
       feedRequestId: first.feedRequestId,
-      limit: 10,
+      limit: 20,
     );
 
     expect(second.feedRequestId, first.feedRequestId);
@@ -82,7 +82,7 @@ void main() {
       category: 'recommended',
       channelId: 'recommend',
       sessionId: sessionId,
-      limit: 5,
+      limit: 20,
     );
     expect(page.items, isNotEmpty);
     final target = page.items.first;

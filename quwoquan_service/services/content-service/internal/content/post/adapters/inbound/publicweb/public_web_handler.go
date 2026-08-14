@@ -69,7 +69,7 @@ func (h *Handler) Routes() http.Handler {
 
 func (h *Handler) handlePostHTML(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		h.writePlainStatus(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	postID := strings.TrimSpace(r.PathValue("postId"))
@@ -166,7 +166,7 @@ func (h *Handler) bodyAssetsFor(
 
 func (h *Handler) handleRobots(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		h.writePlainStatus(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -175,16 +175,16 @@ func (h *Handler) handleRobots(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleSitemap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		h.writePlainStatus(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	if h.sitemapLister == nil {
-		http.Error(w, "sitemap unavailable", http.StatusServiceUnavailable)
+		h.writePlainStatus(w, http.StatusServiceUnavailable, "sitemap unavailable")
 		return
 	}
 	ids, err := h.sitemapLister.ListPublicPostIDs(r.Context(), h.sitemapLimit)
 	if err != nil {
-		http.Error(w, "sitemap unavailable", http.StatusServiceUnavailable)
+		h.writePlainStatus(w, http.StatusServiceUnavailable, "sitemap unavailable")
 		return
 	}
 	urls := make([]string, 0, len(ids))
@@ -202,7 +202,7 @@ func (h *Handler) handleSitemap(w http.ResponseWriter, r *http.Request) {
 // 到对象 SEO 页保证抓取质量；移动端 UA 渲染 deeplink 引导页。
 func (h *Handler) handleTransfer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		h.writePlainStatus(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	h.writeTransfer(w, r, rtweb.TransferRequest{
@@ -217,7 +217,7 @@ func (h *Handler) handleTransfer(w http.ResponseWriter, r *http.Request) {
 // 分流，不伪造对象跳转。
 func (h *Handler) handleTransferToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		h.writePlainStatus(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 	h.writeTransfer(w, r, rtweb.TransferRequest{
@@ -281,6 +281,15 @@ func htmlEscape(value string) string {
 		`"`, "&quot;",
 	)
 	return replacer.Replace(value)
+}
+
+// writePlainStatus 是公开 SEO 面（浏览器/爬虫消费）的非 HTML 状态写出：
+// 与 writeNotFound 同型，爬虫只消费 status code，不使用 JSON 错误信封。
+func (h *Handler) writePlainStatus(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-Robots-Tag", "noindex")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(message))
 }
 
 func (h *Handler) writeNotFound(w http.ResponseWriter) {

@@ -116,6 +116,7 @@
 .PHONY: verify-app-cloud-runtime-single-path
 .PHONY: verify-app-cloud-security-cutovers
 .PHONY: accept-app-contract-handoff
+.PHONY: accept-app-contract-handoff-atomic
 .PHONY: verify-app-contract-handoff
 .PHONY: verify-app-contract-handoff-inputs
 .PHONY: verify-app-generated-manifest
@@ -196,6 +197,10 @@ verify-app-concept-naming:
 verify-app-error-endcloud-parity:
 	@python3 quwoquan_app/scripts/runtime/error/verify_error_code_endcloud_parity.py
 
+# App 侧 generated 错误码断言覆盖棘轮：未断言码数只减不增
+verify-app-error-code-assertion-coverage:
+	@python3 quwoquan_app/scripts/runtime/error/verify_app_error_code_assertion_coverage.py
+
 verify-app-domain-error-code-registry:
 	@python3 quwoquan_app/scripts/runtime/error/verify_domain_error_code_registry.py
 
@@ -257,6 +262,10 @@ verify-app-startup-environment-pr:
 	@python3 quwoquan_app/test/local_contract/runtime/ios_runtime_dart_defines__direct_debug__local_contract_test.py
 	@python3 quwoquan_app/test/local_contract/runtime/ios_hot_restart_launcher__local_contract_test.py
 	@python3 quwoquan_app/test/local_contract/runtime/startup_probe_parser__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/startup_probe_parser__environment_matrix__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/startup_probe_parser__matrix_evidence__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/startup_probe_parser__launcher_handoff__local_contract_test.py
+	@python3 quwoquan_app/test/local_contract/runtime/startup_probe_parser__android_probe__local_contract_test.py
 
 verify-app-ios-hot-restart:
 	@test -n "$(IOS_SIMULATOR_ID)" || { echo "IOS_SIMULATOR_ID is required"; exit 2; }
@@ -736,7 +745,7 @@ verify-app-page-abc-governance-enforce-all:
 verify-app-user-profile-avatar-projection-versions:
 	@python3 quwoquan_app/scripts/user_service/account/user_account/verify_user_profile_avatar_projection_versions.py
 
-# UI 层 Map<String,dynamic> 字面量防回退（见 quwoquan_ops/policies/gates/ui_map_literal_budget.json）
+# UI 层 Map<String,dynamic> 字面量零容忍（存量已清零，基线已退役，命中即 FAIL）
 verify-app-ui-map-literal-budget:
 	@python3 quwoquan_app/scripts/runtime/page/verify_ui_map_literal_budget.py
 
@@ -865,6 +874,11 @@ accept-app-contract-handoff:
 		--previous-lock "$(APP_CONTRACT_PREVIOUS_LOCK)" \
 		--previous-lock-sha256 "$(APP_CONTRACT_PREVIOUS_LOCK_SHA256)" \
 		--expected-current-lock-sha256 "$(APP_CONTRACT_EXPECTED_CURRENT_LOCK_SHA256)"
+
+# 多会话并行下的收口原子链：静止探测 -> graph 重建 -> accept(快照 CAS) ->
+# codegen-app 秒级衔接。breaking 非空且未审阅时硬停，不自动批准。
+accept-app-contract-handoff-atomic:
+	@python3 quwoquan_ops/cli/cloud_contract_handoff_atomic.py $(APP_CONTRACT_ATOMIC_ARGS)
 
 verify-app-contract-handoff:
 	@python3 quwoquan_ops/cli/cloud_contract_handoff.py verify

@@ -11,7 +11,8 @@ import 'package:quwoquan_app/service/search_service/search/search_index_view/app
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/search_user_profile_hit_view.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-/// 全局搜索唯一生产适配器：只调用 search-service canonical generated operation。
+/// owner/assistant REST 适配器：调用 search-service canonical generated
+/// `POST /search`。App 结果页生产装配必须走 `RemoteSearchPageRepository`。
 final class RemoteSearchRepository implements SearchRepository {
   const RemoteSearchRepository({
     required this.remoteQuery,

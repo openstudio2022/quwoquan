@@ -29,4 +29,12 @@ abstract interface class ChatMessageRepository {
     required String conversationId,
     required String messageId,
   });
+
+  /// 群空间相册/文件宫格的会话媒体索引（kind=image|file，按 seq DESC 分页）。
+  Future<ConversationAssetPage> listConversationAssets({
+    required String conversationId,
+    required String kind,
+    int? beforeSeq,
+    int limit = 60,
+  });
 }

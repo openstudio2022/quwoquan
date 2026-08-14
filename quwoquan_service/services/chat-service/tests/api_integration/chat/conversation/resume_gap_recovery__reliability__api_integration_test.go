@@ -14,8 +14,8 @@ import (
 	"time"
 
 	runtimemessaging "quwoquan_service/runtime/messaging"
-	"quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/mq"
 	messageevent "quwoquan_service/services/chat-service/generated/chat/message/contract/event"
+	"quwoquan_service/services/chat-service/internal/chat/conversation/adapters/inbound/mq"
 )
 
 func TestResumeStreamRecoversDisconnectWindowWithoutGapsOrDuplicates(t *testing.T) {

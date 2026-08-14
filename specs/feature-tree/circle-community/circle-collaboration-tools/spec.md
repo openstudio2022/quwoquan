@@ -97,19 +97,20 @@
 - 优先级：`P1`
 - 准出影响：`track`
 - 影响或价值：SCN-014「实体主页→圈子→群聊→建联」主旅程与审批页 UAT 需要健康的
-  `gamma-local` 栈与 Android/iPhone 物理真机。当前 `gamma-local` compose up 失败的
-  直接根因已定位：`recommendation-service` 容器启动即退出
-  （exit 3，`main.py` bootstrap runtime contract fail-fast），
-  拖垮依赖链后 stackctl 按治理拆栈，
-  健康检查停在 `startup Provider runtime identity is not current`；修复归
-  recommendation 服务属地（其正在重建镜像迭代）。本机仅连接模拟器、无物理真机。
+  `gamma-local` 栈与 Android/iPhone 物理真机。最近一次
+  `stackctl health --target gamma-local --scope full` 仍为 0/1：
+  `GATE_BLOCK: gamma-local startup Provider runtime identity is not current`
+  （报告 `20260813T164408165357Z-84a2211f484b4f8186fbd9756f4ac7a0-health-gamma-local`）。
+  直接根因仍是 `recommendation-service` 启动 fail-fast 拖垮依赖链后被治理拆栈；
+  修复归 recommendation 服务属地。本机仅连接模拟器、无物理真机。
   绑定链上 api_integration 证据（binding-sync GWT-001..GWT-012 全子句）已闭合，
   SCN-014 主旅程 API journey runner 已落
   `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/circle-service/`
   （smoke probe + gamma 聚合器 + ActorLease handoff 投影，缺 handoff 时如实 blocked），
   实体页「近期行动」App Remote 合同 runner 亦已落
   `quwoquan_app/test/api_integration/service/circle_service/circle_management/gathering/gathering_list_by_source_remote__api_integration_test.dart`；
-  环境恢复后两者可直接执行。推荐流仍在循环迭代其启动修复（多轮 rebuild + package + up 中）。
+  审批页 UAT 已登记 `readiness_case: circle_membership_approval_app_uat`。
+  环境恢复后 journey / 审批模拟器段 / listBySource Remote 可直接执行。
 - 完成判定：`SIT-001` 的端到端子句由 `gamma-local` user_acceptance 直接绑定：
   `stackctl health --scope full` 通过后，UAT runner 落入 `service_ops` 验收树内新建的
   circle-service gamma 目录（capability request 经 `stackctl verify` 创建隔离 Actor，禁止 fixture/seed），

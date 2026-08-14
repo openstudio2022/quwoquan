@@ -59,13 +59,13 @@
 ## 7. 开放事项
 
 <a id="open-001"></a>
-### OPEN-001 Active Skill Package 尚缺受管环境收据
+### OPEN-001 Active Skill Package 尚缺 Gamma 同 digest 与 rollback 收据
 
 - 类型：`capability_gap`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：尚缺受管 Remote 的官方 package activation；生产 `Catalog`、Prompt、Input Schema 与 Presentation 虽已统一读取 active/frozen `SkillPackageRelease`，源码扫描器也只存在于 package builder 和测试 fixture，但用户仍无法获得带环境收据的可验证、可回滚 Skill 目录。
-- 尚缺实现：受保护 publisher identity 与环境 activation composition 尚未完成闭环装配。
-- 尚缺验收证据：签名 package 的 stage/activate/catalog readback、旧 Run frozen digest 恢复与 rollback 环境收据均未取得，不能仅凭本地 resolver 测试宣称可发布。
-- 完成判定：`GWT-001` 的 local_contract、Mongo api_integration 和 replay 全部通过，并取得同一 package digest 的受管环境 activation/readback/rollback receipt；生产 API binary 不出现源码 asset scanner 或 built-in catalog fallback。
+- 影响或价值：仍缺同一 digest 在 Gamma 的 activation/readback 与 rollback 环境收据，不能仅凭 Alpha 激活宣称可发布。Alpha canonical 已取得官方 SkillPackage 空环境自举激活收据（`activatedBy: service:local-managed-bootstrap:alpha-local`，`activeReleaseDigest: sha256:ec6fc1eb1eff0db87a1aed15a50dc13de67db8ec32689a5db8013f40b37f0a06`，health 29/29 run `20260813T160518410673Z-d38bed3e0945497980753e19bcb051e5-health-alpha-local`）。生产 `Catalog`、Prompt、Input Schema 与 Presentation 已统一读取 active/frozen `SkillPackageRelease`，源码扫描器只存在于 package builder 和测试 fixture。
+- 尚缺实现：无新增实现。空环境自举、验签、digest 与评测 receipt 门禁已接入 `PrepareMigration`。
+- 尚缺验收证据：同一 package digest 的 Gamma activation/readback 与 rollback 环境收据尚未取得。最近一次 `stackctl up --env gamma` GATE_BLOCK（run `20260813T165117596635Z-05f1f7ae24b149f187e67df4127e90fd-up-gamma`）因并行 `beta-local` 操作锁。`gamma-local` 与在场 `alpha-local` 共享 `workstation-commercial-runtime`，不能并行启动。
+- 完成判定：`GWT-001` 的 local_contract、Mongo api_integration 和 replay 全部通过，并取得同一 package digest 的 Alpha/Gamma 受管环境 activation/readback/rollback receipt；生产 API binary 不出现源码 asset scanner 或 built-in catalog fallback。
 - 依赖：受保护 publisher identity、SkillPackage artifact store 与 Assistant Provider 环境闭环。

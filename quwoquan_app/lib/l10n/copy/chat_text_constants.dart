@@ -111,6 +111,10 @@ abstract final class ChatText {
   static const String chatFileOpenFailed = '文件打开失败，请稍后再试';
   static const String chatMediaUnavailable = '媒体暂不可用，请稍后再试';
 
+  /// 群空间相册/文件宫格空态。
+  static const String groupAlbumEmpty = '群里还没有图片';
+  static const String groupFilesEmpty = '群里还没有文件';
+
   /// 会话内查找聊天记录（设置页入口与面板标题）。
   static const String searchInConversation = '查找聊天记录';
   static const String searchInConversationTitle = '查找聊天记录';

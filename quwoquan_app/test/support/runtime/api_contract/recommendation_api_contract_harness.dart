@@ -1,5 +1,4 @@
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
@@ -9,13 +8,9 @@ import 'package:quwoquan_app/service/user_service/account/account_session/adapte
 import 'package:quwoquan_app/service/user_service/account/user_account/adapters/account_lifecycle_remote.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
+import 'api_contract_environment.dart';
 import 'production_cloud_operation_telemetry_evidence.dart';
 
-const _apiContractEnv = String.fromEnvironment(
-  'API_CONTRACT_ENV',
-  defaultValue: 'gamma',
-);
-const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 const recommendationApiContractDeviceId = 'recommendation-api-contract-device';
 
 final class RecommendationApiContractHarness {
@@ -28,9 +23,7 @@ final class RecommendationApiContractHarness {
   });
 
   static Future<RecommendationApiContractHarness> create() async {
-    if (_apiBase.isEmpty) {
-      throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
-    }
+    final environment = ApiContractEnvironment.resolve();
     final tokenProvider = _MutableAccessTokenProvider();
     final httpClient = CloudHttpClient(authTokenProvider: tokenProvider);
     const clientContext = _RecommendationApiClientContext();
@@ -41,15 +34,7 @@ final class RecommendationApiContractHarness {
       httpClient: httpClient,
       clientContextProvider: clientContext,
       telemetrySink: telemetry.sink,
-      environment: CloudRuntimeEnvironment(
-        environment: CloudEnvironment.values.firstWhere(
-          (candidate) => candidate.name == _apiContractEnv,
-          orElse: () => throw StateError(
-            'Unsupported API_CONTRACT_ENV: $_apiContractEnv',
-          ),
-        ),
-        gatewayBaseUri: Uri.parse(_apiBase),
-      ),
+      environment: environment,
     );
 
     try {
@@ -104,8 +89,11 @@ final class RecommendationApiContractHarness {
             surfaceId: AppUiSurfaces.settingsAccountSecurity.id,
             routeId: AppUiSurfaces.settingsAccountSecurity.routeId,
             clientPageId: clientPageId,
+            // CloseAccount 是幂等写命令，契约要求随 invocation 提供幂等键。
+            idempotencyKey:
+                'recommendation-api-account-cleanup-${session!.ownerId}',
             actor: CloudOperationActorContext(
-              accountId: session!.ownerId,
+              accountId: session.ownerId,
               personaId: session.activePersona?.personaId,
               deviceActorId: recommendationApiContractDeviceId,
             ),

@@ -9,7 +9,7 @@ import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
 
 /// 对象页（实体 / 圈子主页）底部全局导航栏。
 ///
-/// 高保口径：详情页底部保留与首页一致的全局底栏（首页/视频书/+/联系/我），
+/// 高保口径：详情页底部保留与首页一致的全局底栏（首页/行动/+/联系/我），
 /// 复用 [BottomNavigationWidget]，与主壳同款 token / 图标 / 尺寸。
 ///
 /// 行为：加号 → 全局创建动作面板（[GlobalQuickActionSheet]，登录拦截下沉到具体动作）；

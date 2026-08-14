@@ -32,6 +32,7 @@ import argparse
 import json
 import os
 import random
+import ssl
 import statistics
 import sys
 import threading
@@ -39,6 +40,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+# 本地管理 TLS 环境（*-local）的网关根证书；由 --ca-file 注入，走正常验证。
+_SSL_CONTEXT: ssl.SSLContext | None = None
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -128,7 +132,9 @@ def _http(
         req.add_header("Content-Type", "application/json")
     start = time.perf_counter()
     try:
-        with urllib.request.urlopen(req, data=data, timeout=timeout) as resp:
+        with urllib.request.urlopen(
+            req, data=data, timeout=timeout, context=_SSL_CONTEXT
+        ) as resp:
             payload = resp.read()
             elapsed = (time.perf_counter() - start) * 1000.0
             parsed = None
@@ -408,7 +414,9 @@ def verdict(summary: dict, targets: dict) -> dict:
 def reachable(base_url: str) -> bool:
     for probe in ("/healthz", "/health"):
         try:
-            with urllib.request.urlopen(base_url.rstrip("/") + probe, timeout=2) as resp:
+            with urllib.request.urlopen(
+                base_url.rstrip("/") + probe, timeout=2, context=_SSL_CONTEXT
+            ) as resp:
                 if resp.status == 200:
                     return True
         except Exception:
@@ -435,11 +443,19 @@ def main() -> int:
     )
     ap.add_argument("--out-dir", default="")
     ap.add_argument("--repo-root", default=os.getcwd())
+    ap.add_argument(
+        "--ca-file",
+        default=os.environ.get("QWQ_PROBE_CA_FILE", ""),
+        help="本地管理 TLS 环境（*-local）的根证书路径",
+    )
     args = ap.parse_args()
 
     if args.env == "prod":  # argparse 已挡，双保险：压测不打生产
         print("prod is refused", file=sys.stderr)
         return 1
+    if args.ca_file:
+        global _SSL_CONTEXT
+        _SSL_CONTEXT = ssl.create_default_context(cafile=args.ca_file)
 
     targets = load_slo_targets(args.repo_root)
     if not targets:

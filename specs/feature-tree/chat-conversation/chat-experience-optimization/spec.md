@@ -69,18 +69,15 @@
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-002"></a>
-### OPEN-002 chat 域空态与骨架未对齐 design system 标准组件
+### 空态与骨架已对齐 design system 标准组件（现行事实）
 
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：尚缺成员搜索、公告与转发面板三处对标准组件的接入。
-  Inbox 列表、会话页与设置页已接入：会话空态使用 `AppEmptyState`，消息首页
-  分区、消息时间线与群首页初始加载使用共享 `AppSkeletonListRows` 骨架
-  （design system 新增该列表行骨架组合，页面不得再拼装私有行骨架）；接入
-  断言见 `chat_page_widget__local_contract_test.dart`、
-  `message_paging_scroll_anchor__local_contract_test.dart` 与
-  `chat_settings_page_widget__local_contract_test.dart`。
-- 完成判定：`SIT-001` 所述交互与状态在空态与加载态上同样成立——chat 域主表面空态
-  经 `AppEmptyState`、列表加载经 `AppSkeleton` 呈现，并有对应 widget 测试
-  `spec_ref`。
+chat 域主表面空态经 `AppEmptyState`、列表加载经共享 `AppSkeletonListRows` 呈现，
+页面不再拼装私有行骨架或私有空态文案容器：Inbox 列表、会话页、设置页、成员搜索
+（无匹配空态 + 加载骨架）、公告只读空态、转发面板（空态 + 最近会话加载骨架）。
+接入断言见 `chat_page_widget__local_contract_test.dart`、
+`message_paging_scroll_anchor__local_contract_test.dart`、
+`chat_settings_page_widget__local_contract_test.dart`、
+`group_member_search_page_widget__local_contract_test.dart`、
+`chat_announcement_page_widget__local_contract_test.dart` 与
+`forward_share_journey__local_contract_test.dart`。
+

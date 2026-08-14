@@ -82,6 +82,16 @@ type rtcCallLogMessageStoreStub struct {
 	commit MessageCommit
 }
 
+func (*rtcCallLogMessageStoreStub) ListMediaMessages(
+	context.Context,
+	string,
+	string,
+	int,
+	int64,
+) ([]messagemodel.Message, error) {
+	return nil, nil
+}
+
 func (s *rtcCallLogMessageStoreStub) CommitMessage(
 	_ context.Context,
 	commit MessageCommit,

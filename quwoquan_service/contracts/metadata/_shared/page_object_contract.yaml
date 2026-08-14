@@ -512,6 +512,16 @@ pages:
           aggregate_row_kind: product_action_funnel
           alerts:
             - product-action-longtail-failure-rate-high
+        - journey: gathering_flywheel
+          telemetry_page_name: chat_list
+          object_ids: [circle.gathering]
+          actions: [notification_facilitation_open, notification_recap_nudge_open]
+          instrumentation_evidence:
+            - lib/service/chat_service/chat/chat_inbox_view/presentation/chat_page_state.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-action-longtail-failure-rate-high
     entry_widget: ChatPage
     route_registration_evidence:
       - lib/runtime/di/navigation/app_router.dart
@@ -1494,7 +1504,20 @@ pages:
     data_contract_reason: 聚集创建表单只提交 circle.gathering command，不预填远端读模型。
     auth_requirement: required
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.circle.gathering_create, lifecycle: [enter, exit, submit, retry, published, failure] }
+    telemetry_descriptor:
+      event_namespace: page.circle.gathering_create
+      lifecycle: [enter, exit, submit, retry, published, failure]
+      product_actions:
+        - journey: gathering_flywheel
+          telemetry_page_name: gathering_create
+          object_ids: [circle.gathering]
+          actions: [gathering_published]
+          instrumentation_evidence:
+            - lib/service/circle_service/circle_management/gathering/presentation/gathering_route_hosts.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-action-longtail-failure-rate-high
     entry_widget: GatheringCreatePage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_gathering_routes.dart]
 
@@ -1510,9 +1533,54 @@ pages:
     typed_presentation: [GatheringPublicCardSlice, GatheringPrivateDetailSlice]
     auth_requirement: optional
     capability_requirements: { all_of: [], any_of: [] }
-    telemetry_descriptor: { event_namespace: page.circle.gathering_detail, lifecycle: [enter, exit, refresh, primary_action, host_action, failure] }
+    telemetry_descriptor:
+      event_namespace: page.circle.gathering_detail
+      lifecycle: [enter, exit, refresh, primary_action, host_action, failure]
+      product_actions:
+        - journey: gathering_flywheel
+          telemetry_page_name: gathering_detail
+          object_ids: [circle.gathering]
+          actions:
+            - gathering_join_succeeded
+            - gathering_apply_succeeded
+            - gathering_accept_invitation_succeeded
+            - gathering_watch_availability_succeeded
+            - gathering_approve_succeeded
+            - gathering_reject_succeeded
+            - gathering_remove_succeeded
+            - gathering_invite_succeeded
+            - gathering_change_capacity_succeeded
+            - gathering_change_admission_succeeded
+            - gathering_material_update_succeeded
+            - gathering_cancel_succeeded
+            - gathering_start_succeeded
+            - gathering_outcome_succeeded
+          instrumentation_evidence:
+            - lib/service/circle_service/circle_management/gathering/presentation/gathering_detail_page.dart
+          required_dimensions: [result, durationMs, failReasonCode, recoveryAction, requestId, traceId]
+          aggregate_row_kind: product_action_funnel
+          alerts:
+            - product-action-longtail-failure-rate-high
     entry_widget: GatheringDetailPage
     route_registration_evidence: [lib/runtime/di/navigation/app_router_gathering_routes.dart]
+
+  - page_id: circle.gathering_actions_discovery
+    source_path: lib/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart
+    page_kind: embedded
+    parent_page_id: app.main_shell
+    surface_ids: [homeActionsDiscovery]
+    experience_owner: circle
+    data_owners: [circle, recommendation]
+    object_ids:
+      - circle.gathering
+      - recommendation.recommendation_feature_profile_view
+    query_slices: [circle.gathering]
+    typed_presentation: [GatheringPublicCardSlice]
+    auth_requirement: optional
+    capability_requirements: { all_of: [], any_of: [] }
+    telemetry_descriptor: { event_namespace: page.circle.gathering_actions_discovery, lifecycle: [enter, exit, failure] }
+    entry_widget: GatheringActionsDiscoveryPage
+    mount_evidence: [lib/runtime/di/main_app_shell_dependencies.dart]
 
   - page_id: circle.my_gatherings
     source_path: lib/service/circle_service/circle_management/gathering/presentation/my_gatherings_page.dart

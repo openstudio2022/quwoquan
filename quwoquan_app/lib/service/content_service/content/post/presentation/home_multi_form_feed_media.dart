@@ -153,7 +153,9 @@ class _HomeImagePostCard extends ConsumerWidget {
             cdnPreset: CdnImagePreset.cover,
             fit: BoxFit.cover,
             placeholder: _mediaPlaceholder(isDark),
-            errorWidget: _mediaPlaceholder(isDark),
+            // 失败态必须与加载占位可区分：静默灰块会把「media-edge 缺对象」
+            // 伪装成加载中，用户与 UAT 都无法发现（errorWidget 缺省时使用
+            // AppCachedNetworkImage 的显式失败件）。
           ),
         ),
       ),
@@ -653,7 +655,7 @@ class _ArticleCoverImage extends ConsumerWidget {
         cdnPreset: CdnImagePreset.cover,
         fit: BoxFit.cover,
         placeholder: _mediaPlaceholder(isDark),
-        errorWidget: _mediaPlaceholder(isDark),
+        // 失败态走 AppCachedNetworkImage 显式失败件，与加载占位可区分。
       ),
     );
   }

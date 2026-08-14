@@ -218,7 +218,8 @@ func TestGatheringPlanNegativePathsEmitDeclaredStableCodes(t *testing.T) {
 						PlanID: created.PlanID, ExpectedPlanVersion: created.PlanVersion,
 						BaseRevisionID:     created.CurrentRevisionID,
 						BaseRevisionNumber: created.CurrentRevisionNumber,
-						BaseRevisionDigest: "sha256:stale-base-digest",
+						// sha256("stale-base-digest"):格式合法但与当前基线漂移的旧摘要。
+						BaseRevisionDigest: "sha256:8dc1a060ff4af4c8426328b35cd7ee2247fef1c77b1fe7c09fd9cf54f1d8f8b1",
 						Items:              agendaItems("过期基线提案"), AcknowledgementPolicy: noAcknowledgement(),
 					},
 				)
@@ -251,7 +252,8 @@ func TestGatheringPlanNegativePathsEmitDeclaredStableCodes(t *testing.T) {
 					app.CommitGatheringPlanProposalCommand{
 						PlanID: created.PlanID, ProposalID: proposed.ProposalID,
 						ExpectedPlanVersion:        proposed.PlanVersion,
-						ExpectedProposalDigest:     "sha256:drifted-proposal-digest",
+						// sha256("drifted-proposal-digest"):格式合法但与提案实际摘要漂移。
+						ExpectedProposalDigest:     "sha256:79719f46ca0bec135b36b231ec791fb83c58e026a8dbe83e5b94980301b824d5",
 						ExpectedBaseRevisionDigest: proposed.CurrentRevisionDigest,
 					},
 				)

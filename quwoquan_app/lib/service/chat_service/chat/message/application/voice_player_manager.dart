@@ -191,7 +191,7 @@ class VoicePlayerManager extends Notifier<VoicePlaybackState>
   Future<void> play(String messageId, String url) async {
     final resolvedUrl = url.trim();
     if (resolvedUrl.isEmpty) {
-      _observability.trackAction(
+      _observability.trackVoiceEvent(
         eventName: VoiceMessageEventNames.playbackFailed,
         messageId: messageId,
         failureKind: 'empty_url',
@@ -218,7 +218,7 @@ class VoicePlayerManager extends Notifier<VoicePlaybackState>
 
         await _backend.setSource(sourceResult.source);
         state = state.copyWith(activeMessageId: messageId, clearFailure: true);
-        _observability.trackAction(
+        _observability.trackVoiceEvent(
           eventName: VoiceMessageEventNames.playbackStarted,
           messageId: messageId,
           cacheHit: sourceResult.cacheHit,
@@ -228,7 +228,7 @@ class VoicePlayerManager extends Notifier<VoicePlaybackState>
       await _backend.play();
     } catch (error) {
       await _backend.stop();
-      _observability.trackAction(
+      _observability.trackVoiceEvent(
         eventName: VoiceMessageEventNames.playbackFailed,
         messageId: messageId,
         failureKind: error.runtimeType.toString(),
@@ -243,7 +243,7 @@ class VoicePlayerManager extends Notifier<VoicePlaybackState>
 
   Future<void> pause() async {
     await _backend.pause();
-    _observability.trackAction(
+    _observability.trackVoiceEvent(
       eventName: VoiceMessageEventNames.playbackPaused,
       messageId: state.activeMessageId,
     );
@@ -254,7 +254,7 @@ class VoicePlayerManager extends Notifier<VoicePlaybackState>
     final messageId = state.activeMessageId;
     await _backend.stop();
     state = const VoicePlaybackState();
-    _observability.trackAction(
+    _observability.trackVoiceEvent(
       eventName: VoiceMessageEventNames.playbackStopped,
       messageId: messageId,
     );

@@ -1,12 +1,10 @@
-// ASSISTANT_WEAK_TYPE: EXTENSION_MAP — `runArtifacts` / cardPayload 等开放 JSON 与 Markdown 解析。
-
-import 'dart:convert';
 import 'dart:developer' as developer;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/assistant_structured_card_payload.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/domain/run_artifacts.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_citation.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_transcript_timeline_row.dart';
@@ -574,7 +572,7 @@ class AssistantAnswerContent extends StatelessWidget {
       return terminalItems;
     }
     return _resolveReferenceItemsFromAnswerParts(
-      runArtifactsMap: row.runArtifacts,
+      runArtifacts: row.runArtifacts,
       uiReferences: row.uiReferences,
     );
   }
@@ -627,11 +625,10 @@ class AssistantAnswerContent extends StatelessWidget {
   }
 
   static List<_AssistantReferenceItem> _resolveReferenceItemsFromAnswerParts({
-    required Map<String, dynamic> runArtifactsMap,
+    required RunArtifacts? runArtifacts,
     required List<AssistantCitation> uiReferences,
   }) {
     final items = <_AssistantReferenceItem>[];
-    final runArtifacts = _resolveRunArtifactsFromMap(runArtifactsMap);
     final bindings =
         runArtifacts?.answerEvidenceBindings ?? const <AnswerEvidenceBinding>[];
     if (bindings.isNotEmpty) {
@@ -676,21 +673,6 @@ class AssistantAnswerContent extends StatelessWidget {
       );
     }
     return items;
-  }
-
-  static RunArtifacts? _resolveRunArtifactsFromMap(Map<String, dynamic> raw) {
-    if (raw.isEmpty) return null;
-    try {
-      return parseRunArtifacts(raw);
-    } catch (error, stackTrace) {
-      developer.log(
-        'assistant run artifacts could not be decoded',
-        name: 'assistant.answer_content',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      return null;
-    }
   }
 
   static AssistantCitation? _citationForTap({
@@ -853,17 +835,6 @@ class _AssistantReferenceItem {
   final AssistantCitation citation;
 
   String get url => citation.externalUrl;
-
-  Map<String, dynamic> toJson() {
-    return <String, dynamic>{
-      'index': index,
-      'title': title,
-      'source': source,
-      'snippet': snippet,
-      'label': label,
-      'destination': citation.destination.toJson(),
-    };
-  }
 
   AssistantCitation toCitation() => citation;
 }

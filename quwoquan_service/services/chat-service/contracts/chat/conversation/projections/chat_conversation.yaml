@@ -31,6 +31,10 @@ fields:
   type: string
 - name: gatheringSourceVersion
   type: int64
+# Gathering 投影来源事件 id（活动群绑定溯源）；云侧 wire 一直携带，
+# 此前缺契约登记导致 App generated client 拒收（首个 App api_integration 抓出）。
+- name: gatheringSourceEventId
+  type: string
 - name: accessMode
   type: enum
   enum_ref: ConversationAccessMode
@@ -44,6 +48,10 @@ fields:
 - name: originIntersectionSnapshot
   type: GreetingIntersectionSnapshot
   nullable: true
+# 非破冰 1v1 的常驻交集摘要（≤2 条云侧 ContactIntersectionFact 只读快照）；
+# 群会话与携带破冰快照的会话为空数组。Chat 不拼句、不改写（REQ-001/REQ-004）。
+- name: intersectionFacts
+  type: '[]ContactIntersectionFact'
 - name: maxSeq
   type: int64
 - name: memberCount
@@ -58,8 +66,11 @@ fields:
   type: string
 - name: announcementUpdatedBy
   type: string
+# 无公告的会话不携带该键（云侧条件写入）；此前缺 nullable 声明导致
+# App generated client 在真实环境解码失败（App api_integration 抓出）。
 - name: announcementUpdatedAt
   type: timestamp
+  nullable: true
 - name: nameEditableByAdminOnly
   type: bool
 - name: lastMessageId

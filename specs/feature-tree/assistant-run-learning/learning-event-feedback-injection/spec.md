@@ -73,5 +73,5 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：尚缺可用 Gamma Remote 与 Prod 获批 Provider conformance、发布回执；三条代码链路已由 `AssistantLearningFact` append sink、canonical-definition projection 和 policy-filtered feedback context 收敛，local/API 合同已直连 Story `spec_ref`，但 gamma-local health gate 当前为 0/28，未取得当前真实 append、幂等 receipt 与 durable relay 回读，且不得在生产环境执行破坏性学习事实探针。
+- 影响或价值：尚缺可用 Gamma Remote 与 Prod 获批 Provider conformance、发布回执。三条代码链路已由 `AssistantLearningFact` append sink、canonical-definition projection 和 policy-filtered feedback context 收敛，local/API 合同已直连 Story `spec_ref`。Alpha canonical health 已达 29/29（run `20260813T160518410673Z-d38bed3e0945497980753e19bcb051e5-health-alpha-local`）。gamma-local 尚未以当前 candidate 启动（最近 health 为 Provider runtime identity 非当前导致的 0/1），因此未取得当前真实 append、幂等 receipt 与 durable relay 回读，且不得在生产环境执行破坏性学习事实探针。
 - 完成判定：`SIT-001` 对应行为满足且真实测试 `spec_ref` 有效，并在可用 alpha/beta/gamma/prod 环境中复验。

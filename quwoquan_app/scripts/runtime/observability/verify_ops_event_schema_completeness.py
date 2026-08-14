@@ -40,91 +40,28 @@ ELASTICSEARCH_ALERTS = (
     / "quwoquan_ops/observability/elasticsearch/product_telemetry_alerts.yaml"
 )
 
-EXPECTED_COMMON_FIELDS = [
-    "logType",
-    "eventType",
-    "sessionId",
-    "pageName",
-    "occurredAt",
-    "deviceManufacturer",
-    "deviceModel",
-    "appVersion",
-    "networkClass",
-]
-EXPECTED_CONTEXT_EXTENSIONS = ["devicePlatform"]
-FORBIDDEN_LEGACY_FIELDS = {
-    "eventVersion",
-    "eventId",
-    "eventName",
-    "priority",
-    "producer",
-    "payload",
-    "metrics",
-    "userIdHash",
-}
-EVENT_STORAGE_LOGSTORE_ROLES = (
-    "raw",
-    "startup_diagnostic",
-    "runtime_diagnostic",
-    "aggregate",
+# 期望闭集常量已迁至 ops_event_schema_expectations；re-export 保持模块属性面。
+# 测试经 importlib 按路径加载本文件，需显式保证本目录可导入。
+_OBSERVABILITY_ROOT = Path(__file__).resolve().parent
+if str(_OBSERVABILITY_ROOT) not in sys.path:
+    sys.path.insert(0, str(_OBSERVABILITY_ROOT))
+
+from ops_event_schema_expectations import (  # noqa: E402
+    ALLOWED_GOLDEN_AGGREGATIONS,
+    ALLOWED_PORTAL_LEVELS,
+    ALLOWED_READFACE_AGGREGATIONS,
+    ALLOWED_SERIES_AGGREGATIONS,
+    ALLOWED_SOURCE_TRACKS,
+    ALLOWED_TARGET_OPERATORS,
+    EVENT_STORAGE_LOGSTORE_ROLES,
+    EXPECTED_COMMON_FIELDS,
+    EXPECTED_CONTEXT_EXTENSIONS,
+    FORBIDDEN_LEGACY_FIELDS,
+    READFACE_FIELD_PATTERN,
+    REQUIRED_APP_EXPERIENCE_METRIC_IDS,
+    REQUIRED_EXPERIENCE_EVENTS,
+    SERIES_NAME_PATTERN,
 )
-REQUIRED_EXPERIENCE_EVENTS = {
-    "app_anr_outcome": {
-        "required_extensions": {"detectionSource", "result"},
-        "optional_extensions": {"durationMs"},
-    },
-    "app_frame_jank_outcome": {
-        "required_extensions": {
-            "sampledFrames",
-            "jankyFrames",
-            "worstFrameMs",
-            "worstBuildFrameMs",
-            "worstRasterFrameMs",
-            "jankThresholdMs",
-            "result",
-        },
-        "optional_extensions": {"surfaceId", "channelId"},
-    },
-    "page_first_usable": {
-        "required_extensions": {"durationMs", "terminalState"},
-        "optional_extensions": {"surfaceId", "failReasonCode"},
-    },
-    "page_error_outcome": {
-        "required_extensions": {
-            "surfaceId",
-            "errorCode",
-            "recoveryAction",
-            "result",
-        },
-        "optional_extensions": {"action", "durationMs"},
-    },
-}
-REQUIRED_APP_EXPERIENCE_METRIC_IDS = {
-    "app_anr_rate",
-    "app_jank_frame_rate",
-    "page_first_usable_p95_ms",
-    "page_error_recovery_rate",
-}
-ALLOWED_GOLDEN_AGGREGATIONS = {
-    "event_ratio",
-    "unique_session_ratio",
-    "percentile_p50",
-    "percentile_p95",
-    "percentile_p99",
-    "sum",
-    "sum_ratio",
-    "count",
-}
-ALLOWED_SERIES_AGGREGATIONS = {"series_rate_ratio"}
-ALLOWED_SOURCE_TRACKS = {"product_telemetry", "behavior_attribution"}
-ALLOWED_PORTAL_LEVELS = {"L1", "L2"}
-ALLOWED_TARGET_OPERATORS = {
-    "less_than",
-    "less_than_or_equal",
-    "greater_than",
-    "greater_than_or_equal",
-}
-SERIES_NAME_PATTERN = r"[a-z][a-z0-9_]*"
 
 
 def load_yaml(path: Path) -> dict:
@@ -387,6 +324,42 @@ def _verify_series_source(
         )
 
 
+def _verify_readface_source(
+    metric_id: str,
+    source: dict,
+    errors: list[str],
+) -> None:
+    """domain_fact_readface 轨：读面读时聚合比例。numerator/denominator series
+    登记读面响应字段名（lowerCamelCase），单轨约束禁止混入 Ops 事件或
+    Prometheus series 形态的字段。"""
+    aggregation = source.get("aggregation")
+    if aggregation not in ALLOWED_READFACE_AGGREGATIONS:
+        errors.append(
+            f"{metric_id} uses unsupported readface aggregation {aggregation}"
+        )
+    for key in ("numerator_series", "denominator_series"):
+        series = source.get(key)
+        if not isinstance(series, str) or re.fullmatch(
+            READFACE_FIELD_PATTERN, series
+        ) is None:
+            errors.append(
+                f"{metric_id} {key} must be a lowerCamelCase readface field name"
+            )
+    forbidden_keys = {
+        key
+        for key in source
+        if key.endswith("event_type")
+        or key.endswith("value_field")
+        or key.endswith("filters")
+        or key == "numerator_series_labels"
+    }
+    if forbidden_keys:
+        errors.append(
+            f"{metric_id} readface source must not mix event or series fields: "
+            + ", ".join(sorted(forbidden_keys))
+        )
+
+
 def _verify_golden_alerting(
     metric_id: str,
     metric: dict,
@@ -550,6 +523,8 @@ def verify_golden_metrics(errors: list[str]) -> None:
             )
         if track == "behavior_attribution":
             _verify_series_source(metric_id, source, errors)
+        elif track == "domain_fact_readface":
+            _verify_readface_source(metric_id, source, errors)
         else:
             _verify_event_source(
                 metric_id,

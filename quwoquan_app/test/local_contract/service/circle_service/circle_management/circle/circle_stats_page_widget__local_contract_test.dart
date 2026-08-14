@@ -1,9 +1,20 @@
+// KPI 报告：成员/群列表经 typed 查询面交付可观察结果；失败走 canonical
+// 页面错误态，不伪造成员或群成功。
+// spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001
+// spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001.t2
+// spec_ref: specs/feature-tree/circle-community/circle-management-and-stats/kpi-reporting/spec.md#gwt-001.t3
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/design_system/actions/app_follow_button.dart';
+import 'package:quwoquan_app/design_system/feedback/error_states/app_error_states.dart';
+import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
+import 'package:quwoquan_app/runtime/errors/domain_error_code.dart';
+import 'package:quwoquan_app/runtime/errors/generated/circle/circle_membership_errors.g.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import 'package:quwoquan_app/design_system/providers/theme_provider.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_app_state.dart'
@@ -102,7 +113,7 @@ final class _RecordingCircleMembershipQueries
 Widget _testApp({
   required String type,
   required _RecordingCircleGroupQueries groupQueries,
-  required _RecordingCircleMembershipQueries membershipQueries,
+  required CircleMembershipQueries membershipQueries,
   required List<String> visitedCircleIds,
 }) => ProviderScope(
   overrides: [isDarkProvider.overrideWithValue(false)],
@@ -392,4 +403,71 @@ void main() {
 
     expect(navigations, <String>['chatDetail:conversation-001']);
   });
+
+  testWidgets('成员列表请求失败走页面错误态且不伪造成员', (tester) async {
+    final visitedCircleIds = <String>[];
+    await tester.pumpWidget(
+      _testApp(
+        type: 'members',
+        groupQueries: _RecordingCircleGroupQueries(),
+        membershipQueries: const _FailingMembershipQueries(),
+        visitedCircleIds: visitedCircleIds,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppPageErrorState), findsOneWidget);
+    expect(find.text('fixture_persona'), findsNothing);
+    expect(find.textContaining('Mock'), findsNothing);
+    expect(visitedCircleIds, <String>['circle-001']);
+  });
+}
+
+final class _FailingMembershipQueries implements CircleMembershipQueries {
+  const _FailingMembershipQueries();
+
+  @override
+  Future<CircleMembershipSlice> getMyMembership(
+    MyCircleMembershipQuery query,
+  ) => throw UnsupportedError('getMyMembership is outside this page contract');
+
+  @override
+  Future<CircleMembershipPageSlice> listMemberships(
+    CircleMembershipListQuery query,
+  ) async => throw _membershipStorageException();
+
+  @override
+  Future<PersonaCirclePageSlice> listPersonaCircles(
+    PersonaCircleListQuery query,
+  ) => throw UnsupportedError(
+    'listPersonaCircles is outside this page contract',
+  );
+}
+
+CloudException _membershipStorageException() {
+  const errorCode = CircleMembershipErrorCode.membershipStorageWriteFailed;
+  return CloudException(
+    type: CloudErrorType.server,
+    message: errorCode.code,
+    statusCode: errorCode.httpStatus,
+    code: errorCode.code,
+    domainErrorCode: DomainErrorCodeRegistry.fromCode(errorCode.code),
+    runtimeFailure: RuntimeFailure(
+      code: errorCode.code,
+      semanticReason: 'membership_storage_write_failed',
+      transportStatus: errorCode.httpStatus,
+      origin: RuntimeFailureOrigin.remoteDependency,
+      kind: RuntimeFailureKind.internal,
+      nature: RuntimeFailureNature.transient,
+      location: const RuntimeFailureLocation(
+        businessObject: 'circle.circle_membership',
+        functionModule: 'circle_stats_page_widget_test',
+      ),
+      context: const RuntimeFailureContext(
+        attributes: <RuntimeContextAttribute>[],
+      ),
+      recovery: const RuntimeRecoveryDirective.none(),
+    ),
+    userMessage: errorCode.defaultMessage,
+  );
 }

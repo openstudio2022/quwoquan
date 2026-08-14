@@ -1,4 +1,6 @@
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_ui_usage_stats_view_data.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/assistant_run/application/public/assistant_run_persisted_value_types.dart'
+    show RunArtifacts;
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_answer_anchor.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/assistant_citation.dart';
 import 'package:quwoquan_app/service/assistant_service/assistant/assistant_turn_view/application/public/persisted_assistant_timeline_payload.dart';
@@ -23,6 +25,18 @@ class PersistedTimelineTurnCodec {
       out[e.key] = _cloneJson(e.value);
     }
     return out;
+  }
+
+  /// 运行工件为诊断性数据：结构非法时 fail-soft 置 null，不阻断整行解码。
+  static RunArtifacts? _decodeRunArtifacts(dynamic raw) {
+    if (raw is! Map) return null;
+    final map = raw.cast<String, dynamic>();
+    if (map.isEmpty) return null;
+    try {
+      return RunArtifacts.fromJson(map);
+    } on FormatException {
+      return null;
+    }
   }
 
   /// 解析失败的引用被丢弃（fail-closed，与 UI 只渲染有效引用一致）。
@@ -108,9 +122,7 @@ class PersistedTimelineTurnCodec {
       anchor: anchor,
       persisted: PersistedAssistantTimelinePayload.fromMap(m),
       uiReferences: _decodeUiReferencesList(m['uiReferences']),
-      runArtifacts:
-          (m['runArtifacts'] as Map?)?.cast<String, dynamic>() ??
-          const <String, dynamic>{},
+      runArtifacts: _decodeRunArtifacts(m['runArtifacts']),
       uiUsageStats: AssistantUiUsageStatsViewData.fromProtocolMap(
         (m['uiUsageStats'] as Map?)?.cast<String, dynamic>() ??
             const <String, dynamic>{},
@@ -175,7 +187,7 @@ class PersistedTimelineTurnCodec {
         'uiReferences': r.uiReferences
             .map((citation) => citation.toReferenceMap())
             .toList(growable: false),
-        'runArtifacts': r.runArtifacts,
+        if (r.runArtifacts != null) 'runArtifacts': r.runArtifacts!.toJson(),
         'uiUsageStats': r.uiUsageStats.toProtocolMap(),
         ...r.persisted.toMap(),
       },
