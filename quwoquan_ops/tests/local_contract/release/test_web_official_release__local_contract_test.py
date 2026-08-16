@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from quwoquan_ops.cli.commands.dev_session_public_web import (
     _load_dev_session_public_web_package,
@@ -13,6 +14,7 @@ from quwoquan_ops.cli.commands.dev_session_public_web import (
 from quwoquan_ops.cli.lib.web_official_release import (
     WebOfficialReleaseError,
     _inject_noindex,
+    _runtime_defines,
     _tree_sha256,
     _trusted_web_origin,
     _verify_web_build,
@@ -25,7 +27,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
         package_root: Path,
         *,
         environment: str = "alpha",
-        public_origin: str = "https://alpha.quwoquan.com",
+        public_origin: str = "https://alpha.quwoquan.com:17000",
     ) -> tuple[Path, Path]:
         release_id = f"web-release-{environment}"
         release_root = package_root / release_id
@@ -70,8 +72,8 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
 
     def test_environment_origins_are_exact_official_hosts(self) -> None:
         self.assertEqual(
-            _trusted_web_origin("alpha", "https://alpha.quwoquan.com"),
-            "https://alpha.quwoquan.com",
+            _trusted_web_origin("alpha", "https://alpha.quwoquan.com:17000"),
+            "https://alpha.quwoquan.com:17000",
         )
         self.assertEqual(
             _trusted_web_origin("prod", "https://quwoquan.com/"),
@@ -79,9 +81,11 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
         )
         self.assertEqual(
             _trusted_web_origin("beta", "https://beta.quwoquan.com:18000"),
-            "https://beta.quwoquan.com",
+            "https://beta.quwoquan.com:18000",
         )
         for rejected in (
+            "https://alpha.quwoquan.com",
+            "https://alpha.quwoquan.com:18000",
             "https://alpha.example.invalid",
             "https://attacker.example",
             "http://alpha.quwoquan.com",
@@ -91,6 +95,28 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
         ):
             with self.assertRaises(WebOfficialReleaseError):
                 _trusted_web_origin("alpha", rejected)
+
+    def test_nonprod_runtime_defines_use_exact_test_live_target(self) -> None:
+        completed = Mock(returncode=0, stdout='{"APP_RUNTIME_ENV":"beta"}')
+        with patch("subprocess.run", return_value=completed) as run:
+            values = _runtime_defines(
+                Path("/repo"),
+                "beta",
+                target="beta-local",
+                launch_policy="test_live",
+            )
+        self.assertEqual(values, {"APP_RUNTIME_ENV": "beta"})
+        command = run.call_args.args[0]
+        self.assertIn("--target", command)
+        self.assertEqual(command[command.index("--target") + 1], "beta-local")
+        self.assertEqual(
+            command[command.index("--launch-policy") + 1],
+            "test_live",
+        )
+        self.assertEqual(
+            command[command.index("--launch-mode") + 1],
+            "web_official_release",
+        )
 
     def test_build_contract_requires_utf8_pwa_and_service_worker(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -138,7 +164,10 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             self.assertEqual(resolved_public, public.resolve())
             self.assertEqual(receipt["environment"], "alpha")
             self.assertEqual(receipt["packageVersion"], "web-release-alpha")
-            self.assertEqual(receipt["publicOrigin"], "https://alpha.quwoquan.com")
+            self.assertEqual(
+                receipt["publicOrigin"],
+                "https://alpha.quwoquan.com:17000",
+            )
             self.assertEqual(
                 receipt["manifestDigest"],
                 "sha256:"
