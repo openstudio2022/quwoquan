@@ -10,6 +10,8 @@ permissions:
 
 env:
   QWQ_OUTPUT_ROOT: .qwq_output
+  PUB_HOSTED_URL: https://pub.flutter-io.cn
+  FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
 
 on:
   pull_request:
@@ -305,13 +307,31 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - id: flutter_version
-        name: Read repository-pinned Flutter toolchain
-        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+      - name: Configure App CI paths
+        run: echo "QWQ_DEPLOY_WORK_ROOT=$RUNNER_TEMP/quwoquan-deploy" >> "$GITHUB_ENV"
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Cache lock-bound Dart dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          flutter-version: ${{ steps.flutter_version.outputs.value }}
-          cache: true
+          path: ~/.pub-cache
+          key: "pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
+          restore-keys: |
+            pub-${{ runner.os }}-${{ runner.arch }}-
+      - name: Install verified Flutter SDK
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
+      - name: Resolve locked App dependencies
+        working-directory: quwoquan_app
+        run: flutter pub get --enforce-lockfile
       - name: Gate (quwoquan_app static + PA core)
         env:
           GATE_APP_PHASE: static
@@ -341,13 +361,31 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - id: flutter_version
-        name: Read repository-pinned Flutter toolchain
-        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+      - name: Configure App CI paths
+        run: echo "QWQ_DEPLOY_WORK_ROOT=$RUNNER_TEMP/quwoquan-deploy" >> "$GITHUB_ENV"
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Cache lock-bound Dart dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          flutter-version: ${{ steps.flutter_version.outputs.value }}
-          cache: true
+          path: ~/.pub-cache
+          key: "pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
+          restore-keys: |
+            pub-${{ runner.os }}-${{ runner.arch }}-
+      - name: Install verified Flutter SDK
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
+      - name: Resolve locked App dependencies
+        working-directory: quwoquan_app
+        run: flutter pub get --enforce-lockfile
       - name: Gate (quwoquan_app tests shard)
         env:
           GATE_APP_PHASE: tests
@@ -378,13 +416,31 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - id: flutter_version
-        name: Read repository-pinned Flutter toolchain
-        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+      - name: Configure App CI paths
+        run: echo "QWQ_DEPLOY_WORK_ROOT=$RUNNER_TEMP/quwoquan-deploy" >> "$GITHUB_ENV"
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Cache lock-bound Dart dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          flutter-version: ${{ steps.flutter_version.outputs.value }}
-          cache: true
+          path: ~/.pub-cache
+          key: "pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
+          restore-keys: |
+            pub-${{ runner.os }}-${{ runner.arch }}-
+      - name: Install verified Flutter SDK
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
+      - name: Resolve locked App dependencies
+        working-directory: quwoquan_app
+        run: flutter pub get --enforce-lockfile
       - name: Gate (quwoquan_app serial suites)
         env:
           GATE_APP_PHASE: serial
