@@ -254,22 +254,37 @@ def select_go_services(paths: list[str]) -> list[str]:
 def select_pytest_paths(paths: list[str]) -> list[str]:
     selected: list[str] = []
     seen: set[str] = set()
+    source_mappings = (
+        ("quwoquan_ops/gate/", "quwoquan_ops/tests/local_contract/gate"),
+        ("quwoquan_ops/policies/gates/", "quwoquan_ops/tests/local_contract/gate"),
+        ("quwoquan_ops/ci/", "quwoquan_ops/tests/local_contract/ci"),
+        ("quwoquan_ops/environments/", "quwoquan_ops/tests/local_contract/environment"),
+        ("quwoquan_ops/cli/", "quwoquan_ops/tests/local_contract/stackctl"),
+        ("quwoquan_data/scripts/core/", "quwoquan_data/tests/local_contract/core"),
+        ("quwoquan_data/scripts/content/execution/", "quwoquan_data/tests/local_contract/execution"),
+        ("quwoquan_data/scripts/content/release/", "quwoquan_data/tests/local_contract/release"),
+        ("quwoquan_data/scripts/content/source/", "quwoquan_data/tests/local_contract/source"),
+        ("quwoquan_data/scripts/governance/", "quwoquan_data/tests/local_contract/governance"),
+    )
     for path in paths:
-        for root in ("quwoquan_data/tests/local_contract", "quwoquan_ops/tests/local_contract"):
+        for root in (
+            "quwoquan_data/tests/local_contract",
+            "quwoquan_ops/tests/local_contract",
+        ):
             if path.startswith(root + "/") and path.endswith(".py"):
                 # A staged deletion still shows up as a changed path; handing it to
                 # pytest aborts the whole run with "file or directory not found".
                 if path not in seen and (ROOT / path).exists():
                     seen.add(path)
                     selected.append(path)
-            elif path.startswith(root.split("/tests/")[0] + "/"):
-                # Map source tree touch to corresponding tests dir if present.
-                domain = root
-                if domain not in seen and (ROOT / domain).is_dir():
-                    # Only add whole domain once when non-test source under domain changes.
-                    if "/tests/" not in path:
-                        seen.add(domain)
-                        selected.append(domain)
+        if "/tests/" in path:
+            continue
+        for source_prefix, test_root in source_mappings:
+            if path.startswith(source_prefix) and test_root not in seen:
+                if (ROOT / test_root).is_dir():
+                    seen.add(test_root)
+                    selected.append(test_root)
+                break
     return selected[:80]
 
 
