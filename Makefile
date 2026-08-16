@@ -1165,6 +1165,7 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/gate/test_directory_layout__canonical_service_tests__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/environment/test_env_artifact_isolation__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_git_branch_policy__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_github_supply_chain__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_homepage_type_contract__shared_enum_parity__contract__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/environment/test_local_dependency_purity__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/test_data/test_test_data_architecture_gate__local_contract_test.py \

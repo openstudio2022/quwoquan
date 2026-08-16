@@ -87,6 +87,10 @@ Widget _buildOtherProfileIntersection({required String userId}) =>
 Widget _buildMyProfileIntersection({required bool isDark}) =>
     MyIntersectionInboxCard(isDark: isDark);
 
+/// Gathering source owner 的 Recommendation participant binding。
+Widget buildGatheringIntersectionInboxSlot({required bool isDark}) =>
+    MyIntersectionInboxCard(isDark: isDark);
+
 Widget _buildMyProfileGatherings({required bool isDark}) =>
     MyGatheringsEntryCard(isDark: isDark);
 

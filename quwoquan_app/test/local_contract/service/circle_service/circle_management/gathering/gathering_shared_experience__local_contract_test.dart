@@ -5,8 +5,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
-    show gatheringDetailGatheringPostsReaderProvider;
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
@@ -84,10 +82,7 @@ Future<InMemoryGatheringPort> _pumpDetail(
   await tester.pumpWidget(
     ProviderScope(
       overrides: <Override>[
-        ...gatheringBoundaryOverrides(port),
-        gatheringDetailGatheringPostsReaderProvider.overrideWithValue(
-          recapReader,
-        ),
+        ...gatheringBoundaryOverrides(port, gatheringPostsReader: recapReader),
       ],
       child: CupertinoApp(
         home: GatheringDetailPage(
@@ -185,10 +180,7 @@ void main() {
         recapReader: _GatheringPostsReaderDouble(),
       );
 
-      expect(
-        find.byKey(GatheringDetailPage.sharedExperienceKey),
-        findsNothing,
-      );
+      expect(find.byKey(GatheringDetailPage.sharedExperienceKey), findsNothing);
       expect(find.byKey(GatheringDetailPage.publishRecapKey), findsNothing);
     });
 
@@ -255,10 +247,7 @@ void main() {
         ),
         recapReader: _GatheringPostsReaderDouble(),
       );
-      expect(
-        find.byKey(GatheringDetailPage.publishRecapKey),
-        findsNothing,
-      );
+      expect(find.byKey(GatheringDetailPage.publishRecapKey), findsNothing);
     });
   });
 }

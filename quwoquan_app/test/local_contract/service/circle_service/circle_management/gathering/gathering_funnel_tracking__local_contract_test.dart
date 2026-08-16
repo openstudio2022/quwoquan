@@ -5,13 +5,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart'
     show journeyEventTrackerProvider;
-import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
-    show
-        gatheringDetailGatheringPostsReaderProvider,
-        gatheringDetailSocialProofReaderProvider;
 import 'package:quwoquan_app/runtime/observability/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
@@ -43,7 +38,8 @@ final class _EmptyRecapReader implements ContentGatheringPostsReader {
   }
 }
 
-final class _ZeroSocialProofReader implements ContentGatheringSocialProofReader {
+final class _ZeroSocialProofReader
+    implements ContentGatheringSocialProofReader {
   @override
   Future<GatheringSocialProofSummary> getGatheringSocialProof({
     required String anchorKind,
@@ -73,12 +69,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: <Override>[
-          ...gatheringBoundaryOverrides(port),
-          gatheringDetailGatheringPostsReaderProvider.overrideWithValue(
-            _EmptyRecapReader(),
-          ),
-          gatheringDetailSocialProofReaderProvider.overrideWithValue(
-            _ZeroSocialProofReader(),
+          ...gatheringBoundaryOverrides(
+            port,
+            gatheringPostsReader: _EmptyRecapReader(),
+            socialProofReader: _ZeroSocialProofReader(),
           ),
           journeyEventTrackerProvider.overrideWithValue(
             JourneyEventTracker(telemetryReporter: recorder),

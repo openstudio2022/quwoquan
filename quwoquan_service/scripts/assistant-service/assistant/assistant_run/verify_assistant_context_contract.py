@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify Xiaoqu assistant context/grounding metadata contracts."""
+"""Verify Xiaoqu assistant-run context/grounding metadata contracts."""
 from __future__ import annotations
 
 import sys
@@ -27,7 +27,7 @@ ASSISTANT_RUN = (
     / "assistant_run"
 )
 FIELDS_PATH = ASSISTANT_RUN / "fields.yaml"
-OPERATIONS_PATH = ASSISTANT_RUN / "operations.yaml"
+SHARED_TYPES_PATH = ASSISTANT_RUN.parents[1] / "_shared" / "types.yaml"
 
 
 def load_yaml(path: Path) -> dict:
@@ -45,17 +45,6 @@ def field_map(entity: dict) -> dict[str, dict]:
     for item in fields:
         if isinstance(item, dict) and isinstance(item.get("name"), str):
             out[item["name"]] = item
-    return out
-
-
-def route_map(operations: dict) -> dict[str, dict]:
-    routes = operations.get("api_routes")
-    if not isinstance(routes, list):
-        return {}
-    out: dict[str, dict] = {}
-    for route in routes:
-        if isinstance(route, dict) and isinstance(route.get("operation"), str):
-            out[route["operation"]] = route
     return out
 
 
@@ -97,7 +86,7 @@ def assert_absent_field(
 def main() -> int:
     failures: list[str] = []
     fields = load_yaml(FIELDS_PATH)
-    operations = load_yaml(OPERATIONS_PATH)
+    shared_types = load_yaml(SHARED_TYPES_PATH)
 
     entities = fields.get("types")
     if not isinstance(entities, dict):
@@ -112,7 +101,6 @@ def main() -> int:
         "AssistantConsentMatrix",
         "AssistantIntersectionEvidenceRef",
         "AssistantSearchCitationView",
-        "CitationDestination",
     ]
     for entity_name in required_entities:
         if entity_name not in entities:
@@ -154,31 +142,16 @@ def main() -> int:
 
     for citation_field in ("destination", "score", "recallSource", "objectTypeRef"):
         assert_field(failures, entities, "AssistantSearchCitationView", citation_field)
-    assert_field(failures, entities, "CitationDestination", "url", "string")
-
-    routes = route_map(operations)
-    expected_request_entities = {
-        "SearchXiaoquResults": "AssistantSearchXiaoquRequestWire",
-        "ReportPageContext": "AssistantReportPageContextRequestWire",
-    }
-    for operation, expected_entity in expected_request_entities.items():
-        route = routes.get(operation)
-        if not isinstance(route, dict):
-            failures.append(f"operations.yaml missing operation {operation}")
-            continue
-        request_entity = route.get("request_entity")
-        if request_entity != expected_entity:
-            failures.append(
-                f"{operation}: request_entity {request_entity!r}, "
-                f"want {expected_entity!r}"
-            )
-            continue
+    shared_entities = shared_types.get("types")
+    if not isinstance(shared_entities, dict):
+        failures.append("assistant-service/contracts/_shared/types.yaml missing types mapping")
+    else:
         assert_field(
             failures,
-            entities,
-            expected_entity,
-            "contextSnapshot",
-            "AssistantContextSnapshot",
+            shared_entities,
+            "CitationDestination",
+            "url",
+            "string",
         )
 
     if failures:

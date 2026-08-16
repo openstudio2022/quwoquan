@@ -13,14 +13,21 @@ void main() {
       'lib/runtime/di/app_providers_chat_search.dart',
     ).readAsStringSync();
     final remote = File(
-      'lib/service/search_service/search/search_index_view/adapters/search_page_query_remote.dart',
+      'lib/service/api_edge/graphql_read/persisted_query_execution/'
+      'adapters/persisted_search_page_query_remote.dart',
     ).readAsStringSync();
 
     expect(composition, contains('GeneratedSearchPageGraphQLClient'));
-    expect(composition, contains('RemoteSearchPageQuery'));
+    expect(composition, contains('RemotePersistedSearchPageQuery'));
     expect(composition, isNot(contains('RemoteCanonicalSearchQuery(')));
     expect(provider, contains('generatedSearchPageGraphQLClientProvider'));
     expect(remote, contains('client.searchPage('));
+    expect(
+      composition,
+      isNot(
+        contains('search_index_view/adapters/search_page_query_remote.dart'),
+      ),
+    );
     expect(remote, isNot(contains('searchSearchIndexViewSearch')));
     expect(remote, isNot(contains("'/search'")));
     expect(remote, isNot(contains("'query'")));

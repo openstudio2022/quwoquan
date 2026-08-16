@@ -99927,7 +99927,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_learning_fact/application/assistant_learning_fact_outbox.dart",
-            "sha256": "1ae743e414694e2fbeba85d2bf431dc9caf7b5fcb10a4d78079ff000526c3e08"
+            "sha256": "105f60d9649fb31756bd33b72d146d8ccbdc9e367c5e89404390930077c657b6"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_learning_fact/application/assistant_learning_fact_outbox_notifier.dart",
@@ -104255,7 +104255,7 @@
         "application": [
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/chat_inbox_view/application/chat_inbox_provider.dart",
-            "sha256": "3daeb485ed312eea651b6481515440f93c280e3946d592ee36e749b0076c971a"
+            "sha256": "7f1769c8acb94e5fb435fbf1794c9641dfe9f8aedc8e4eab3b7a7498793739e0"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/chat_inbox_view/application/chat_inbox_repository.dart",
@@ -104306,6 +104306,10 @@
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/chat_inbox_view/chat_inbox_dto_contract__local_contract_test.dart",
             "sha256": "d8ed0c07f96b27057375d72ac5dd90ad95ddd33051c2e8df00873fcef5c6cb22"
+          },
+          {
+            "path": "quwoquan_app/test/local_contract/service/chat_service/chat/chat_inbox_view/chat_inbox_open_scroll_budget__performance__local_contract_test.dart",
+            "sha256": "8ca253e6b9325655e3c1b09f3eb8f8407c8cc9a8aaf9a8cfde1d82ccfb7e48c7"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/chat_inbox_view/chat_inbox_provider__local_contract_test.dart",
@@ -105066,7 +105070,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/application/conversation_avatar_members_provider.dart",
-            "sha256": "68d5cb2260da781a143a33c9d9c073c83a46271b259cfb00194c1bb6c706544f"
+            "sha256": "7016432d296d9eee0ffbbd9e620b1e6707e5afc53a0e688a9e99274c6b698603"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/application/conversation_query.dart",
@@ -105166,7 +105170,7 @@
         "presentation": [
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/presentation/chat_announcement_page.dart",
-            "sha256": "0b2438081a0b2e83377d54f1dcbdd45cf4e3361d6d760ed1be0b113622425411"
+            "sha256": "47f05f842d62353d3cedcaf434fed990cd2e93c118535a1ab96da5bcd21ea546"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation/presentation/chat_conversation_page.dart",
@@ -105188,7 +105192,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_announcement_page_widget__local_contract_test.dart",
-            "sha256": "5ab082c986681d3bfd8e8ef741ee53affae7be8bd03679519e83556d754e200b"
+            "sha256": "d74735e334ac1460d27d4591ea5260b1de33c82e292aaf3cc8145e1e9e08eaa7"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_assistant_journey__local_contract_test.dart",
@@ -105244,7 +105248,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_production_composition__local_contract_test.dart",
-            "sha256": "c5c3e244627205a38057f27109050f350b672343f44943e7b54388603e88dcff"
+            "sha256": "edb0b1925a531040d3253e125b1ca06f73317c9f2996aa7bf582f8a0f37fa28b"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/chat_reply_to_message__local_contract_test.dart",
@@ -105264,7 +105268,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_avatar_sync_contract__local_contract_test.dart",
-            "sha256": "071ea9b393de68eb9a1ce77832f9376bf9e993d3bfc8ea4fe7ab5a95f352c0c2"
+            "sha256": "76c007c4962a55c582821e0a223e1b450a4a393353683a1abf9d902d7d470ce2"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_cache_public_seams__local_contract_test.dart",
@@ -105272,7 +105276,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_ready_facets__local_contract_test.dart",
-            "sha256": "5917b64911d1f9af523e5f744541744aa801d2c66d14cb32f284260335006b78"
+            "sha256": "2cad9c9ac365b700fed2b26e2cc57a43b3f6cb322485b9819f53e45620f7f0b2"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_commercial_remote__local_contract_test.dart",
@@ -105284,23 +105288,23 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_contracts__local_contract_test.dart",
-            "sha256": "51cf17dc6c194847351994066011261703bfbefd2cafe08a15713e36bbebf126"
+            "sha256": "10bbc88da7631ed0cf8664e2be366c8f30f81bdb5ba234890cae429a7989a3e1"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_dto_contract__local_contract_test.dart",
-            "sha256": "299c277fb9eb197724debd378eac47b5bc972fb48312d02573a2ca7516934a5a"
+            "sha256": "fa258196d64dc57ebb8fb92a29db9a605b6eb1c474a3b3b20b54a8c7729d8883"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_intersection_header__local_contract_test.dart",
-            "sha256": "82be6940fc1a51ff40ad3ddb895e5986ec5e63953b6e3aa91df04ddc08d20d7c"
+            "sha256": "8e4d6d93c7ff759c6cb2e21360721466045759462bfac7fd9f11b6f5af0c3cf8"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_remote__local_contract_test.dart",
-            "sha256": "4afd12f6eb9b17fe7f55e0f084857581d407aa4366176b78ca7d5cfd70e509d8"
+            "sha256": "d25a61ae92fa3af2a6536c23aec73fca60156d96720edac70e751ef71937b4ac"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/conversation_sync_governance_board_remote__local_contract_test.dart",
-            "sha256": "a500687ecc015fa62e14c885aa961ca65e1d155191f79fd8524a831fcb3e2480"
+            "sha256": "7d0fc0f60703ede7ca4110ca75932101b2f222c162cc4820df4e25be28a7174f"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation/customizable_chat_input_bar__local_contract_test.dart",
@@ -105524,7 +105528,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation_membership/presentation/group_member_search_page.dart",
-            "sha256": "a5db2644dd8f1cecd472b6ab6828f7a75868c6f83ee7620bcc775c728a1502fa"
+            "sha256": "4c4ab56dedbf2b48feda58c6af789d78b1b6def71e8bcdfd462cd625f509b91d"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation_membership/presentation/transfer_ownership_page.dart",
@@ -105562,7 +105566,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation_membership/group_member_search_page_widget__local_contract_test.dart",
-            "sha256": "1738d25761d8bc9812c4597ce2ae90dce97d15e358b63c309230b14df41e3881"
+            "sha256": "75f1abeea4abe6346b37a4511df33338c93ef71f416125161a1fc5b8e806b0da"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation_membership/transfer_ownership_page_widget__local_contract_test.dart",
@@ -105757,7 +105761,7 @@
         "store": [
           {
             "path": "quwoquan_service/services/chat-service/internal/chat/message/infrastructure/external/media_asset_delivery_reader.go",
-            "sha256": "01abf206c6c52a10243e5cb8c1b039ea12790651bae8b43ea2c5da480b9b2909"
+            "sha256": "1507dc9dadbe6b43025e1d247f0cbb72a1c8729d72c1b3b41a8e8095a611ddc4"
           }
         ],
         "outbox": [
@@ -105792,7 +105796,7 @@
         "localContract": [
           {
             "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/message/media_asset_delivery_reader__local_contract_test.go",
-            "sha256": "f85e7d38f3fecd7b6fe8ff01b92d1e9b4ebffac84ae6b98fe5a5904b71d0e9b0"
+            "sha256": "a99dca9126b89b13afc4d804ba852274d167ead9a20acb876746a7fbbd48635d"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/local_contract/chat/message/message_card_kind__contract__local_contract_test.go",
@@ -105818,7 +105822,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/message/http_routes__api_integration_test.go",
-            "sha256": "a1b168a0c2d0db4721fdcb53280834d4377aae0cf17e8779371ffc0742efe210"
+            "sha256": "e308b6fc1dbabee2cdccfcb11b2e0c2f787096726fd571a88da7ab6522b5a3e7"
           },
           {
             "path": "quwoquan_service/services/chat-service/tests/api_integration/chat/message/rtc_call_log_consumer__api_integration_test.go",
@@ -106027,7 +106031,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_app/test/api_integration/service/chat_service/chat/message/message_media_reply_remote__api_integration_test.dart",
-            "sha256": "b960a03d812c3a2fd452ace35a8cb7b03d094977be4b23a1b7369f3774079425"
+            "sha256": "35ad9db06975678c84df5b4d03e0520c5de206655340850ae0447be7263a7f5e"
           },
           {
             "path": "quwoquan_app/test/api_integration/service/chat_service/chat/message/message_remote__api_integration_test.dart",
@@ -108235,7 +108239,7 @@
         "presentation": [
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/gathering_actions_discovery_page.dart",
-            "sha256": "30b7fa762d41001fcff35b7a2a51938749b4cf7997a88197fd8ccfb9171e648b"
+            "sha256": "4a2d3533c5db2a5761d009f3d1be76323d97f928b207d9172e014e47ebfa15e6"
           },
           {
             "path": "quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/gathering_create_page.dart",
@@ -108253,7 +108257,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_actions_discovery_page__local_contract_test.dart",
-            "sha256": "858dd941ad2d0095fd03d32934f28bea0bb463f47cf8d51e5dad0872df438e02"
+            "sha256": "08e475b7bc8d75b76a9eb14291a37e081d377e324ae44ba5e6b9ede92c860bba"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_create_composer__local_contract_test.dart",
@@ -108269,7 +108273,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_funnel_tracking__local_contract_test.dart",
-            "sha256": "b0c13e182e904f0aa4f27a0a4bcaa2dccfa4c05faa8750aa6de5ce941cb4c2c8"
+            "sha256": "b1d843176c48bf4a1f8017c52795327f4271f9f8cfe94326423bc797851afbf0"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_invitation_inbox_card__local_contract_test.dart",
@@ -108289,11 +108293,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_shared_experience__local_contract_test.dart",
-            "sha256": "40602704626faece84194335d29efd18b97b8e84cb98dd6cca30d45dabc3bed7"
+            "sha256": "3d7b479dc5eded978fed70d24cbcadf88710280a79e8a89db7796ff26df1e567"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_social_proof_display__local_contract_test.dart",
-            "sha256": "bf446217212697602e141c9b9e1f7dd18c85a4b8eb9185a349bc5eae82f19c61"
+            "sha256": "d3de8871db58bfb45d34ed007a216d96c5c78ef05205668c6878c35cfb341606"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_source_cards_section__local_contract_test.dart",
@@ -108606,7 +108610,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/comment/application/contracts.go",
-            "sha256": "6563655179059c7b956e2cf1c6f1ec6d18a3e3b08aef33247ceb17be197e09cb"
+            "sha256": "f8756ec12e87beb63e601c517c9454a2ceb09902fd916778118888abca4918a9"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/comment/application/data_ports.go",
@@ -108636,6 +108640,10 @@
           }
         ],
         "localContract": [
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/command_result_false_boolean_wire__local_contract_test.go",
+            "sha256": "e0e53973369f0f5facb3fc5def2e6ddac33f200a21667ca4cf2a02eea3409cae"
+          },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/comment/adapters/inbound/http/comment_operations__local_contract_test.go",
             "sha256": "437367dacc0ea1e576547dccf3454ecede431ec405773f5189eb5c6aadfbb146"
@@ -108732,7 +108740,7 @@
         "adapters": [
           {
             "path": "quwoquan_app/lib/service/content_service/content/comment/adapters/comment_draft_store.dart",
-            "sha256": "7b94f05b89a70b632432b513c3b4818b160836838ae09621b0a28ddd8ca84061"
+            "sha256": "137c1e7796fa90d4e9a1404c725390cf3c2220ca6fe9d183610954f942c526f9"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/comment/adapters/comment_facets_remote.dart",
@@ -108741,6 +108749,10 @@
         ],
         "presentation": [],
         "localContract": [
+          {
+            "path": "quwoquan_app/test/local_contract/service/content_service/content/comment/comment_command_result_nullability__local_contract_test.dart",
+            "sha256": "41a38e563975ddaaaada24ba85a85f37393748150b7ee84568d19837ff1bfa85"
+          },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/comment/comment_counts_delta_notice__local_contract_test.dart",
             "sha256": "6eca0f35ae5317693fb8f0cdd401d67a6a17f0f2e302c0da545fe90e6af4e252"
@@ -109240,7 +109252,7 @@
         "reader": [
           {
             "path": "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction/contracts.go",
-            "sha256": "1300145b81f5857d56594a002d1635988ab0d10abb16087511831aa6acce3bcc"
+            "sha256": "e79a1ef9ca7fbc8fd4f19250bb17eea80e5180bc833edf1472187132499894e4"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/content_reaction/application/reaction/data_ports.go",
@@ -109815,7 +109827,7 @@
         "presentation": [
           {
             "path": "quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_page.dart",
-            "sha256": "540751b7818cfe33adc8d0684fa59b0e6e690fcdf93fa17d33cb3aa31ad0e1a5"
+            "sha256": "71b5d66b52b29470156ccb493e64974f1d58cd654cffdb02575d2c934e026c56"
           }
         ],
         "localContract": [
@@ -109849,7 +109861,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/filter_catalog_release/image_editor_export_pipeline__functional__local_contract_test.dart",
-            "sha256": "a24379150802f963cdc2c017ecdb413c9289df19951b188ebb1eeb810d7e201b"
+            "sha256": "a46a13e1494cb6f3f08a4e2879b3c7ab23b9018c737a83394308c97ea0480ae8"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/media/filter_catalog_release/image_editor_filter_catalog__local_contract_test.dart",
@@ -109962,7 +109974,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection/intersection_service.go",
-            "sha256": "a575a5959190011517a0b9c7bd9c6ccdbca829e9bddf771a3c9c124270f980c2"
+            "sha256": "2e6dee98223fd53f51c00e7e1c9445e14406670abc00a0ed0f82b7fa0e57d4fb"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection/intersection_statement_template.go",
@@ -109974,7 +109986,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection/intersection_views.go",
-            "sha256": "f4860039b8231c36fe6438ba19fd1149713f24e45d52ec8ac2fd7c264704d2c5"
+            "sha256": "8d905dd2401d218c23ae2a70f44073080d8040a29ff992d5cf2ec02817de989f"
           }
         ],
         "transport": [
@@ -110243,7 +110255,7 @@
         "reader": [
           {
             "path": "quwoquan_service/services/content-service/internal/media/media_asset/application/contracts.go",
-            "sha256": "a58c919a258ec5237ad30e50a5b4cc5bcdc59d19b7588cbb4e473c5fa969d00b"
+            "sha256": "ad4108fd2c9478d669d122724df35104717e153855be23e843a929a44a90e548"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/media/media_asset/application/creation.go",
@@ -110950,7 +110962,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/media/media_upload_session/adapters/exif_media_capture_metadata_extractor.dart",
-            "sha256": "f22c2df91f86c88dafca72c44dd231d5c8e277f90288479c1acdc0f92a1ca9d6"
+            "sha256": "09eda5a7278dd7de27d1209fc2bde363ee0666087aa061c5890eb6edfcaeb29e"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/media/media_upload_session/adapters/image_pick_gateway.dart",
@@ -111889,6 +111901,10 @@
             "sha256": "fefedf1359affc3c812acda7214a4d864a6b8c1aa41fca9090312c2a6210cc30"
           },
           {
+            "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/feed_admission_rejection.go",
+            "sha256": "1314b41f1207abd4174e8a3ebe4a38acaf6f279437d683502156e9a8925ed451"
+          },
+          {
             "path": "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http/routes.go",
             "sha256": "bbefce3bd43eed678f30bc871e8b8811bd555103eefe3612318873e3e9487734"
           },
@@ -111929,6 +111945,10 @@
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_read_operations__commercial_ready__local_contract_test.go",
             "sha256": "381c4af13dc2ded08ccc545542c9f2dac2c3ad6dfb3954196c74bac32bc194a5"
+          },
+          {
+            "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/feed_admission_rejection__local_contract_test.go",
+            "sha256": "6a8aa54dc8d677a0e8a83361588bfd65ebf21b087aac150feef65fa65c0d5e2a"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/get_post_source_attribution_projection__contract__local_contract_test.go",
@@ -112610,7 +112630,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/report_crud_contract__api_integration_test.go",
-            "sha256": "0564482317c139dc5b7894b41419aa8a49bc3237df1f41f5fb536add836b4243"
+            "sha256": "6222fad989e4a556a4f3081488571845c7eae01af1e94b1e53fd06ac23be7864"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/report_dismiss_contract__api_integration_test.go",
@@ -112958,11 +112978,11 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/cached_content_post_reader.dart",
-            "sha256": "ed7dbe91f8fbef01a6cb3b65f5c5c45e7260dd41525d285f65ff1f05ca5c2854"
+            "sha256": "0ac9062b056d5c451dac88453d11d429ce131b73f7ffb0774010c49d0d7d9df4"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/cached_content_repository.dart",
-            "sha256": "ed76f85a86c431e2eed3eb174073424a688cbb64fbe56a97bb16c28e8f3415ea"
+            "sha256": "9369bd5e7a20674987cbe3f57364f37459f8d94c13b9453bfbc0fc1778dd00f4"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/content_app_config_remote.dart",
@@ -112970,7 +112990,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/content_cache_services.dart",
-            "sha256": "cece28f2ea82b2fa50c0ad3710992fdb33650ded4056eda6895496154b02505e"
+            "sha256": "598ad757a9c63662d03fb31c41e2a58c6e7d04940ccd924f18ecbb0f9941022c"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/content_media_cover_selection.dart",
@@ -115532,8 +115552,18 @@
       },
       "app": {
         "domain": [],
-        "application": [],
-        "adapters": [],
+        "application": [
+          {
+            "path": "quwoquan_app/lib/service/api_edge/graphql_read/persisted_query_execution/application/public/persisted_search_page_query.dart",
+            "sha256": "8f527ba53132d413b79b85d5b70f44ee75863dac982bc42adb4b2a969175c1f9"
+          }
+        ],
+        "adapters": [
+          {
+            "path": "quwoquan_app/lib/service/api_edge/graphql_read/persisted_query_execution/adapters/persisted_search_page_query_remote.dart",
+            "sha256": "e7326865de9a680f425cb9b9697a4b1de33d18af3f2b37272800a1381325c3be"
+          }
+        ],
         "presentation": [],
         "localContract": [],
         "apiIntegration": [],
@@ -115834,7 +115864,7 @@
           },
           {
             "path": "quwoquan_service/services/integration-service/tests/local_contract/external_integration/capability_grant/public_provider_config__local_contract_test.go",
-            "sha256": "a673ff783192aa8c3c0d1b24223fb3f74d62ca9050384a157599784043ee25a6"
+            "sha256": "5c6575c7e85677adbe10b3d9fb82db58f7700e822ce7f69bd05558af7c56e60a"
           }
         ],
         "apiIntegration": [
@@ -118868,7 +118898,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_message_sent_handler__local_contract_test.dart",
-            "sha256": "f7fa993bfe7fbc1b29fbdeaef97d1030f373d2367d5470268286b5e96b083135"
+            "sha256": "1a066e27f58b486c0c8ab79fbfc471c17a58f2a93ea64c53d7d94c0969e2dc1f"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/realtime_gateway/realtime/connection/realtime_reconnect_gap_recovery__local_contract_test.dart",
@@ -120709,6 +120739,10 @@
             "sha256": "7dc466bdcd5b050eb299b7dc2892ed7722d03e9a2cd84bcd719871f263c2aaf7"
           },
           {
+            "path": "quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/realtime_payload_nullability_evidence__api_integration_test.go",
+            "sha256": "da3ef99a3e43d4ab14c565286ad492fc70ed72656e2f7ff14e0610d028963f29"
+          },
+          {
             "path": "quwoquan_service/services/rtc-service/tests/api_integration/rtc/call_session/room_management_contract__api_integration_test.go",
             "sha256": "5335c7d1558a20c59d1fa1fd953aace0b3f3a40a5a3fe8e82365f8df1382d6ac"
           },
@@ -121724,10 +121758,6 @@
             "sha256": "2eb2b27fb3176b91354f34dc8a9d0c7bdf06d16f0462537f78f51687a255f092"
           },
           {
-            "path": "quwoquan_app/lib/service/search_service/search/search_index_view/application/search_page_query_facet.dart",
-            "sha256": "91de07381a7171ce77b5ac3235b4dded00f1c9b022a893c89c2c2039364ec62a"
-          },
-          {
             "path": "quwoquan_app/lib/service/search_service/search/search_index_view/application/search_repository.dart",
             "sha256": "61c622dc45aa9945ed3ed827de8365d34ddd2db8cd4a974455f87d11b18c8a85"
           },
@@ -121767,15 +121797,11 @@
           },
           {
             "path": "quwoquan_app/lib/service/search_service/search/search_index_view/adapters/remote_search_page_repository.dart",
-            "sha256": "dffd7eed6991c86190c5f2c43425c646cdc4d47f1f8583ba6b42ed1dbd76888e"
+            "sha256": "b9201633fec4a670d9c72dda5ac6c0b2dd251a409ce8d75737f66e95a12facfc"
           },
           {
             "path": "quwoquan_app/lib/service/search_service/search/search_index_view/adapters/remote_search_repository.dart",
             "sha256": "667245d811af78bded6c6875a7b5f52ef330d544aa77c9a90372a6b0857000a2"
-          },
-          {
-            "path": "quwoquan_app/lib/service/search_service/search/search_index_view/adapters/search_page_query_remote.dart",
-            "sha256": "3b54b4fb4a047a132a676a21845a369e3a1d0d44a3ba84252d270bafc309f31d"
           },
           {
             "path": "quwoquan_app/lib/service/search_service/search/search_index_view/adapters/search_query_remote.dart",
@@ -121819,7 +121845,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/local_chat_search_sync_service__local_contract_test.dart",
-            "sha256": "e38683922ae113e387ec311573e93d2536e6deb37f40ab0c3c7df064aa92a507"
+            "sha256": "aa11bb00cde62c04f881044b5d20cceb65fad6daf9024a8922d09315fd53ba56"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/location_place_landing_page_widget__local_contract_test.dart",
@@ -121847,11 +121873,11 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_page_graphql_repository__local_contract_test.dart",
-            "sha256": "65116e17e9ba8cfc5e578e83dc4e1e268288f5a55e482e2e4a4347b16de375cf"
+            "sha256": "31485ef94d37218c7d38eecc1aaf81c489c36fdb5b28e6328711388971b773bf"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_page_production_composition__local_contract_test.dart",
-            "sha256": "a752cc25496ba36fc1c2ea5d5b7abe7a1656292cbb54bbe657345228c6430750"
+            "sha256": "2aa34d4547ce90f85b87c413e0e2fce77498d9b11fe563ed65310c386247ee3a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_remote_api_path__local_contract_test.dart",
@@ -126974,9 +127000,7 @@
       "commercialReady": false,
       "missing": [
         "commercial.operation.ExecutePersistedGraphQLQuery",
-        "implementation.app.adapters",
         "implementation.app.api_integration",
-        "implementation.app.application",
         "implementation.app.local_contract"
       ]
     },
