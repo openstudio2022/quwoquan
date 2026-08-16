@@ -55,6 +55,23 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
 
         self.assertEqual([hidden, visible], files)
 
+    def test_file_enumeration_fallback_matches_root_level_double_star_glob(
+        self,
+    ) -> None:
+        cache = self._write("quwoquan_app/.ruff_cache/state.py")
+
+        with patch(
+            "quwoquan_ops.gate.python_script_governance.inventory.shutil.which",
+            return_value=None,
+        ):
+            files = ripgrep_files(
+                self.root / "quwoquan_app",
+                include_globs=("**/.ruff_cache/**",),
+                no_ignore=True,
+            )
+
+        self.assertEqual([cache], files)
+
     def test_app_paths_derive_service_object_and_reject_flat_or_milestone_names(
         self,
     ) -> None:

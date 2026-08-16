@@ -100,14 +100,28 @@ def _walk_files(root: Path, *, include_globs: Sequence[str]) -> list[Path]:
             relative = candidate.relative_to(root)
             relative_text = relative.as_posix()
             if positive_globs and not any(
-                relative.match(pattern)
-                or fnmatch(relative_text, pattern)
-                or fnmatch(name, pattern)
+                _matches_walk_glob(relative, relative_text, name, pattern)
                 for pattern in positive_globs
             ):
                 continue
             files.append(candidate)
     return sorted(files)
+
+
+def _matches_walk_glob(
+    relative: Path,
+    relative_text: str,
+    name: str,
+    pattern: str,
+) -> bool:
+    """Match the same root-level paths as ``rg --glob '**/…'``."""
+    patterns = (pattern, pattern[3:]) if pattern.startswith("**/") else (pattern,)
+    return any(
+        relative.match(candidate)
+        or fnmatch(relative_text, candidate)
+        or fnmatch(name, candidate)
+        for candidate in patterns
+    )
 
 
 def enumerate_python_files(root: Path, scope: str) -> list[Path]:
