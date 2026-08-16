@@ -17,6 +17,28 @@ def test_delivery_gate_bootstrap_uses_pinned_cached_toolchains() -> None:
     assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in workflow
     assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in workflow
     assert "pip install -r quwoquan_data/requirements.txt" in workflow
+    assert "github.com/rhysd/actionlint/cmd/actionlint@v1.7.7" in workflow
+    assert 'actionlint\" -version | head -n 1)\" = \"v1.7.7\"' in workflow
+
+
+def test_delivery_gate_runs_for_integration_and_promotion_pull_requests() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    pre_release = (ROOT / ".github/workflows/pre-release-gate.yml").read_text(encoding="utf-8")
+
+    assert "pull_request:\n    branches:\n      - dev1.0\n      - main" in workflow
+    assert "pull_request:\n    branches:\n      - dev1.0\n      - main" in pre_release
+    assert "\n  push:\n" not in workflow
+    assert "Enforce the reviewed pull-request branch edge" in workflow
+    assert "verify_git_branch_policy.py" in workflow
+
+
+def test_app_pipeline_uses_only_the_repository_pinned_flutter_version() -> None:
+    workflow = (ROOT / ".github/workflows/app_pipeline.yml").read_text(encoding="utf-8")
+
+    assert workflow.count("quwoquan_app/.flutter-version") == 4
+    assert workflow.count("flutter-version: ${{ steps.flutter_version.outputs.value }}") == 4
+    assert "channel: stable" not in workflow
+    assert (ROOT / "quwoquan_app/.flutter-version").read_text(encoding="utf-8") == "3.47.0\n"
 
 
 def test_delivery_gate_has_bounded_jobs() -> None:

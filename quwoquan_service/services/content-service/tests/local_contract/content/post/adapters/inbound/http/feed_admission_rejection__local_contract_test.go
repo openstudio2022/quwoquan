@@ -1,9 +1,5 @@
 // spec_ref: specs/feature-tree/runtime/runtime-test-pyramid/spec.md#req-004
-//
-// CONTENT.SYSTEM.feed_capacity_unavailable 的唯一发射点是装配层的
-// feed admission 拒绝 writer；本白盒测试真实调用生产 writer，锁定
-// wire code、HTTP 状态与 Retry-After 语义。
-package bootstrap
+package http_test
 
 import (
 	"net/http"
@@ -12,13 +8,14 @@ import (
 	"testing"
 
 	rtgov "quwoquan_service/runtime/governance"
+	httpadapter "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
 )
 
 func TestWriteContentFeedAdmissionRejectionEmitsFeedCapacityUnavailable(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/content/feed", nil)
 
-	writeContentFeedAdmissionRejection(
+	httpadapter.WriteFeedAdmissionRejection(
 		recorder,
 		request,
 		rtgov.OperationAdmissionInflightFull,

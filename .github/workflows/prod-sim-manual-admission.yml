@@ -171,7 +171,6 @@ jobs:
       id-token: write
       attestations: write
     env:
-      RECEIPT_PATH: ${{ runner.temp }}/prod-hosted-first-party-prevalidation-report.json
       RECEIPT_BASE64: ${{ needs.prod_sim_admission.outputs.prod_sim_receipt_base64 }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -179,6 +178,8 @@ jobs:
           ref: ${{ inputs.source_sha }}
           clean: false
           persist-credentials: false
+      - name: Initialize runner-local prod-sim receipt path
+        run: echo "RECEIPT_PATH=$RUNNER_TEMP/prod-hosted-first-party-prevalidation-report.json" >> "$GITHUB_ENV"
       - name: Materialize exact prod-sim report bytes
         run: |
           python3 - <<'PY'

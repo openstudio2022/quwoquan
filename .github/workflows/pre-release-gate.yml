@@ -1,6 +1,6 @@
 # 04 PR 轻量门禁：pr_light 不访问远端；manual_full/mainline_auto_prod
 # 必须对显式 beta/prod URL 执行 canonical /search 商业信封探针。hosted gamma 预检保持退役。
-# 触发：pull_request(main) + workflow_dispatch
+# 触发：pull_request(dev1.0/main) + workflow_dispatch
 # 执行语义见 .cursor/commands/verify.md；本 workflow 是 CI 行为真相源。
 name: 04. Pre-Release Gate
 
@@ -10,6 +10,7 @@ permissions:
 on:
   pull_request:
     branches:
+      - dev1.0
       - main
   workflow_dispatch:
     inputs:

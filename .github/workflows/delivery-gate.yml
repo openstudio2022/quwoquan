@@ -1,5 +1,5 @@
 # Delivery Gate — PR 合入主门禁（L1+L2）
-# 触发：pull_request(main) + workflow_dispatch
+# 触发：pull_request(dev1.0/main) + workflow_dispatch
 # 职责：拓扑校验 + metadata + L1(Flutter) + L2(Go contract) + portal
 # 执行语义见 .cursor/commands/deliver.md；本 workflow 是 CI 行为真相源。
 name: 03. Delivery Gate
@@ -14,6 +14,7 @@ env:
 on:
   pull_request:
     branches:
+      - dev1.0
       - main
   workflow_dispatch:
   workflow_call:
@@ -138,6 +139,15 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.checkout_ref || github.sha }}
+      - name: Validate every workflow with pinned actionlint
+        run: |
+          ACTIONLINT_ROOT="$RUNNER_TEMP/actionlint-1.7.7"
+          GOBIN="$ACTIONLINT_ROOT/bin" go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          test "$("$ACTIONLINT_ROOT/bin/actionlint" -version | head -n 1)" = "v1.7.7"
+          "$ACTIONLINT_ROOT/bin/actionlint" -color
+      - name: Enforce the reviewed pull-request branch edge
+        if: ${{ github.event_name == 'pull_request' }}
+        run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
@@ -302,7 +312,6 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: ${{ steps.flutter_version.outputs.value }}
-          channel: stable
           cache: true
       - name: Gate (quwoquan_app static + PA core)
         env:
@@ -339,7 +348,6 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: ${{ steps.flutter_version.outputs.value }}
-          channel: stable
           cache: true
       - name: Gate (quwoquan_app tests shard)
         env:
@@ -377,7 +385,6 @@ jobs:
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: ${{ steps.flutter_version.outputs.value }}
-          channel: stable
           cache: true
       - name: Gate (quwoquan_app serial suites)
         env:

@@ -16,6 +16,7 @@ on:
     - cron: '0 18 * * *'
   pull_request:
     branches:
+      - dev1.0
       - main
   workflow_dispatch:
     inputs:
@@ -246,7 +247,7 @@ jobs:
     name: Prepare one Beta stack prerequisite
     needs: resolve_release_evidence
     if: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
-    runs-on: [self-hosted, macOS, ARM64, mobile-stack]
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: ${{ (github.event_name == 'schedule' || inputs.validation_profile == 'manual_full' || inputs.validation_profile == 'nightly_full' || inputs.validation_profile == 'release_candidate') && 20 || 2 }}
     permissions:
       contents: read
@@ -544,7 +545,6 @@ jobs:
       id-token: write
       attestations: write
     env:
-      RECEIPT_PATH: ${{ runner.temp }}/environment-stability-recovery-android.json
       RECEIPT_BASE64: ${{ needs.android_device_matrix.outputs.recovery_receipt_base64 }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -552,6 +552,8 @@ jobs:
           ref: ${{ needs.beta_stack.outputs.source_git_sha }}
           clean: false
           persist-credentials: false
+      - name: Initialize runner-local Android receipt path
+        run: echo "RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-android.json" >> "$GITHUB_ENV"
       - name: Materialize exact Android recovery receipt bytes
         run: |
           python3 - <<'PY'
@@ -584,7 +586,6 @@ jobs:
       id-token: write
       attestations: write
     env:
-      RECEIPT_PATH: ${{ runner.temp }}/environment-stability-recovery-ios.json
       RECEIPT_BASE64: ${{ needs.ios_device_matrix.outputs.recovery_receipt_base64 }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -592,6 +593,8 @@ jobs:
           ref: ${{ needs.beta_stack.outputs.source_git_sha }}
           clean: false
           persist-credentials: false
+      - name: Initialize runner-local iOS receipt path
+        run: echo "RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-ios.json" >> "$GITHUB_ENV"
       - name: Materialize exact iOS recovery receipt bytes
         run: |
           python3 - <<'PY'
@@ -800,7 +803,7 @@ jobs:
     name: Teardown the stack owned by this matrix run
     needs: [beta_stack, android_device_matrix, ios_device_matrix, mobile_matrix]
     if: ${{ always() && (needs.beta_stack.outputs.formal_runtime_started == 'true' || needs.beta_stack.outputs.managed_runtime_started == 'true') }}
-    runs-on: [self-hosted, macOS, ARM64, mobile-stack]
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: ${{ needs.beta_stack.outputs.managed_runtime_started == 'true' && 10 || 1 }}
     permissions:
       contents: read
@@ -991,17 +994,19 @@ jobs:
       id-token: write
       attestations: write
     env:
-      IOS_RECEIPT_PATH: ${{ runner.temp }}/environment-stability-recovery-ios.json
       IOS_RECEIPT_BASE64: ${{ needs.ios_device_matrix.outputs.recovery_receipt_base64 }}
-      ANDROID_RECEIPT_PATH: ${{ runner.temp }}/environment-stability-recovery-android.json
       ANDROID_RECEIPT_BASE64: ${{ needs.android_device_matrix.outputs.recovery_receipt_base64 }}
-      RECEIPT_PATH: ${{ runner.temp }}/environment-stability-nightly-full.json
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           ref: ${{ needs.beta_stack.outputs.source_git_sha }}
           clean: false
           persist-credentials: false
+      - name: Initialize runner-local nightly receipt paths
+        run: |
+          echo "IOS_RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-ios.json" >> "$GITHUB_ENV"
+          echo "ANDROID_RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-android.json" >> "$GITHUB_ENV"
+          echo "RECEIPT_PATH=$RUNNER_TEMP/environment-stability-nightly-full.json" >> "$GITHUB_ENV"
       - name: Materialize exact dual-platform recovery receipt bytes
         run: |
           python3 - <<'PY'

@@ -104,7 +104,10 @@ func TestCreateReportPersistsPendingAggregateAndOutbox(t *testing.T) {
 }
 
 func TestReportStoreRejectsNonCanonicalReporterAccountOwnership(t *testing.T) {
-	suite := newReportPostgresSuite(t)
+	// This test deliberately relaxes a schema invariant. Keep that mutation in
+	// an independently-owned database so the package fixture and later required
+	// Recommendation tests can never inherit the nullable column.
+	suite := testinfra.NewSuite(t, testinfra.WithPostgres())
 	defer suite.TearDown(t)
 	suite.CleanPG(t)
 

@@ -495,6 +495,10 @@ jobs:
           DRY_RUN="${{ github.event.inputs.dry_run }}"
           if [[ -z "$CLOUD_PROVIDER" ]]; then CLOUD_PROVIDER="aliyun"; fi
           if [[ -z "$DRY_RUN" ]]; then DRY_RUN="true"; fi
+          if [[ "$DRY_RUN" != "true" && "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            echo "::error::GATE_BLOCK: real Prod apply requires explicit workflow_dispatch"
+            exit 2
+          fi
           CANDIDATE_DIGEST="$(python3 - <<'PY'
           import json
           import os
@@ -1099,8 +1103,9 @@ jobs:
       - beta_device_matrix
       - gamma_local
       - preprod_evidence
-    runs-on: [self-hosted, macOS, prod-release]
-    environment: production
+    runs-on: [self-hosted, macOS, ARM64]
+    environment:
+      name: ${{ needs.prepare.outputs.dry_run != 'true' && 'production' || 'release-validation' }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -1733,7 +1738,7 @@ jobs:
     name: Prod hosted soak authority
     needs: [prepare, prod_rollout]
     if: ${{ needs.prepare.outputs.dry_run != 'true' && needs.prod_rollout.result == 'success' && needs.prod_rollout.outputs.release_status == 'released' }}
-    runs-on: [self-hosted, macOS, prod-release]
+    runs-on: [self-hosted, macOS, ARM64]
     environment: production
     timeout-minutes: 1500
     permissions:
@@ -2105,9 +2110,11 @@ jobs:
           elif [ "${CALENDAR_SECONDS}" -gt "${SOFT_BUDGET_SECONDS}" ]; then
             echo "::warning::RELEASED_OVER_SOFT_BUDGET: mainline end-to-end time ${CALENDAR_SECONDS}s exceeds ${SOFT_BUDGET_SECONDS}s"
           fi
-          if [[ -z "$APPROVAL_REQUESTED_AT" || -z "$APPROVAL_APPROVED_AT" || -z "$APPROVAL_WAIT_SECONDS" || -z "$HUMAN_DECISION_WAIT_SECONDS" ]]; then
-            echo "::error::GATE_BLOCK: ${APPROVAL_EVIDENCE_REASON} Canonical summary remains historical_incomplete."
-            exit 2
+          if [[ "$DRY_RUN" != "true" ]]; then
+            if [[ -z "$APPROVAL_REQUESTED_AT" || -z "$APPROVAL_APPROVED_AT" || -z "$APPROVAL_WAIT_SECONDS" || -z "$HUMAN_DECISION_WAIT_SECONDS" ]]; then
+              echo "::error::GATE_BLOCK: ${APPROVAL_EVIDENCE_REASON} Canonical summary remains historical_incomplete."
+              exit 2
+            fi
           fi
           if [[ -n "$UPSTREAM_MISSING_EVIDENCE" ]]; then
             echo "::error::GATE_BLOCK: canonical mainline timing is historical_incomplete: ${UPSTREAM_MISSING_EVIDENCE}"
@@ -2230,6 +2237,7 @@ jobs:
           retention-days: 3
       - name: Assert four-environment promotion chain
         env:
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
           DELIVERY_RESULT: ${{ needs.delivery_gate.outputs.summary_result }}
           ALPHA_RESULT: ${{ needs.alpha_local.result }}
           BETA_RESULT: ${{ needs.beta_device_matrix.outputs.summary_result }}
@@ -2252,11 +2260,45 @@ jobs:
           expect_success "beta_device_matrix" "${BETA_RESULT}" "检查 beta-local self-hosted device matrix"
           expect_success "gamma_local" "${GAMMA_RESULT}" "检查 gamma-local release-fast package/up/health/verify"
           expect_success "prod_rollout" "${PROD_RESULT}" "检查单一 Prod 事务及真实 GATE_BLOCK"
-          expect_success "prod_soak_acceptance" "${PROD_SOAK_RESULT}" "检查真实 soak、告警、健康、凭据与审批 hosted readback"
-          if [[ "${PROD_RELEASE_STATUS}" != "released" ]]; then
-            echo "::error::prod_rollout terminal status expected released, got ${PROD_RELEASE_STATUS:-missing}. Rolled-back or rollback-failed evidence is preserved but cannot be promoted as green."
+          if [[ "$DRY_RUN" != "true" ]]; then
+            expect_success "prod_soak_acceptance" "${PROD_SOAK_RESULT}" "检查真实 soak、告警、健康、凭据与审批 hosted readback"
+            if [[ "${PROD_RELEASE_STATUS}" != "released" ]]; then
+              echo "::error::prod_rollout terminal status expected released, got ${PROD_RELEASE_STATUS:-missing}. Rolled-back or rollback-failed evidence is preserved but cannot be promoted as green."
+              fail=1
+            fi
+          elif [[ "$PROD_SOAK_RESULT" != "skipped" ]]; then
+            echo "::error::automatic dry-run must not execute Prod soak; got ${PROD_SOAK_RESULT}"
             fail=1
           fi
           if [ "${fail}" -ne 0 ]; then
             exit 1
           fi
+
+  backsync_main_to_dev1:
+    name: System fast-forward main back to dev1.0
+    needs: mainline_summary
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.mainline_summary.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Verify and fast-forward only the canonical backsync edge
+        env:
+          QWQ_SYSTEM_BRANCH_BACKSYNC: "true"
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main dev1.0
+          MAIN_SHA="$(git rev-parse origin/main)"
+          DEV1_SHA="$(git rev-parse origin/dev1.0)"
+          test "$MAIN_SHA" = "${{ github.sha }}"
+          git merge-base --is-ancestor "$DEV1_SHA" "$MAIN_SHA"
+          git switch main
+          printf '%s %s %s %s\n' \
+            refs/heads/main "$MAIN_SHA" refs/heads/dev1.0 "$DEV1_SHA" \
+            | python3 quwoquan_ops/gate/verify_git_branch_policy.py --pre-push
+          git push origin refs/heads/main:refs/heads/dev1.0

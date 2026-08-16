@@ -156,8 +156,9 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     }
     assert aggregate_job["name"] == "Aggregate mobile matrix evidence"
     assert aggregate_job["runs-on"] == "ubuntu-latest"
-    assert jobs["beta_stack"]["runs-on"][-1] == "mobile-stack"
-    assert jobs["beta_teardown"]["runs-on"][-1] == "mobile-stack"
+    canonical_mobile_runner = ["self-hosted", "macOS", "ARM64"]
+    assert jobs["beta_stack"]["runs-on"] == canonical_mobile_runner
+    assert jobs["beta_teardown"]["runs-on"] == canonical_mobile_runner
     assert jobs["android_device_matrix"]["uses"] == "./.github/workflows/beta-device-platform.yml"
     assert jobs["ios_device_matrix"]["uses"] == "./.github/workflows/beta-device-platform.yml"
     assert jobs["android_device_matrix"]["needs"] == "beta_stack"
@@ -165,7 +166,9 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert jobs["android_device_matrix"]["with"]["platform"] == "android"
     assert jobs["ios_device_matrix"]["with"]["platform"] == "ios"
     assert jobs["beta_teardown"]["needs"][-1] == "mobile_matrix"
-    assert "mobile-${{ inputs.platform }}" in platform_text
+    assert 'runs-on: [self-hosted, macOS, ARM64]' in platform_text
+    assert 'runs-on: [self-hosted, macOS, ARM64, "mobile-${{ inputs.platform }}"]' not in platform_text
+    assert '--runner-label "mobile-${{ inputs.platform }}"' in platform_text
     assert "device_runner_lease.py acquire" in platform_text
     assert "device_runner_lease.py release" in platform_text
     assert "expected-host-digest" in platform_text

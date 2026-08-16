@@ -97,7 +97,12 @@ def classify(paths: list[str]) -> dict[str, bool]:
         "has_portal": False,
         "has_contracts": False,
         "has_app_contracts": False,
+        "has_app_dart": False,
         "has_pageflip": False,
+        "has_app_scripts": False,
+        "has_service_scripts": False,
+        "has_ops_scripts": False,
+        "has_data_scripts": False,
     }
     for path in paths:
         if path.startswith("quwoquan_service/"):
@@ -106,16 +111,30 @@ def classify(paths: list[str]) -> dict[str, bool]:
                 "quwoquan_service/contracts/"
             ):
                 flags["has_contracts"] = True
+            if "/tests/" not in path and path.endswith((".py", ".sh")):
+                flags["has_service_scripts"] = True
         if path.startswith("quwoquan_app/"):
             flags["has_app"] = True
+            if path.endswith(".dart"):
+                flags["has_app_dart"] = True
             if "contracts" in path or path.startswith(
                 "quwoquan_app/packages/quwoquan_cloud_contracts/"
             ):
                 flags["has_app_contracts"] = True
+            if "/tests/" not in path and "/test/" not in path and path.endswith((".py", ".sh")):
+                flags["has_app_scripts"] = True
         if path.startswith("quwoquan_data/"):
             flags["has_data"] = True
+            if "/tests/" not in path and path.endswith((".py", ".sh")):
+                flags["has_data_scripts"] = True
         if path.startswith("quwoquan_ops/") or path.startswith("specs/"):
             flags["has_ops"] = True
+        if (
+            path.startswith("quwoquan_ops/")
+            and "/tests/" not in path
+            and path.endswith((".py", ".sh"))
+        ):
+            flags["has_ops_scripts"] = True
         if path.startswith("specs/"):
             flags["has_specs"] = True
         if path.startswith("quwoquan_ops/portal/"):
@@ -126,23 +145,21 @@ def classify(paths: list[str]) -> dict[str, bool]:
 
 
 def static_checks(flags: dict[str, bool]) -> list[str]:
-    checks = [
-        "branch_policy",
-        "feature_tree",
-        "python_script_governance",
-        "entrypoint_script_paths",
-    ]
+    checks = ["branch_policy", "entrypoint_script_paths"]
+    if flags["has_specs"]:
+        checks.append("feature_tree")
+    for scope in ("app", "service", "ops", "data"):
+        if flags[f"has_{scope}_scripts"]:
+            checks.append(f"python_script_governance_{scope}")
     if flags["has_service"] or flags["has_ops"]:
         checks.append("service_architecture")
+    if flags["has_app_contracts"] or flags["has_contracts"]:
+        checks.append("app_generated_manifest")
     if flags["has_app"] or flags["has_app_contracts"]:
-        checks.extend(
-            [
-                "app_generated_manifest",
-                "app_contract_handoff",
-                *SMOKE_STATIC,
-            ]
-        )
-    if flags["has_contracts"] or flags["has_service"]:
+        checks.append("app_contract_handoff")
+    if flags["has_app_dart"]:
+        checks.extend(SMOKE_STATIC)
+    if flags["has_contracts"]:
         checks.extend(["metadata_contract", "commercial_contract"])
     if flags["has_pageflip"]:
         checks.append("pageflip_backward_mainline")

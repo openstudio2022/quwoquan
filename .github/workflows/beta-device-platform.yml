@@ -66,7 +66,7 @@ permissions:
 jobs:
   device:
     name: Beta ${{ inputs.platform }} device matrix
-    runs-on: [self-hosted, macOS, ARM64, "mobile-${{ inputs.platform }}"]
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: ${{ inputs.validation_profile == 'nightly_full' && 120 || (inputs.validation_profile == 'release_candidate' && 90 || 4) }}
     permissions:
       contents: read
@@ -85,7 +85,6 @@ jobs:
       execution_ended_at: ${{ steps.execution_end.outputs.ended_at }}
       recovery_receipt_base64: ${{ steps.recovery_receipt.outputs.receipt_base64 }}
     env:
-      QWQ_OUTPUT_ROOT: ${{ runner.temp }}/quwoquan-device-matrix/${{ github.run_id }}/${{ github.run_attempt }}/${{ inputs.platform }}/.qwq_output
       PLATFORM_REPO_DIR: ${{ github.workspace }}/.qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/${{ inputs.platform }}
       ALPHA_TEST_AUTH_TOKEN: ${{ secrets.ALPHA_TEST_AUTH_TOKEN }}
       BETA_TEST_AUTH_TOKEN: ${{ secrets.BETA_TEST_AUTH_TOKEN }}
@@ -97,6 +96,8 @@ jobs:
       PROD_ACCOUNT_CLOSURE_PERSONA_ID: ${{ secrets.PROD_ACCOUNT_CLOSURE_PERSONA_ID }}
       VIDEO_PLAYBACK_CANARY_WORK_ID: ${{ vars.VIDEO_PLAYBACK_CANARY_WORK_ID }}
     steps:
+      - name: Initialize runner-local device output root
+        run: echo "QWQ_OUTPUT_ROOT=$RUNNER_TEMP/quwoquan-device-matrix/${{ github.run_id }}/${{ github.run_attempt }}/${{ inputs.platform }}/.qwq_output" >> "$GITHUB_ENV"
       - id: start
         name: Start platform timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
