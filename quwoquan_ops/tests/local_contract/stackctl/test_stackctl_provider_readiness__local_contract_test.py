@@ -104,7 +104,7 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
         ):
             result = stackctl.command_provider_config(args)
 
-        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["exitCode"], 0, result)
         compile_current.assert_called_once_with(
             environment="alpha",
             target="alpha-local",
@@ -236,8 +236,18 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
             compiled, governance_issues = external_provider_governance.load_and_compile()
             self.assertEqual(governance_issues, [])
             expected_cells = provider_conformance.expected_required_cell_keys(compiled)
+            selected_gamma_bindings = compiled["selectedBindings"]["gamma"]
+            provider_capability_ids = {
+                capability_id
+                for capability_id, binding in selected_gamma_bindings.items()
+                if external_provider_governance.requires_provider_conformance(
+                    binding
+                )
+            }
             expected_environment_cells = {
-                cell for cell in expected_cells if cell[1] == "gamma"
+                cell
+                for cell in expected_cells
+                if cell[1] == "gamma" and cell[0] in provider_capability_ids
             }
             expected_count = len(expected_environment_cells)
             attempt_paths = [
@@ -272,7 +282,13 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
                 [],
             )
             conformance.expected_required_cell_keys.return_value = expected_cells
+            runtime_use_lock = mock.Mock()
             with (
+                mock.patch.object(
+                    stackctl,
+                    "acquire_local_runtime_use_lock",
+                    return_value=runtime_use_lock,
+                ) as acquire_runtime_use_lock,
                 mock.patch.object(
                     stackctl,
                     "_provider_conformance_runner",
@@ -291,13 +307,18 @@ class StackctlProviderReadinessContractTest(unittest.TestCase):
             ):
                 result = stackctl.command_provider_conformance(args)
 
-        self.assertEqual(result["exitCode"], 0)
+        self.assertEqual(result["exitCode"], 0, result)
+        acquire_runtime_use_lock.assert_called_once_with(
+            target="gamma-local",
+            purpose="provider-conformance-uat",
+        )
+        runtime_use_lock.close.assert_called_once_with()
         self.assertEqual(
             result["bindingCapabilityCount"], compiled["capabilityCount"]
         )
         self.assertEqual(
             result["capabilityCount"],
-            len(provider_conformance.provider_conformance_capability_ids(compiled)),
+            len(provider_capability_ids),
         )
         self.assertEqual(result["expectedCells"], expected_count)
         self.assertEqual(result["executed"], expected_count)

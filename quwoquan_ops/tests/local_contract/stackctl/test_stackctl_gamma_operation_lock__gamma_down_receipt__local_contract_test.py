@@ -55,10 +55,7 @@ class StackctlGammaOperationLockContractTest(
         self,
     ) -> None:
         refs = {
-            service: (
-                f"localhost/quwoquan_service_{service.replace('-', '_')}:"
-                + f"{index:064x}"
-            )
+            service: self._packaged_service_source_ref(service, f"{index:064x}")
             for index, (service, _) in enumerate(
                 stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS,
                 start=1,
@@ -329,7 +326,7 @@ class StackctlGammaOperationLockContractTest(
         }
         environment: dict[str, str] = {}
         with tempfile.TemporaryDirectory() as temporary_dir:
-            candidate_root = Path(temporary_dir) / "receipt-candidate"
+            candidate_root = (Path(temporary_dir) / "receipt-candidate").resolve()
             provider_binding = {
                 "candidateRoot": candidate_root,
                 "providerRuntime": {"composition": {}},
@@ -349,6 +346,16 @@ class StackctlGammaOperationLockContractTest(
                     "active_deployment_candidate",
                     return_value={"baselineId": switched_active_candidate},
                 ) as active_candidate,
+                mock.patch.object(
+                    stackctl,
+                    "load_candidate_manifest",
+                    return_value={"baselineId": receipt_candidate},
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "deployment_candidate_dir",
+                    return_value=candidate_root,
+                ),
                 mock.patch.object(
                     stackctl,
                     "_candidate_provider_runtime",
@@ -398,11 +405,15 @@ class StackctlGammaOperationLockContractTest(
             "gamma",
             "gamma-local",
             receipt_candidate,
+            candidate_manifest={"baselineId": receipt_candidate},
+            candidate_root=candidate_root,
         )
         candidate_observability.assert_called_once_with(
             "gamma",
             "gamma-local",
             receipt_candidate,
+            candidate_manifest={"baselineId": receipt_candidate},
+            candidate_root=candidate_root,
         )
         active_candidate.assert_not_called()
         self.assertNotEqual(receipt_candidate, switched_active_candidate)
@@ -416,39 +427,57 @@ class StackctlGammaOperationLockContractTest(
             "providerRuntimeDigest": "sha256:" + "2" * 64,
             "observabilityLogSinkDigest": "sha256:" + "3" * 64,
         }
-        with (
-            mock.patch.object(
-                stackctl,
-                "load_startup_attempt",
-                return_value=attempt,
-            ),
-            mock.patch.object(
-                stackctl,
-                "_candidate_provider_runtime",
-                side_effect=ValueError("receipt candidate package is missing"),
-            ) as candidate_provider,
-            mock.patch.object(
-                stackctl,
-                "active_deployment_candidate",
-                return_value={"baselineId": "sha256:" + "9" * 64},
-            ) as active_candidate,
-            mock.patch.object(
-                stackctl,
-                "_candidate_observability_log_sink",
-            ) as candidate_observability,
-            self.assertRaisesRegex(ValueError, "receipt candidate package is missing"),
-        ):
-            stackctl._bind_local_teardown_runtime(
-                env_name="gamma",
-                target_name="gamma-local",
-                environment={},
-                purge_rebuildable_state=False,
-            )
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            candidate_root = (Path(temporary_dir) / "receipt-candidate").resolve()
+            candidate_manifest = {"baselineId": receipt_candidate}
+            with (
+                mock.patch.object(
+                    stackctl,
+                    "load_startup_attempt",
+                    return_value=attempt,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "load_candidate_manifest",
+                    return_value=candidate_manifest,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "deployment_candidate_dir",
+                    return_value=candidate_root,
+                ),
+                mock.patch.object(
+                    stackctl,
+                    "_candidate_provider_runtime",
+                    side_effect=ValueError("receipt candidate package is missing"),
+                ) as candidate_provider,
+                mock.patch.object(
+                    stackctl,
+                    "active_deployment_candidate",
+                    return_value={"baselineId": "sha256:" + "9" * 64},
+                ) as active_candidate,
+                mock.patch.object(
+                    stackctl,
+                    "_candidate_observability_log_sink",
+                ) as candidate_observability,
+                self.assertRaisesRegex(
+                    ValueError,
+                    "receipt candidate package is missing",
+                ),
+            ):
+                stackctl._bind_local_teardown_runtime(
+                    env_name="gamma",
+                    target_name="gamma-local",
+                    environment={},
+                    purge_rebuildable_state=False,
+                )
 
         candidate_provider.assert_called_once_with(
             "gamma",
             "gamma-local",
             receipt_candidate,
+            candidate_manifest=candidate_manifest,
+            candidate_root=candidate_root,
         )
         candidate_observability.assert_not_called()
         active_candidate.assert_not_called()

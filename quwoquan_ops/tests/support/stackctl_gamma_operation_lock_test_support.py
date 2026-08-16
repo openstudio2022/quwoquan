@@ -159,6 +159,15 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
             },
         }
 
+    @staticmethod
+    def _packaged_service_source_ref(service: str, digest: str) -> str:
+        repository = (
+            "core"
+            if service == stackctl.SERVICE_CORE_WORKLOAD
+            else service.replace("-", "_")
+        )
+        return f"localhost/quwoquan_service_{repository}:{digest}"
+
     def setUp(self) -> None:
         self.deploy_root = tempfile.TemporaryDirectory()
         self.addCleanup(self.deploy_root.cleanup)
@@ -194,6 +203,15 @@ class StackctlGammaOperationLockContractTestBase(unittest.TestCase):
         )
         candidate_snapshot.start()
         self.addCleanup(candidate_snapshot.stop)
+        candidate_manifest = mock.patch.object(
+            stackctl,
+            "load_candidate_manifest",
+            side_effect=lambda environment_name, _target, _digest, **_kwargs: (
+                self._candidate_snapshot(environment_name)["manifest"]
+            ),
+        )
+        candidate_manifest.start()
+        self.addCleanup(candidate_manifest.stop)
         snapshot_check = mock.patch.object(
             stackctl,
             "assert_active_deployment_candidate_snapshot",

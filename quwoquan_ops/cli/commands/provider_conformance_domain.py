@@ -242,6 +242,10 @@ def _command_provider_conformance_unlocked(
                     capability_id
                     for capability_id, cell_environment, _ in expected_cells
                     if cell_environment == environment
+                    and isinstance(selected.get(capability_id), dict)
+                    and governance.requires_provider_conformance(
+                        selected[capability_id]
+                    )
                 }
             )
             capability_count = len(capability_ids)
@@ -266,8 +270,6 @@ def _command_provider_conformance_unlocked(
                     raise ValueError(
                         f"{environment}/{capability_id} selected Binding is invalid"
                     )
-                if not governance.requires_provider_conformance(binding):
-                    continue
                 adapter_id = str(binding.get("adapter_id") or "")
                 if not adapter_id or binding.get("state") != "enabled":
                     raise ValueError(
@@ -491,4 +493,3 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
     provider_conformance_parser.add_argument("--execute", action="store_true")
     provider_conformance_parser.add_argument("--image-digest", default="")
     provider_conformance_parser.add_argument("--data-digest", default="")
-

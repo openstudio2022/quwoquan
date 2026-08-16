@@ -24,8 +24,7 @@ class StackctlGammaOperationLockContractTest(
                 stackctl,
                 "_packaged_service_source_image_ref",
                 side_effect=lambda _env_name, service: (
-                    f"localhost/quwoquan_service_{service.replace('-', '_')}:"
-                    + "a" * 64
+                    self._packaged_service_source_ref(service, "a" * 64)
                 ),
             ) as source_image,
             mock.patch.object(
@@ -40,8 +39,7 @@ class StackctlGammaOperationLockContractTest(
             stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS
         ):
             expected = (
-                f"localhost/quwoquan_service_{service.replace('-', '_')}:"
-                + "a" * 64
+                self._packaged_service_source_ref(service, "a" * 64)
             )
             self.assertEqual(environment[environment_key], expected)
             self.assertEqual(
@@ -76,7 +74,10 @@ class StackctlGammaOperationLockContractTest(
             shared = candidate_root / "packages/runtime-shared"
             shared.mkdir(parents=True)
             build_refs = {
-                service: f"localhost/{service}:build"
+                service: self._packaged_service_source_ref(
+                    service,
+                    ("f" * 64 if service == stackctl.SERVICE_CORE_WORKLOAD else "build"),
+                )
                 for service, _ in stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS
             }
             images = {
@@ -251,7 +252,10 @@ class StackctlGammaOperationLockContractTest(
                 shared = candidate_root / "packages/runtime-shared"
                 shared.mkdir(parents=True)
                 build_refs = {
-                    service: f"localhost/{service}:build"
+                    service: self._packaged_service_source_ref(
+                        service,
+                        ("1" * 64 if service == stackctl.SERVICE_CORE_WORKLOAD else "build"),
+                    )
                     for service, _ in stackctl.GAMMA_PACKAGED_SERVICE_IMAGE_ENVIRONMENTS
                 }
                 images = {
