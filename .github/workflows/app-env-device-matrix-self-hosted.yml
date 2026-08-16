@@ -904,6 +904,7 @@ jobs:
             --candidate-job "Aggregate mobile matrix evidence" \
             --critical-start run \
             --github-output "$TIMING_OUTPUT"
+          # shellcheck source=/dev/null
           source "$TIMING_OUTPUT"
           cat "$TIMING_OUTPUT" >> "$GITHUB_OUTPUT"
           DURATION_ARGS=(--calendar-lead-time-seconds "$calendar_lead_time_seconds")
@@ -1004,9 +1005,11 @@ jobs:
           persist-credentials: false
       - name: Initialize runner-local nightly receipt paths
         run: |
-          echo "IOS_RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-ios.json" >> "$GITHUB_ENV"
-          echo "ANDROID_RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-android.json" >> "$GITHUB_ENV"
-          echo "RECEIPT_PATH=$RUNNER_TEMP/environment-stability-nightly-full.json" >> "$GITHUB_ENV"
+          {
+            echo "IOS_RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-ios.json"
+            echo "ANDROID_RECEIPT_PATH=$RUNNER_TEMP/environment-stability-recovery-android.json"
+            echo "RECEIPT_PATH=$RUNNER_TEMP/environment-stability-nightly-full.json"
+          } >> "$GITHUB_ENV"
       - name: Materialize exact dual-platform recovery receipt bytes
         run: |
           python3 - <<'PY'
