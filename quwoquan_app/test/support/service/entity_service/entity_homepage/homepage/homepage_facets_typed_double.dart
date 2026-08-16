@@ -463,6 +463,8 @@ Map<String, Object?> _minimalHomepageWireExample() {
     'status': 'published',
     'categoryTags': categoryTags,
     'coverUrl': coverUrl,
+    'averageRating': reviewSummary?['averageRating'],
+    'ratingCount': reviewSummary?['ratingCount'] ?? 0,
     'reviewSummary': ?reviewSummary,
     'contentPreview': contentPreview,
     'questionPreview': const <Map<String, Object?>>[],

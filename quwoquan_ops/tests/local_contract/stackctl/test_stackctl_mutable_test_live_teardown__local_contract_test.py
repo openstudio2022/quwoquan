@@ -51,7 +51,7 @@ def _receipt(run_root: Path, *, status: str = "running") -> dict[str, object]:
             "packageVersion": "web-release-alpha",
             "manifestDigest": "sha256:" + "7" * 64,
             "contentDigest": "sha256:" + "8" * 64,
-            "publicOrigin": "https://alpha.quwoquan.com",
+            "publicOrigin": "https://alpha.quwoquan.com:17000",
         },
         "sourceRevision": "a" * 40,
         "workspaceStatusDigest": "sha256:" + "5" * 64,

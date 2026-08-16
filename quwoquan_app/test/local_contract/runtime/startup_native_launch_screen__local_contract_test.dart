@@ -537,6 +537,22 @@ void main() {
       expect(iosGateProbe, isNot(contains('"uninstall"')));
       expect(iosGateProbe, contains('"normalLaunchVerified"'));
       expect(iosGateProbe, contains('"status": "passed" if not issues'));
+      expect(iosGateProbe, contains('verify_web_cta_with_xcuitest'));
+      expect(iosGateProbe, contains('trustedExactPublicWebURLRequested'));
+      expect(iosGateProbe, contains('safariForegroundObserved'));
+      expect(iosGateProbe, contains('sameAppProcessAfterReturn'));
+      final iosUiTest = _readAppFile('ios/RunnerUITests/RunnerUITests.m');
+      expect(iosUiTest, contains('QWQNativeStartupRecoveryWebUITests'));
+      expect(
+        iosUiTest,
+        contains('testRecoveryWebCTAOpensSafariAndReturnsToSameProcess'),
+      );
+      expect(iosUiTest, contains('com.apple.mobilesafari'));
+      expect(iosUiTest, contains('recovery_web_cta_returned_app_foreground'));
+      expect(ios, contains('qwq.native.startup.recovery.web'));
+      expect(ios, contains('ios_native_recovery_external_open_requested'));
+      expect(ios, contains('ios_native_recovery_external_open_completed'));
+      expect(ios, contains('ios_native_recovery_external_returned'));
       expect(ios, contains('effectiveLaunchManifestDigest'));
       expect(ios, contains('clearFatalMarker(reason: "safe_shell_conflict")'));
       expect(ios, contains('clearFatalMarker(reason: "artifact_mismatch")'));

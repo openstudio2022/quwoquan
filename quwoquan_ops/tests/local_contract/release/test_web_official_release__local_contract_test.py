@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 
 from quwoquan_ops.cli.commands.dev_session_public_web import (
     _load_dev_session_public_web_package,
+    _resolve_dev_session_public_web_package,
 )
 from quwoquan_ops.cli.lib.web_official_release import (
     WebOfficialReleaseError,
@@ -59,7 +60,7 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             "noindex": environment != "prod",
             "spaFallback": "/index.html",
             "htmlContentType": "text/html; charset=utf-8",
-            "assetCacheControl": "public, max-age=31536000, immutable",
+            "assetCacheControl": "no-cache, must-revalidate",
             "serviceWorker": "flutter_service_worker.js",
         }
         manifest_path = release_root / "manifest.json"
@@ -175,6 +176,42 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
             )
             self.assertEqual(receipt["contentDigest"], "sha256:" + _tree_sha256(public))
 
+    def test_dev_session_resolves_the_standalone_web_package_root(self) -> None:
+        package_root = Path("/deploy/alpha-local/standalone-packages/web/packages/public-web")
+        with (
+            patch(
+                "quwoquan_ops.cli.stackctl.deployment_target_path",
+                return_value=package_root,
+            ) as target_path,
+            patch(
+                "quwoquan_ops.cli.commands.dev_session_public_web._load_dev_session_public_web_package",
+                return_value=({"environment": "alpha"}, Path("/public")),
+            ) as load_package,
+        ):
+            receipt, public = _resolve_dev_session_public_web_package(
+                environment="alpha",
+                target="alpha-local",
+                target_contract={
+                    "publicBases": {
+                        "publicWeb": "https://alpha.quwoquan.com:17000",
+                    },
+                },
+            )
+        target_path.assert_called_once_with(
+            "alpha-local",
+            "standalone-packages",
+            "web",
+            "packages",
+            "public-web",
+        )
+        load_package.assert_called_once_with(
+            environment="alpha",
+            package_root=package_root,
+            public_origin="https://alpha.quwoquan.com:17000",
+        )
+        self.assertEqual(receipt, {"environment": "alpha"})
+        self.assertEqual(public, Path("/public"))
+
     def test_dev_session_fails_closed_for_missing_current_or_content_drift(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             package_root = Path(directory)
@@ -211,6 +248,51 @@ class WebOfficialReleaseContractTest(unittest.TestCase):
         self.assertIn("QWQ_PUBLIC_WEB_CONTENT_DIGEST", caddy)
         self.assertIn("LOCAL_GAMMA_PUBLIC_WEB_ROOT", compose)
         self.assertIn(":/srv/web:ro", compose)
+
+    def test_unversioned_web_assets_revalidate_across_package_activation(self) -> None:
+        repo_root = Path(__file__).resolve().parents[4]
+        caddy = (
+            repo_root / "quwoquan_ops/environments/gamma/local/Caddyfile"
+        ).read_text(encoding="utf-8")
+        start = caddy.index("@public_web_service_worker")
+        end = caddy.index("\n\thandle {\n\t\timport business_api_edge", start)
+        public_web = caddy[start:end]
+
+        self.assertIn(
+            "path /assets/* /canvaskit/* /icons/* /main.dart.js /flutter.js /flutter_bootstrap.js",
+            public_web,
+        )
+        self.assertIn('Cache-Control "no-cache, must-revalidate"', public_web)
+        self.assertIn(
+            'Cache-Control "no-cache, no-store, must-revalidate"',
+            public_web,
+        )
+        self.assertNotIn("max-age=31536000", public_web)
+        self.assertNotIn("@public_web_immutable_asset", public_web)
+
+    def test_spa_fallback_sets_utf8_and_revalidation_after_rewrite(self) -> None:
+        repo_root = Path(__file__).resolve().parents[4]
+        caddy = (
+            repo_root / "quwoquan_ops/environments/gamma/local/Caddyfile"
+        ).read_text(encoding="utf-8")
+        start = caddy.index("\thandle @public_web_app {")
+        end = caddy.index("\n\thandle {\n\t\timport business_api_edge", start)
+        app_route = caddy[start:end]
+
+        self.assertIn("\n\t\troute {", app_route)
+        rewrite = app_route.index("try_files {path} /index.html")
+        html_matcher = app_route.index("@public_web_html path /index.html")
+        html_headers = app_route.index(
+            'Content-Type "text/html; charset=utf-8"'
+        )
+        file_server = app_route.index("file_server")
+        self.assertLess(rewrite, html_matcher)
+        self.assertLess(html_matcher, html_headers)
+        self.assertLess(html_headers, file_server)
+        self.assertIn(
+            'Cache-Control "no-cache, must-revalidate"',
+            app_route[html_matcher:file_server],
+        )
 
 
 if __name__ == "__main__":

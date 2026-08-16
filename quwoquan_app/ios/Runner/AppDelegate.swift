@@ -475,6 +475,7 @@ private final class RecoveryFailureEncryptedStore {
   private var nativeRecoveryDeadlineReached = false
   private var confirmedPreviousBuildFatal = false
   private var recoveryExternalOpenInFlight = false
+  private var recoveryExternalReturnPending = false
   private var recoveryVersionCheckInFlight = false
   private var recoveryVersionRefreshPending = false
   private var dartStartupAttemptStarted = false
@@ -1176,6 +1177,13 @@ private final class RecoveryFailureEncryptedStore {
       appInForeground = true
       foregroundStartedUptime = ProcessInfo.processInfo.systemUptime
     }
+    if recoveryExternalReturnPending && confirmedPreviousBuildFatal {
+      recoveryExternalReturnPending = false
+      NSLog(
+        "QWQStartup ios_native_recovery_external_returned processId=%d",
+        ProcessInfo.processInfo.processIdentifier
+      )
+    }
     if recoveryVersionRefreshPending,
        nativeRecoveryShown,
        let title = startupRecoveryTitle,
@@ -1526,6 +1534,7 @@ private final class RecoveryFailureEncryptedStore {
     nativeRecoveryShown = true
 
     let recovery = UIView(frame: window.bounds)
+    recovery.accessibilityIdentifier = "qwq.native.startup.recovery"
     let backgroundColor = UIColor(
       red: 247 / 255,
       green: 247 / 255,
@@ -1562,9 +1571,11 @@ private final class RecoveryFailureEncryptedStore {
     message.translatesAutoresizingMaskIntoConstraints = false
 
     let primary = RecoveryActionButton(type: .system)
+    primary.accessibilityIdentifier = "qwq.native.startup.recovery.primary"
     configureRecoveryButton(primary, title: "正在检查…", filled: true, enabled: false)
 
     let web = RecoveryActionButton(type: .system)
+    web.accessibilityIdentifier = "qwq.native.startup.recovery.web"
     configureRecoveryButton(web, title: "使用网页版", filled: false, enabled: true)
     web.recoveryAction = { [weak self] in
       self?.openRecoveryTarget(
@@ -1881,7 +1892,28 @@ private final class RecoveryFailureEncryptedStore {
       completion(false)
       return
     }
-    UIApplication.shared.open(url, options: [:], completionHandler: completion)
+    let urlDigest = recoveryURLDigest(rawURL)
+    NSLog(
+      "QWQStartup ios_native_recovery_external_open_requested urlDigest=%@ processId=%d",
+      urlDigest,
+      ProcessInfo.processInfo.processIdentifier
+    )
+    UIApplication.shared.open(url, options: [:]) { opened in
+      NSLog(
+        "QWQStartup ios_native_recovery_external_open_completed urlDigest=%@ opened=%@",
+        urlDigest,
+        opened ? "true" : "false"
+      )
+      if opened {
+        self.recoveryExternalReturnPending = true
+      }
+      completion(opened)
+    }
+  }
+
+  private func recoveryURLDigest(_ rawURL: String) -> String {
+    let digest = SHA256.hash(data: Data(rawURL.utf8))
+    return "sha256:" + digest.map { String(format: "%02x", $0) }.joined()
   }
 
   private func showRecoveryToast(_ message: String) {

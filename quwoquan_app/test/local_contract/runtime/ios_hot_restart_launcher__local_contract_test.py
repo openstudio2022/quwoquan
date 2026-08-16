@@ -1,10 +1,14 @@
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-002
+# spec_ref: specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/spec.md#gwt-004
+
 import json
+import signal
 import subprocess
 import sys
 import unittest
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 APP_DIR = Path(__file__).resolve().parents[3]
@@ -13,6 +17,8 @@ sys.path.insert(0, str(APP_DIR / "scripts/device"))
 from verify_flutter_run_defines import validate_flutter_run_defines
 from verify_ios_hot_restart import (
     _count_native_launches_since,
+    _runtime_identity_issues,
+    _stop_original_process_group,
     _terminate_stale_device_runtime,
     cold_startup_terminal_observed,
     flutter_resident_ready_for_hot_restart,
@@ -100,6 +106,10 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         self.assertNotIn('is_workspace_frontend_server', source)
         self.assertIn("extract_dart_startup_attempts", source)
         self.assertIn("nativeDidFinishLaunchingCount", source)
+        self.assertIn("runtimeIdentitySnapshots", source)
+        self.assertIn("flutterProcessGroupStoppedBySigint", source)
+        self.assertNotIn("process.terminate()", source)
+        self.assertNotIn("process.kill()", source)
 
     def test_stale_cleanup_is_scoped_to_the_target_simulator_bundle(self) -> None:
         with patch(
@@ -127,6 +137,49 @@ class IosHotRestartLauncherContractTest(unittest.TestCase):
         self.assertTrue(result["terminatedNativeApp"])
         self.assertEqual(result["terminatedFlutterResidentPids"], [])
         self.assertEqual(result["terminatedFrontendServerPids"], [])
+
+    def test_flutter_session_shutdown_targets_only_original_process_group(self) -> None:
+        process = Mock()
+        process.poll.return_value = None
+        process.wait.return_value = 0
+        with patch("verify_ios_hot_restart.os.killpg") as killpg:
+            stopped = _stop_original_process_group(
+                process,
+                4242,
+                attempts=1,
+                wait_seconds=0.01,
+            )
+
+        self.assertTrue(stopped)
+        killpg.assert_called_once_with(4242, signal.SIGINT)
+        process.wait.assert_called_once_with(timeout=0.01)
+        self.assertNotIn("call.terminate()", [str(call) for call in process.mock_calls])
+        self.assertNotIn("call.kill()", [str(call) for call in process.mock_calls])
+
+    def test_cold_and_three_hot_restarts_keep_one_runtime_identity(self) -> None:
+        identity = {
+            "environment": "beta",
+            "target": "beta-local",
+            "runtimeConfigDigest": f"sha256:{'1' * 64}",
+            "effectiveLaunchManifestDigest": f"sha256:{'2' * 64}",
+        }
+        self.assertEqual(
+            _runtime_identity_issues(
+                [dict(identity) for _ in range(4)],
+                expected_environment="beta",
+            ),
+            [],
+        )
+
+        drifted = [dict(identity) for _ in range(4)]
+        drifted[3]["runtimeConfigDigest"] = f"sha256:{'3' * 64}"
+        self.assertIn(
+            "hot_restart_3: runtimeConfigDigest drifted from the cold runtime identity",
+            _runtime_identity_issues(
+                drifted,
+                expected_environment="beta",
+            ),
+        )
 
     def test_hot_restart_waits_for_flutter_resident_command_reader(self) -> None:
         self.assertFalse(

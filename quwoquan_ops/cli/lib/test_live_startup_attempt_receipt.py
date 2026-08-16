@@ -171,9 +171,9 @@ def validate_test_live_startup_attempt(
         raise ValueError("test-live startup receipt tlsProfile is required")
     public_web_package = value.get("publicWebPackage")
     expected_public_origin = {
-        "alpha": "https://alpha.quwoquan.com",
-        "beta": "https://beta.quwoquan.com",
-        "gamma": "https://gamma.quwoquan.com",
+        "alpha": "https://alpha.quwoquan.com:17000",
+        "beta": "https://beta.quwoquan.com:18000",
+        "gamma": "https://gamma.quwoquan.com:19000",
     }[environment]
     if (
         not isinstance(public_web_package, dict)

@@ -101,7 +101,7 @@ class TestLiveContentBindingContract(unittest.TestCase):
                 "packageVersion": "web-release-alpha",
                 "manifestDigest": _B,
                 "contentDigest": _C,
-                "publicOrigin": "https://alpha.quwoquan.com",
+                "publicOrigin": "https://alpha.quwoquan.com:17000",
             },
             "sourceRevision": "1" * 40,
             "workspaceStatusDigest": _F,

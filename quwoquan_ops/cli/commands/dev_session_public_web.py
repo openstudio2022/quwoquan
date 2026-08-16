@@ -126,9 +126,12 @@ def _resolve_dev_session_public_web_package(
     public_bases = target_contract.get("publicBases") or {}
     return _load_dev_session_public_web_package(
         environment=environment,
-        package_root=_stackctl.web_deployment_package_dir(
-            environment,
-            target=target,
+        package_root=_stackctl.deployment_target_path(
+            target,
+            "standalone-packages",
+            "web",
+            "packages",
+            "public-web",
         ),
         public_origin=str(public_bases.get("publicWeb") or ""),
     )

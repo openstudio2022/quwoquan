@@ -169,7 +169,7 @@ def _mutable_fixture(
             "packageVersion": "web-release-alpha",
             "manifestDigest": _digest("web-manifest"),
             "contentDigest": _digest("web-content"),
-            "publicOrigin": "https://alpha.quwoquan.com",
+            "publicOrigin": "https://alpha.quwoquan.com:17000",
         },
         "sourceRevision": "a" * 40,
         "workspaceStatusDigest": _digest("workspace-status"),

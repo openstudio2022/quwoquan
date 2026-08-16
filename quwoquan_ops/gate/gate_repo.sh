@@ -361,7 +361,7 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/platform/verify_startup_environment_matrix.py \
       --component-environment alpha \
       --component-environment beta \
-      --component-environment gamma >/dev/null || exit 1
+      --component-environment gamma || exit 1
     python3 quwoquan_app/scripts/runtime/platform/verify_dual_platform_usability_baseline.py || exit 1
     python3 quwoquan_app/scripts/runtime/platform/verify_plugin_registration_policy.py || exit 1
     python3 quwoquan_service/scripts/verify/contract_graph/verify_metadata_service_entities_vs_fields.py || exit 1
