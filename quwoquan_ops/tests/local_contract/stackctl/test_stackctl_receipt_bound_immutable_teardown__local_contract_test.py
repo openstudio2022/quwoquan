@@ -141,7 +141,7 @@ class StackctlReceiptBoundImmutableTeardownTest(unittest.TestCase):
             "alpha-local",
             receipt_candidate,
             require_full=True,
-            require_current_contract_graph=False,
+            purpose="self_verify",
         )
         provider_environment.assert_called_once_with(
             {"composition": {}},
