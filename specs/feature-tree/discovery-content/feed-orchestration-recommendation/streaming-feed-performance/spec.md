@@ -189,7 +189,7 @@
 - 类型：`external_blocker`
 - 优先级：`P0`
 - 准出影响：`block`
-- 影响或价值：仓库内无协议版本前缀的 canonical quota-shard 单轨、无 schema-version 信封的 payload/cursor、强制 Redis pipeline composition、全族 live key/live payload byte 准入、owner 单字段长度、启动配置、分项指标/SLO/告警/看板和 Redis API integration 已由 `REQ-001 / REQ-004 / GWT-001 / GWT-004` 接管，不再作为 OPEN 能力缺口。容量校准已获得首个真实环境输入：gamma-local 单机全栈对 `GET /content/feed`（首刷/续页）与 `POST /content/behaviors` 的可重复压测画像已回填 `recommendation_slo.yaml#load_model` 的 `measured_gamma_local`（20260813T174733Z/20260813T180145Z，err=0 的首刷 p95≈704ms @43rps；单机口径不代表生产容量）。仍缺同一候选版本在目标 Redis Cluster 的物理容量校准、受控发布/回滚演练、Prometheus/Alertmanager/Grafana readback，以及默认 8 页冻结深度的产品长滚动定标；业务准入上限不是环境容量证明。
+- 影响或价值：仍缺同一候选版本在目标 Redis Cluster 的物理容量校准、受控发布与回滚演练、Prometheus/Alertmanager/Grafana readback，以及默认 8 页冻结深度的产品长滚动定标。受管单机环境输入只能校准容量假设，不能证明生产容量或替代业务准入上限。
 - 完成判定：alpha/beta/gamma/prod 对同一 release digest 留存 Redis cluster topology/容量余量、`GWT-001` 的 canonical key/pipeline 实际 readback、受控发布与回滚、`GWT-004` 的四类 quota 指标/告警/看板 readback；默认冻结深度经产品长滚动场景验证且拒绝率满足 SLO。任一环境缺证时继续 `GATE_BLOCK`。
 
 <a id="open-002"></a>
