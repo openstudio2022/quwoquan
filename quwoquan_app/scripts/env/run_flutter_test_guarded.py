@@ -244,6 +244,8 @@ def _with_runtime_environment_defines(args: list[str]) -> list[str]:
       str(RUNTIME_DEFINE_SCRIPT),
       "--env",
       runtime_env,
+      "--launch-policy",
+      "test_live",
       "--format",
       "args",
     ],

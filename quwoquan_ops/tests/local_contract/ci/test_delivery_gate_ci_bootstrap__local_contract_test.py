@@ -25,6 +25,29 @@ def test_delivery_gate_bootstrap_uses_pinned_verified_toolchains() -> None:
     assert 'actionlint\" -version | head -n 1)\" = \"v1.7.7\"' in workflow
 
 
+def test_ops_portal_build_receives_the_external_deploy_root() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    job_start = workflow.index("  ops_portal:\n")
+    job_end = workflow.index("\n  release_evidence:\n", job_start)
+    job = workflow[job_start:job_end]
+
+    assert "Configure Ops Portal CI paths" in job
+    assert (
+        'echo "QWQ_DEPLOY_WORK_ROOT=$RUNNER_TEMP/quwoquan-deploy" '
+        '>> "$GITHUB_ENV"'
+    ) in job
+
+
+def test_service_gate_installs_required_native_test_dependencies() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    job_start = workflow.index("  quwoquan_service:\n")
+    job_end = workflow.index("\n  search_contract_smoke:\n", job_start)
+    job = workflow[job_start:job_end]
+
+    assert "prometheus tesseract-ocr" in job
+    assert "--no-install-recommends" in job
+
+
 def test_delivery_gate_runs_for_integration_and_promotion_pull_requests() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     pre_release = (ROOT / ".github/workflows/pre-release-gate.yml").read_text(encoding="utf-8")
@@ -52,11 +75,11 @@ def test_delivery_gate_has_bounded_jobs() -> None:
 
     expected_timeouts = {
         "topology_regression": 10,
-        "quwoquan_service": 10,
+        "quwoquan_service": 30,
         "search_contract_smoke": 10,
-        "quwoquan_app_static": 10,
-        "quwoquan_app_tests": 10,
-        "quwoquan_app_serial": 10,
+        "quwoquan_app_static": 20,
+        "quwoquan_app_tests": 40,
+        "quwoquan_app_serial": 40,
         "quwoquan_app": 10,
         "quwoquan_data": 10,
         "ops_portal": 10,
