@@ -1177,6 +1177,7 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/gate/test_object_search_policy_closure__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_readiness_case_coverage__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_readiness_result_bundle_collector__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_runtime_host_literals__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_search_index_field_drift__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_stage_name_identifiers__gate__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_retired_runtime_architecture__local_contract_test.py \
