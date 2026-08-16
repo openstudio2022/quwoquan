@@ -293,8 +293,8 @@ jobs:
       - name: Verify four-environment search probe contract
         run: |
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest \
-            quwoquan_ops.tests.acceptance.user_acceptance.test_stackctl_up_runtime__user_acceptance_test.StackctlUpRuntimeTest.test_environment_probe_uses_ready_entity_operation_not_blocked_chat \
-            quwoquan_ops.tests.acceptance.user_acceptance.test_stackctl_up_runtime__user_acceptance_test.StackctlUpRuntimeTest.test_environment_probe_requires_search_commercial_envelope
+            quwoquan_ops.tests.acceptance.user_acceptance.test_stackctl_up_runtime__integration_probe__user_acceptance_test.StackctlUpRuntimeTest.test_environment_probe_uses_ready_entity_operation_not_blocked_chat \
+            quwoquan_ops.tests.acceptance.user_acceptance.test_stackctl_up_runtime__integration_probe__user_acceptance_test.StackctlUpRuntimeTest.test_environment_probe_requires_search_commercial_envelope
       - id: finish
         if: always()
         name: Finish timer
