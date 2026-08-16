@@ -280,6 +280,7 @@ def _command_package_unlocked(
             release = _stackctl.package_web_official_release(
                 repo_root=_stackctl.ROOT,
                 environment=env_name,
+                target=target_name,
                 package_root=_stackctl.web_deployment_package_dir(
                     env_name,
                     target=target_name,

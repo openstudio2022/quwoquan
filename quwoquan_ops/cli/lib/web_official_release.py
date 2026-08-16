@@ -18,6 +18,7 @@ def package_web_official_release(
     *,
     repo_root: Path,
     environment: str,
+    target: str,
     package_root: Path,
     public_origin: str,
 ) -> dict[str, object]:
@@ -29,7 +30,12 @@ def package_web_official_release(
     if not flutter:
         raise WebOfficialReleaseError("flutter is required to package the Web application")
 
-    defines = _runtime_defines(repo_root, environment)
+    defines = _runtime_defines(
+        repo_root,
+        environment,
+        target=target,
+        launch_policy="prod_release" if environment == "prod" else "test_live",
+    )
     defines["CLOUD_GATEWAY_BASE_URL"] = public_origin + "/api"
     defines["APP_LEGAL_BASE_URL"] = public_origin + "/legal"
     defines["PUBLIC_WEB_BASE_URL"] = public_origin
@@ -103,12 +109,24 @@ def package_web_official_release(
     }
 
 
-def _runtime_defines(repo_root: Path, environment: str) -> dict[str, str]:
+def _runtime_defines(
+    repo_root: Path,
+    environment: str,
+    *,
+    target: str,
+    launch_policy: str,
+) -> dict[str, str]:
     command = [
         "python3",
         str(repo_root / "quwoquan_app/scripts/env/print_app_env_dart_defines.py"),
         "--env",
         environment,
+        "--target",
+        target,
+        "--launch-mode",
+        "web_official_release",
+        "--launch-policy",
+        launch_policy,
         "--format",
         "json",
     ]
@@ -133,20 +151,23 @@ def _trusted_web_origin(environment: str, raw: str) -> str:
     value = raw.strip().rstrip("/")
     parsed = urlparse(value)
     expected = {
-        "alpha": "alpha.quwoquan.com",
-        "beta": "beta.quwoquan.com",
-        "gamma": "gamma.quwoquan.com",
-        "prod": "quwoquan.com",
+        "alpha": ("alpha.quwoquan.com", 17000),
+        "beta": ("beta.quwoquan.com", 18000),
+        "gamma": ("gamma.quwoquan.com", 19000),
+        "prod": ("quwoquan.com", None),
     }[environment]
+    expected_host, expected_port = expected
     try:
         parsed.port
     except ValueError as error:
         raise WebOfficialReleaseError(
-            f"{environment} Web origin must be https://{expected}"
+            f"{environment} Web origin must be "
+            f"https://{expected_host}{f':{expected_port}' if expected_port else ''}"
         ) from error
     if (
         parsed.scheme != "https"
-        or parsed.hostname != expected
+        or parsed.hostname != expected_host
+        or parsed.port != expected_port
         or parsed.username is not None
         or parsed.password is not None
         or parsed.path not in {"", "/"}
@@ -154,12 +175,10 @@ def _trusted_web_origin(environment: str, raw: str) -> str:
         or parsed.fragment
     ):
         raise WebOfficialReleaseError(
-            f"{environment} Web origin must be https://{expected}"
+            f"{environment} Web origin must be "
+            f"https://{expected_host}{f':{expected_port}' if expected_port else ''}"
         )
-    # Local runtime targets expose the canonical host through an isolated
-    # workstation port.  A distributable Web package is host-bound, so remove
-    # that transport-only port instead of persisting it as release identity.
-    return f"https://{expected}"
+    return f"https://{expected_host}{f':{expected_port}' if expected_port else ''}"
 
 
 def _verify_web_build(build_root: Path) -> None:
