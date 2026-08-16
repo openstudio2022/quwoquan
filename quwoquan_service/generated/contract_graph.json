@@ -130598,7 +130598,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "59fb05a655c3a627d3079ea7d95ec57a5189346decb659493d6461627bf5efdc"
+      "sha256": "68ced5a97f2ee26e25db0193cc8887ec9d08d5083f2ac32331903b6ecca68d36"
     },
     {
       "path": "realtime/openapi.yaml",
@@ -347770,7 +347770,7 @@
     },
     {
       "path": "platform/config.yaml",
-      "sha256": "59fb05a655c3a627d3079ea7d95ec57a5189346decb659493d6461627bf5efdc",
+      "sha256": "68ced5a97f2ee26e25db0193cc8887ec9d08d5083f2ac32331903b6ecca68d36",
       "mediaType": "application/yaml",
       "content": {
         "configs": [
@@ -350177,7 +350177,7 @@
           {
             "key": "sys.content-service.research_identity.attestation_key_base64",
             "reload": "restart",
-            "rollout": "replace",
+            "rollout": "progressive",
             "scope": "workload",
             "sensitive": true,
             "type": "string"

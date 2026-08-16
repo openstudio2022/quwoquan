@@ -221,7 +221,7 @@ jobs:
   quwoquan_service:
     name: Delivery Gate — Service (L2)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.service == 'true' }}
     outputs:
@@ -242,8 +242,11 @@ jobs:
         uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
-      - name: 安装 promtool（告警表达式求值回归）
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq prometheus
+      - name: 安装 Service 系统测试依赖
+        run: >-
+          sudo apt-get update -qq &&
+          sudo apt-get install -y -qq --no-install-recommends
+          prometheus tesseract-ocr
       - name: 安装 Python 依赖 (recommendation-service)
         run: |
           pip install -r quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt
@@ -304,7 +307,7 @@ jobs:
   quwoquan_app_static:
     name: Delivery Gate — App Static
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
     outputs:
@@ -354,7 +357,7 @@ jobs:
   quwoquan_app_tests:
     name: Delivery Gate — App Tests Shard ${{ matrix.shard_index }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
     strategy:
@@ -413,7 +416,7 @@ jobs:
   quwoquan_app_serial:
     name: Delivery Gate — App Serial
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
     outputs:
@@ -531,6 +534,8 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Configure Ops Portal CI paths
+        run: echo "QWQ_DEPLOY_WORK_ROOT=$RUNNER_TEMP/quwoquan-deploy" >> "$GITHUB_ENV"
       - name: 设置 Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:

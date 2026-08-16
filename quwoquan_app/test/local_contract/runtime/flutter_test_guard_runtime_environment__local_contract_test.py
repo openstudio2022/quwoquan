@@ -48,6 +48,10 @@ class FlutterTestGuardRuntimeEnvironmentContractTest(unittest.TestCase):
 
         self.assertIn("--dart-define=APP_RUNTIME_ENV=beta", args)
         self.assertEqual(run.call_args.args[0][2:4], ["--env", "beta"])
+        self.assertEqual(
+            run.call_args.args[0][run.call_args.args[0].index("--launch-policy") + 1],
+            "test_live",
+        )
 
     def test_explicit_dart_define_overrides_the_process_environment(self) -> None:
         subject = _load_subject()
@@ -68,6 +72,10 @@ class FlutterTestGuardRuntimeEnvironmentContractTest(unittest.TestCase):
 
         self.assertEqual(args.count("--dart-define=APP_RUNTIME_ENV=gamma"), 1)
         self.assertEqual(run.call_args.args[0][2:4], ["--env", "gamma"])
+        self.assertEqual(
+            run.call_args.args[0][run.call_args.args[0].index("--launch-policy") + 1],
+            "test_live",
+        )
 
 
 if __name__ == "__main__":
