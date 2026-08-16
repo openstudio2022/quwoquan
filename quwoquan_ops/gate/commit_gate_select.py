@@ -255,16 +255,104 @@ def select_pytest_paths(paths: list[str]) -> list[str]:
     selected: list[str] = []
     seen: set[str] = set()
     source_mappings = (
-        ("quwoquan_ops/gate/", "quwoquan_ops/tests/local_contract/gate"),
-        ("quwoquan_ops/policies/gates/", "quwoquan_ops/tests/local_contract/gate"),
-        ("quwoquan_ops/ci/", "quwoquan_ops/tests/local_contract/ci"),
-        ("quwoquan_ops/environments/", "quwoquan_ops/tests/local_contract/environment"),
-        ("quwoquan_ops/cli/", "quwoquan_ops/tests/local_contract/stackctl"),
-        ("quwoquan_data/scripts/core/", "quwoquan_data/tests/local_contract/core"),
-        ("quwoquan_data/scripts/content/execution/", "quwoquan_data/tests/local_contract/execution"),
-        ("quwoquan_data/scripts/content/release/", "quwoquan_data/tests/local_contract/release"),
-        ("quwoquan_data/scripts/content/source/", "quwoquan_data/tests/local_contract/source"),
-        ("quwoquan_data/scripts/governance/", "quwoquan_data/tests/local_contract/governance"),
+        (
+            "quwoquan_ops/ci/provider_conformance/provider_patrol_lib/",
+            (
+                "quwoquan_ops/tests/local_contract/provider/"
+                "test_provider_patrol_runtime_identity__contract__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/commands/dev_session",
+            (
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_dev_session_mutable_startup_gate__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_dev_session_resume_compose__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_dev_session_runtime_reuse__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/commands/down_shared.py",
+            (
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_mutable_test_live_teardown__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/lib/test_live_startup_attempt_receipt.py",
+            (
+                "quwoquan_ops/tests/local_contract/test_data/"
+                "test_live_startup_attempt_receipt__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/test_data/"
+                "test_test_live_content_binding__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/lib/web_official_release.py",
+            (
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_web_official_release__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/cli/stackctl.py",
+            (
+                "quwoquan_ops/tests/local_contract/stackctl/"
+                "test_stackctl_test_live_content_binding_wiring__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_web_official_release__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml",
+            (
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_environment_package_entrypoints__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_local_gamma_service_runtime_bindings__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_runtime_topology_package__security__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/environments/gamma/local/Caddyfile",
+            (
+                "quwoquan_ops/tests/local_contract/environment/"
+                "test_local_media_origin_cache_policy__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_api_edge_single_track__local_contract_test.py",
+            ),
+        ),
+        ("quwoquan_ops/gate/", ("quwoquan_ops/tests/local_contract/gate",)),
+        (
+            "quwoquan_ops/policies/gates/",
+            ("quwoquan_ops/tests/local_contract/gate",),
+        ),
+        ("quwoquan_ops/ci/", ("quwoquan_ops/tests/local_contract/ci",)),
+        (
+            "quwoquan_ops/environments/",
+            ("quwoquan_ops/tests/local_contract/environment",),
+        ),
+        ("quwoquan_ops/cli/", ("quwoquan_ops/tests/local_contract/stackctl",)),
+        ("quwoquan_data/scripts/core/", ("quwoquan_data/tests/local_contract/core",)),
+        (
+            "quwoquan_data/scripts/content/execution/",
+            ("quwoquan_data/tests/local_contract/execution",),
+        ),
+        (
+            "quwoquan_data/scripts/content/release/",
+            ("quwoquan_data/tests/local_contract/release",),
+        ),
+        (
+            "quwoquan_data/scripts/content/source/",
+            ("quwoquan_data/tests/local_contract/source",),
+        ),
+        (
+            "quwoquan_data/scripts/governance/",
+            ("quwoquan_data/tests/local_contract/governance",),
+        ),
     )
     for path in paths:
         for root in (
@@ -279,11 +367,13 @@ def select_pytest_paths(paths: list[str]) -> list[str]:
                     selected.append(path)
         if "/tests/" in path:
             continue
-        for source_prefix, test_root in source_mappings:
-            if path.startswith(source_prefix) and test_root not in seen:
-                if (ROOT / test_root).is_dir():
-                    seen.add(test_root)
-                    selected.append(test_root)
+        for source_prefix, test_targets in source_mappings:
+            if path.startswith(source_prefix):
+                for test_target in test_targets:
+                    if test_target in seen or not (ROOT / test_target).exists():
+                        continue
+                    seen.add(test_target)
+                    selected.append(test_target)
                 break
     return selected[:80]
 

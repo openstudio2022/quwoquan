@@ -466,6 +466,9 @@ from quwoquan_ops.cli.commands.dev_session_runtime import (
     _dev_session_target_media_root, _dev_session_workload_conflict, _materialize_local_portal_root,
     _mutable_test_live_operation_identity_environment, _mutable_workspace_snapshot,
 )
+from quwoquan_ops.cli.commands.dev_session_public_web import (
+    _load_dev_session_public_web_package, _resolve_dev_session_public_web_package,
+)
 from quwoquan_ops.cli.commands.matrix_domain import command_matrix
 from quwoquan_ops.cli.commands.provider_conformance_domain import (
     _command_provider_conformance_unlocked, _provider_conformance, _provider_conformance_runner,

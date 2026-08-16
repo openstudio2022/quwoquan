@@ -174,6 +174,11 @@ def _verify_web_build(build_root: Path) -> None:
         raise WebOfficialReleaseError(
             "Web build is incomplete: " + ", ".join(missing)
         )
+    noto_sans_sc = tuple(build_root.rglob("NotoSansSC*.ttf"))
+    if len(noto_sans_sc) != 1 or noto_sans_sc[0].is_symlink():
+        raise WebOfficialReleaseError(
+            "Web build must contain exactly one bundled Noto Sans SC font"
+        )
     index = (build_root / "index.html").read_text(encoding="utf-8")
     for token in ('<html lang="zh-CN">', '<meta charset="utf-8">'):
         if token not in index:

@@ -54,6 +54,7 @@ _FIELDS = frozenset(
         "publishedPorts",
         "tlsProfile",
         "resolverHandoffDigest",
+        "publicWebPackage",
         "sourceRevision",
         "workspaceStatusDigest",
         "mutableStateDigest",
@@ -76,6 +77,7 @@ _IDENTITY_FIELDS = (
     "publishedPorts",
     "tlsProfile",
     "resolverHandoffDigest",
+    "publicWebPackage",
     "sourceRevision",
     "workspaceStatusDigest",
     "mutableStateDigest",
@@ -167,6 +169,34 @@ def validate_test_live_startup_attempt(
         raise ValueError("test-live startup receipt sourceRevision is invalid")
     if not str(value.get("tlsProfile") or "").strip():
         raise ValueError("test-live startup receipt tlsProfile is required")
+    public_web_package = value.get("publicWebPackage")
+    expected_public_origin = {
+        "alpha": "https://alpha.quwoquan.com",
+        "beta": "https://beta.quwoquan.com",
+        "gamma": "https://gamma.quwoquan.com",
+    }[environment]
+    if (
+        not isinstance(public_web_package, dict)
+        or set(public_web_package)
+        != {
+            "environment",
+            "packageVersion",
+            "manifestDigest",
+            "contentDigest",
+            "publicOrigin",
+        }
+        or public_web_package.get("environment") != environment
+        or not str(public_web_package.get("packageVersion") or "").strip()
+        or "/" in str(public_web_package.get("packageVersion") or "")
+        or _DIGEST.fullmatch(
+            str(public_web_package.get("manifestDigest") or "")
+        )
+        is None
+        or _DIGEST.fullmatch(str(public_web_package.get("contentDigest") or ""))
+        is None
+        or public_web_package.get("publicOrigin") != expected_public_origin
+    ):
+        raise ValueError("test-live startup receipt publicWebPackage is invalid")
 
     block = value.get("portBlock")
     ports = value.get("publishedPorts")
@@ -232,6 +262,7 @@ def _identity_from_plan(
         "publishedPorts": dict(plan.get("publishedPorts") or {}),
         "tlsProfile": plan.get("tlsProfile"),
         "resolverHandoffDigest": plan.get("resolverHandoffDigest"),
+        "publicWebPackage": dict(plan.get("publicWebPackage") or {}),
         "sourceRevision": workspace.get("sourceRevision"),
         "workspaceStatusDigest": workspace.get("workspaceStatusDigest"),
         "mutableStateDigest": workspace.get("mutableStateDigest"),
@@ -383,4 +414,3 @@ def transition_test_live_startup_attempt(
     )
     _atomic_write(path, validated)
     return validated
-

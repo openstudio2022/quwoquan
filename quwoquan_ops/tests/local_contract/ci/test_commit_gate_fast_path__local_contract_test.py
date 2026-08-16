@@ -104,6 +104,8 @@ class CommitGateFastPathTest(unittest.TestCase):
                 "--changed-file",
                 "quwoquan_service/services/user-service/internal/foo.go",
                 "--changed-file",
+                "quwoquan_service/services/user-service/internal/tool.py",
+                "--changed-file",
                 "quwoquan_app/lib/cloud/user/bar.dart",
             ],
             cwd=ROOT,
@@ -116,7 +118,7 @@ class CommitGateFastPathTest(unittest.TestCase):
         self.assertTrue(plan["flags"]["has_app"])
         self.assertIn("user-service", plan["go_services"])
         self.assertIn("service_architecture", plan["static_checks"])
-        self.assertIn("python_script_governance", plan["static_checks"])
+        self.assertIn("python_script_governance_service", plan["static_checks"])
         self.assertIn("entrypoint_script_paths", plan["static_checks"])
 
     def test_flutter_guard_no_longer_forces_concurrency_one(self) -> None:

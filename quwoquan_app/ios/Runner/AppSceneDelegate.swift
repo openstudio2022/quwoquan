@@ -27,6 +27,10 @@ import UIKit
 }
 
 @objc final class AppSceneDelegate: FlutterSceneDelegate {
+  override func stateRestorationActivity(for scene: UIScene) -> NSUserActivity? {
+    nil
+  }
+
   override func scene(
     _ scene: UIScene,
     openURLContexts URLContexts: Set<UIOpenURLContext>

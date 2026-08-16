@@ -164,6 +164,13 @@ def _mutable_fixture(
         },
         "tlsProfile": "local-managed",
         "resolverHandoffDigest": _digest("resolver"),
+        "publicWebPackage": {
+            "environment": "alpha",
+            "packageVersion": "web-release-alpha",
+            "manifestDigest": _digest("web-manifest"),
+            "contentDigest": _digest("web-content"),
+            "publicOrigin": "https://alpha.quwoquan.com",
+        },
         "sourceRevision": "a" * 40,
         "workspaceStatusDigest": _digest("workspace-status"),
         "mutableStateDigest": _digest("mutable-state"),
@@ -196,6 +203,12 @@ def _mutable_fixture(
         "mediaRoot": media_root.relative_to(subject.ROOT).as_posix(),
         "tlsProfile": receipt["tlsProfile"],
         "resolverHandoffDigest": receipt["resolverHandoffDigest"],
+        "publicWebPackage": receipt["publicWebPackage"],
+        "graphqlReadRegistry": {
+            "schema": "gateway.graphql_read.runtime_registry",
+            "configVersion": _digest("graphql-read-config"),
+        },
+        "serviceCoreModules": [],
         "workspaceIdentity": {
             "sourceRevision": receipt["sourceRevision"],
             "workspaceStatusDigest": receipt["workspaceStatusDigest"],
