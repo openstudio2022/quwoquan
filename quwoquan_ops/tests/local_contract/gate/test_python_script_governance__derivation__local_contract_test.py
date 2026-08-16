@@ -4,7 +4,9 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from quwoquan_ops.gate.python_script_governance.inventory import ripgrep_files
 from quwoquan_ops.gate.verify_entrypoint_script_paths import (
     entrypoint_script_path_issues,
 )
@@ -34,6 +36,24 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
             str(issue["code"])
             for issue in report["issues"]  # type: ignore[index]
         }
+
+    def test_file_enumeration_falls_back_without_ripgrep(self) -> None:
+        visible = self._write("quwoquan_app/scripts/runtime/visible.py")
+        hidden = self._write("quwoquan_app/.hidden/visible.py")
+        self._write("quwoquan_app/.qwq_output/ignored.py")
+        self._write("quwoquan_app/scripts/runtime/ignored.txt")
+
+        with patch(
+            "quwoquan_ops.gate.python_script_governance.inventory.shutil.which",
+            return_value=None,
+        ):
+            files = ripgrep_files(
+                self.root / "quwoquan_app",
+                include_globs=("*.py",),
+                no_ignore=True,
+            )
+
+        self.assertEqual([hidden, visible], files)
 
     def test_app_paths_derive_service_object_and_reject_flat_or_milestone_names(
         self,

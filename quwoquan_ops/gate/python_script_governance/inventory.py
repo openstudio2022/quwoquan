@@ -1,7 +1,10 @@
 """物理树枚举与 Python 治理边界分类。"""
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Sequence
 
@@ -12,6 +15,7 @@ from .constants import (
     PYTHON_SCOPE_ROOTS,
     RIPGREP_EXCLUDED_GLOBS,
     SCRIPT_SUFFIXES,
+    TRAVERSAL_IGNORED_DIR_NAMES,
 )
 from .models import PythonFileRecord, relative_path
 
@@ -52,7 +56,10 @@ def ripgrep_files(
 ) -> list[Path]:
     if not root.is_dir():
         return []
-    command = ["rg", "--files", "--hidden"]
+    ripgrep = shutil.which("rg")
+    if ripgrep is None:
+        return _walk_files(root, include_globs=include_globs)
+    command = [ripgrep, "--files", "--hidden"]
     if no_ignore:
         command.append("--no-ignore")
     for pattern in (*include_globs, *RIPGREP_EXCLUDED_GLOBS):
@@ -74,6 +81,33 @@ def ripgrep_files(
         for line in completed.stdout.splitlines()
         if line.strip()
     )
+
+
+def _walk_files(root: Path, *, include_globs: Sequence[str]) -> list[Path]:
+    """Mirror the governed ``rg --files`` projection when rg is unavailable."""
+    positive_globs = tuple(
+        pattern for pattern in include_globs if not pattern.startswith("!")
+    )
+    files: list[Path] = []
+    for directory, child_directories, names in os.walk(root, followlinks=False):
+        child_directories[:] = sorted(
+            name
+            for name in child_directories
+            if name not in TRAVERSAL_IGNORED_DIR_NAMES
+        )
+        for name in sorted(names):
+            candidate = Path(directory) / name
+            relative = candidate.relative_to(root)
+            relative_text = relative.as_posix()
+            if positive_globs and not any(
+                relative.match(pattern)
+                or fnmatch(relative_text, pattern)
+                or fnmatch(name, pattern)
+                for pattern in positive_globs
+            ):
+                continue
+            files.append(candidate)
+    return sorted(files)
 
 
 def enumerate_python_files(root: Path, scope: str) -> list[Path]:
