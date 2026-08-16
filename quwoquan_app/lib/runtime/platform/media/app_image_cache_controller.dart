@@ -345,6 +345,28 @@ class AppImageCacheController {
     await _avatarImageCacheManager.downloadFile(processed);
   }
 
+  /// 预热头像缓存，失败不向上传播。
+  ///
+  /// 预热失败对用户不可见——正常加载路径照样会取到这张图。但「一直预热不成功」
+  /// 会表现为头像每次都慢，线上却查不到线索，所以失败必须留痕。调用方因此不需要
+  /// 也不应该再自己吞一次：`.catchError((_) => null)` 会把这份证据一起吞掉。
+  static Future<void> warmAvatarCache(
+    String imageUrl, {
+    double size = 120,
+    MediaEndpointConfig? endpointConfig,
+  }) async {
+    try {
+      await preloadAvatar(imageUrl, size: size, endpointConfig: endpointConfig);
+    } catch (error, stackTrace) {
+      developer.log(
+        'avatar cache warm-up failed',
+        name: 'runtime.media.imageCache',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   static AppImageCacheTier cacheTierForPreset(CdnImagePreset preset) {
     switch (preset) {
       case CdnImagePreset.avatar:

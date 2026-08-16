@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/runtime/shell/state/startup_auth_restore_gate_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/observability/app_trace_context_store.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_request_headers.dart';
 import 'package:quwoquan_app/runtime/auth/cloud_auth_token_provider.dart';

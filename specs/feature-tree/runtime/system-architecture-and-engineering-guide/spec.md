@@ -67,6 +67,7 @@
 - [`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md)：ContractGraph validate/generate/check 可在 clean checkout 幂等重生。
 - [`domain-service-directory-ownership`](./domain-service-directory-ownership/spec.md)：从每个服务的 `contracts/domain.yaml` 和 L1 工程归属直接定位唯一责任领域。
 - [`repository-layout-hygiene-and-retirement`](./repository-layout-hygiene-and-retirement/spec.md)：报告包含固定九类分类、WIP 清单、候选引用证据和最小验证命令。
+- [`absent-empty-failure-nullability`](./absent-empty-failure-nullability/spec.md)：缺席、空值与失败在端云保持三种不可互换的结果状态。
 
 ## 5. 能力要求
 

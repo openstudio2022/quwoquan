@@ -25,8 +25,10 @@ enum AppTelemetryEnqueueResult { persisted, unavailable, evicted }
 
 enum AppTelemetryDeliveryDegradation { dropped, deadLettered, retrying }
 
-typedef AppTelemetryDeliveryObserver =
-    void Function(AppTelemetryDeliveryDegradation kind, String reason);
+typedef AppTelemetryDeliveryObserver = void Function(
+  AppTelemetryDeliveryDegradation kind,
+  String reason,
+);
 
 final class AppTelemetryQueuedRecord {
   const AppTelemetryQueuedRecord({
@@ -164,7 +166,7 @@ final class AppTelemetryOutbox {
       final box = await _storage.open(_partition, _queueName);
       if (box == null) return AppTelemetryFlushResult.deferred;
       await _removeExpired(box);
-      var sealed = _readSealed(box.get(_sealedKey));
+      var sealed = _tryReadSealed(box.get(_sealedKey));
       sealed ??= await _sealNextBatch(box);
       if (sealed == null) return AppTelemetryFlushResult.empty;
       try {
@@ -217,7 +219,7 @@ final class AppTelemetryOutbox {
     final events = <Map<String, Object?>>[];
     for (final key in keys) {
       final raw = box.get(key);
-      final envelope = _readEnvelope(raw);
+      final envelope = _tryReadEnvelope(raw);
       if (envelope == null) {
         if (raw != null) {
           await _storage.moveToDlq(
@@ -286,7 +288,7 @@ final class AppTelemetryOutbox {
     var deadLettered = false;
     for (final key in sealed.eventKeys) {
       final raw = box.get(key);
-      final envelope = _readEnvelope(raw);
+      final envelope = _tryReadEnvelope(raw);
       if (raw == null || envelope == null) {
         if (raw != null) {
           await _storage.moveToDlq(
@@ -365,7 +367,7 @@ final class AppTelemetryOutbox {
     final now = _now().toUtc();
     for (final key in _eventKeys(box)) {
       final raw = box.get(key);
-      final envelope = _readEnvelope(raw);
+      final envelope = _tryReadEnvelope(raw);
       if (envelope == null || !envelope.expiresAt.isAfter(now)) {
         await box.delete(key);
         _deliveryObserver(
@@ -379,7 +381,7 @@ final class AppTelemetryOutbox {
   Future<void> _enforceCapacity(Box<String> box) async {
     while (true) {
       final sealedKeys =
-          _readSealed(box.get(_sealedKey))?.eventKeys.toSet() ??
+          _tryReadSealed(box.get(_sealedKey))?.eventKeys.toSet() ??
           const <String>{};
       final keys = _eventKeys(box);
       final bytes = keys.fold<int>(
@@ -399,7 +401,7 @@ final class AppTelemetryOutbox {
       }
       String? victim;
       for (final key in removableKeys) {
-        final envelope = _readEnvelope(box.get(key));
+        final envelope = _tryReadEnvelope(box.get(key));
         if (envelope != null &&
             !envelope.critical &&
             envelope.logType == 'event' &&
@@ -409,7 +411,7 @@ final class AppTelemetryOutbox {
         }
       }
       for (final key in removableKeys) {
-        final envelope = _readEnvelope(box.get(key));
+        final envelope = _tryReadEnvelope(box.get(key));
         if (envelope?.logType == 'event' && !envelope!.critical) {
           victim = key;
           break;
@@ -468,7 +470,7 @@ final class AppTelemetryOutbox {
     return key;
   }
 
-  _QueuedEnvelope? _readEnvelope(String? raw) {
+  _QueuedEnvelope? _tryReadEnvelope(String? raw) {
     if (raw == null || raw.isEmpty) return null;
     try {
       final decoded = jsonDecode(raw);
@@ -494,7 +496,7 @@ final class AppTelemetryOutbox {
     }
   }
 
-  _SealedTelemetryBatch? _readSealed(String? raw) {
+  _SealedTelemetryBatch? _tryReadSealed(String? raw) {
     if (raw == null || raw.isEmpty) return null;
     try {
       final decoded = jsonDecode(raw);

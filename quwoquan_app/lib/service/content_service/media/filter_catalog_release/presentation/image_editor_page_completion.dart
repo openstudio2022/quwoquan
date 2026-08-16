@@ -91,30 +91,48 @@ extension _ImageEditorPageCompletion on _ImageEditorPageState {
       if (!ImageEditorExportEngine.isEditorBakedArtifactPath(path)) {
         continue;
       }
-      final delivered = _deliveryJpegCache[path] ?? await _transcodeOne(path);
-      if (delivered != null) {
-        _deliveryJpegCache[path] = delivered;
-        results[i] = delivered;
+      final cached = _deliveryJpegCache[path];
+      if (cached != null) {
+        results[i] = cached;
+        continue;
       }
+      final delivered = await _transcodeOne(path);
+      if (delivered != path) {
+        _deliveryJpegCache[path] = delivered;
+      }
+      results[i] = delivered;
     }
     return results;
   }
 
-  Future<String?> _transcodeOne(String path) async {
+  /// 转码是提交期的静默增强：失败时原 PNG 仍可提交，属于降级但达成，
+  /// 因此返回可用路径而不是用 null 表达失败。降级经遥测上报，不静默吞掉。
+  Future<String> _transcodeOne(String path) async {
     try {
       final bytes = await _loadImageBytes(path);
-      if (bytes.isEmpty) return null;
+      if (bytes.isEmpty) return path;
       final image = await ImageEditorExportEngine.decodeConstrained(bytes);
-      final jpeg = await ImageEditorExportEngine.encodeDeliveryJpeg(image);
-      image.dispose();
-      if (jpeg == null) return null;
-      return writeAppTemporaryFileBytes(
+      final Uint8List jpeg;
+      try {
+        jpeg = await ImageEditorExportEngine.encodeDeliveryJpeg(image);
+      } finally {
+        image.dispose();
+      }
+      return await writeAppTemporaryFileBytes(
         fileName: 'delivery_${DateTime.now().millisecondsSinceEpoch}.jpg',
         bytes: jpeg,
       );
-    } catch (_) {
-      // 转码失败回退原 PNG，不阻塞提交。
-      return null;
+    } catch (error, stackTrace) {
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'content.image_editor.delivery_transcode',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+      );
+      return path;
     }
   }
 

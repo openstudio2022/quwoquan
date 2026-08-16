@@ -6,7 +6,8 @@ const MethodChannel _startupTimingsChannel = MethodChannel(
   'quwoquan/startup/timings',
 );
 
-int? readPlatformStartupElapsedMs() => null;
+/// 返回 null 表示该平台没有进程级启动计时能力，不表示测量失败。
+int? tryReadPlatformStartupElapsedMs() => null;
 
 String? readPlatformStartupDeadlineOrigin() => null;
 

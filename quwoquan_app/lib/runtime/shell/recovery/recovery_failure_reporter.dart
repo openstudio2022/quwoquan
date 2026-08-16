@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:quwoquan_app/runtime/platform/app_recovery_native_bridge.dart';
 import 'package:quwoquan_app/runtime/shell/recovery/recovery_operation_gateway.dart';
@@ -196,7 +197,16 @@ final class RecoveryFailureReporter {
         queue.removeAt(0);
       }
       return queue;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 队列坏了就丢掉重来，否则每次启动都会在同一条记录上失败。但「丢掉了几条
+      // 待上报的恢复失败」本身就是要上报的事实，而这里正是上报器自己，不能自指，
+      // 用 developer.log。
+      developer.log(
+        'recovery failure queue is not decodable, dropping it',
+        name: 'runtime.recovery',
+        error: error,
+        stackTrace: stackTrace,
+      );
       await _store.clear();
       return <_QueuedRecoveryFailure>[];
     }

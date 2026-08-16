@@ -15,12 +15,33 @@
   目录参数之下，或被 `python3 -m unittest <module>` 直接点名。
 
 存量缺口按 `owner` / `reason` / `expires_when` 登记基线，只减不增；新增即 BLOCK。
+
+## 判据 B：本次改动的门禁必须有 companion
+
+上面那条判据只在「恰好有同名测试」时才生效——一个门禁完全没有配套测试时，
+`_companion_tests` 返回空列表，循环体一次都不执行，门禁反而静默放行。越是新写的、
+判据最没被验证过的门禁，越容易掉进这个缺口。`verify_nil_semantics.py` 的 wire 判定
+早先用目录名近似，全仓扫描一直是绿的，缺陷却在现网——正是这个形态。
+
+所以补一条独立判据：**本次改动（相对 base）的门禁脚本必须至少有一个 companion，且
+它必须被 gate 链执行。** 只约束改动面，因此可以用比判据 A 更宽的脚本范围
+（含 `quwoquan_app` / `quwoquan_data` 的门禁树）而不误伤存量——存量的 96 处缺口需要
+逐个补测试，那是独立工作项，不能挂在任何一次无关改动上。
+
+改动面取 `merge-base HEAD origin/main`..HEAD 的**已提交**增量，不含未提交工作树。这里
+不是漏了一种情况：本仓库脏工作树是常态，一次会话里往往同时躺着好几个域的并行改动，
+把工作树计入会让判据 B 长期为别人的改动报红——而持续假红最终只会被 `--no-verify`
+绕过，比没有这条判据更糟。合入门看的正是 `base...HEAD`，判据 B 在那里完整生效。
+
+仓库不是 git 工作副本时（打包产物、tarball）判据 B 静默跳过——那种环境里 diff 无从
+计算，强行报错只会制造另一种假红灯。
 """
 
 from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -37,6 +58,16 @@ GATE_SCRIPT_ROOTS = (
     "quwoquan_ops/gate/",
     "quwoquan_service/scripts/verify/",
 )
+
+#: 判据 B 的脚本范围。比 `GATE_SCRIPT_ROOTS` 宽：判据 B 只看本次改动，把 App / Data
+#: 的门禁树纳进来不会翻出存量缺口。
+CHANGED_GATE_SCRIPT_ROOTS = GATE_SCRIPT_ROOTS + (
+    "quwoquan_app/scripts/",
+    "quwoquan_data/scripts/verify/",
+)
+
+#: 判据 B 的 base。`origin/main` 缺失时退回单看工作树。
+BASE_CANDIDATES = ("origin/main", "main")
 
 #: canonical local_contract 测试树。App Dart 树不在此列——它没有 Python 门禁配套。
 LOCAL_CONTRACT_TEST_ROOTS = (
@@ -232,6 +263,43 @@ def _test_is_executed(
     return False
 
 
+def _git(*arguments: str) -> str | None:
+    try:
+        completed = subprocess.run(
+            ("git", *arguments),
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    return completed.stdout if completed.returncode == 0 else None
+
+
+def changed_gate_scripts() -> list[str] | None:
+    """本次已提交增量里的门禁脚本。不是 git 工作副本时返回 `None`（判据 B 跳过）。"""
+    if _git("rev-parse", "--git-dir") is None:
+        return None
+    paths: set[str] = set()
+    for candidate in BASE_CANDIDATES:
+        merge_base = _git("merge-base", "HEAD", candidate)
+        if merge_base is None:
+            continue
+        committed = _git("diff", "--name-only", f"{merge_base.strip()}...HEAD")
+        if committed:
+            paths.update(committed.split())
+        break
+    return sorted(
+        path
+        for path in paths
+        if path.endswith(".py")
+        and any(path.startswith(root) for root in CHANGED_GATE_SCRIPT_ROOTS)
+        and Path(path).name.startswith("verify_")
+        and (ROOT / path).is_file()
+    )
+
+
 def _load_baseline() -> tuple[set[str], list[str]]:
     # 缺口容忍基线已在缺口归零后删除，本门禁转为零容忍：没有基线文件是正常状态，
     # 任何缺口都是新增缺口。重新引入基线文件只会被当成额外容忍面，不应该发生。
@@ -334,6 +402,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         for key in stale_keys:
             print(f"  {key}", file=sys.stderr)
+
+    changed = changed_gate_scripts()
+    if changed is None:
+        print("[gate-local-contract] 非 git 工作副本，跳过改动面判据")
+    else:
+        unproven: list[str] = []
+        for gate in changed:
+            companions = _companion_tests(gate, tests)
+            executed = [
+                test
+                for test in companions
+                if _test_is_executed(test, scripts, pytest_paths, unittest_modules)
+            ]
+            if not executed:
+                reason = (
+                    "没有任何同名 companion 测试"
+                    if not companions
+                    else "companion 存在但没有任何 gate 链执行："
+                    + "、".join(companions)
+                )
+                unproven.append(f"{gate}（{reason}）")
+        print(f"[gate-local-contract] changed_gates={len(changed)}")
+        if unproven:
+            failed = True
+            print(
+                "[gate-local-contract] FAIL: 本次改动的门禁没有被执行的 companion "
+                "测试——判据是否还成立无从证明。companion 命名须为 "
+                "`test_<门禁名去掉 verify_ 前缀>__<facet>__local_contract_test.py`，"
+                "并挂进 Makefile 的 test-gate-companion-local-contract：",
+                file=sys.stderr,
+            )
+            for item in unproven:
+                print(f"  {item}", file=sys.stderr)
 
     if failed:
         return 1

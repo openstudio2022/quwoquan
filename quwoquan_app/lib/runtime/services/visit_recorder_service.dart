@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:quwoquan_app/runtime/models/visit_models.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/observability/visit/visit_append_port.dart';
 import 'package:quwoquan_app/runtime/platform/storage/hive_runtime.dart';
 
@@ -132,7 +133,15 @@ class VisitRecorderService {
     try {
       final map = jsonDecode(raw) as Map<String, dynamic>;
       return VisitRecord.fromStorageMap(map);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 记录损坏时按「无访问记录」继续，但损坏本身必须留证据。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'runtime.visit_recorder.decode_record',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       return null;
     }
   }

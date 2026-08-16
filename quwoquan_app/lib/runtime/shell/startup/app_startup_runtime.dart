@@ -99,8 +99,7 @@ final class StartupPhaseSnapshot {
     if (runAppMs != null) 'runAppMs': runAppMs,
     if (firstFrameMs != null) 'firstFrameMs': firstFrameMs,
     if (welcomeShownMs != null) 'welcomeShownMs': welcomeShownMs,
-    if (welcomeWindowInitMs != null)
-      'welcomeWindowInitMs': welcomeWindowInitMs,
+    if (welcomeWindowInitMs != null) 'welcomeWindowInitMs': welcomeWindowInitMs,
     if (welcomeCompletedMs != null) 'welcomeCompletedMs': welcomeCompletedMs,
     if (shellFirstPaintMs != null) 'shellFirstPaintMs': shellFirstPaintMs,
     if (androidActivityOnCreateMs != null)
@@ -213,7 +212,7 @@ final class AppStartupRuntime {
     _bootstrapStarted = true;
     _startupAttemptId = StartupTelemetrySupport.randomUrlSafeToken(24);
     _stopwatch.start();
-    final platformElapsed = readPlatformStartupElapsedMs();
+    final platformElapsed = tryReadPlatformStartupElapsedMs();
     _dartElapsedAtDeadlineArmMs = _elapsedMs;
     if (platformElapsed != null) {
       _nativeElapsedSinceProcessStartMs = platformElapsed;
