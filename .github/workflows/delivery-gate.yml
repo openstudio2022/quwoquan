@@ -136,6 +136,9 @@ jobs:
       candidate_digest: ${{ steps.candidate.outputs.candidate_digest }}
       artifact_digest: ${{ steps.candidate.outputs.artifact_digest }}
     steps:
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
@@ -149,9 +152,6 @@ jobs:
       - name: Enforce the reviewed pull-request branch edge
         if: ${{ github.event_name == 'pull_request' }}
         run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
-      - id: start
-        name: Start timer
-        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - id: detect
         name: Detect impacted scopes
         env:
@@ -186,7 +186,11 @@ jobs:
               exit 2
             fi
           done
-          if [[ "$EXPECTED_SOURCE_SHA" != "${{ inputs.head_sha }}" ]] || [[ "$EXPECTED_SOURCE_SHA" != "${{ inputs.checkout_ref }}" ]]; then
+          if [[ "$EXPECTED_SOURCE_SHA" != "${{ inputs.head_sha }}" ]]; then
+            echo "::error::GATE_BLOCK: Delivery Gate source SHA differs from the requested head"
+            exit 2
+          fi
+          if [[ "$EXPECTED_SOURCE_SHA" != "${{ inputs.checkout_ref }}" ]]; then
             echo "::error::GATE_BLOCK: Delivery Gate source SHA differs from the release candidate"
             exit 2
           fi
@@ -568,7 +572,7 @@ jobs:
         name: Resolve immutable evidence coordinates
         run: |
           SOURCE_SHA="$(git rev-parse HEAD)"
-          SOURCE_TREE="sha1:$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE="sha1:$(git rev-parse 'HEAD^{tree}')"
           if [[ -n "${{ inputs.head_sha }}" && "$SOURCE_SHA" != "${{ inputs.head_sha }}" ]]; then
             echo "::error::GATE_BLOCK: Delivery evidence checkout differs from the requested source"
             exit 2

@@ -136,7 +136,10 @@ jobs:
             QWQ_ANDROID_BETA_GOOGLE_SERVICES_JSON \
             QWQ_ANDROID_GAMMA_GOOGLE_SERVICES_JSON \
             QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON; do
-            test -n "${!required}" || { echo "::error::${required} is required"; exit 2; }
+            if [[ -z "${!required}" ]]; then
+              echo "::error::${required} is required"
+              exit 2
+            fi
           done
           printf '%s' "$QWQ_ANDROID_RELEASE_KEYSTORE_B64" | base64 --decode > "$QWQ_ANDROID_RELEASE_KEYSTORE_PATH"
           cleanup() {
@@ -145,7 +148,7 @@ jobs:
           trap cleanup EXIT
           BUNDLE_ROOT="$RUNNER_TEMP/app-candidate-evidence"
           mkdir -p "$BUNDLE_ROOT/application-packages" "$BUNDLE_ROOT/payloads"
-          SOURCE_TREE_DIGEST="sha1:$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE_DIGEST="sha1:$(git rev-parse 'HEAD^{tree}')"
           for env_name in "${{ matrix.environment }}"; do
             case "$env_name" in
               alpha) TARGET=alpha-local; FIREBASE_JSON="$QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON" ;;
@@ -339,7 +342,7 @@ jobs:
           make verify-production-wiring-purity
           BUNDLE_ROOT="$RUNNER_TEMP/app-candidate-evidence"
           mkdir -p "$BUNDLE_ROOT/application-packages" "$BUNDLE_ROOT/payloads"
-          SOURCE_TREE_DIGEST="sha1:$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE_DIGEST="sha1:$(git rev-parse 'HEAD^{tree}')"
           for env_name in "${{ matrix.environment }}"; do
             case "$env_name" in
               alpha) TARGET=alpha-local ;;
@@ -476,12 +479,15 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_GIT_SHA"
           if [ "${{ matrix.environment }}" = prod ]; then
             for required in PROD_OPS_OIDC_ISSUER PROD_OPS_OIDC_CLIENT_ID PROD_OPS_OIDC_AUDIENCE PROD_OPS_OIDC_SCOPE; do
-              test -n "${!required}" || { echo "::error::release-signing ${required} is required"; exit 2; }
+              if [[ -z "${!required}" ]]; then
+                echo "::error::release-signing ${required} is required"
+                exit 2
+              fi
             done
           fi
           BUNDLE_ROOT="$RUNNER_TEMP/app-candidate-evidence"
           mkdir -p "$BUNDLE_ROOT/application-packages" "$BUNDLE_ROOT/payloads"
-          SOURCE_TREE_DIGEST="sha1:$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE_DIGEST="sha1:$(git rev-parse 'HEAD^{tree}')"
           for env_name in "${{ matrix.environment }}"; do
             python3 quwoquan_ops/cli/stackctl.py package \
               --env "$env_name" \
@@ -601,7 +607,7 @@ jobs:
           flutter pub get
           BUNDLE_ROOT="$RUNNER_TEMP/app-candidate-evidence"
           mkdir -p "$BUNDLE_ROOT/application-packages" "$BUNDLE_ROOT/payloads"
-          SOURCE_TREE_DIGEST="sha1:$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE_DIGEST="sha1:$(git rev-parse 'HEAD^{tree}')"
           for env_name in "${{ matrix.environment }}"; do
             export QWQ_APP_RUNTIME_ENV="$env_name"
             DART_DEFINES=()
@@ -680,7 +686,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$SOURCE_GIT_SHA"
-          SOURCE_TREE_DIGEST="sha1:$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE_DIGEST="sha1:$(git rev-parse 'HEAD^{tree}')"
           python3 quwoquan_ops/ci/render_release_application_package.py validate-bundle \
             --bundle-dir "$RUNNER_TEMP/app-candidate-evidence" \
             --source-git-sha "$SOURCE_GIT_SHA" \
@@ -713,9 +719,11 @@ jobs:
           set -euo pipefail
           [[ "$APP_EVIDENCE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           APP_EVIDENCE_REF="$REGISTRY/$IMAGE_PREFIX/app-candidate-artifact@$APP_EVIDENCE_DIGEST"
-          echo "app_evidence_ref=$APP_EVIDENCE_REF" >> "$GITHUB_OUTPUT"
-          echo "app_evidence_digest=$APP_EVIDENCE_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "source_git_sha=$SOURCE_GIT_SHA" >> "$GITHUB_OUTPUT"
+          {
+            echo "app_evidence_ref=$APP_EVIDENCE_REF"
+            echo "app_evidence_digest=$APP_EVIDENCE_DIGEST"
+            echo "source_git_sha=$SOURCE_GIT_SHA"
+          } >> "$GITHUB_OUTPUT"
           echo "- App OCI evidence: \`$APP_EVIDENCE_REF\`" >> "$GITHUB_STEP_SUMMARY"
       - id: timing
         name: Calculate App candidate machine-path diagnostic

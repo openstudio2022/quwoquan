@@ -392,7 +392,6 @@ jobs:
           EXPECTED_WORKFLOW_RUN_ID: ${{ needs.service_pipeline.outputs.producer_workflow_run_id }}
           EXPECTED_SOURCE_SHA: ${{ needs.service_pipeline.outputs.source_git_sha }}
         run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/ci-packages/process/service/release-evidence-manifest"
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import os
@@ -544,11 +543,13 @@ jobs:
           print(ref)
           PY
           )"
-          echo "from_candidate_digest=$FROM_CANDIDATE_DIGEST" >> "$GITHUB_OUTPUT"
-          echo "resume_stage=$RESOLVED_RESUME_STAGE" >> "$GITHUB_OUTPUT"
-          echo "existing_release_evidence_ref=$EXISTING_RELEASE_EVIDENCE_REF" >> "$GITHUB_OUTPUT"
-          echo "cloud_provider=$CLOUD_PROVIDER" >> "$GITHUB_OUTPUT"
-          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+          {
+            echo "from_candidate_digest=$FROM_CANDIDATE_DIGEST"
+            echo "resume_stage=$RESOLVED_RESUME_STAGE"
+            echo "existing_release_evidence_ref=$EXISTING_RELEASE_EVIDENCE_REF"
+            echo "cloud_provider=$CLOUD_PROVIDER"
+            echo "dry_run=$DRY_RUN"
+          } >> "$GITHUB_OUTPUT"
       - name: Parse canonical rollout stages
         id: stages
         run: |
@@ -1051,7 +1052,6 @@ jobs:
         env:
           EXPECTED_CANDIDATE: ${{ needs.prepare.outputs.candidate_digest }}
         run: |
-          ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/mainline-preprod/process/release-evidence-manifest"
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import os
