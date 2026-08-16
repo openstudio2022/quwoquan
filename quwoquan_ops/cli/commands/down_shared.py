@@ -107,6 +107,7 @@ def _mutable_test_live_runtime_plan_from_receipt(
         "publishedPorts",
         "tlsProfile",
         "resolverHandoffDigest",
+        "publicWebPackage",
     ):
         if runtime_plan.get(field) != receipt.get(field):
             raise ValueError(f"mutable test-live receipt/plan drift: {field}")
@@ -575,5 +576,4 @@ def _command_mutable_test_live_down(
         "blockerKind": blocker_kind,
         "runtimeMode": "mutable-test-live",
     }
-
 

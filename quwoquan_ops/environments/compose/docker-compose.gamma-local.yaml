@@ -232,6 +232,7 @@ services:
       - ${LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE:?LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE is required}:/etc/caddy/tls/object-storage-ca.pem:ro
       - ${LOCAL_GAMMA_MEDIA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/cache/media}:/srv/media:ro
       - ${LOCAL_GAMMA_LEGAL_STATIC_ROOT:?LOCAL_GAMMA_LEGAL_STATIC_ROOT is required}:/srv/legal:ro
+      - ${LOCAL_GAMMA_PUBLIC_WEB_ROOT:?immutable public Web package is required}:/srv/web:ro
       # 运维运营 Portal 静态站点（vite build 产物；prod 渲染时替换为 runtime/portal）。
       - ${LOCAL_GAMMA_PORTAL_ROOT:?LOCAL_GAMMA_PORTAL_ROOT is required}:/srv/portal:ro
       - ${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}:/data

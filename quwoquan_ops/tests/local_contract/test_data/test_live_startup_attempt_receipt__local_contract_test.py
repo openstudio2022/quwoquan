@@ -28,6 +28,13 @@ def _plan() -> dict[str, object]:
         "publishedPorts": {"api-edge": 17000, "sms-provider-substitute": 17080},
         "tlsProfile": "local-managed",
         "resolverHandoffDigest": "sha256:" + "4" * 64,
+        "publicWebPackage": {
+            "environment": "alpha",
+            "packageVersion": "web-release-alpha",
+            "manifestDigest": "sha256:" + "7" * 64,
+            "contentDigest": "sha256:" + "8" * 64,
+            "publicOrigin": "https://alpha.quwoquan.com",
+        },
         "workspaceIdentity": {
             "sourceRevision": "a" * 40,
             "workspaceStatusDigest": "sha256:" + "5" * 64,
@@ -81,6 +88,10 @@ class TestLiveStartupAttemptReceiptContractTest(unittest.TestCase):
         self.assertEqual(running["status"], "running")
         self.assertEqual(running["configurationDigest"], "sha256:" + "2" * 64)
         self.assertEqual(running["sourceRevision"], "a" * 40)
+        self.assertEqual(
+            running["publicWebPackage"]["packageVersion"],
+            "web-release-alpha",
+        )
         self.assertTrue(running["nonPromotable"])
         self.assertNotIn("candidateDigest", running)
         self.assertNotIn("imageComposition", running)
@@ -145,6 +156,20 @@ class TestLiveStartupAttemptReceiptContractTest(unittest.TestCase):
                         attempt_id=prepared["attemptId"],
                         status="partial",
                         runtime_plan=drifted,
+                        run_root=run_root,
+                    )
+                drifted_web = _plan()
+                drifted_web["publicWebPackage"] = {
+                    **drifted_web["publicWebPackage"],
+                    "contentDigest": "sha256:" + "9" * 64,
+                }
+                with self.assertRaisesRegex(ValueError, "publicWebPackage"):
+                    receipt.transition_test_live_startup_attempt(
+                        environment="alpha",
+                        target="alpha-local",
+                        attempt_id=prepared["attemptId"],
+                        status="partial",
+                        runtime_plan=drifted_web,
                         run_root=run_root,
                     )
                 invalid = dict(prepared)

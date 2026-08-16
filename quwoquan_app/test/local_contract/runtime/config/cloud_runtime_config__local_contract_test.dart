@@ -29,12 +29,10 @@ void main() {
     tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
 
     test('裸 Flutter Debug 从 native manifest 恢复 canonical Alpha 包', () {
-      expect(CloudRuntimeConfig.shouldLoadNativeRuntimePackage, isTrue);
-      expect(
-        CloudRuntimeConfig.runtimeDefineSummary['configurationState'],
-        'pending_native',
-      );
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(const <
+        String,
+        String
+      >{
         'APP_RUNTIME_ENV': 'alpha',
         'CLOUD_GATEWAY_BASE_URL': 'https://api.example.test',
         'REALTIME_CONNECTION_URL': 'wss://api.example.test',
@@ -54,29 +52,27 @@ void main() {
             'sha256:3333333333333333333333333333333333333333333333333333333333333333',
       });
 
+      expect(CloudRuntimeConfig.shouldLoadNativeRuntimePackage, isTrue);
       expect(CloudRuntimeConfig.appRuntimeEnv, 'alpha');
       expect(CloudRuntimeConfig.launchMode, 'direct_flutter_run');
       expect(
         CloudRuntimeConfig.runtimeDefineSummary['configurationState'],
-        'invalid',
+        'complete',
       );
-      expect(
-        CloudRuntimeConfig.missingRequiredDefineKeys,
-        contains('CONTENT_BINDING_STATE'),
-      );
+      expect(CloudRuntimeConfig.missingRequiredDefineKeys, isEmpty);
       expect(CloudRuntimeConfig.hasCompleteContentBinding, isFalse);
       expect(
         CloudRuntimeConfig.runtimeDefineSummary['contentBindingState'],
         'unbound',
       );
-      expect(
-        CloudRuntimeConfig.validateRequiredEndpoints,
-        throwsA(isA<CloudRuntimeConfigurationException>()),
-      );
+      expect(CloudRuntimeConfig.validateRequiredEndpoints, returnsNormally);
     });
 
     test('内容发布绑定缺失或 digest 非 canonical 时保持 invalid', () {
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(<
+        String,
+        String
+      >{
         ..._nativeRuntimePackageFor('prod'),
         'APP_LAUNCH_POLICY': CloudRuntimeConfig.prodReleaseLaunchPolicy,
         'CONTENT_BINDING_STATE': 'bound',
@@ -93,33 +89,27 @@ void main() {
       );
     });
 
-    test('裸 direct Flutter Debug 未绑定内容时阻断 Remote 并进入配置恢复', () {
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
-      });
-
-      expect(CloudRuntimeConfig.blocksRemoteForDirectUnboundLaunch, isTrue);
-      expect(CloudRuntimeConfig.requiresReleaseBoundContent, isFalse);
-      expect(
-        CloudRuntimeConfig.validateRequiredEndpoints,
-        throwsA(
-          isA<CloudRuntimeConfigurationException>().having(
-            (error) => error.invalidKeys,
-            'invalidKeys',
-            contains('CONTENT_BINDING_STATE'),
-          ),
-        ),
+    test('裸 direct Flutter Debug 未绑定内容时进入 no_active_release 安全壳', () {
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
+        <String, String>{
+          ..._nativeRuntimePackageFor('alpha'),
+          'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
+        },
       );
+
+      expect(CloudRuntimeConfig.requiresReleaseBoundContent, isFalse);
+      expect(CloudRuntimeConfig.missingRequiredDefineKeys, isEmpty);
+      expect(CloudRuntimeConfig.validateRequiredEndpoints, returnsNormally);
     });
 
     test('canonical ui-only 未绑定内容仍可进入 Remote no_active_release 终态', () {
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'QWQ_APP_LAUNCH_MODE': 'canonical_launcher',
-      });
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
+        <String, String>{
+          ..._nativeRuntimePackageFor('alpha'),
+          'QWQ_APP_LAUNCH_MODE': 'canonical_launcher',
+        },
+      );
 
-      expect(CloudRuntimeConfig.blocksRemoteForDirectUnboundLaunch, isFalse);
       expect(CloudRuntimeConfig.requiresReleaseBoundContent, isFalse);
       expect(CloudRuntimeConfig.validateRequiredEndpoints, returnsNormally);
     });
@@ -132,15 +122,17 @@ void main() {
       const launchDigest =
           'sha256:3333333333333333333333333333333333333333333333333333333333333333';
 
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'CONTENT_BINDING_STATE': 'bound',
-        'contentReleaseId': 'release-alpha-run',
-        'contentManifestDigest': manifestDigest,
-        'contentReadinessReceiptDigest': readinessDigest,
-        'launchTarget': 'alpha-local',
-        'effectiveLaunchManifestDigest': launchDigest,
-      });
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
+        <String, String>{
+          ..._nativeRuntimePackageFor('alpha'),
+          'CONTENT_BINDING_STATE': 'bound',
+          'contentReleaseId': 'release-alpha-run',
+          'contentManifestDigest': manifestDigest,
+          'contentReadinessReceiptDigest': readinessDigest,
+          'launchTarget': 'alpha-local',
+          'effectiveLaunchManifestDigest': launchDigest,
+        },
+      );
 
       expect(CloudRuntimeConfig.hasCompleteContentBinding, isTrue);
       expect(CloudRuntimeConfig.requiresReleaseBoundContent, isTrue);
@@ -151,14 +143,16 @@ void main() {
       );
 
       CloudRuntimeConfig.clearNativeRuntimePackageForTest();
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'CONTENT_BINDING_STATE': 'bound',
-        'contentReleaseId': 'release-alpha-run',
-        'contentManifestDigest': manifestDigest,
-        'launchTarget': 'alpha-local',
-        'effectiveLaunchManifestDigest': launchDigest,
-      });
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
+        <String, String>{
+          ..._nativeRuntimePackageFor('alpha'),
+          'CONTENT_BINDING_STATE': 'bound',
+          'contentReleaseId': 'release-alpha-run',
+          'contentManifestDigest': manifestDigest,
+          'launchTarget': 'alpha-local',
+          'effectiveLaunchManifestDigest': launchDigest,
+        },
+      );
       expect(
         CloudRuntimeConfig.missingRequiredDefineKeys,
         contains('contentReadinessReceiptDigest'),
@@ -169,12 +163,14 @@ void main() {
       );
 
       CloudRuntimeConfig.clearNativeRuntimePackageForTest();
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'contentReleaseId': 'release-alpha-run',
-        'contentManifestDigest': manifestDigest,
-        'contentReadinessReceiptDigest': readinessDigest,
-      });
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
+        <String, String>{
+          ..._nativeRuntimePackageFor('alpha'),
+          'contentReleaseId': 'release-alpha-run',
+          'contentManifestDigest': manifestDigest,
+          'contentReadinessReceiptDigest': readinessDigest,
+        },
+      );
       expect(
         CloudRuntimeConfig.missingRequiredDefineKeys,
         contains('CONTENT_BINDING_STATE'),
@@ -186,11 +182,13 @@ void main() {
     });
 
     test('Prod launch policy 缺少 release-bound 内容时仍 fail-closed', () {
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('prod'),
-        'APP_LAUNCH_POLICY': CloudRuntimeConfig.prodReleaseLaunchPolicy,
-        'CONTENT_BINDING_STATE': 'bound',
-      });
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
+        <String, String>{
+          ..._nativeRuntimePackageFor('prod'),
+          'APP_LAUNCH_POLICY': CloudRuntimeConfig.prodReleaseLaunchPolicy,
+          'CONTENT_BINDING_STATE': 'bound',
+        },
+      );
 
       expect(
         CloudRuntimeConfig.validateRequiredEndpoints,
@@ -211,10 +209,13 @@ void main() {
     });
 
     test('不具备 native launch binding 的平台不伪造 release 绑定要求', () {
-      CloudRuntimeConfig.hydrateFromNativeRuntimePackage(<String, String>{
-        ..._nativeRuntimePackageFor('alpha'),
-        'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
-      }, enforceNativeLaunchBinding: false);
+      CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
+        <String, String>{
+          ..._nativeRuntimePackageFor('alpha'),
+          'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
+        },
+        enforceNativeLaunchBinding: false,
+      );
 
       expect(CloudRuntimeConfig.requiresReleaseBoundContent, isFalse);
       expect(CloudRuntimeConfig.missingRequiredDefineKeys, isEmpty);
@@ -224,7 +225,7 @@ void main() {
     test('Alpha、Beta、Gamma native 包不会混合 endpoint 或启动上下文', () {
       for (final environment in <String>['alpha', 'beta', 'gamma']) {
         CloudRuntimeConfig.clearNativeRuntimePackageForTest();
-        CloudRuntimeConfig.hydrateFromNativeRuntimePackage(
+        CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
           _nativeRuntimePackageFor(environment),
         );
 

@@ -287,14 +287,8 @@ void main() {
       expect(gate, contains('normalWindowFocusReleaseRequested'));
       expect(gate, contains('normalWindowFocusReleased'));
       expect(gate, contains('normalHandoffDispatchPosted'));
-      expect(
-        gate,
-        contains('requestWindowFocusReleaseWhenReady();'),
-      );
-      expect(
-        gate,
-        contains('scheduleFlutterMainHandoffWhenReady();'),
-      );
+      expect(gate, contains('requestWindowFocusReleaseWhenReady();'));
+      expect(gate, contains('scheduleFlutterMainHandoffWhenReady();'));
       expect(
         gate,
         contains(
@@ -310,10 +304,7 @@ void main() {
           'WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);',
         ),
       );
-      expect(
-        gate,
-        contains('if (!normalWindowFocusReleased'),
-      );
+      expect(gate, contains('if (!normalWindowFocusReleased'));
       expect(
         gate,
         contains(
@@ -520,6 +511,19 @@ void main() {
         scene.indexOf('@objc final class AppSceneDelegate'),
       );
       expect(recoveryScene, isNot(contains('FlutterSceneDelegate')));
+      final appSceneDelegate = scene.substring(
+        scene.indexOf('@objc final class AppSceneDelegate'),
+      );
+      expect(
+        appSceneDelegate,
+        contains(
+          'override func stateRestorationActivity(for scene: UIScene) '
+          '-> NSUserActivity? {\n    nil\n  }',
+        ),
+      );
+      expect(appSceneDelegate, isNot(contains('NSUserActivity(')));
+      final infoPlist = _readAppFile('ios/Runner/Info.plist');
+      expect(infoPlist, isNot(contains('NSUserActivityTypes')));
       final iosGateProbe = _readAppFile(
         'scripts/tools/device/inspect_ios_native_startup.py',
       );
@@ -916,8 +920,7 @@ void main() {
       // probe 实现单轨在 startup_first_frame/ 包内，入口只做 re-export；
       // 源码断言读取「入口 + 包内全部模块」的拼接文本。
       final probeSources =
-          _appFile('scripts/device/startup_first_frame/__init__.py')
-              .parent
+          _appFile('scripts/device/startup_first_frame/__init__.py').parent
               .listSync()
               .whereType<File>()
               .where((file) => file.path.endsWith('.py'))

@@ -96,6 +96,13 @@ class TestLiveContentBindingContract(unittest.TestCase):
             "publishedPorts": {"api": 17443},
             "tlsProfile": "local-managed",
             "resolverHandoffDigest": _E,
+            "publicWebPackage": {
+                "environment": "alpha",
+                "packageVersion": "web-release-alpha",
+                "manifestDigest": _B,
+                "contentDigest": _C,
+                "publicOrigin": "https://alpha.quwoquan.com",
+            },
             "sourceRevision": "1" * 40,
             "workspaceStatusDigest": _F,
             "mutableStateDigest": _A,

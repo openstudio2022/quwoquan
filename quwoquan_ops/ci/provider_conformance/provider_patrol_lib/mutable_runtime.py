@@ -27,7 +27,8 @@ _MUTABLE_PLAN_FIELDS = frozenset({
     "portBlock", "publishedPorts", "composeFiles", "executionComposeFiles",
     "composeProfiles", "composeDigest", "configurationDigest",
     "providerRuntimeDigest", "mediaLocalRef", "mediaRoot", "tlsProfile",
-    "resolverHandoffDigest", "workspaceIdentity",
+    "resolverHandoffDigest", "publicWebPackage", "workspaceIdentity",
+    "graphqlReadRegistry", "serviceCoreModules",
 })
 
 
@@ -88,6 +89,7 @@ def _load_mutable_runtime_plan(
         "environment", "target", "composeProject", "portProfile", "portBlock",
         "publishedPorts", "composeDigest", "configurationDigest",
         "providerRuntimeDigest", "tlsProfile", "resolverHandoffDigest",
+        "publicWebPackage",
     )
     for field in receipt_fields:
         if plan.get(field) != receipt.get(field):

@@ -70,6 +70,13 @@ def _runtime_started_with_identity(report_dir: Path) -> dict[str, object]:
         "publishedPorts": {"api-edge": 17000},
         "tlsProfile": "local-managed",
         "resolverHandoffDigest": "sha256:" + "4" * 64,
+        "publicWebPackage": {
+            "environment": "alpha",
+            "packageVersion": "web-release-alpha",
+            "manifestDigest": "sha256:" + "7" * 64,
+            "contentDigest": "sha256:" + "8" * 64,
+            "publicOrigin": "https://alpha.quwoquan.com",
+        },
         "serviceCoreModules": sorted(stackctl.SERVICE_CORE_MODULE_SET),
         "workspaceIdentity": {
             "sourceRevision": "a" * 40,
@@ -99,6 +106,7 @@ def _runtime_started_with_identity(report_dir: Path) -> dict[str, object]:
                 "publishedPorts",
                 "tlsProfile",
                 "resolverHandoffDigest",
+                "publicWebPackage",
             )
         },
         "sourceRevision": "a" * 40,
@@ -131,4 +139,3 @@ class StackctlDevSessionTestBase(unittest.TestCase):
         )
         self._mutable_receipt_loader.start()
         self.addCleanup(self._mutable_receipt_loader.stop)
-

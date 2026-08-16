@@ -46,6 +46,13 @@ def _receipt(run_root: Path, *, status: str = "running") -> dict[str, object]:
         "publishedPorts": {"api-edge": 17000},
         "tlsProfile": "local-managed",
         "resolverHandoffDigest": "sha256:" + "4" * 64,
+        "publicWebPackage": {
+            "environment": "alpha",
+            "packageVersion": "web-release-alpha",
+            "manifestDigest": "sha256:" + "7" * 64,
+            "contentDigest": "sha256:" + "8" * 64,
+            "publicOrigin": "https://alpha.quwoquan.com",
+        },
         "sourceRevision": "a" * 40,
         "workspaceStatusDigest": "sha256:" + "5" * 64,
         "mutableStateDigest": "sha256:" + "6" * 64,

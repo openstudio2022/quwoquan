@@ -556,6 +556,7 @@ def _dev_session_resume_running_mutable_runtime(
         "publishedPorts",
         "tlsProfile",
         "resolverHandoffDigest",
+        "publicWebPackage",
     ):
         if runtime_plan.get(field) != receipt.get(field):
             raise ValueError(f"running mutable receipt/plan drift: {field}")

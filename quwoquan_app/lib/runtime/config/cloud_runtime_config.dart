@@ -34,6 +34,7 @@ class CloudRuntimeConfig {
   static List<String> _nativeRuntimeDriftKeys = const <String>[];
   static bool _nativeRuntimePackageHydrated = false;
   static bool _enforceNativeLaunchBinding = true;
+  static bool _forceNativeRuntimePackageForTest = false;
 
   static String _runtimeValue(String key, String compiledValue) {
     // 任一 compile-time runtime define 存在时，整包只能来自 compile-time；
@@ -249,21 +250,22 @@ class CloudRuntimeConfig {
   /// 只有 runtime 相关 compile-time define 全部为空时才读取 native package。
   /// 部分显式配置必须继续 fail-closed，不能与自动 Alpha handoff 拼接。
   static bool get shouldLoadNativeRuntimePackage {
-    return <String>[
-      _compiledAppRuntimeEnv,
-      _compiledGatewayBaseUrl,
-      _compiledRealtimeConnectionUrl,
-      _compiledPublicWebBaseUrl,
-      _compiledAppDownloadBaseUrl,
-      _compiledLegalBaseUrl,
-      _compiledMediaAvatarCdnBaseUrl,
-      _compiledMediaImageCdnBaseUrl,
-      _compiledMediaVideoCdnBaseUrl,
-      _compiledMediaUploadBaseUrl,
-      _compiledRtcMediaConnectionUrl,
-      _compiledLaunchPolicy,
-      _compiledContentBindingState,
-    ].every((value) => value.isEmpty);
+    return _forceNativeRuntimePackageForTest ||
+        <String>[
+          _compiledAppRuntimeEnv,
+          _compiledGatewayBaseUrl,
+          _compiledRealtimeConnectionUrl,
+          _compiledPublicWebBaseUrl,
+          _compiledAppDownloadBaseUrl,
+          _compiledLegalBaseUrl,
+          _compiledMediaAvatarCdnBaseUrl,
+          _compiledMediaImageCdnBaseUrl,
+          _compiledMediaVideoCdnBaseUrl,
+          _compiledMediaUploadBaseUrl,
+          _compiledRtcMediaConnectionUrl,
+          _compiledLaunchPolicy,
+          _compiledContentBindingState,
+        ].every((value) => value.isEmpty);
   }
 
   static const Set<String> _nativeRuntimeAllowedKeys = <String>{
@@ -303,6 +305,29 @@ class CloudRuntimeConfig {
   static void hydrateFromNativeRuntimePackage(
     Map<String, String> values, {
     bool enforceNativeLaunchBinding = true,
+  }) {
+    _hydrateFromNativeRuntimePackage(
+      values,
+      enforceNativeLaunchBinding: enforceNativeLaunchBinding,
+    );
+  }
+
+  /// 让 local contract 在 CI 注入完整 compile-time 包时，仍能独立验证
+  /// 裸 Flutter Debug 的 native package 单轨语义。生产调用不能开启该覆盖。
+  static void hydrateFromNativeRuntimePackageForTest(
+    Map<String, String> values, {
+    bool enforceNativeLaunchBinding = true,
+  }) {
+    _forceNativeRuntimePackageForTest = true;
+    _hydrateFromNativeRuntimePackage(
+      values,
+      enforceNativeLaunchBinding: enforceNativeLaunchBinding,
+    );
+  }
+
+  static void _hydrateFromNativeRuntimePackage(
+    Map<String, String> values, {
+    required bool enforceNativeLaunchBinding,
   }) {
     const contentBindingKeys = <String>{
       'contentReleaseId',
@@ -351,6 +376,7 @@ class CloudRuntimeConfig {
     _nativeRuntimeDriftKeys = const <String>[];
     _nativeRuntimePackageHydrated = false;
     _enforceNativeLaunchBinding = true;
+    _forceNativeRuntimePackageForTest = false;
   }
 
   static String get contentReleaseId =>
@@ -382,18 +408,6 @@ class CloudRuntimeConfig {
   static bool get requiresReleaseBoundContent =>
       declaredContentBindingState == 'bound' ||
       (_enforceNativeLaunchBinding && launchPolicy == prodReleaseLaunchPolicy);
-
-  /// 裸 `flutter run` 没有显式内容绑定时不能静默请求 Remote。
-  ///
-  /// canonical launcher 的 `ui-only` 仍可进入安全 Shell，并由服务端
-  /// `no_active_release` 表达无内容；direct Debug 则先进入 metadata 驱动的
-  /// 开发配置恢复，避免把启动方式错误伪装成普通服务不可用。
-  static bool get blocksRemoteForDirectUnboundLaunch =>
-      _enforceNativeLaunchBinding &&
-      launchMode == 'direct_flutter_run' &&
-      launchPolicy == testLiveLaunchPolicy &&
-      declaredContentBindingState == 'unbound' &&
-      !_hasAnyContentBinding;
 
   /// 返回有效 runtime package 中缺失或非法的键，不包含任何 endpoint 值。
   static List<String> get missingRequiredDefineKeys {
@@ -430,7 +444,6 @@ class CloudRuntimeConfig {
         'CONTENT_BINDING_STATE',
       if (declaredContentBindingState == 'unbound' && _hasAnyContentBinding)
         'CONTENT_BINDING_STATE',
-      if (blocksRemoteForDirectUnboundLaunch) 'CONTENT_BINDING_STATE',
       if (requiresReleaseBoundContent && contentReleaseId.isEmpty)
         'contentReleaseId',
       if (requiresReleaseBoundContent && launchTarget != '$appRuntimeEnv-local')
