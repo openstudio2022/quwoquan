@@ -93,9 +93,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - id: flutter_version
+        name: Read repository-pinned Flutter toolchain
+        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
-          channel: stable
+          flutter-version: ${{ steps.flutter_version.outputs.value }}
           cache: true
       - name: Verify source identity and dependencies
         working-directory: quwoquan_app
@@ -286,9 +289,12 @@ jobs:
       - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
         with:
           version: 1.3.3
+      - id: flutter_version
+        name: Read repository-pinned Flutter toolchain
+        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
-          channel: stable
+          flutter-version: ${{ steps.flutter_version.outputs.value }}
           cache: true
       - name: Import canonical iOS signing material
         env:
@@ -450,9 +456,12 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: quwoquan_ops/portal/package-lock.json
+      - id: flutter_version
+        name: Read repository-pinned Flutter toolchain
+        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
-          channel: stable
+          flutter-version: ${{ steps.flutter_version.outputs.value }}
           cache: true
       - name: Build four immutable Web packages and Prod Ops Portal
         env:
@@ -575,9 +584,12 @@ jobs:
       - uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d
         with:
           version: 1.3.3
+      - id: flutter_version
+        name: Read repository-pinned Flutter toolchain
+        run: echo "value=$(tr -d '[:space:]' < quwoquan_app/.flutter-version)" >> "$GITHUB_OUTPUT"
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
-          channel: stable
+          flutter-version: ${{ steps.flutter_version.outputs.value }}
           cache: true
       - name: Build four immutable macOS packages
         working-directory: quwoquan_app

@@ -126,7 +126,8 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
         self.assertNotIn("  prod_initial:\n", source)
         self.assertNotIn("  prod_carry_on:\n", source)
         self.assertNotIn("  prod_full:\n", source)
-        self.assertEqual(source.count("environment: production"), 2)
+        self.assertEqual(source.count("environment: production"), 1)
+        self.assertIn("'production' || 'release-validation'", source)
         self.assertIn("  prod_soak_acceptance:\n", source)
         self.assertEqual(
             jobs["prod_soak_acceptance"]["environment"],
@@ -246,7 +247,7 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
         self.assertIn("needs.prepare.outputs.resume_stage", prod)
         self.assertEqual(prod.count("--promotion-deadline-epoch"), 5)
         self.assertEqual(prod.count("--hard-deadline-epoch"), 6)
-        self.assertIn("environment: production", prod)
+        self.assertIn("'production' || 'release-validation'", prod)
         self.assertIn("timeout-minutes: 30", prod)
         self.assertIn("--readback-output", source)
         self.assertIn("existing_release_evidence_ref", source)
@@ -303,6 +304,8 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
     def test_dry_run_does_not_fabricate_later_ledger_stages(self) -> None:
         source = CONTROLLED_PROD.read_text(encoding="utf-8")
         self.assertIn("default: true", source)
+        self.assertIn("real Prod apply requires explicit workflow_dispatch", source)
+        self.assertIn("'production' || 'release-validation'", source)
         self.assertIn("Dry-run remained read-only after canary validation", source)
         for stage in (
             "Deploy Prod 5%",
@@ -317,6 +320,9 @@ class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
             )
         terminal = source[source.index("Seal terminal Prod outcome") :]
         self.assertIn("needs.prepare.outputs.dry_run != 'true'", terminal)
+        summary = source[source.index("  mainline_summary:\n") :]
+        self.assertIn('if [[ "$DRY_RUN" != "true" ]]; then', summary)
+        self.assertIn("automatic dry-run must not execute Prod soak", summary)
         self.assertIn("rollback-readiness", source)
 
     def test_prod_lifecycle_is_sealed_before_and_after_apply(self) -> None:

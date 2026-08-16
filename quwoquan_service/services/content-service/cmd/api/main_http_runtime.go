@@ -3,7 +3,6 @@ package bootstrap
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 
 	operationsecurity "quwoquan_service/generated/operationsecurity"
 	rtauth "quwoquan_service/runtime/auth"
@@ -60,7 +59,7 @@ func buildContentHTTPServer(
 	sensitiveOperationGuard := httpadapter.RequireSensitiveOperationPrincipal(handler)
 	admissionGuard := rtgov.OperationAdmissionMiddleware(
 		[]rtgov.OperationAdmissionPolicy{feedAdmissionPolicy},
-		writeContentFeedAdmissionRejection,
+		httpadapter.WriteFeedAdmissionRejection,
 	)(sensitiveOperationGuard)
 	generatedOperationGuard := rtauth.EnforceRuntimeOperationContract(
 		contentDescriptors,
@@ -139,22 +138,6 @@ func contentFeedAdmissionPolicy(
 		CanonicalOperationID: operationID,
 		InflightLimiter:      rtgov.NewInflightLimiter(feedConfig.MaxInflight),
 	}
-}
-
-func writeContentFeedAdmissionRejection(
-	w http.ResponseWriter,
-	r *http.Request,
-	reason rtgov.OperationAdmissionRejection,
-) {
-	const retryAfterSeconds = 1
-	w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
-	rterr.WriteHTTPError(
-		w,
-		contentgenerated.AppErrorFromFeedCapacityUnavailable(
-			"content feed owner concurrency exhausted: "+string(reason),
-		).WithRecoveryDirective("retry", "snackbar", retryAfterSeconds),
-		rterr.HTTPWriteOptionsFromRequest(r),
-	)
 }
 
 func contentLivenessHandler(w http.ResponseWriter, request *http.Request) {

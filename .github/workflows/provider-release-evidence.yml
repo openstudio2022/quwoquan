@@ -20,13 +20,10 @@ permissions:
   attestations: read
   packages: read
 
-env:
-  QWQ_OUTPUT_ROOT: ${{ runner.temp }}/quwoquan-provider-${{ github.run_id }}-${{ github.run_attempt }}/.qwq_output
-
 jobs:
   provider_release_evidence:
     name: Execute and publish Provider release evidence
-    runs-on: [self-hosted, macOS, ARM64, mobile-stack]
+    runs-on: [self-hosted, macOS, ARM64]
     environment: production
     timeout-minutes: 240
     permissions:
@@ -45,6 +42,8 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           persist-credentials: false
+      - name: Initialize runner-local Provider output root
+        run: echo "QWQ_OUTPUT_ROOT=$RUNNER_TEMP/quwoquan-provider-${{ github.run_id }}-${{ github.run_attempt }}/.qwq_output" >> "$GITHUB_ENV"
       - id: pointer
         name: Resolve the only allowed release pointer
         env:
