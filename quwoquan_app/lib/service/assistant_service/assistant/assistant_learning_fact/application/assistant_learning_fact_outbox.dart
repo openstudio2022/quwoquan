@@ -204,7 +204,14 @@ final class AssistantLearningFactOutbox {
         trainingEligible: fact['trainingEligible'] as bool,
         occurredAt: DateTime.parse(fact['occurredAt'] as String),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 队列条目损坏时跳过该条，但损坏意味着本地事实已丢失，必须留证据。
+      developer.log(
+        'assistant learning fact queue entry could not be decoded',
+        name: 'assistant.learning_fact',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }

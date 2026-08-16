@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'dart:developer' as developer;
+
 import 'package:quwoquan_app/runtime/observability/app_log_models.dart';
 import 'package:quwoquan_app/runtime/observability/app_observability_ports.dart';
 import 'package:quwoquan_app/runtime/observability/app_log_policy.dart';
@@ -127,10 +128,15 @@ class AppLogService implements AppEventLogPort {
         line: envelope.toLogLine(target.kind),
       );
       return path;
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint('[AppLogService] writeEvent failed: $error');
-      }
+    } catch (error, stackTrace) {
+      // 日志服务自身写盘失败，不能再走本服务上报（会自指）；dart:developer 是更
+      // 底层的通道，且 release 下同样生效，不像 kDebugMode 那样让线上零证据。
+      developer.log(
+        'writeEvent failed',
+        name: 'runtime.observability.app_log_service',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }
@@ -146,10 +152,13 @@ class AppLogService implements AppEventLogPort {
         fileName: 'run_${_sanitize(runId)}.json',
         payload: _redactor.redactMap(payload),
       );
-    } catch (error) {
-      if (kDebugMode) {
-        debugPrint('[AppLogService] writeRunFile failed: $error');
-      }
+    } catch (error, stackTrace) {
+      developer.log(
+        'writeRunFile failed',
+        name: 'runtime.observability.app_log_service',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return null;
     }
   }

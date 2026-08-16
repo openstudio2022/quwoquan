@@ -152,6 +152,35 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
     );
   }
 
+  /// 烘焙类工具的统一执行入口。
+  ///
+  /// 烘焙失败是「用户动作未达成」，必须走错误态并被观测。把 try/catch 收在这里，
+  /// 是为了让各 `_apply*ToCurrentImage` 能返回非空 `String`：调用点无从「忘记判空
+  /// 后继续提交」，失败也无从静默消失。
+  Future<bool> _runBakeAction({
+    required String title,
+    required String source,
+    required Future<String> Function() bake,
+    required void Function(String bakedPath) onBaked,
+  }) async {
+    try {
+      onBaked(await bake());
+      return true;
+    } catch (error, stackTrace) {
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: source,
+              error: error,
+              stackTrace: stackTrace,
+            ),
+      );
+      await _showEditorActionFailure(title: title);
+      return false;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -355,7 +384,6 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   /// HSL：进入本次专业面板时的快照
   Map<String, Map<String, double>> _proHslSnapshotValues =
       createDefaultHslValues();
-
 
   /// HSL：会话撤回/重做栈
   final List<Map<String, Map<String, double>>> _hslSessionStack = [];

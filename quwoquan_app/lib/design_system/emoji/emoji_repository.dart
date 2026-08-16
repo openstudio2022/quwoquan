@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
 import 'package:quwoquan_app/design_system/emoji/emoji_catalog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,13 +23,23 @@ class EmojiRepository {
     try {
       final list = jsonDecode(raw) as List<dynamic>?;
       return list?.map((e) => e.toString()).toList() ?? [];
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 磁盘上这条记录坏了。表情面板照常可用，但「最近使用」会看起来像从没用过，
+      // 与真的没用过无从区分，所以降级必须留痕。design_system 是最底层，不能反向
+      // 依赖 runtime 的遥测端口，用 developer.log（release 下同样生效）。
+      developer.log(
+        'recent emoji list is not decodable',
+        name: 'design_system.emoji',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return [];
     }
   }
 
   /// 总使用统计：id -> count
-  Map<String, int> getTotalCounts() => _decodeCounts(_prefs.getString(_keyTotal));
+  Map<String, int> getTotalCounts() =>
+      _decodeCounts(_prefs.getString(_keyTotal));
 
   /// 待上报增量：id -> count
   Map<String, int> getIncrementalForReport() =>
@@ -46,7 +57,13 @@ class EmojiRepository {
           (v is int) ? v : int.tryParse(v.toString()) ?? 0,
         ),
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      developer.log(
+        'emoji usage counts are not decodable',
+        name: 'design_system.emoji',
+        error: error,
+        stackTrace: stackTrace,
+      );
       return {};
     }
   }

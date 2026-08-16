@@ -83,7 +83,7 @@ type CommentCommandResult struct {
 	ID       string              `json:"id"`
 	Version  int64               `json:"version"`
 	Status   commentmodel.Status `json:"status"`
-	Replayed bool                `json:"replayed,omitempty"`
+	Replayed bool                `json:"replayed"`
 }
 
 type CommentAttachmentSlice struct {

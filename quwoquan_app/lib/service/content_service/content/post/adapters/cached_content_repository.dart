@@ -26,6 +26,7 @@ class CachedContentRepository
     required ContentQuerySnapshotStore querySnapshotStore,
     UserProfileAuthorSnapshotCache? userProfileCache,
     Future<List<String>> Function()? blockedKeywordsLoader,
+    // 契约：best-effort 预热，失败自行留痕、不向上抛。
     Future<void> Function(String avatarUrl)? avatarPreloader,
     CacheTelemetrySink telemetrySink = const DeveloperLogCacheTelemetrySink(),
   }) : _feedDelegate = feedDelegate,
@@ -36,7 +37,7 @@ class CachedContentRepository
        _blockedKeywordsLoader = blockedKeywordsLoader ?? _emptyBlockedKeywords,
        _telemetrySink = telemetrySink,
        _avatarPreloader =
-           avatarPreloader ?? AppImageCacheController.preloadAvatar;
+           avatarPreloader ?? AppImageCacheController.warmAvatarCache;
 
   final ContentDiscoveryFeedQuery _feedDelegate;
   final ContentPostDeleteCommandWriter _deleteDelegate;
@@ -328,7 +329,7 @@ class CachedContentRepository
       updatedAt: post.createdAt.toUtc().toIso8601String(),
     );
     if (avatarUrl.isNotEmpty) {
-      unawaited(_avatarPreloader(avatarUrl).catchError((_) => null));
+      unawaited(_avatarPreloader(avatarUrl));
     }
   }
 

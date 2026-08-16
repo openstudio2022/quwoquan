@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/service/content_service/content/comment/application/public/comment_draft_terminal_account_purger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -79,7 +81,15 @@ class CommentDraftStore implements CommentDraftTerminalAccountPurger {
         final draft = CommentDraft.fromJson(decoded);
         return draft.isEmpty ? null : draft;
       }
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 草稿损坏时按「没有草稿」继续，但损坏本身是真实故障，必须留证据。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'content.comment_draft.decode',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       return null;
     }
     return null;

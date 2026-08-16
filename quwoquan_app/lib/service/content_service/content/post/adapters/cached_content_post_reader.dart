@@ -24,10 +24,11 @@ final class CachedContentPostReader
     required this.postCache,
     required this.querySnapshotStore,
     this.userProfileCache,
+    // 契约：best-effort 预热，失败自行留痕、不向上抛。
     Future<void> Function(String avatarUrl)? avatarPreloader,
     this.telemetrySink = const DeveloperLogCacheTelemetrySink(),
   }) : _avatarPreloader =
-           avatarPreloader ?? AppImageCacheController.preloadAvatar;
+           avatarPreloader ?? AppImageCacheController.warmAvatarCache;
 
   final ContentPostDetailReader detailDelegate;
   final ContentAuthorPostsReader authorPostsDelegate;
@@ -150,7 +151,7 @@ final class CachedContentPostReader
       updatedAt: post.createdAt.toUtc().toIso8601String(),
     );
     if (avatarUrl.isNotEmpty) {
-      unawaited(_avatarPreloader(avatarUrl).catchError((_) => null));
+      unawaited(_avatarPreloader(avatarUrl));
     }
   }
 

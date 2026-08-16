@@ -126,8 +126,11 @@ ExtractedMediaCaptureMetadata _metadataFromExif(img.ExifData exif) {
     shutterSpeedSeconds: _positiveDouble(photo['ExposureTime']),
     isoSensitivity: _positiveInt(photo['ISOSpeed']),
     capturedAt: _exifDateTime(_ascii(photo['DateTimeOriginal'])),
-    gpsLatitude: _coordinate(gps['GPSLatitude'], _ascii(gps['GPSLatitudeRef'])),
-    gpsLongitude: _coordinate(
+    gpsLatitude: _tryReadCoordinate(
+      gps['GPSLatitude'],
+      _ascii(gps['GPSLatitudeRef']),
+    ),
+    gpsLongitude: _tryReadCoordinate(
       gps['GPSLongitude'],
       _ascii(gps['GPSLongitudeRef']),
     ),
@@ -184,7 +187,7 @@ DateTime? _exifDateTime(String? raw) {
 }
 
 /// GPS 坐标是 `[度, 分, 秒]` 三个 rational，方向由 `N/S` `E/W` 决定符号。
-double? _coordinate(img.IfdValue? value, String? reference) {
+double? _tryReadCoordinate(img.IfdValue? value, String? reference) {
   if (value == null || reference == null) return null;
   final double degrees;
   final double minutes;

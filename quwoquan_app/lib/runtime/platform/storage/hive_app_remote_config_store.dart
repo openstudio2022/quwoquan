@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/config/app_remote_config_snapshot.dart';
 import 'package:quwoquan_app/runtime/config/app_remote_config_store.dart';
 import 'package:quwoquan_app/runtime/platform/storage/hive_runtime.dart';
@@ -31,7 +33,15 @@ final class HiveAppRemoteConfigStore implements AppRemoteConfigStore {
         persisted,
         source: source,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 缓存损坏时按「无本地配置」继续拉远端，但损坏本身必须留证据。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'runtime.remote_config.read_active_snapshot',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       return null;
     }
   }

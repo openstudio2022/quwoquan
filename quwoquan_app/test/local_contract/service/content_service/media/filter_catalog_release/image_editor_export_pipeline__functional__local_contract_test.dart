@@ -40,7 +40,7 @@ void main() {
       final small = await _solidImage(64, 32);
       final smallBytes = await ImageEditorExportEngine.encodePng(small);
       final decoded = await ImageEditorExportEngine.decodeConstrained(
-        smallBytes!,
+        smallBytes,
       );
       expect(decoded.width, 64);
       expect(decoded.height, 32);
@@ -48,7 +48,7 @@ void main() {
       final wide = await _solidImage(400, 100);
       final wideBytes = await ImageEditorExportEngine.encodePng(wide);
       final constrained = await ImageEditorExportEngine.decodeConstrained(
-        wideBytes!,
+        wideBytes,
         maxDimension: 200,
       );
       expect(constrained.width, 200);
@@ -324,10 +324,13 @@ void main() {
         48,
         color: const ui.Color(0xFF2266AA),
       );
-      final jpeg = await ImageEditorExportEngine.encodeDeliveryJpeg(image);
-      expect(jpeg, isNotNull);
+      // 类型注解本身就是断言：签名非可空，编码失败只能抛出，不能退化成 null。
+      // spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/absent-empty-failure-nullability/spec.md#gwt-002
+      final Uint8List jpeg = await ImageEditorExportEngine.encodeDeliveryJpeg(
+        image,
+      );
       // JPEG 魔数
-      expect(jpeg![0], 0xFF);
+      expect(jpeg[0], 0xFF);
       expect(jpeg[1], 0xD8);
       final decoded = await ImageEditorExportEngine.decodeConstrained(jpeg);
       expect(decoded.width, 64);

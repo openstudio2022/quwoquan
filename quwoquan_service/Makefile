@@ -51,7 +51,7 @@ export QWQ_OUTPUT_ROOT
 export PYTHONDONTWRITEBYTECODE ?= 1
 
 # ─── Quality Gate ────────────────────────────────────────────────────
-gate: verify-metadata verify-redis-routes verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission
+gate: verify-metadata verify-redis-routes verify-go-single-module verify-service-layering verify-production-wiring-purity verify-api-edge-rate-limit-single-track verify-append-only-fact-command-admission verify-nullability-single-semantics
 	@PYTHONDONTWRITEBYTECODE=1 python3 ../quwoquan_ops/gate/verify_service_architecture.py
 	@set -e; for service in $(DOMAIN_SERVICES); do \
 		echo "[gate] $$service"; \
@@ -160,6 +160,11 @@ verify-shared-contract-enums: service-contract-view
 
 verify-storage-keyset-single-track:
 	go test ./tools/codegen_storage -run 'TestStorageSchemaKeepsTopLevelKeySetClosed|TestCodegenStorageReaderKeySetIsSubsetOfSchema|TestStorageSchemaKeysArePartitionedByCodegenConsumption|TestCodegenStorageReaderHasNoDeadKeys' -count=1
+
+# 契约可空性只有一种读法：必填缺失 fail-closed，可空的缺席与空值不得互相塌陷，
+# 生成器不得补入契约未声明的默认值。没有这条过滤目标时，这些测试只是躺在树里。
+verify-nullability-single-semantics:
+	go test ./tools/codegen_app_metadata -run 'TestAssistantWireRequiredScalarsFailClosedOnAbsence|TestAssistantWireNullableScalarsKeepAbsenceDistinctFromEmpty|TestRtcPayloadWithoutDefaultKeepsAbsence|TestRtcPayloadWithDefaultUsesDeclaredValue' -count=1
 
 verify-storage-index-governance:
 	go run ./tools/storage_index_governance -repo-root "$(REPO_ROOT)"

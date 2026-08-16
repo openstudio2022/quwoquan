@@ -1,4 +1,5 @@
 import "package:quwoquan_cloud_contracts/generated/chat_contracts.dart";
+
 import 'dart:async';
 import 'dart:collection';
 
@@ -94,8 +95,10 @@ class ConversationAvatarMembersNotifier
     if (ids.isEmpty) {
       return;
     }
+    // `_loadMembers` 已经把失败收敛成「留痕 + 空成员」，`ensureLoaded` 不会抛，
+    // 所以这里不再吞一次：多余的 catchError 只会把将来真出现的异常也一起藏掉。
     await Future.wait<void>(
-      ids.map((id) => ensureLoaded(id).then((_) {}).catchError((_, _) => null)),
+      ids.map((id) => ensureLoaded(id).then((_) {})),
       eagerError: false,
     );
   }
@@ -130,7 +133,18 @@ class ConversationAvatarMembersNotifier
       );
       _store(conversationId, normalized);
       return normalized;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 取不到成员时群头像会画成空的，这跟「这个会话真的没有别人」在界面上完全
+      // 一样，用户和运维都看不出发生了故障，所以降级本身必须可观测。
+      unawaited(
+        ref
+            .read(exceptionTelemetryPortProvider)
+            .recordHandledException(
+              source: 'chat.conversation_avatar.load_members',
+              error: error,
+              stackTrace: stackTrace,
+            ),
+      );
       _store(conversationId, const <ConversationMemberListRow>[]);
       return const <ConversationMemberListRow>[];
     }

@@ -962,7 +962,16 @@ DateTime? _accessTokenExpiryForScheduling(String token) {
       expirySeconds * Duration.millisecondsPerSecond,
       isUtc: true,
     );
-  } catch (_) {
+  } catch (error, stackTrace) {
+    // 拿不到 exp 只影响主动刷新调度，会话仍按被动刷新工作；但 token 结构异常
+    // 是安全相关信号，不能连一行证据都不留。
+    unawaited(
+      AppExceptionTelemetryService.instance.recordHandledException(
+        source: 'runtime.auth.access_token_expiry_parse',
+        error: error,
+        stackTrace: stackTrace,
+      ),
+    );
     return null;
   }
 }

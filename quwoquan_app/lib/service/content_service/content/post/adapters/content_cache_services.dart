@@ -13,6 +13,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_read_model_projection.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/cache_read_result.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/cache_telemetry_sink.dart';
+import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/object_cache_store.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show ContentFeedEmptyReason, ContentFeedOutcome, isCanonicalSha256Digest;
@@ -228,7 +229,15 @@ class ContentQuerySnapshot {
         outcome: outcome,
         emptyReason: emptyReason,
       );
-    } catch (_) {
+    } catch (error, stackTrace) {
+      // 快照损坏时按「无缓存」继续，但损坏本身是真实故障，必须留证据。
+      unawaited(
+        AppExceptionTelemetryService.instance.recordHandledException(
+          source: 'content.query_snapshot.decode',
+          error: error,
+          stackTrace: stackTrace,
+        ),
+      );
       return null;
     }
   }
@@ -302,9 +311,9 @@ class ContentQuerySnapshotPersistencePolicy {
   List<ContentQuerySnapshot> selectPersistableSnapshots(
     Iterable<ContentQuerySnapshot> snapshots,
   ) {
-    return selectPersistableSnapshotChains(
-      snapshots,
-    ).expand((chain) => chain).toList(growable: false);
+    return selectPersistableSnapshotChains(snapshots)
+        .expand((chain) => chain)
+        .toList(growable: false);
   }
 
   List<List<ContentQuerySnapshot>> selectPersistableSnapshotChains(
