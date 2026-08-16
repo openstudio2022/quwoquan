@@ -256,6 +256,22 @@ def select_pytest_paths(paths: list[str]) -> list[str]:
     seen: set[str] = set()
     source_mappings = (
         (
+            "quwoquan_ops/gate/commit_gate",
+            (
+                "quwoquan_ops/tests/local_contract/ci/"
+                "test_commit_gate_fast_path__local_contract_test.py",
+                "quwoquan_ops/tests/local_contract/gate/"
+                "test_commit_gate_select__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_ops/gate/verify_github_supply_chain.py",
+            (
+                "quwoquan_ops/tests/local_contract/release/"
+                "test_service_supply_chain_provenance__supply_chain__local_contract_test.py",
+            ),
+        ),
+        (
             "quwoquan_ops/ci/provider_conformance/provider_patrol_lib/",
             (
                 "quwoquan_ops/tests/local_contract/provider/"

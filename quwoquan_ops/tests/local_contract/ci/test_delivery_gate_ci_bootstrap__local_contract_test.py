@@ -99,6 +99,23 @@ def test_delivery_gate_parallelizes_safe_checks_on_hosted_runners() -> None:
     assert "runs-on: macos-latest" not in delivery
 
 
+def test_search_smoke_builds_the_pinned_cjk_provider_before_api_tests() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    job_start = workflow.index("  search_contract_smoke:\n")
+    job_end = workflow.index("\n  quwoquan_app_static:\n", job_start)
+    job = workflow[job_start:job_end]
+
+    build = (
+        "docker build \\\n"
+        "            --tag quwoquan/elasticsearch-cjk:8.13.4"
+    )
+    test = "go test ./services/search-service/tests/api_integration/search/search_index_view"
+    assert build in job
+    assert job.index(build) < job.index(test)
+
+
 def test_environment_writing_jobs_stay_on_controlled_runners() -> None:
     for workflow_path in (
         ROOT / ".github/workflows/pre-release-gate.yml",

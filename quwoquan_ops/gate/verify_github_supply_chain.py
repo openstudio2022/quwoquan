@@ -66,9 +66,13 @@ def verify_production_execution_isolation() -> list[str]:
     }
     for path in sorted([*WORKFLOWS.glob("*.yml"), *WORKFLOWS.glob("*.yaml")]):
         text = path.read_text(encoding="utf-8")
+        if "prod-release" in text:
+            failures.append(
+                f"{path.relative_to(ROOT)} must not target the retired prod-release runner label"
+            )
         if path in deploy_paths:
             for token in (
-                "runs-on: [self-hosted, macOS, prod-release]",
+                "runs-on: [self-hosted, macOS, ARM64]",
                 "environment: production",
                 "verify_release_governance.py",
                 "governance-receipt.json",
@@ -78,10 +82,6 @@ def verify_production_execution_isolation() -> list[str]:
                     failures.append(
                         f"{path.relative_to(ROOT)} missing production isolation control: {token}"
                     )
-        elif "prod-release" in text:
-            failures.append(
-                f"{path.relative_to(ROOT)} must not target the dedicated prod-release runner"
-            )
     return failures
 
 

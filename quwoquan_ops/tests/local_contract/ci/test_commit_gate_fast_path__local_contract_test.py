@@ -155,6 +155,19 @@ class CommitGateFastPathTest(unittest.TestCase):
         self.assertIn("PYTEST_ADDOPTS", source)
         self.assertIn("cache_dir=$QWQ_OUTPUT_ROOT/env/repo/local/tests/cache/pytest", source)
 
+    def test_commit_gate_scrubs_hook_git_environment_before_pytest(self) -> None:
+        source = COMMIT_GATE.read_text(encoding="utf-8")
+
+        pytest_start = source.index('start_test_job "pytest_impacted"')
+        pytest_end = source.index("start_test_job \"smoke_marker\"", pytest_start)
+        pytest_block = source[pytest_start:pytest_end]
+        self.assertIn("git rev-parse --local-env-vars", pytest_block)
+        self.assertIn('unset "$git_local_var"', pytest_block)
+        self.assertLess(
+            pytest_block.index("git rev-parse --local-env-vars"),
+            pytest_block.index('"$pytest_python" -m pytest'),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
