@@ -26,7 +26,10 @@ from quwoquan_ops.cli.lib.observability import (
 )
 from quwoquan_ops.cli.lib.runtime_log_process import run_logged_process
 from quwoquan_ops.gate.verify_observability_envelope import envelope_issues
-from quwoquan_ops.gate.verify_observability_layout import layout_issues
+from quwoquan_ops.gate.verify_observability_layout import (
+    layout_issues,
+    materialize_repo_gate_observability_run,
+)
 
 
 def test_canonical_deploy_log_accepts_canonical_writer_fields(tmp_path: Path) -> None:
@@ -50,6 +53,18 @@ def test_canonical_deploy_log_accepts_canonical_writer_fields(tmp_path: Path) ->
         },
     )
 
+    assert layout_issues(root) == []
+    assert envelope_issues(root) == []
+
+
+def test_repo_gate_materializes_real_canonical_observability_before_validation(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / ".qwq_output"
+
+    run = materialize_repo_gate_observability_run(root)
+
+    assert run.is_dir()
     assert layout_issues(root) == []
     assert envelope_issues(root) == []
 
