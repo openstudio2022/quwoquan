@@ -7,13 +7,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 
 
-def test_delivery_gate_bootstrap_uses_pinned_cached_toolchains() -> None:
+def test_delivery_gate_bootstrap_uses_pinned_verified_toolchains() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
 
-    assert "subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2" in workflow
+    assert "subosito/flutter-action@" not in workflow
     assert "quwoquan_app/.flutter-version" in workflow
-    assert "flutter-version: ${{ steps.flutter_version.outputs.value }}" in workflow
-    assert "cache: true" in workflow
+    assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve" in workflow
+    assert "python3 quwoquan_ops/ci/setup_flutter_sdk.py install" in workflow
+    assert "Cache lock-bound Dart dependencies" in workflow
+    assert (
+        "path: |\n            ${{ steps.flutter.outputs.cache_path }}" not in workflow
+    )
     assert "cache-dependency-path: quwoquan_ops/portal/package-lock.json" in workflow
     assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in workflow
     assert "pip install -r quwoquan_data/requirements.txt" in workflow
