@@ -2,7 +2,8 @@
   "schema": "quwoquan.elasticsearch_cjk_supply_chain.v1",
   "elasticsearch": {
     "version": "8.13.4",
-    "image": "docker.elastic.co/elasticsearch/elasticsearch@sha256:5af05323c9bfc52fcee63a47c682412a6ef5955ac85966f045a68ba8623db2e1",
+    "image": "docker.elastic.co/elasticsearch/elasticsearch@sha256:dfd318b417be1356d9c7fdd6a5577c8a45553ac9d34354929a416c69c85daa9f",
+    "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
     "license": "Elastic-License-2.0"
   },
   "plugins": [

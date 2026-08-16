@@ -130,11 +130,7 @@ func (projection *MongoUserProfileSearchProjection) applyProviderProjection(
 	ctx context.Context,
 	event application.UserProfileSearchProjectionEvent,
 ) error {
-	op := es.OpUpsert
-	if event.Operation == "delete" {
-		op = es.OpDelete
-	}
-	if err := projection.writer.Apply(ctx, es.ChangeEvent{Op: op, Doc: event.Document()}); err != nil {
+	if err := projection.writer.Apply(ctx, BuildProviderChangeEvent(event)); err != nil {
 		// The Search checkpoint is deliberately not advanced. Provider upserts and
 		// deletes use a stable object ID, so the pending stream event can replay.
 		return fmt.Errorf(
@@ -142,6 +138,20 @@ func (projection *MongoUserProfileSearchProjection) applyProviderProjection(
 		)
 	}
 	return nil
+}
+
+// BuildProviderChangeEvent translates one durable UserProfile projection event
+// into the provider-owned Search document mutation. The search-service internal
+// boundary exports the pure translation so canonical local contracts can verify
+// replay identity without reaching into a concrete Mongo projection instance.
+func BuildProviderChangeEvent(
+	event application.UserProfileSearchProjectionEvent,
+) es.ChangeEvent {
+	op := es.OpUpsert
+	if event.Operation == "delete" {
+		op = es.OpDelete
+	}
+	return es.ChangeEvent{Op: op, Doc: event.Document()}
 }
 
 func (projection *MongoUserProfileSearchProjection) commitCheckpoint(

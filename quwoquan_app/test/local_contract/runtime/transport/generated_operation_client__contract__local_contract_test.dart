@@ -114,6 +114,14 @@ void main() {
     () async {
       final executor = _RecordingExecutor(
         response: <String, Object?>{
+          'interpretedQuery': <String, Object?>{
+            'normalized': '西湖',
+            'tokens': <String>['西湖'],
+            'variants': <String>[],
+            'detectedEntities': <String>[],
+            'detectedTags': <String>[],
+            'selectedObjectTypes': <String>['article'],
+          },
           'hits': <Object?>[
             <String, Object?>{
               'target': 'article',

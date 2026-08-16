@@ -234,7 +234,7 @@ func (s *PgProfileStore) EnqueueUserProfileSearchBackfill(
 		operation = "delete"
 	}
 	projection := repository.UserProfileSearchProjection{
-		EventID: userProfileSearchBackfillEventID(
+		EventID: UserProfileSearchBackfillEventID(
 			profile.UserID,
 			int64(profile.ProfileVersion),
 			occurredAt,
@@ -299,7 +299,7 @@ func appendUserProfileSearchProjections(
 		}
 		eventID := strings.TrimSpace(projection.EventID)
 		if eventID == "" {
-			eventID = userProfileSearchProjectionEventID(
+			eventID = UserProfileSearchProjectionEventID(
 				projection.UserID,
 				projection.ProfileVersion,
 				projection.EventType,
@@ -341,7 +341,9 @@ func appendUserProfileSearchProjections(
 	return nil
 }
 
-func userProfileSearchProjectionEventID(
+// UserProfileSearchProjectionEventID returns the stable identity shared by
+// retries of one committed write-path profile projection.
+func UserProfileSearchProjectionEventID(
 	userID string,
 	profileVersion int64,
 	eventType string,
@@ -355,7 +357,9 @@ func userProfileSearchProjectionEventID(
 	return "ups_" + hex.EncodeToString(digest[:24])
 }
 
-func userProfileSearchBackfillEventID(
+// UserProfileSearchBackfillEventID returns an attempt-specific identity so a
+// later repair cannot collide with either a prior backfill or the write path.
+func UserProfileSearchBackfillEventID(
 	userID string,
 	profileVersion int64,
 	occurredAt time.Time,
