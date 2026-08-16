@@ -75,6 +75,7 @@
 - Prod 只接受随受审计发布包签名并登记的 persisted query hash；hash 必须精确绑定 operation、对象集合、授权和成本预算，未知 hash、任意 query text、在线注册、超成本查询和 mutation 全部拒绝。
 - `POST /graphql` 的 canonical operation 只能在签名 registry 解出 persisted query hash 后由 GraphQL 专属 authorizer 裁决；通用 REST method/path guard 不得把共享 `/graphql` 路径误判为重复路由，也不得代替 registry 猜测具体 operation。普通 REST route 仍须保持 method/path 唯一并在冲突时 fail-closed。
 - GraphQL 专属 authorizer 的部署描述符集合必须包含 gateway-owned persisted query operation；它不因 gateway 缺少 REST owner upstream 而从 ContractGraph 授权集合消失，同时不得把 gateway operation 注入通用 REST owner proxy。
+- App 侧 gateway-owned persisted query 必须由 `lib/service/api_edge/<context>/<object>/{application,adapters}` 承载对象级 typed port 与 Remote adapter；业务对象只消费该 public port，不得直接持有签名 hash、GraphQL envelope、generated transport 或 invocation context 装配。
 - 嵌套字段只能读取父 Query Slice 或使用批量 DataLoader，不得由 resolver 逐字段跨服务远程调用；所有状态变更继续进入 canonical REST command/write owner。
 - 跨服务业务读取使用对象 owner 的 typed query，可经进程内 application port 或受限内部 HTTP 传输，不绕行 App GraphQL。内部 HTTP 必须绑定 canonical operation/Reader/Slice、验签 service principal、最小 scope、`internal` visibility 与 ContractGraph operation identity，且不进入 App/public exposure。
 - 运营控制面读取可保留明确的 typed REST query，但必须使用验签 operator/admin principal、显式 scope 与 canonical operation，不得作为 App 或公众业务读面。非业务 HTTP 入口另行声明闭集 `transport_role`，且不得返回普通业务 Query Slice。路径名称不产生隐式豁免。
@@ -93,7 +94,7 @@
 
 ## 7. 工程归属
 
-- App：`quwoquan_app/lib/service/realtime_gateway`
+- App：`quwoquan_app/lib/service/api_edge`、`quwoquan_app/lib/service/realtime_gateway`
 - Metadata（协作引用，不用于代码归属）：`quwoquan_service/contracts/metadata/_shared`
 - Service：`quwoquan_service/runtime`、`quwoquan_service/services/api-edge`、`quwoquan_service/services/realtime-gateway`
 - 测试：
@@ -126,13 +127,3 @@
   - api-edge `/graphql` 路由 `commercial.status` 转为 `ready` 且 gap_id 撤销。
   - composition root 装配、签名 registry 发布与至少一条 owner Query Slice（建议 `content.post.GetPost`）的 api_integration 证据绑定本节点。
   - 随后首批迁移波次（零 App 消费的 `GetCounters`、`GetHelperRead`、`GetOwnedMediaAsset` 优先裁决，`GetPost` 作为首条真实切轨）使 `appPublicLegacyRestQueryRoutes` 从 167 严格下降。
-
-<a id="open-003"></a>
-### OPEN-003 App 侧 persisted query 消费缺对象级承载，canonical coverage 无计量单元
-
-- 类型：`capability_gap`
-- 优先级：`P1`
-- 准出影响：`track`
-- 影响或价值：当前 `gateway.persisted_query_execution.SearchPage` 带已提交 `clientContract`，但 App 侧没有任何对象级生产代码承载它——transport 生成代码归 `lib/runtime/transport/graphql_read/generated`（runtime 横切，按 `object_path_map` 设计不承载对象身份），消费端 adapter 归 `search.search_index_view` 对象。已提交 `object_path_map` 义务模型（有 clientContract 的对象 App 侧必须有 `application + adapters` 层）在全仓报告的缺层对象仅此一个，canonical coverage 门对 `app:api_edge/graphql_read/persisted_query_execution` 因无 owned production coverage unit 而 fail-closed。
-- 收敛二选一（必须整体裁决，禁止只改一处消音）：在 App 侧建立 `lib/service/api_edge_service/graphql_read/persisted_query_execution/{application,adapters}` 对象级 typed port，把 search 对 transport 生成代码的直接消费收口进去；或架构裁定 GraphQL persisted read 端侧承载即 runtime 横切、不产生对象义务，则同步修改 `required_app_layers` 义务模型与 coverage 门的 `expected_app_capability_units` 并在本节点 design 记 DEC。
-- 完成判定：`DOM-001` 对应的工程映射覆盖该对象——canonical coverage 门（`quwoquan_ops/tests/local_contract/gate/test_canonical_coverage__gate__local_contract_test.py` 的 `test_app_scope_measures_the_real_repository_instead_of_an_empty_roster` 与 `test_app_entry_and_l10n_sources_are_measured_not_dropped`）在真实仓库上通过，且 `object_path_map` 缺层报告归零。

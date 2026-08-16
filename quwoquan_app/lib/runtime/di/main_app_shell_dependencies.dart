@@ -11,6 +11,7 @@ import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/in
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/active_call_bar.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/pip_call_overlay.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/my_profile_page.dart';
+import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart';
 
 class MainAppShellActiveCallRoute {
   const MainAppShellActiveCallRoute({
@@ -49,7 +50,9 @@ class MainAppShellBindings {
     return HomeFeaturedImmersivePage(onExitToHome: onExitToHome);
   }
 
-  Widget buildActionsDiscovery() => const GatheringActionsDiscoveryPage();
+  Widget buildActionsDiscovery() => GatheringActionsDiscoveryPage(
+    buildIntersectionInbox: buildGatheringIntersectionInboxSlot,
+  );
 
   Widget buildProfile() => const MyProfilePage();
 

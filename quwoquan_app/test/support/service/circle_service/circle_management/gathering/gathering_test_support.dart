@@ -6,11 +6,23 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
+    show
+        gatheringDetailGatheringPostsReaderProvider,
+        gatheringDetailSocialProofReaderProvider;
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_ports.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/domain/gathering_models.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/presentation/gathering_page_copy.dart';
 import 'package:quwoquan_app/service/circle_service/circle_management/gathering/application/public/gathering_presentation_models.dart';
 import 'package:quwoquan_app/runtime/di/gathering_dependencies.dart';
+import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart'
+    show ContentGatheringPostsReader, ContentGatheringSocialProofReader;
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentGatheringPostsQuery, GatheringSocialProofSummary;
+
+import '../../../../runtime/cloud_boundary_test_scope.dart';
 
 const GatheringCreatePageCopy gatheringCreateTestCopy = GatheringCreatePageCopy(
   pageTitle: 'CREATE',
@@ -478,9 +490,8 @@ final class InMemoryGatheringPort
   ) async => GatheringHostCardPage.empty;
 
   @override
-  Future<GatheringHostCardPage> listMine(
-    GatheringMineListQuery query,
-  ) async => GatheringHostCardPage.empty;
+  Future<GatheringHostCardPage> listMine(GatheringMineListQuery query) async =>
+      GatheringHostCardPage.empty;
 
   @override
   Future<GatheringCommandResult> removeParticipant(
@@ -541,10 +552,54 @@ final class InMemoryGatheringPort
   }
 }
 
-List<Override> gatheringBoundaryOverrides(InMemoryGatheringPort port) {
+final class _EmptyGatheringPostsReader implements ContentGatheringPostsReader {
+  @override
+  Future<CursorPage<ContentPostViewData>> listPostsByGathering({
+    required String gatheringId,
+    String? cursor,
+    int limit = ContentGatheringPostsQuery.defaultLimit,
+  }) async {
+    return const CursorPage<ContentPostViewData>(
+      items: <ContentPostViewData>[],
+      nextCursor: null,
+    );
+  }
+}
+
+final class _ZeroGatheringSocialProofReader
+    implements ContentGatheringSocialProofReader {
+  @override
+  Future<GatheringSocialProofSummary> getGatheringSocialProof({
+    required String anchorKind,
+    required String objectId,
+  }) async {
+    return GatheringSocialProofSummary(
+      anchorKind: anchorKind,
+      objectId: objectId,
+      publishedCount: 0,
+      formedCount: 0,
+      experiencedCount: 0,
+    );
+  }
+}
+
+List<Override> gatheringBoundaryOverrides(
+  InMemoryGatheringPort port, {
+  ContentGatheringPostsReader? gatheringPostsReader,
+  ContentGatheringSocialProofReader? socialProofReader,
+  List<Override> extra = const <Override>[],
+}) {
   return <Override>[
+    ...sealedCloudBoundaryOverrides(),
     gatheringCommandWriterProvider.overrideWithValue(port),
     gatheringQueryReaderProvider.overrideWithValue(port),
+    gatheringDetailGatheringPostsReaderProvider.overrideWithValue(
+      gatheringPostsReader ?? _EmptyGatheringPostsReader(),
+    ),
+    gatheringDetailSocialProofReaderProvider.overrideWithValue(
+      socialProofReader ?? _ZeroGatheringSocialProofReader(),
+    ),
+    ...extra,
   ];
 }
 

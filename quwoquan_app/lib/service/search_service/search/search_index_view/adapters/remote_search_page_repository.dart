@@ -1,5 +1,5 @@
+import 'package:quwoquan_app/service/api_edge/graphql_read/persisted_query_execution/application/public/persisted_search_page_query.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/public/search_query_contract.dart';
-import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_page_query_facet.dart';
 import 'package:quwoquan_app/service/search_service/search/search_index_view/application/search_repository.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_cloud_contracts/generated/gateway_contracts.dart';
@@ -13,7 +13,7 @@ final class RemoteSearchPageRepository implements SearchRepository {
 
   static const int _maximumPageItems = 20;
 
-  final SearchPageQueryFacet remoteQuery;
+  final PersistedSearchPageQuery remoteQuery;
 
   @override
   Future<SearchResponse> search(
