@@ -121517,7 +121517,7 @@
           },
           {
             "path": "quwoquan_service/services/search-service/internal/search/search_index_view/infrastructure/userprofile/mongo_projection.go",
-            "sha256": "d79842a1bf7793c3ae3d547d38270c5addf37032cd775cdfa1e23f93ab36435e"
+            "sha256": "66421276bfa227543624593ffc1f300d73edb50866ab3f08dd9c2632ae8c3bc0"
           }
         ],
         "outbox": [],
@@ -121668,7 +121668,7 @@
           },
           {
             "path": "quwoquan_service/services/search-service/tests/local_contract/search/search_index_view/user_profile_projection_ingestion__contract__local_contract_test.go",
-            "sha256": "64479987072d53f572b198eecea0a3e0af8468359bda95b29868c753fa541070"
+            "sha256": "3a63b4da4a9f4e75f339234ac053aec9c82ae4d00966b2a93bc03321c8fe252a"
           }
         ],
         "apiIntegration": [
@@ -125239,7 +125239,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence/pg_profile_store_ext.go",
-            "sha256": "37e1dd173c0d4b382d672d4f9f36273827f5b89b4dd79ea077f46343b45a9be5"
+            "sha256": "b3ada7fd0dc6b517134f29a8987a5d542f2e5dd9f381eb332dafd8c1c24d9055"
           },
           {
             "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence/profile_search_outbox_store.go",
@@ -125302,7 +125302,7 @@
             "storage": "user_profile_search_outbox",
             "artifact": {
               "path": "quwoquan_service/services/user-service/internal/account/user_account/infrastructure/persistence/pg_profile_store_ext.go",
-              "sha256": "37e1dd173c0d4b382d672d4f9f36273827f5b89b4dd79ea077f46343b45a9be5"
+              "sha256": "b3ada7fd0dc6b517134f29a8987a5d542f2e5dd9f381eb332dafd8c1c24d9055"
             }
           }
         ],
@@ -125633,7 +125633,7 @@
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/profile_search_projection_event__contract__local_contract_test.go",
-            "sha256": "a9240a190756e74ae877792f5316b534fc1fb5d74927100424f81a0d9c4d5694"
+            "sha256": "bf2c3d33b7eb4357eb81626636f7b5e5ed791c06daa49cd85fcf41043b22eec0"
           },
           {
             "path": "quwoquan_service/services/user-service/tests/local_contract/account/user_account/profile_search_projection_stream__reliability__local_contract_test.go",
