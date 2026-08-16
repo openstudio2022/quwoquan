@@ -2,7 +2,7 @@
 
 P4 主干归一：移除「homepage-only 内容类型 → 临时 feature 分支」绑定。
 分支不再是内容类型配置；商业执行只认 `quwoquan_ops/policies/branch_policy.yaml`
-声明的正式 mainline 分支（allowed_local_branches）。执行实例照旧把当前
+声明的长期集成/发布分支（allowed_local_branches）。执行实例照旧把当前
 branch/commit 冻结进 spec/证据（可重放审计），但校验对象是 branch policy，
 不是任何按内容类型推导出来的分支。
 """
@@ -200,7 +200,7 @@ def execution_branch_issues(
     if actual not in allowed:
         issues.append(
             f"当前 git 分支 {actual!r} 不在正式分支 allowlist {allowed}；"
-            "商业执行只允许 mainline（临时 feature 分支绑定已废止）"
+            "商业执行只允许 branch_policy 声明的长期集成/发布分支"
         )
     return issues
 

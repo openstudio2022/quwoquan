@@ -1,8 +1,25 @@
 allowed_local_branches:
+  - dev1.0
   - main
 
 allowed_remote_branches:
+  - dev1.0
   - main
 
 pull_request_branch_prefixes:
   - codex/
+
+integration_branch: dev1.0
+release_branch: main
+production_source_branch: main
+
+allowed_pull_request_edges:
+  - head_prefix: codex/
+    base: dev1.0
+  - head: dev1.0
+    base: main
+
+system_backsync:
+  head: main
+  base: dev1.0
+  mode: fast_forward_only

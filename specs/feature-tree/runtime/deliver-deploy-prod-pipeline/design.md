@@ -11,7 +11,7 @@
 
 ## 2. Story 协作与状态流
 
-- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：`main` 是唯一长期发布主干；短期 PR 分支受控、合入即删，退役分支只保留 archive tag/bundle。
+- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：`dev1.0` 承接长期集成，`main` 承接唯一发布；短期 PR 分支受控、合入即删，禁止第三长期分支。
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
 - [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
@@ -29,13 +29,13 @@
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 main 后只允许一条权威受控主链
-- 决策：main 后只允许一条权威受控主链。
-- 分支真相：`main` 同时是唯一长期开发与发布真相源；短期 PR 分支不是第二主干，禁止从 archive tag/bundle 恢复为活动发布分支。
+### DEC-001 dev1.0 集成与 main 发布组成唯一受控主链
+- 决策：长期集成真相源固定为 `dev1.0`，唯一发布真相源固定为 `main`，两者组成唯一受控主链且禁止第三长期分支。
+- 分支真相：正常开发只通过 `codex/* -> dev1.0` PR，发布只通过 `dev1.0 -> main` promotion PR；promotion 成功后系统才可将 `main` fast-forward backsync 到 `dev1.0`，人工 PR 或非 fast-forward 回写均被拒绝。
 - 理由：以 `alpha-local`、`beta-local`、`gamma` 本地镜像和 `prod-hosted` 为环境边界，由 `stackctl` 与 GitHub Actions 统一完成打包、启动、健康检查、端云验证、灰度发布与回滚。
-- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
+- 被否决方案：`main` 同时承担日常集成、恢复第三长期分支、`codex/* -> main` 直达发布、人工 `main -> dev1.0` 回写，或由调用方、页面、脚本复制本层状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
-- main push 自动启动同一 DAG，完成不可变 OCI `ReleaseEvidenceManifest` 的 `component-ready -> candidate-ready` 总装与 Alpha/Beta/Gamma 阻断验证；正式 Prod apply 不由 workflow_run 或 push 静默执行，必须由人工 dispatch 绑定可达 main 的精确 Git SHA、显式设置非 dry-run，并通过 production environment approval。
+- main push 自动启动同一 DAG，完成不可变 OCI `ReleaseEvidenceManifest` 的 `component-ready -> candidate-ready` 总装与 Alpha/Beta/Gamma 阻断验证；正式 Prod apply 不由 workflow_run 或 push 静默执行，必须由人工 dispatch 绑定可达 `main` 的精确 Git SHA、显式设置非 dry-run，并通过 production environment approval。
 - `candidate-ready` 必须绑定四环境配置包、四环境 App 真实 payload、ContractGraph、真实 Provider readiness 与三层测试；按序接受 Alpha/Beta/Gamma 回执并绑定 rollback readiness 后才成为 `deployable`，Prod 全量验证后才成为 `released`。
 - 同一候选制品就绪后，Alpha、Beta、Gamma-local 在隔离运行面并行执行；聚合器仍按 `alpha -> beta -> gamma` 验证回执，任一失败均不得申请 Prod approval。
 - Prod 只保留一个 production environment approval 与一个事务 job；checkout、OIDC/registry login、ReleaseEvidenceManifest 验签、治理校验和配置包物化只执行一次，随后由 `stackctl` 依次推进 `canary、5、20、50、100`。

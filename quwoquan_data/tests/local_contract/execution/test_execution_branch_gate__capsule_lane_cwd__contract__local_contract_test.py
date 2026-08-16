@@ -15,6 +15,10 @@ from core.execution_branch import (
 )
 
 
+def test_repository_policy_exposes_integration_and_release_branches() -> None:
+    assert branch_policy_allowed_branches() == ["dev1.0", "main"]
+
+
 def test_branch_gate_resolves_policy_from_tree_root_not_process_cwd(
     tmp_path: Path,
 ) -> None:

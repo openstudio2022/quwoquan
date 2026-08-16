@@ -80,7 +80,7 @@ def test_detached_branch_fallback_requires_campaign_context(
     }
 
 
-def test_capsule_captured_dev_branch_remains_a_typed_branch_blocker(
+def test_main_only_fixture_still_rejects_capsule_captured_dev_branch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -102,7 +102,7 @@ def test_capsule_captured_dev_branch_remains_a_typed_branch_blocker(
     assert current_git_branch(cwd=capsule) == "dev1.0"
     assert execution_branch_issues(cwd=capsule) == [
         "当前 git 分支 'dev1.0' 不在正式分支 allowlist ['main']；"
-        "商业执行只允许 mainline（临时 feature 分支绑定已废止）"
+        "商业执行只允许 branch_policy 声明的长期集成/发布分支"
     ]
 
 
