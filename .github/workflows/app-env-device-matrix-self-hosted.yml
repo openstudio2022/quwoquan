@@ -621,7 +621,7 @@ jobs:
     needs: [beta_stack, android_device_matrix, ios_device_matrix]
     if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 1
+    timeout-minutes: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' && 20 || 2 }}
     permissions:
       contents: read
       attestations: read
@@ -639,6 +639,7 @@ jobs:
         name: Start aggregation timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        if: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}
         with:
           ref: ${{ needs.beta_stack.outputs.source_git_sha || github.sha }}
           path: .qwq_output/env/repo/local/device-matrix/cache/checkouts/${{ github.run_id }}/${{ github.run_attempt }}/aggregate

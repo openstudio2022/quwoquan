@@ -195,7 +195,17 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "timeout-minutes: 120" not in combined
     assert "timeout-minutes: 30" not in combined
     assert "20 || 2" in jobs["beta_stack"]["timeout-minutes"]
-    assert aggregate_job["timeout-minutes"] == "1"
+    assert "mainline_auto_prod" in aggregate_job["timeout-minutes"]
+    assert "20" in aggregate_job["timeout-minutes"]
+    assert "|| 2" in aggregate_job["timeout-minutes"]
+    aggregate_checkout = next(
+        step
+        for step in aggregate_job["steps"]
+        if step.get("uses", "").startswith("actions/checkout@")
+    )
+    assert aggregate_checkout["if"] == (
+        "${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}"
+    )
     assert "10 || 1" in jobs["beta_teardown"]["timeout-minutes"]
     platform_payload = yaml.load(platform_text, Loader=yaml.BaseLoader)
     platform_timeout = platform_payload["jobs"]["device"]["timeout-minutes"]
