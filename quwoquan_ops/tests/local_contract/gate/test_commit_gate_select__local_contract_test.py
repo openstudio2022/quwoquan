@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from quwoquan_ops.gate.commit_gate_select import classify, static_checks
+from quwoquan_ops.gate.commit_gate_select import (
+    classify,
+    select_pytest_paths,
+    static_checks,
+)
 
 
 def _checks(*paths: str) -> list[str]:
@@ -52,3 +56,21 @@ def test_contract_spec_and_dart_changes_keep_their_required_static_gates() -> No
     assert "app_generated_manifest" in contract_checks
     assert "metadata_contract" in contract_checks
     assert "commercial_contract" in contract_checks
+
+
+def test_python_test_selection_uses_the_narrow_owner_tree() -> None:
+    assert select_pytest_paths(
+        ["quwoquan_ops/policies/gates/assistant_search_weak_typing_baseline.json"]
+    ) == ["quwoquan_ops/tests/local_contract/gate"]
+    assert select_pytest_paths(
+        ["quwoquan_ops/cli/commands/dev_session_runtime.py"]
+    ) == ["quwoquan_ops/tests/local_contract/stackctl"]
+    assert select_pytest_paths(
+        [
+            "quwoquan_ops/tests/local_contract/ci/"
+            "test_delivery_gate_ci_bootstrap__local_contract_test.py"
+        ]
+    ) == [
+        "quwoquan_ops/tests/local_contract/ci/"
+        "test_delivery_gate_ci_bootstrap__local_contract_test.py"
+    ]
