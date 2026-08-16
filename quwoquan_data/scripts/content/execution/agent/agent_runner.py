@@ -31,6 +31,8 @@ from content.execution.context import (
     _managed_uses_serial_local_cursor,
 )
 
+_EXTRACTED_DEPENDENCIES = (sys,)
+
 _CURSOR_BRIDGE_MAX_RETRIES = active_runtime_policy().cursor_bridge_max_retries
 _PROCESS_TERMINATION_TIMEOUT_SECONDS = (
     active_runtime_policy().process_termination_timeout_seconds
@@ -41,56 +43,28 @@ _CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS = (
 _CURSOR_BRIDGE_READY_DELAY_SECONDS = active_runtime_policy().bridge_ready_delay_seconds
 
 
-def _cursor_provider_rejection(message: str, *, code: str = "") -> bool:
-    """Identify non-retryable account/quota rejection from the public SDK."""
-    classified = classify_provider_failure(message, code=code)
-    return (
-        classified.kind is AgentFailureKind.PROVIDER_REJECTED
-        and not classified.retryable
+def _cursor_provider_rejection(*args: Any, **kwargs: Any) -> bool:
+    from content.execution.agent.agent_runner_support import (
+        _cursor_provider_rejection as implementation,
     )
 
-
-def _prompt_cursor_agent(
-    agent_cls: Any,
-    prompt: str,
-    agent_options: Any,
-    *,
-    client: Any,
-) -> tuple[Any, str]:
-    """Run one prompt and preserve the SDK terminal status explanation."""
-    agent = agent_cls.create(agent_options, client=client)
-    try:
-        run = agent.send(prompt)
-        terminal_message = ""
-        for event in run.events():
-            message = getattr(event, "sdk_message", None)
-            if (
-                getattr(message, "type", "") == "status"
-                and str(getattr(message, "status", "")).casefold() == "error"
-            ):
-                terminal_message = str(getattr(message, "message", "") or "").strip()
-        return run.wait(), terminal_message
-    finally:
-        agent.close()
+    return implementation(*args, **kwargs)
 
 
-def _close_cursor_client(
-    client_context: Any,
-    *,
-    workspace: Path,
-    terminate_bridges: bool,
-) -> None:
-    """Close the public client and reap any managed-local bridge it leaves behind."""
-    try:
-        client_context.__exit__(None, None, None)
-    except Exception as exc:  # noqa: BLE001
-        print(
-            f"[cursor-agent] client close failed: {type(exc).__name__}",
-            file=sys.stderr,
-        )
-    finally:
-        if terminate_bridges:
-            _terminate_workspace_cursor_bridges(workspace)
+def _prompt_cursor_agent(*args: Any, **kwargs: Any) -> tuple[Any, str]:
+    from content.execution.agent.agent_runner_support import (
+        _prompt_cursor_agent as implementation,
+    )
+
+    return implementation(*args, **kwargs)
+
+
+def _close_cursor_client(*args: Any, **kwargs: Any) -> None:
+    from content.execution.agent.agent_runner_support import (
+        _close_cursor_client as implementation,
+    )
+
+    return implementation(*args, **kwargs)
 
 
 def _default_managed_agent_runner(ctx: ExecutionContext, prompt: str):
@@ -567,8 +541,12 @@ def _managed_agent_runner_for_provider_unjournaled(
                 outcome=outcome,
                 runtime_profile_id=policy.profile_id,
             )
-            receipt_ref = receipt_path.resolve().relative_to(OUTPUT_ROOT.resolve()).as_posix()
-            receipt_digest = "sha256:" + hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+            receipt_ref = (
+                receipt_path.resolve().relative_to(OUTPUT_ROOT.resolve()).as_posix()
+            )
+            receipt_digest = (
+                "sha256:" + hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+            )
             outcome = outcome.with_capacity_receipt(
                 receipt_ref=receipt_ref,
                 receipt_digest=receipt_digest,
@@ -603,4 +581,7 @@ def _managed_agent_runner_for_provider_unjournaled(
 
 def _managed_agent_runner_for_provider(ctx: ExecutionContext, prompt: str):
     from content.execution.agent import semantic_task_journal
-    return semantic_task_journal.run_journaled_semantic_task(ctx, prompt, _managed_agent_runner_for_provider_unjournaled)
+
+    return semantic_task_journal.run_journaled_semantic_task(
+        ctx, prompt, _managed_agent_runner_for_provider_unjournaled
+    )

@@ -1,9 +1,8 @@
 """Content-addressed read-only campaign capsule and isolated lane roots."""
+
 from __future__ import annotations
 
 import fcntl
-import hashlib
-import json
 import os
 import shutil
 import subprocess
@@ -18,6 +17,7 @@ from core.schema import assert_valid
 from core.source_digest import (
     ExecutionBundleIdentity,
     SourceDefinitionSnapshot,
+    current_execution_bundle_identity,
     current_source_definition_snapshot,
 )
 
@@ -29,17 +29,22 @@ from content.execution.campaign.external_inputs import (
     payload_digest,
     verify_external_input_refs,
 )
+from content.execution.campaign.source_pool_binding import (
+    capsule_source_pool_fields,
+    load_capsule_source_pool,
+    materialize_bound_scale_source_pool,
+    resolve_capsule_scale_source_pool_identity,
+)
 from content.execution.campaign.source_snapshot import (
     SNAPSHOT_FORMAT,
     campaign_snapshot_roots,
     materialize_source_snapshot,
 )
 from content.execution.identity import validate_execution_id
-from content.execution.campaign.source_pool_binding import (
-    capsule_source_pool_fields,
-    load_capsule_source_pool,
-    materialize_bound_scale_source_pool,
-    resolve_capsule_scale_source_pool_identity,
+
+_EXTRACTED_DEPENDENCIES = (
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
 )
 
 CAPSULE_SCHEMA = "quwoquan_data.content_campaign_source_capsule"
@@ -132,6 +137,7 @@ class CampaignLaneWorkspace:
     def source_digest(self) -> str:
         return self.capsule.source_digest
 
+
 def _git(
     repo_root: Path,
     *args: str,
@@ -170,8 +176,7 @@ def require_clean_main_tree(repo_root: Path) -> None:
     if dirty:
         first = dirty.splitlines()[0]
         raise ValueError(
-            "campaign main worktree is not globally clean; "
-            f"first drift={first}"
+            f"campaign main worktree is not globally clean; first drift={first}"
         )
 
 
@@ -204,14 +209,12 @@ def assert_frozen_revision(
     observed_branch = current_branch(repo_root)
     if observed_branch != git_branch:
         raise ValueError(
-            "campaign branch drift: "
-            f"frozen={git_branch} current={observed_branch}"
+            f"campaign branch drift: frozen={git_branch} current={observed_branch}"
         )
     observed_commit = current_commit(repo_root)
     if observed_commit != commit_sha:
         raise ValueError(
-            "campaign commit drift: "
-            f"frozen={commit_sha} current={observed_commit}"
+            f"campaign commit drift: frozen={commit_sha} current={observed_commit}"
         )
     observed_digest = current_source_definition_snapshot(repo_root=repo_root).digest
     if observed_digest != source_digest:
@@ -237,69 +240,35 @@ def _portable_ref(path: Path, output_root: Path) -> str:
 
 
 def _canonical_digest(payload: dict[str, Any]) -> str:
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    from content.execution.campaign.workspace_identity import (
+        _canonical_digest as implementation,
+    )
+
+    return implementation(payload)
 
 
 def _file_digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    from content.execution.campaign.workspace_identity import (
+        _file_digest as implementation,
+    )
+
+    return implementation(path)
 
 
 def _capsule_tree_digest(root: Path) -> str:
-    """Verify every exported executor byte, not only sourceDigest inputs."""
-    digest = hashlib.sha256()
-    for path in sorted(root.rglob("*")):
-        relative = path.relative_to(root).as_posix()
-        if relative == ".qwq_campaign_capsule.json":
-            continue
-        if path.is_symlink():
-            row = f"L\0{relative}\0{os.readlink(path)}\n"
-        elif path.is_file():
-            executable = path.stat().st_mode & 0o111
-            row = f"F\0{relative}\0{executable:o}\0{_file_digest(path)}\n"
-        else:
-            continue
-        digest.update(row.encode("utf-8"))
-    return "sha256:" + digest.hexdigest()
+    from content.execution.campaign.workspace_identity import (
+        _capsule_tree_digest as implementation,
+    )
+
+    return implementation(root)
 
 
-def _capsule_identity(
-    *,
-    git_branch: str,
-    commit_sha: str,
-    source_revision: str,
-    source_digest: str,
-    execution_bundle: dict[str, Any],
-    entity_catalog_digest: str,
-    lane_external_inputs: dict[str, dict[str, Any]],
-    external_inputs_digest: str,
-    source_pool_fields: dict[str, Any],
-    roots: tuple[str, ...],
-) -> tuple[dict[str, Any], str]:
-    stable = {
-        "schema": CAPSULE_SCHEMA,
-        "format": CAPSULE_FORMAT,
-        "gitBranch": git_branch,
-        "gitCommitSha": commit_sha,
-        "sourceRevision": source_revision,
-        "sourceDigest": source_digest,
-        "executionBundle": execution_bundle,
-        "entityCatalogDigest": entity_catalog_digest,
-        "roots": list(roots),
-        "laneExternalInputs": lane_external_inputs,
-        "externalInputsDigest": external_inputs_digest,
-    }
-    stable.update(source_pool_fields)
-    return stable, _canonical_digest(stable)
+def _capsule_identity(*args: Any, **kwargs: Any) -> tuple[dict[str, Any], str]:
+    from content.execution.campaign.workspace_identity import (
+        _capsule_identity as implementation,
+    )
+
+    return implementation(*args, **kwargs)
 
 
 def _make_tree_writable(root: Path) -> None:
@@ -381,7 +350,7 @@ def load_source_capsule_manifest(
     for carrier, lane in stable["laneExternalInputs"].items():
         if lane["externalInputsDigest"] != refs_digest(lane["externalInputRefs"]):
             raise ValueError(
-                "campaign capsule lane externalInputsDigest drift: " f"{carrier}"
+                f"campaign capsule lane externalInputsDigest drift: {carrier}"
             )
         verify_external_input_refs(
             carrier,
@@ -451,7 +420,9 @@ def prepare_source_capsule(
     capsule_lanes = {
         carrier: {
             "rootRef": f"external-inputs/{carrier}",
-            "externalInputRefs": list(lane_external_inputs[carrier]["externalInputRefs"]),
+            "externalInputRefs": list(
+                lane_external_inputs[carrier]["externalInputRefs"]
+            ),
             "externalInputsDigest": str(
                 lane_external_inputs[carrier]["externalInputsDigest"]
             ),
@@ -513,9 +484,7 @@ def prepare_source_capsule(
             except (OSError, TypeError, ValueError):
                 _remove_tree(capsule_path)
 
-        temp_root = Path(
-            tempfile.mkdtemp(prefix=f".{key}.", dir=capsules_root)
-        )
+        temp_root = Path(tempfile.mkdtemp(prefix=f".{key}.", dir=capsules_root))
         try:
             materialize_source_snapshot(
                 runtime_paths.repo_root,

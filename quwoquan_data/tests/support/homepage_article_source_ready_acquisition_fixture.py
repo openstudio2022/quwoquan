@@ -3,6 +3,7 @@
 由 test_homepage_article_source_ready_acquisition__public_mediawiki_* 场景组
 测试文件共享；从原单体测试文件逐字下沉，不改变任何 helper 逻辑。
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -50,12 +51,12 @@ def _planned(
 ) -> dict[str, object]:
     resolved_title = source_title or name
     row: dict[str, object] = {
-        "coverageEntityIdentity": f"name_location:{name}|四川省|成都市|锦江区",
+        "coverageEntityIdentity": f"name_location:{name}|测试省甲|测试市甲|测试区甲",
         "canonicalEntityRef": f"/entity/{entity_type}/{name}",
         "candidateName": name,
-        "province": "四川省",
-        "city": "成都市",
-        "district": "锦江区",
+        "province": "测试省甲",
+        "city": "测试市甲",
+        "district": "测试区甲",
         "entityType": entity_type,
         "source": {
             "sourceKind": "wikipedia",
@@ -117,14 +118,12 @@ def _seed_selection(
         }
         seed = {
             "seedOrigin": seed_origin,
-            "seedId": seed_id(
-                seed_origin=seed_origin, coverage_key=coverage_key
-            ),
+            "seedId": seed_id(seed_origin=seed_origin, coverage_key=coverage_key),
             "coverageKey": coverage_key,
             "candidateName": name,
-            "province": "四川省",
-            "city": "成都市",
-            "district": "锦江区",
+            "province": "测试省甲",
+            "city": "测试市甲",
+            "district": "测试区甲",
             "entityType": "地点/景区",
             "sourceKind": source["sourceKind"],
             "extractor": source["extractor"],
@@ -132,9 +131,7 @@ def _seed_selection(
         if seed_origin == "historical_capsule_hint":
             seed["historicalBaseline"] = {
                 "candidateId": f"historical-{carrier}-{index}",
-                "bodyContentSha256": _sha(
-                    f"historical:{carrier}:{index}".encode()
-                ),
+                "bodyContentSha256": _sha(f"historical:{carrier}:{index}".encode()),
             }
         seeds.append(seed)
     stable = {
@@ -146,7 +143,9 @@ def _seed_selection(
         },
         "seeds": seeds,
     }
-    write_create_once_json(path, {**stable, "selectionDigest": canonical_digest(stable)})
+    write_create_once_json(
+        path, {**stable, "selectionDigest": canonical_digest(stable)}
+    )
     return path
 
 
@@ -160,8 +159,7 @@ def _asset_document(
             "assetId": f"asset-{seed}",
             "role": role,
             "assetRef": (
-                f"{source_unit_ref}/assets/"
-                f"{digest.removeprefix('sha256:')}.jpg"
+                f"{source_unit_ref}/assets/{digest.removeprefix('sha256:')}.jpg"
             ),
             "originalAssetUrl": f"https://upload.wikimedia.org/{seed}.jpg",
             "sourcePageUrl": f"https://commons.wikimedia.org/wiki/File:{seed}.jpg",
@@ -216,9 +214,11 @@ def _fake_acquired(carrier: str, name: str) -> AcquiredSourceReadyCandidate:
         )
         assets.append(AcquiredAsset(body=asset_body, document=dict(document)))
     source_unit_digest = _sha(
-        (body_sha + "|" + "|".join(
-            str(asset.document["contentSha256"]) for asset in assets
-        )).encode()
+        (
+            body_sha
+            + "|"
+            + "|".join(str(asset.document["contentSha256"]) for asset in assets)
+        ).encode()
     )
     candidate_id = f"candidate-{carrier}-{name}"
     entity_ref = f"/entity/地点/景区/{name}"
@@ -287,9 +287,7 @@ def _fake_acquired(carrier: str, name: str) -> AcquiredSourceReadyCandidate:
     else:
         site = next(
             site
-            for site in article_search_sites(
-                site_ids=frozenset({"wikipedia_zh"})
-            )
+            for site in article_search_sites(site_ids=frozenset({"wikipedia_zh"}))
             if site["siteId"] == "wikipedia_zh"
         )
         article_assets = []

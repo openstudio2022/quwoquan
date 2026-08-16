@@ -9,7 +9,6 @@ import pytest
 from content.execution.campaign import controller as campaign_controller
 from content.execution.campaign import distributed as campaign_distributed
 from content.execution.campaign import orchestrator as campaign_orchestrator
-from content.execution.campaign import plan as campaign_plan
 from content.execution.campaign.lane_claim import read_lane_claim
 from content.execution.campaign.runtime import (
     read_lane_checkpoint,
@@ -69,7 +68,7 @@ def test_detached_branch_fallback_requires_campaign_context(
         },
     )
     assert current_git_branch(cwd=repo) == branch
-    monkeypatch.setenv("QWQ_FROZEN_MAIN_BRANCH", "dev1.0")
+    monkeypatch.setenv("QWQ_FROZEN_MAIN_BRANCH", "main")
     assert current_git_branch(cwd=repo) == ""
     monkeypatch.setenv("QWQ_FROZEN_MAIN_BRANCH", branch)
     spec = {"executionPolicy": {}}
@@ -101,8 +100,10 @@ def test_main_only_fixture_still_rejects_capsule_captured_dev_branch(
 
     assert current_git_branch(cwd=capsule) == "dev1.0"
     assert execution_branch_issues(cwd=capsule) == [
-        "当前 git 分支 'dev1.0' 不在正式分支 allowlist ['main']；"
-        "商业执行只允许 branch_policy 声明的长期集成/发布分支"
+        (
+            "当前 git 分支 'dev1.0' 不在正式分支 allowlist ['main']；"
+            "商业执行只允许 branch_policy 声明的长期集成/发布分支"
+        )
     ]
 
 
@@ -169,11 +170,7 @@ def test_real_subprocess_lanes_overlap_and_publish_only_after_own_review(
         assert lane["qualifiedCount"] == 1
         assert lane["finalizedCount"] == 1
     capsule_progress = {
-        sum(
-            1
-            for lane in update["lanes"].values()
-            if lane["status"] == "capsule_ready"
-        )
+        sum(1 for lane in update["lanes"].values() if lane["status"] == "capsule_ready")
         for update in report_updates
         if update["status"] == "running" and update["phase"] == "capsule"
     }
@@ -247,6 +244,7 @@ def test_four_copied_sessions_claim_independent_lanes_and_finalize(
     _submit_all(repo, runtime, monkeypatch)
     event_log = tmp_path / "distributed-events.ndjson"
     monkeypatch.setenv("CAMPAIGN_EVENT_LOG", str(event_log))
+    monkeypatch.setenv("CAMPAIGN_EVENT_DELAY_SECONDS", "1.5")
 
     frozen_report = campaign_distributed.freeze_campaign(
         ROOT_ID,
@@ -254,9 +252,7 @@ def test_four_copied_sessions_claim_independent_lanes_and_finalize(
         runtime_paths=runtime,
     )
     frozen = read_json(frozen_report)
-    plan = read_json(
-        runtime.campaigns_root / ROOT_ID / "campaign_plan.json"
-    )
+    plan = read_json(runtime.campaigns_root / ROOT_ID / "campaign_plan.json")
     assert frozen["phase"] == "capsule"
     assert plan["executionMode"] == "distributed"
     assert plan["distributedRun"]["campaignRunId"]
@@ -283,18 +279,12 @@ def test_four_copied_sessions_claim_independent_lanes_and_finalize(
     assert report["status"] == "succeeded"
     assert report["phase"] == "completed"
     assert report["campaignRunId"] == plan["distributedRun"]["campaignRunId"]
-    assert report["campaignGeneration"] == plan["distributedRun"][
-        "campaignGeneration"
-    ]
-    review_events = [
-        row for row in _events(event_log) if row["phase"] == "review"
-    ]
+    assert report["campaignGeneration"] == plan["distributedRun"]["campaignGeneration"]
+    review_events = [row for row in _events(event_log) if row["phase"] == "review"]
     starts = {
         row["carrier"]: row["at"] for row in review_events if row["kind"] == "start"
     }
-    ends = {
-        row["carrier"]: row["at"] for row in review_events if row["kind"] == "end"
-    }
+    ends = {row["carrier"]: row["at"] for row in review_events if row["kind"] == "end"}
     assert set(starts) == set(CARRIERS)
     assert max(starts.values()) < min(ends.values())
     capsule_refs: set[str] = set()
@@ -305,9 +295,7 @@ def test_four_copied_sessions_claim_independent_lanes_and_finalize(
         assert claim["status"] == "completed"
         assert claim["executionId"] == plan["executionIds"][carrier]
         assert claim["campaignRunId"] == plan["distributedRun"]["campaignRunId"]
-        assert claim["capsuleRef"] == frozen["lanes"][carrier][
-            "sourceCapsuleRef"
-        ]
+        assert claim["capsuleRef"] == frozen["lanes"][carrier]["sourceCapsuleRef"]
         capsule_refs.add(str(claim["capsuleRef"]))
         execution_root = Path(str(claim["executionRoot"]))
         assert execution_root.parent == runtime.output_root / "data/tasks"
@@ -328,12 +316,10 @@ def test_four_copied_sessions_claim_independent_lanes_and_finalize(
         checkpoint = read_lane_checkpoint(runtime, ROOT_ID, carrier)
         assert checkpoint is not None
         assert checkpoint["runId"] == plan["distributedRun"]["campaignRunId"]
-        assert checkpoint["generation"] == plan["distributedRun"][
-            "campaignGeneration"
-        ]
-        assert checkpoint["fencingToken"] == plan["distributedRun"][
-            "campaignFencingToken"
-        ]
+        assert checkpoint["generation"] == plan["distributedRun"]["campaignGeneration"]
+        assert (
+            checkpoint["fencingToken"] == plan["distributedRun"]["campaignFencingToken"]
+        )
         assert checkpoint["executionId"] == plan["executionIds"][carrier]
         assert checkpoint["phase"] == "run"
         assert checkpoint["status"] == "succeeded"

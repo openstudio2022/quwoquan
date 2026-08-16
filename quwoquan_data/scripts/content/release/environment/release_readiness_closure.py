@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from core.io import read_json
 from core.release_layout import object_closure_digest, payload_file
 
 
@@ -16,13 +15,11 @@ class ReleaseReadinessClosureError(ValueError):
 
 
 def _object(path: Path, *, label: str) -> dict[str, Any]:
-    try:
-        value = read_json(path)
-    except (OSError, TypeError, ValueError) as exc:
-        raise ReleaseReadinessClosureError(f"{label} is unreadable: {path}") from exc
-    if not isinstance(value, Mapping):
-        raise ReleaseReadinessClosureError(f"{label} must be an object: {path}")
-    return dict(value)
+    from content.release.environment.release_readiness_import_counts import (
+        _object as implementation,
+    )
+
+    return implementation(path, label=label)
 
 
 def _text(value: object, *, label: str) -> str:
@@ -32,19 +29,12 @@ def _text(value: object, *, label: str) -> str:
     return result
 
 
-def _normalized_ref(value: object, *, kind: str) -> str:
-    result = _text(value, label=f"{kind} ref").strip("/")
-    singular = {"creators": "creator", "entities": "entity", "posts": "post", "tags": "tag"}.get(kind)
-    if singular is None:
-        raise ReleaseReadinessClosureError(f"unsupported release object kind: {kind}")
-    prefixes = (f"{kind}/", f"{singular}/")
-    for prefix in prefixes:
-        if result.startswith(prefix):
-            result = result[len(prefix) :]
-            break
-    if not result or ".." in Path(result).parts:
-        raise ReleaseReadinessClosureError(f"unsafe {kind} ref: {value}")
-    return result
+def _normalized_ref(*args: Any, **kwargs: Any) -> str:
+    from content.release.environment.release_readiness_import_counts import (
+        _normalized_ref as implementation,
+    )
+
+    return implementation(*args, **kwargs)
 
 
 def _url_slice(value: object, *, label: str, allow_query: bool = False) -> str:
@@ -67,9 +57,11 @@ def _media_rows(media_manifest: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
         raise ReleaseReadinessClosureError(
             "release media manifest must contain an issue-free asset array"
         )
-    if not isinstance(counts, Mapping) or counts.get("assets") != len(assets) or counts.get(
-        "issues"
-    ) != len(issues):
+    if (
+        not isinstance(counts, Mapping)
+        or counts.get("assets") != len(assets)
+        or counts.get("issues") != len(issues)
+    ):
         raise ReleaseReadinessClosureError("release media manifest counts drift")
     result: dict[str, dict[str, Any]] = {}
     for raw in assets:
@@ -212,21 +204,13 @@ def _assert_import_counts(
     creator_report: Mapping[str, Any],
     desired: Mapping[str, list[str]],
 ) -> None:
-    content_counts = import_report.get("counts")
-    creator_counts = creator_report.get("counts")
-    if not isinstance(content_counts, Mapping) or (
-        content_counts.get("postsLoaded") != len(desired["posts"])
-        or content_counts.get("entitiesLoaded") != len(desired["entities"])
-    ):
-        raise ReleaseReadinessClosureError(
-            "content import counts drift from immutable desiredRefs"
-        )
-    if not isinstance(creator_counts, Mapping) or creator_counts.get(
-        "creatorsLoaded"
-    ) != len(desired["creators"]):
-        raise ReleaseReadinessClosureError(
-            "creator import counts drift from immutable desiredRefs"
-        )
+    from content.release.environment.release_readiness_import_counts import (
+        _assert_import_counts as implementation,
+    )
+
+    return implementation(
+        import_report=import_report, creator_report=creator_report, desired=desired
+    )
 
 
 def _assert_probe_matches_asset(
@@ -237,9 +221,7 @@ def _assert_probe_matches_asset(
 ) -> None:
     asset_id = _text(asset.get("assetId"), label="release media assetId")
     expected_kind = "video" if asset.get("kind") == "video" else "image"
-    expected_fields_present = (
-        "expectedBytes" in probe or "expectedSha256" in probe
-    )
+    expected_fields_present = "expectedBytes" in probe or "expectedSha256" in probe
     if (
         (
             probe.get("kind") != expected_kind
@@ -325,9 +307,7 @@ def validate_readiness_closure(
     }
     for normalized in sorted(desired_tag_refs):
         tag = _object(
-            payload_file(
-                release_root, f"objects/tags/{normalized}/_definition.json"
-            ),
+            payload_file(release_root, f"objects/tags/{normalized}/_definition.json"),
             label=f"release tag definition {normalized}",
         )
         _text(tag.get("label"), label=f"release tag label {normalized}")
@@ -342,14 +322,14 @@ def validate_readiness_closure(
     for row in media_by_id.values():
         owner_refs = row.get("ownerRefs")
         if not isinstance(owner_refs, list):
-            raise ReleaseReadinessClosureError("release media ownerRefs must be an array")
+            raise ReleaseReadinessClosureError(
+                "release media ownerRefs must be an array"
+            )
         for owner_ref in owner_refs:
             owner_assets.setdefault(str(owner_ref), []).append(row)
 
     creator_rows = [
-        row
-        for row in post_report.get("creators") or []
-        if isinstance(row, Mapping)
+        row for row in post_report.get("creators") or [] if isinstance(row, Mapping)
     ]
     creator_evidence = {
         _normalized_ref(row.get("creatorRef"), kind="creators"): row
@@ -358,9 +338,8 @@ def validate_readiness_closure(
     expected_creator_refs = {
         _normalized_ref(ref, kind="creators") for ref in desired["creators"]
     }
-    if (
-        set(creator_evidence) != expected_creator_refs
-        or len(creator_rows) != len(creator_evidence)
+    if set(creator_evidence) != expected_creator_refs or len(creator_rows) != len(
+        creator_evidence
     ):
         raise ReleaseReadinessClosureError(
             "creator API evidence does not exactly close desired creators"
@@ -371,9 +350,7 @@ def validate_readiness_closure(
     for creator_ref in desired["creators"]:
         normalized = _normalized_ref(creator_ref, kind="creators")
         profile = _object(
-            payload_file(
-                release_root, f"objects/creators/{normalized}/profile.json"
-            ),
+            payload_file(release_root, f"objects/creators/{normalized}/profile.json"),
             label=f"release creator profile {normalized}",
         )
         author_id = _text(
@@ -456,17 +433,12 @@ def validate_readiness_closure(
     for entity_ref in desired["entities"]:
         normalized = _normalized_ref(entity_ref, kind="entities")
         entity = _object(
-            payload_file(
-                release_root, f"objects/entities/{normalized}/_entity.json"
-            ),
+            payload_file(release_root, f"objects/entities/{normalized}/_entity.json"),
             label=f"release entity object {normalized}",
         )
-        creator_ref = _normalized_ref(
-            entity.get("creatorProfileId"), kind="creators"
-        )
+        creator_ref = _normalized_ref(entity.get("creatorProfileId"), kind="creators")
         entity_tags = {
-            _normalized_ref(tag, kind="tags")
-            for tag in entity.get("tagRefs") or []
+            _normalized_ref(tag, kind="tags") for tag in entity.get("tagRefs") or []
         }
         if (
             creator_ref not in expected_creator_refs
@@ -518,8 +490,7 @@ def validate_readiness_closure(
             binding.get("contentType"), label=f"post contentType {post_ref}"
         )
         manifest_tags = {
-            _normalized_ref(tag, kind="tags")
-            for tag in manifest.get("tagRefs") or []
+            _normalized_ref(tag, kind="tags") for tag in manifest.get("tagRefs") or []
         }
         manifest_creator_ref = _normalized_ref(
             manifest.get("creatorProfileId"), kind="creators"
@@ -531,8 +502,7 @@ def validate_readiness_closure(
             or manifest.get("contentType") != content_type
             or row.get("contentType") != content_type
             or manifest_creator_ref not in creator_author_ids
-            or manifest.get("authorId")
-            != creator_author_ids.get(manifest_creator_ref)
+            or manifest.get("authorId") != creator_author_ids.get(manifest_creator_ref)
             or binding.get("authorId") != manifest.get("authorId")
             or row.get("authorId") != manifest.get("authorId")
             or not manifest_tags
@@ -543,9 +513,10 @@ def validate_readiness_closure(
             )
         if content_type == "video":
             attribution = manifest.get("sourceAttribution")
-            if not isinstance(attribution, Mapping) or not str(
-                attribution.get("attributionText") or ""
-            ).strip():
+            if (
+                not isinstance(attribution, Mapping)
+                or not str(attribution.get("attributionText") or "").strip()
+            ):
                 raise ReleaseReadinessClosureError(
                     f"release video attribution is missing: {post_ref}"
                 )
@@ -612,6 +583,7 @@ def validate_readiness_closure(
         "playableVideoIds": playable_video_ids,
         "mediaAssetIds": set(media_by_id),
     }
+
 
 __all__ = [
     "ReleaseReadinessClosureError",

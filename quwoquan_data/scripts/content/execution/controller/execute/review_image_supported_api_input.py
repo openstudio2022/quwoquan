@@ -1,4 +1,5 @@
 """Run independent governed semantic reviews for supported-API image inputs."""
+
 from __future__ import annotations
 
 import argparse
@@ -22,11 +23,11 @@ from content.execution import store
 from content.execution.agent.capacity_broker import SemanticCapacityBroker
 from content.execution.agent.outcome import AgentRunOutcome
 from content.execution.context import ExecutionContext
-from content.execution.model_contract import semantic_execution_binding_for_execution
-from content.execution.workspace import execution_root, load_frozen_execution_manifest
 from content.execution.controller.execute.pre_acquisition_handoff import (
     guard_acquisition_source_identity,
 )
+from content.execution.model_contract import semantic_execution_binding_for_execution
+from content.execution.workspace import execution_root, load_frozen_execution_manifest
 from content.source.professional_image_supported_api_contract import load_document
 from content.source.professional_safety_evidence import file_sha256
 from content.source.source_review_journal import run_source_review
@@ -38,7 +39,9 @@ class ProfessionalImageSupportedApiReviewError(RuntimeError):
 
 def _canonical_bytes(value: Mapping[str, Any]) -> bytes:
     return (
-        json.dumps(dict(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        json.dumps(
+            dict(value), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        )
         + "\n"
     ).encode("utf-8")
 
@@ -125,7 +128,11 @@ def _copy_create_once(source: Path, destination: Path) -> None:
             0o600,
         )
     except FileExistsError:
-        if destination.is_symlink() or not destination.is_file() or destination.read_bytes() != body:
+        if (
+            destination.is_symlink()
+            or not destination.is_file()
+            or destination.read_bytes() != body
+        ):
             raise ProfessionalImageSupportedApiReviewError(
                 f"DATA.SOURCE.REVIEW_STAGING_CONFLICT: {destination}"
             ) from None
@@ -137,7 +144,9 @@ def _copy_create_once(source: Path, destination: Path) -> None:
 
 
 def _review_request_with_current_contract(
-    source: Path, *, source_mode: bool = False,
+    source: Path,
+    *,
+    source_mode: bool = False,
 ) -> dict[str, Any]:
     """Derive today's immutable reviewer request from frozen physical inputs."""
     del source_mode
@@ -155,34 +164,18 @@ def _review_request_with_current_contract(
     return request
 
 
-def _source_review_identity(
-    *, handoff: Mapping[str, Any], request: Mapping[str, Any], handoff_ref: Path,
-) -> dict[str, str]:
-    source = handoff.get("sourceDigest")
-    bundle = handoff.get("executionBundle")
-    if not isinstance(source, Mapping) or not isinstance(bundle, Mapping):
-        raise ProfessionalImageSupportedApiReviewError(
-            "DATA.SOURCE.REVIEW_HANDOFF_INVALID: frozen source/bundle identity is missing"
-        )
-    identity = {
-        "sourceRevision": str(handoff.get("sourceRevision") or ""),
-        "sourceDigest": str(source.get("digest") or ""),
-        "entityCatalogDigest": str(handoff.get("entityCatalogDigest") or ""),
-        "executionBundleDigest": str(bundle.get("digest") or ""),
-        "handoffDigest": file_sha256(handoff_ref),
-        "requestDigest": str(request.get("requestDigest") or ""),
-    }
-    if any(not value.startswith("sha256:") for value in identity.values()):
-        raise ProfessionalImageSupportedApiReviewError(
-            "DATA.SOURCE.REVIEW_HANDOFF_INVALID: source review identity is malformed"
-        )
-    return identity
+def _source_review_identity(*args: Any, **kwargs: Any) -> Any:
+    from content.execution.controller.execute.review_image_supported_api_identity import (
+        _source_review_identity as implementation,
+    )
+
+    return implementation(*args, **kwargs)
 
 
 def _source_runner(prompt: str) -> AgentRunOutcome:
-    """Run the governed Cursor reviewer without inventing an execution identity."""
-    from content.execution.agent.agent_runner import _default_managed_agent_runner
     from core.cursor_model import CursorModelSelection
+
+    from content.execution.agent.agent_runner import _default_managed_agent_runner
 
     policy = active_runtime_policy()
     selection = policy.explicit_semantic_selection("cursor_grok").binding
@@ -192,7 +185,7 @@ def _source_runner(prompt: str) -> AgentRunOutcome:
             selection.model, selection.model_parameters, label="source reviewer"
         ),
         agent_provider=AgentProvider.CURSOR_SDK,
-        max_workers=1,
+        max_workers=policy.reviewer_workers,
     )
     return _default_managed_agent_runner(context, prompt)
 
@@ -227,12 +220,17 @@ def review_supported_api_inputs_from_source(
     for ref in review_request_refs:
         request_path = _safe_file(root, ref)
         request = _review_request_with_current_contract(request_path, source_mode=True)
-        stable = {key: value for key, value in request.items() if key != "requestDigest"}
-        request_digest = "sha256:" + hashlib.sha256(
-            json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(
-                "utf-8"
-            )
-        ).hexdigest()
+        stable = {
+            key: value for key, value in request.items() if key != "requestDigest"
+        }
+        request_digest = (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(
+                    stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                ).encode("utf-8")
+            ).hexdigest()
+        )
         if request["requestDigest"] != request_digest:
             raise ProfessionalImageSupportedApiReviewError(
                 "DATA.SOURCE.REVIEW_INPUT_INVALID: request digest drift"
@@ -318,7 +316,9 @@ def review_supported_api_inputs_from_source(
             "judgmentDigest": _digest(judgment),
         }
         assert_valid(
-            result, "source", "professional_image_supported_api_reviewer_result",
+            result,
+            "source",
+            "professional_image_supported_api_reviewer_result",
             label=f"source supported API reviewer result:{request['candidateId']}",
         )
         result_path = _write_create_once(
@@ -337,8 +337,14 @@ def _judgment(text: str) -> dict[str, Any] | None:
     if first >= 0 and last > first:
         candidates.append(text[first : last + 1])
     expected = {
-        "status", "entityMatch", "privacyRisk", "minorRisk",
-        "maliciousMediaRisk", "watermarkStatus", "qualityStatus", "findings",
+        "status",
+        "entityMatch",
+        "privacyRisk",
+        "minorRisk",
+        "maliciousMediaRisk",
+        "watermarkStatus",
+        "qualityStatus",
+        "findings",
     }
     for candidate in candidates:
         try:
@@ -350,14 +356,19 @@ def _judgment(text: str) -> dict[str, Any] | None:
     return None
 
 
-def _journal_pair(root: Path, *, prompt_sha256: str) -> tuple[Path, Path, dict[str, Any]]:
+def _journal_pair(
+    root: Path, *, prompt_sha256: str
+) -> tuple[Path, Path, dict[str, Any]]:
     matches: list[tuple[Path, Path, dict[str, Any]]] = []
     journal_root = root / "_shared/semantic_tasks"
     for request_path in sorted(journal_root.glob("*/request.json")):
         request = read_json(request_path)
         if not isinstance(request, dict):
             continue
-        if request.get("stage") != "reviewer" or request.get("promptSha256") != prompt_sha256:
+        if (
+            request.get("stage") != "reviewer"
+            or request.get("promptSha256") != prompt_sha256
+        ):
             continue
         attempts = sorted((request_path.parent / "attempts").glob("*.json"))
         if attempts:
@@ -413,21 +424,25 @@ def review_supported_api_inputs(
         spec=spec,
         managed=True,
         runtime=binding.runtime,
-        max_workers=1,
+        max_workers=active_runtime_policy().reviewer_workers,
         model=reviewer_model.model_id,
         model_parameters=reviewer_model.parameters,
         agent_provider=reviewer_model.provider,
         semantic_role="reviewer",
     )
     if runner is None:
-        from content.execution.agent.agent_worker import _default_managed_agent_runner_isolated
+        from content.execution.agent.agent_worker import (
+            _default_managed_agent_runner_isolated,
+        )
 
         runner = _default_managed_agent_runner_isolated
     results: list[tuple[dict[str, Any], Path]] = []
     for ref in review_request_refs:
         physical_request_path = _safe_file(root, ref)
         request = _review_request_with_current_contract(physical_request_path)
-        stable = {key: value for key, value in request.items() if key != "requestDigest"}
+        stable = {
+            key: value for key, value in request.items() if key != "requestDigest"
+        }
         if request["requestDigest"] != _digest(stable):
             raise ProfessionalImageSupportedApiReviewError(
                 "DATA.SOURCE.REVIEW_INPUT_INVALID: request digest drift"
@@ -477,7 +492,9 @@ def review_supported_api_inputs(
             "contentSha256": request["contentSha256"],
             "reviewRequestRef": _portable_ref(request_path),
             "reviewRequestSha256": prompt_sha,
-            "semanticTaskRequestRef": request_journal_path.relative_to(output_root).as_posix(),
+            "semanticTaskRequestRef": request_journal_path.relative_to(
+                output_root
+            ).as_posix(),
             "semanticTaskRequestSha256": file_sha256(request_journal_path),
             "semanticTaskAttemptRef": attempt_path.relative_to(output_root).as_posix(),
             "semanticTaskAttemptSha256": file_sha256(attempt_path),
@@ -525,21 +542,35 @@ def handle_review_image_supported_api_input(args: argparse.Namespace) -> None:
                 reviewer_root=Path(args.reviewer_root or OUTPUT_ROOT),
                 review_request_refs=tuple(args.review_request_ref or ()),
             )
-    except (FileNotFoundError, OSError, TypeError, ValueError, ProfessionalImageSupportedApiReviewError) as exc:
-        raise SystemExit(f"[task review-image-supported-api-input] GATE_BLOCK {exc}") from exc
-    print(json.dumps({
-        "executionId": args.execution_id or "",
-        "reviewedCount": len(results),
-        "results": [
+    except (
+        FileNotFoundError,
+        OSError,
+        TypeError,
+        ValueError,
+        ProfessionalImageSupportedApiReviewError,
+    ) as exc:
+        raise SystemExit(
+            f"[task review-image-supported-api-input] GATE_BLOCK {exc}"
+        ) from exc
+    print(
+        json.dumps(
             {
-                "candidateId": result["candidateId"],
-                "status": result["judgment"]["status"],
-                "resultRef": path.relative_to(OUTPUT_ROOT).as_posix(),
-                "resultSha256": file_sha256(path),
-            }
-            for result, path in results
-        ],
-    }, ensure_ascii=False, indent=2))
+                "executionId": args.execution_id or "",
+                "reviewedCount": len(results),
+                "results": [
+                    {
+                        "candidateId": result["candidateId"],
+                        "status": result["judgment"]["status"],
+                        "resultRef": path.relative_to(OUTPUT_ROOT).as_posix(),
+                        "resultSha256": file_sha256(path),
+                    }
+                    for result, path in results
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def register_review_image_supported_api_input_parser(
@@ -560,6 +591,6 @@ def register_review_image_supported_api_input_parser(
 __all__ = [
     "ProfessionalImageSupportedApiReviewError",
     "register_review_image_supported_api_input_parser",
-    "review_supported_api_inputs_from_source",
     "review_supported_api_inputs",
+    "review_supported_api_inputs_from_source",
 ]

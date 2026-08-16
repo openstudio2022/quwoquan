@@ -30,5 +30,10 @@
     "type": "platform_virtual_creator",
     "displayText": "平台虚拟创作者，内容由资料整理与 AI 辅助生成，经平台审核发布。",
     "visible": true
+  },
+  "avatarAsset": {
+    "assetId": "creator-avatar-qwq_creator_pro_guide_001-98dea9a30b69c1be",
+    "kind": "avatar",
+    "sha256": "sha256:98dea9a30b69c1be336f65a9a09f2cddf01c9bfa74a8deffdb1ea12f18bddf6c"
   }
 }

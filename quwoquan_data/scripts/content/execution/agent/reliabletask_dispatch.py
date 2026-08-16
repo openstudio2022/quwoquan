@@ -1,4 +1,5 @@
 """Dispatch declared ReliableTask jobs through the service-owned fleet."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -31,6 +32,13 @@ from content.execution.queue.reliabletask.projection import (
     record_reliabletask_stale_terminal_outcome,
 )
 from content.execution.queue.runtime import DISCARDED_ISSUE_CODES
+
+_EXTRACTED_DEPENDENCIES = (
+    QueueFailureKind,
+    _read_job,
+    record_reliabletask_failure,
+    record_reliabletask_stale_terminal_outcome,
+)
 
 _CHECKPOINT_QUEUE_STAGE = {
     ExecutionStage.BUILD_HOMEPAGE: QueueJobStage.AUTHOR,
@@ -184,8 +192,7 @@ def _declared_jobs(
     return tuple(
         job
         for job in _load_jobs(execution_id)
-        if job.backend is QueueBackend.RELIABLE_TASK
-        and job.stage is queue_stage
+        if job.backend is QueueBackend.RELIABLE_TASK and job.stage is queue_stage
     )
 
 
@@ -208,42 +215,11 @@ def _pool_delivery_unavailable_issue(message: str) -> DataIssue:
 
 
 def _project_local_success_evidence(job: QueueJob) -> bool:
-    """Recover a remote success only from the exact local completion envelope."""
-    refreshed = _read_job(job.execution_id, job.job_id)
-    if refreshed.state is QueueJobState.SUCCEEDED:
-        return True
-    if refreshed.stage is not QueueJobStage.AUTHOR or not refreshed.content_object_dir:
-        return False
-
-    from core.paths import OUTPUT_ROOT
-
-    from content.execution.queue.reliabletask.projection import (
-        record_reliabletask_completion,
-    )
-    from content.execution.workspace import execution_root
-
-    envelope = (
-        execution_root(refreshed.execution_id)
-        / refreshed.content_object_dir
-        / "4.draft"
-        / "agent_result_envelope.json"
-    )
-    if not envelope.is_file():
-        return False
-    from content.execution.queue.reliabletask.author import (
-        author_envelope_requires_reauthoring,
+    from content.execution.agent.reliabletask_dispatch_projection import (
+        _project_local_success_evidence as implementation,
     )
 
-    if author_envelope_requires_reauthoring(refreshed, envelope):
-        return False
-    record_reliabletask_completion(
-        refreshed.execution_id,
-        refreshed.job_id,
-        evidence_path=envelope,
-        evidence_root=OUTPUT_ROOT,
-        envelope_workspace_root=envelope.parent,
-    )
-    return True
+    return implementation(job)
 
 
 def _project_fleet_outcomes(
@@ -254,79 +230,17 @@ def _project_fleet_outcomes(
     expected_job_ids: frozenset[str],
     outcomes: tuple[object, ...],
 ) -> tuple[DataIssue, ...]:
-    jobs = {job.job_id: job for job in _declared_jobs(execution_id, queue_stage)}
-    outcome_ids = {str(getattr(outcome, "job_id", "")) for outcome in outcomes}
-    if outcome_ids != expected_job_ids or not outcome_ids.issubset(jobs):
-        return (
-            _contract_issue(
-                stage,
-                "ReliableTask fleet receipt does not match dispatched jobs",
-            ),
-        )
-    issues: list[DataIssue] = []
-    for outcome in outcomes:
-        job_id = str(getattr(outcome, "job_id", ""))
-        status = str(getattr(outcome, "status", ""))
-        job = jobs[job_id]
-        if job.state is QueueJobState.SUCCEEDED and status == "dead":
-            record_reliabletask_stale_terminal_outcome(
-                execution_id,
-                job_id,
-                attempts=int(getattr(outcome, "attempts", 0)),
-                failure_code=str(getattr(outcome, "failure_code", "")).strip(),
-            )
-            continue
-        if status == "succeeded":
-            # Local SUCCEEDED is written only after the worker validates and
-            # binds the exact result envelope. A later fleet receipt is merely
-            # transport acknowledgement; re-reading mutable draft files here
-            # can falsely invalidate already-admitted completion after the
-            # controller advances into review/repair.
-            if job.state is QueueJobState.SUCCEEDED:
-                continue
-            try:
-                projected = _project_local_success_evidence(job)
-            except (OSError, TypeError, ValueError) as exc:
-                issues.append(
-                    _contract_issue(
-                        stage,
-                        "ReliableTask local completion evidence is invalid: "
-                        f"{type(exc).__name__}: {exc}",
-                    )
-                )
-                continue
-            if not projected:
-                issues.append(
-                    _contract_issue(
-                        stage,
-                        "ReliableTask success receipt lacks local completion evidence",
-                    )
-                )
-            continue
-        if status != "dead":
-            # A fleet may return after its derived batch budget with valid
-            # ready/processing jobs still owned by Mongo+Redis. The next
-            # controller resume must continue that durable queue, not turn a
-            # recoverable wait into a false terminal failure.
-            continue
-        failure_code = str(getattr(outcome, "failure_code", "")).strip()
-        failure_detail = f" (failureCode={failure_code})" if failure_code else ""
-        issue = job.issue(
-            QueueFailureKind.EXECUTION,
-            message=(
-                "ReliableTask fleet exhausted the job retry policy"
-                f"{failure_detail}"
-            ),
-            recovery=_failure_recovery(queue_stage),
-        )
-        record_reliabletask_failure(
-            execution_id,
-            job_id,
-            attempts=int(getattr(outcome, "attempts", 0)),
-            issue=issue,
-        )
-        issues.append(issue)
-    return tuple(issues)
+    from content.execution.agent.reliabletask_dispatch_projection import (
+        _project_fleet_outcomes as implementation,
+    )
+
+    return implementation(
+        execution_id,
+        stage,
+        queue_stage,
+        expected_job_ids=expected_job_ids,
+        outcomes=outcomes,
+    )
 
 
 def _dispatch_fleet(
@@ -377,9 +291,7 @@ def _dispatch_fleet(
             for job in remaining_jobs
         )
         discarded = tuple(
-            issue
-            for issue in terminal_issues
-            if issue.code in DISCARDED_ISSUE_CODES
+            issue for issue in terminal_issues if issue.code in DISCARDED_ISSUE_CODES
         )
         blocking = tuple(
             issue
@@ -441,10 +353,7 @@ def _dispatch_fleet(
                 ),
             )
     policy = active_runtime_policy()
-    expected_job_ids = frozenset(
-        job.job_id
-        for job in active_jobs
-    )
+    expected_job_ids = frozenset(job.job_id for job in active_jobs)
     try:
         report = run_reliabletask_fleet(
             ctx.execution_id,
@@ -482,10 +391,7 @@ def _dispatch_fleet(
             or not post_fleet_jobs
             or (
                 post_fleet_jobs
-                and all(
-                    job.state in _TERMINAL_JOB_STATES
-                    for job in post_fleet_jobs
-                )
+                and all(job.state in _TERMINAL_JOB_STATES for job in post_fleet_jobs)
             )
         ):
             return _dispatch_fleet(ctx, stage, queue_stage)
@@ -527,7 +433,9 @@ def _dispatch_fleet(
     # fleet 不可用）不属于任何对象，永远不可被配额吸收。未知问题码按批次级处理，
     # 宁可阻断也不静默放行。
     discarded = tuple(issue for issue in issues if issue.code in DISCARDED_ISSUE_CODES)
-    blocking = tuple(issue for issue in issues if issue.code not in DISCARDED_ISSUE_CODES)
+    blocking = tuple(
+        issue for issue in issues if issue.code not in DISCARDED_ISSUE_CODES
+    )
     delivered = _delivered_count(ctx, stage, queue_stage)
     publish_quota_met = False
     if queue_stage is QueueJobStage.PUBLISH:
@@ -538,8 +446,7 @@ def _dispatch_fleet(
         )
         delivered = max(delivered, canonical_accepted)
         publish_quota_met = bool(
-            report.passed
-            and canonical_accepted >= approved_quota(ctx.execution_id)
+            report.passed and canonical_accepted >= approved_quota(ctx.execution_id)
         )
     quota_met = _quota_reached(ctx, stage, queue_stage) or publish_quota_met
     if blocking and not publish_quota_met:
@@ -571,7 +478,9 @@ def _dispatch_fleet(
         stage=stage,
         queue_stage=queue_stage,
         status=status,
-        attempted_count=sum(int(getattr(outcome, "attempts", 0)) for outcome in report.outcomes),
+        attempted_count=sum(
+            int(getattr(outcome, "attempts", 0)) for outcome in report.outcomes
+        ),
         completed_count=delivered,
         issues=blocking,
         discarded=discarded,

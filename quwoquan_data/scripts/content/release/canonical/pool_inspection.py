@@ -172,24 +172,12 @@ def _not_admitted_issue(
     admission_missing: bool,
     ref: str,
 ) -> None:
-    if admission_missing:
-        _issue(
-            issues,
-            gate="eligibility",
-            code="DATA.POOL.EXPLICIT_ADMISSION_MISSING",
-            ref=ref,
-        )
-        return
-    gate = (
-        "quality"
-        if isinstance(record, Mapping) and record.get("qualityResult") == "failed"
-        else "eligibility"
+    from content.release.canonical.pool_inspection_issues import (
+        _not_admitted_issue as implementation,
     )
-    _issue(
-        issues,
-        gate=gate,
-        code="DATA.POOL.OBJECT_NOT_ADMITTED",
-        ref=ref,
+
+    return implementation(
+        issues, record=record, admission_missing=admission_missing, ref=ref
     )
 
 
@@ -232,16 +220,11 @@ def _entity_closure_ready(
 
 
 def _reason_summary(issues: list[dict[str, str]]) -> list[dict[str, Any]]:
-    counts = Counter((row["gate"], row["code"]) for row in issues)
-    return [
-        {
-            "gate": gate,
-            "code": code,
-            "count": count,
-            "message": _REASON_MESSAGES.get(code, code),
-        }
-        for (gate, code), count in sorted(counts.items())
-    ]
+    from content.release.canonical.pool_inspection_issues import (
+        _reason_summary as implementation,
+    )
+
+    return implementation(issues)
 
 
 def inspect_pool(

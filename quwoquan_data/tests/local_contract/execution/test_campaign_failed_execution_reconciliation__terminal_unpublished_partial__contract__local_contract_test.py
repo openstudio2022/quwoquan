@@ -55,6 +55,7 @@ def _write_prepared_transaction(
             "schema": "quwoquan_data.object_transaction_package",
             "transactionId": transaction_id,
             "executionId": execution_id,
+            "publishMediaMode": "embedded_media",
             "sourcePolicyRevision": "rights-cleared-content",
             "target": {
                 "layoutSchema": "quwoquan_data.canonical_publish",
@@ -68,14 +69,14 @@ def _write_prepared_transaction(
                 "tagRefs": [],
                 "sourceCatalogRef": "source_catalog.json",
                 "rightsRef": "rights.json",
-                "casRefs": [{
-                    "sourceRef": "cas/source.jpg",
-                    "objectKey": "media/objects/sha256/aa/aa/"
-                    + "a" * 64
-                    + ".jpg",
-                    "sha256": "sha256:" + "a" * 64,
-                    "bytes": 1,
-                }],
+                "casRefs": [
+                    {
+                        "sourceRef": "cas/source.jpg",
+                        "objectKey": "media/objects/sha256/aa/aa/" + "a" * 64 + ".jpg",
+                        "sha256": "sha256:" + "a" * 64,
+                        "bytes": 1,
+                    }
+                ],
             },
             "review": {
                 "attestationRef": "attestation.json",
@@ -175,9 +176,10 @@ def test_terminal_unpublished_source_drift_binds_reviews_without_release_credit(
     assert repeated_path == path
     assert repeated == receipt
     assert path.parent.name == "terminal-unpublished-source-drift"
-    assert path.stem == receipt["observedSourceIdentity"]["sourceRevision"].split(
-        ":", 1
-    )[1]
+    assert (
+        path.stem
+        == receipt["observedSourceIdentity"]["sourceRevision"].split(":", 1)[1]
+    )
     reference = reconciliation_reference(path, output_root=output_root)
     loaded, loaded_path = load_reconciliation_reference(
         reference,
@@ -188,10 +190,7 @@ def test_terminal_unpublished_source_drift_binds_reviews_without_release_credit(
     assert reference["receiptRef"].endswith(
         f"terminal-unpublished-source-drift/{path.name}"
     )
-    assert (
-        receipt["errorCode"]
-        == "DATA.CAMPAIGN.TERMINAL_UNPUBLISHED_SOURCE_DRIFT"
-    )
+    assert receipt["errorCode"] == "DATA.CAMPAIGN.TERMINAL_UNPUBLISHED_SOURCE_DRIFT"
     assert receipt["originalSourceIdentity"] != receipt["observedSourceIdentity"]
     evidence = receipt["executionEvidence"]
     assert evidence["observedFinalizedCount"] == 0

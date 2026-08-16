@@ -1,5 +1,6 @@
 # spec_ref: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/spec.md
 """promote_post_object must be idempotent when canonical already matches package."""
+
 from __future__ import annotations
 
 import inspect
@@ -106,9 +107,18 @@ def test_promote_post_object_skips_apply_when_canonical_matches_package(
         raise AssertionError("apply must not run for matching canonical")
 
     monkeypatch.setattr(subject, "build_post_object_transaction_package", fake_build)
+    monkeypatch.setattr(
+        subject,
+        "_repair_applied_pool_record_drift",
+        lambda **_kwargs: False,
+    )
     monkeypatch.setattr(subject, "audit_object_transaction", lambda **_k: {})
     monkeypatch.setattr(subject, "apply_object_transaction", fake_apply)
-    result = subject.promote_post_object(execution_id, post_ref)
+    result = subject.promote_post_object(
+        execution_id,
+        post_ref,
+        pool_delivery_intent={},
+    )
     assert result["canonicalObjectRef"] == f"posts/{post_ref}"
     assert apply_calls == []
     assert package_object  # silence unused in lint-free path
@@ -180,7 +190,11 @@ def test_promote_post_object_rejects_existing_canonical_identity_or_merkle_drift
         ObjectTransactionError,
         match="completed post transaction canonical object drift",
     ):
-        subject.promote_post_object(execution_id, post_ref)
+        subject.promote_post_object(
+            execution_id,
+            post_ref,
+            pool_delivery_intent={},
+        )
 
 
 def test_promote_execution_posts_does_not_count_existing_canonical_on_failure(
@@ -212,9 +226,7 @@ def test_promote_execution_posts_does_not_count_existing_canonical_on_failure(
     monkeypatch.setattr(
         subject,
         "write_publish_ref",
-        lambda eid, *, post_refs: publish_ref_writes.append(
-            (eid, tuple(post_refs))
-        ),
+        lambda eid, *, post_refs: publish_ref_writes.append((eid, tuple(post_refs))),
     )
 
     with pytest.raises(ObjectTransactionError, match="promoted=0 required=1"):

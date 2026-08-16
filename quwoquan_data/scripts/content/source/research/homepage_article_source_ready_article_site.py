@@ -1,4 +1,5 @@
 """Acquire one immutable Article source unit from the governed site frontier."""
+
 from __future__ import annotations
 
 import base64
@@ -8,17 +9,19 @@ import urllib.parse
 from collections.abc import Mapping
 from typing import Any
 
+from core.runtime_policy import active_runtime_policy
 from core.source_attribution import canonical_source_attribution
 
 from content.post.article.base_draft import base_draft_readiness
 from content.post.article.evidence_text import score_source_markdown
 from content.source.fetch_payload import fetch_source_payload
+from content.source.research import network_io
+from content.source.research.article_frontier_contract import ArticleSourceCandidate
 from content.source.research.article_frontier_profile import (
     article_profile_digest,
     article_search_sites,
     resolve_article_source_binding,
 )
-from content.source.research.article_frontier_contract import ArticleSourceCandidate
 from content.source.research.article_source_classification import (
     ArticleSourceClassificationRejected,
     photography_classification,
@@ -32,19 +35,17 @@ from content.source.research.homepage_article_source_ready_mediawiki import (
 )
 from content.source.research.public_search import discover_article_source_frontier
 from content.source.research.qunar_sources import _qunar_travelogue_sources
-from content.source.research import network_io
 from content.source.research.text_match import (
     _entity_name_variants,
     _title_matches_entity,
 )
 
-
 _SEARCH_FALLBACK_PRIORITY = ("wikivoyage_zh", "ctrip_sight_guide")
 _TOPICS = ("旅游攻略", "游记", "玩法", "避坑", "摄影")
 _QUNAR_POI_LINK = re.compile(
     r'<a\b[^>]*href=["\'](?P<url>https://(?:touch\.go|touch\.travel)\.qunar\.com/poi/\d+)["\'][^>]*>.*?'
-    r'<dt>(?P<title>.*?)</dt>',
-    re.I | re.S,
+    r"<dt>(?P<title>.*?)</dt>",
+    re.IGNORECASE | re.DOTALL,
 )
 _HTML_TAG = re.compile(r"<[^>]+>")
 
@@ -119,12 +120,14 @@ def _candidate_batches(
     if qunar_sites:
         site = qunar_sites[0]
         profile_digest = article_profile_digest(site)
-        search_url = (
-            "https://touch.travel.qunar.com/search?q="
-            + urllib.parse.quote(entity_name)
+        search_url = "https://touch.travel.qunar.com/search?q=" + urllib.parse.quote(
+            entity_name
         )
         try:
-            search_html = network_io.curl_text(search_url, timeout=15)
+            search_html = network_io.curl_text(
+                search_url,
+                timeout=active_runtime_policy().provider_timeouts.qunar_seconds,
+            )
         except Exception as exc:  # noqa: BLE001 - provider shard checkpoint
             search_html = ""
             search_error = f"{type(exc).__name__}: {exc}"
@@ -166,9 +169,7 @@ def _candidate_batches(
                     search_html.encode("utf-8")
                 ),
                 "providerError": search_error,
-                "candidates": [
-                    candidate.as_evidence() for candidate in poi_candidates
-                ],
+                "candidates": [candidate.as_evidence() for candidate in poi_candidates],
             },
             tuple(poi_candidates),
         )
@@ -198,11 +199,17 @@ def _candidate_batches(
                 ArticleSourceCandidate(
                     source_id=str(source.get("source_id") or f"qunar-direct-{index}"),
                     site_id="qunar_guide",
-                    platform=str(source.get("platform") or site.get("platform") or "去哪儿攻略"),
-                    category=str(source.get("category") or site.get("category") or "travelogue"),
+                    platform=str(
+                        source.get("platform") or site.get("platform") or "去哪儿攻略"
+                    ),
+                    category=str(
+                        source.get("category") or site.get("category") or "travelogue"
+                    ),
                     canonical_url=url,
                     title=title,
-                    discovery_method=str(source.get("discoveryProvider") or "qunar_site_direct"),
+                    discovery_method=str(
+                        source.get("discoveryProvider") or "qunar_site_direct"
+                    ),
                     relevance_score=float(source.get("matchConfidence") or 0.0),
                     profile_digest=profile_digest,
                     discovery_query=entity_name,

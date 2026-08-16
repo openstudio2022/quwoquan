@@ -1,4 +1,5 @@
 """Execution service extracted from the retired monolithic runner."""
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -29,7 +30,10 @@ from content.execution.support import (
 if TYPE_CHECKING:
     from content.execution.agent.outcome import AgentRunOutcome
 
-_PROCESS_TERMINATION_TIMEOUT_SECONDS = active_runtime_policy().process_termination_timeout_seconds
+_PROCESS_TERMINATION_TIMEOUT_SECONDS = (
+    active_runtime_policy().process_termination_timeout_seconds
+)
+
 
 def _managed_agent_worker_main() -> None:
     """Subprocess entrypoint for one real semantic-agent job.
@@ -38,6 +42,7 @@ def _managed_agent_worker_main() -> None:
     Fake test runners still bypass this path through ctx.agent_runner.
     """
     from content.execution.agent.agent_runner import _managed_agent_runner_for_provider
+
     input_path = Path(sys.argv[1])
     output_path = Path(sys.argv[2])
     payload = json.loads(input_path.read_text(encoding="utf-8"))
@@ -95,7 +100,7 @@ def _source_review_agent_worker_main() -> None:
         runtime=str(payload.get("runtime") or "local"),
         model_selection=model_selection,
         agent_provider="cursor_sdk",
-        max_workers=1,
+        max_workers=active_runtime_policy().reviewer_workers,
     )
     outcome = _default_managed_agent_runner(
         context,
@@ -113,7 +118,7 @@ def run_source_review_agent_isolated(
     model_selection: CursorModelSelection,
     prompt: str,
     timeout_seconds: float | None = None,
-) -> "AgentRunOutcome":
+) -> AgentRunOutcome:
     """Run one source review with visible progress and a killable hard deadline."""
     from core.control_types import AgentFailureKind, AgentProvider
 
@@ -273,11 +278,13 @@ def _register_managed_agent_subprocess(pid: int) -> None:
     with _MANAGED_AGENT_SUBPROCESS_LOCK:
         _MANAGED_AGENT_SUBPROCESS_PIDS.add(pid)
 
+
 def _unregister_managed_agent_subprocess(pid: int) -> None:
     if pid <= 0:
         return
     with _MANAGED_AGENT_SUBPROCESS_LOCK:
         _MANAGED_AGENT_SUBPROCESS_PIDS.discard(pid)
+
 
 def _terminate_managed_agent_subprocesses() -> list[int]:
     with _MANAGED_AGENT_SUBPROCESS_LOCK:
@@ -305,13 +312,14 @@ def _terminate_managed_agent_subprocesses() -> list[int]:
             pass
     return pids
 
+
 def _default_managed_agent_runner_isolated(
     ctx: ExecutionContext,
     prompt: str,
     *,
     completion_probe: Callable[[], bool] | None = None,
     completion_grace_seconds: float = 0,
-) -> "AgentRunOutcome":
+) -> AgentRunOutcome:
     """Run one provider adapter in a killable subprocess with a hard deadline."""
     from core.control_types import AgentFailureKind, AgentProvider
 
@@ -340,7 +348,9 @@ def _default_managed_agent_runner_isolated(
                         "maxWorkers": ctx.max_workers,
                         "model": ctx.model,
                         "modelParameters": ctx.model_selection.parameters_document(),
-                        "agentProvider": _normalize_managed_agent_provider(ctx.agent_provider),
+                        "agentProvider": _normalize_managed_agent_provider(
+                            ctx.agent_provider
+                        ),
                         "semanticRole": ctx.semantic_role,
                         "semanticMaxAttempts": ctx.semantic_max_attempts,
                         "releaseOnly": ctx.release_only,
@@ -474,6 +484,7 @@ def _default_managed_agent_runner_isolated(
         finally:
             _unregister_managed_agent_subprocess(proc.pid)
 
+
 def _child_pids(pid: int) -> list[int]:
     try:
         proc = subprocess.run(
@@ -499,9 +510,11 @@ def _child_pids(pid: int) -> list[int]:
             children.append(child_pid)
     return children
 
+
 def _terminate_pid_tree_if_alive(pid: int) -> None:
     """Best-effort cleanup for Cursor bridge shell/node children."""
     seen: set[int] = set()
+
     def _walk(target: int) -> list[int]:
         if target in seen:
             return []
@@ -511,9 +524,11 @@ def _terminate_pid_tree_if_alive(pid: int) -> None:
             descendants.extend(_walk(child))
             descendants.append(child)
         return descendants
+
     for child_pid in _walk(pid):
         _terminate_pid_if_alive(child_pid)
     _terminate_pid_if_alive(pid)
+
 
 def _terminate_pid_if_alive(pid: int) -> None:
     """Best-effort cleanup for one process."""

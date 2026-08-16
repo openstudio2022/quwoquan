@@ -45,11 +45,17 @@ def _capsule(output: Path, marker: str) -> Path:
     lane_digest = "sha256:" + "9" * 64
     stable = {
         "schema": "quwoquan_data.content_campaign_source_capsule",
-        "format": "source-snapshot-v1",
+        "format": "source-capsule-v2",
+        "gitBranch": "codex/test-canonical-gc",
         "gitCommitSha": "1" * 40,
         "sourceRevision": "sha256:" + "2" * 64,
         "sourceDigest": "sha256:" + marker * 64,
         "entityCatalogDigest": "sha256:" + "4" * 64,
+        "executionBundle": {
+            "algorithm": "sha256",
+            "digest": "sha256:" + "6" * 64,
+            "inputs": ["quwoquan_data/scripts/content"],
+        },
         "roots": ["quwoquan_data"],
         "laneExternalInputs": {
             carrier: {

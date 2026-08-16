@@ -1,4 +1,5 @@
 """Acquire governed professional videos into an immutable local CAS."""
+
 from __future__ import annotations
 
 import tempfile
@@ -60,6 +61,8 @@ from content.source.professional_video_transport import (
 )
 from content.source.research.text_match import _normalized_title
 
+_EXTRACTED_DEPENDENCIES = (initial_popularity_signals, redact_sensitive_video_url)
+
 
 def _registered_video_source(
     provider: str,
@@ -76,7 +79,9 @@ def _registered_video_source(
         rows.extend(row for row in travel["video"] if isinstance(row, Mapping))
     matches = [row for row in rows if str(row.get("sourceId") or "") == provider]
     if len(matches) != 1:
-        raise ValueError(f"professional video provider is not uniquely registered: {provider}")
+        raise ValueError(
+            f"professional video provider is not uniquely registered: {provider}"
+        )
     return {
         "sourceId": provider,
         "platform": str(matches[0].get("platform") or ""),
@@ -141,9 +146,13 @@ def _validate_item(
     api_evidence = str(item["apiEvidence"]).strip()
     if path == "manual_file":
         if not manual_file or asset_url:
-            raise ValueError(f"{asset_id}: manual_file requires manualFile and forbids assetUrl")
+            raise ValueError(
+                f"{asset_id}: manual_file requires manualFile and forbids assetUrl"
+            )
     elif not asset_url.startswith("https://") or manual_file:
-        raise ValueError(f"{asset_id}: {path} requires HTTPS assetUrl and forbids manualFile")
+        raise ValueError(
+            f"{asset_id}: {path} requires HTTPS assetUrl and forbids manualFile"
+        )
     if path == "supported_api" and not api_evidence.startswith("https://"):
         raise ValueError(f"{asset_id}: supported_api requires HTTPS apiEvidence")
     if path != "supported_api" and api_evidence:
@@ -165,7 +174,9 @@ def _validate_item(
             raise ValueError(
                 f"{asset_id}: popularitySignals.{field} must be null or non-negative integer"
             )
-    popular_binding = [str(item.get(field) or "").strip() for field in POPULAR_BINDING_FIELDS]
+    popular_binding = [
+        str(item.get(field) or "").strip() for field in POPULAR_BINDING_FIELDS
+    ]
     if any(popular_binding) and not all(popular_binding):
         raise ValueError(
             f"{asset_id}: popular candidate/catalog ref/digest/file SHA must be supplied together"
@@ -187,7 +198,10 @@ def _pre_acquisition_block(item: Mapping[str, Any]) -> tuple[str, str]:
     ):
         return "DATA.SOURCE.ACCESS_CONTROL_BLOCKED", "access barrier or bypass declared"
     if item["acquisitionPath"] != "manual_file" and not access["anonymousAssetAccess"]:
-        return "DATA.SOURCE.ANONYMOUS_ACCESS_REQUIRED", "network video is not anonymously accessible"
+        return (
+            "DATA.SOURCE.ANONYMOUS_ACCESS_REQUIRED",
+            "network video is not anonymously accessible",
+        )
     review = item["safetyReview"]
     if review["status"] != "passed":
         return "DATA.SOURCE.SAFETY_REVIEW_BLOCKED", "safety review is not passed"
@@ -197,7 +211,10 @@ def _pre_acquisition_block(item: Mapping[str, Any]) -> tuple[str, str]:
         review[field] != "none"
         for field in ("privacyRisk", "minorRisk", "maliciousMediaRisk")
     ):
-        return "DATA.SOURCE.SAFETY_RISK_BLOCKED", "privacy, minor or malicious-media risk"
+        return (
+            "DATA.SOURCE.SAFETY_RISK_BLOCKED",
+            "privacy, minor or malicious-media risk",
+        )
     if review["watermarkStatus"] != "absent":
         return "DATA.SOURCE.WATERMARK_BLOCKED", "watermark is present or unknown"
     entity_key = _normalized_title(str(item["entityId"]))
@@ -211,7 +228,10 @@ def _pre_acquisition_block(item: Mapping[str, Any]) -> tuple[str, str]:
         if _normalized_title(value)
     ]
     if not any(alias in evidence_key for alias in aliases):
-        return "DATA.SOURCE.ENTITY_MISMATCH", "title and relevance do not identify entity"
+        return (
+            "DATA.SOURCE.ENTITY_MISMATCH",
+            "title and relevance do not identify entity",
+        )
     return "", ""
 
 
@@ -223,88 +243,28 @@ def _source_identity(document: Mapping[str, Any]) -> tuple[str, str, str]:
     )
 
 
-def _receipt_source_identity_header(path: Path) -> tuple[str, str, str]:
-    """Read only the immutable identity header before current-schema validation.
+def _receipt_source_identity_header(*args: Any, **kwargs: Any) -> Any:
+    from content.source.professional_video_acquisition_row import (
+        _receipt_source_identity_header as implementation,
+    )
 
-    Historical receipts from another source identity are not candidates for
-    deduplication and may predate the current receipt body schema.  A malformed
-    header still fails closed because its identity cannot be proven foreign.
-    """
-    document = read_json(path)
-    if not isinstance(document, Mapping):
-        raise TypeError(
-            f"professional video acquisition receipt header must be an object: {path}"
-        )
-    if document.get("schema") != "quwoquan_data.professional_video_acquisition_receipt":
-        raise ValueError(
-            f"professional video acquisition receipt header schema is invalid: {path}"
-        )
-    values: list[str] = []
-    for field in ("sourceRevision", "sourceDigest", "entityCatalogDigest"):
-        value = document.get(field)
-        if not isinstance(value, str) or not value.strip():
-            raise ValueError(
-                "professional video acquisition receipt identity header is invalid: "
-                f"{path} field={field}"
-            )
-        values.append(value)
-    return values[0], values[1], values[2]
+    return implementation(*args, **kwargs)
 
 
-def _prior_content_index(
-    output_root: Path,
-    *,
-    current_receipt: Path,
-    source_identity: tuple[str, str, str],
-) -> dict[str, str]:
-    index: dict[str, str] = {}
-    receipts = output_root / "receipts"
-    if not receipts.is_dir():
-        return index
-    for path in sorted(receipts.glob("*.json")):
-        if path.resolve() == current_receipt.resolve():
-            continue
-        ref = path.relative_to(output_root).as_posix()
-        if _receipt_source_identity_header(path) != source_identity:
-            continue
-        receipt = load_professional_video_acquisition_receipt(ref, root=output_root)
-        for row in receipt["assets"]:
-            digest = str(row.get("contentSha256") or "")
-            if row.get("acquisitionStatus") == "acquired" and digest:
-                index.setdefault(digest, f"{ref}#{row['assetId']}")
-    return index
+def _prior_content_index(*args: Any, **kwargs: Any) -> Any:
+    from content.source.professional_video_acquisition_row import (
+        _prior_content_index as implementation,
+    )
+
+    return implementation(*args, **kwargs)
 
 
 def _empty_row(item: Mapping[str, Any], *, rights: RightsStatus) -> dict[str, Any]:
-    row = {
-        **{key: item[key] for key in (
-            "assetId", "entityId", "observedEntityId", "provider", "platform",
-            "displayName", "sourceKind", "acquisitionPath", "sourceUrl", "assetUrl",
-            "manualFile", "apiEvidence", "accessEvidence", "title", "relevance",
-            "creator", "capturedAt", "license", "termsUrl", "authorizationProof",
-            "rightsIssues", "modelReleaseStatus", "propertyReleaseStatus", "safetyReview",
-        )},
-        "acquisitionStatus": AcquisitionStatus.BLOCKED.value,
-        "rightsStatus": rights.value,
-        "authorizationRequired": rights is not RightsStatus.VERIFIED or not str(item["authorizationProof"]).strip(),
-        "distributionDecision": DistributionDecision.BLOCKED.value,
-        "contentSha256": "",
-        "assetRef": "",
-        "bytes": 0,
-        "mediaProbe": None,
-        "duplicateOf": "",
-        "failureCode": "",
-        "failure": "",
-        "popularitySignals": initial_popularity_signals(dict(item["popularitySignals"])),
-        "planVideoSpec": None,
-        "popularCandidateId": str(item.get("popularCandidateId") or ""),
-        "popularCatalogRef": str(item.get("popularCatalogRef") or ""),
-        "popularCatalogDigest": str(item.get("popularCatalogDigest") or ""),
-        "popularCatalogFileSha256": str(item.get("popularCatalogFileSha256") or ""),
-    }
-    for field in ("sourceUrl", "assetUrl", "apiEvidence", "termsUrl", "authorizationProof"):
-        row[field] = redact_sensitive_video_url(str(row[field]))
-    return row
+    from content.source.professional_video_acquisition_row import (
+        _empty_row as implementation,
+    )
+
+    return implementation(item, rights=rights)
 
 
 def _acquire_item(
@@ -327,7 +287,9 @@ def _acquire_item(
         if item["acquisitionPath"] == "manual_file":
             if manual_root is None:
                 raise ValueError("manual_root is required by manual_file acquisition")
-            suffix = copy_manual_video(str(item["manualFile"]), temporary, manual_root=manual_root)
+            suffix = copy_manual_video(
+                str(item["manualFile"]), temporary, manual_root=manual_root
+            )
         else:
             suffix = fetch_public_video(
                 str(item["assetUrl"]),
@@ -424,7 +386,12 @@ def acquire_professional_videos(
     manifest = read_json(manifest_path)
     if not isinstance(manifest, dict):
         raise TypeError("professional video acquisition manifest must be an object")
-    assert_valid(manifest, "source", "professional_video_acquisition_manifest", label="professional video acquisition manifest")
+    assert_valid(
+        manifest,
+        "source",
+        "professional_video_acquisition_manifest",
+        label="professional video acquisition manifest",
+    )
     guard_acquisition_source_identity(
         manifest,
         handoff_ref=handoff_ref,
@@ -436,9 +403,7 @@ def acquire_professional_videos(
     if len(asset_ids) != len(set(asset_ids)):
         raise ValueError("professional video acquisition assetId values must be unique")
     provider_labels: dict[str, tuple[str, str]] = {}
-    validated: list[
-        tuple[dict[str, Any], RightsStatus, str, dict[str, Any]]
-    ] = []
+    validated: list[tuple[dict[str, Any], RightsStatus, str, dict[str, Any]]] = []
     popular_bindings: dict[str, dict[str, Any]] = {}
     catalog_cache: dict[tuple[str, str, str], dict[str, Any]] = {}
     registry = load_content_source_registry()
@@ -466,8 +431,13 @@ def acquire_professional_videos(
         if popular is not None:
             popular_bindings[str(item["assetId"])] = popular
         label = (str(item["displayName"]), str(item["platform"]))
-        if str(item["provider"]) in provider_labels and provider_labels[str(item["provider"])] != label:
-            raise ValueError(f"{item['assetId']}: provider displayName/platform are inconsistent")
+        if (
+            str(item["provider"]) in provider_labels
+            and provider_labels[str(item["provider"])] != label
+        ):
+            raise ValueError(
+                f"{item['assetId']}: provider displayName/platform are inconsistent"
+            )
         provider_labels[str(item["provider"])] = label
         validated.append((item, rights, publication, safety_evidence))
     manifest_digest = document_digest(manifest)
@@ -510,7 +480,9 @@ def acquire_professional_videos(
     rows: list[dict[str, Any]] = []
     seen: dict[str, str] = {}
     root.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="professional-video-", dir=root) as temporary:
+    with tempfile.TemporaryDirectory(
+        prefix="professional-video-", dir=root
+    ) as temporary:
         temporary_root = Path(temporary)
         max_workers = min(
             len(validated),
@@ -595,7 +567,12 @@ def acquire_professional_videos(
         "assets": rows,
     }
     receipt = {**stable, "receiptDigest": document_digest(stable)}
-    assert_valid(receipt, "source", "professional_video_acquisition_receipt", label="professional video acquisition receipt")
+    assert_valid(
+        receipt,
+        "source",
+        "professional_video_acquisition_receipt",
+        label="professional video acquisition receipt",
+    )
     assert_funnel_consistent(receipt)
     frozen = write_create_once_video_receipt(
         receipt_path,

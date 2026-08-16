@@ -4,6 +4,7 @@ Supersession never rewrites a historical manifest, request, state, or object.
 It only proves that the frozen execution cannot resume under the current source
 identity and that its bytes remain protected for audit/retry lineage.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -11,7 +12,6 @@ import fcntl
 import hashlib
 import json
 import os
-import socket
 import stat
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -32,6 +32,8 @@ from core.source_digest import (
 
 from content.execution.identity import validate_execution_id
 from content.execution.terminal_state_integrity import verify_terminal_state_integrity
+
+_EXTRACTED_DEPENDENCIES = (stat,)
 
 _REASONS = frozenset({"source_drift", "missing_canonical_input"})
 _ERROR_CODES = {
@@ -105,8 +107,7 @@ def _file_binding(root: Path, relative: str) -> dict[str, object]:
 
 def _anchors(root: Path) -> dict[str, dict[str, object]]:
     return {
-        name: _file_binding(root, relative)
-        for name, relative in _ANCHOR_REFS.items()
+        name: _file_binding(root, relative) for name, relative in _ANCHOR_REFS.items()
     }
 
 
@@ -161,43 +162,11 @@ def _require_regular_file(path: Path, *, label: str) -> None:
 
 
 def _root_inventory(root: Path) -> tuple[tuple[dict[str, object], ...], str]:
-    entries: list[dict[str, object]] = []
-    candidates = sorted(
-        root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()
+    from content.execution.recovery.supersession_inventory import (
+        _root_inventory as implementation,
     )
-    for path in candidates:
-        relative = path.relative_to(root).as_posix()
-        parts = Path(relative).parts
-        if parts[:2] == ("_shared", "reconciliation"):
-            if len(parts) == 2 and (path.is_symlink() or not path.is_dir()):
-                raise ValueError(
-                    "execution supersession reconciliation root is corrupt"
-                )
-            continue
-        metadata = path.lstat()
-        if stat.S_ISLNK(metadata.st_mode):
-            raise ValueError(
-                f"execution supersession root contains a symlink: {relative}"
-            )
-        if stat.S_ISDIR(metadata.st_mode):
-            entries.append({
-                "ref": relative, "kind": "directory", "size": None, "sha256": None
-            })
-            continue
-        if not stat.S_ISREG(metadata.st_mode):
-            raise ValueError(
-                f"execution supersession root contains a non-regular entry: {relative}"
-            )
-        entries.append(
-            {
-                "ref": relative,
-                "kind": "file",
-                "size": metadata.st_size,
-                "sha256": _file_digest(path),
-            }
-        )
-    frozen = tuple(entries)
-    return frozen, _digest({"entries": list(frozen)})
+
+    return implementation(root)
 
 
 def _settled_execution_state(root: Path) -> dict[str, Any] | None:
@@ -263,11 +232,7 @@ def _validate_pre_controller_closure(
     root: Path,
     inventory: tuple[dict[str, object], ...],
 ) -> None:
-    files = {
-        str(entry["ref"])
-        for entry in inventory
-        if entry.get("kind") == "file"
-    }
+    files = {str(entry["ref"]) for entry in inventory if entry.get("kind") == "file"}
     missing = sorted(_PRE_CONTROLLER_REQUIRED_FILES - files)
     unexpected = sorted(
         files - _PRE_CONTROLLER_REQUIRED_FILES - _PRE_CONTROLLER_OPTIONAL_FILES
@@ -288,15 +253,13 @@ def _validate_pre_controller_closure(
             for line in lines:
                 value = json.loads(line)
                 if not isinstance(value, dict):
-                    raise ValueError("pre-controller catalog rows must be objects")
+                    raise TypeError("pre-controller catalog rows must be objects")
         elif path.stat().st_size == 0:
             raise ValueError(f"pre-controller evidence must not be empty: {relative}")
     for relative in _PRE_CONTROLLER_IDENTITY_FILES:
         document = _optional_object(root / relative)
         if document is None or document.get("executionId") != root.name:
-            raise ValueError(
-                f"pre-controller evidence executionId drift: {relative}"
-            )
+            raise ValueError(f"pre-controller evidence executionId drift: {relative}")
     progress = _optional_object(root / "_shared/execution_progress.json") or {}
     counts = progress.get("counts")
     if progress.get("lastRunId") is not None or not isinstance(counts, Mapping):
@@ -306,49 +269,13 @@ def _validate_pre_controller_closure(
 
 
 def _process_evidence(
-    root: Path,
-    *,
-    execution_id: str,
-    state: Mapping[str, Any] | None,
+    root: Path, *, execution_id: str, state: Mapping[str, Any] | None
 ) -> tuple[dict[str, object], str]:
-    lease = _optional_object(root / _ANCHOR_REFS["controllerLease"])
-    if lease is not None:
-        if lease.get("executionId") != execution_id:
-            raise ValueError("execution controller lease executionId drift")
-        lease_status = str(lease.get("status") or "").strip()
-        if lease_status == "active":
-            raise ValueError("execution controller lease is active; supersession refused")
-        if lease_status != "released":
-            raise ValueError("execution controller lease status is invalid")
-    state_status = str((state or {}).get("status") or "missing")
-    if state is not None and state_status not in _SUPERSESSION_ELIGIBLE_STATE_STATUSES:
-        raise ValueError(
-            f"execution state is not supersession-eligible: {state_status}"
-        )
-    controller = state.get("controller") if state else None
-    controller_row = controller if isinstance(controller, Mapping) else {}
-    pid = _optional_pid((lease or {}).get("pid") or controller_row.get("pid"))
-    pgid = _optional_pid((lease or {}).get("pgid") or controller_row.get("pgid"))
-    observed_pid_alive = _pid_alive(pid)
-    observed_group_alive = _pgid_alive(pgid)
-    if observed_pid_alive or observed_group_alive:
-        raise ValueError(
-            "execution controller/process group is still alive; supersession refused"
-        )
-    return (
-        {
-            "hostname": socket.gethostname(),
-            "pid": pid,
-            "pgid": pgid,
-            "observedPidAlive": observed_pid_alive,
-            "observedProcessGroupAlive": observed_group_alive,
-            "identityMatched": False,
-            "pidAlive": False,
-            "processGroupAlive": False,
-            "livenessProbe": _LIVENESS_PROBE,
-        },
-        state_status,
+    from content.execution.recovery.supersession_inventory import (
+        _process_evidence as implementation,
     )
+
+    return implementation(root, execution_id=execution_id, state=state)
 
 
 @contextmanager
@@ -397,7 +324,9 @@ def validate_execution_supersession_receipt(
     expected_evidence_digest = _digest(anchors)
     if receipt["evidenceDigest"] != expected_evidence_digest:
         raise ValueError("execution supersession evidence digest drift")
-    expected_name = f"supersession-{expected_evidence_digest.removeprefix('sha256:')}.json"
+    expected_name = (
+        f"supersession-{expected_evidence_digest.removeprefix('sha256:')}.json"
+    )
     if path.name != expected_name:
         raise ValueError("execution supersession receipt path drift")
     root_fields = ("rootInventoryDigest", "rootInventoryEntryCount", "stateEvidence")
@@ -483,9 +412,7 @@ def supersede_execution(
         raise FileNotFoundError(f"execution root is missing: {root}")
     source_repo = (repo_root or paths.REPO_ROOT).resolve()
     with _lock(root):
-        stale_receipts = tuple(
-            (root / "_shared/reconciliation").glob("stale-*.json")
-        )
+        stale_receipts = tuple((root / "_shared/reconciliation").glob("stale-*.json"))
         if stale_receipts:
             raise ValueError("stale-reconciled execution is already terminal")
         existing = load_execution_supersession_receipt(root)
@@ -583,11 +510,12 @@ def supersede_execution(
         if observed_again != observed_source:
             raise ValueError("source changed while writing supersession receipt")
         current_inventory, current_inventory_digest = _root_inventory(root)
-        if (
-            current_inventory_digest != inventory_digest
-            or len(current_inventory) != len(inventory)
-        ):
-            raise ValueError("execution root changed while writing supersession receipt")
+        if current_inventory_digest != inventory_digest or len(
+            current_inventory
+        ) != len(inventory):
+            raise ValueError(
+                "execution root changed while writing supersession receipt"
+            )
         body = json.dumps(receipt, ensure_ascii=False, indent=2).encode("utf-8") + b"\n"
         path.parent.mkdir(parents=True, exist_ok=True)
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)

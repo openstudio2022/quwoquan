@@ -1,4 +1,5 @@
 """通过唯一 Data CLI 驱动 Mongo+Redis ReliableTask 内容 worker。"""
+
 from __future__ import annotations
 
 import os
@@ -45,6 +46,8 @@ from content.execution.runtime_evidence.reliabletask_process import (
     load_frozen_campaign_worker_binary_binding,
     load_frozen_observer_binary_binding,
 )
+
+_EXTRACTED_DEPENDENCIES = (signal,)
 
 _RECOVERY_EXECUTION_STAGES_BY_QUEUE_STAGE = {
     QueueJobStage.AUTHOR: frozenset({"build_homepage", "post_author"}),
@@ -150,8 +153,7 @@ def build_fleet_request(
     stage_jobs = [
         job
         for job in _load_jobs(execution_id)
-        if job.backend is QueueBackend.RELIABLE_TASK
-        and job.stage is stage
+        if job.backend is QueueBackend.RELIABLE_TASK and job.stage is stage
     ]
     jobs = [
         job
@@ -167,8 +169,7 @@ def build_fleet_request(
     object_timeout_seconds = _object_timeout_seconds(jobs)
     backend_envelope = load_execution_queue_backend(execution_id)
     active_documents = [
-        fleet_job_document(job)
-        for job in sorted(jobs, key=lambda item: item.job_id)
+        fleet_job_document(job) for job in sorted(jobs, key=lambda item: item.job_id)
     ]
     job_set_envelope = select_or_freeze_job_set_attempt(
         execution_id,
@@ -206,15 +207,19 @@ def build_fleet_request(
         execution_id,
         job_set_envelope,
     ) / (
-        f"hosts/{host_scope_id}/{request_name}"
-        if worker_host_binding
-        else request_name
+        f"hosts/{host_scope_id}/{request_name}" if worker_host_binding else request_name
     )
     if request_path.is_file():
         existing = read_json(request_path)
-        assert_valid(existing, "execution", "data_content_fleet_request", label="data_content_fleet_request")
+        assert_valid(
+            existing,
+            "execution",
+            "data_content_fleet_request",
+            label="data_content_fleet_request",
+        )
         if (
-            existing.get("jobSetEnvelopeDigest") != job_set_envelope.get("envelopeDigest")
+            existing.get("jobSetEnvelopeDigest")
+            != job_set_envelope.get("envelopeDigest")
             or existing.get("jobSetDigest") != job_set_envelope.get("jobSetDigest")
             or existing.get("actualTaskDigest") != actual_task_digest
             or existing.get("workerHostBinding") != worker_host_binding
@@ -298,8 +303,7 @@ def _fleet_command(
         backend_envelope = load_execution_queue_backend(execution_id)
         binding = (
             load_frozen_observer_binary_binding()
-            if backend_envelope.get("scaleClass")
-            in {"M100_PLUS", "M10000_PLUS"}
+            if backend_envelope.get("scaleClass") in {"M100_PLUS", "M10000_PLUS"}
             else load_frozen_campaign_worker_binary_binding()
         )
         return [str(validate_frozen_observer_binary(binding))], REPO_ROOT
@@ -342,46 +346,21 @@ def fleet_batch_timeout_seconds(
 
 
 def _terminate_fleet_process(process: subprocess.Popen[object]) -> None:
-    """Stop the service worker and all of its children after controller cancellation."""
-    if process.poll() is not None:
-        return
-    from core.runtime_policy import active_runtime_policy
+    from content.execution.queue.reliabletask.fleet_process import (
+        _terminate_fleet_process as implementation,
+    )
 
-    grace_seconds = active_runtime_policy().process_termination_timeout_seconds
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except OSError:
-        return
-    try:
-        process.wait(timeout=grace_seconds)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except OSError:
-        return
-    process.wait()
+    return implementation(process)
 
 
 def _run_fleet_process(
-    command: list[str],
-    *,
-    cwd: Path,
-    environment: Mapping[str, str],
+    command: list[str], *, cwd: Path, environment: Mapping[str, str]
 ) -> int:
-    """Run one owned worker process group so an interrupted execution cannot leak it."""
-    process = subprocess.Popen(
-        command,
-        cwd=cwd,
-        env=dict(environment),
-        start_new_session=True,
+    from content.execution.queue.reliabletask.fleet_process import (
+        _run_fleet_process as implementation,
     )
-    try:
-        return process.wait()
-    except BaseException:
-        _terminate_fleet_process(process)
-        raise
+
+    return implementation(command, cwd=cwd, environment=environment)
 
 
 def discard_reliabletask_execution(execution_id: str) -> None:
@@ -438,10 +417,13 @@ def _run_reliabletask_host(
         object_timeout_seconds=object_timeout_milliseconds // 1000,
         completion_grace_seconds=completion_grace_seconds,
     )
-    evidence_dir = attempt_evidence_dir(execution_id, {
-        "stage": stage.value,
-        "jobSetDigest": request["jobSetDigest"],
-    })
+    evidence_dir = attempt_evidence_dir(
+        execution_id,
+        {
+            "stage": stage.value,
+            "jobSetDigest": request["jobSetDigest"],
+        },
+    )
     worker_binding = request.get("workerHostBinding")
     if isinstance(worker_binding, Mapping):
         evidence_dir = evidence_dir / "hosts" / str(worker_binding["hostScopeId"])
@@ -462,8 +444,7 @@ def _run_reliabletask_host(
         exact_attempt = (
             existing.execution_id == execution_id
             and existing.stage == stage.value
-            and existing.job_set_envelope_digest
-            == request["jobSetEnvelopeDigest"]
+            and existing.job_set_envelope_digest == request["jobSetEnvelopeDigest"]
             and existing.job_set_digest == request["jobSetDigest"]
             and existing.actual_task_digest == request["actualTaskDigest"]
         )
@@ -472,8 +453,7 @@ def _run_reliabletask_host(
         if existing.passed or (
             not bool(request.get("recoverDeadTasks"))
             and all(
-            outcome.status in {"succeeded", "dead"}
-            for outcome in existing.outcomes
+                outcome.status in {"succeeded", "dead"} for outcome in existing.outcomes
             )
         ):
             return existing
@@ -501,9 +481,7 @@ def _run_reliabletask_host(
     startup_failure_limit = policy.queue_max_startup_failures
     restart_deadline = time.monotonic() + min(
         batch_timeout_seconds,
-        policy.campaign_lane_timeout_seconds_for_scale(
-            str(request["campaignScale"])
-        ),
+        policy.campaign_lane_timeout_seconds_for_scale(str(request["campaignScale"])),
     )
 
     def wait_for_backend(startup_failures: int) -> None:
@@ -564,15 +542,13 @@ def _run_reliabletask_host(
         if (
             decoded.execution_id != execution_id
             or decoded.stage != stage.value
-            or decoded.job_set_envelope_digest
-            != request["jobSetEnvelopeDigest"]
+            or decoded.job_set_envelope_digest != request["jobSetEnvelopeDigest"]
             or decoded.job_set_digest != request["jobSetDigest"]
             or decoded.actual_task_digest != request["actualTaskDigest"]
         ):
             raise ValueError("ReliableTask fleet report attempt identity drift")
         all_terminal = all(
-            outcome.status in {"succeeded", "dead"}
-            for outcome in decoded.outcomes
+            outcome.status in {"succeeded", "dead"} for outcome in decoded.outcomes
         )
         if decoded.passed or all_terminal:
             return decoded

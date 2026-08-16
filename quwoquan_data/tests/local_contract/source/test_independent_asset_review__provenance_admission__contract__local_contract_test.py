@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import io
-import shutil
+import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -150,7 +150,9 @@ def _acquisition(
         popularity="热门",
         output_root=acquisition_root / "discovery-plans",
     )
-    candidate = next(row for row in plan["candidates"] if row["provider"] == "pinterest")
+    candidate = next(
+        row for row in plan["candidates"] if row["provider"] == "pinterest"
+    )
     item = _acquisition_item(rights_status=rights_status)
     item["discoveryCandidateId"] = candidate["candidateId"]
     item["discoveryUrl"] = candidate["discoveryUrl"]
@@ -205,6 +207,11 @@ def _execution_manifest(output_root: Path, *, source_digest: str) -> Path:
                 "digest": source_digest,
                 "inputs": ["quwoquan_data/control_plane"],
             },
+            "executionBundle": {
+                "algorithm": "sha256",
+                "digest": _digest("execution-bundle"),
+                "inputs": ["quwoquan_data/scripts"],
+            },
             "modelBinding": {
                 "provider": "codex_sdk",
                 "authorModel": "gpt-5.6-terra",
@@ -254,7 +261,8 @@ def _semantic_evidence(
             "files": [
                 {
                     "path": authored.name,
-                    "sha256": "sha256:" + hashlib.sha256(authored.read_bytes()).hexdigest(),
+                    "sha256": "sha256:"
+                    + hashlib.sha256(authored.read_bytes()).hexdigest(),
                     "role": "authored_object",
                 }
             ],
@@ -294,7 +302,9 @@ def _semantic_evidence(
     return author, reviewer
 
 
-def _judgment(*, rights_status: str = "unverified", blocked: bool = False) -> dict[str, object]:
+def _judgment(
+    *, rights_status: str = "unverified", blocked: bool = False
+) -> dict[str, object]:
     return {
         "rightsStatus": rights_status,
         "authorizationRequired": rights_status != "verified",
@@ -312,6 +322,155 @@ def _judgment(*, rights_status: str = "unverified", blocked: bool = False) -> di
             else ["independent rights, safety, entity and quality review passed"]
         ),
     }
+
+
+def _file_digest(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _journal_digest(payload: dict[str, object]) -> str:
+    encoded = (
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _supported_api_reviewer_evidence(
+    output_root: Path,
+    *,
+    asset_id: str,
+    content_sha256: str,
+    acquisition: dict,
+    author_manifest_path: Path,
+    judgment: dict[str, object],
+) -> Path:
+    reviewer_execution_id = "20260812--travel-image-review--china--pilot-001"
+    reviewer_run_id = "supported-api-review-run-001"
+    review_request = output_root / "reviews/request.json"
+    write_json(
+        review_request,
+        {
+            "candidateId": asset_id,
+            "contentSha256": content_sha256,
+            "requiredResultSchema": (
+                "quwoquan_data.professional_image_supported_api_reviewer_result"
+            ),
+        },
+    )
+    source_identity = {
+        "sourceRevision": acquisition["sourceRevision"],
+        "sourceDigest": acquisition["sourceDigest"],
+        "entityCatalogDigest": acquisition["entityCatalogDigest"],
+        "targetSetDigest": "1" * 64,
+    }
+    request_stable: dict[str, object] = {
+        "schema": "quwoquan_data.semantic_task_journal_request",
+        "workUnitId": "sha256:" + "2" * 64,
+        "executionId": reviewer_execution_id,
+        "carrier": "image",
+        "stage": "reviewer",
+        "promptSha256": _file_digest(review_request),
+        "sourceIdentity": source_identity,
+        "semanticPreflightReceipt": None,
+        "workspaceRef": f"data/tasks/{reviewer_execution_id}",
+        "provider": "cursor_sdk",
+        "model": "grok-test",
+        "modelParameters": [],
+        "runtimeProfileId": "scale",
+        "runtimeProfileDigest": "sha256:" + "3" * 64,
+        "semanticSelectionDigest": "sha256:" + "4" * 64,
+        "maxAttempts": 2,
+    }
+    request = {
+        **request_stable,
+        "requestDigest": _journal_digest(request_stable),
+    }
+    request_path = output_root / "reviews/semantic-request.json"
+    write_json(request_path, request)
+
+    supported_judgment = {
+        "status": ("passed" if judgment["safetyStatus"] == "passed" else "blocked"),
+        "entityMatch": judgment["entityMatch"],
+        "privacyRisk": judgment["privacyRisk"],
+        "minorRisk": judgment["minorRisk"],
+        "maliciousMediaRisk": judgment["maliciousMediaRisk"],
+        "watermarkStatus": judgment["watermarkStatus"],
+        "qualityStatus": judgment["qualityStatus"],
+        "findings": judgment["findings"],
+    }
+    result_sha256 = _journal_digest(supported_judgment)
+    attempt_stable: dict[str, object] = {
+        "schema": "quwoquan_data.semantic_task_journal_attempt",
+        "workUnitId": request["workUnitId"],
+        "requestDigest": request["requestDigest"],
+        "attempt": 1,
+        "recordedAt": "2026-08-12T10:05:00Z",
+        "status": "finished",
+        "provider": "cursor_sdk",
+        "runId": reviewer_run_id,
+        "agentId": "reviewer-agent-001",
+        "requestId": "reviewer-request-001",
+        "durationMs": 50,
+        "resultSha256": result_sha256,
+        "failureKind": "",
+        "errorCode": "",
+        "retryable": False,
+        "capacityReceiptRef": "",
+        "capacityReceiptDigest": "",
+    }
+    attempt = {
+        **attempt_stable,
+        "attemptDigest": _journal_digest(attempt_stable),
+    }
+    attempt_path = output_root / "reviews/semantic-attempt.json"
+    write_json(attempt_path, attempt)
+
+    reviewer_manifest = read_json(author_manifest_path)
+    reviewer_manifest["executionId"] = reviewer_execution_id
+    reviewer_manifest["modelBinding"] = {
+        "provider": "cursor_sdk",
+        "authorModel": "grok-test",
+        "authorModelFamily": "grok",
+        "authorModelParameters": [],
+        "reviewerModel": "grok-test",
+        "reviewerModelFamily": "grok",
+        "reviewerModelParameters": [],
+    }
+    write_json(
+        output_root / f"data/tasks/{reviewer_execution_id}/execution_manifest.json",
+        reviewer_manifest,
+    )
+    reviewer_path = output_root / "reviews/reviewer-result.json"
+    write_json(
+        reviewer_path,
+        {
+            "schema": (
+                "quwoquan_data.professional_image_supported_api_reviewer_result"
+            ),
+            "candidateId": asset_id,
+            "contentSha256": content_sha256,
+            "reviewRequestRef": review_request.relative_to(output_root).as_posix(),
+            "reviewRequestSha256": _file_digest(review_request),
+            "semanticTaskRequestRef": request_path.relative_to(output_root).as_posix(),
+            "semanticTaskRequestSha256": _file_digest(request_path),
+            "semanticTaskAttemptRef": attempt_path.relative_to(output_root).as_posix(),
+            "semanticTaskAttemptSha256": _file_digest(attempt_path),
+            "provider": "cursor_sdk",
+            "model": "grok-test",
+            "runId": reviewer_run_id,
+            "reviewedAt": "2026-08-12T10:05:00Z",
+            "resultSha256": result_sha256,
+            "judgment": supported_judgment,
+            "judgmentDigest": result_sha256,
+        },
+    )
+    return reviewer_path
 
 
 def _write_review(
@@ -356,15 +515,14 @@ def test_research_unverified_asset_requires_independent_create_once_receipt(
 
     assert path.name == f"{receipt['reviewId']}.json"
     assert path.parent == (
-        output_root
-        / "data/tasks"
-        / EXECUTION_ID
-        / "evidence/asset_reviews/receipts"
+        output_root / "data/tasks" / EXECUTION_ID / "evidence/asset_reviews/receipts"
     )
     assert receipt["reviewDecision"] == "accepted"
     assert receipt["assetSnapshot"]["rightsStatus"] == "unverified"
     assert receipt["assetSnapshot"]["authorizationRequired"] is True
-    assert receipt["acquisitionExecution"]["runId"] != receipt["authorExecution"]["runId"]
+    assert (
+        receipt["acquisitionExecution"]["runId"] != receipt["authorExecution"]["runId"]
+    )
     assert receipt["authorExecution"]["runId"] != receipt["reviewerExecution"]["runId"]
     assert_asset_review_accepted(
         receipt,
@@ -374,7 +532,9 @@ def test_research_unverified_asset_requires_independent_create_once_receipt(
     )
     acquisition_path = output_root / receipt["acquisitionReceiptRef"]
     acquisition = read_json(acquisition_path)
-    asset = next(row for row in acquisition["assets"] if row["assetId"] == "pin-independent-1")
+    asset = next(
+        row for row in acquisition["assets"] if row["assetId"] == "pin-independent-1"
+    )
     admitted = admit_independently_reviewed_image(asset, receipt)
     assert admitted["independentAssetReviewId"] == receipt["reviewId"]
     with pytest.raises(IndependentAssetReviewError, match="snapshot drift"):
@@ -440,12 +600,15 @@ def test_canonical_adoption_binds_exact_review_bytes_and_source_identity(
             "bytes": 1,
         },
     }
-    assert validate_frozen_asset_review_binding(
-        output_root=output_root,
-        object_ref=OBJECT_REF,
-        rights_asset=rights_asset,
-        source_digest=receipt["sourceDigest"],
-    ) == binding
+    assert (
+        validate_frozen_asset_review_binding(
+            output_root=output_root,
+            object_ref=OBJECT_REF,
+            rights_asset=rights_asset,
+            source_digest=receipt["sourceDigest"],
+        )
+        == binding
+    )
 
     drifted_binding = {**binding, "entityCatalogDigest": _digest("drifted-catalog")}
     with pytest.raises(ObjectTransactionError, match="binding drift"):
@@ -473,14 +636,18 @@ def test_canonical_adoption_binds_exact_review_bytes_and_source_identity(
         )
 
 
-def test_reviewer_cannot_reuse_author_run_or_self_report_result_hash(tmp_path: Path) -> None:
+def test_reviewer_cannot_reuse_author_run_or_self_report_result_hash(
+    tmp_path: Path,
+) -> None:
     output_root = tmp_path / "same-run"
     with pytest.raises(IndependentAssetReviewError, match="independent runId"):
         _write_review(output_root, reviewer_run_id="author-run-001")
 
     output_root = tmp_path / "unbound-result"
     acquisition, acquisition_path = _acquisition(output_root)
-    manifest = _execution_manifest(output_root, source_digest=acquisition["sourceDigest"])
+    manifest = _execution_manifest(
+        output_root, source_digest=acquisition["sourceDigest"]
+    )
     judgment = _judgment()
     author, reviewer = _semantic_evidence(output_root, judgment=judgment)
     payload = read_json(reviewer)
@@ -503,82 +670,57 @@ def test_reviewer_cannot_reuse_author_run_or_self_report_result_hash(tmp_path: P
 def test_supported_api_reviewer_keeps_distinct_frozen_execution_identity(
     tmp_path: Path,
 ) -> None:
-    """A prior exact-byte reviewer journal may not be relabelled as the author run."""
-    source = Path(__file__).resolve().parents[4] / ".qwq_output"
-    author_execution = "20260812--travel-image-author--china--pilot-002"
-    author_root = source / "data/tasks" / author_execution
-    acquisition_root = source / (
-        "data/local/workspace/source-acquisition/openverse-smoke3-20260812/"
-        "preparations/professional-image-supported-api-dc7af7dd5436c975"
-    )
-    required = (
-        author_root / "execution_manifest.json",
-        acquisition_root
-        / "receipts/903bcfd8dc2ed0d38aa23f1d07e57107bec1365920d817f42f2038a7a5b0d393.json",
-    )
-    missing = [str(path) for path in required if not path.is_file()]
-    if missing:
-        pytest.fail(
-            "live frozen Image evidence is required by this contract test; "
-            "rebuild the frozen execution work packages before running: "
-            + ", ".join(missing)
-        )
-
-    # This test exercises only the contract helper against copied, immutable
-    # fixture bytes; it must never mutate or trust the real output tree.
+    """A reviewer journal may not be relabelled as the author execution."""
     output_root = tmp_path / "output"
-    for relative in (
-        "data/tasks/20260812--travel-image-author--china--pilot-002",
-        "data/tasks/20260812--travel-image-review--china--pilot-001",
-        "data/local/workspace/source-acquisition/openverse-smoke3-20260812/"
-        "preparations/professional-image-supported-api-dc7af7dd5436c975",
-    ):
-        shutil.copytree(source / relative, output_root / relative)
-    author_token = "97f35fc1a0d7db726bd5"
-    reviewer_ref = (
-        "data/tasks/20260812--travel-image-review--china--pilot-001/"
-        "evidence/source_reviews/results/97f35fc1a0d7db726bd5.json"
+    acquisition, acquisition_path = _acquisition(output_root)
+    asset = acquisition["assets"][0]
+    author_manifest_path = _execution_manifest(
+        output_root,
+        source_digest=acquisition["sourceDigest"],
     )
-    reviewer = read_json(output_root / reviewer_ref)
-    judgment = {
-        "rightsStatus": "unverified",
-        "authorizationRequired": True,
-        "distributionDecision": "research_allowed",
-        "safetyStatus": "passed",
-        "entityMatch": reviewer["judgment"]["entityMatch"],
-        "qualityStatus": reviewer["judgment"]["qualityStatus"],
-        "privacyRisk": reviewer["judgment"]["privacyRisk"],
-        "minorRisk": reviewer["judgment"]["minorRisk"],
-        "maliciousMediaRisk": reviewer["judgment"]["maliciousMediaRisk"],
-        "watermarkStatus": reviewer["judgment"]["watermarkStatus"],
-        "findings": reviewer["judgment"]["findings"],
-    }
+    judgment = _judgment()
+    author, _ordinary_reviewer = _semantic_evidence(
+        output_root,
+        judgment=judgment,
+    )
+    author_document = read_json(author)
+    author_document["ref"] = "/professional-image/pin-independent-1"
+    write_json(author, author_document)
+    reviewer = _supported_api_reviewer_evidence(
+        output_root,
+        asset_id="pin-independent-1",
+        content_sha256=asset["contentSha256"],
+        acquisition=acquisition,
+        author_manifest_path=author_manifest_path,
+        judgment=judgment,
+    )
     receipt, _path = write_independent_asset_review_receipt(
-        acquisition_receipt_path=output_root / required[1].relative_to(source),
+        acquisition_receipt_path=acquisition_path,
         asset_kind="image",
-        asset_id="openverse:asset:0e8185daea1b63a9",
-        execution_manifest_path=output_root / required[0].relative_to(source),
-        author_evidence_path=output_root / (
-            f"data/tasks/{author_execution}/evidence/source_authors/objects/"
-            f"{author_token}/4.draft/agent_result_envelope.json"
-        ),
-        reviewer_evidence_path=output_root / reviewer_ref,
-        object_ref="/professional-image/openverse:asset:0e8185daea1b63a9",
+        asset_id="pin-independent-1",
+        execution_manifest_path=author_manifest_path,
+        author_evidence_path=author,
+        reviewer_evidence_path=reviewer,
+        object_ref="posts/image/pin-independent-1",
         judgment=judgment,
         output_root=output_root,
     )
     assert receipt["reviewDecision"] == "accepted"
-    assert receipt["authorExecution"]["executionId"] == author_execution
+    assert receipt["authorExecution"]["executionId"] == EXECUTION_ID
     assert receipt["reviewerExecution"]["executionId"] == (
         "20260812--travel-image-review--china--pilot-001"
     )
     assert receipt["authorExecution"]["runId"] != receipt["reviewerExecution"]["runId"]
 
 
-def test_create_once_is_stable_under_concurrent_identical_writers(tmp_path: Path) -> None:
+def test_create_once_is_stable_under_concurrent_identical_writers(
+    tmp_path: Path,
+) -> None:
     output_root = tmp_path / "output"
     acquisition, acquisition_path = _acquisition(output_root)
-    manifest = _execution_manifest(output_root, source_digest=acquisition["sourceDigest"])
+    manifest = _execution_manifest(
+        output_root, source_digest=acquisition["sourceDigest"]
+    )
     judgment = _judgment()
     author, reviewer = _semantic_evidence(output_root, judgment=judgment)
 
@@ -630,7 +772,9 @@ def test_identity_or_receipt_evidence_drift_fails_closed(tmp_path: Path) -> None
     reviewer["runId"] = "review-run-tampered"
     write_json(reviewer_path, reviewer)
 
-    with pytest.raises(IndependentAssetReviewError, match="provenance drift|evidenceSha256"):
+    with pytest.raises(
+        IndependentAssetReviewError, match="provenance drift|evidenceSha256"
+    ):
         load_independent_asset_review_receipt(
             path.relative_to(output_root).as_posix(),
             output_root=output_root,
@@ -668,9 +812,13 @@ def test_unknown_rights_remain_research_admissible_after_independent_review(
     assert receipt["assetSnapshot"]["authorizationRequired"] is True
 
 
-def test_review_cannot_upgrade_restricted_rights_to_research_allowed(tmp_path: Path) -> None:
+def test_review_cannot_upgrade_restricted_rights_to_research_allowed(
+    tmp_path: Path,
+) -> None:
     output_root = tmp_path / "output"
-    with pytest.raises(IndependentAssetReviewError, match="rightsStatus cannot upgrade"):
+    with pytest.raises(
+        IndependentAssetReviewError, match="rightsStatus cannot upgrade"
+    ):
         _write_review(
             output_root,
             rights_status="restricted",

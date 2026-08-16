@@ -1,18 +1,20 @@
 """Filesystem contract for one content execution work package."""
+
 from __future__ import annotations
 
 import hashlib
 import json
 import os
-import yaml
-from datetime import datetime, timezone
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
+import yaml
 from core import paths as core_paths
-from core.paths import WORKSPACE_ROOT_BY_COMMAND, normalize_execution_workspace_command
 from core.io import read_json, write_json
+from core.paths import WORKSPACE_ROOT_BY_COMMAND, normalize_execution_workspace_command
 from core.source_digest import (
     ExecutionBundleIdentity,
     SourceDefinitionSnapshot,
@@ -20,10 +22,17 @@ from core.source_digest import (
     current_execution_bundle_identity,
     current_source_definition_snapshot,
 )
+
 from content.source.contracts import QualifiedHomepageSource
 
 from .identity import SelectionPolicy, parse_execution_id, validate_execution_id
 
+_EXTRACTED_DEPENDENCIES = (
+    current_execution_bundle_identity,
+    current_source_definition_snapshot,
+    parse_execution_id,
+    yaml,
+)
 
 MANIFEST_FILENAME = "execution_manifest.json"
 REQUEST_REF = "0.plan/request.json"
@@ -37,12 +46,16 @@ WORK_PACKAGE_DIRECTORIES = (
     "evidence",
 )
 _TRANSACTION_OBJECT_MARKERS = ("--entity-", "--post-")
+
+
 class ExecutionSourceDigestDriftError(ValueError):
     """The immutable execution was created from different repository inputs."""
 
 
 def transaction_workspace_root() -> Path:
     return core_paths.DATA_LOCAL_ROOT / "workspace" / "object-transactions"
+
+
 def frozen_target_archive_path(execution_id: str) -> Path:
     archive_root = core_paths.DATA_LOCAL_ROOT / "workspace" / "frozen-target-sets"
     return archive_root / f"{validate_execution_id(execution_id)}.json"
@@ -76,7 +89,8 @@ def require_clean_transaction_workspace(execution_id: str) -> None:
     normalized = validate_execution_id(execution_id)
     prefix = f"{normalized}--"
     stale = [
-        path for path in orphaned_transaction_workspaces()
+        path
+        for path in orphaned_transaction_workspaces()
         if path.name.startswith(prefix)
     ]
     if stale:
@@ -93,6 +107,8 @@ def execution_root(execution_id: str) -> Path:
 
 def execution_manifest_path(execution_id: str) -> Path:
     return execution_root(execution_id) / MANIFEST_FILENAME
+
+
 def execution_target_set_path(execution_id: str) -> Path:
     return execution_root(execution_id) / TARGET_SET_REF
 
@@ -108,7 +124,9 @@ class ExecutionWorkspace:
     execution_id: str
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "execution_id", validate_execution_id(self.execution_id))
+        object.__setattr__(
+            self, "execution_id", validate_execution_id(self.execution_id)
+        )
 
     @property
     def root(self) -> Path:
@@ -139,7 +157,7 @@ class FrozenTarget:
     qualified_homepage_source: QualifiedHomepageSource | None = None
 
     @classmethod
-    def from_mapping(cls, payload: Mapping[str, Any]) -> "FrozenTarget":
+    def from_mapping(cls, payload: Mapping[str, Any]) -> FrozenTarget:
         name = str(payload.get("name") or "").strip()
         entity_type = str(payload.get("entityType") or "").strip().strip("/")
         if not name or len(entity_type.split("/")) != 2:
@@ -198,11 +216,17 @@ def ensure_execution_command_layout(execution_id: str, command: str) -> Path:
 
 
 def relative_execution_ref(target: Path, execution_id: str) -> str:
-    return os.path.relpath(Path(target).resolve(), execution_root(execution_id).resolve()).replace(os.sep, "/")
+    return os.path.relpath(
+        Path(target).resolve(), execution_root(execution_id).resolve()
+    ).replace(os.sep, "/")
 
 
 def execution_id_from_spec_path(path: Path) -> str:
-    candidate = path.parent.parent.name if path.name == "execution_spec.yaml" else path.parent.name
+    candidate = (
+        path.parent.parent.name
+        if path.name == "execution_spec.yaml"
+        else path.parent.name
+    )
     return validate_execution_id(candidate)
 
 
@@ -263,8 +287,10 @@ def entity_catalog_digest(source_ref: str) -> str:
         raise ValueError("entity catalog must be inside the repository") from exc
     if not root.exists():
         raise FileNotFoundError(f"entity catalog does not exist: {root}")
-    files = (root,) if root.is_file() else tuple(
-        path for path in sorted(root.rglob("*")) if path.is_file()
+    files = (
+        (root,)
+        if root.is_file()
+        else tuple(path for path in sorted(root.rglob("*")) if path.is_file())
     )
     if not files:
         raise ValueError(f"entity catalog is empty: {root}")
@@ -279,7 +305,12 @@ def entity_catalog_digest(source_ref: str) -> str:
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 def write_frozen_target_set(
@@ -339,7 +370,7 @@ def load_frozen_target_set(execution_id: str) -> dict[str, Any]:
         )
     payload = read_json(path)
     if not isinstance(payload, dict):
-        raise ValueError(f"frozen target set is not an object: {path}")
+        raise TypeError(f"frozen target set is not an object: {path}")
     from core.schema import assert_valid
 
     assert_valid(payload, "execution", "target_set", label=f"target_set:{execution_id}")
@@ -354,7 +385,7 @@ def archive_frozen_target_set(execution_id: str) -> Path:
         raise FileNotFoundError(f"frozen target set does not exist: {source}")
     payload = read_json(source)
     if not isinstance(payload, dict):
-        raise ValueError(f"frozen target set is not an object: {source}")
+        raise TypeError(f"frozen target set is not an object: {source}")
     from core.schema import assert_valid
 
     assert_valid(payload, "execution", "target_set", label=f"target_set:{normalized}")
@@ -377,10 +408,12 @@ def frozen_target_by_name(execution_id: str, name: str) -> FrozenTarget | None:
     payload = load_frozen_target_set(execution_id)
     targets = payload.get("targets")
     if not isinstance(targets, list):
-        raise ValueError(f"frozen target set targets must be an array: {execution_id}")
+        raise TypeError(f"frozen target set targets must be an array: {execution_id}")
     for raw_target in targets:
         if not isinstance(raw_target, Mapping):
-            raise ValueError(f"frozen target set contains a non-object target: {execution_id}")
+            raise TypeError(
+                f"frozen target set contains a non-object target: {execution_id}"
+            )
         target = FrozenTarget.from_mapping(raw_target)
         if target.name == expected_name:
             return target
@@ -404,121 +437,22 @@ def create_execution_manifest(
     semantic_preflight_binding: Mapping[str, Any] | None = None,
     semantic_preflight_require_fresh: bool = True,
 ) -> dict[str, Any]:
-    """Create exactly one immutable execution manifest and work-package tree.
-
-    Reusing an existing ID is a resume only when its immutable inputs match.
-    A new attempt must receive a new sequence and point at ``retryOf``.
-    """
-    identity = parse_execution_id(execution_id)
-    root = execution_root(identity.execution_id)
-    manifest_path = root / MANIFEST_FILENAME
-    recipe_file = core_paths.recipe_path(recipe_ref)
-    if not isinstance(selection_policy, SelectionPolicy):
-        raise TypeError("selection_policy must be SelectionPolicy")
-    if target_set_ref != TARGET_SET_REF:
-        raise ValueError(f"targetSetRef must be {TARGET_SET_REF}")
-    actual_target_set_digest = frozen_target_set_digest(identity.execution_id)
-    if target_set_digest != actual_target_set_digest:
-        raise ValueError("targetSetDigest does not match the frozen target set")
-    normalized_retry_of = validate_execution_id(retry_of) if retry_of else None
-    if normalized_retry_of:
-        retry_identity = parse_execution_id(normalized_retry_of)
-        comparable = (
-            "vertical",
-            "content_type",
-            "intent",
-            "scope",
-            "phase",
-        )
-        if normalized_retry_of == identity.execution_id or any(
-            getattr(retry_identity, field) != getattr(identity, field) for field in comparable
-        ):
-            raise ValueError("retryOf must reference an earlier sequence of the same execution scope")
-        if retry_identity.sequence >= identity.sequence:
-            raise ValueError("retryOf sequence must be lower than the new execution sequence")
-
-    existing_manifest = (
-        load_execution_manifest(identity.execution_id)
-        if manifest_path.is_file()
-        else None
-    )
-    from content.execution.planning.semantic_preflight_admission import (
-        resolve_manifest_preflight_binding,
+    from content.execution.planning.execution_manifest import (
+        create_execution_manifest as implementation,
     )
 
-    normalized_preflight_binding = resolve_manifest_preflight_binding(
-        existing_manifest=existing_manifest,
-        requested_binding=semantic_preflight_binding,
+    return implementation(
+        execution_id=execution_id,
+        recipe_ref=recipe_ref,
+        request=request,
+        selection_policy=selection_policy,
+        target_set_ref=target_set_ref,
+        target_set_digest=target_set_digest,
+        retry_of=retry_of,
         semantic_selection_id=semantic_selection_id,
-        output_root=core_paths.OUTPUT_ROOT,
-        require_requested_fresh=(
-            semantic_preflight_require_fresh and existing_manifest is None
-        ),
+        semantic_preflight_binding=semantic_preflight_binding,
+        semantic_preflight_require_fresh=semantic_preflight_require_fresh,
     )
-    if existing_manifest is not None:
-        # A v2 work package is its own immutable execution authority.  Resume
-        # must not rebuild either identity from the changing checkout: source
-        # definitions and the executor bundle were frozen at first creation.
-        # The exact request/target/preflight/family lineage is still checked
-        # below, so this does not turn resume into a compatibility path.
-        family_ref = existing_manifest.get("familyRef")
-        if not isinstance(family_ref, Mapping) or family_ref.get("ref") != recipe_ref:
-            raise ValueError("execution manifest familyRef drift")
-        if existing_manifest.get("semanticSelectionId") != semantic_selection_id:
-            raise ValueError("execution manifest semanticSelectionId drift")
-        if existing_manifest.get("retryOf") != normalized_retry_of:
-            raise ValueError("execution manifest retryOf drift")
-        if existing_manifest.get("targetSetRef") != target_set_ref:
-            raise ValueError("execution manifest targetSetRef drift")
-        if existing_manifest.get("targetSetDigest") != target_set_digest:
-            raise ValueError("execution manifest targetSetDigest drift")
-        if existing_manifest.get("semanticPreflightReceipt") != normalized_preflight_binding:
-            raise ValueError("execution manifest semantic preflight binding drift")
-        request_path = execution_request_path(identity.execution_id)
-        if not request_path.is_file() or read_json(request_path) != request:
-            raise ValueError("execution request is immutable; create a new sequence")
-        return existing_manifest
-
-    if not recipe_file.is_file():
-        raise FileNotFoundError(f"recipeRef does not exist: {recipe_ref}")
-    recipe_payload = yaml.safe_load(recipe_file.read_text(encoding="utf-8"))
-    if not isinstance(recipe_payload, dict):
-        raise ValueError(f"recipe must be an object: {recipe_file}")
-    from content.execution.planning.semantic_selection import semantic_manifest_identity
-
-    semantic_identity = semantic_manifest_identity(
-        recipe_payload,
-        semantic_selection_id=semantic_selection_id,
-        retry_of=normalized_retry_of,
-    )
-    source_identity = current_source_definition_snapshot().to_document()
-    execution_bundle_identity = current_execution_bundle_identity().to_document()
-    candidate = {
-        "executionId": identity.execution_id,
-        "familyRef": {"ref": recipe_ref, "sha256": _file_sha256(recipe_file)},
-        "sourceDigest": source_identity,
-        "executionBundle": execution_bundle_identity,
-        **semantic_identity,
-        "requestRef": REQUEST_REF,
-        "targetSetRef": target_set_ref,
-        "targetSetDigest": target_set_digest,
-        "retryOf": normalized_retry_of,
-    }
-    if normalized_preflight_binding is not None:
-        candidate["semanticPreflightReceipt"] = normalized_preflight_binding
-    ensure_execution_work_package_layout(identity.execution_id)
-    request_path = execution_request_path(identity.execution_id)
-    if request_path.is_file():
-        existing_request = read_json(request_path)
-        if existing_request != request:
-            raise ValueError("execution request is immutable; create a new sequence")
-    else:
-        write_json(request_path, request)
-    from core.schema import assert_valid
-
-    assert_valid(candidate, "execution", "content_execution_manifest", label=f"execution_manifest:{identity.execution_id}")
-    write_json(manifest_path, candidate)
-    return candidate
 
 
 def load_frozen_execution_manifest(execution_id: str) -> dict[str, Any]:
@@ -528,11 +462,12 @@ def load_frozen_execution_manifest(execution_id: str) -> dict[str, Any]:
         raise FileNotFoundError(f"execution manifest does not exist: {manifest_path}")
     manifest = read_json(manifest_path)
     if not isinstance(manifest, dict):
-        raise ValueError(f"execution manifest is not an object: {manifest_path}")
+        raise TypeError(f"execution manifest is not an object: {manifest_path}")
     if manifest.get("executionId") != validate_execution_id(execution_id):
         raise ValueError(f"execution manifest identity mismatch: {manifest_path}")
-    from content.execution.execution_terminal import load_terminal_execution_evidence
     from core.schema import assert_valid
+
+    from content.execution.execution_terminal import load_terminal_execution_evidence
 
     pre_bundle_manifest = "executionBundle" not in manifest
     if pre_bundle_manifest:
@@ -545,14 +480,21 @@ def load_frozen_execution_manifest(execution_id: str) -> dict[str, Any]:
         if manifest.get("executionId") != validate_execution_id(execution_id):
             raise ValueError(f"execution manifest identity mismatch: {manifest_path}")
         return manifest
-    assert_valid(manifest, "execution", "content_execution_manifest", label=f"execution_manifest:{execution_id}")
+    assert_valid(
+        manifest,
+        "execution",
+        "content_execution_manifest",
+        label=f"execution_manifest:{execution_id}",
+    )
     try:
         SourceDefinitionSnapshot.from_document(manifest.get("sourceDigest"))
         ExecutionBundleIdentity.from_document(manifest.get("executionBundle"))
     except SourceDigestError as exc:
         raise ValueError(f"execution manifest sourceDigest invalid: {exc}") from exc
     if manifest.get("targetSetDigest") != frozen_target_set_digest(execution_id):
-        raise ValueError(f"execution manifest target set digest mismatch: {manifest_path}")
+        raise ValueError(
+            f"execution manifest target set digest mismatch: {manifest_path}"
+        )
     return manifest
 
 
@@ -574,7 +516,7 @@ def execution_manifest_recipe_ref(execution_id: str) -> str:
     manifest = load_execution_manifest(execution_id)
     family_ref = manifest.get("familyRef")
     if not isinstance(family_ref, dict):
-        raise ValueError("execution manifest familyRef must be an object")
+        raise TypeError("execution manifest familyRef must be an object")
     recipe_ref = str(family_ref.get("ref") or "").strip()
     if not recipe_ref:
         raise ValueError("execution manifest recipe.ref is required")
@@ -582,41 +524,18 @@ def execution_manifest_recipe_ref(execution_id: str) -> str:
 
 
 def _canonical_object_refs(refs: Iterable[str], *, kind: str) -> list[str]:
-    singular = {"entities": "entity", "posts": "post"}.get(kind)
-    if singular is None:
-        raise ValueError(f"unsupported canonical object kind: {kind}")
-    prefix = f"/{singular}/"
-    normalized: set[str] = set()
-    for raw in refs:
-        ref = str(raw or "").strip().strip("/")
-        if raw and str(raw).startswith(prefix):
-            ref = str(raw)[len(prefix):].strip("/")
-        candidate = Path(ref)
-        if not ref or candidate.is_absolute() or ".." in candidate.parts:
-            raise ValueError(f"unsafe canonical {kind} ref: {raw}")
-        normalized.add(ref)
-    return sorted(normalized)
+    from content.execution.planning.workspace_publish_ref import (
+        _canonical_object_refs as implementation,
+    )
+
+    return implementation(refs, kind=kind)
 
 
 def write_publish_ref(
-    execution_id: str,
-    *,
-    entity_refs: Iterable[str] = (),
-    post_refs: Iterable[str] = (),
+    execution_id: str, *, entity_refs: Iterable[str] = (), post_refs: Iterable[str] = ()
 ) -> Path:
-    """Record this execution's canonical object closure, never a release alias."""
-    target = execution_root(execution_id) / "publish_ref.json"
-    payload = {
-        "schema": "quwoquan_data.execution_publish_ref",
-        "executionId": validate_execution_id(execution_id),
-        "canonicalPublishRoot": "quwoquan_data/publish",
-        "publishedRefs": {
-            "entities": _canonical_object_refs(entity_refs, kind="entities"),
-            "posts": _canonical_object_refs(post_refs, kind="posts"),
-        },
-    }
-    from core.schema import assert_valid
+    from content.execution.planning.workspace_publish_ref import (
+        write_publish_ref as implementation,
+    )
 
-    assert_valid(payload, "execution", "publish_ref", label=f"publish_ref:{execution_id}")
-    write_json(target, payload)
-    return target
+    return implementation(execution_id, entity_refs=entity_refs, post_refs=post_refs)

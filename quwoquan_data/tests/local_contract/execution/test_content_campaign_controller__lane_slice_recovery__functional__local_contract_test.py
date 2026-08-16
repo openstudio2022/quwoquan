@@ -76,13 +76,17 @@ def test_only_typed_execution_checkpoints_are_resumable_lane_slices(
             },
         },
     )
-    assert campaign_lane_execution._execution_has_resumable_checkpoint(tmp_path) is False
+    assert (
+        campaign_lane_execution._execution_has_resumable_checkpoint(tmp_path) is False
+    )
 
     write_json(
         state,
         {"status": "manual_required", "waitingCheckpoint": None},
     )
-    assert campaign_lane_execution._execution_has_resumable_checkpoint(tmp_path) is False
+    assert (
+        campaign_lane_execution._execution_has_resumable_checkpoint(tmp_path) is False
+    )
 
     write_json(
         state,
@@ -197,17 +201,20 @@ def test_lane_runner_resumes_controller_yields_in_one_create_once_claim(
     yield_checkpoint = next(
         checkpoint
         for checkpoint in checkpoints
-        if checkpoint.get("return_code") == campaign_lane_execution._LANE_SLICE_YIELD_CODE
+        if checkpoint.get("return_code")
+        == campaign_lane_execution._LANE_SLICE_YIELD_CODE
     )
-    assert yield_checkpoint["process_evidence"]["terminationOwner"] == "controller_yield"
+    assert (
+        yield_checkpoint["process_evidence"]["terminationOwner"] == "controller_yield"
+    )
     evidence = checkpoints[-1]["process_evidence"]
     assert evidence["sliceCount"] == 2
     assert evidence["resumeCount"] == 1
     assert evidence["maxRssBytes"] == 64 * 1024**2
     assert evidence["terminationOwner"] == "lane_process"
-    assert "resuming create-once lane checkpoint" in (
-        tmp_path / "lane.log"
-    ).read_text(encoding="utf-8")
+    assert "resuming create-once lane checkpoint" in (tmp_path / "lane.log").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_lane_runner_stops_identical_checkpoint_resume_loop(
@@ -381,6 +388,10 @@ def test_failed_lane_prefers_typed_terminal_cause_over_truncated_log_tail(
         path=capsule,
         ref="data/local/cache/content-campaign-workspaces/capsule",
         execution_root=execution_root,
+        capsule=SimpleNamespace(
+            git_branch="main",
+            commit_sha="a" * 40,
+        ),
     )
     runtime = CampaignRuntimePaths(
         repo_root=tmp_path,
@@ -398,8 +409,7 @@ def test_failed_lane_prefers_typed_terminal_cause_over_truncated_log_tail(
         lane_checkpoint=lambda **kwargs: checkpoints.append(kwargs),
     )
     missing_contract = (
-        capsule
-        / "quwoquan_service/services/recommendation-service/contracts/"
+        capsule / "quwoquan_service/services/recommendation-service/contracts/"
         "recommendation/recommendation_feature_profile_view/projections/"
         "intersection_reason.yaml"
     )
@@ -472,11 +482,11 @@ def test_failed_lane_prefers_typed_terminal_cause_over_truncated_log_tail(
             "familyRef": "content/travel/video/video",
             "regionRef": "china",
             "selector": "source-ready-priority",
-                "quota": 1,
-                "count": 1,
-                "requiredWorkers": 1,
-                "partitionCount": 16,
-                "capacityPlanDigest": "sha256:" + "6" * 64,
+            "quota": 1,
+            "count": 1,
+            "requiredWorkers": 1,
+            "partitionCount": 16,
+            "capacityPlanDigest": "sha256:" + "6" * 64,
         },
         stage="review-only",
         runtime=runtime,

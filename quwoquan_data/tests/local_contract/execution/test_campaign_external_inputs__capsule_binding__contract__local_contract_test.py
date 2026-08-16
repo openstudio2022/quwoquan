@@ -36,6 +36,12 @@ from support.campaign_external_inputs_fixture import (  # noqa: F401
 )
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
+EXECUTION_BUNDLE = {
+    "algorithm": "sha256",
+    "digest": "sha256:" + "f" * 64,
+    "inputs": ["quwoquan_data/scripts"],
+}
+
 
 def _runtime(tmp_path: Path) -> CampaignRuntimePaths:
     output = tmp_path / "output"
@@ -46,8 +52,6 @@ def _runtime(tmp_path: Path) -> CampaignRuntimePaths:
         campaigns_root=output / "data/local/workspace/content-campaign-submissions",
         workspaces_root=output / "data/local/cache/content-campaign-workspaces",
     )
-
-
 
 
 def _submission(
@@ -94,6 +98,7 @@ def _submission(
             "digest": SOURCE_DIGEST,
             "inputs": ["quwoquan_data/schema"],
         },
+        "executionBundle": EXECUTION_BUNDLE,
         "entityCatalogDigest": CATALOG_DIGEST,
         "externalInputRefs": refs,
         "externalInputsDigest": external_inputs_digest(refs),
@@ -103,8 +108,6 @@ def _submission(
         "requestDigest": payload_digest(stable),
         "submittedAt": "2026-08-05T00:00:00Z",
     }
-
-
 
 
 def _scale_source_pool(
@@ -129,7 +132,9 @@ def _scale_source_pool(
     pool = {**pool_stable, "planDigest": payload_digest(pool_stable)}
     pool_path = runtime.output_root / "data/local/workspace/scale-source-pool/plan.json"
     write_json(pool_path, pool)
-    evidence_root = runtime.output_root / "data/local/workspace/scale-source-pool/evidence"
+    evidence_root = (
+        runtime.output_root / "data/local/workspace/scale-source-pool/evidence"
+    )
     evidence_root.mkdir(parents=True)
     binding = {
         "poolId": pool["poolId"],
@@ -139,7 +144,8 @@ def _scale_source_pool(
         "entityCatalogDigest": CATALOG_DIGEST,
         "planRef": pool_path.relative_to(runtime.output_root).as_posix(),
         "planDigest": pool["planDigest"],
-        "planFileSha256": "sha256:" + hashlib.sha256(pool_path.read_bytes()).hexdigest(),
+        "planFileSha256": "sha256:"
+        + hashlib.sha256(pool_path.read_bytes()).hexdigest(),
     }
     selections: dict[str, dict[str, object]] = {}
     for carrier in EXECUTION_IDS:
@@ -149,9 +155,11 @@ def _scale_source_pool(
             "candidateCount": 1,
         }
         selections[carrier] = {**stable, "selectionDigest": payload_digest(stable)}
-    return binding, evidence_root.relative_to(runtime.output_root).as_posix(), selections
-
-
+    return (
+        binding,
+        evidence_root.relative_to(runtime.output_root).as_posix(),
+        selections,
+    )
 
 
 def _frozen_documents(
@@ -194,6 +202,7 @@ def _frozen_documents(
         "gitCommitSha": "c" * 40,
         "sourceRevision": SOURCE_REVISION,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": EXECUTION_BUNDLE,
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": semantic_preflight_binding,
@@ -217,8 +226,6 @@ def _frozen_documents(
     plan = {**stable, "planDigest": payload_digest(stable)}
     write_json(runtime.campaigns_root / ROOT_ID / "campaign_plan.json", plan)
     return plan, submissions
-
-
 
 
 def _capsule(
@@ -245,9 +252,7 @@ def _capsule(
             "externalInputRefs": refs,
             "externalInputsDigest": external_inputs_digest(refs),
         }
-    pool_plan = read_json(
-        runtime.output_root / str(plan["scaleSourcePool"]["planRef"])
-    )
+    pool_plan = read_json(runtime.output_root / str(plan["scaleSourcePool"]["planRef"]))
     selected_ids = {
         str(candidate_id)
         for selection in plan["laneSourcePoolSelections"].values()
@@ -275,11 +280,7 @@ def _capsule(
         "gitCommitSha": "c" * 40,
         "sourceRevision": SOURCE_REVISION,
         "sourceDigest": SOURCE_DIGEST,
-        "executionBundle": {
-            "algorithm": "sha256",
-            "digest": "sha256:" + "f" * 64,
-            "inputs": ["quwoquan_data/scripts"],
-        },
+        "executionBundle": EXECUTION_BUNDLE,
         "entityCatalogDigest": CATALOG_DIGEST,
         "roots": ["quwoquan_data"],
         "laneExternalInputs": lane_payload,
@@ -327,7 +328,6 @@ def _capsule(
         },
         source_pool_snapshot_root_ref="scale-source-pool",
     )
-
 
 
 def test_fenced_execution_envelope_uses_only_canonical_capsule_and_rejects_tamper(
@@ -395,7 +395,7 @@ def test_fenced_execution_envelope_uses_only_canonical_capsule_and_rejects_tampe
                         "sourceUrl": "https://example.invalid/agent-replacement",
                     }
                 ],
-            }
+            },
         },
     )
     monkeypatch.setattr(

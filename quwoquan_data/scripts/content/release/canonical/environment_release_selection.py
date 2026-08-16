@@ -32,6 +32,8 @@ from content.release.canonical.pool_source_attribution import (
     source_attribution_complete,
 )
 
+_EXTRACTED_DEPENDENCIES = (Any, hashlib, json)
+
 DATA_POST_CAPS: dict[str, int | None] = {
     "alpha": 2_100,
     "beta": 10_000,
@@ -118,7 +120,9 @@ def _candidate(
             f"DATA.POOL.IDENTITY_INVALID: {post_ref} lacks contentType/authorId"
         )
 
-    pool_record = _effective_record(manifest_path.parent, manifest, object_type="content")
+    pool_record = _effective_record(
+        manifest_path.parent, manifest, object_type="content"
+    )
     if pool_record is not None:
         process_result = str(pool_record.get("processResult") or "").strip()
         quality_result = str(pool_record.get("qualityResult") or "").strip()
@@ -260,7 +264,9 @@ def _delivery_issue(
             entity_record = entity_admission.record
         except (OSError, ObjectTransactionError, TypeError, ValueError):
             return "DATA.POOL.REFERENCE_MISSING"
-        if not is_pool_record_admitted(entity_record) or not effective_source_attribution_ready(
+        if not is_pool_record_admitted(
+            entity_record
+        ) or not effective_source_attribution_ready(
             entity_admission, release_mode="research"
         ):
             return "DATA.POOL.REFERENCE_MISSING"
@@ -354,25 +360,11 @@ def _stable_balanced_order(candidates: Sequence[PoolCandidate]) -> list[PoolCand
 
 
 def _pool_digest(candidates: Sequence[PoolCandidate]) -> str:
-    rows: list[dict[str, Any]] = [
-        {
-            "postRef": row.post_ref,
-            "contentId": row.content_id,
-            "version": row.version,
-            "contentType": row.content_type,
-            "authorId": row.author_id,
-            "variantPurpose": row.variant_purpose,
-            "usageScope": row.usage_scope,
-        }
-        for row in sorted(
-            candidates,
-            key=lambda item: (item.content_id, item.version, item.post_ref),
-        )
-    ]
-    encoded = json.dumps(
-        rows, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    return "sha256:" + hashlib.sha256(encoded).hexdigest()
+    from content.release.canonical.environment_release_selection_digest import (
+        _pool_digest as implementation,
+    )
+
+    return implementation(candidates)
 
 
 def select_environment_release_posts(

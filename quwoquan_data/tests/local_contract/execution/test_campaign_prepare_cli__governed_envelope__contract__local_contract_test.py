@@ -30,6 +30,8 @@ def _args(tmp_path: Path) -> Namespace:
         handoff_ref=str(tmp_path / "handoff.json"),
         predecessor_reconciliation_receipt=None,
         promotion_receipt=None,
+        alpha_m100_readiness_receipt=None,
+        alpha_m100_app_uat_receipt=None,
         homepage_retry_of="20260805--travel-homepage-m3--china--scale-001",
         article_retry_of="20260805--travel-article-m3--china--scale-001",
         image_retry_of="20260805--travel-image-m3--china--scale-001",
@@ -48,9 +50,7 @@ def _fake_envelopes(tmp_path: Path) -> dict[str, Path]:
             path,
             {
                 "scale": "M3",
-                "rootExecutionId": (
-                    "20260806--travel-homepage-m3--china--scale-002"
-                ),
+                "rootExecutionId": ("20260806--travel-homepage-m3--china--scale-002"),
                 "executionId": f"20260806--travel-{carrier}-m3--china--scale-002",
                 "retryOf": f"20260805--travel-{carrier}-m3--china--scale-001",
                 "familyRef": f"content/travel/{carrier}/{carrier}",
@@ -101,12 +101,11 @@ def test_prepare_campaign_maps_only_governed_external_input_kinds(
 
     assert captured["scale"] == "M3"
     assert captured["semantic_selection_id"] == "default"
-    assert captured["semantic_preflight_receipt"] == (
-        tmp_path / "semantic-preflight.json"
-    ).resolve()
-    assert captured["pre_acquisition_handoff"] == (
-        tmp_path / "handoff.json"
-    ).resolve()
+    assert (
+        captured["semantic_preflight_receipt"]
+        == (tmp_path / "semantic-preflight.json").resolve()
+    )
+    assert captured["pre_acquisition_handoff"] == (tmp_path / "handoff.json").resolve()
     assert captured["predecessor_execution_ids_by_carrier"] == {
         carrier: f"20260805--travel-{carrier}-m3--china--scale-001"
         for carrier in CAMPAIGN_CARRIERS

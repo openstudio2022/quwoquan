@@ -1,4 +1,5 @@
 """Immutable reviewed-object intents for canonical pool delivery."""
+
 from __future__ import annotations
 
 import hashlib
@@ -70,7 +71,9 @@ def _safe_object_dir(root: Path, value: object) -> tuple[str, Path]:
     try:
         normalized = path.relative_to(root.resolve()).as_posix()
     except ValueError as exc:
-        raise ValueError("pool delivery contentObjectDir escapes execution root") from exc
+        raise ValueError(
+            "pool delivery contentObjectDir escapes execution root"
+        ) from exc
     relative_parts = Path(relative).parts
     has_symlink = any(
         (root / Path(*relative_parts[:index])).is_symlink()
@@ -79,7 +82,9 @@ def _safe_object_dir(root: Path, value: object) -> tuple[str, Path]:
     if has_symlink:
         raise ValueError("pool delivery contentObjectDir cannot traverse symlinks")
     if not normalized or not path.is_dir():
-        raise ValueError("pool delivery contentObjectDir is not a physical object directory")
+        raise ValueError(
+            "pool delivery contentObjectDir is not a physical object directory"
+        )
     return normalized, path
 
 
@@ -95,53 +100,27 @@ def _approved_review(object_dir: Path) -> tuple[str, str]:
     return path.relative_to(object_dir).as_posix(), _file_digest(path)
 
 
-def _identity_documents(
-    *,
-    carrier: str,
-    object_ref: str,
-    object_dir: Path,
-    reserved_identity: Mapping[str, Any] | None,
-) -> tuple[str, str | None, int, str | None, Mapping[str, Any], Mapping[str, Any]]:
-    manifest = read_json(object_dir / "manifest.json")
-    if not isinstance(manifest, Mapping):
-        raise TypeError("pool delivery manifest must be an object")
-    if carrier == "homepage":
-        entity = read_json(object_dir / "_entity.json")
-        if not isinstance(entity, Mapping):
-            raise TypeError("pool delivery homepage entity must be an object")
-        expected_ref = str(entity.get("entityRef") or "").strip()
-        if expected_ref != object_ref:
-            raise ValueError("pool delivery homepage objectRef drift")
-        return object_ref, None, 1, None, entity, manifest
-    if str(manifest.get("contentType") or "").strip() != carrier:
-        raise ValueError("pool delivery post carrier drift")
-    if not isinstance(reserved_identity, Mapping):
-        raise ValueError("pool delivery post identity reservation is missing")
-    content_id = str(reserved_identity.get("contentId") or "").strip()
-    version = reserved_identity.get("version")
-    if not content_id or isinstance(version, bool) or not isinstance(version, int) or version < 1:
-        raise ValueError("pool delivery post contentId/version is invalid")
-    reservation_id = str(reserved_identity.get("reservationId") or "").strip()
-    if not reservation_id.startswith("sha256:"):
-        raise ValueError("pool delivery post identity reservation is invalid")
-    if reserved_identity.get("sourceManifestSha256") != _file_digest(
-        object_dir / "manifest.json"
-    ):
-        raise ValueError(
-            "DATA.POOL.IDEMPOTENCY_CONFLICT: "
-            "pool delivery post identity reservation input drift"
-        )
-    return content_id, content_id, version, reservation_id, manifest, manifest
+def _identity_documents(*args: Any, **kwargs: Any) -> tuple[Any, ...]:
+    from content.execution.closure.pool_delivery_documents import (
+        identity_documents as implementation,
+    )
+
+    return implementation(*args, **kwargs)
 
 
-def _content_creator_signals(identity: Mapping[str, Any]) -> tuple[str | None, str | None, list[str]]:
+def _content_creator_signals(
+    identity: Mapping[str, Any],
+) -> tuple[str | None, str | None, list[str]]:
     vertical = str(identity.get("vertical") or "").strip() or None
-    region = str(
-        identity.get("regionRef")
-        or identity.get("coverageRegion")
-        or identity.get("region")
-        or ""
-    ).strip() or None
+    region = (
+        str(
+            identity.get("regionRef")
+            or identity.get("coverageRegion")
+            or identity.get("region")
+            or ""
+        ).strip()
+        or None
+    )
     tags = [
         str(value).strip()
         for value in (identity.get("tagRefs") or [])
@@ -247,8 +226,10 @@ def creator_binding_from_pool_delivery_intent(
         if source_issues or _complete_creator_binding(identity) != dict(binding):
             raise ValueError("pool delivery manifest-exact creator binding drift")
     elif mode == "semantic_fit_recovery":
-        if carrier == "homepage" or not source_issues or any(
-            ".semanticFit:" not in issue for issue in source_issues
+        if (
+            carrier == "homepage"
+            or not source_issues
+            or any(".semanticFit:" not in issue for issue in source_issues)
         ):
             raise ValueError(
                 "pool delivery semantic creator recovery requires semanticFit-only source drift"
@@ -332,9 +313,7 @@ def build_pool_delivery_intent(
             identity.get("sourceAttribution")
         )
         if (
-            not source_attribution_complete(
-                {"sourceAttribution": source_attribution}
-            )
+            not source_attribution_complete({"sourceAttribution": source_attribution})
             or manifest.get("sourceAttribution") != source_attribution
         ):
             raise ValueError("pool delivery homepage sourceAttribution is incomplete")
@@ -359,16 +338,11 @@ def build_pool_delivery_intent(
                 for ref in normalized_entity_refs
             )
         ):
-            raise ValueError(
-                "pool delivery normalized entityRefs are not canonical"
-            )
+            raise ValueError("pool delivery normalized entityRefs are not canonical")
         if (
             not isinstance(tag_refs, list)
             or not tag_refs
-            or any(
-                not isinstance(ref, str) or "/" not in ref
-                for ref in tag_refs
-            )
+            or any(not isinstance(ref, str) or "/" not in ref for ref in tag_refs)
         ):
             raise ValueError("pool delivery tagRefs are not canonical")
         entity_tag_binding = {
@@ -379,9 +353,7 @@ def build_pool_delivery_intent(
         source_attribution = canonical_source_attribution(
             identity.get("sourceAttribution")
         )
-        if not source_attribution_complete(
-            {"sourceAttribution": source_attribution}
-        ):
+        if not source_attribution_complete({"sourceAttribution": source_attribution}):
             raise ValueError("pool delivery sourceAttribution is incomplete")
     transaction_ref = (
         normalized_ref.removeprefix("/entity/")
@@ -412,9 +384,7 @@ def build_pool_delivery_intent(
         "sourceAttributionDigest": _digest(source_attribution),
         "mediaClosureDigest": _digest(manifest.get("assets") or []),
         "transactionId": transaction_id,
-        "transactionInputDigest": str(
-            tree_integrity_stats(object_dir)["merkleRoot"]
-        ),
+        "transactionInputDigest": str(tree_integrity_stats(object_dir)["merkleRoot"]),
     }
     intent = {"intentId": _digest(stable), **stable}
     assert_valid(
@@ -434,10 +404,10 @@ def pool_delivery_intent_path(
     root: Path | None = None,
 ) -> Path:
     normalized = validate_execution_id(execution_id)
-    key = hashlib.sha256(
-        f"{normalized}|{carrier}|{object_ref}".encode("utf-8")
-    ).hexdigest()
-    return (root or execution_root(normalized)) / POOL_DELIVERY_INTENT_DIR / f"{key}.json"
+    key = hashlib.sha256(f"{normalized}|{carrier}|{object_ref}".encode()).hexdigest()
+    return (
+        (root or execution_root(normalized)) / POOL_DELIVERY_INTENT_DIR / f"{key}.json"
+    )
 
 
 @canonical_publish_serialized
@@ -556,7 +526,9 @@ def validate_pool_delivery_intent_document(
     stable = {key: value for key, value in payload.items() if key != "intentId"}
     if _digest(stable) != payload.get("intentId"):
         raise ValueError("pool delivery intent content digest mismatch")
-    _relative, object_dir = _safe_object_dir(root.resolve(), payload["contentObjectDir"])
+    _relative, object_dir = _safe_object_dir(
+        root.resolve(), payload["contentObjectDir"]
+    )
     review_ref = Path(str(payload["reviewEvidenceRef"]))
     review_path = root.resolve() / review_ref
     review_has_symlink = any(
@@ -574,7 +546,8 @@ def validate_pool_delivery_intent_document(
     ):
         raise ValueError("pool delivery intent input drift")
     identity = read_json(
-        object_dir / ("_entity.json" if payload["carrier"] == "homepage" else "manifest.json")
+        object_dir
+        / ("_entity.json" if payload["carrier"] == "homepage" else "manifest.json")
     )
     if not isinstance(identity, Mapping):
         raise TypeError("pool delivery creator identity must be an object")

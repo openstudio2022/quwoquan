@@ -7,6 +7,7 @@ homepage/article source-ready acquisition 契约测试（public mediawiki）。
 拒绝；测试逐字搬移。共享常量与构造 helper 见
 tests/support/homepage_article_source_ready_acquisition_fixture.py。
 """
+
 from __future__ import annotations
 
 import json
@@ -166,7 +167,7 @@ def test_mediawiki_homepage_fact_falls_back_to_governed_baike_fact_source(
         captured_at=CAPTURED_AT,
     )
 
-    assert observed_geo == [("四川省", "成都市", "锦江区")]
+    assert observed_geo == [("测试省甲", "测试市甲", "测试区甲")]
     facts = acquired.candidate["structuredFacts"]
     assert facts["ticketPriceRange"] == {
         "currency": "CNY",

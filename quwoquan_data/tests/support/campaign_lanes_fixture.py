@@ -5,6 +5,7 @@
 `_restore_capsule_permissions_for_pytest_cleanup` 需要在各测试模块中显式
 import 以保持原有的按模块 autouse 语义。
 """
+
 from __future__ import annotations
 
 import json
@@ -22,9 +23,10 @@ from content.execution.campaign.workspace import CampaignRuntimePaths
 from content.execution.request import RuntimeExecutionRequest
 from core.control_types import TargetSelector
 from core.io import read_json
+
 from support.semantic_preflight_fixture import ready_semantic_preflight
 
-ROOT_ID = "20260728--travel-homepage-m1--china--scale-001"
+ROOT_ID = "20260728--travel-homepage-baseline--china--scale-001"
 CARRIERS = ("homepage", "article", "image", "video")
 
 
@@ -106,12 +108,12 @@ if phase == "publish":
         raise SystemExit(31)
 
 event("start")
-delay = 0.25
+delay = float(os.environ.get("CAMPAIGN_EVENT_DELAY_SECONDS", "0.25"))
 if (
     phase == "review"
     and os.environ.get("SLOW_REVIEW_CARRIER") == carrier
 ):
-    delay = 1.0
+    delay = max(delay, 2.0)
 time.sleep(delay)
 if (
     phase == "review"
@@ -369,12 +371,11 @@ def _create_repo(tmp_path: Path) -> Path:
     branch_policy = repo / "quwoquan_ops/policies/branch_policy.yaml"
     branch_policy.parent.mkdir(parents=True)
     branch_policy.write_text(
-        "allowed_local_branches:\n  - main\n",
+        "allowed_local_branches:\n  - dev1.0\n  - main\n",
         encoding="utf-8",
     )
     feature_root = (
-        repo
-        / "specs/feature-tree/discovery-content/object-homepage-coverage-scaling"
+        repo / "specs/feature-tree/discovery-content/object-homepage-coverage-scaling"
     )
     feature_root.mkdir(parents=True)
     (feature_root / "spec.md").write_text(
@@ -385,10 +386,16 @@ def _create_repo(tmp_path: Path) -> Path:
         "# Object homepage coverage scaling design\n",
         encoding="utf-8",
     )
+    multi_carrier_release = feature_root / "multi-carrier-release"
+    multi_carrier_release.mkdir()
+    (multi_carrier_release / "spec.md").write_text(
+        "# Multi-carrier release\n",
+        encoding="utf-8",
+    )
     catalog = repo / "quwoquan_data/reference/travel/entities/china"
     catalog.mkdir(parents=True)
     (catalog / "catalog.yaml").write_text("entities: [测试实体]\n", encoding="utf-8")
-    _git(repo, "init")
+    _git(repo, "init", "-b", "dev1.0")
     _git(repo, "config", "user.email", "campaign@example.invalid")
     _git(repo, "config", "user.name", "Campaign Test")
     _git(repo, "add", ".")
@@ -435,7 +442,7 @@ def _request(
 def _execution_id(carrier: str, *, sequence: str = "001") -> str:
     if carrier == "homepage" and sequence == "001":
         return ROOT_ID
-    return f"20260728--travel-{carrier}-m1--china--scale-{sequence}"
+    return f"20260728--travel-{carrier}-baseline--china--scale-{sequence}"
 
 
 def _semantic_preflight_kwargs(
@@ -489,18 +496,14 @@ def _assert_capsule_reused_and_lane_roots_isolated(
 ) -> None:
     lanes = report["lanes"]
     assert isinstance(lanes, dict)
-    capsule_refs = {
-        str(lanes[carrier]["sourceCapsuleRef"]) for carrier in CARRIERS
-    }
+    capsule_refs = {str(lanes[carrier]["sourceCapsuleRef"]) for carrier in CARRIERS}
     assert len(capsule_refs) == 1
     capsule = runtime.output_root / next(iter(capsule_refs))
     assert capsule.is_dir()
     assert (capsule / ".qwq_campaign_capsule.json").is_file()
     assert not (capsule / ".qwq_output").exists()
     assert (capsule / "quwoquan_data/requirements-cursor.txt").is_file()
-    assert (
-        capsule / "quwoquan_ops/policies/branch_policy.yaml"
-    ).is_file()
+    assert (capsule / "quwoquan_ops/policies/branch_policy.yaml").is_file()
     feature_root = (
         capsule
         / "specs/feature-tree/discovery-content/object-homepage-coverage-scaling"
@@ -508,7 +511,7 @@ def _assert_capsule_reused_and_lane_roots_isolated(
     assert (feature_root / "spec.md").is_file()
     assert (feature_root / "design.md").is_file()
     capsule_manifest = read_json(capsule / ".qwq_campaign_capsule.json")
-    assert capsule_manifest["gitBranch"] == "main"
+    assert capsule_manifest["gitBranch"] == "dev1.0"
     assert capsule_manifest["sourceRevision"].startswith("sha256:")
     assert set(capsule_manifest["laneExternalInputs"]) == set(CARRIERS)
     assert capsule.stat().st_mode & 0o222 == 0
@@ -517,9 +520,7 @@ def _assert_capsule_reused_and_lane_roots_isolated(
         lane = lanes[carrier]
         assert lane["sourceCapsuleReadOnly"] is True
         assert lane["sourceCapsuleDigest"] == capsule_manifest["capsuleDigest"]
-        assert lane["executionRootRef"] == (
-            f"data/tasks/{lane['executionId']}"
-        )
+        assert lane["executionRootRef"] == (f"data/tasks/{lane['executionId']}")
         assert lane["cleanupStatus"] == "cleaned"
         checkpoint = read_lane_checkpoint(runtime, ROOT_ID, carrier)
         assert checkpoint is not None

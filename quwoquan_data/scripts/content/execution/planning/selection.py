@@ -1,4 +1,5 @@
 """Reusable single-carrier target selection and execution audit helpers."""
+
 from __future__ import annotations
 
 import hashlib
@@ -7,8 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from core.control_types import ExecutionStateStatus, TargetSelector
-from core.data_issue import DataIssue
+from core.control_types import TargetSelector
 from core.execution_branch import stamp_execution_branch
 from core.paths import (
     preset_path,
@@ -34,7 +34,14 @@ from content.execution.planning.source_selection import (
     qualify_source_ready_targets,
 )
 
-DEFAULT_ARTICLE_ANGLES = ["planning_consultation", "decision_experience", "route_transport", "seasonal_timing"]
+DEFAULT_ARTICLE_ANGLES = [
+    "planning_consultation",
+    "decision_experience",
+    "route_transport",
+    "seasonal_timing",
+]
+
+
 @dataclass(frozen=True)
 class SelectionRequest:
     """One immutable request for creating an execution work package."""
@@ -74,41 +81,12 @@ class SelectionRequest:
 
 
 def execution_failure_items(state: ExecutionStateTransition) -> list[dict[str, Any]]:
-    status = state.status
-    if status in {
-        ExecutionStateStatus.SUCCEEDED,
-        ExecutionStateStatus.STOPPED_AT_UNTIL,
-    }:
-        return []
-    items: list[dict[str, Any]] = []
-    records = state.failed_issue_records
-    for raw in records if isinstance(records, list) else []:
-        if not isinstance(raw, Mapping):
-            continue
-        try:
-            issue = DataIssue.from_dict(raw)
-        except (TypeError, ValueError):
-            continue
-        entity = issue.ref.rsplit("/", 1)[-1].strip() if issue.ref else "__execution__"
-        items.append(
-            {
-                "entity": entity,
-                "lane": "execution" if issue.lane.value == "all" else issue.lane.value,
-                "issues": [str(issue)],
-            }
-        )
-    if not items:
-        failed_objects = [
-            str(item) for item in state.failed_objects or [] if str(item).strip()
-        ]
-        items.append(
-            {
-                "entity": "__execution__",
-                "lane": "execution",
-                "issues": failed_objects or [f"execution status={status.value}"],
-            }
-        )
-    return items
+    from content.execution.planning.selection_failures import (
+        execution_failure_items as implementation,
+    )
+
+    return implementation(state)
+
 
 def _candidate_pool_exhausted(
     *,
@@ -137,9 +115,7 @@ def _matches_category(
     if entity_type == requested:
         return True
     return requested in {
-        segment.strip()
-        for segment in entity_type.split("/")
-        if segment.strip()
+        segment.strip() for segment in entity_type.split("/") if segment.strip()
     }
 
 
@@ -169,9 +145,7 @@ def select_targets(
     if isinstance(quota, bool) or not isinstance(quota, int) or quota < 1:
         raise ValueError("quota must be a positive integer")
     if quota > limit:
-        raise ValueError(
-            f"approved quota {quota} exceeds the candidate pool {limit}"
-        )
+        raise ValueError(f"approved quota {quota} exceeds the candidate pool {limit}")
     partitions = load_partitions(discovery_path)
     all_by_name = partition_targets(partitions, target_selector=target_selector)
     by_name = {
@@ -182,25 +156,30 @@ def select_targets(
     selected: list[dict[str, str]] = []
     seen: set[str] = set()
 
-    if target_selector is TargetSelector.SOURCE_READY_PRIORITY and source_qualifier is None:
+    if (
+        target_selector is TargetSelector.SOURCE_READY_PRIORITY
+        and source_qualifier is None
+    ):
         raise ValueError("source-ready-priority requires source_qualifier")
     if target_names:
         target_catalog = all_by_name if inherit_frozen_targets else by_name
         resolved_target_names = resolve_target_names(target_catalog, target_names)
         if (
-            target_selector is not TargetSelector.SOURCE_READY_PRIORITY
-            or inherit_frozen_targets
+            (
+                target_selector is not TargetSelector.SOURCE_READY_PRIORITY
+                or inherit_frozen_targets
+            )
+            and inherit_frozen_targets
+            and target_selector is TargetSelector.SOURCE_READY_PRIORITY
         ):
-            if inherit_frozen_targets and target_selector is TargetSelector.SOURCE_READY_PRIORITY:
-                # retryOf must keep the predecessor's exact candidate pool.
-                # Re-probing Commons/Wikipedia here is unbounded and can reshape
-                # the immutable retry set; download admission re-verifies rights.
-                if source_qualifier is None:
-                    raise ValueError("source-ready-priority requires source_qualifier")
+            # retryOf must keep the predecessor's exact candidate pool.
+            # Re-probing Commons/Wikipedia here is unbounded and can reshape
+            # the immutable retry set; download admission re-verifies rights.
+            if source_qualifier is None:
+                raise ValueError("source-ready-priority requires source_qualifier")
             if inherited_targets:
                 inherited_names = tuple(
-                    str(row.get("name") or "").strip()
-                    for row in inherited_targets
+                    str(row.get("name") or "").strip() for row in inherited_targets
                 )
                 if inherited_names != resolved_target_names:
                     raise ValueError(
@@ -268,15 +247,17 @@ def select_targets(
 
     if target_selector is TargetSelector.SOURCE_READY_PRIORITY:
         assert source_qualifier is not None
-        selected, source_qualification, requested_target_names = qualify_source_ready_targets(
-            candidate_rows,
-            discovery_ref=str(discovery_path),
-            limit=limit,
-            quota=quota,
-            source_qualifier=source_qualifier,
-            target_names=target_names,
-            qualification_source_key=qualification_source_key,
-            persist_qualified_source=persist_qualified_source,
+        selected, source_qualification, requested_target_names = (
+            qualify_source_ready_targets(
+                candidate_rows,
+                discovery_ref=str(discovery_path),
+                limit=limit,
+                quota=quota,
+                source_qualifier=source_qualifier,
+                target_names=target_names,
+                qualification_source_key=qualification_source_key,
+                persist_qualified_source=persist_qualified_source,
+            )
         )
     else:
         for row in candidate_rows:
@@ -317,6 +298,8 @@ def select_targets(
         if requested_target_names:
             report["requestedTargetNames"] = list(requested_target_names)
     return selected, report
+
+
 def _validated_quota(value: int, *, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(f"{field} must be a non-negative integer")
@@ -367,7 +350,9 @@ def build_execution_spec(
     video_works_per_target = _validated_quota(
         video_works_per_target, field="videoWorksPerTarget"
     )
-    resolved_target_count = len(targets) if target_entity_count is None else target_entity_count
+    resolved_target_count = (
+        len(targets) if target_entity_count is None else target_entity_count
+    )
     target_entity_count = _validated_quota(
         resolved_target_count, field="targetEntityCount"
     )
@@ -468,7 +453,9 @@ def build_execution_spec(
             "research": {
                 "lanes": research_lanes,
                 "maxConcurrency": runtime_policy.download_concurrency,
-                "laneConcurrency": {lane: lane_concurrency[lane] for lane in research_lanes},
+                "laneConcurrency": {
+                    lane: lane_concurrency[lane] for lane in research_lanes
+                },
             },
             "carriers": carriers,
             "quotas": {
@@ -524,7 +511,11 @@ def build_execution_spec(
     }
     stamp_execution_branch(spec)
     return spec
-def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any], dict[str, Any]]:
+
+
+def create_execution_selection(
+    request: SelectionRequest,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Select targets and write the sole execution manifest/specification."""
     execution_id = validate_execution_id(request.execution_id)
     if not isinstance(request.selection_policy, SelectionPolicy):
@@ -540,6 +531,7 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         from content.source.research.scale_source_pool_runtime import (
             select_frozen_source_pool_targets,
         )
+
         targets, report = select_frozen_source_pool_targets(
             targets=request.source_pool_targets,
             requested_limit=requested_limit,
@@ -596,9 +588,10 @@ def create_execution_selection(request: SelectionRequest) -> tuple[dict[str, Any
         for item in targets
     )
     report["targetRefs"] = target_refs
-    report["targetRefsSha256"] = "sha256:" + hashlib.sha256(
-        ("\n".join(target_refs) + "\n").encode("utf-8")
-    ).hexdigest()
+    report["targetRefsSha256"] = (
+        "sha256:"
+        + hashlib.sha256(("\n".join(target_refs) + "\n").encode("utf-8")).hexdigest()
+    )
     report["quotas"] = (spec.get("content") or {}).get("quotas") or {}
     write_selected_task(spec, report)
     return spec, report

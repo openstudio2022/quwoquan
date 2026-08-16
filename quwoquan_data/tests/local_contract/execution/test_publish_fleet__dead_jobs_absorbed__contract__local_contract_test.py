@@ -1,13 +1,14 @@
 # spec_ref: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/spec.md
 """Publish must absorb DEAD jobs when fleet.passed already meets quota."""
+
 from __future__ import annotations
 
 import shutil
 from pathlib import Path
 from types import SimpleNamespace
 
-from content.execution.controller import publish as publish_module
 from content.execution.context import ExecutionContext
+from content.execution.controller import publish as publish_module
 from content.execution.support import StageStatus
 from core.control_types import (
     ExecutionStage,
@@ -17,7 +18,6 @@ from core.control_types import (
 from core.io import write_json
 from core.paths import execution_root
 from support.execution_manifest_fixture import ExecutionFixtureBuilder
-
 
 EXECUTION_ID = "20260731--travel-homepage-publish--test-region-a--pilot-911"
 _NAMES = ("测试实体甲", "测试实体乙", "测试实体丙")
@@ -57,8 +57,7 @@ def test_homepage_object_publish_reads_incremental_inventory_before_apply(
         canonical_inventory,
         "load_or_bootstrap_inventory",
         lambda root: (
-            inventory_calls.append(root)
-            or {"stats": {"merkleRoot": before_merkle}}
+            inventory_calls.append(root) or {"stats": {"merkleRoot": before_merkle}}
         ),
     )
 
@@ -99,6 +98,7 @@ def test_homepage_object_publish_reads_incremental_inventory_before_apply(
     result = publish_module.publish_homepage_object(
         EXECUTION_ID,
         "/entity/地点/景区/测试实体甲",
+        pool_delivery_intent={},
     )
 
     assert inventory_calls == [publish_root]

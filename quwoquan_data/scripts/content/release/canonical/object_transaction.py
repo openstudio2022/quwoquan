@@ -16,7 +16,9 @@ from content.release.canonical.content_pool_record import (
     append_pool_record,
     build_canonical_pool_record,
 )
-from content.release.canonical.creator_projection import project_creator_object
+from content.release.canonical.creator_projection import (
+    project_creator_object,
+)
 from content.release.canonical.entity_transaction_sources import (
     safe_asset_id as _safe_asset_id,
 )
@@ -60,42 +62,25 @@ from governance.coverage.license import (
     rights_proof_required,
 )
 
+_EXTRACTED_DEPENDENCIES = (_tree_digest, project_creator_object)
+
 
 def _project_entity_creator_closure(
-    *,
-    entity: Mapping[str, Any],
-    staging: Path,
+    *, entity: Mapping[str, Any], staging: Path
 ) -> tuple[list[str], list[dict[str, object]]]:
-    creator_ref = str(entity.get("creatorProfileId") or "").strip()
-    if not creator_ref:
-        return [], []
-    creator_ref = _safe_id(creator_ref, label="creatorProfileId")
-    creator_root = project_creator_object(
-        creator_ref,
-        staging / "creator_objects" / creator_ref,
+    from content.release.canonical.object_transaction_projection import (
+        _project_entity_creator_closure as implementation,
     )
-    return [creator_ref], [
-        {
-            "creatorRef": creator_ref,
-            "packageRef": creator_root.relative_to(staging).as_posix(),
-            "treeDigest": _tree_digest(creator_root),
-        }
-    ]
+
+    return implementation(entity=entity, staging=staging)
 
 
 def _image_dimensions(path: Path) -> tuple[int, int, str]:
-    from core.image_decode import probe_image_path
+    from content.release.canonical.object_transaction_projection import (
+        _image_dimensions as implementation,
+    )
 
-    probe = probe_image_path(path)
-    if not probe.succeeded:
-        raise ObjectTransactionError(f"发布图片不可解析：{path}: {probe.failure.value}")
-    if (
-        probe.width <= 0
-        or probe.height <= 0
-        or not probe.mime_type.startswith("image/")
-    ):
-        raise ObjectTransactionError(f"发布图片缺有效尺寸或 MIME：{path}")
-    return probe.width, probe.height, probe.mime_type
+    return implementation(path)
 
 
 def build_entity_object_transaction_package(
@@ -152,9 +137,7 @@ def build_entity_object_transaction_package(
             f"entity sourceAttribution invalid: {exc}"
         ) from exc
     if (
-        not source_attribution_complete(
-            {"sourceAttribution": source_attribution}
-        )
+        not source_attribution_complete({"sourceAttribution": source_attribution})
         or source_manifest.get("sourceAttribution") != source_attribution
     ):
         raise ObjectTransactionError(
@@ -199,8 +182,7 @@ def build_entity_object_transaction_package(
         delivery_intent.get("executionId") != execution_id
         or delivery_intent.get("carrier") != "homepage"
         or delivery_intent.get("objectRef") != f"/entity/{canonical_ref}"
-        or delivery_intent.get("contentObjectDir")
-        != f"entities/{canonical_ref}"
+        or delivery_intent.get("contentObjectDir") != f"entities/{canonical_ref}"
         or delivery_intent.get("transactionId") != transaction_id
         or delivery_intent.get("contentId") is not None
         or delivery_intent.get("poolIdentityReservationId") is not None
@@ -417,58 +399,53 @@ def build_entity_object_transaction_package(
                     f"asset {asset_id} 缺 canonical modelReleaseStatus"
                 )
             rights_row = {
-                    "assetId": asset_id,
-                    "sourceKind": str(
-                        (entity.get("primarySource") or {}).get("sourceKind")
-                        or "wikipedia"
-                    ),
-                    "sourceUseMode": (
-                        "licensed_adaptation"
-                        if rights_audit_status is RightsAuditStatus.VERIFIED
-                        else "rights_audit_only"
-                    ),
-                    "canonicalFilePage": canonical_file_page,
-                    "snapshotUrl": canonical_file_page,
-                    "pageRevision": _digest_file(snapshot_path),
-                    "originalAssetUrl": str(
-                        source_asset.get("url") or canonical_file_page
-                    ),
-                    "author": author,
-                    "source": str(
-                        source_asset.get("collectionPageUrl") or canonical_file_page
-                    ),
-                    "licenseName": effective_license_name,
-                    "licenseShortName": effective_license_name,
-                    "licenseUrl": license_url,
-                    "usageScope": usage_scope,
-                    "attribution": attribution,
-                    "caption": str(raw.get("caption") or ""),
-                    "captionSource": "captured source asset metadata",
-                    "modifications": "homepage materialization resize/crop when applicable",
-                    "fetchedAt": fetched_at,
-                    "snapshot": {
-                        "ref": snapshot_ref.as_posix(),
-                        "sha256": _digest_file(snapshot_path),
-                        "bytes": snapshot_path.stat().st_size,
-                    },
-                    "asset": {
-                        "ref": cas_ref.as_posix(),
-                        "sha256": digest,
-                        "bytes": asset_source.stat().st_size,
-                        "mimeType": mime,
-                        "width": width,
-                        "height": height,
-                    },
-                    "authorizationProof": authorization_proof,
-                    "rightsAuditStatus": rights_audit_status.value,
-                    "rightsAuditIssues": rights_audit_issues,
-                    "modelReleaseStatus": model_release_status,
-                }
+                "assetId": asset_id,
+                "sourceKind": str(
+                    (entity.get("primarySource") or {}).get("sourceKind") or "wikipedia"
+                ),
+                "sourceUseMode": (
+                    "licensed_adaptation"
+                    if rights_audit_status is RightsAuditStatus.VERIFIED
+                    else "rights_audit_only"
+                ),
+                "canonicalFilePage": canonical_file_page,
+                "snapshotUrl": canonical_file_page,
+                "pageRevision": _digest_file(snapshot_path),
+                "originalAssetUrl": str(source_asset.get("url") or canonical_file_page),
+                "author": author,
+                "source": str(
+                    source_asset.get("collectionPageUrl") or canonical_file_page
+                ),
+                "licenseName": effective_license_name,
+                "licenseShortName": effective_license_name,
+                "licenseUrl": license_url,
+                "usageScope": usage_scope,
+                "attribution": attribution,
+                "caption": str(raw.get("caption") or ""),
+                "captionSource": "captured source asset metadata",
+                "modifications": "homepage materialization resize/crop when applicable",
+                "fetchedAt": fetched_at,
+                "snapshot": {
+                    "ref": snapshot_ref.as_posix(),
+                    "sha256": _digest_file(snapshot_path),
+                    "bytes": snapshot_path.stat().st_size,
+                },
+                "asset": {
+                    "ref": cas_ref.as_posix(),
+                    "sha256": digest,
+                    "bytes": asset_source.stat().st_size,
+                    "mimeType": mime,
+                    "width": width,
+                    "height": height,
+                },
+                "authorizationProof": authorization_proof,
+                "rightsAuditStatus": rights_audit_status.value,
+                "rightsAuditIssues": rights_audit_issues,
+                "modelReleaseStatus": model_release_status,
+            }
             if independent_review is not None:
                 rights_row.update(
-                    acquisitionReceiptRef=independent_review[
-                        "acquisitionReceiptRef"
-                    ],
+                    acquisitionReceiptRef=independent_review["acquisitionReceiptRef"],
                     independentAssetReview=independent_review,
                 )
             rights_rows.append(rights_row)

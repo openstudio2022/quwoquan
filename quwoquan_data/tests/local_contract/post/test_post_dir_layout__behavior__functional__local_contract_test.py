@@ -8,12 +8,17 @@
 
 可直接运行：python3 quwoquan_data/tests/local_contract/post/test_post_dir_layout__behavior__functional__local_contract_test.py
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+DATA_ROOT = next(
+    parent
+    for parent in Path(__file__).resolve().parents
+    if parent.name == "quwoquan_data"
+)
 TESTS_ROOT = DATA_ROOT / "tests"
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
 for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
@@ -31,53 +36,40 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 _OUTPUT_ROOT = Path(tempfile.mkdtemp(prefix="post_dir_layout_output_"))
 
-from content.execution import workspace as execution_workspace  # noqa: E402
 from content.execution.closure.pool_delivery import (
-    write_pool_delivery_intent,  # noqa: E402
+    write_pool_delivery_intent,
 )
-from content.execution.stage_reports import write_stage_result  # noqa: E402
-from content.post.article.draft_io import (  # noqa: E402
+from content.execution.stage_reports import write_stage_result
+from content.post.article.draft_io import (
     write_agent_draft,
     write_writing_pack,
 )
-from content.post.materialize_apply import materialize_posts  # noqa: E402
-from content.post.materialize_contract import _materialized_asset_refs  # noqa: E402
+from content.post.materialize_apply import materialize_posts
+from content.post.materialize_contract import _materialized_asset_refs
 from content.post.materialize_residue_cleanup import (
-    prune_materialized_post_refs,  # noqa: E402
+    prune_materialized_post_refs,
 )
-from content.post.object_index import register_content_object  # noqa: E402
-from content.release.canonical import creator_projection, post_transaction  # noqa: E402
-from content.release.canonical.post_transaction import (  # noqa: E402
+from content.post.object_index import register_content_object
+from content.release.canonical import creator_projection, post_transaction
+from content.release.canonical.post_transaction import (
     build_post_object_transaction_package,
 )
-from content.source.source_unit import write_source_unit  # noqa: E402
-from content.templates.registry import TemplateRegistry  # noqa: E402
-from core.io import read_json, write_json  # noqa: E402
-from core.paths import (  # noqa: E402
+from content.source.source_unit import write_source_unit
+from content.templates.registry import TemplateRegistry
+from core.io import read_json, write_json
+from core.paths import (
     ensure_execution_command_layout,
     ensure_execution_layout,
     execution_command_root,
     execution_entity_object_dir,
     execution_root,
 )
-from core.source_digest import current_source_digest  # noqa: E402
-from governance.creators.assignment import creator_assignment_from_profile  # noqa: E402
-from support.execution_manifest_fixture import build_execution_fixture  # noqa: E402
+from governance.creators.assignment import creator_assignment_from_profile
+from support.execution_manifest_fixture import build_execution_fixture
 
 EXECUTION_ID = "20260711--travel-article-layout--test-region-b--pilot-001"
 ANGLE = "攻略"
-
-
-@pytest.fixture(autouse=True)
-def _freeze_source_digest_during_one_test(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    frozen = current_source_digest()
-    monkeypatch.setattr(
-        execution_workspace,
-        "current_source_digest",
-        lambda: frozen,
-    )
+SOURCE_URL = "https://zh.wikipedia.org/wiki/都江堰"
 
 
 def _source_attribution() -> dict[str, object]:
@@ -87,8 +79,8 @@ def _source_attribution() -> dict[str, object]:
         "originalCreatorName": "都江堰来源编辑",
         "originalCreatorProfileUrl": None,
         "platform": "Curated Research",
-        "sourcePostUrl": "https://example.com/dujiangyan",
-        "originalAssetUrl": "https://example.com/dujiangyan",
+        "sourcePostUrl": SOURCE_URL,
+        "originalAssetUrl": SOURCE_URL,
         "attributionText": "都江堰来源编辑 / internal research",
         "rightsBasis": "factual reference only",
         "commercialAuthorizationStatus": "unverified",
@@ -114,7 +106,9 @@ def _seed_post(ref: str, publish_title: str, source_ref: str) -> None:
     creator = creator_assignment_from_profile(
         TemplateRegistry.load().creators["qwq_creator_travel_blogger_001"]
     )
-    register_content_object(EXECUTION_ID, ref, content_type="article", angle=ANGLE, title=publish_title)
+    register_content_object(
+        EXECUTION_ID, ref, content_type="article", angle=ANGLE, title=publish_title
+    )
     write_writing_pack(
         EXECUTION_ID,
         ref,
@@ -126,7 +120,10 @@ def _seed_post(ref: str, publish_title: str, source_ref: str) -> None:
     )
     write_stage_result(EXECUTION_ID, "post", "review", ref, {"decision": "approved"})
     write_stage_result(
-        EXECUTION_ID, "post", "compose", ref,
+        EXECUTION_ID,
+        "post",
+        "compose",
+        ref,
         {
             "generator": "agent",
             "articleMarkdown": article,
@@ -141,7 +138,7 @@ def _seed_post(ref: str, publish_title: str, source_ref: str) -> None:
             "publishMediaMode": "text_only",
             "baseSourceRef": source_ref,
             "sourcePaths": [source_ref],
-            "sourceUrls": ["https://example.com/dujiangyan"],
+            "sourceUrls": [SOURCE_URL],
             "citedSourceRefs": [source_ref],
         },
     )
@@ -175,9 +172,7 @@ def _materialize() -> tuple[Path, list[Path]]:
     if post_results.exists():
         shutil.rmtree(post_results)
     build_execution_fixture(EXECUTION_ID)
-    entity_dir = execution_entity_object_dir(
-        EXECUTION_ID, "地点", "景区", "都江堰"
-    )
+    entity_dir = execution_entity_object_dir(EXECUTION_ID, "地点", "景区", "都江堰")
     write_json(
         entity_dir / "_entity.json",
         {"entityRef": "/entity/地点/景区/都江堰"},
@@ -188,9 +183,12 @@ def _materialize() -> tuple[Path, list[Path]]:
         source_id="base",
         source_md="# 都江堰来源\n\n用于文章目录布局契约的来源证据。",
         clean_md="# 都江堰来源\n\n用于文章目录布局契约的来源证据。",
-        platform="curated",
-        source_category="overview_baike",
-        url="https://example.com/dujiangyan",
+        platform="wikipedia",
+        source_category="wikipedia",
+        extractor="wikipedia_api",
+        policy_revision="encyclopedia-primary",
+        source_role="primary",
+        url=SOURCE_URL,
         title="都江堰来源",
         target_ref="/entity/地点/景区/都江堰",
         execution_id=EXECUTION_ID,
@@ -237,31 +235,49 @@ def test_materialized_asset_refs_infer_source_ref_from_source_path():
         execution_id=EXECUTION_ID,
     )
 
-    assert source_asset_ref == "entities/地点/景区/毕棚沟/1.download/sources/03.article_base/assets/001.jpg"
-    assert source_ref == "entities/地点/景区/毕棚沟/1.download/sources/03.article_base/source.md"
+    assert (
+        source_asset_ref
+        == "entities/地点/景区/毕棚沟/1.download/sources/03.article_base/assets/001.jpg"
+    )
+    assert (
+        source_ref
+        == "entities/地点/景区/毕棚沟/1.download/sources/03.article_base/source.md"
+    )
 
 
 def test_seq_increments_for_duplicate_title():
     posts, _ = _materialize()
-    seq1 = read_json(posts / "article" / ANGLE / "成都周边小众露营地实测" / "1" / "manifest.json")["publishSeq"]
-    seq2 = read_json(posts / "article" / ANGLE / "成都周边小众露营地实测" / "2" / "manifest.json")["publishSeq"]
-    solo_seq = read_json(posts / "article" / ANGLE / "都江堰一日游怎么玩" / "1" / "manifest.json")["publishSeq"]
+    seq1 = read_json(
+        posts / "article" / ANGLE / "成都周边小众露营地实测" / "1" / "manifest.json"
+    )["publishSeq"]
+    seq2 = read_json(
+        posts / "article" / ANGLE / "成都周边小众露营地实测" / "2" / "manifest.json"
+    )["publishSeq"]
+    solo_seq = read_json(
+        posts / "article" / ANGLE / "都江堰一日游怎么玩" / "1" / "manifest.json"
+    )["publishSeq"]
     assert {seq1, seq2} == {1, 2}
     assert solo_seq == 1
 
 
 def test_manifest_angle_matches_object_dir():
     posts, _ = _materialize()
-    m = read_json(posts / "article" / ANGLE / "都江堰一日游怎么玩" / "1" / "manifest.json")
+    m = read_json(
+        posts / "article" / ANGLE / "都江堰一日游怎么玩" / "1" / "manifest.json"
+    )
     assert m["publishAngle"] == ANGLE, m["publishAngle"]
     assert m["publishTitle"] == "都江堰一日游怎么玩", m["publishTitle"]
 
 
 def test_object_index_written_per_object():
     posts, _ = _materialize()
-    idx = read_json(posts / "article" / ANGLE / "都江堰一日游怎么玩" / "1" / "_object.json")
+    idx = read_json(
+        posts / "article" / ANGLE / "都江堰一日游怎么玩" / "1" / "_object.json"
+    )
     assert idx["objectKind"] == "content"
-    assert idx["publishTargetRef"] == "posts/article/攻略/都江堰一日游怎么玩/1", idx["publishTargetRef"]
+    assert idx["publishTargetRef"] == "posts/article/攻略/都江堰一日游怎么玩/1", idx[
+        "publishTargetRef"
+    ]
 
 
 def test_prune_materialized_post_refs_removes_only_final_surface():
@@ -289,14 +305,28 @@ def test_publish_angle_derives_category_from_carrier_and_intent():
     assert _publish_angle({"carrier": "image"}) == "画报"
     assert _publish_angle({"carrier": "image"}) == "画报"
     # 文章按底稿派生的 writingIntent 标签归类。
-    assert _publish_angle({"carrier": "article", "writingIntent": "planning_consultation"}) == "攻略"
-    assert _publish_angle({"carrier": "article", "writingIntent": "decision_experience"}) == "体验"
-    assert _publish_angle({"carrier": "article", "writingIntent": "post_trip_journal"}) == "游记"
-    assert _publish_angle({
-        "carrier": "article",
-        "articleCategory": "photography",
-        "writingIntent": "planning_consultation",
-    }) == "摄影"
+    assert (
+        _publish_angle({"carrier": "article", "writingIntent": "planning_consultation"})
+        == "攻略"
+    )
+    assert (
+        _publish_angle({"carrier": "article", "writingIntent": "decision_experience"})
+        == "体验"
+    )
+    assert (
+        _publish_angle({"carrier": "article", "writingIntent": "post_trip_journal"})
+        == "游记"
+    )
+    assert (
+        _publish_angle(
+            {
+                "carrier": "article",
+                "articleCategory": "photography",
+                "writingIntent": "planning_consultation",
+            }
+        )
+        == "摄影"
+    )
     # 缺失/未知 intent 回退「攻略」，templateId 不再影响 angle。
     assert _publish_angle({"carrier": "article"}) == "攻略"
     assert _publish_angle({"templateId": "线路_自驾路书"}) == "攻略"
@@ -332,9 +362,7 @@ def test_materialize_review_intent_and_transaction_share_reserved_identity(
     publish_root = tmp_path / "canonical-publish"
     reservation_root = tmp_path / "delivery-reservations"
 
-    profile = TemplateRegistry.load().creators[
-        "qwq_creator_travel_blogger_001"
-    ]
+    profile = TemplateRegistry.load().creators["qwq_creator_travel_blogger_001"]
     avatar_object_key = str(profile["avatarAsset"]["objectKey"])
     avatar_target = publish_root / avatar_object_key
     avatar_target.parent.mkdir(parents=True, exist_ok=True)
@@ -375,7 +403,9 @@ def test_materialize_review_intent_and_transaction_share_reserved_identity(
 
 
 def _run_all() -> None:
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+    fns = [
+        v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)
+    ]
     for fn in fns:
         fn()
         print(f"PASS {fn.__name__}")

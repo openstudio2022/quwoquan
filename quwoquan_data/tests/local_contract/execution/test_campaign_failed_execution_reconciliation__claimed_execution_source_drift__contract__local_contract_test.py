@@ -29,6 +29,11 @@ OBSERVED_SOURCE_DIGEST = "sha256:" + "c" * 64
 CATALOG_DIGEST = "sha256:" + "b" * 64
 RUN_ID = "claimed-execution-run"
 FENCING_TOKEN = "sha256:" + "f" * 64
+EXECUTION_BUNDLE = {
+    "algorithm": "sha256",
+    "digest": "sha256:" + "e" * 64,
+    "inputs": ["quwoquan_data/scripts"],
+}
 
 
 def _execution_id(carrier: str) -> str:
@@ -60,9 +65,7 @@ def _write_boundary(
         "default", output_root=output_root
     )
     campaign = (
-        output_root
-        / "data/local/workspace/content-campaign-submissions"
-        / ROOT_ID
+        output_root / "data/local/workspace/content-campaign-submissions" / ROOT_ID
     )
     source_revision = content_source_revision(
         source_digest=SOURCE_DIGEST,
@@ -95,6 +98,7 @@ def _write_boundary(
             "gitCommitSha": "d" * 40,
             "sourceRevision": source_revision,
             "sourceDigest": _source_document(SOURCE_DIGEST),
+            "executionBundle": EXECUTION_BUNDLE,
             "entityCatalogDigest": CATALOG_DIGEST,
             "externalInputRefs": [],
             "externalInputsDigest": empty_external,
@@ -126,6 +130,7 @@ def _write_boundary(
         "gitCommitSha": "d" * 40,
         "sourceRevision": source_revision,
         "sourceDigest": SOURCE_DIGEST,
+        "executionBundle": EXECUTION_BUNDLE,
         "entityCatalogDigest": CATALOG_DIGEST,
         "semanticSelectionId": "default",
         "semanticPreflightReceipt": preflight,
@@ -188,9 +193,7 @@ def _write_boundary(
         execution_root = output_root / "data/tasks" / execution_ids[carrier]
         execution_root.mkdir(parents=True)
         supersession_path = (
-            execution_root
-            / "_shared/reconciliation"
-            / f"supersession-{'1' * 64}.json"
+            execution_root / "_shared/reconciliation" / f"supersession-{'1' * 64}.json"
         )
         write_json(supersession_path, {"carrier": carrier})
         write_json(
@@ -238,12 +241,8 @@ def _write_boundary(
         )
 
     monkeypatch.setattr(claimed_contract, "_pid_alive", lambda _pid: False)
-    monkeypatch.setattr(
-        claimed_contract, "_process_group_alive", lambda _pgid: False
-    )
-    monkeypatch.setattr(
-        claimed_contract, "load_execution_supersession_receipt", _load
-    )
+    monkeypatch.setattr(claimed_contract, "_process_group_alive", lambda _pgid: False)
+    monkeypatch.setattr(claimed_contract, "load_execution_supersession_receipt", _load)
     monkeypatch.setattr(
         reconciliation,
         "current_source_digest",
@@ -273,7 +272,9 @@ def _write_post_publish_boundary(
         lane.update(
             {
                 "status": "blocked",
-                "phase": "review" if carrier in {"homepage", "article"} else "submission",
+                "phase": "review"
+                if carrier in {"homepage", "article"}
+                else "submission",
                 "reviewReturnCode": 0 if carrier in {"homepage", "article"} else None,
                 "publishReturnCode": 1,
                 "executionRootRef": f"data/tasks/{execution_ids[carrier]}",

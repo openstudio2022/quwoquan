@@ -10,14 +10,6 @@
     "quarantineRef",
     "reason",
     "reusableSourceTruthAllowed",
-    "migrationApplyReceiptRef",
-    "migrationApplyReceiptSha256",
-    "migrationPlanDigest",
-    "migrationSourceRef",
-    "migrationDestinationRef",
-    "migrationEntryFileCount",
-    "migrationEntryByteCount",
-    "migrationEntryDigest",
     "directories",
     "files",
     "symlinks",
@@ -32,10 +24,8 @@
   "properties": {
     "schema": {"const": "quwoquan_data.protected_quarantine_evidence"},
     "status": {"const": "protected_read_only"},
-    "quarantineRef": {
-      "type": "string",
-      "pattern": "^local/workspace/quarantine/[A-Za-z0-9][A-Za-z0-9._-]*$"
-    },
+    "provenance": {"const": "forensic"},
+    "quarantineRef": {"type": "string", "minLength": 1},
     "reason": {"type": "string", "minLength": 1},
     "reusableSourceTruthAllowed": {"const": false},
     "migrationApplyReceiptRef": {
@@ -49,6 +39,11 @@
     "migrationEntryFileCount": {"type": "integer", "minimum": 1},
     "migrationEntryByteCount": {"type": "integer", "minimum": 0},
     "migrationEntryDigest": {"$ref": "#/$defs/digest"},
+    "forensicMarkerPath": {"const": "QUARANTINE.json"},
+    "forensicMarkerSha256": {"$ref": "#/$defs/digest"},
+    "forensicDecision": {"type": "string", "minLength": 1},
+    "forensicConsumption": {"const": "forbidden"},
+    "forensicRecovery": {"const": "retain_for_forensics_only"},
     "directories": {
       "type": "array",
       "items": {"type": "string", "minLength": 1}
@@ -69,6 +64,62 @@
     "manifestDigest": {"$ref": "#/$defs/digest"},
     "recordedAt": {"type": "string", "minLength": 1}
   },
+  "oneOf": [
+    {
+      "required": [
+        "migrationApplyReceiptRef",
+        "migrationApplyReceiptSha256",
+        "migrationPlanDigest",
+        "migrationSourceRef",
+        "migrationDestinationRef",
+        "migrationEntryFileCount",
+        "migrationEntryByteCount",
+        "migrationEntryDigest"
+      ],
+      "properties": {
+        "quarantineRef": {
+          "pattern": "^local/workspace/quarantine/[A-Za-z0-9][A-Za-z0-9._-]*$"
+        }
+      },
+      "not": {
+        "anyOf": [
+          {"required": ["provenance"]},
+          {"required": ["forensicMarkerPath"]},
+          {"required": ["forensicMarkerSha256"]},
+          {"required": ["forensicDecision"]},
+          {"required": ["forensicConsumption"]},
+          {"required": ["forensicRecovery"]}
+        ]
+      }
+    },
+    {
+      "required": [
+        "provenance",
+        "forensicMarkerPath",
+        "forensicMarkerSha256",
+        "forensicDecision",
+        "forensicConsumption",
+        "forensicRecovery"
+      ],
+      "properties": {
+        "quarantineRef": {
+          "pattern": "^quarantine/[A-Za-z0-9][A-Za-z0-9._-]*$"
+        }
+      },
+      "not": {
+        "anyOf": [
+          {"required": ["migrationApplyReceiptRef"]},
+          {"required": ["migrationApplyReceiptSha256"]},
+          {"required": ["migrationPlanDigest"]},
+          {"required": ["migrationSourceRef"]},
+          {"required": ["migrationDestinationRef"]},
+          {"required": ["migrationEntryFileCount"]},
+          {"required": ["migrationEntryByteCount"]},
+          {"required": ["migrationEntryDigest"]}
+        ]
+      }
+    }
+  ],
   "$defs": {
     "digest": {
       "type": "string",

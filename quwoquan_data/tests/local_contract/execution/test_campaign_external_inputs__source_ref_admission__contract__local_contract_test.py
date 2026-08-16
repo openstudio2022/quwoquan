@@ -33,6 +33,12 @@ class _FrozenSourceDigest:
         return self._document
 
 
+EXECUTION_BUNDLE: dict[str, object] = {
+    "algorithm": "sha256",
+    "digest": "sha256:" + "e" * 64,
+    "inputs": ["quwoquan_data/scripts"],
+}
+
 
 def test_campaign_submission_accepts_stable_dirty_source_inputs(
     monkeypatch: pytest.MonkeyPatch,
@@ -45,11 +51,20 @@ def test_campaign_submission_accepts_stable_dirty_source_inputs(
     }
     monkeypatch.setattr(
         campaign_submission,
-        "current_source_digest",
+        "current_source_definition_snapshot",
         lambda **_kwargs: _FrozenSourceDigest(document),
     )
+    monkeypatch.setattr(
+        campaign_submission,
+        "current_execution_bundle_identity",
+        lambda **_kwargs: _FrozenSourceDigest(EXECUTION_BUNDLE),
+    )
 
-    campaign_submission._require_stable_source_inputs(document, repo_root=tmp_path)
+    campaign_submission._require_stable_source_inputs(
+        document,
+        execution_bundle=EXECUTION_BUNDLE,
+        repo_root=tmp_path,
+    )
 
 
 def test_campaign_submission_rejects_source_digest_drift(
@@ -64,13 +79,21 @@ def test_campaign_submission_rejects_source_digest_drift(
     observed = {**frozen, "digest": "sha256:" + ("f" * 64)}
     monkeypatch.setattr(
         campaign_submission,
-        "current_source_digest",
+        "current_source_definition_snapshot",
         lambda **_kwargs: _FrozenSourceDigest(observed),
+    )
+    monkeypatch.setattr(
+        campaign_submission,
+        "current_execution_bundle_identity",
+        lambda **_kwargs: _FrozenSourceDigest(EXECUTION_BUNDLE),
     )
 
     with pytest.raises(ValueError, match="changed during freeze"):
-        campaign_submission._require_stable_source_inputs(frozen, repo_root=tmp_path)
-
+        campaign_submission._require_stable_source_inputs(
+            frozen,
+            execution_bundle=EXECUTION_BUNDLE,
+            repo_root=tmp_path,
+        )
 
 
 def test_external_inputs_reject_path_escape_and_content_replacement(
@@ -108,8 +131,6 @@ def test_external_inputs_reject_path_escape_and_content_replacement(
         )
 
 
-
-
 def test_professional_image_input_is_limited_to_homepage_and_image(
     tmp_path: Path,
 ) -> None:
@@ -139,8 +160,6 @@ def test_professional_image_input_is_limited_to_homepage_and_image(
         )
 
 
-
-
 def test_request_envelope_freezes_content_addressed_external_refs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -149,18 +168,21 @@ def test_request_envelope_freezes_content_addressed_external_refs(
     repo = tmp_path / "repo"
     (repo / "quwoquan_data/reference/travel/entities/china").mkdir(parents=True)
 
-    class FrozenSource:
-        def to_document(self) -> dict[str, object]:
-            return {
-                "algorithm": "sha256",
-                "digest": SOURCE_DIGEST,
-                "inputs": ["quwoquan_data/schema"],
-            }
+    source_document: dict[str, object] = {
+        "algorithm": "sha256",
+        "digest": SOURCE_DIGEST,
+        "inputs": ["quwoquan_data/schema"],
+    }
 
     monkeypatch.setattr(
-        campaign_request_envelope,
-        "current_source_digest",
-        lambda **_kwargs: FrozenSource(),
+        campaign_request_envelope_build,
+        "current_source_definition_snapshot",
+        lambda **_kwargs: _FrozenSourceDigest(source_document),
+    )
+    monkeypatch.setattr(
+        campaign_request_envelope_build,
+        "current_execution_bundle_identity",
+        lambda **_kwargs: _FrozenSourceDigest(EXECUTION_BUNDLE),
     )
     monkeypatch.setattr(
         campaign_request_envelope_build,
@@ -198,6 +220,7 @@ def test_request_envelope_freezes_content_addressed_external_refs(
         acquisition_root=acquisition_root,
     )
     assert envelope["sourceRevision"] == SOURCE_REVISION
+    assert envelope["executionBundle"] == EXECUTION_BUNDLE
     assert envelope["externalInputRefs"] == refs
     assert envelope["externalInputsDigest"] == external_inputs_digest(refs)
     path = tmp_path / "image-envelope.json"

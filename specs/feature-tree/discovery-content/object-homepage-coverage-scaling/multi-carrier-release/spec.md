@@ -50,7 +50,7 @@
 - 复制会话的 carrier claim 必须绑定 campaign/run generation/fencing、carrier、execution、只读 source capsule 与独立 execution root；同一 carrier 同一 generation 只能存在一个有效 claim，过期或跨 generation owner 不得 finalize。
 - carrier finalize 必须绑定对应 claim、对象级 review/rights/provenance 证据与 publish receipt，并满足 `finalized == qualified >= 1`；同 digest 重放幂等，token、generation、source 或对象闭包漂移 fail closed。未达 quota、存在 shortfall 或存在带 typed issues 的 discard 均不阻止其余全部合格对象 finalize。
 - 每个生成批次只按对象记录过程完成、质量和授权范围；合格对象立即追加到统一池，批次未达 quota、存在 shortfall 或其他对象失败均不阻断已合格对象。M100/M1000/M10000 只按累计唯一对象数量判断是否达标，均为数量下限而不是停止生产或准入的上限。
-- M1000 sourcing 以四川、浙江全量 frontier 为产品范围：穷举两省全部市、区、县与可识别 POI，合格对象即使显著超过 1000 也全部准入。不得设置单一区县、单一实体类型、Provider 或 creator 数量/比例上限。
+- 规模化 sourcing 以当前 execution 冻结并通过 source identity 校验的区域 frontier 为产品范围：穷举其全部市、区、县与可识别 POI，合格对象即使显著超过当前里程碑下限也全部准入。不得设置单一区县、单一实体类型、Provider 或 creator 数量/比例上限。
 - M10000 将同一 frontier 先推广到全国，再扩海外，国内外只共享一套 canonical geo/entity/source contract。
 
 ### REQ-002 生命周期与统一素材 admission

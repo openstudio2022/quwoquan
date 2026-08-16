@@ -5,11 +5,11 @@ spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/
 由 test_scale_source_pool_homepage_article__catalog_projection_* 场景组
 测试文件共享；从原单体测试文件逐字下沉，不改变任何 fixture 逻辑。
 """
+
 from __future__ import annotations
 
 import copy
 import hashlib
-import json
 from pathlib import Path
 
 from content.source.research.scale_source_pool_homepage_article import (
@@ -55,7 +55,7 @@ def _source_ready_batch(
             candidate_name = entity_ref.rsplit("/", 1)[-1]
             coverage_key = {
                 "coverageEntityIdentity": (
-                    f"name_location:{candidate_name}|浙江省|杭州市|西湖区"
+                    f"name_location:{candidate_name}|测试省乙|测试市乙|测试区乙"
                 ),
                 "coverageRecordDigest": _digest(
                     f"coverage:{carrier}:{entity_ref}:{source['sourceUrl']}"
@@ -74,7 +74,7 @@ def _source_ready_batch(
                 ),
                 "coverageKey": coverage_key,
                 "candidateName": entity_ref.rsplit("/", 1)[-1],
-                "province": "浙江省",
+                "province": "测试省乙",
                 "city": "杭州市",
                 "district": "西湖区",
                 "entityType": "/".join(entity_ref.split("/")[2:4]),
@@ -117,9 +117,7 @@ def _source_ready_batch(
             member_root_ref = (
                 f"members/{carrier}/{candidate_id}" if per_member_roots else "."
             )
-            candidate_root = (
-                root / member_root_ref if member_root_ref != "." else root
-            )
+            candidate_root = root / member_root_ref if member_root_ref != "." else root
             candidate_coverage_ref = (
                 "shared/coverage.json" if per_member_roots else coverage_ref
             )
@@ -146,12 +144,14 @@ def _source_ready_batch(
                 assert isinstance(primary, dict) and isinstance(hero, dict)
                 body_ref = str(primary["bodyEvidenceRef"])
                 body_content = str(primary["bodyContentSha256"])
-                media_rows = [{
-                    "assetId": hero["assetId"],
-                    "role": "hero",
-                    "ref": hero["assetRef"],
-                    "contentSha256": hero["contentSha256"],
-                }]
+                media_rows = [
+                    {
+                        "assetId": hero["assetId"],
+                        "role": "hero",
+                        "ref": hero["assetRef"],
+                        "contentSha256": hero["contentSha256"],
+                    }
+                ]
             else:
                 body_ref = str(candidate["bodyEvidenceRef"])
                 body_content = str(candidate["bodyContentSha256"])
@@ -167,7 +167,9 @@ def _source_ready_batch(
                 ]
             body_value = body_values.get(body_content)
             if body_value is None:
-                raise AssertionError(f"test body content preimage missing: {body_content}")
+                raise AssertionError(
+                    f"test body content preimage missing: {body_content}"
+                )
             body_file_sha = _write_evidence_file(
                 candidate_root / body_ref,
                 body_value,
@@ -176,15 +178,18 @@ def _source_ready_batch(
             for row in media_rows:
                 ref = str(row["ref"])
                 media_bytes = _image_bytes(f"{candidate_id}:{row['assetId']}")
-                assert "sha256:" + hashlib.sha256(media_bytes).hexdigest() == row[
-                    "contentSha256"
-                ]
-                materialized_media.append({
-                    **row,
-                    "fileSha256": _write_evidence_bytes(
-                        candidate_root / ref, media_bytes
-                    ),
-                })
+                assert (
+                    "sha256:" + hashlib.sha256(media_bytes).hexdigest()
+                    == row["contentSha256"]
+                )
+                materialized_media.append(
+                    {
+                        **row,
+                        "fileSha256": _write_evidence_bytes(
+                            candidate_root / ref, media_bytes
+                        ),
+                    }
+                )
             evidence_bindings: list[dict[str, str]] = []
             for name in ("discovery", "acquisition", "rights", "quality"):
                 ref = (
@@ -196,10 +201,12 @@ def _source_ready_batch(
                     candidate_root / ref,
                     {"schema": f"test.{name}", "id": candidate_id},
                 )
-                evidence_bindings.append({
-                    "ref": ref,
-                    "fileSha256": _file_digest(candidate_root / ref),
-                })
+                evidence_bindings.append(
+                    {
+                        "ref": ref,
+                        "fileSha256": _file_digest(candidate_root / ref),
+                    }
+                )
             stable_capsule: dict[str, object] = {
                 "schema": "quwoquan_data.homepage_article_source_ready_candidate",
                 "carrier": carrier,
@@ -242,14 +249,16 @@ def _source_ready_batch(
                 else f"capsules/{carrier}/{candidate_id}.json"
             )
             _write_json(candidate_root / capsule_ref, capsule)
-            capsule_bindings.append({
-                "carrier": carrier,
-                "candidateId": candidate_id,
-                "evidenceRootRef": member_root_ref,
-                "ref": capsule_ref,
-                "digest": capsule["capsuleDigest"],
-                "fileSha256": _file_digest(candidate_root / capsule_ref),
-            })
+            capsule_bindings.append(
+                {
+                    "carrier": carrier,
+                    "candidateId": candidate_id,
+                    "evidenceRootRef": member_root_ref,
+                    "ref": capsule_ref,
+                    "digest": capsule["capsuleDigest"],
+                    "fileSha256": _file_digest(candidate_root / capsule_ref),
+                }
+            )
     stable_batch: dict[str, object] = {
         "schema": "quwoquan_data.homepage_article_source_ready_batch",
         "sourceSetId": "projection-source-set",
@@ -280,9 +289,7 @@ def _project(
     per_member_roots: bool = False,
     **catalog_kwargs: object,
 ) -> dict[str, object]:
-    homepage, article, homepage_path, article_path = _catalogs(
-        root, **catalog_kwargs
-    )
+    homepage, article, homepage_path, article_path = _catalogs(root, **catalog_kwargs)
     batch_ref, batch_digest, batch_file_sha = _source_ready_batch(
         root,
         homepage_candidates=list(homepage["candidates"]),

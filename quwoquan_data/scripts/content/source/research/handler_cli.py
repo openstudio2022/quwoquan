@@ -1,4 +1,5 @@
 """CLI-first binding for offline four-carrier source-ready pools."""
+
 from __future__ import annotations
 
 import argparse
@@ -86,9 +87,9 @@ def handle_validate(args: argparse.Namespace) -> None:
 def handle_write(args: argparse.Namespace) -> None:
     try:
         plan = load_object(args.plan, label="plan")
-        output_root = Path(
-            args.output_root or SOURCE_ACQUISITION_ROOT
-        ).expanduser().resolve()
+        output_root = (
+            Path(args.output_root or SOURCE_ACQUISITION_ROOT).expanduser().resolve()
+        )
         destination = canonical_pool_destination(plan, output_root=output_root)
         frozen = write_create_once_scale_source_pool(
             destination,
@@ -160,9 +161,9 @@ def handle_project_candidates(args: argparse.Namespace) -> None:
             image_video_projection=image_video,
             active_carriers=active_carriers,
         )
-        output_root = Path(
-            args.output_root or SOURCE_ACQUISITION_ROOT
-        ).expanduser().resolve()
+        output_root = (
+            Path(args.output_root or SOURCE_ACQUISITION_ROOT).expanduser().resolve()
+        )
         destination = canonical_candidates_destination(
             candidates,
             output_root=output_root,
@@ -190,9 +191,9 @@ def handle_project_candidates(args: argparse.Namespace) -> None:
 
 def handle_freeze_homepage_article_catalogs(args: argparse.Namespace) -> None:
     try:
-        output_root = Path(
-            args.output_root or SOURCE_ACQUISITION_ROOT
-        ).expanduser().resolve()
+        output_root = (
+            Path(args.output_root or SOURCE_ACQUISITION_ROOT).expanduser().resolve()
+        )
         result = freeze_homepage_article_source_ready_batch(
             Path(args.source_ready_manifest),
             evidence_root=Path(args.evidence_root),
@@ -222,8 +223,7 @@ def handle_merge_homepage_article(args: argparse.Namespace) -> None:
         )
     except (FileNotFoundError, OSError, TypeError, ValueError) as exc:
         raise SystemExit(
-            "[source-pool merge-homepage-article] GATE_BLOCK "
-            f"{typed_error(exc)}"
+            f"[source-pool merge-homepage-article] GATE_BLOCK {typed_error(exc)}"
         ) from exc
     print_document(result)
 
@@ -232,9 +232,7 @@ def handle_acquire_homepage_article(args: argparse.Namespace) -> None:
     try:
         result = acquire_homepage_article_source_ready_batch(
             coverage_run_dir=Path(args.coverage_run_dir),
-            output_root=Path(
-                args.output_root or SOURCE_ACQUISITION_ROOT
-            ),
+            output_root=Path(args.output_root or SOURCE_ACQUISITION_ROOT),
             source_set_id=args.source_set_id,
             target_scale=args.target_scale,
             source_revision=args.source_revision,
@@ -251,17 +249,16 @@ def handle_acquire_homepage_article(args: argparse.Namespace) -> None:
         if isinstance(checkpoint, Mapping):
             print_document(checkpoint)
         raise SystemExit(
-            "[source-pool acquire-homepage-article] GATE_BLOCK "
-            f"{typed_error(exc)}"
+            f"[source-pool acquire-homepage-article] GATE_BLOCK {typed_error(exc)}"
         ) from exc
     print_document(result)
 
 
 def handle_freeze_professional_image_catalog(args: argparse.Namespace) -> None:
     try:
-        output_root = Path(
-            args.output_root or SOURCE_ACQUISITION_ROOT
-        ).expanduser().resolve()
+        output_root = (
+            Path(args.output_root or SOURCE_ACQUISITION_ROOT).expanduser().resolve()
+        )
         catalog_root = (
             output_root / "professional-image-candidate-catalogs" / "governed"
         )
@@ -300,9 +297,11 @@ def handle_freeze_professional_video_catalog(args: argparse.Namespace) -> None:
     )
 
     try:
-        output_root = Path(
-            args.output_root or (SOURCE_ACQUISITION_ROOT / "video")
-        ).expanduser().resolve()
+        output_root = (
+            Path(args.output_root or (SOURCE_ACQUISITION_ROOT / "video"))
+            .expanduser()
+            .resolve()
+        )
         catalog = build_professional_video_popular_candidate_catalog(
             source_revision=args.source_revision,
             source_digest=args.source_digest,
@@ -328,14 +327,16 @@ def handle_freeze_professional_video_catalog(args: argparse.Namespace) -> None:
             f"[source-pool freeze-professional-video-catalog] GATE_BLOCK "
             f"{typed_error(exc)}"
         ) from exc
-    print_document({
-        "schema": "quwoquan_data.professional_video_popular_catalog_write_result",
-        "catalogRef": destination.relative_to(output_root).as_posix(),
-        "catalogDigest": frozen["catalogDigest"],
-        "catalogFileSha256": file_sha256(destination),
-        "candidateCount": frozen["candidateCount"],
-        "providerCounts": frozen["providerCounts"],
-    })
+    print_document(
+        {
+            "schema": "quwoquan_data.professional_video_popular_catalog_write_result",
+            "catalogRef": destination.relative_to(output_root).as_posix(),
+            "catalogDigest": frozen["catalogDigest"],
+            "catalogFileSha256": file_sha256(destination),
+            "candidateCount": frozen["candidateCount"],
+            "providerCounts": frozen["providerCounts"],
+        }
+    )
 
 
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
@@ -369,8 +370,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     acquire_content.add_argument(
         "--acquisition-concurrency",
         type=int,
-        default=1,
-        help="单一 create-once batch 内的有界网络取得并发度（1-32）",
+        default=None,
+        help="单一 create-once batch 内的有界网络取得并发度（默认取 runtime policy download workers）",
     )
     acquire_content.add_argument("--output-root")
     acquire_content.set_defaults(handler=handle_acquire_homepage_article)
@@ -379,7 +380,9 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "merge-homepage-article",
         help="逐字节复验并 create-once 合并同 identity 的 source-ready batches",
     )
-    merge_content.add_argument("--source-ready-manifest", action="append", required=True)
+    merge_content.add_argument(
+        "--source-ready-manifest", action="append", required=True
+    )
     merge_content.add_argument("--source-set-id", required=True)
     merge_content.add_argument(
         "--target-scale", choices=("M100", "M1000", "M10000"), required=True
@@ -437,7 +440,9 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "project-candidates",
         help="从当前 wave 的 catalog/evidence 确定性 create-once 投影候选文件",
     )
-    project.add_argument("--target-scale", choices=("M100", "M1000", "M10000"), required=True)
+    project.add_argument(
+        "--target-scale", choices=("M100", "M1000", "M10000"), required=True
+    )
     project.add_argument("--source-revision", required=True)
     project.add_argument("--source-digest", required=True)
     project.add_argument("--entity-catalog-digest", required=True)
@@ -472,7 +477,9 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     plan = commands.add_parser("plan", help="从已审核候选构建 digest-bound pool")
     plan.add_argument("--pool-id", required=True)
-    plan.add_argument("--target-scale", choices=("M100", "M1000", "M10000"), required=True)
+    plan.add_argument(
+        "--target-scale", choices=("M100", "M1000", "M10000"), required=True
+    )
     plan.add_argument("--source-revision", required=True)
     plan.add_argument("--source-digest", required=True)
     plan.add_argument("--entity-catalog-digest", required=True)
@@ -485,7 +492,9 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     validate.add_argument("--evidence-root", required=True)
     validate.set_defaults(handler=handle_validate)
 
-    write = commands.add_parser("write", help="按 planDigest create-once 写入 canonical workspace")
+    write = commands.add_parser(
+        "write", help="按 planDigest create-once 写入 canonical workspace"
+    )
     write.add_argument("--plan", required=True)
     write.add_argument("--output-root")
     write.add_argument("--evidence-root", required=True)

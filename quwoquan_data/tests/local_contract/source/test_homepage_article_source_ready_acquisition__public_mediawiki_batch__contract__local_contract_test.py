@@ -8,6 +8,7 @@ preflight seed 漂移拒绝、typed shortfall、carrier 选择性执行、有界
 CLI 身份冻结；测试逐字搬移。共享常量与构造 helper 见
 tests/support/homepage_article_source_ready_acquisition_fixture.py。
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,6 +18,10 @@ import time
 from pathlib import Path
 
 import pytest
+from content.source.research.homepage_article_seed_selection import (
+    HomepageArticleSeedSelectionError,
+    load_homepage_article_seed_selection,
+)
 from content.source.research.homepage_article_source_ready_acquisition import (
     HomepageArticleSourceReadyAcquisitionError,
     acquire_homepage_article_source_ready_batch,
@@ -24,10 +29,6 @@ from content.source.research.homepage_article_source_ready_acquisition import (
 from content.source.research.homepage_article_source_ready_evidence import (
     canonical_digest,
     write_create_once_json,
-)
-from content.source.research.homepage_article_seed_selection import (
-    HomepageArticleSeedSelectionError,
-    load_homepage_article_seed_selection,
 )
 from content.source.research.homepage_article_source_ready_mediawiki import (
     AcquiredSourceReadyCandidate,
@@ -102,7 +103,10 @@ def test_coverage_snapshot_preserves_absolute_report_as_bound_bytes(
     assert observed_runs == [source_run, source_run]
     for name in mod._COVERAGE_FILES:
         assert (snapshot_root / name).read_bytes() == (source_run / name).read_bytes()
-    assert json.loads((snapshot_root / "coverage-projection.json").read_text()) == projection
+    assert (
+        json.loads((snapshot_root / "coverage-projection.json").read_text())
+        == projection
+    )
 
 
 def test_acquisition_writes_replayable_physical_batch(
@@ -125,7 +129,9 @@ def test_acquisition_writes_replayable_physical_batch(
     ) -> dict[str, object]:
         return _projection(evidence_root, rows)
 
-    def acquire(row: dict[str, object], *, carrier: str, **_: object) -> AcquiredSourceReadyCandidate:
+    def acquire(
+        row: dict[str, object], *, carrier: str, **_: object
+    ) -> AcquiredSourceReadyCandidate:
         return _fake_acquired(carrier, str(row["candidateName"]))
 
     monkeypatch.setattr(mod, "_copy_coverage_run", copy_run)
@@ -201,7 +207,9 @@ def test_acquisition_rejects_seed_drift_before_output_or_network(
     monkeypatch.setattr(
         mod,
         "acquire_mediawiki_source_ready_candidate",
-        lambda *_args, **_kwargs: pytest.fail("network acquisition started before preflight"),
+        lambda *_args, **_kwargs: pytest.fail(
+            "network acquisition started before preflight"
+        ),
     )
 
     with pytest.raises(
@@ -245,10 +253,14 @@ def test_acquisition_reports_typed_shortfall_without_batch(
     monkeypatch.setattr(
         mod,
         "_copy_coverage_run",
-        lambda _run, *, evidence_root, identity, expected_projection=None: _projection(evidence_root, rows),
+        lambda _run, *, evidence_root, identity, expected_projection=None: _projection(
+            evidence_root, rows
+        ),
     )
 
-    def acquire(row: dict[str, object], *, carrier: str, **_: object) -> AcquiredSourceReadyCandidate:
+    def acquire(
+        row: dict[str, object], *, carrier: str, **_: object
+    ) -> AcquiredSourceReadyCandidate:
         if carrier == "article":
             raise MediaWikiSourceReadyRejected("no illustrated source page")
         return _fake_acquired(carrier, str(row["candidateName"]))
@@ -468,7 +480,7 @@ def test_acquisition_cli_freezes_exact_identity_and_counts(
         "homepage_count": 180,
         "article_count": 180,
         "seed_selection": tmp_path / "seed-selection.json",
-        "acquisition_concurrency": 1,
+        "acquisition_concurrency": None,
     }
     assert json.loads(capsys.readouterr().out)["counts"] == {
         "homepage": 180,

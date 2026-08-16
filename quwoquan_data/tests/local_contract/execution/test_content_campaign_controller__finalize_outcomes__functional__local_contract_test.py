@@ -1,14 +1,12 @@
 # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-001
 from __future__ import annotations
 
-import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
 from content.execution.campaign import controller as campaign_controller
 from content.execution.campaign import distributed as campaign_distributed
-from content.execution.campaign import lane_execution as campaign_lane_execution
 from content.execution.campaign import submission as campaign_submission
 from content.execution.campaign.lane_claim import read_lane_claim
 from content.execution.campaign.runtime import (
@@ -158,14 +156,10 @@ def test_finalize_uses_frozen_capsule_after_live_source_drift(
     )
     assert report["status"] == "succeeded"
     assert report["phase"] == "completed"
-    assert {
-        lane["sourceCapsuleRef"] for lane in report["lanes"].values()
-    } == {
+    assert {lane["sourceCapsuleRef"] for lane in report["lanes"].values()} == {
         lane["sourceCapsuleRef"] for lane in frozen["lanes"].values()
     }
-    assert {
-        lane["sourceCapsuleDigest"] for lane in report["lanes"].values()
-    } == {
+    assert {lane["sourceCapsuleDigest"] for lane in report["lanes"].values()} == {
         lane["sourceCapsuleDigest"] for lane in frozen["lanes"].values()
     }
 
@@ -217,9 +211,7 @@ def test_finalize_terminally_blocks_without_consuming_corrupted_capsule(
         assert lane["sourceCapsuleReadOnly"] is False
         assert lane["cleanupStatus"] == "failed"
         assert lane["error"] == report["failure"]
-    assert not (
-        runtime.campaigns_root / ROOT_ID / "copy_ready_receipt.json"
-    ).exists()
+    assert not (runtime.campaigns_root / ROOT_ID / "copy_ready_receipt.json").exists()
 
 
 def test_quota_shortfall_publishes_partial_qualified_objects(
@@ -352,7 +344,7 @@ def test_submission_collision_and_cross_lane_mismatch_fail_closed(
     assert report["phase"] == "freeze"
 
 
-def test_cursor_auto_first_submission_and_retry_reach_lane_argv(
+def test_cursor_auto_first_submission_fails_before_lane_argv(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -377,39 +369,22 @@ def test_cursor_auto_first_submission_and_retry_reach_lane_argv(
             repo_root=repo,
             root=runtime.campaigns_root,
         )
-    first_path = campaign_submission.write_submission(
-        root_execution_id=(
-            "20260728--travel-homepage-scale--china--scale-001"
-        ),
-        execution_id=_execution_id("article", sequence="001"),
-        request=_request("article"),
-        retry_of=None,
-        semantic_selection_id="cursor_auto",
-        semantic_preflight_receipt=preflight_path,
-        semantic_preflight_output_root=runtime.output_root,
-        repo_root=repo,
-        root=runtime.campaigns_root,
-    )
-    assert read_json(first_path)["retryOf"] is None
-    path = campaign_submission.write_submission(
-        root_execution_id=root_id,
-        execution_id=article_id,
-        request=_request("article"),
-        retry_of=predecessor,
-        semantic_selection_id="cursor_auto",
-        semantic_preflight_receipt=preflight_path,
-        semantic_preflight_output_root=runtime.output_root,
-        repo_root=repo,
-        root=runtime.campaigns_root,
-    )
-    submission = read_json(path)
-    assert submission["semanticSelectionId"] == "cursor_auto"
-    assert submission["semanticPreflightReceipt"] == preflight_binding
-    argv = campaign_lane_execution._lane_argv(submission, stage="plan-only")
-    selection_index = argv.index("--semantic-selection-id")
-    assert argv[selection_index + 1] == "cursor_auto"
-    receipt_index = argv.index("--semantic-preflight-receipt")
-    assert argv[receipt_index + 1] == preflight_binding["receiptRef"]
+    with pytest.raises(ValueError, match="CURSOR_AUTO_RETRY_REQUIRED"):
+        campaign_submission.write_submission(
+            root_execution_id=("20260728--travel-homepage-scale--china--scale-001"),
+            execution_id=_execution_id("article", sequence="001"),
+            request=_request("article"),
+            retry_of=None,
+            semantic_selection_id="cursor_auto",
+            semantic_preflight_receipt=preflight_path,
+            semantic_preflight_output_root=runtime.output_root,
+            repo_root=repo,
+            root=runtime.campaigns_root,
+        )
+    assert not (
+        runtime.campaigns_root / root_id / "submissions" / f"{article_id}.json"
+    ).exists()
+    assert preflight_binding["receiptRef"]
 
 
 def test_main_tree_drift_during_review_still_blocks_and_cleans(

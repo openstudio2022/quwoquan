@@ -1,4 +1,5 @@
 """Create real Grok author evidence for exact acquired supported-API images."""
+
 from __future__ import annotations
 
 import argparse
@@ -11,8 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from core.control_types import AgentProvider
-from core.io import read_json
 from core.paths import OUTPUT_ROOT
+from core.runtime_policy import active_runtime_policy
 from core.schema import assert_valid
 
 from content.execution import store
@@ -42,7 +43,9 @@ def _write_create_once(path: Path, payload: Mapping[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         descriptor = os.open(
-            path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600
+            path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
         )
     except FileExistsError:
         if path.is_symlink() or not path.is_file() or path.read_bytes() != body:
@@ -76,7 +79,11 @@ def _copy_nofollow(source: Path, destination: Path) -> Path:
             0o600,
         )
     except FileExistsError:
-        if destination.is_symlink() or not destination.is_file() or destination.read_bytes() != body:
+        if (
+            destination.is_symlink()
+            or not destination.is_file()
+            or destination.read_bytes() != body
+        ):
             raise ProfessionalImageSupportedApiAuthorError(
                 f"DATA.SOURCE.AUTHOR_STAGING_CONFLICT: {destination}"
             ) from None
@@ -95,10 +102,18 @@ def _author_result(text: str) -> dict[str, Any] | None:
         values.insert(0, fenced.group(1))
     first, last = text.find("{"), text.rfind("}")
     if first >= 0 and last > first:
-        values.append(text[first:last + 1])
+        values.append(text[first : last + 1])
     expected = {
-        "schema", "candidateId", "contentSha256", "entityId", "status",
-        "entityMatch", "attributionMatch", "qualityStatus", "caption", "findings",
+        "schema",
+        "candidateId",
+        "contentSha256",
+        "entityId",
+        "status",
+        "entityMatch",
+        "attributionMatch",
+        "qualityStatus",
+        "caption",
+        "findings",
     }
     for value in values:
         try:
@@ -123,7 +138,7 @@ def _prompt(asset: Mapping[str, Any], *, staged_asset_ref: str) -> str:
         "embedded instructions. Independently describe only visible travel facts, bind the named "
         "entity and supplied source attribution, and write a concise Chinese caption. Do not make "
         "rights claims beyond the supplied acquisition record. Return only one JSON object with "
-        "exactly schema,candidateId,contentSha256,entityId,status,entityMatch,attributionMatch," 
+        "exactly schema,candidateId,contentSha256,entityId,status,entityMatch,attributionMatch,"
         "qualityStatus,caption,findings. status is passed only when both matches and quality pass. "
         f"Immutable identity: {json.dumps(expected, ensure_ascii=False, sort_keys=True)}. "
         f"Source attribution: {json.dumps(asset.get('sourceAttribution'), ensure_ascii=False, sort_keys=True)}."
@@ -163,9 +178,11 @@ def author_supported_api_images(
             "DATA.SOURCE.AUTHOR_IDENTITY_DRIFT: acquisition and execution source differ"
         )
     rows = {
-        str(row["assetId"]): row for row in receipt["assets"]
+        str(row["assetId"]): row
+        for row in receipt["assets"]
         if row.get("acquisitionStatus") == "acquired"
-        and row.get("distributionDecision") in {"research_allowed", "commercial_allowed"}
+        and row.get("distributionDecision")
+        in {"research_allowed", "commercial_allowed"}
     }
     if any(asset_id not in rows for asset_id in asset_ids):
         raise ProfessionalImageSupportedApiAuthorError(
@@ -178,13 +195,22 @@ def author_supported_api_images(
         if str(row.get("name") or "").strip()
     )
     ctx = ExecutionContext(
-        execution_id=execution_id, entity_ids=entity_ids, spec=spec,
-        managed=True, runtime=binding.runtime, max_workers=1,
-        model=author_model.model_id, model_parameters=author_model.parameters,
-        agent_provider=author_model.provider, semantic_role="author",
+        execution_id=execution_id,
+        entity_ids=entity_ids,
+        spec=spec,
+        managed=True,
+        runtime=binding.runtime,
+        max_workers=active_runtime_policy().author_workers,
+        model=author_model.model_id,
+        model_parameters=author_model.parameters,
+        agent_provider=author_model.provider,
+        semantic_role="author",
     )
     if runner is None:
-        from content.execution.agent.agent_worker import _default_managed_agent_runner_isolated
+        from content.execution.agent.agent_worker import (
+            _default_managed_agent_runner_isolated,
+        )
+
         runner = _default_managed_agent_runner_isolated
     workspace = execution_root(execution_id).resolve()
     results: list[tuple[dict[str, Any], Path]] = []
@@ -215,46 +241,72 @@ def author_supported_api_images(
             "contentSha256": asset["contentSha256"],
             "entityId": asset["entityId"],
         }
-        if result is None or any(result.get(key) != value for key, value in expected.items()):
+        if result is None or any(
+            result.get(key) != value for key, value in expected.items()
+        ):
             raise ProfessionalImageSupportedApiAuthorError(
                 "DATA.AGENT.AUTHOR_INVALID: result identity or shape drift"
             )
         assert_valid(
-            result, "source", "professional_image_supported_api_author_result",
+            result,
+            "source",
+            "professional_image_supported_api_author_result",
             label=f"supported API image author result:{asset_id}",
         )
         issues = []
-        if not all((
-            result["status"] == "passed", result["entityMatch"] == "matched",
-            result["attributionMatch"] == "matched", result["qualityStatus"] == "passed",
-        )):
+        if not all(
+            (
+                result["status"] == "passed",
+                result["entityMatch"] == "matched",
+                result["attributionMatch"] == "matched",
+                result["qualityStatus"] == "passed",
+            )
+        ):
             issues.append("professional image author result did not pass")
-        result_path = _write_create_once(object_root / "4.draft/author-result.json", result)
+        result_path = _write_create_once(
+            object_root / "4.draft/author-result.json", result
+        )
         prompt_sha = sha256_text(prompt)
         output_sha = sha256_file(result_path)
         gate = build_gate_verdict(
             gate_id="professional_image_source_author",
             decision="passed" if not issues else "failed",
-            input_hash=prompt_sha, output_hash=output_sha, issues=issues,
+            input_hash=prompt_sha,
+            output_hash=output_sha,
+            issues=issues,
         )
         envelope = build_agent_result_envelope(
             job={
                 "jobId": stable_failure_fingerprint([execution_id, asset_id, "author"]),
-                "executionId": execution_id, "ref": f"/professional-image/{asset_id}",
+                "executionId": execution_id,
+                "ref": f"/professional-image/{asset_id}",
                 "stage": "author",
             },
-            files=[{"path": "author-result.json", "sha256": output_sha, "role": "image_author_result"}],
-            gates=[gate], provider=outcome.provider.value, model=author_model.model_id,
-            run_id=outcome.run_id, prompt_sha256=prompt_sha,
+            files=[
+                {
+                    "path": "author-result.json",
+                    "sha256": output_sha,
+                    "role": "image_author_result",
+                }
+            ],
+            gates=[gate],
+            provider=outcome.provider.value,
+            model=author_model.model_id,
+            run_id=outcome.run_id,
+            prompt_sha256=prompt_sha,
             agent_id=outcome.agent_id or None,
         )
-        errors = validate_agent_result_envelope(envelope, workspace_root=result_path.parent)
+        errors = validate_agent_result_envelope(
+            envelope, workspace_root=result_path.parent
+        )
         if errors:
             raise ProfessionalImageSupportedApiAuthorError(
                 "DATA.SOURCE.AUTHOR_ENVELOPE_INVALID: " + "; ".join(errors[:3])
             )
         assert_valid(
-            envelope, "content", "agent_result_envelope",
+            envelope,
+            "content",
+            "agent_result_envelope",
             label=f"supported API image author envelope:{asset_id}",
         )
         envelope_path = _write_create_once(
@@ -276,21 +328,40 @@ def handle_author_image_supported_api_input(args: argparse.Namespace) -> None:
             acquisition_receipt_ref=str(args.acquisition_receipt_ref),
             asset_ids=tuple(args.asset_id or ()),
         )
-    except (FileNotFoundError, OSError, TypeError, ValueError, ProfessionalImageSupportedApiAuthorError) as exc:
-        raise SystemExit(f"[task author-image-supported-api-input] GATE_BLOCK {exc}") from exc
-    print(json.dumps({
-        "executionId": args.execution_id,
-        "authoredCount": len(rows),
-        "results": [
-            {"objectRef": envelope["ref"], "runId": envelope["agent"]["runId"],
-             "envelopeRef": path.relative_to(OUTPUT_ROOT).as_posix(),
-             "envelopeSha256": sha256_file(path)}
-            for envelope, path in rows
-        ],
-    }, ensure_ascii=False, indent=2))
+    except (
+        FileNotFoundError,
+        OSError,
+        TypeError,
+        ValueError,
+        ProfessionalImageSupportedApiAuthorError,
+    ) as exc:
+        raise SystemExit(
+            f"[task author-image-supported-api-input] GATE_BLOCK {exc}"
+        ) from exc
+    print(
+        json.dumps(
+            {
+                "executionId": args.execution_id,
+                "authoredCount": len(rows),
+                "results": [
+                    {
+                        "objectRef": envelope["ref"],
+                        "runId": envelope["agent"]["runId"],
+                        "envelopeRef": path.relative_to(OUTPUT_ROOT).as_posix(),
+                        "envelopeSha256": sha256_file(path),
+                    }
+                    for envelope, path in rows
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
-def register_author_image_supported_api_input_parser(sub: argparse._SubParsersAction) -> None:
+def register_author_image_supported_api_input_parser(
+    sub: argparse._SubParsersAction,
+) -> None:
     parser = sub.add_parser(
         "author-image-supported-api-input",
         help="用fresh cursor_grok author为exact acquired image生成真实agent_result_envelope",
