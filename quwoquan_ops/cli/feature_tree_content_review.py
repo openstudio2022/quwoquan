@@ -362,7 +362,9 @@ def validate_content(review: Review, text: str) -> None:
         normalized_lines: dict[str, int] = {}
         for raw in text.splitlines():
             line = raw.strip()
-            if len(line) < 20 or line.startswith(("#", ">", "```", "- canonical：")):
+            if len(line) < 20 or line.startswith(
+                ("#", ">", "```", "- canonical：", "- 关联要求：", "- 关联验收：")
+            ):
                 continue
             normalized_lines[line] = normalized_lines.get(line, 0) + 1
         duplicates = [line for line, count in normalized_lines.items() if count > 1]

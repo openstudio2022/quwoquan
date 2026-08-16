@@ -1,3 +1,5 @@
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/offline-actions-discovery-tab/spec.md#gwt-001.t1
+// spec_ref: specs/feature-tree/circle-community/gathering-coordination/offline-actions-discovery-tab/spec.md#gwt-001.t2
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';

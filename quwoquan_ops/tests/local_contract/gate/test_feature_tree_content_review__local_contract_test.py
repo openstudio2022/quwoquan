@@ -328,6 +328,18 @@ def test_repeated_design_sentence_and_mechanical_list_are_blocked() -> None:
     ]
 
 
+def test_repeated_structured_requirement_links_are_not_duplicate_prose() -> None:
+    issues = issues_for(
+        "- 关联要求：`REQ-001`、`REQ-002`\n"
+        "- 关联要求：`REQ-001`、`REQ-002`\n"
+        "- 关联验收：`SIT-001`\n"
+        "- 关联验收：`SIT-001`\n",
+        kind="L2 Business Capability Design",
+    )
+
+    assert issues == []
+
+
 def test_repository_reference_allows_fragment_and_documented_path_variable(
     tmp_path: Path, monkeypatch
 ) -> None:

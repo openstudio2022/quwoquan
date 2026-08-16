@@ -45,6 +45,7 @@
 - [`gathering-participant-roster`](./gathering-participant-roster/spec.md)：以单一 root-owned Participation 管理邀请、申请、公开加入、容量、名单、重大变更确认与退出/移除。
 - [`gathering-conversation-binding`](./gathering-conversation-binding/spec.md)：在 Publish 前绑定唯一活动群聊，并让有效参与者默认进入消息与活动看板。
 - [`gathering-plan-collaboration`](./gathering-plan-collaboration/spec.md)：以每个 Gathering 至多一个可选 Plan、typed proposal/commit 与不可变 Revision history 管理协作计划。
+- [`offline-actions-discovery-tab`](./offline-actions-discovery-tab/spec.md)：以底栏「行动」和首页视频书入口组合既有读面，并诚实区分游客态与尚未交付的公开行动发现流。
 
 ## 5. 能力要求
 
