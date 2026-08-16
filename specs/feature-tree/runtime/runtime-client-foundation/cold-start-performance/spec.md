@@ -93,7 +93,7 @@
 - 每次受支持构建必须生成符合 `app_launch_manifest.app_effective_launch_manifest` 共享协议的 immutable effective launch manifest；构建、安装、启动与发布证据不满足 canonical target/environment、摘要或 transport 约束时必须 fail closed。
 - `quwoquan_app/run.sh -d <device>` 是显式设备选择与 transport 准备入口。裸 `flutter run` 和 IDE 直接 Flutter Debug 也必须由 Xcode/Gradle backend 在安装前按 `QWQ_ENVIRONMENT=alpha|beta|gamma` 选择同一份 canonical handoff，默认 Alpha。
 - 两条路径都必须把完整 handoff、entrypoint 和全部 runtime defines 交给 Flutter resident compiler，使冷启动、Hot Reload 与 Hot Restart 消费同一环境、target 与 digest。禁止 native build phase 临时拼装第二份 URL、密钥或 release 配置。
-- 本地 Debug 安装前必须执行只读的 release-bound App 内容预检；active candidate、commercial readiness、rollback/replay lifecycle、首页、视频书、Creator/头像或媒体任一证据不成立时 fail closed，并只输出首个 typed blocker。该严格预检不改变正式 App 的网络恢复语义，普通运行期网络或服务故障仍进入安全 Shell 内的页面级恢复。
+- 本地 Debug 安装前必须执行只读 App 预检。Alpha/Beta/Gamma `test_live` 未绑定内容或 runtime、Provider、内容证据不健康时只记录结构化 warning，并进入 `no_active_release`/typed unavailable 安全 Shell；`content-live`、immutable candidate 与 Prod 的 release、readiness、rollback/replay、首页、视频书、Creator/头像及媒体任一必要证据不成立时仍 fail closed，并只输出首个 typed blocker。该分层不改变正式 App 的网络恢复语义，普通运行期网络或服务故障仍进入安全 Shell 内的页面级恢复。
 - Android `BuildConfig` 与 iOS `QWQNativeRuntime.plist` 必须内嵌 effective launch manifest 摘要；启动失败标记、runtime probe 和制品 provenance 必须回报同一摘要，禁止跨 target、跨环境或重打包复用。
 - package-only 四环境编译只能证明组件可构建，不得标记为 runtime UAT。运行证据必须来自真实 `MAIN/LAUNCHER` 或 iOS scene 启动，且包含非 `unknown` 的本次 attempt ID、当前 motion contract、safe terminal、Gate/Main 或 scene 结果和单一 task。
 - Prod Android AAB/APK 与 iOS IPA 必须先验证平台签名、禁止 Mock/test/local transport 泄漏，并证明内嵌清单摘要与发布 handoff 一致，才可从 component-ready 推进到 deployable。

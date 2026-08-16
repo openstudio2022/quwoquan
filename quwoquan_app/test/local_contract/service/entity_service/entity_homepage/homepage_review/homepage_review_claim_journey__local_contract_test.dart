@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -54,6 +52,7 @@ import '../../../../../support/service/content_service/content/content_behavior_
 import '../../../../../support/service/entity_service/entity_homepage/homepage_review/homepage_review_facets_typed_double.dart';
 
 import '../../../../../support/runtime/observability/recording_app_telemetry_recorder.dart';
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 
 const String _homepageId = 'homepage_sight_west_lake';
 
@@ -62,7 +61,6 @@ void main() {
 
   setUp(() {
     AuthGate.resetDebounce();
-    HttpOverrides.global = _NoNetworkHttpOverrides();
     originalOnError = FlutterError.onError;
     FlutterError.onError = (details) {
       final message = details.exceptionAsString();
@@ -75,7 +73,6 @@ void main() {
   });
 
   tearDown(() {
-    HttpOverrides.global = null;
     FlutterError.onError = originalOnError;
   });
 
@@ -126,6 +123,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...sealedCloudBoundaryOverrides(),
           ...homepageSourceCardsBoundaryOverrides(),
           contentRuntimeConfigProvider.overrideWithValue(
             buildProductionContentRuntimeConfigDefaults(),
@@ -296,5 +294,3 @@ final class _NoWishlistStateReader implements ContentEntityWishlistStateReader {
     );
   }
 }
-
-final class _NoNetworkHttpOverrides extends HttpOverrides {}

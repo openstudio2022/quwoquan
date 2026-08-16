@@ -87,7 +87,7 @@ def package_web_official_release(
         "noindex": environment != "prod",
         "spaFallback": "/index.html",
         "htmlContentType": "text/html; charset=utf-8",
-        "assetCacheControl": "public, max-age=31536000, immutable",
+        "assetCacheControl": "no-cache, must-revalidate",
         "serviceWorker": "flutter_service_worker.js",
     }
     manifest_path = release_root / "manifest.json"

@@ -7,10 +7,12 @@
 # 本文件承接环境矩阵汇总场景组（release 绑定矩阵通过判定、component/release
 # 状态区分、partial 证据 gate_block、UAT/Make 候选绑定）；测试逐字搬移。
 
+import io
 import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -28,6 +30,68 @@ from verify_startup_environment_matrix import (
 
 
 class StartupProbeParserContractTest(unittest.TestCase):
+    def test_component_runtime_defines_use_exact_test_live_target(self) -> None:
+        defines = {
+            **{key: "value" for key in startup_matrix.REQUIRED_DEFINES},
+            "APP_RUNTIME_ENV": "beta",
+        }
+        completed = mock.Mock(
+            returncode=0,
+            stdout=json.dumps(defines),
+            stderr="",
+        )
+
+        with mock.patch(
+            "startup_environment_matrix.package_probe._run",
+            return_value=completed,
+        ) as run:
+            self.assertEqual(startup_matrix._runtime_defines("beta"), defines)
+
+        run.assert_called_once_with(
+            "python3",
+            "scripts/env/print_app_env_dart_defines.py",
+            "--env",
+            "beta",
+            "--target",
+            "beta-local",
+            "--launch-policy",
+            "test_live",
+            "--format",
+            "json",
+        )
+
+    def test_component_failure_prints_typed_issue_and_returns_nonzero(self) -> None:
+        argv = [
+            "verify_startup_environment_matrix.py",
+            "--component-environment",
+            "alpha",
+        ]
+        output = io.StringIO()
+        with (
+            mock.patch.object(
+                startup_matrix.cli,
+                "_runtime_defines",
+                side_effect=RuntimeError("typed component probe failure"),
+            ),
+            mock.patch.object(sys, "argv", argv),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(startup_matrix.main(), 1)
+
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(
+            report["issues"],
+            ["alpha: typed component probe failure"],
+        )
+
+    def test_app_static_gate_does_not_hide_component_probe_report(self) -> None:
+        gate = (APP_DIR.parent / "quwoquan_ops/gate/gate_repo.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("--component-environment gamma || exit 1", gate)
+        self.assertNotIn("--component-environment gamma >/dev/null", gate)
+
     def test_release_bound_matrix_passes_only_with_all_real_case_results(
         self,
     ) -> None:

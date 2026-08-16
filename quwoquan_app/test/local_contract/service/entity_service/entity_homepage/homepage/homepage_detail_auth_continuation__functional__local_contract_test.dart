@@ -45,11 +45,13 @@ import 'package:quwoquan_app/runtime/di/content_behavior_dependencies.dart'
     show behaviorRepositoryProvider, contentBehaviorTrackerProvider;
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/entity_service/entity_homepage/homepage_review/homepage_review_facets_typed_double.dart';
+import '../../../../../support/runtime/homepage_source_cards_boundary_overrides.dart';
 
 const String _homepageId = 'homepage_sight_west_lake';
 
 List<Override> _homepageShellBoundaryOverrides() => <Override>[
   ...sealedCloudBoundaryOverrides(),
+  ...homepageSourceCardsBoundaryOverrides(),
   behaviorRepositoryProvider.overrideWithValue(
     RecordingContentBehaviorRepository(),
   ),

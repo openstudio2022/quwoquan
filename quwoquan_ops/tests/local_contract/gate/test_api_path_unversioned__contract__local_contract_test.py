@@ -33,11 +33,41 @@ class ApiPathUnversionedContractTest(unittest.TestCase):
         line = 'url: "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png"'
         self.assertTrue(mod.line_is_excluded(line))
 
+    def test_concatenated_media_object_key_is_excluded_without_hiding_api(self) -> None:
+        mod = _load_module()
+        line = (
+            'AvatarObjectKey: "media/avatar/s/archived-avatar/user/" '
+            '+ id + "/v1/avatar.png",'
+        )
+        self.assertTrue(mod.line_is_excluded(line))
+        self.assertFalse(
+            mod.line_is_excluded(
+                'path: "/v1/content/feed" // media/avatar remains an object key'
+            )
+        )
+        self.assertFalse(
+            mod.line_is_excluded(
+                'AvatarObjectKey: "media/avatar/current"; '
+                'route := "/v1/content/feed"'
+            )
+        )
+
     def test_immutable_public_media_slice_assertion_is_excluded(self) -> None:
         mod = _load_module()
         self.assertTrue(
             mod.line_is_excluded(
                 'issues.append("public fixture 当前唯一 canonical 版本必须是 /v1/")'
+            )
+        )
+        self.assertTrue(
+            mod.line_is_excluded(
+                '_add("public slice fixture 当前唯一 canonical 版本必须是 /v1/")'
+            )
+        )
+        self.assertFalse(
+            mod.line_is_excluded(
+                'issues.append("public fixture 当前唯一 canonical 版本必须是 /v1/"); '
+                'route = "/v1/content/feed"'
             )
         )
 
@@ -57,6 +87,18 @@ class ApiPathUnversionedContractTest(unittest.TestCase):
         self.assertTrue(
             mod.line_is_excluded(
                 'CompletionURL: server.URL + "/v1/chat/completions",',
+                relative_path=(
+                    "quwoquan_service/services/assistant-service/tests/"
+                    "local_contract/assistant/assistant_session/"
+                    "infrastructure_modelprovider_client__local_contract_test.go"
+                ),
+                external_provider_authorities=authorities,
+            )
+        )
+        self.assertFalse(
+            mod.line_is_excluded(
+                'CompletionURL: server.URL + "/v1/chat/completions"; '
+                'route := "/v1/content/feed"',
                 relative_path=(
                     "quwoquan_service/services/assistant-service/tests/"
                     "local_contract/assistant/assistant_session/"
@@ -101,6 +143,72 @@ class ApiPathUnversionedContractTest(unittest.TestCase):
                 'path: "/v1/debug/sms/otp/latest/compat"',
                 relative_path="quwoquan_ops/cli/lib/local_sms_provider_debug.py",
                 external_provider_authorities=authorities,
+            )
+        )
+
+    def test_provider_scoped_weather_paths_are_excluded(self) -> None:
+        mod = _load_module()
+        relative_path = (
+            "quwoquan_service/services/assistant-service/tests/api_integration/"
+            "assistant/assistant_session/"
+            "weather_provider_protocol__api_integration_test.go"
+        )
+        for line in (
+            'case "/v1/search":',
+            'ForecastURL: upstream.URL + "/v1/forecast",',
+        ):
+            self.assertTrue(
+                mod.line_is_excluded(line, relative_path=relative_path)
+            )
+        self.assertFalse(
+            mod.line_is_excluded(
+                'path: "/v1/search"',
+                relative_path=(
+                    "quwoquan_service/services/search-service/contracts/"
+                    "search/search_query/operations.yaml"
+                ),
+            )
+        )
+        self.assertFalse(
+            mod.line_is_excluded(
+                'case "/v1/search": route := "/v1/content/feed"',
+                relative_path=relative_path,
+            )
+        )
+
+    def test_negative_uri_guard_and_breaking_fixture_are_excluded(self) -> None:
+        mod = _load_module()
+        self.assertTrue(
+            mod.line_is_excluded("uri.path != '/v1/otp' ||")
+        )
+        self.assertFalse(
+            mod.line_is_excluded(
+                "uri.path != '/v1/otp' || route == '/v1/admin/export'"
+            )
+        )
+        self.assertFalse(
+            mod.line_is_excluded(
+                'if uri.path != "/v1/admin/export" { return notFound }',
+            )
+        )
+        self.assertTrue(
+            mod.line_is_excluded(
+                'self._write_graph(path_template="/v2/things")',
+            )
+        )
+        self.assertFalse(
+            mod.line_is_excluded(
+                'self._write_graph(path_template="/v2/things"); '
+                'route = "/v1/content/feed"',
+            )
+        )
+        self.assertTrue(
+            mod.line_is_excluded('self.assertNotIn("/v1/", caddy_text)')
+        )
+        self.assertFalse(
+            mod.line_is_excluded(
+                'self.assertNotIn("/v1/", caddy_text); '
+                'route = "/v1/content/feed"'
             )
         )
 
@@ -151,10 +259,14 @@ class ApiPathUnversionedContractTest(unittest.TestCase):
 
     def test_negative_route_guard_is_excluded(self) -> None:
         mod = _load_module()
-        self.assertTrue(
+        line = (
+            '{method: http.MethodPost, path: "/v1/search", '
+            "wantStatus: http.StatusNotFound},"
+        )
+        self.assertTrue(mod.line_is_excluded(line))
+        self.assertFalse(
             mod.line_is_excluded(
-                '{method: http.MethodPost, path: "/v1/search", '
-                "wantStatus: http.StatusNotFound},"
+                line + ' route = "/v1/content/feed"'
             )
         )
 

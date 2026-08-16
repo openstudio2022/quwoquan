@@ -241,6 +241,8 @@ class LocalGammaServiceRuntimeBindingsTest(unittest.TestCase):
     def test_mongo_init_waits_for_writable_primary_before_dependents(self) -> None:
         compose = COMPOSE_FILE.read_text(encoding="utf-8")
 
+        mongodb = yaml.safe_load(compose)["services"]["mongodb"]
+        self.assertEqual(mongodb["healthcheck"]["timeout"], "10s")
         self.assertIn("db.hello().isWritablePrimary", compose)
         self.assertIn("mongo-init timed out waiting for writable primary", compose)
         self.assertIn(
@@ -563,4 +565,3 @@ class LocalGammaServiceRuntimeBindingsTest(unittest.TestCase):
             'CONTENT_PUBLIC_WEB_CDN_ORIGIN: "${QWQ_COMPOSE_MEDIA_DELIVERY_BASE_URL:-}"',
             content_compose,
         )
-

@@ -4,13 +4,17 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import plistlib
+import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 _SCRIPTS_ROOT = next(
     parent
@@ -40,6 +44,165 @@ def read_plist(path: Path) -> dict[str, Any]:
     return payload
 
 
+def public_web_identity(native_runtime: dict[str, Any]) -> dict[str, str]:
+    raw_url = str(native_runtime.get("publicWebURL") or "").strip()
+    parsed = urlsplit(raw_url)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.fragment
+    ):
+        raise ValueError("iOS publicWebURL must be an exact trusted HTTPS URL")
+    return {
+        "publicWebURL": raw_url,
+        "publicWebURLDigest": "sha256:"
+        + hashlib.sha256(raw_url.encode("utf-8")).hexdigest(),
+    }
+
+
+def resolve_simulator_udid(simulator: str) -> str:
+    if simulator != "booted":
+        return simulator
+    result = run(
+        "xcrun",
+        "simctl",
+        "getenv",
+        "booted",
+        "SIMULATOR_UDID",
+    )
+    device_id = result.stdout.strip()
+    if not device_id:
+        raise ValueError("booted iOS Simulator UDID is unavailable")
+    return device_id
+
+
+def verify_web_cta_with_xcuitest(
+    *,
+    simulator_udid: str,
+    environment: str,
+    expected_url_digest: str,
+    output_dir: Path,
+) -> dict[str, Any]:
+    test_environment = dict(os.environ)
+    for key in (
+        "QWQ_APP_RUNTIME_ENV",
+        "QWQ_APP_LAUNCH_MODE",
+        "QWQ_LAUNCH_TARGET",
+        "QWQ_LAUNCH_HANDOFF_JSON",
+        "QWQ_DART_DEFINES_DIGEST",
+        "QWQ_EXPECTED_RUNTIME_CONFIG_DIGEST",
+        "QWQ_EFFECTIVE_LAUNCH_MANIFEST_DIGEST",
+    ):
+        test_environment.pop(key, None)
+    test_environment["QWQ_ENVIRONMENT"] = environment
+    test_environment["QWQ_IOS_SIMULATOR_UDID"] = simulator_udid
+    command = [
+        "xcodebuild",
+        "-workspace",
+        "Runner.xcworkspace",
+        "-scheme",
+        "Runner",
+        "-configuration",
+        "Debug",
+        "-destination",
+        f"platform=iOS Simulator,id={simulator_udid}",
+        "-destination-timeout",
+        "60",
+        (
+            "-only-testing:RunnerUITests/"
+            "QWQNativeStartupRecoveryWebUITests/"
+            "testRecoveryWebCTAOpensSafariAndReturnsToSameProcess"
+        ),
+        "test",
+    ]
+    log_started_at = time.strftime("%Y-%m-%d %H:%M:%S")
+    test = subprocess.run(
+        command,
+        cwd=APP_ROOT / "ios",
+        env=test_environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    test_output = test.stdout + test.stderr
+    (output_dir / "ios-native-startup-web-cta-xcuitest.log").write_text(
+        test_output,
+        encoding="utf-8",
+    )
+    time.sleep(1.0)
+    app_log = run(
+        "xcrun",
+        "simctl",
+        "spawn",
+        simulator_udid,
+        "log",
+        "show",
+        "--start",
+        log_started_at,
+        "--style",
+        "compact",
+        "--predicate",
+        (
+            'eventMessage CONTAINS "ios_native_recovery_external_open" '
+            'OR eventMessage CONTAINS "ios_native_recovery_external_returned"'
+        ),
+    ).stdout
+    (output_dir / "ios-native-startup-web-cta-app.log").write_text(
+        app_log,
+        encoding="utf-8",
+    )
+    requested = (
+        "ios_native_recovery_external_open_requested "
+        f"urlDigest={expected_url_digest}"
+    ) in app_log
+    opened = (
+        "ios_native_recovery_external_open_completed "
+        f"urlDigest={expected_url_digest} opened=true"
+    ) in app_log
+    safari_foreground = (
+        "QWQNativeStartupUITest recovery_web_cta_safari_foreground"
+        in test_output
+    )
+    returned_foreground = (
+        "QWQNativeStartupUITest recovery_web_cta_returned_app_foreground"
+        in test_output
+    )
+    requested_process_id = ""
+    same_process = False
+    request_pattern = re.compile(
+        r"ios_native_recovery_external_open_requested "
+        rf"urlDigest={re.escape(expected_url_digest)} processId=(\d+)"
+    )
+    return_pattern = re.compile(
+        r"ios_native_recovery_external_returned processId=(\d+)"
+    )
+    for line in app_log.splitlines():
+        request_match = request_pattern.search(line)
+        if request_match:
+            requested_process_id = request_match.group(1)
+            continue
+        return_match = return_pattern.search(line)
+        if return_match and requested_process_id:
+            same_process = return_match.group(1) == requested_process_id
+            requested_process_id = ""
+    return {
+        "xcodeTestPassed": test.returncode == 0,
+        "trustedExactPublicWebURLRequested": requested,
+        "safariForegroundObserved": safari_foreground,
+        "trustedExactPublicWebURLOpened": opened,
+        "sameAppProcessAfterReturn": same_process and returned_foreground,
+        "xcodeTestExitCode": test.returncode,
+        "xcodeTestLog": str(
+            output_dir / "ios-native-startup-web-cta-xcuitest.log"
+        ),
+        "appOpenLog": str(
+            output_dir / "ios-native-startup-web-cta-app.log"
+        ),
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app", required=True, help="Built Runner.app path")
@@ -62,6 +225,8 @@ def main() -> int:
     bundle_id = ""
     process_id = ""
     normal_process_id = ""
+    web_identity: dict[str, str] = {}
+    web_cta_result: dict[str, Any] = {}
 
     try:
         info = read_plist(app / "Info.plist")
@@ -71,6 +236,8 @@ def main() -> int:
         environment = str(
             native_runtime.get("runtimeEnvironment") or ""
         ).strip()
+        web_identity = public_web_identity(native_runtime)
+        simulator_udid = resolve_simulator_udid(args.simulator)
         runtime_digest = str(
             native_runtime.get("runtimeConfigDigest") or ""
         ).strip()
@@ -151,6 +318,34 @@ def main() -> int:
             issues.append("fatal recovery created the implicit Flutter engine")
         if "ios_did_finish_launching" in log_text:
             issues.append("fatal recovery entered the normal Flutter launch path")
+
+        web_cta_result = verify_web_cta_with_xcuitest(
+            simulator_udid=simulator_udid,
+            environment=environment,
+            expected_url_digest=web_identity["publicWebURLDigest"],
+            output_dir=output_dir,
+        )
+        for key, message in (
+            ("xcodeTestPassed", "native recovery Web CTA XCUITest failed"),
+            (
+                "trustedExactPublicWebURLRequested",
+                "Web CTA did not request the exact trusted publicWebURL",
+            ),
+            (
+                "safariForegroundObserved",
+                "Web CTA did not put Safari in the foreground",
+            ),
+            (
+                "trustedExactPublicWebURLOpened",
+                "Safari did not open the exact trusted publicWebURL",
+            ),
+            (
+                "sameAppProcessAfterReturn",
+                "App did not return in the same native recovery process",
+            ),
+        ):
+            if not web_cta_result.get(key):
+                issues.append(message)
 
         run(
             "xcrun",
@@ -234,6 +429,8 @@ def main() -> int:
             "ios_did_finish_launching" in normal_log_text
             and "ios_implicit_flutter_engine_initialized" in normal_log_text
         ),
+        **web_identity,
+        "webCta": web_cta_result,
         "issues": issues,
     }
     (output_dir / "report.json").write_text(

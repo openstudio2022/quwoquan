@@ -15,10 +15,11 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 /// This cross-domain boundary belongs to the runtime harness rather than either
 /// object-owned support tree. Individual Homepage tests may layer a typed
 /// reader when source-card behavior is their subject.
-List<Override> homepageSourceCardsBoundaryOverrides() => <Override>[
-  gatheringQueryReaderProvider.overrideWithValue(
-    const _EmptyGatheringQueryReader(),
-  ),
+List<Override> homepageSourceCardsBoundaryOverrides({
+  GatheringQueryReader gatheringQueryReader =
+      const _EmptyGatheringQueryReader(),
+}) => <Override>[
+  gatheringQueryReaderProvider.overrideWithValue(gatheringQueryReader),
   homepageDetailSocialProofReaderProvider.overrideWithValue(
     const _ZeroGatheringSocialProofReader(),
   ),

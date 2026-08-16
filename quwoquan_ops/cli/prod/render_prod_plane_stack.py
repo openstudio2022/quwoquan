@@ -885,17 +885,24 @@ www.quwoquan.com {{
 \t\troot * /srv/legal
 \t\tfile_server
 \t}}
-\t@immutable path /assets/* /canvaskit/* /icons/* /fonts/*
-\theader @immutable Cache-Control "public, max-age=31536000, immutable"
-\t@html path / *.html
-\theader @html Content-Type "text/html; charset=utf-8"
+\t@service_worker path /flutter_service_worker.js
+\theader @service_worker Cache-Control "no-cache, no-store, must-revalidate"
+\t@revalidated_web_asset path /assets/* /canvaskit/* /icons/* /fonts/* /main.dart.js /flutter.js /flutter_bootstrap.js *.ttf *.woff2
+\theader @revalidated_web_asset Cache-Control "no-cache, must-revalidate"
 \thandle {{
-\t\theader {{
-\t\t\tContent-Security-Policy "default-src 'self'; connect-src 'self' https: wss:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'"
-\t\t}}
 \t\troot * /srv/web
-\t\ttry_files {{path}} /index.html
-\t\tfile_server
+\t\troute {{
+\t\t\ttry_files {{path}} /index.html
+\t\t\t@html path /index.html
+\t\t\theader @html {{
+\t\t\t\tCache-Control "no-cache, must-revalidate"
+\t\t\t\tContent-Type "text/html; charset=utf-8"
+\t\t\t}}
+\t\t\theader {{
+\t\t\t\tContent-Security-Policy "default-src 'self'; connect-src 'self' https: wss:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; manifest-src 'self'; frame-ancestors 'none'"
+\t\t\t}}
+\t\t\tfile_server
+\t\t}}
 \t}}
 }}
 """

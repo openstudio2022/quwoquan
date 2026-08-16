@@ -113,12 +113,36 @@ def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -
     assert 'run_app_flutter_tests "${FLUTTER_TEST_SERIAL_MODE:-exclude}"' in gate
 
 
-def test_delivery_gate_parallelizes_safe_checks_on_hosted_runners() -> None:
+def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_serial_on_controlled_macos() -> None:
     delivery = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
         encoding="utf-8"
     )
-    assert "runs-on: ubuntu-latest" in delivery
-    assert "timeout-minutes: 10" in delivery
+
+    hosted_linux_jobs = (
+        "topology_regression",
+        "quwoquan_service",
+        "search_contract_smoke",
+        "quwoquan_app_static",
+        "quwoquan_app_tests",
+        "quwoquan_app",
+        "quwoquan_data",
+        "ops_portal",
+        "release_evidence",
+        "delivery_gate_summary",
+    )
+    for job_name in hosted_linux_jobs:
+        job_start = delivery.index(f"  {job_name}:\n")
+        next_job = re.search(
+            r"^  [a-z_]+:\n", delivery[job_start + 1 :], flags=re.MULTILINE
+        )
+        job_end = job_start + 1 + next_job.start() if next_job else None
+        job_body = delivery[job_start:job_end]
+        assert "runs-on: ubuntu-latest" in job_body
+
+    serial_start = delivery.index("  quwoquan_app_serial:\n")
+    serial_end = delivery.index("\n  quwoquan_app:\n", serial_start)
+    serial_job = delivery[serial_start:serial_end]
+    assert "runs-on: [self-hosted, macOS, ARM64]" in serial_job
     assert "runs-on: macos-latest" not in delivery
 
 

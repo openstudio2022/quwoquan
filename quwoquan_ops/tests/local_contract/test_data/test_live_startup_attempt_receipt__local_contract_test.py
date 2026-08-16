@@ -33,7 +33,7 @@ def _plan() -> dict[str, object]:
             "packageVersion": "web-release-alpha",
             "manifestDigest": "sha256:" + "7" * 64,
             "contentDigest": "sha256:" + "8" * 64,
-            "publicOrigin": "https://alpha.quwoquan.com",
+            "publicOrigin": "https://alpha.quwoquan.com:17000",
         },
         "workspaceIdentity": {
             "sourceRevision": "a" * 40,

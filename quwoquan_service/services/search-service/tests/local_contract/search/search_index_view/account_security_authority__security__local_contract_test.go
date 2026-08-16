@@ -308,6 +308,11 @@ func TestSearchAccountSecurityAuthorityConfigurationIsExplicitInEveryEnvironment
 			if got := environmentConfig.Overrides["sys.search-service.accountSecurityAuthority.timeoutMs"]; got != 300 {
 				t.Fatalf("timeout=%#v, want=300ms", got)
 			}
+			if environment != "prod" {
+				if got := environmentConfig.Overrides["sys.search-service.es.requestTimeoutMs"]; got != 5000 {
+					t.Fatalf("Elasticsearch request timeout=%#v, want=5000ms", got)
+				}
+			}
 		})
 	}
 }

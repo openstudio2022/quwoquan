@@ -415,7 +415,7 @@ jobs:
 
   quwoquan_app_serial:
     name: Delivery Gate — App Serial
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 40
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}
