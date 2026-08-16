@@ -48,6 +48,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final imageFile = _writeImage();
     addTearDown(() => imageFile.parent.deleteSync(recursive: true));
+    final canonicalConfig = (await tester.runAsync(_canonicalConfig))!;
     final catalog = Completer<ImageEditorFilterConfig>();
     final repository = ImageEditorFilterRepository(
       catalogLoader: () => catalog.future,
@@ -64,7 +65,7 @@ void main() {
     );
     expect(tester.takeException(), isNull);
 
-    catalog.complete(await _canonicalConfig());
+    catalog.complete(canonicalConfig);
     // loading 指示器为持续动画，pumpAndSettle 永不收敛；有限 pump 等待
     // 目录渲染完成即可。
     await _pumpUntil(
@@ -83,12 +84,13 @@ void main() {
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final imageFile = _writeImage();
       addTearDown(() => imageFile.parent.deleteSync(recursive: true));
+      final canonicalConfig = (await tester.runAsync(_canonicalConfig))!;
       var attempts = 0;
       final repository = ImageEditorFilterRepository(
         catalogLoader: () async {
           attempts += 1;
           if (attempts == 1) throw StateError('catalog unavailable');
-          return _canonicalConfig();
+          return canonicalConfig;
         },
       );
 
@@ -119,17 +121,13 @@ void main() {
         () =>
             find
                 .byKey(
-                  const ValueKey<String>(
-                    'image_editor_filter_catalog_failure',
-                  ),
+                  const ValueKey<String>('image_editor_filter_catalog_failure'),
                 )
                 .evaluate()
                 .isEmpty &&
             find
                 .byKey(
-                  const ValueKey<String>(
-                    'image_editor_filter_catalog_loading',
-                  ),
+                  const ValueKey<String>('image_editor_filter_catalog_loading'),
                 )
                 .evaluate()
                 .isEmpty,
@@ -154,10 +152,7 @@ void main() {
 }
 
 /// 有限 pump 等待条件成立（loading 指示器是持续动画，禁用 pumpAndSettle）。
-Future<void> _pumpUntil(
-  WidgetTester tester,
-  bool Function() condition,
-) async {
+Future<void> _pumpUntil(WidgetTester tester, bool Function() condition) async {
   for (var i = 0; i < 100 && !condition(); i++) {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 30)),

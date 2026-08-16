@@ -452,6 +452,7 @@ Map<String, Object?> _minimalHomepageWireExample() {
     List<Map<String, Object?>> contentPreview = const <Map<String, Object?>>[],
     List<Map<String, Object?>> relatedGroups = const <Map<String, Object?>>[],
     Map<String, Object?>? introduction,
+    Map<String, Object?>? impactSummary,
   }) => <String, Object?>{
     'homepageId': id,
     'homepageType': type,
@@ -467,6 +468,7 @@ Map<String, Object?> _minimalHomepageWireExample() {
     'questionPreview': const <Map<String, Object?>>[],
     'relatedGroups': relatedGroups,
     'introduction': ?introduction,
+    'impactSummary': ?impactSummary,
   };
 
   final westLakeIntroduction = <String, Object?>{
@@ -510,6 +512,8 @@ Map<String, Object?> _minimalHomepageWireExample() {
             'title': '西湖日落散步路线',
             'summary': '黄昏慢走路线',
             'contentType': 'article',
+            'authorName': '湖畔慢行者',
+            'likeCount': 328,
           },
         ],
         relatedGroups: const <Map<String, Object?>>[
@@ -520,6 +524,18 @@ Map<String, Object?> _minimalHomepageWireExample() {
           },
         ],
         introduction: westLakeIntroduction,
+        impactSummary: const <String, Object?>{
+          'total': 1,
+          'items': <Map<String, Object?>>[
+            <String, Object?>{
+              'impactId': 'impact-west-lake-guide',
+              'helpType': 'guide',
+              'action': 'open',
+              'primaryText': '西湖行程为出行者提供路线参考',
+              'count': 1,
+            },
+          ],
+        },
       ),
       homepage(
         'homepage_sight_dongqian_lake',
@@ -555,6 +571,18 @@ Map<String, Object?> _minimalHomepageWireExample() {
         categoryTags: const <String>['教育培训', '语言学习', '校友'],
         coverUrl:
             'media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png',
+        impactSummary: const <String, Object?>{
+          'total': 1,
+          'items': <Map<String, Object?>>[
+            <String, Object?>{
+              'impactId': 'impact-neworiental-learning',
+              'helpType': 'learning',
+              'action': 'open',
+              'primaryText': '学习经验帮助了同领域用户',
+              'count': 1,
+            },
+          ],
+        },
       ),
       homepage(
         'fixture_homepage_photo_spot_hengshu_studio',

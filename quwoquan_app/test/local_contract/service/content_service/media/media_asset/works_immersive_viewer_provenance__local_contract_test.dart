@@ -1,6 +1,5 @@
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#req-009
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -9,14 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/l10n/copy/gathering_text_constants.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
-    show workBrowserSocialProofReaderProvider;
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart'
     show runtimeLoggerProvider;
 import 'package:quwoquan_app/runtime/observability/runtime_log_ports.dart';
 import 'package:quwoquan_app/runtime/observability/runtime_log_record.dart';
 import 'package:quwoquan_app/runtime/observability/runtime_logger.dart';
-import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart'
     show ContentGatheringSocialProofReader;
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
@@ -93,10 +89,16 @@ final class _UnusedVideoPreviewTrackQuery implements VideoPreviewTrackQuery {
   }
 }
 
-Widget _wrap(Widget child, {required List<Override> overrides}) {
+Widget _wrap(
+  Widget child, {
+  required ContentGatheringSocialProofReader socialProofReader,
+}) {
   final router = GoRouter(
     routes: <RouteBase>[
-      GoRoute(path: '/', builder: (context, state) => Scaffold(body: child)),
+      GoRoute(
+        path: '/',
+        builder: (context, state) => Scaffold(body: child),
+      ),
       GoRoute(
         path: '/gatherings/:id',
         builder: (context, state) => const SizedBox.shrink(),
@@ -106,7 +108,10 @@ Widget _wrap(Widget child, {required List<Override> overrides}) {
   return ProviderScope(
     overrides: <Override>[
       ...sealedCloudBoundaryOverrides(),
-      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
+      ...mockContentFacetOverrides(
+        store: InMemoryContentPostStore(),
+        workBrowserSocialProofReader: socialProofReader,
+      ),
       activePersonaContextProvider.overrideWith(
         (_) async => ActivePersonaContextViewData.fallback(
           personaId: 'persona-1',
@@ -131,7 +136,6 @@ Widget _wrap(Widget child, {required List<Override> overrides}) {
         ref.onDispose(logger.dispose);
         return logger;
       }),
-      ...overrides,
     ],
     child: ScreenUtilInit(
       designSize: const Size(375, 812),
@@ -179,11 +183,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         _viewer(post, gatheringRef: 'gathering-prov-1'),
-        overrides: <Override>[
-          workBrowserSocialProofReaderProvider.overrideWithValue(
-            _SocialProofReaderDouble(),
-          ),
-        ],
+        socialProofReader: _SocialProofReaderDouble(),
       ),
     );
     await _pumpFrames(tester);
@@ -197,11 +197,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         _viewer(post),
-        overrides: <Override>[
-          workBrowserSocialProofReaderProvider.overrideWithValue(
-            _SocialProofReaderDouble(formedCount: 2),
-          ),
-        ],
+        socialProofReader: _SocialProofReaderDouble(formedCount: 2),
       ),
     );
     await _pumpFrames(tester);
@@ -215,11 +211,7 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         _viewer(post),
-        overrides: <Override>[
-          workBrowserSocialProofReaderProvider.overrideWithValue(
-            _SocialProofReaderDouble(formedCount: 0),
-          ),
-        ],
+        socialProofReader: _SocialProofReaderDouble(formedCount: 0),
       ),
     );
     await _pumpFrames(tester);

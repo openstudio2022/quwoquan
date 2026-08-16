@@ -21,6 +21,8 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/pre
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/share_interaction/share_interaction_row.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/share_interaction/share_target_preview.dart';
 import '../../../../../support/service/content_service/content/profile_interaction_activity_view/test_profile_interaction_facets.dart';
+import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
+import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
 
 void main() {
@@ -55,6 +57,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
           profileQueryProvider.overrideWith(
             (ref, surface) => const MockUserProfileRepository(),
           ),

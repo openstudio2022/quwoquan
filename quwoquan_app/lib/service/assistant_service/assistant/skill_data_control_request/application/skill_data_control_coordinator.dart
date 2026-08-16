@@ -162,7 +162,7 @@ final class SkillDataControlCoordinator {
       );
       final accepted = _accept(receipt.request);
       if (accepted.request?.status == SkillDataControlRequestStatus.executing) {
-        return _pollUntilStable();
+        return await _pollUntilStable();
       }
       return accepted;
     } catch (error) {
@@ -171,7 +171,7 @@ final class SkillDataControlCoordinator {
         if (latest != null) {
           final reconciled = _accept(latest);
           if (latest.status == SkillDataControlRequestStatus.executing) {
-            return _pollUntilStable();
+            return await _pollUntilStable();
           }
           if (latest.status == SkillDataControlRequestStatus.completed ||
               latest.status == SkillDataControlRequestStatus.cancelled) {

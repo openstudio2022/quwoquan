@@ -85,9 +85,7 @@ void main() {
       // 池真相源：home_feed_core.featuredFeedPostIds（与云侧 rm_premium_pool
       // 物化集合、alpha runner adapter 同判定）；数据工程直供兜底。
       final rawPool = const <Object?>[];
-      final pool = (rawPool ?? const <Object?>[])
-          .map((id) => id.toString())
-          .toSet();
+      final pool = rawPool.map((id) => id.toString()).toSet();
       for (final item in page.items) {
         expect(
           pool.contains(item.id) || item.supplySource == 'data_engineering',

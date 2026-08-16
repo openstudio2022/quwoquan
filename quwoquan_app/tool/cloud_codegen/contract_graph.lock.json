@@ -6080,7 +6080,10 @@
       "mutationTarget": "",
       "objectId": "chat.message",
       "ownershipPolicy": "conversation_member",
-      "pagination": null,
+      "pagination": {
+        "defaultItems": 60,
+        "maximumItems": 200
+      },
       "pathTemplate": "/chat/conversations/{conversationId}/assets",
       "permissions": [],
       "principal": "persona",
@@ -29679,13 +29682,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "da9e8cfed0ac351825f3b7e9e129eef28efa99ca6ab7f1c0faf52151d7ea4083"
+    "sha256": "8a6f6ebf27693ffde06d1edc2d1e7ec682bef49689129520ead23297f2ff03fa"
   },
   "contractGraph": {
     "compilerHash": "sha256:88eda096929822ed15dc83b01bf7dd3fd60051e241d98548a7f90dd0794b0196",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "3ecf7598e8529139019cc3bead6cbaf73599a7afae10f147a1dda961cfcaf4da",
-    "sourceDigestSetSha256": "8a9fa89e861c00011e5d4834dc831d9a582f7f759e7a110025fde4152efa3a1a"
+    "sha256": "c187e0ddefbcbada5dcb6de37c9cb9eceeb0cf95fdb14bede749ec987371272a",
+    "sourceDigestSetSha256": "9c916bf05a42d757617ae042276c61817ec26e2f7229d36a08af0ee8104521a2"
   },
   "generator": "app-cloud-handoff"
 }

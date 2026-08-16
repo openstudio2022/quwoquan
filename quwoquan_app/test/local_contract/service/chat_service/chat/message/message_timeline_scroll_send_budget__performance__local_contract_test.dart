@@ -1,3 +1,6 @@
+@Tags(<String>['serial'])
+library;
+
 // 长会话打开首帧、滚动与发送确认的性能预算契约（固定 seed 千条消息 + 运行时采样）。
 //
 // 预算数值唯一声明于 test/support/runtime/performance/performance_budget_probe.dart
@@ -83,16 +86,13 @@ void main() {
             .evaluate()
             .isNotEmpty;
       }
-      expect(
-        firstMessageVisible,
-        isTrue,
-        reason: '打开会话必须渲染出首条可见消息',
-      );
+      expect(firstMessageVisible, isTrue, reason: '打开会话必须渲染出首条可见消息');
     });
     expectWithinBudgetMs(
       label: '打开会话到首条消息可见',
       actualMs: openProbe.medianMs,
-      budgetMs: MessageRuntimePerformanceBudgets.openToFirstMessageFrameBudgetMs,
+      budgetMs:
+          MessageRuntimePerformanceBudgets.openToFirstMessageFrameBudgetMs,
     );
     await tester.pump(const Duration(milliseconds: 350));
     expect(find.byType(ChatConversationPage), findsOneWidget);
@@ -105,11 +105,7 @@ void main() {
               ChatConversationPerformanceMetricNames.firstScreenTtiMs,
         )
         .toList();
-    expect(
-      firstScreenSamples,
-      hasLength(1),
-      reason: '打开会话到首屏可用必须恰好上报一次性能采样',
-    );
+    expect(firstScreenSamples, hasLength(1), reason: '打开会话到首屏可用必须恰好上报一次性能采样');
     expect(firstScreenSamples.first.eventType, 'performance_sample');
 
     await tester.pumpWidget(const SizedBox.shrink());
@@ -219,7 +215,10 @@ Widget _buildConversationApp({RecordingAppTelemetryRecorder? telemetry}) {
     child: MaterialApp(
       navigatorObservers: <NavigatorObserver>[chatRouteObserver],
       home: _AuthWarmup(
-        child: ChatConversationPage(conversationId: _conversationId, onBack: _noop),
+        child: ChatConversationPage(
+          conversationId: _conversationId,
+          onBack: _noop,
+        ),
       ),
     ),
   );

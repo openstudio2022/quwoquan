@@ -210,6 +210,10 @@ Widget _interactionTabActionsApp(
 }) {
   return ProviderScope(
     overrides: [
+      ...mockContentFacetOverrides(
+        store: InMemoryContentPostStore(),
+        commentFacet: commentFacet,
+      ),
       profileQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
       ),
@@ -220,11 +224,6 @@ Widget _interactionTabActionsApp(
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
       ),
-      if (commentFacet != null)
-        ...mockContentFacetOverrides(
-          store: InMemoryContentPostStore(),
-          commentFacet: commentFacet,
-        ),
       if (chatRepository != null)
         ...chatTestRepositoryOverrides(
           conversation: chatRepository.conversation,
@@ -302,6 +301,7 @@ Widget _interactionTabApp(
 }) {
   return ProviderScope(
     overrides: [
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       profileQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
       ),
@@ -374,6 +374,7 @@ Widget _interactionTabRouterApp(
   );
   return ProviderScope(
     overrides: [
+      ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
       profileQueryProvider.overrideWith(
         (ref, surface) => const MockUserProfileRepository(),
       ),

@@ -44,8 +44,8 @@ https://{$QWQ_PUBLIC_WEB_HOST}:{$LOCAL_GAMMA_HTTP_PORT:19000} {
 		host {$QWQ_PUBLIC_WEB_HOST}
 		path /api/*
 	}
+	uri @web_api strip_prefix /api
 	handle @web_api {
-		uri strip_prefix /api
 		import business_api_edge
 	}
 	# 公开 SEO 读面（public-content-web-entry）：publicWeb host 的对象页、

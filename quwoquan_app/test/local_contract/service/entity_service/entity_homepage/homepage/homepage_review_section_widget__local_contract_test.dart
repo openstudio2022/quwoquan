@@ -2,7 +2,6 @@
 // 空态诚实渲染、真实评价列表来自 HomepageReviewQuery 公开读面、
 // 写入口以 requireAuth 闸口分流（游客中止不打开编辑器）。
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';

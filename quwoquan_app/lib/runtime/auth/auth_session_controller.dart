@@ -168,7 +168,7 @@ class AuthSessionController extends Notifier<AuthSessionState> {
             ),
           );
       _validateAnonymousGrant(result);
-      return _runSessionMutation<bool>(() async {
+      return await _runSessionMutation<bool>(() async {
         if (_explicitLoginGeneration != explicitLoginGeneration ||
             state.isAuthenticated) {
           return state.hasTrustedSession;

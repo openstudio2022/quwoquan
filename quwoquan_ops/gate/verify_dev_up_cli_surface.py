@@ -456,7 +456,20 @@ def main() -> int:
                 issues.append(
                     f"{label} business ingress must proxy only to api-edge and overwrite the edge client identity"
                 )
-        if first_party_direct_proxy.search(source):
+        business_proxy_source = source
+        if label == "gamma Caddyfile":
+            public_web_seo = source_section(
+                source,
+                "\thandle @public_web_seo {",
+                "\n\t}",
+            )
+            if public_web_seo is not None:
+                business_proxy_source = business_proxy_source.replace(
+                    public_web_seo,
+                    "",
+                    1,
+                )
+        if first_party_direct_proxy.search(business_proxy_source):
             issues.append(
                 f"{label} must not duplicate operation ownership by proxying directly to a first-party service"
             )

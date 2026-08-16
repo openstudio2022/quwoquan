@@ -334,9 +334,6 @@ extension _VideoPlaybackSessionRuntimeInternals on VideoPlaybackSession {
   }
 
   void _notify() {
-    if (!hasListeners) {
-      return;
-    }
-    notifyListeners();
+    _notifyRuntimeListeners();
   }
 }

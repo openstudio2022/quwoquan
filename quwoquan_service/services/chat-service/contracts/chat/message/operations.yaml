@@ -329,6 +329,7 @@ api_routes:
   - method: GET
     path: /chat/conversations/{conversationId}/assets
     operation: ListConversationAssets
+    pagination: {default_items: 60, maximum_items: 200}
     request_bindings:
       path:
         - name: conversationId

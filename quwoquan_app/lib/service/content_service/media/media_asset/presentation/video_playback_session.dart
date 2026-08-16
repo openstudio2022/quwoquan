@@ -21,6 +21,12 @@ part 'video_playback_session_runtime_internals.dart';
 /// 原生 controller 由视频 surface 创建并在销毁时释放；任何页面、时间轴或浏览器
 /// 控件只能通过本对象播放、暂停和 seek，从而避免 WorkBrowser 与播放器重复控制。
 class VideoPlaybackSession extends ChangeNotifier {
+  void _notifyRuntimeListeners() {
+    if (hasListeners) {
+      notifyListeners();
+    }
+  }
+
   VideoPlaybackSession({
     this.transientControlsDuration = const Duration(seconds: 5),
     this.seekCommandTimeout = AppRequestWaitTimings.foregroundReadDeadline,

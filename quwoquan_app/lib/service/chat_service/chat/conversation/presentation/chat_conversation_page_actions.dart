@@ -459,11 +459,10 @@ abstract class _ChatConversationPageActionsState
       return;
     }
     unawaited(
-      showGeneralDialog<void>(
+      showAppFloatingModal<void>(
         context: context,
         barrierDismissible: false,
-        barrierColor: AppColors.black,
-        pageBuilder: (dialogContext, _, _) {
+        builder: (dialogContext) {
           return ColoredBox(
             key: const ValueKey<String>('chat_image_viewer_surface'),
             color: AppColors.black,
@@ -496,10 +495,7 @@ abstract class _ChatConversationPageActionsState
                       key: const ValueKey<String>('chat_image_viewer_close'),
                       padding: EdgeInsets.all(AppSpacing.intraGroupXs),
                       onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: Icon(
-                        CupertinoIcons.xmark,
-                        color: AppColors.white,
-                      ),
+                      child: Icon(CupertinoIcons.xmark, color: AppColors.white),
                     ),
                   ),
                 ],
@@ -522,20 +518,18 @@ abstract class _ChatConversationPageActionsState
     }
     final MediaDeliveryReference reference;
     try {
-      reference = MediaDeliveryResolver(endpointConfig).resolve(
-        rawUrl,
-        kind: MediaDeliveryKind.video,
-      );
+      reference = MediaDeliveryResolver(
+        endpointConfig,
+      ).resolve(rawUrl, kind: MediaDeliveryKind.video);
     } on MediaDeliveryResolutionException {
       AppToast.show(context, ChatText.chatMediaUnavailable);
       return;
     }
     unawaited(
-      showGeneralDialog<void>(
+      showAppFloatingModal<void>(
         context: context,
         barrierDismissible: false,
-        barrierColor: AppColors.black,
-        pageBuilder: (dialogContext, _, _) {
+        builder: (dialogContext) {
           return ColoredBox(
             key: const ValueKey<String>('chat_video_playback_surface'),
             color: AppColors.black,
@@ -555,10 +549,7 @@ abstract class _ChatConversationPageActionsState
                       key: const ValueKey<String>('chat_video_playback_close'),
                       padding: EdgeInsets.all(AppSpacing.intraGroupXs),
                       onPressed: () => Navigator.of(dialogContext).pop(),
-                      child: Icon(
-                        CupertinoIcons.xmark,
-                        color: AppColors.white,
-                      ),
+                      child: Icon(CupertinoIcons.xmark, color: AppColors.white),
                     ),
                   ),
                 ],

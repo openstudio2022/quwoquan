@@ -1,3 +1,6 @@
+@Tags(<String>['serial', 'visual'])
+library;
+
 // 共享空态组件的双主题 golden 基线（组件级视觉回归样板）。
 //
 // 基线更新规范：仅在对应 UI 有意变更的同一变更集内以

@@ -1,7 +1,6 @@
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#req-008
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#req-009
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -18,7 +17,6 @@ import 'package:quwoquan_app/runtime/observability/runtime_log_ports.dart';
 import 'package:quwoquan_app/runtime/observability/runtime_log_record.dart';
 import 'package:quwoquan_app/runtime/observability/runtime_logger.dart';
 import 'package:quwoquan_app/runtime/transport/cloud_api_query_defaults.dart';
-import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart';
 import 'package:quwoquan_app/service/content_service/content/intersection_visit_state/adapters/intersection_repository.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart'
@@ -82,7 +80,7 @@ Map<String, dynamic> _photoRaw(
     'authorDisplayName': post.displayName,
     'authorAvatarUrl': post.avatarUrl,
     'body': post.body,
-    if (homepageId != null) 'primaryHomepageId': homepageId,
+    'primaryHomepageId': ?homepageId,
     if (homepageId != null) 'primaryHomepageType': homepageType,
     if (homepageId != null)
       'primaryHomepageSnapshot': <String, Object?>{'title': '黄龙雪山'},
@@ -91,9 +89,7 @@ Map<String, dynamic> _photoRaw(
 
 final class _WishlistStateReaderDouble
     implements ContentEntityWishlistStateReader {
-  _WishlistStateReaderDouble({this.wishlisted = false});
-
-  bool wishlisted;
+  bool wishlisted = false;
   int calls = 0;
 
   @override
@@ -194,7 +190,10 @@ Widget _wrap(
 }) {
   final router = GoRouter(
     routes: <RouteBase>[
-      GoRoute(path: '/', builder: (context, state) => Scaffold(body: child)),
+      GoRoute(
+        path: '/',
+        builder: (context, state) => Scaffold(body: child),
+      ),
       GoRoute(
         path: '/homepage/:id',
         builder: (context, state) => const SizedBox.shrink(),
@@ -294,9 +293,7 @@ void main() {
     expect(find.byKey(ImmersiveEngagementBar.wishlistActionKey), findsNothing);
   });
 
-  testWidgets('文章形态同一锚点门控：有锚点渲染想去按钮（种草主载体入口契约）', (
-    tester,
-  ) async {
+  testWidgets('文章形态同一锚点门控：有锚点渲染想去按钮（种草主载体入口契约）', (tester) async {
     // 文章从 feed 点开进同一 works 沉浸消费，想去入口由统一 engagement bar
     // 承载——锚点门控与形态无关，不为文章另造第二入口。
     final post = ContentPostViewData.fromWire(
@@ -384,9 +381,7 @@ void main() {
     );
     await _pumpFrames(tester);
 
-    final wishlistAction = find.byKey(
-      ImmersiveEngagementBar.wishlistActionKey,
-    );
+    final wishlistAction = find.byKey(ImmersiveEngagementBar.wishlistActionKey);
     expect(wishlistAction, findsOneWidget);
     expect(find.text(ObjectHomepageText.homepageWishlistAction), findsWidgets);
     expect(wishlistReader.calls, 1);
@@ -399,10 +394,7 @@ void main() {
         .toList();
     expect(wishlistEvents, hasLength(1));
     expect(wishlistEvents.single.contentId, 'homepage-wish-1');
-    expect(
-      find.text(ObjectHomepageText.wishlistAddedFeedback),
-      findsOneWidget,
-    );
+    expect(find.text(ObjectHomepageText.wishlistAddedFeedback), findsOneWidget);
     expect(
       find.text(ObjectHomepageText.homepageWishlistedAction),
       findsWidgets,

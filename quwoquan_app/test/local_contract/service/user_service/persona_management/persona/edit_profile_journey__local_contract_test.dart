@@ -369,6 +369,9 @@ void main() {
       final noNetworkClient = _RecordingNoNetworkClient();
       final app = ProviderScope(
         overrides: [
+          contentRuntimeConfigProvider.overrideWithValue(
+            buildProductionContentRuntimeConfigDefaults(),
+          ),
           cloudHttpClientProvider.overrideWithValue(
             CloudHttpClient(
               client: noNetworkClient,

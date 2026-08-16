@@ -89,6 +89,11 @@ final class _RecordingExecutor implements CloudOperationExecutor {
           'attestationIdHash': 'sha256:${'b' * 64}',
           'signatureVerified': true,
           'researchBadgeVisible': true,
+          'postIds': <String>['research-post-1'],
+          'entityRefs': <String>['research-entity-1'],
+          'mediaAssetIds': <String>['research-media-1'],
+          'publicCdnDetected': false,
+          'anonymousMediaUrlDetected': false,
         },
       _ => throw StateError('unexpected operation'),
     };

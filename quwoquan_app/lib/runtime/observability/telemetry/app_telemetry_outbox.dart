@@ -25,10 +25,8 @@ enum AppTelemetryEnqueueResult { persisted, unavailable, evicted }
 
 enum AppTelemetryDeliveryDegradation { dropped, deadLettered, retrying }
 
-typedef AppTelemetryDeliveryObserver = void Function(
-  AppTelemetryDeliveryDegradation kind,
-  String reason,
-);
+typedef AppTelemetryDeliveryObserver =
+    void Function(AppTelemetryDeliveryDegradation kind, String reason);
 
 final class AppTelemetryQueuedRecord {
   const AppTelemetryQueuedRecord({
@@ -186,7 +184,7 @@ final class AppTelemetryOutbox {
       } on CloudException catch (error) {
         final status = error.statusCode ?? 0;
         if (status == 400 || status == 422) {
-          return _isolateRejectedSealedBatch(
+          return await _isolateRejectedSealedBatch(
             box,
             sealed,
             reason: 'http_$status',
