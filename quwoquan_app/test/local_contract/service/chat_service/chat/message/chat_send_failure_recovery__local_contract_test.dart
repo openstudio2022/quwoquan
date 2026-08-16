@@ -11,9 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart';
 import 'package:quwoquan_app/runtime/di/chat_message_application_dependencies.dart';
-import 'package:quwoquan_app/runtime/observability/app_observability_ports.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_message_bubble.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_message_display_item.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_send_outbox.dart';
@@ -88,11 +86,16 @@ void main() {
     testWidgets('failed 消息的失败指示器可点击并触发重发回调', (tester) async {
       var retried = 0;
       await tester.pumpWidget(
-        _wrapBubble(_displayItem(status: 'failed'), onRetrySend: () => retried++),
+        _wrapBubble(
+          _displayItem(status: 'failed'),
+          onRetrySend: () => retried++,
+        ),
       );
       await tester.pump();
 
-      final retryFinder = find.byKey(const ValueKey<String>('chat_bubble_retry_send'));
+      final retryFinder = find.byKey(
+        const ValueKey<String>('chat_bubble_retry_send'),
+      );
       expect(retryFinder, findsOneWidget);
       await tester.tap(retryFinder);
       expect(retried, 1);
@@ -168,7 +171,9 @@ void main() {
       );
       writer.failNext = true;
       await controller.sendMessage('text', '待重发消息');
-      var snapshot = container.read(chatMessageTimelineProvider(_conversationId));
+      var snapshot = container.read(
+        chatMessageTimelineProvider(_conversationId),
+      );
       final failed = snapshot.messages
           .where((m) => m.status == 'failed')
           .toList(growable: false);

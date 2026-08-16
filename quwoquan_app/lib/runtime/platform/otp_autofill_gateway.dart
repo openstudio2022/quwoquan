@@ -34,8 +34,8 @@ final class SystemOtpAutofillGateway implements OtpAutofillGateway {
 
 final class MethodChannelSmsRetrieverOtpGateway implements OtpAutofillGateway {
   MethodChannelSmsRetrieverOtpGateway({
-    MethodChannel channel = const MethodChannel('quwoquan/auth/sms_retriever'),
-  }) : _channel = channel;
+    this._channel = const MethodChannel('quwoquan/auth/sms_retriever'),
+  });
 
   final MethodChannel _channel;
   OtpAutofillCodeListener? _onCode;

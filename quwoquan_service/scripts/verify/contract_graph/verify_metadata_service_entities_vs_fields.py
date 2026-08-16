@@ -51,6 +51,9 @@ def declared_schema_names() -> set[str]:
             raw = yaml.safe_load(schema_path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
                 continue
+            dart_class = raw.get("dart_class")
+            if isinstance(dart_class, str) and dart_class.strip():
+                names.add(dart_class.strip())
             contract = raw.get("contract")
             if isinstance(contract, str) and contract.strip():
                 names.add(

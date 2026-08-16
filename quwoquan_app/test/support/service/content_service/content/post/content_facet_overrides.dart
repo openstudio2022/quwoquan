@@ -22,6 +22,7 @@ List<Override> mockContentFacetOverrides({
   ContentPostDeleteCommandWriter? deleteWriter,
   ContentConfigRepository? configRepository,
   ContentPostDetailReader? workBrowserDetailReader,
+  ContentGatheringSocialProofReader? workBrowserSocialProofReader,
   ContentCommentFacet? commentFacet,
   ContentPostReactionPort? postReactionFacet,
   ContentBehaviorFactAppender? behaviorWriter,
@@ -40,6 +41,10 @@ List<Override> mockContentFacetOverrides({
     contentDiscoveryFeedQueryProvider.overrideWithValue(resolvedFeedQuery),
     workBrowserContentPostDetailReaderProvider.overrideWithValue(
       workBrowserDetailReader ?? resolvedDetailReader,
+    ),
+    workBrowserSocialProofReaderProvider.overrideWithValue(
+      workBrowserSocialProofReader ??
+          const _TestContentGatheringSocialProofReader(),
     ),
     globalSearchContentPostDetailReaderProvider.overrideWithValue(
       resolvedDetailReader,
@@ -72,6 +77,25 @@ final class _TestContentBehaviorFactAppender
 
   @override
   Future<void> reportBehaviors(ReportContentBehaviorsCommand command) async {}
+}
+
+final class _TestContentGatheringSocialProofReader
+    implements ContentGatheringSocialProofReader {
+  const _TestContentGatheringSocialProofReader();
+
+  @override
+  Future<GatheringSocialProofSummary> getGatheringSocialProof({
+    required String anchorKind,
+    required String objectId,
+  }) async {
+    return GatheringSocialProofSummary(
+      anchorKind: anchorKind,
+      objectId: objectId,
+      publishedCount: 0,
+      formedCount: 0,
+      experiencedCount: 0,
+    );
+  }
 }
 
 final class InMemoryContentPostReactionPort implements ContentPostReactionPort {

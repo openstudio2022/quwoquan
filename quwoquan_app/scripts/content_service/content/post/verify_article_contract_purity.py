@@ -81,7 +81,8 @@ ARTICLE_SURFACE_VIEW_MAPPER = (
 )
 CONTENT_OBJECT_BUILDER = (
     ROOT
-    / "quwoquan_app/test/support/runtime/fixtures/object_scenario_builders.dart"
+    / "quwoquan_app/test/support/service/content_service/content/post/"
+    "content_post_wire_test_builder.dart"
 )
 
 DEAD_ARTIFACTS = [

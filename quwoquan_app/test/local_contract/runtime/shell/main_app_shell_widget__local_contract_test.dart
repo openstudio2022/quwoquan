@@ -27,7 +27,6 @@ import 'package:quwoquan_app/l10n/copy/app_concept_constants.dart';
 import 'package:quwoquan_app/design_system/semantics/settings_semantic_constants.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
-import 'package:quwoquan_app/runtime/di/client_state_sync_dependencies.dart';
 import 'package:quwoquan_app/runtime/transport/state_sync/client_state_sync.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
@@ -137,10 +136,10 @@ List<Override> _shellTestOverrides({
     greetingRepositoryProvider.overrideWithValue(alphaGreetingRepository()),
     authorImpactQueryProvider(
       AppUiSurfaces.profileHome,
-    ).overrideWithValue(const MockUserProfileRepository()),
+    ).overrideWithValue(const UserProfileObjectTypedDouble()),
     profileQueryProvider(
       AppUiSurfaces.profileHome,
-    ).overrideWithValue(const MockUserProfileRepository()),
+    ).overrideWithValue(const UserProfileObjectTypedDouble()),
     intersectionRepositoryProvider.overrideWithValue(
       const _EmptyIntersectionRepository(),
     ),

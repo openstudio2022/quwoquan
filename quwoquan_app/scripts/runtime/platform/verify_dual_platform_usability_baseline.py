@@ -8,7 +8,8 @@ environment CaseResult report.
 
 from __future__ import annotations
 
-
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -20,12 +21,7 @@ _SCRIPTS_ROOT = next(
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
-
-import json
-import re
-import sys
-from pathlib import Path
+from _common.paths import REPO_ROOT
 
 
 ROOT = REPO_ROOT
@@ -41,6 +37,11 @@ CORE_READBACK_PATROL = (
     APP
     / "test/user_acceptance/journeys/app_startup"
     / "app_core_readback__user_acceptance_test.dart"
+)
+BASIC_READBACK_PATROL = (
+    APP
+    / "test/user_acceptance/journeys/app_startup"
+    / "basic_viability__user_acceptance_test.dart"
 )
 CORE_READBACK_SUPPORT = (
     APP / "test/support/runtime/patrol/patrol_core_readback_support.dart"
@@ -63,6 +64,7 @@ def main() -> int:
         IOS_WRAPPER,
         RUN_SH,
         CORE_READBACK_PATROL,
+        BASIC_READBACK_PATROL,
         CORE_READBACK_SUPPORT,
         SMOKE,
         VALIDATION,
@@ -153,8 +155,9 @@ def main() -> int:
         "enable_android_adb_reverse",
         'export QWQ_ENVIRONMENT="${REQUESTED_ENVIRONMENT:-alpha}"',
         'export QWQ_APP_RUNTIME_ENV="$QWQ_ENVIRONMENT"',
-        'export QWQ_LAUNCH_TARGET="${QWQ_APP_RUNTIME_ENV}-local"',
-        'app-debug-preflight --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
+        'export QWQ_LAUNCH_TARGET="${REQUESTED_TARGET:-${QWQ_APP_RUNTIME_ENV}-local}"',
+        'app-debug-preflight --purpose "$PREFLIGHT_PURPOSE"',
+        '--target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
         '--env "$QWQ_APP_RUNTIME_ENV"',
         '--target "$QWQ_LAUNCH_TARGET"',
     ):
@@ -162,21 +165,18 @@ def main() -> int:
             fail(failures, f"{RUN_SH.relative_to(ROOT)}: missing launcher requirement {required}")
 
     patrol = CORE_READBACK_PATROL.read_text(encoding="utf-8")
-    if "skip:" in patrol or "kRunPatrolAcceptance" in patrol:
+    if "skip: !kRunPatrolAcceptance" not in patrol:
         fail(
             failures,
             (
                 f"{CORE_READBACK_PATROL.relative_to(ROOT)}: required readback "
-                "must not use a dynamic skip"
+                "must use only the canonical Patrol compile guard"
             ),
         )
     for needle in (
         "environment_app_core_readback",
-        "provisionPatrolCoreChatConversation",
         "home-feed-card-0",
         "video-player-ready",
-        "chat-inbox-row-",
-        "AppRoutePaths.profile",
         "DATA_RELEASE_CREATOR_USER_HANDLE",
         "DATA_RELEASE_CREATOR_PERSONA_ID",
         "DATA_RELEASE_CREATOR_AVATAR_ASSET_ID",
@@ -187,6 +187,29 @@ def main() -> int:
             fail(
                 failures,
                 f"{CORE_READBACK_PATROL.relative_to(ROOT)}: missing journey assertion {needle}",
+            )
+
+    basic_patrol = BASIC_READBACK_PATROL.read_text(encoding="utf-8")
+    if "skip: !kRunPatrolAcceptance" not in basic_patrol:
+        fail(
+            failures,
+            (
+                f"{BASIC_READBACK_PATROL.relative_to(ROOT)}: required readback "
+                "must use only the canonical Patrol compile guard"
+            ),
+        )
+    for needle in (
+        "environment_post_auth_core_social_readback",
+        "provisionPatrolCoreChatConversation",
+        "chat-inbox-row-",
+        "AppRoutePaths.profile",
+        "profile-header-avatar-image",
+        "startupRecoveryTitle",
+    ):
+        if needle not in basic_patrol:
+            fail(
+                failures,
+                f"{BASIC_READBACK_PATROL.relative_to(ROOT)}: missing journey assertion {needle}",
             )
 
     support = CORE_READBACK_SUPPORT.read_text(encoding="utf-8")
@@ -203,10 +226,13 @@ def main() -> int:
             )
 
     smoke = SMOKE.read_text(encoding="utf-8")
-    if "app_core_readback__user_acceptance_test.dart" not in smoke:
+    if "CORE_READBACK_TARGET" not in smoke or "BASIC_VIABILITY_TARGET" not in smoke:
         fail(
             failures,
-            f"{SMOKE.relative_to(ROOT)}: must declare CORE_READBACK_TARGET",
+            (
+                f"{SMOKE.relative_to(ROOT)}: must declare both content and "
+                "content-free core readback targets"
+            ),
         )
     if '"local-gamma"' not in smoke or "runtime_anonymous_session" not in smoke:
         fail(

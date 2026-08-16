@@ -4,9 +4,11 @@
 
 from __future__ import annotations
 
-
+import re
 import sys
+from collections import defaultdict
 from pathlib import Path
+from typing import Iterable, NamedTuple
 
 _SCRIPTS_ROOT = next(
     parent
@@ -16,13 +18,7 @@ _SCRIPTS_ROOT = next(
 if str(_SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_ROOT))
 
-from _common.paths import APP_ROOT, REPO_ROOT, SCRIPTS_ROOT
-
-import re
-from collections import defaultdict
-from pathlib import Path
-from typing import Iterable, NamedTuple
-
+from _common.paths import REPO_ROOT
 
 ROOT = REPO_ROOT
 APP = ROOT / "quwoquan_app"
@@ -115,6 +111,12 @@ class UpgradeOwnerReport(NamedTuple):
     legacy_only: frozenset[str]
     legacy_overlap: frozenset[str]
     missing_executors: frozenset[str]
+
+
+class GeneratedMethodMetadata(NamedTuple):
+    canonical_operation_id: str
+    domain: str
+    transport: str
 
 
 def _relative(path: Path) -> str:
@@ -571,6 +573,87 @@ def _parse_generated_surface(
     return methods, upgrades, domains
 
 
+def _parse_generated_method_metadata(
+    source: str, generated_methods: Iterable[str]
+) -> dict[str, GeneratedMethodMetadata]:
+    canonical_to_identifier = {
+        canonical: identifier
+        for identifier, canonical in re.findall(
+            r'^\s+static const String ([A-Za-z][A-Za-z0-9_]*) = "([^"]+)";', source, re.MULTILINE
+        )
+    }
+    ready_methods = frozenset(generated_methods)
+    result: dict[str, GeneratedMethodMetadata] = {}
+    for match in re.finditer(
+        r'^  "(?P<canonical>[^"]+)": CloudOperationContract\(\n'
+        r'(?P<body>.*?)(?=\n  "[^"]+": CloudOperationContract\(|\n\};)',
+        source, re.MULTILINE | re.DOTALL,
+    ):
+        canonical_id = match.group("canonical")
+        identifier = canonical_to_identifier.get(canonical_id)
+        if identifier not in ready_methods:
+            continue
+        body = match.group("body")
+        fields = tuple(re.search(rf'{name}: "([^"]+)"', body) for name in ("domain", "transport"))
+        if any(field is None for field in fields):
+            raise ValueError(
+                f"generated method metadata is incomplete: {canonical_id}"
+            )
+        domain, transport = (field.group(1) for field in fields if field is not None)
+        result[identifier] = GeneratedMethodMetadata(canonical_id, domain, transport)
+    missing = ready_methods - frozenset(result)
+    if missing:
+        raise ValueError("generated methods have no operation metadata: " + ", ".join(sorted(missing)))
+    return result
+
+
+def _check_graphql_method_owners(
+    app_root: Path, metadata: dict[str, GeneratedMethodMetadata], failures: list[str]
+) -> int:
+    graphql_methods = {
+        key: value for key, value in metadata.items() if value.transport == "graphql"
+    }
+    generated_files = tuple(sorted((app_root / "lib/runtime/transport/graphql_read/generated").rglob("*.g.dart")))
+    adapter_paths = _canonical_adapter_paths(app_root)
+    owned = 0
+    for identifier, item in sorted(graphql_methods.items()):
+        descriptor_files = tuple(
+            path for path in generated_files
+            if item.canonical_operation_id in path.read_text(encoding="utf-8")
+        )
+        if len(descriptor_files) != 1:
+            failures.append(
+                "GraphQL operation must have exactly one specialized generated "
+                f"descriptor: {identifier} -> {_format_paths(descriptor_files)}"
+            )
+            continue
+        generated_source = descriptor_files[0].read_text(encoding="utf-8")
+        client_classes = tuple(
+            sorted(set(re.findall(
+                r"\bfinal class (Generated[A-Za-z0-9_]*GraphQLClient)\b",
+                generated_source,
+            )))
+        )
+        if len(client_classes) != 1:
+            failures.append(
+                "GraphQL descriptor must define exactly one generated client: "
+                f"{identifier} -> {_display_path(descriptor_files[0])}"
+            )
+            continue
+        client_class = client_classes[0]
+        owners = tuple(
+            path for path in adapter_paths if client_class in path.read_text(encoding="utf-8")
+        )
+        if len(owners) != 1:
+            failures.append(
+                "GraphQL generated client must have exactly one canonical adapter "
+                f"owner: {identifier} -> {_format_paths(owners)}"
+            )
+            continue
+        owned += 1
+    return owned
+
+
 def _format_paths(paths: Iterable[Path]) -> str:
     return ", ".join(_display_path(path) for path in paths)
 
@@ -828,58 +911,66 @@ def main() -> int:
     generated_methods: frozenset[str] = frozenset()
     generated_upgrades: frozenset[str] = frozenset()
     generated_domains: frozenset[str] = frozenset()
+    generated_method_metadata: dict[str, GeneratedMethodMetadata] = {}
     try:
         generated_source = GENERATED_OPERATION_CONTRACTS.read_text(encoding="utf-8")
-        (
+        generated_methods, generated_upgrades, generated_domains = (
+            _parse_generated_surface(generated_source)
+        )
+        generated_method_metadata = _parse_generated_method_metadata(
+            generated_source,
             generated_methods,
-            generated_upgrades,
-            generated_domains,
-        ) = _parse_generated_surface(generated_source)
+        )
     except (OSError, ValueError) as error:
         failures.append(str(error))
-
     _check_execution_runtime_import_dag(failures)
     _check_generated_purity(failures)
-    owner_report = _analyze_method_owners(APP, generated_methods)
+    graphql_methods = frozenset(
+        key for key, value in generated_method_metadata.items() if value.transport == "graphql"
+    )
+    json_methods = generated_methods - graphql_methods
+    owner_report = _analyze_method_owners(APP, json_methods)
     _check_adapter_owners(owner_report, failures)
+    graphql_owned_methods = _check_graphql_method_owners(APP, generated_method_metadata, failures)
     upgrade_report = _analyze_upgrade_owners(APP, generated_upgrades)
     _check_upgrade_owners(upgrade_report, failures)
+    graphql_domains = {
+        value.domain for value in generated_method_metadata.values()
+        if value.transport == "graphql"
+    }
+    non_graphql_domains = {
+        value.domain for value in generated_method_metadata.values()
+        if value.transport != "graphql"
+    }
+    composition_domains = generated_domains - (graphql_domains - non_graphql_domains)
     composition_expected, composition_present = _check_domain_compositions(
         APP,
-        generated_domains,
+        composition_domains,
         failures,
     )
     provider_constructions = _collect_provider_remote_constructions(APP)
     _check_provider_composition_ownership(provider_constructions, failures)
     _check_runtime_foundation(failures)
 
-    canonical_owner_references = sum(
-        len(paths) for paths in owner_report.canonical_owners.values()
-    )
-    canonical_owned_methods = len(
-        frozenset(owner_report.canonical_owners) & generated_methods
-    )
-    canonical_upgrade_owner_references = sum(
-        len(paths) for paths in upgrade_report.canonical_owners.values()
-    )
+    canonical_owner_references = sum(map(len, owner_report.canonical_owners.values()))
+    canonical_owned_methods = len(frozenset(owner_report.canonical_owners) & json_methods)
+    canonical_upgrade_owner_references = sum(map(len, upgrade_report.canonical_owners.values()))
     canonical_owned_upgrades = len(
         frozenset(upgrade_report.canonical_owners) & generated_upgrades
     )
-    legacy_method_references = sum(
-        len(paths) for paths in owner_report.legacy_references.values()
-    )
-    provider_construction_count = sum(
-        len(observed) for observed in provider_constructions.values()
-    )
+    legacy_method_references = sum(map(len, owner_report.legacy_references.values()))
+    provider_construction_count = sum(map(len, provider_constructions.values()))
     print(
         "[cloud-runtime-single-path] OWNER_MASS: "
         f"generated={len(generated_methods) + len(generated_upgrades)}, "
-        f"json_methods={len(generated_methods)}, "
+        f"json_methods={len(json_methods)}, "
+        f"graphql_methods={len(graphql_methods)}, "
         f"upgrade_descriptors={len(generated_upgrades)}, "
         f"canonical_adapter_files={len(owner_report.canonical_paths)}, "
         f"canonical_owner_references="
         f"{canonical_owner_references + canonical_upgrade_owner_references}, "
-        f"canonical_owned={canonical_owned_methods + canonical_owned_upgrades}, "
+        f"canonical_owned="
+        f"{canonical_owned_methods + graphql_owned_methods + canonical_owned_upgrades}, "
         f"missing={len(owner_report.missing) + len(upgrade_report.missing)}, "
         f"duplicates="
         f"{len(owner_report.duplicates) + len(upgrade_report.duplicates)}, "

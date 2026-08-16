@@ -235,7 +235,10 @@ void main() {
 }
 
 void _hydrateReleaseBoundRuntime() {
-  CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
+  CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(const <
+    String,
+    String
+  >{
     'QWQ_APP_LAUNCH_MODE': 'direct_flutter_run',
     'contentReleaseId': 'release-alpha',
     'contentManifestDigest':

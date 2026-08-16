@@ -4,7 +4,6 @@
 // 群邀完整 UI journey 契约（收口 call-experience OPEN-001）：
 // 通话页控制条邀请入口 → 参与者 picker 勾选 → 确认提交 InviteToCall →
 // 聚合会话与 roster 同步新增成员，单条 journey 全链路可达。
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -104,9 +103,7 @@ void main() {
         GoRoute(
           path: AppRoutePaths.rtcPickParticipants,
           builder: (context, state) => CallParticipantPickerPage(
-            routeExtra: CallParticipantPickerRouteExtra.fromRouter(
-              state.extra,
-            ),
+            routeExtra: CallParticipantPickerRouteExtra.fromRouter(state.extra),
           ),
         ),
       ],

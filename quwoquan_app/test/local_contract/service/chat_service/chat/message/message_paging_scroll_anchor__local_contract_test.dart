@@ -14,18 +14,14 @@ import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
-import 'package:quwoquan_app/runtime/di/app_providers_chat_search.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_conversation_page.dart';
-import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_provider.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_send_outbox.dart';
-import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_timeline_cache.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_view_data.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/voice_message_interaction.dart';
 import 'package:quwoquan_app/service/chat_service/chat/message/application/chat_message_repository.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/service/realtime_gateway/realtime/connection/application/public/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/runtime/platform/storage/sqflite_ffi_test_support.dart';
@@ -139,9 +135,7 @@ final class _TwoPageMessageRepository extends Fake
       await Future<void>.delayed(const Duration(milliseconds: 200));
     }
     final page = <ChatMessageViewData>[];
-    for (var seq = beforeSeq - 1;
-        seq >= floor && page.length < limit;
-        seq--) {
+    for (var seq = beforeSeq - 1; seq >= floor && page.length < limit; seq--) {
       page.add(_message(seq));
     }
     return page;
@@ -289,11 +283,7 @@ void main() {
     await tester.drag(scrollable, const Offset(0, 6000));
     await tester.pumpAndSettle();
 
-    expect(
-      repo.listCallCount,
-      greaterThanOrEqualTo(2),
-      reason: '滚动到顶必须触发历史分页',
-    );
+    expect(repo.listCallCount, greaterThanOrEqualTo(2), reason: '滚动到顶必须触发历史分页');
     expect(
       find.text('锚点消息 20', skipOffstage: false),
       findsWidgets,
@@ -303,7 +293,9 @@ void main() {
     // 可视位置保持（GWT-002 前半句）：插入 20 条更早消息（合计高度远超
     // 一屏）后，滚到顶时的锚点消息经 offset 补偿必须仍停留在视口内；
     // 若无补偿，它会被新插入内容推出视口约 900px 以上。
-    final viewportHeight = tester.getSize(find.byType(ChatConversationPage)).height;
+    final viewportHeight = tester
+        .getSize(find.byType(ChatConversationPage))
+        .height;
     final anchorTop = tester.getTopLeft(
       find.text('锚点消息 21', skipOffstage: false),
     );

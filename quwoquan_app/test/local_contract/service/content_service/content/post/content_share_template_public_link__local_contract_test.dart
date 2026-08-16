@@ -45,9 +45,11 @@ ContentPostViewData _post({
 
 void main() {
   setUp(() {
-    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
-      'PUBLIC_WEB_BASE_URL': 'https://public.example.test',
-    });
+    CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
+      const <String, String>{
+        'PUBLIC_WEB_BASE_URL': 'https://public.example.test',
+      },
+    );
   });
   tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
 

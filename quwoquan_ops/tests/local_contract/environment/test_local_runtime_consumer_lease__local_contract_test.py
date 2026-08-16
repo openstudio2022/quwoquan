@@ -42,8 +42,8 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                 f"printf '%s\\n' \"$*\" >> {shlex.quote(str(flutter_log))}\n"
                 "if [[ \"$*\" == \"pub get --offline\" ]]; then exit 0; fi\n"
                 "if [[ \"$*\" == \"devices --machine\" ]]; then\n"
-                "  echo '[{\"id\":\"policy-ios\",\"name\":\"Policy iPhone\","
-                "\"targetPlatform\":\"ios\",\"emulator\":true,"
+                "  echo '[{\"id\":\"policy-android\",\"name\":\"Policy Android\","
+                "\"targetPlatform\":\"android-arm64\",\"emulator\":true,"
                 "\"ephemeral\":false,\"isSupported\":true}]'\n"
                 "  exit 0\n"
                 "fi\n"
@@ -101,7 +101,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                     "--mode",
                     "ui-only",
                     "-d",
-                    "policy-ios",
+                    "policy-android",
                 ],
                 cwd=ROOT,
                 env=environment,
@@ -128,7 +128,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             result.stderr,
         )
         self.assertIn(
-            "WARN: runtime consumer lease is unavailable",
+            "WARN: Android transport preparation is unavailable",
             result.stderr,
         )
         self.assertIn("run --no-pub", flutter_log)
@@ -165,9 +165,16 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertIn("--ports \"$QWQ_ANDROID_LOCAL_PORTS\"", script)
         self.assertIn('export QWQ_ENVIRONMENT="${REQUESTED_ENVIRONMENT:-alpha}"', script)
         self.assertIn('export QWQ_APP_RUNTIME_ENV="$QWQ_ENVIRONMENT"', script)
-        self.assertIn('QWQ_LAUNCH_TARGET="${QWQ_APP_RUNTIME_ENV}-local"', script)
         self.assertIn(
-            'app-debug-preflight --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
+            'export QWQ_LAUNCH_TARGET="${REQUESTED_TARGET:-${QWQ_APP_RUNTIME_ENV}-local}"',
+            script,
+        )
+        self.assertIn(
+            'app-debug-preflight --purpose "$PREFLIGHT_PURPOSE"',
+            script,
+        )
+        self.assertIn(
+            '--target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live',
             script,
         )
         self.assertIn("--platform ios-simulator", script)
@@ -200,7 +207,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
         self.assertLess(
             script.index(device_guard),
             script.index(
-                'app-debug-preflight --target "$QWQ_LAUNCH_TARGET" --runtime-mode test_live'
+                'app-debug-preflight --purpose "$PREFLIGHT_PURPOSE"'
             ),
         )
 

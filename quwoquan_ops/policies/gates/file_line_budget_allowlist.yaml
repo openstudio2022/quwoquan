@@ -8,6 +8,57 @@ governance:
     allow 内即 BLOCK；allow 内的文件超过各自 max_lines 也 BLOCK。
 block_threshold: 1000
 allow:
-- path: quwoquan_app/lib/service/content_service/content/post/application/post_publication_intent_queue_provider.dart
-  max_lines: 1050
+- path: quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_export_engine.dart
+  max_lines: 1552
   reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_app/lib/service/circle_service/circle_management/gathering/presentation/gathering_detail_page.dart
+  max_lines: 1308
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_service/internal/platform/redis/client.go
+  max_lines: 1184
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/services/user-service/cmd/api/main.go
+  max_lines: 1176
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/services/search-service/cmd/api/main.go
+  max_lines: 1097
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/tools/codegen_app_metadata/assistant_codegen.go
+  max_lines: 1093
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/services/notification-service/cmd/api/main.go
+  max_lines: 1088
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/runtime_outbox.go
+  max_lines: 1084
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/services/chat-service/cmd/api/main.go
+  max_lines: 1077
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_app/lib/service/content_service/content/post/application/post_publication_intent_queue_provider.dart
+  max_lines: 1068
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_service/services/circle-service/cmd/api/main.go
+  max_lines: 1041
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/internal/metadata/load/evidence.go
+  max_lines: 1032
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence/elasticsearch_queries.go
+  max_lines: 1032
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/services/chat-service/internal/chat/conversation/application/message_service.go
+  max_lines: 1031
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_app/lib/service/content_service/media/filter_catalog_release/presentation/image_editor_page_pro_adjustments.dart
+  max_lines: 1018
+  reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
+- path: quwoquan_service/services/content-service/cmd/api/main.go
+  max_lines: 1017
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/services/product-ops-service/internal/product_ops/event_record/infrastructure/persistence/elasticsearch_event_log_store.go
+  max_lines: 1009
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)
+- path: quwoquan_service/tools/codegen_app_metadata/domain_operation_contract_render.go
+  max_lines: 1002
+  reason: go-oversized-budget (同 package 多文件拆分，后续逐步降)

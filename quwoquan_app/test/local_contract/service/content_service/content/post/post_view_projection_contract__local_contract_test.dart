@@ -26,11 +26,14 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/post_
 /// - 自包含 inline fixtures（不依赖 lib 端 mock data 类），契约数据由本文件就地构造。
 void main() {
   setUpAll(() {
-    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
-      'MEDIA_AVATAR_CDN_BASE_URL': 'https://cdn.example.test/media/avatar',
-      'MEDIA_IMAGE_CDN_BASE_URL': 'https://cdn.example.test/media/image',
-      'MEDIA_VIDEO_CDN_BASE_URL': 'https://cdn.example.test/media/video',
-    }, enforceNativeLaunchBinding: false);
+    CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
+      const <String, String>{
+        'MEDIA_AVATAR_CDN_BASE_URL': 'https://cdn.example.test/media/avatar',
+        'MEDIA_IMAGE_CDN_BASE_URL': 'https://cdn.example.test/media/image',
+        'MEDIA_VIDEO_CDN_BASE_URL': 'https://cdn.example.test/media/video',
+      },
+      enforceNativeLaunchBinding: false,
+    );
   });
 
   tearDownAll(CloudRuntimeConfig.clearNativeRuntimePackageForTest);

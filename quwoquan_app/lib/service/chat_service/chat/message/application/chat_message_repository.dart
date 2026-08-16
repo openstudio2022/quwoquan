@@ -35,6 +35,6 @@ abstract interface class ChatMessageRepository {
     required String conversationId,
     required String kind,
     int? beforeSeq,
-    int limit = 60,
+    int limit = ChatListConversationAssetsQuery.defaultLimit,
   });
 }

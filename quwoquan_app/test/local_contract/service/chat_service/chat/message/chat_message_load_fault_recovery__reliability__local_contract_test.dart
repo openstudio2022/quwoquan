@@ -19,7 +19,6 @@ import 'package:quwoquan_app/service/chat_service/chat/message/application/publi
 import 'package:quwoquan_app/service/chat_service/chat/message/application/public/chat_message_view_data.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/persona_query.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/runtime/fault/typed_fault_injection.dart';
@@ -98,7 +97,9 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    final notifier = container.read(chatMessageProvider(_conversationId).notifier);
+    final notifier = container.read(
+      chatMessageProvider(_conversationId).notifier,
+    );
 
     injector.activate(TypedFaultProfile.disconnect);
     await notifier.loadMessages();
@@ -113,11 +114,7 @@ void main() {
         ChatTimelineContentSource.offlineReadOnly,
         reason: '本地命中且断连必须标记为离线只读来源',
       );
-      expect(
-        faulted.error,
-        isNull,
-        reason: '离线只读不得与远端失败混为同一错误态',
-      );
+      expect(faulted.error, isNull, reason: '离线只读不得与远端失败混为同一错误态');
     } else {
       expect(faulted.error, isNotNull, reason: '断连且无本地内容必须进入结构化错误态');
       expect(faulted.source, ChatTimelineContentSource.none);
@@ -162,7 +159,9 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    final notifier = container.read(chatMessageProvider(_conversationId).notifier);
+    final notifier = container.read(
+      chatMessageProvider(_conversationId).notifier,
+    );
 
     injector.activate(
       TypedFaultProfile.latency,

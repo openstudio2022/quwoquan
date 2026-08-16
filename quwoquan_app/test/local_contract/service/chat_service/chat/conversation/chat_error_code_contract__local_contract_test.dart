@@ -10,7 +10,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/runtime/errors/generated/chat/chat_errors.g.dart';
-import 'package:quwoquan_app/runtime/errors/ui_error_models.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 
@@ -66,7 +65,7 @@ void main() {
     Future<UiErrorSemantic> resolveChatCode(
       WidgetTester tester,
       ChatErrorCode code, {
-    required CloudErrorType type,
+      required CloudErrorType type,
       required RuntimeFailureKind kind,
       required RuntimeFailureNature nature,
     }) async {
@@ -89,9 +88,7 @@ void main() {
       );
     }
 
-    testWidgets('conversation_not_found 收敛为确定性 not_found 语义', (
-      tester,
-    ) async {
+    testWidgets('conversation_not_found 收敛为确定性 not_found 语义', (tester) async {
       final semantic = await resolveChatCode(
         tester,
         ChatErrorCode.conversationNotFound,
@@ -115,9 +112,7 @@ void main() {
       expect(semantic.recoveryAction, isNot(RuntimeRecoveryAction.retry));
     });
 
-    testWidgets('message_media_unavailable 收敛为可重试的依赖失败语义', (
-      tester,
-    ) async {
+    testWidgets('message_media_unavailable 收敛为可重试的依赖失败语义', (tester) async {
       final semantic = await resolveChatCode(
         tester,
         ChatErrorCode.messageMediaUnavailable,

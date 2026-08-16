@@ -10,6 +10,7 @@ from typing import Any
 from .context import (
     DEVICE_PROFILES,
     ENVIRONMENTS,
+    ENVIRONMENTS,
     RUNTIME_CASES,
     SHA256_PATTERN,
     SPEC_REFS,
@@ -49,6 +50,16 @@ def main() -> int:
     parser.add_argument("--release-id", default="")
     parser.add_argument("--release-digest", default="")
     parser.add_argument("--report", default="")
+    parser.add_argument(
+        "--component-environment",
+        action="append",
+        choices=ENVIRONMENTS,
+        dest="component_environments",
+        help=(
+            "Limit component-readiness probes to explicit environments. "
+            "Release-bound evidence still uses the complete canonical matrix."
+        ),
+    )
     args = parser.parse_args()
 
     issues: list[str] = []
@@ -132,7 +143,8 @@ def main() -> int:
                 )
             )
 
-    for environment in ENVIRONMENTS:
+    component_environments = tuple(args.component_environments or ENVIRONMENTS)
+    for environment in component_environments:
         package_issues: list[str] = []
         runtime: dict[str, str] = {}
         ios: dict[str, str] = {}

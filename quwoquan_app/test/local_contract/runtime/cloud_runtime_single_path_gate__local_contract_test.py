@@ -259,6 +259,38 @@ abstract final class AppCloudOperationUpgradeDescriptors {
         )
         self.assertEqual(domains, frozenset({"realtime"}))
 
+    def test_graphql_method_uses_specialized_client_and_canonical_owner(
+        self,
+    ) -> None:
+        canonical_id = "gateway.persisted_query_execution.SearchPage"
+        self.write(
+            "lib/runtime/transport/graphql_read/generated/search_page.g.dart",
+            f"""
+const canonicalOperationId = '{canonical_id}';
+final class GeneratedSearchPageGraphQLClient {{}}
+""",
+        )
+        self.write(
+            "lib/service/api_edge/graphql_read/persisted_query_execution/adapters/search_remote.dart",
+            "final GeneratedSearchPageGraphQLClient client;\n",
+        )
+        failures: list[str] = []
+
+        owned = self.verifier._check_graphql_method_owners(
+            self.app_root,
+            {
+                "gatewayPersistedQueryExecutionSearchPage": self.verifier.GeneratedMethodMetadata(
+                    canonical_id,
+                    "gateway",
+                    "graphql",
+                )
+            },
+            failures,
+        )
+
+        self.assertEqual(owned, 1)
+        self.assertEqual(failures, [])
+
     def test_legacy_path_blocks_even_without_generated_method_call(self) -> None:
         legacy = self.write(
             "lib/cloud/services/foo/foo_models.dart",

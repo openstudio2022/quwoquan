@@ -566,7 +566,7 @@ final class _EmptyGatheringPostsReader implements ContentGatheringPostsReader {
   }
 }
 
-final class _ZeroGatheringSocialProofReader
+final class ZeroGatheringSocialProofReader
     implements ContentGatheringSocialProofReader {
   @override
   Future<GatheringSocialProofSummary> getGatheringSocialProof({
@@ -597,7 +597,7 @@ List<Override> gatheringBoundaryOverrides(
       gatheringPostsReader ?? _EmptyGatheringPostsReader(),
     ),
     gatheringDetailSocialProofReaderProvider.overrideWithValue(
-      socialProofReader ?? _ZeroGatheringSocialProofReader(),
+      socialProofReader ?? ZeroGatheringSocialProofReader(),
     ),
     ...extra,
   ];

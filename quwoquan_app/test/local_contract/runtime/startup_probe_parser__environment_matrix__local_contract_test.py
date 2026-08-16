@@ -282,6 +282,61 @@ class StartupProbeParserContractTest(unittest.TestCase):
             {"required": 2, "executed": 1, "skipped": 0, "failed": 0},
         )
 
+    def test_component_matrix_can_exclude_unbuilt_prod_package(self) -> None:
+        digest = "sha256:" + "a" * 64
+        defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
+
+        def environment_defines(environment: str) -> dict[str, str]:
+            self.assertNotEqual(environment, "prod")
+            return {**defines, "APP_RUNTIME_ENV": environment}
+
+        def handoff(environment: str, target: str | None = None) -> dict[str, str]:
+            self.assertNotEqual(environment, "prod")
+            return {
+                "target": target or startup_matrix.RUNTIME_TARGETS[environment],
+                "entrypoint": "lib/main_prod.dart",
+                "dartDefinesDigest": digest,
+                "runtimeConfigDigest": digest,
+                "effectiveLaunchManifestDigest": digest,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "report.json"
+            argv = [
+                "verify_startup_environment_matrix.py",
+                "--component-environment",
+                "alpha",
+                "--component-environment",
+                "beta",
+                "--component-environment",
+                "gamma",
+                "--report",
+                str(report_path),
+            ]
+            with (
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_runtime_defines",
+                    side_effect=environment_defines,
+                ),
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_ios_defines",
+                    side_effect=environment_defines,
+                ),
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_launcher_handoff",
+                    side_effect=handoff,
+                ),
+                mock.patch.object(sys, "argv", argv),
+                mock.patch("builtins.print"),
+            ):
+                self.assertEqual(startup_matrix.main(), 0)
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(set(report["packages"]), {"alpha", "beta", "gamma"})
+            self.assertEqual(report["status"], "component_ready")
+
     def test_partial_release_evidence_request_is_gate_blocked(self) -> None:
         digest = "sha256:" + "e" * 64
         defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}

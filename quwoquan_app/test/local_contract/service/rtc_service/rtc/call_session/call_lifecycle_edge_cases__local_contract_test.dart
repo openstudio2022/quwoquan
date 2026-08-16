@@ -15,7 +15,6 @@ import 'package:quwoquan_app/runtime/platform/rtc_room_service.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/active_call_service.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_session_provider.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/rtc_signal_events.dart';
-import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_state.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../../support/service/rtc_service/rtc/call_session/call_session_typed_double.dart';
@@ -52,10 +51,7 @@ void main() {
   test('PiP enter→exit→re-enter 往返不丢通话事实', () {
     final (container, _, _) = createHarness();
     final activeCall = container.read(activeCallProvider.notifier);
-    activeCall.startCall(
-      callId: _seedAudioCallId,
-      callType: 'audio',
-    );
+    activeCall.startCall(callId: _seedAudioCallId, callType: 'audio');
 
     activeCall.enterPipMode();
     var state = container.read(activeCallProvider);
@@ -104,16 +100,18 @@ void main() {
 
     // 双发：本地挂断已提交，同时对端 call.ended 信令到达。
     final hangup = notifier.hangupCall();
-    container.read(rtcSignalEventBusProvider).emit(
-      RealtimeEventEnvelope.fromWire(<String, Object?>{
-        'type': 'call.ended',
-        'occurredAt': '2026-08-04T10:00:00Z',
-        'payload': <String, Object?>{
-          'callId': _seedAudioCallId,
-          'endReason': 'normal',
-        },
-      }),
-    );
+    container
+        .read(rtcSignalEventBusProvider)
+        .emit(
+          RealtimeEventEnvelope.fromWire(<String, Object?>{
+            'type': 'call.ended',
+            'occurredAt': '2026-08-04T10:00:00Z',
+            'payload': <String, Object?>{
+              'callId': _seedAudioCallId,
+              'endReason': 'normal',
+            },
+          }),
+        );
     await hangup;
     await Future<void>.delayed(Duration.zero);
 

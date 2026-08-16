@@ -1,3 +1,6 @@
+@Tags(<String>['serial', 'visual'])
+library;
+
 // 关注 pill 双变体双主题的视觉基线（组件级视觉回归）。
 //
 // 基线更新规范：仅在对应 UI 有意变更的同一变更集内以
@@ -47,26 +50,25 @@ void main() {
 
   for (final brightness in <Brightness>[Brightness.light, Brightness.dark]) {
     for (final style in AppFollowButtonStyle.values) {
-      testWidgets(
-        'AppFollowButton ${style.name} ${brightness.name} 视觉基线',
-        (tester) async {
-          tester.view.physicalSize = const Size(400, 400);
-          tester.view.devicePixelRatio = 2.0;
-          addTearDown(tester.view.reset);
+      testWidgets('AppFollowButton ${style.name} ${brightness.name} 视觉基线', (
+        tester,
+      ) async {
+        tester.view.physicalSize = const Size(400, 400);
+        tester.view.devicePixelRatio = 2.0;
+        addTearDown(tester.view.reset);
 
-          await tester.pumpWidget(_host(brightness: brightness, style: style));
-          await tester.pump();
+        await tester.pumpWidget(_host(brightness: brightness, style: style));
+        await tester.pump();
 
-          await expectLater(
-            find.byKey(
-              ValueKey<String>('follow-${style.name}-${brightness.name}'),
-            ),
-            matchesGoldenFile(
-              'goldens/app_follow_button_${style.name}_${brightness.name}.png',
-            ),
-          );
-        },
-      );
+        await expectLater(
+          find.byKey(
+            ValueKey<String>('follow-${style.name}-${brightness.name}'),
+          ),
+          matchesGoldenFile(
+            'goldens/app_follow_button_${style.name}_${brightness.name}.png',
+          ),
+        );
+      });
     }
   }
 }

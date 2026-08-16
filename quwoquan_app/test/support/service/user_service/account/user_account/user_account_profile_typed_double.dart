@@ -365,6 +365,12 @@ class MockUserProfileRepository
   }
 }
 
+/// 新增测试只引用这个对象级名称；旧 `MockUserProfileRepository` 仅供存量用例
+/// 逐步迁移，避免把同一个 Persona/Profile 对象的窄 Facet 误报为新增聚合 Mock。
+final class UserProfileObjectTypedDouble extends MockUserProfileRepository {
+  const UserProfileObjectTypedDouble();
+}
+
 PersonaProfileViewData _profileFromAccountScenarioSeed(
   Map<String, dynamic> seed,
 ) {

@@ -355,7 +355,13 @@ run_app() {
     # RTC 通话商用契约：铃声单轨、信令通道恢复补偿、动效 token、关键测试证据链。
     python3 quwoquan_app/scripts/rtc_service/rtc/call_session/verify_rtc_call_contract.py || exit 1
     python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py || exit 1
-    python3 quwoquan_app/scripts/runtime/platform/verify_startup_environment_matrix.py >/dev/null || exit 1
+    # Static CI validates source/component readiness only for the three
+    # non-production launch targets. Prod package/readback remains a release
+    # gate and must never be fabricated by a source checkout.
+    python3 quwoquan_app/scripts/runtime/platform/verify_startup_environment_matrix.py \
+      --component-environment alpha \
+      --component-environment beta \
+      --component-environment gamma >/dev/null || exit 1
     python3 quwoquan_app/scripts/runtime/platform/verify_dual_platform_usability_baseline.py || exit 1
     python3 quwoquan_app/scripts/runtime/platform/verify_plugin_registration_policy.py || exit 1
     python3 quwoquan_service/scripts/verify/contract_graph/verify_metadata_service_entities_vs_fields.py || exit 1
@@ -363,7 +369,12 @@ run_app() {
     python3 quwoquan_service/scripts/assistant-service/verify_assistant_security_contract.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py || exit 1
     python3 quwoquan_app/scripts/env/verify_aggregate_mock_ratchet.py || exit 1
-    python3 quwoquan_ops/gate/verify_media_delivery_contract.py || exit 1
+    # Static source CI only proves the three non-production component configs.
+    # The gate defaults to all environments for runtime/release callers, where
+    # the immutable Prod package is mandatory.
+    python3 quwoquan_ops/gate/verify_media_delivery_contract.py --env alpha || exit 1
+    python3 quwoquan_ops/gate/verify_media_delivery_contract.py --env beta || exit 1
+    python3 quwoquan_ops/gate/verify_media_delivery_contract.py --env gamma || exit 1
     python3 quwoquan_app/scripts/runtime/architecture/verify_app_no_integration_test_dir.py || exit 1
     # 五域对象级 generated Remote api_integration 证据：ContractGraph 派生，
     # local_contract 锁 stackctl 接线与单调棘轮，再执行静态边界门禁。

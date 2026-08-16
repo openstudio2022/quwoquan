@@ -48,11 +48,14 @@ InMemoryContentPostDetailReader _articleReader(
 
 void main() {
   setUp(() {
-    CloudRuntimeConfig.hydrateFromNativeRuntimePackage(const <String, String>{
-      'MEDIA_AVATAR_CDN_BASE_URL': 'https://media.example.com/avatar',
-      'MEDIA_IMAGE_CDN_BASE_URL': 'https://media.example.com/image',
-      'MEDIA_VIDEO_CDN_BASE_URL': 'https://media.example.com/video',
-    }, enforceNativeLaunchBinding: false);
+    CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
+      const <String, String>{
+        'MEDIA_AVATAR_CDN_BASE_URL': 'https://media.example.com/avatar',
+        'MEDIA_IMAGE_CDN_BASE_URL': 'https://media.example.com/image',
+        'MEDIA_VIDEO_CDN_BASE_URL': 'https://media.example.com/video',
+      },
+      enforceNativeLaunchBinding: false,
+    );
   });
 
   tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);

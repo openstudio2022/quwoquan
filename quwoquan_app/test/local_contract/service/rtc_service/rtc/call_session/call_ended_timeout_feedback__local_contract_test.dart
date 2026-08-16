@@ -16,7 +16,6 @@ import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/call_session_provider.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/rtc_signal_events.dart';
-import 'package:quwoquan_app/service/rtc_service/rtc/call_session/domain/call_state.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/incoming_call_page.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/presentation/outgoing_call_page.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -90,13 +89,18 @@ void main() {
   }
 
   void emitEnded(ProviderContainer container, String endReason) {
-    container.read(rtcSignalEventBusProvider).emit(
-      RealtimeEventEnvelope.fromWire(<String, Object?>{
-        'type': 'call.ended',
-        'occurredAt': '2026-08-04T10:00:00Z',
-        'payload': <String, Object?>{'callId': _callId, 'endReason': endReason},
-      }),
-    );
+    container
+        .read(rtcSignalEventBusProvider)
+        .emit(
+          RealtimeEventEnvelope.fromWire(<String, Object?>{
+            'type': 'call.ended',
+            'occurredAt': '2026-08-04T10:00:00Z',
+            'payload': <String, Object?>{
+              'callId': _callId,
+              'endReason': endReason,
+            },
+          }),
+        );
   }
 
   Future<void> settleToast(WidgetTester tester) async {

@@ -284,29 +284,6 @@ final class InMemoryChatStateEngine {
       _text(row['avatarUrl']).toLowerCase().startsWith('media/avatar/');
 }
 
-ChatFixtureObject _asObject(Object? value) {
-  if (value is! Map) {
-    return <String, Object?>{};
-  }
-  return value.map<String, Object?>(
-    (key, item) => MapEntry(key.toString(), item),
-  );
-}
-
-List<ChatFixtureObject> _objectList(Object? value) {
-  if (value is! List) {
-    return <ChatFixtureObject>[];
-  }
-  return value.whereType<Map>().map(_asObject).toList(growable: false);
-}
-
-Map<String, List<ChatFixtureObject>> _objectListMap(Object? value) {
-  final object = _asObject(value);
-  return <String, List<ChatFixtureObject>>{
-    for (final entry in object.entries) entry.key: _objectList(entry.value),
-  };
-}
-
 List<String> _stringList(Object? value) {
   if (value is! List) {
     return const <String>[];

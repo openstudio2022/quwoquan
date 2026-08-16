@@ -238,7 +238,7 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
     try {
       final bytes = await _loadImageBytes(path);
       if (bytes.isEmpty) return const ImageEditorFilterImageFeatures();
-      return _filterFeatureExtractor.extractFromBytes(bytes);
+      return await _filterFeatureExtractor.extractFromBytes(bytes);
     } catch (_) {
       return const ImageEditorFilterImageFeatures();
     }
