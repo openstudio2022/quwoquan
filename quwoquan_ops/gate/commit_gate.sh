@@ -266,6 +266,13 @@ if [[ "${#PYTEST_PATHS[@]}" -gt 0 ]]; then
     set -euo pipefail
     pytest_python="$1"
     shift
+    # Git exports repository-local variables to hooks.  Test fixtures that
+    # create a temporary repository must not inherit the real worktree index
+    # or refs; cwd still points at ROOT, so tests that intentionally inspect
+    # the current repository continue to discover it normally.
+    while IFS= read -r git_local_var; do
+      [[ -n "$git_local_var" ]] && unset "$git_local_var"
+    done < <(git rev-parse --local-env-vars)
     if "$pytest_python" -c "import xdist" >/dev/null 2>&1; then
       "$pytest_python" -m pytest -n 4 -q "$@"
     else

@@ -283,6 +283,11 @@ jobs:
         with:
           go-version-file: quwoquan_service/go.mod
           cache: false
+      - name: Build the pinned production CJK search image
+        run: |
+          docker build \
+            --tag quwoquan/elasticsearch-cjk:8.13.4 \
+            quwoquan_service/services/product-ops-service/build/elasticsearch
       - name: Verify canonical /search response contract
         working-directory: quwoquan_service
         run: go test ./services/search-service/tests/api_integration/search/search_index_view -count=1

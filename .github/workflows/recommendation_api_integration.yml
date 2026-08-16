@@ -53,16 +53,19 @@ jobs:
           # Pull-request cache scopes are isolated by GitHub. They may restore
           # the default-branch cache, but must not create a new per-PR copy.
           lookup-only: ${{ github.event_name == 'pull_request' }}
+      - name: Install canonical media processor
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Run content-service api_integration
         run: |
           go test ./services/content-service/tests/api_integration/content/post/ -count=1 -timeout 30m -v 2>&1 | tee api_integration.log
       - name: Assert recommendation-critical tests executed
         run: |
-          # 防回归：premium 事件链与 behavior 契约必须真实执行（不是被 skip）。
+          # Content 只证明 typed behavior facts；Recommendation 的投影门在下方 job。
           for required in \
-            TestPremiumPoolEventChainServesAndEjectsPremiumFeed \
-            TestBehaviorBatchAssistantInterestProjectsTagInteraction \
-            TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick \
+            TestBehaviorBatchAssistantInterestAllowsEmptyContentID \
+            TestBehaviorBatchPersistsCanonicalFunnelStates \
             TestBehaviorBatchRejectsLike \
             TestCommentStore_AuthoritativeCountsNoCache; do
             if ! grep -q "PASS: ${required}" api_integration.log; then
@@ -133,6 +136,8 @@ jobs:
             test_ranked_window_create_and_continue_over_real_redis_and_mongo \
             test_ranked_window_rejects_unauthorized_conflict_and_missing_window \
             test_ranked_window_closes_and_erases_windows_for_closed_subject \
+            test_premium_pool_stream_projects_mongo_admission_before_ack \
+            test_flywheel_funnel_multi_dimension_honest_counts \
             test_metrics_exposes_http_series; do
             if ! grep -E "${required}.* PASSED" rec_api_integration.log >/dev/null; then
               echo "required api_integration test ${required} did not pass"
