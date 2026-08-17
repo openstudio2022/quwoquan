@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Mapping
 from uuid import uuid4
 
+from .environment_topology import get_target, load_environment_topology
 from .output_paths import env_runs_root, target_process_dir
 
 
@@ -170,11 +171,13 @@ def validate_test_live_startup_attempt(
     if not str(value.get("tlsProfile") or "").strip():
         raise ValueError("test-live startup receipt tlsProfile is required")
     public_web_package = value.get("publicWebPackage")
-    expected_public_origin = {
-        "alpha": "https://alpha.quwoquan.com:17000",
-        "beta": "https://beta.quwoquan.com:18000",
-        "gamma": "https://gamma.quwoquan.com:19000",
-    }[environment]
+    target_topology = get_target(load_environment_topology(), target)
+    public_bases = target_topology.get("publicBases")
+    expected_public_origin = (
+        str(public_bases.get("publicWeb") or "").rstrip("/")
+        if isinstance(public_bases, Mapping)
+        else ""
+    )
     if (
         not isinstance(public_web_package, dict)
         or set(public_web_package)

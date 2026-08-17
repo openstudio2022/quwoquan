@@ -10,8 +10,8 @@ from typing import Any
 from .context import (
     DEVICE_PROFILES,
     ENVIRONMENTS,
-    ENVIRONMENTS,
     RUNTIME_CASES,
+    RUNTIME_TARGETS,
     SHA256_PATTERN,
     SPEC_REFS,
 )
@@ -27,6 +27,9 @@ from .package_probe import (
     _validate_defines,
 )
 from .reporting import _case, _case_counts, _report_status, _write_report
+
+
+_PROD_TEST_LIVE_REJECTION = "test_live target/environment selection is invalid"
 
 
 def main() -> int:
@@ -145,6 +148,58 @@ def main() -> int:
 
     component_environments = tuple(args.component_environments or ENVIRONMENTS)
     for environment in component_environments:
+        if environment == "prod":
+            prod_issues: list[str] = []
+            rejection_reason = ""
+            try:
+                _runtime_defines(environment)
+            except RuntimeError as exc:
+                rejection_reason = str(exc).strip()
+                if rejection_reason != _PROD_TEST_LIVE_REJECTION:
+                    prod_issues.append(
+                        "prod: test_live rejection reason mismatch: "
+                        f"{rejection_reason or '<empty>'}"
+                    )
+            except (KeyError, json.JSONDecodeError) as exc:
+                prod_issues.append(f"prod: test_live boundary probe invalid: {exc}")
+            else:
+                prod_issues.append("prod: test_live was unexpectedly accepted")
+
+            boundary_status = (
+                "expected_fail_closed" if not prod_issues else "failed"
+            )
+            issues.extend(prod_issues)
+            packages[environment] = {
+                "runtimeDefineKeys": [],
+                "iosDefineKeys": [],
+                "runtimeTarget": RUNTIME_TARGETS[environment],
+                "entrypoint": "",
+                "dartDefinesDigest": "",
+                "runtimeConfigDigest": "",
+                "effectiveLaunchManifestDigest": "",
+                "status": boundary_status,
+                "componentEligible": False,
+                "promotionEligible": False,
+                "reason": rejection_reason,
+            }
+            cases.append(
+                _case(
+                    "component:prod",
+                    kind="component_readiness",
+                    status=boundary_status,
+                    required=bool(prod_issues),
+                    environment=environment,
+                    target=RUNTIME_TARGETS[environment],
+                    launchPolicy="test_live",
+                    componentEligible=False,
+                    promotionEligible=False,
+                    effectiveLaunchManifestDigest="",
+                    reason=rejection_reason,
+                    issues=prod_issues,
+                )
+            )
+            continue
+
         package_issues: list[str] = []
         runtime: dict[str, str] = {}
         ios: dict[str, str] = {}

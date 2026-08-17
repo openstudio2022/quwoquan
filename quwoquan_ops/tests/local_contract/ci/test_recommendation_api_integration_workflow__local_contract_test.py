@@ -6,6 +6,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 
 
+def test_recommendation_api_integration_pr_targets_only_main() -> None:
+    workflow = (ROOT / ".github/workflows/recommendation_api_integration.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "pull_request:\n    branches:\n      - main\n    paths:" in workflow
+
+
 def test_recommendation_api_integration_uses_canonical_content_post_package() -> None:
     workflow = (ROOT / ".github/workflows/recommendation_api_integration.yml").read_text(
         encoding="utf-8"

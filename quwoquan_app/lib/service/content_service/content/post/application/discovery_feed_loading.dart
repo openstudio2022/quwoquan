@@ -452,7 +452,13 @@ abstract class _DiscoveryFeedMapLoadingCore
         !isStaleSnapshot &&
         page.cacheFallbackError == null &&
         ((page.items.isEmpty &&
-                !_isCanonicalInitialEmptyPage(channelId, page)) ||
+                !_isCanonicalInitialEmptyPage(
+                  channelId,
+                  page,
+                  releaseRequirement: ref.read(
+                    contentReleaseRequirementProvider,
+                  ),
+                )) ||
             (page.items.isNotEmpty &&
                 (page.outcome != ContentFeedOutcome.content ||
                     page.emptyReason != null)));

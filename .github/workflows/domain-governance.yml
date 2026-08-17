@@ -23,6 +23,10 @@ jobs:
           QWQ_DNS_PROVISIONING_API_TOKEN: ${{ secrets.QWQ_DNS_PROVISIONING_API_TOKEN }}
           QWQ_DNS_ZONE_ID: ${{ secrets.QWQ_DNS_ZONE_ID }}
         run: |
+          python3 quwoquan_ops/gate/require_ci_inputs.py \
+            --scope domain-governance \
+            QWQ_DNS_PROVISIONING_API_TOKEN \
+            QWQ_DNS_ZONE_ID
           python3 quwoquan_ops/cli/domain_governance.py apply \
             --report .qwq_output/domain/dns-apply-receipt.json
           python3 quwoquan_ops/cli/domain_governance.py verify \
@@ -61,7 +65,11 @@ jobs:
           QWQ_TLS_AGE_RECIPIENT: ${{ secrets.QWQ_TLS_AGE_RECIPIENT }}
           TARGET: ${{ matrix.target }}
         run: |
-          test -n "$QWQ_TLS_AGE_RECIPIENT"
+          python3 quwoquan_ops/gate/require_ci_inputs.py \
+            --scope domain-governance \
+            QWQ_ACME_DNS_API_TOKEN \
+            QWQ_ACME_ACCOUNT_EMAIL \
+            QWQ_TLS_AGE_RECIPIENT
           mkdir -p .qwq_output
           python3 quwoquan_ops/cli/lib/public_domain_tls.py issue \
             --target "$TARGET" \

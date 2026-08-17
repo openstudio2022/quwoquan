@@ -15,6 +15,8 @@ from quwoquan_ops.gate.verify_python_script_governance import (
     main as governance_main,
 )
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
+
 
 class PythonScriptGovernanceDerivationTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -36,6 +38,23 @@ class PythonScriptGovernanceDerivationTest(unittest.TestCase):
             str(issue["code"])
             for issue in report["issues"]  # type: ignore[index]
         }
+
+    def test_delivery_gate_routes_python_governance_to_its_requested_scope(
+        self,
+    ) -> None:
+        gate = (
+            REPOSITORY_ROOT / "quwoquan_ops/gate/gate_repo.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn(
+            "verify_python_script_governance.py --scope all --mode check",
+            gate,
+        )
+        self.assertIn('service) python_script_scope="service"', gate)
+        self.assertIn('app|patrol) python_script_scope="app"', gate)
+        self.assertIn('portal|ops-portal) python_script_scope="ops"', gate)
+        self.assertIn('data) python_script_scope="data"', gate)
+        self.assertIn('--scope "$python_script_scope" --mode check', gate)
 
     def test_file_enumeration_falls_back_without_ripgrep(self) -> None:
         visible = self._write("quwoquan_app/scripts/runtime/visible.py")

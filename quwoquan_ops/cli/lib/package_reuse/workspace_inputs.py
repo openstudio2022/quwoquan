@@ -33,8 +33,12 @@ def deployment_input_roots(
 ) -> list[str]:
     """Return the declared source closure actually read by runtime packaging."""
 
-    expected_target = "prod-hosted" if env_name == "prod" else f"{env_name}-local"
-    if target_name != expected_target:
+    expected_targets = (
+        {"prod-sim", "prod-hosted"}
+        if env_name == "prod"
+        else {f"{env_name}-local"}
+    )
+    if target_name not in expected_targets:
         raise ValueError("deployment input closure target/environment mismatch")
     _normalized_service_packages(service_packages)
     roots = {

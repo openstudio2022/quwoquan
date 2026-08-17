@@ -18,10 +18,40 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.cli.lib.local_beta_object_storage import prepare_local_beta_object_storage
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
 from quwoquan_ops.cli.lib.local_gamma_object_storage import prepare_local_gamma_object_storage
+from quwoquan_ops.cli.lib.local_environment_object_storage import (
+    package_build_object_storage_environment,
+)
 from quwoquan_ops.cli.lib.local_environment_auth import prepare_local_environment_auth
 
 
 class LocalGammaObjectStorageTest(unittest.TestCase):
+    def test_package_build_values_are_target_scoped_placeholders(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir, mock.patch.dict(
+            os.environ,
+            {"QWQ_OUTPUT_ROOT": str(Path(tmp_dir) / "output")},
+            clear=False,
+        ):
+            values = package_build_object_storage_environment(
+                target_name="alpha-local"
+            )
+        self.assertEqual(
+            values["LOCAL_GAMMA_OBJECT_STORAGE_ENDPOINT"],
+            "https://127.0.0.1",
+        )
+        self.assertEqual(
+            values["LOCAL_GAMMA_OBJECT_STORAGE_ACCESS_KEY_ID"],
+            "package-build-only",
+        )
+        self.assertIn(
+            "alpha-local",
+            values["LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE"],
+        )
+        self.assertTrue(
+            values["LOCAL_GAMMA_OBJECT_STORAGE_CA_FILE"].endswith(
+                "/package/tls/root.crt"
+            )
+        )
+
     def test_all_local_upload_authorities_use_the_target_object_storage_edge(self) -> None:
         topology = load_environment_topology()
         expected = {

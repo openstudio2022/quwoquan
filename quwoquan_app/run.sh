@@ -155,35 +155,6 @@ done
 export QWQ_RUN_DEVICE_ID="$(parse_flutter_device_id "$@")"
 DEVICE_ID="$QWQ_RUN_DEVICE_ID"
 
-if [[ -z "$DEVICE_ID" ]]; then
-  echo "[run] GATE_BLOCK: pass -d/--device-id so runtime ports and the consumer lease bind to one device."
-  exit 2
-fi
-
-if ! PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - "$DEVICE_ID" <<'PY'
-import sys
-
-from quwoquan_ops.cli.lib.dev_up import find_device
-
-device_id = sys.argv[1].strip()
-device = find_device(device_id, include_desktop=False)
-if device is None:
-    raise SystemExit(
-        f"GATE_BLOCK: Flutter device {device_id!r} is not currently connected; "
-        "boot or attach an iOS/Android device before runtime preflight."
-    )
-platform = str(device.get("targetPlatform") or "").strip().lower()
-if platform != "ios" and not platform.startswith("android"):
-    raise SystemExit(
-        f"GATE_BLOCK: Flutter device {device_id!r} has unsupported platform {platform!r}; "
-        "use an iOS or Android device for Remote runtime launch."
-    )
-PY
-then
-  echo "[run] GATE_BLOCK: a connected iOS/Android device is required before runtime preflight." >&2
-  exit 2
-fi
-
 if [[ "$ENSURE_RUNTIME" == "1" ]]; then
   echo "[run] GATE_BLOCK: --ensure-runtime requires an explicit frozen candidate identity; the App launcher cannot infer or mutate it." >&2
   exit 2
@@ -331,6 +302,35 @@ if ! flutter pub get --offline; then
   echo "[run] FAIL: offline Flutter dependency resolution failed."
   echo "[run] This repo forbids implicit build-time network fetches. Run an explicit dependency sync only when intentionally changing third-party packages."
   exit 1
+fi
+
+if [[ -z "$DEVICE_ID" ]]; then
+  echo "[run] GATE_BLOCK: pass -d/--device-id so runtime ports and the consumer lease bind to one device."
+  exit 2
+fi
+
+if ! PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 - "$DEVICE_ID" <<'PY'
+import sys
+
+from quwoquan_ops.cli.lib.dev_up import find_device
+
+device_id = sys.argv[1].strip()
+device = find_device(device_id, include_desktop=False)
+if device is None:
+    raise SystemExit(
+        f"GATE_BLOCK: Flutter device {device_id!r} is not currently connected; "
+        "boot or attach an iOS/Android device after runtime preflight."
+    )
+platform = str(device.get("targetPlatform") or "").strip().lower()
+if platform != "ios" and not platform.startswith("android"):
+    raise SystemExit(
+        f"GATE_BLOCK: Flutter device {device_id!r} has unsupported platform {platform!r}; "
+        "use an iOS or Android device for Remote runtime launch."
+    )
+PY
+then
+  echo "[run] GATE_BLOCK: a connected iOS/Android device is required after runtime preflight." >&2
+  exit 2
 fi
 
 ANDROID_LOCAL_GATEWAY_BASE_URL=""

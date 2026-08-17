@@ -132,6 +132,24 @@ from .parsing import (  # noqa: E402
     parse_python_trace_files,
     render_lcov,
 )
+from .app_runtime import (  # noqa: E402
+    APP_COVERAGE_CLEARED_ENV_KEYS,
+    APP_COVERAGE_CONCURRENCY,
+    APP_COVERAGE_LAUNCH_POLICY,
+    APP_COVERAGE_MAX_ATTEMPTS,
+    APP_COVERAGE_RUNTIME_ENV,
+    APP_COVERAGE_SERIAL_CONCURRENCY,
+    APP_COVERAGE_TIMEOUT_SECONDS,
+    APP_FLUTTER_TEST_RUNNER,
+    APP_RUNTIME_DEFINE_RESOLVER,
+    APP_TEST_SELECTION_POLICY,
+    app_coverage_policy_identity,
+    app_runtime_define_command,
+    canonical_app_coverage_environment,
+    guarded_app_coverage_command,
+    resolved_app_runtime_defines,
+    serial_app_test_files,
+)
 from .provenance import (  # noqa: E402
     LOCAL_DEPENDENCY_EXCLUDED_DIRECTORY_NAMES,
     PYTHON_TOOLCHAIN_PROBE,
@@ -144,6 +162,7 @@ from .provenance import (  # noqa: E402
     _collection_config_inputs,
     _collection_scope_digest,
     _git_head_identity,
+    _flutter_toolchain_identity,
     _identity_command,
     _parse_python_coverage_toolchain_lock,
     _provenance_tree_files,

@@ -143,6 +143,16 @@ def test_receipts_are_validated_after_execution_and_before_attestation() -> None
         "Bind and verify canonical prod-sim report",
     )
     signer = prod_sim["jobs"]["attest_prod_sim_report"]
+    assert signer["if"] == "${{ needs.prod_sim_admission.result == 'success' }}"
+    assert "prod_sim_receipt_base64 != ''" not in PROD_SIM_WORKFLOW_PATH.read_text(
+        encoding="utf-8"
+    )
+    materialize = next(
+        step
+        for step in signer["steps"]
+        if step.get("name") == "Materialize exact prod-sim report bytes"
+    )["run"]
+    assert "passed prod-sim admission did not emit a receipt" in materialize
     assert _step_index(
         signer,
         "Verify passed non-promotable prod-sim report bindings",

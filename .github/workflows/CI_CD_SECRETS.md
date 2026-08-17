@@ -16,6 +16,7 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 | **app_pipeline.yml** | 仅由 mainline `workflow_call` | 四环境 Android/iOS/macOS/Web、Prod Ops Portal 与 immutable App OCI evidence | G2 / 候选 |
 | **pre-release-gate.yml** | `pull_request(main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
 | **app-env-device-matrix-self-hosted.yml** | `pull_request(main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
+| **prod-sim-manual-admission.yml** | 手动 | exact main SHA 的隔离、不可晋级 first-party 预演 | G5b 诊断 |
 | **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 主链，并在 `canary` 承接真实远端集成复验 | G5c |
 | **domain-governance.yml** | 每周、手动 | DNS 唯一记录收敛、DNS-01 续期与加密证书交接 | 环境治理 |
 
@@ -100,7 +101,7 @@ App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关�
 
 - `api_integration` / `user_acceptance` 验证统一跑 `gamma-local`，默认 URL 由 `quwoquan_ops/environments/gamma/runtime.yaml` 经 `stackctl` 解析。
 - 如需手动覆盖 local-gamma 入口，可在命令行或 workflow input 传 `gamma_base_url`，而不是维护第二套 GitHub secret。
-- `user_acceptance` Patrol 已统一迁到 **本机 macOS self-hosted runner**，通过 `flutter devices --machine` 动态发现当前可见的 Android/iOS 模拟器或真机，并逐台执行；总设备数至少为 1。
+- `user_acceptance` Patrol 已统一迁到 **本机 macOS self-hosted runner**，通过 `flutter devices --machine` 动态发现当前可见的 Android/iOS 模拟器或真机。`03` / `04` / `05` 的 required PR 路径要求 Android 与 iOS 两个独立 job 均成功，任一平台缺席或失败都会 fail-closed。
 - `main` 的 pull request 合入规则中，`03` / `04` / `05` 需同时配置为 required checks。
 
 ---
@@ -124,6 +125,7 @@ App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关�
 
 | Variable | 用途 |
 |----------|------|
+| **ENABLE_SELF_HOSTED_MOBILE_MATRIX** | required PR/main 路径必须精确为 `true`；缺失或其他值均输出 `GATE_BLOCK`。仅独立 `workflow_dispatch` 且显式设置 `allow_disabled_mobile_matrix_debug=true` 时可返回不构成准出的 `result=skipped` |
 | VIDEO_PLAYBACK_CANARY_WORK_ID | `environment-smoke` 当前已发布视频对象；缺失时设备矩阵 fail-closed |
 | **RELEASED_RELEASE_EVIDENCE_REF** | Nightly schedule 与 Provider producer 共用的唯一稳定发现指针；值必须是 status=`released` 的 exact `ghcr.io/.../release-artifact@sha256:...`。消费端会校验完整 manifest/文件闭包、BuildKit SBOM/provenance、GitHub OIDC issuer 与 `deploy-prod-auto.yml` signer identity |
 
@@ -160,7 +162,22 @@ App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关�
 | 条目 | 用途 |
 |------|------|
 | **`self-hosted` + `macOS` runner** | 所有设备类 job 统一调度到当前开发 Mac |
-| **可见移动设备 ≥ 1** | `flutter devices --machine` 至少能看到一台 Android/iOS 模拟器或真机，否则矩阵直接 `gate_block` |
+| **Android 与 iOS 双平台可见** | required PR/main 路径必须分别租约一台 Android 与一台 iOS 模拟器或真机；任一平台 job 缺席、跳过或失败，或 aggregation 未成功，矩阵都直接 `GATE_BLOCK` |
+
+### Prod-Sim 手动准入的独立前提
+
+`prod-sim-manual-admission.yml` 使用 `prod-sim-admission` GitHub Environment，
+只生成 `nonPromotable=true` 的隔离预演证据，不构成 Prod 发布或 promotion 证据。
+
+| 配置位置 | 名称 / 路径 | 约束 |
+|----------|-------------|------|
+| `prod-sim-admission` Environment variable | **PROD_SIM_SSH_MANAGEMENT_HOST** | 必须是裸 SSH host（域名或 IPv4），不得包含 scheme、端口、用户名、路径或空白 |
+| self-hosted runner 本地文件 | **`~/.ssh/quwoquan-prod/prod-edge-svc`** | `prod-edge-svc` 私钥，必须为普通文件且 mode 精确 `0600` |
+| self-hosted runner 本地文件 | **`~/.ssh/quwoquan-prod/prod-service-svc`** | `prod-service-svc` 私钥，必须为普通文件且 mode 精确 `0600` |
+
+上述两个私钥是 runner-local 运维凭据，不是 GitHub Secret，也不得进入仓库、
+Actions Artifact 或日志。缺 host、缺任一 key、权限漂移或 source SHA 不可达
+`main` 时 workflow 必须 fail closed。
 
 ---
 
@@ -175,6 +192,14 @@ App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关�
 ---
 
 ## 八、Prod Hosted Deploy（deploy-prod-auto.yml）
+
+PR/Delivery 的打包门分两层：Alpha/Beta/Gamma 使用临时部署根真实执行 hermetic
+package；Prod 只执行 fail-closed contract、artifact isolation、OCI evidence 与 purity
+测试，不注入虚构法务或签名事实，也不形成 active candidate。`main` 发布事务必须在
+真实 `stackctl package --env prod --target prod-hosted` 后立即执行 packaging verify；
+真实 legal/signing/release evidence 任一缺失都会阻断，独立的
+`verify-prod-hosted-runtime-readiness` 只用于 live legal/health/SSH plane 诊断，不是构包
+或发布准出回执。
 
 > 远端唯一托管目标为 `prod-hosted`（backend=ssh-hosted，与原 gamma 同台 ECS，rootless podman compose）。
 > 已**退役** `PROD_KUBECONFIG` 单一全权凭据，改为按 `edge / media / service / data` 四平面去 root 隔离的 SSH 凭据。

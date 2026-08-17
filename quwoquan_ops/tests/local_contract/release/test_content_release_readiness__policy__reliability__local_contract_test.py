@@ -315,6 +315,19 @@ def test_baseline_verify__does_not_read_disposable_release_output__local_contrac
     rendered = "\n".join(" ".join(command) for command in commands)
     assert "verify_environment_packaging_contract.py" not in rendered
     assert "verify_env_artifact_isolation.py" not in rendered
+    media_command = next(
+        command
+        for command in commands
+        if any(part.endswith("verify_media_delivery_contract.py") for part in command)
+    )
+    assert media_command[-6:] == [
+        "--component-environment",
+        "alpha",
+        "--component-environment",
+        "beta",
+        "--component-environment",
+        "gamma",
+    ]
 
 
 def test_non_prod_verify__binds_prod_purity_to_prod_target__local_contract() -> None:

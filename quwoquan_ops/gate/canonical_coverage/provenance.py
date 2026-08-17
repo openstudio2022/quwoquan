@@ -44,6 +44,12 @@ from .constants import (
     _display,
     _tail,
 )
+from .app_runtime import (
+    APP_FLUTTER_TEST_RUNNER,
+    APP_RUNTIME_DEFINE_RESOLVER,
+    APP_TEST_SELECTION_POLICY,
+    app_coverage_policy_identity,
+)
 from .units import (
     _collection_target_language,
     cloud_collection_targets_for_unit,
@@ -275,11 +281,24 @@ def _service_collection_inputs(target: str) -> tuple[list[Path], list[Path]]:
 
 def _collection_config_inputs(target: str) -> list[Path]:
     if target == APP_COLLECTION_TARGET:
+        ops_environment_root = cc.ROOT / "quwoquan_ops" / "environments"
+        ops_cli_lib = cc.ROOT / "quwoquan_ops" / "cli" / "lib"
         required = _required_safe_files(
             (
                 cc.APP_ROOT / ".flutter-version",
                 cc.APP_ROOT / "pubspec.yaml",
                 cc.APP_ROOT / "pubspec.lock",
+                cc.APP_ROOT / APP_FLUTTER_TEST_RUNNER,
+                cc.APP_ROOT / APP_RUNTIME_DEFINE_RESOLVER,
+                cc.APP_ROOT / APP_TEST_SELECTION_POLICY,
+                cc.APP_ROOT / "scripts/_common/__init__.py",
+                ops_cli_lib / "common.py",
+                ops_cli_lib / "environment_topology.py",
+                ops_cli_lib / "output_paths.py",
+                ops_cli_lib / "port_manifest.py",
+                ops_environment_root / "domain_governance.yaml",
+                ops_environment_root / "local_env_port_manifest.yaml",
+                *sorted(ops_environment_root.glob("*/runtime.yaml")),
             ),
             label="App coverage config",
         )
@@ -333,14 +352,18 @@ def _attribution_inputs() -> list[Path]:
 def _collection_scope_digest(target: str) -> str:
     if target == APP_COLLECTION_TARGET:
         command = [
-            "flutter",
-            "test",
+            "<current-python>",
+            APP_FLUTTER_TEST_RUNNER.as_posix(),
             "--coverage",
             "--branch-coverage",
             "--coverage-path=<artifact>",
             "--reporter=compact",
-            APP_TEST_TARGET,
+            "--dart-define=APP_RUNTIME_ENV=alpha",
+            "<phase-concurrency>",
+            "<exclude-serial|serial-only>",
+            "<canonical-app-test-shard-phase>",
         ]
+        app_runtime_policy = app_coverage_policy_identity()
         scopes = [unit_scope(unit) for unit in cc.discover_app_units()]
     else:
         language = _collection_target_language(target)
@@ -392,6 +415,8 @@ def _collection_scope_digest(target: str) -> str:
             ).encode("utf-8")
         ),
     }
+    if target == APP_COLLECTION_TARGET:
+        payload["appRuntimePolicy"] = app_runtime_policy
     return _sha256_bytes(
         json.dumps(
             payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -414,6 +439,32 @@ def _identity_command(command: Sequence[str], *, cwd: Path) -> str:
     if not output:
         raise CoverageError(f"provenance identity command 无输出: {' '.join(command)}")
     return output
+
+
+def _flutter_toolchain_identity() -> dict[str, object]:
+    """Return the canonical machine-readable Flutter toolchain identity.
+
+    Flutter can emit a transient SDK-lock wait message on stderr while another
+    process is starting.  That diagnostic is not toolchain identity and must
+    not make otherwise identical coverage receipts stale.  A non-zero exit or
+    malformed machine JSON still fails closed.
+    """
+    command = ["flutter", "--version", "--machine"]
+    completed = subprocess.run(
+        command, cwd=cc.APP_ROOT, text=True, capture_output=True, check=False
+    )
+    if completed.returncode != 0:
+        raise CoverageError(
+            "provenance Flutter identity command 失败 "
+            f"(exit={completed.returncode}): {_tail(completed.stderr)}"
+        )
+    try:
+        identity = json.loads(completed.stdout)
+    except json.JSONDecodeError as exc:
+        raise CoverageError("provenance Flutter machine identity 不是合法 JSON") from exc
+    if not isinstance(identity, dict) or not identity:
+        raise CoverageError("provenance Flutter machine identity 必须是非空对象")
+    return identity
 
 
 def _python_collection_executable(target: str) -> Path:
@@ -627,9 +678,7 @@ def _toolchain_digest(target: str) -> str:
         "pythonVersion": platform.python_version(),
     }
     if target == APP_COLLECTION_TARGET:
-        identity["flutter"] = cc._identity_command(
-            ["flutter", "--version", "--machine"], cwd=cc.APP_ROOT
-        )
+        identity["flutter"] = cc._flutter_toolchain_identity()
         identity["dart"] = cc._identity_command(["dart", "--version"], cwd=cc.APP_ROOT)
     elif _collection_target_language(target) == "python":
         identity["coverageToolchain"] = _python_toolchain_state(target)

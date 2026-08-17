@@ -21,7 +21,12 @@ for relative_path in "${required_specs[@]}"; do
   fi
 done
 
-PYTHONDONTWRITEBYTECODE=1 python3 \
+DATA_PYTHON="${QWQ_PYTHON_CACHE_ROOT:-$HOME/.cache/quwoquan/python-envs}/quwoquan-data/bin/python"
+if [[ ! -x "${DATA_PYTHON}" ]]; then
+  python3 "${ROOT_DIR}/quwoquan_ops/cli/prepare_test_python.py"
+fi
+
+PYTHONDONTWRITEBYTECODE=1 "${DATA_PYTHON}" \
   "${ROOT_DIR}/quwoquan_ops/cli/feature_tree.py" verify
 
 if [[ "${FULL_MODE}" == "--full" ]]; then
@@ -58,7 +63,16 @@ python3 "${ROOT_DIR}/quwoquan_app/scripts/runtime/media/verify_app_network_image
 python3 "${ROOT_DIR}/quwoquan_app/scripts/runtime/media/verify_app_avatar_rendering_policy.py"
 python3 "${ROOT_DIR}/quwoquan_app/scripts/runtime/media/verify_app_media_url_policy.py"
 python3 "${ROOT_DIR}/quwoquan_service/scripts/content-service/verify_media_variant_registry_metadata.py"
-python3 "${ROOT_DIR}/quwoquan_ops/gate/verify_media_delivery_contract.py"
+if [[ "${FULL_MODE}" == "--full" ]]; then
+  # Full release evidence must resolve immutable packages for all environments.
+  python3 "${ROOT_DIR}/quwoquan_ops/gate/verify_media_delivery_contract.py"
+else
+  # Local/source verification reads version-controlled topology only.
+  python3 "${ROOT_DIR}/quwoquan_ops/gate/verify_media_delivery_contract.py" \
+    --component-environment alpha \
+    --component-environment beta \
+    --component-environment gamma
+fi
 
 echo "[runtime-media] video delivery and playback failure contracts"
 (
@@ -85,11 +99,11 @@ echo "[runtime-media] Android native first-frame / seek-settle / safe-dispose co
 )
 (
   cd "${ROOT_DIR}"
-  python3 -m unittest \
-    quwoquan_ops.tests.local_contract.test_environment_patrol_smoke__local_contract_test \
-    quwoquan_ops.tests.local_contract.test_runtime_media_playback_evidence__local_contract_test \
-    quwoquan_ops.tests.local_contract.test_video_playback_canary__local_contract_test \
-    quwoquan_ops.tests.local_contract.test_prod_rollout_stage__local_contract_test
+  "${DATA_PYTHON}" -B -m unittest \
+    quwoquan_ops.tests.local_contract.environment.test_environment_patrol_smoke__local_contract_test \
+    quwoquan_ops.tests.local_contract.media.test_runtime_media_playback_evidence__local_contract_test \
+    quwoquan_ops.tests.local_contract.media.test_video_playback_canary__local_contract_test \
+    quwoquan_ops.tests.local_contract.release.test_prod_rollout_stage__local_contract_test
 )
 (
   cd "${ROOT_DIR}/quwoquan_service"
@@ -98,10 +112,6 @@ echo "[runtime-media] Android native first-frame / seek-settle / safe-dispose co
   go test ./services/content-service/tests/api_integration/content/post \
     -run 'TestVideoPostProjectionCarriesAuthoritativeTimelineDescriptor|TestEffectivePlayRejectsScrubAndAcceptsForegroundEvidence'
 )
-DATA_PYTHON="${QWQ_PYTHON_CACHE_ROOT:-$HOME/.cache/quwoquan/python-envs}/quwoquan-data/bin/python"
-if [[ ! -x "${DATA_PYTHON}" ]]; then
-  python3 "${ROOT_DIR}/quwoquan_ops/cli/prepare_test_python.py"
-fi
 "${DATA_PYTHON}" -B -m pytest \
   -o "cache_dir=${ROOT_DIR}/.qwq_output/env/repo/local/tests/cache/pytest" \
   "${ROOT_DIR}/quwoquan_data/tests/local_contract/governance/test_media_probe__video_playback__functional__local_contract_test.py" \

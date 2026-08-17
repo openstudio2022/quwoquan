@@ -155,6 +155,11 @@ def collect_response_decls() -> dict[str, dict[str, dict[str, str]]]:
                 entity = str(route.get("response_entity") or "").strip()
                 body = str(route.get("response_body") or "").strip()
                 kind = str(route.get("response_body_kind") or "").strip()
+                # An entity-only route predates the canonical response-body
+                # declaration and is governed by the migration gate. This
+                # verifier owns only routes that declare body semantics; once
+                # kind/body is present, parity below is strict even when the
+                # entity has no generated Dart class.
                 if not op or (not body and not kind):
                     continue
                 bucket[op] = {
@@ -254,6 +259,24 @@ def main() -> int:
             if resolved is None:
                 resolved = ("", "", "")
             dart_class, output_path, external_path = resolved
+            allowed_app_entities = {entity}
+            if dart_class:
+                allowed_app_entities.add(dart_class)
+            if app_decl["kind"] != kind:
+                errors.append(
+                    f"{domain}.{op}: response_body_kind metadata={kind!r} "
+                    f"app={app_decl['kind']!r}"
+                )
+            if app_decl["entity"] not in allowed_app_entities:
+                errors.append(
+                    f"{domain}.{op}: response_entity metadata={entity!r}/"
+                    f"{dart_class!r} app={app_decl['entity']!r}"
+                )
+            if app_decl["body"] != body:
+                errors.append(
+                    f"{domain}.{op}: response_body metadata={body!r} "
+                    f"app={app_decl['body']!r}"
+                )
             if not dart_class:
                 continue
             if output_path or external_path:
@@ -280,25 +303,6 @@ def main() -> int:
                         f"{domain}.{op}: Dart contract {source} does not define "
                         f"class {dart_class}"
                     )
-
-            if app_decl["kind"] and app_decl["kind"] != kind:
-                errors.append(
-                    f"{domain}.{op}: response_body_kind metadata={kind!r} "
-                    f"app={app_decl['kind']!r}"
-                )
-            if app_decl["entity"] and app_decl["entity"] not in {
-                entity,
-                dart_class,
-            }:
-                errors.append(
-                    f"{domain}.{op}: response_entity metadata={entity!r}/"
-                    f"{dart_class!r} app={app_decl['entity']!r}"
-                )
-            if app_decl["body"] != body:
-                errors.append(
-                    f"{domain}.{op}: response_body metadata={body!r} "
-                    f"app={app_decl['body']!r}"
-                )
 
     if checked_ops == 0:
         errors.append(

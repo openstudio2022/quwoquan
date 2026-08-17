@@ -2,12 +2,15 @@
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md#gwt-001.t1
 // spec_ref: specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md#gwt-001.t2
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/runtime/transport/links/app_public_content_links.dart';
 import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/content_share_template.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+final _publicLinks = PublicContentLinkBuilder(
+  Uri.parse('https://public.example.test'),
+);
 
 ContentPostViewData _post({
   required String id,
@@ -44,15 +47,6 @@ ContentPostViewData _post({
 );
 
 void main() {
-  setUp(() {
-    CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
-      const <String, String>{
-        'PUBLIC_WEB_BASE_URL': 'https://public.example.test',
-      },
-    );
-  });
-  tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
-
   group('ContentShareTemplate public links', () {
     test(
       'public content keeps app deep link but defaults to HTTPS landing URL',
@@ -70,12 +64,13 @@ void main() {
           ),
           enableIdentityTemplate: true,
           visibility: 'public',
+          publicLinks: _publicLinks,
         );
 
         // landingUrl 以规范公网 URL 为基础，并追加单次分享归因参数。
         expect(
           template.landingUrl,
-          startsWith(AppPublicContentLinks.postWebUrl('moment_public_link')),
+          startsWith(_publicLinks.postWebUrl('moment_public_link')),
         );
         expect(template.landingUrl, startsWith('https://'));
         expect(template.landingUrl, contains('share_id='));

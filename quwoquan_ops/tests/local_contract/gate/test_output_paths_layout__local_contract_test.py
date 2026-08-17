@@ -27,8 +27,6 @@ from quwoquan_ops.gate.verify_root_layout import (
 )
 
 MANIFEST = ROOT / "quwoquan_ops" / "environments" / "output_layout_manifest.yaml"
-GATE_REPO = ROOT / "quwoquan_ops" / "gate" / "gate_repo.sh"
-MAKEFILE = ROOT / "Makefile"
 DEPLOY_BASH_ENTRIES = {
     ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh": "prod-sim",
     ROOT / "quwoquan_ops/cli/prod/deploy_to_prod.sh": "prod-hosted",
@@ -654,24 +652,6 @@ def test_stackctl_inspect_captures_configuration_without_deployment_writes(
     )
     assert not (deploy / "gamma-local/inspection").exists()
     assert output_layout_issues(output) == []
-
-
-def test_environment_packaging_uses_hermetic_deploy_workspace_and_rechecks_output() -> None:
-    makefile = MAKEFILE.read_text(encoding="utf-8")
-    target_start = makefile.index("verify-env-packaging:")
-    target_end = makefile.index("\n\n", target_start)
-    recipe = makefile[target_start:target_end]
-    assert "mktemp -d" in recipe
-    assert "QWQ_DEPLOY_WORK_ROOT=" in recipe
-    assert "stackctl.py --output-format json package" in recipe
-
-    gate = GATE_REPO.read_text(encoding="utf-8")
-    package_index = gate.index("make verify-env-packaging")
-    recheck_index = gate.index(
-        "python3 quwoquan_ops/gate/verify_output_layout.py",
-        package_index,
-    )
-    assert recheck_index > package_index
 
 
 def test_layout_gate_rejects_retired_categories_and_misplaced_state(

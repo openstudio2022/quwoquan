@@ -73,7 +73,7 @@ def main() -> int:
 
     snapshot_source = (
         SERVICE_ROOT
-        / "control-plane/platform-ops/internal/ops/platform_ops/config_snapshot/application/platform_ops/config_layer/snapshot_source.go"
+        / "control-plane/platform-ops/internal/platform_ops/config_snapshot/application/config_layer/snapshot_source.go"
     ).read_text(encoding="utf-8")
     if 'filepath.Join(s.configRoot, service+".yaml")' not in snapshot_source:
         failures.append("platform ConfigSnapshot does not consume effective service config")

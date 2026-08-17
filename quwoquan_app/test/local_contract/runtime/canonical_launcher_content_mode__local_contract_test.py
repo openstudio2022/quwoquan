@@ -61,8 +61,12 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
 
         dev_up = root / "quwoquan_ops/cli/lib/dev_up.py"
         dev_up.parent.mkdir(parents=True)
+        find_device_log = root / "find_device.log"
         dev_up.write_text(
+            "from pathlib import Path\n"
+            f"FIND_DEVICE_LOG = Path({str(find_device_log)!r})\n"
             "def find_device(*_args, **_kwargs):\n"
+            "    FIND_DEVICE_LOG.write_text('called\\n', encoding='utf-8')\n"
             "    return None\n",
             encoding="utf-8",
         )
@@ -159,7 +163,44 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             self.assertEqual(result.returncode, 2, result.stderr)
             self.assertIn("release readiness evidence is missing", result.stderr)
             self.assertIn("supply-chain-drill", result.stderr)
+            self.assertFalse((app.parent / "find_device.log").exists())
             self.assertFalse((app.parent / "flutter.log").exists())
+
+    def test_passed_preflight_still_requires_a_connected_device(self) -> None:
+        temporary, app, environment = self._workspace(
+            preflight={
+                "purpose": "content_live",
+                "status": "passed",
+                "contentLive": "passed",
+                "contentBindingState": "bound",
+                "releaseId": "research-alpha",
+                "manifestDigest": "sha256:" + "1" * 64,
+                "readinessReceiptDigest": "sha256:" + "2" * 64,
+                "contentBinding": {"verifyRunId": "verify-alpha"},
+            },
+        )
+        with temporary:
+            result = subprocess.run(
+                ["bash", "run.sh", "--mode", "content-live", "-d", "device"],
+                cwd=app,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn(
+                "connected iOS/Android device is required after runtime preflight",
+                result.stderr,
+            )
+            self.assertEqual(
+                (app.parent / "find_device.log").read_text(encoding="utf-8"),
+                "called\n",
+            )
+            self.assertEqual(
+                (app.parent / "flutter.log").read_text(encoding="utf-8"),
+                "pub get --offline\n",
+            )
 
     def test_delivery_block_emits_one_formal_recovery_and_stops_flutter(self) -> None:
         digest = "sha256:" + "1" * 64
@@ -222,7 +263,16 @@ class CanonicalLauncherContentModeContractTest(unittest.TestCase):
             self.assertEqual(result.returncode, 2, result.stderr)
             self.assertIn("content is unbound", result.stderr)
             self.assertIn(
-                "pub get --offline", (app.parent / "flutter.log").read_text()
+                "connected iOS/Android device is required after runtime preflight",
+                result.stderr,
+            )
+            self.assertEqual(
+                (app.parent / "find_device.log").read_text(encoding="utf-8"),
+                "called\n",
+            )
+            self.assertEqual(
+                (app.parent / "flutter.log").read_text(encoding="utf-8"),
+                "pub get --offline\n",
             )
 
     def test_launcher_remains_valid_bash(self) -> None:

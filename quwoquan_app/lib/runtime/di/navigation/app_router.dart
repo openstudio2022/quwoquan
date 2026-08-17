@@ -75,6 +75,7 @@ import 'package:quwoquan_app/service/user_service/relationship/greeting_request/
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_announcement_page.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation/presentation/chat_settings_page.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/presentation/group_manage_page.dart';
+import 'package:quwoquan_app/service/assistant_service/assistant/skill_surface_placement/presentation/assistant_skill_placement_sheet.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/presentation/transfer_ownership_page.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/presentation/group_admins_page.dart';
 import 'package:quwoquan_app/service/chat_service/chat/conversation_membership/presentation/group_member_search_page.dart';

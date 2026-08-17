@@ -91,6 +91,65 @@ func TestStorageSchemaRejectsEveryRetiredAlias(t *testing.T) {
 	}
 }
 
+func TestStorageSchemaOwnsCollectionWriterShape(t *testing.T) {
+	t.Parallel()
+
+	schema := compileStorageSchema(t)
+	valid := map[string]any{
+		"backend": "mongodb",
+		"role":    "projection",
+		"collections": map[string]any{
+			"shared_projection": map[string]any{
+				"entity":  "SharedProjection",
+				"role":    "projection",
+				"writers": []any{"content-service"},
+			},
+		},
+	}
+	if err := schema.Validate(valid); err != nil {
+		t.Fatalf("schema rejected canonical collection writers: %v", err)
+	}
+
+	for name, writers := range map[string]any{
+		"empty":            []any{},
+		"duplicate":        []any{"content-service", "content-service"},
+		"invalid identity": []any{"Content_Service"},
+		"scalar":           "content-service",
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalid := map[string]any{
+				"backend": "mongodb",
+				"role":    "projection",
+				"collections": map[string]any{
+					"shared_projection": map[string]any{
+						"entity":  "SharedProjection",
+						"role":    "projection",
+						"writers": writers,
+					},
+				},
+			}
+			if err := schema.Validate(invalid); err == nil {
+				t.Fatalf("schema accepted invalid collection writers %#v", writers)
+			}
+		})
+	}
+
+	unknownField := map[string]any{
+		"backend": "mongodb",
+		"role":    "projection",
+		"collections": map[string]any{
+			"shared_projection": map[string]any{
+				"entity":          "SharedProjection",
+				"role":            "projection",
+				"writer_services": []any{"content-service"},
+			},
+		},
+	}
+	if err := schema.Validate(unknownField); err == nil {
+		t.Fatal("schema accepted noncanonical collection writer alias")
+	}
+}
+
 func TestStorageSchemaAndTypedDocumentHaveRecursiveKeyParity(t *testing.T) {
 	t.Parallel()
 

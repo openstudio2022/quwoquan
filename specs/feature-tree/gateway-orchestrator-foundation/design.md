@@ -81,7 +81,7 @@
 - 决策：App 与公众业务读面进入 persisted GraphQL read plane。API Edge 聚合只暴露页面或外部门面 Query Slice。跨服务 owner 读取不绕行 App GraphQL，而是经 canonical Reader/Slice 的 typed application port 或受限内部 HTTP。后者必须在 owner 执行前验证 service principal、scope、internal visibility 与 ContractGraph operation identity。运营控制面使用 scoped operator/admin typed query，与 App/public 读面分开。
 - 理由：Query Slice 可以统一查询入口而不泄露领域内部对象或强迫所有聚合根暴露；REST command 保留清晰的写 owner、幂等和恢复语义，也保证更新/恢复端点在 GraphQL 不可用或客户端低于 minimum 时仍可访问。
 - 被否决方案：六类对象机械暴露、GraphQL Mutation、把所有 owner/control-plane 读取强制绕行 App GraphQL、未验签或未声明 scope 的内部 REST query、按 URL 猜测非业务例外、resolver 逐字段跨服务调用、在线登记未知 query、同一 App Build 长期 REST/GraphQL 双读择优，以及用领域模型版本参与请求路由。
-- 约束与影响：首版嵌套读取只使用父 Slice 或批量 DataLoader。禁止用 resolver 逐字段远程调用规避 `maxOwnerCalls/maxBatchKeys`。成本例外只能扩大签名 registry 中的静态上限，不能绕过 variables、分页、执行用量或响应字节的请求期重验。旧 REST read 只有在最后消费 App 已低于 minimum 且观察期使用量为零后删除。新 App 发布前必须对当前 stable 云通过真实 api_integration，candidate 云必须保留所有受支持 App 的 persisted query 与 REST command。
+- 约束与影响：首版嵌套读取只使用父 Slice 或批量 DataLoader。禁止用 resolver 逐字段远程调用规避 `maxOwnerCalls/maxBatchKeys`。成本例外只能扩大签名 registry 中的静态上限，不能绕过 variables、分页、执行用量或响应字节的请求期重验。旧 REST read 只有在最后消费 App 已低于 minimum 且观察期使用量为零后删除。source-only 校验只对结构违规 strict-zero，并以 PR 事件的 immutable base/candidate SHA 对 legacy REST identity 集合执行只减不增；全量 zero 仍是需要 hosted readiness、minimum-build 与零调用证据的 release cutover 门，不得用固定数量、allowlist 或 warn-only 替代。新 App 发布前必须对当前 stable 云通过真实 api_integration，candidate 云必须保留所有受支持 App 的 persisted query 与 REST command。
 - 关联要求：`REQ-005`
 - 关联能力：[`unified-entry-security`](./unified-entry-security/spec.md)、[`request-context-propagation`](./request-context-propagation/spec.md)
 

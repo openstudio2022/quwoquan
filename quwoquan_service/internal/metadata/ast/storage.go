@@ -89,6 +89,7 @@ type StorageCollection struct {
 	Role            string                   `json:"role,omitempty" yaml:"role,omitempty"`
 	PublicationRole string                   `json:"publication_role,omitempty" yaml:"publication_role,omitempty"`
 	Description     string                   `json:"description,omitempty" yaml:"description,omitempty"`
+	Writers         []string                 `json:"writers,omitempty" yaml:"writers,omitempty"`
 	Indexes         []StorageCollectionIndex `json:"indexes,omitempty" yaml:"indexes,omitempty"`
 }
 

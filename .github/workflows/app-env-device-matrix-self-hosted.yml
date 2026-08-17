@@ -62,6 +62,11 @@ on:
         description: 'Prod 一次性注销证据的唯一 Flutter device id'
         required: false
         default: ''
+      allow_disabled_mobile_matrix_debug:
+        description: '仅独立手动调试：明确允许在 self-hosted mobile matrix 未启用时跳过'
+        required: false
+        default: false
+        type: boolean
   workflow_call:
     inputs:
       checkout_ref:
@@ -245,7 +250,7 @@ jobs:
   beta_stack:
     name: Prepare one Beta stack prerequisite
     needs: resolve_release_evidence
-    if: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+    if: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
     runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: ${{ (github.event_name == 'schedule' || inputs.validation_profile == 'manual_full' || inputs.validation_profile == 'nightly_full' || inputs.validation_profile == 'release_candidate') && 20 || 2 }}
     permissions:
@@ -618,7 +623,7 @@ jobs:
   mobile_matrix:
     name: Aggregate mobile matrix evidence
     needs: [beta_stack, android_device_matrix, ios_device_matrix]
-    if: always()
+    if: ${{ always() && vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' && 20 || 2 }}
     permissions:
@@ -652,6 +657,17 @@ jobs:
         run: |
           echo "android_result=$ANDROID" >> "$GITHUB_OUTPUT"
           echo "ios_result=$IOS" >> "$GITHUB_OUTPUT"
+      - name: Require successful dual-platform job aggregation
+        env:
+          STACK_RESULT: ${{ needs.beta_stack.result }}
+          ANDROID_RESULT: ${{ needs.android_device_matrix.result }}
+          IOS_RESULT: ${{ needs.ios_device_matrix.result }}
+        run: |
+          set -euo pipefail
+          if [ "$STACK_RESULT" != success ] || [ "$ANDROID_RESULT" != success ] || [ "$IOS_RESULT" != success ]; then
+            echo "::error::GATE_BLOCK: device matrix aggregation requires successful stack, Android and iOS jobs"
+            exit 2
+          fi
       - name: Require successful direct-bound dual-platform evidence
         if: ${{ needs.beta_stack.outputs.profile == 'mainline_auto_prod' }}
         env:
@@ -883,7 +899,7 @@ jobs:
         name: Render official GitHub DAG timing
         working-directory: ${{ env.SUMMARY_REPO_DIR }}
         env:
-          SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+          SELF_HOSTED_ENABLED: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
           VALIDATION_PROFILE: ${{ needs.beta_stack.outputs.profile }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -949,7 +965,8 @@ jobs:
       - id: summary
         name: Block any missing or failed platform
         env:
-          SELF_HOSTED_ENABLED: ${{ github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+          SELF_HOSTED_ENABLED: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
+          DEBUG_SKIP_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_disabled_mobile_matrix_debug == true }}
           STACK: ${{ needs.beta_stack.result }}
           ANDROID: ${{ needs.android_device_matrix.result }}
           IOS: ${{ needs.ios_device_matrix.result }}
@@ -961,18 +978,26 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$SELF_HOSTED_ENABLED" != true ]; then
-            echo "result=success" >> "$GITHUB_OUTPUT"
-            exit 0
+            if [ "$DEBUG_SKIP_REQUESTED" = true ]; then
+              echo "::notice::self-hosted mobile matrix was explicitly skipped for this standalone manual debug run"
+              echo "result=skipped" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::GATE_BLOCK: ENABLE_SELF_HOSTED_MOBILE_MATRIX must equal true for required PR/main device validation"
+            exit 2
           fi
-          args=()
-          if [ "$ALLOW_MISSING" = true ]; then args+=(--allow-missing-platforms); fi
+          if [ "$ALLOW_MISSING" = true ]; then
+            ALLOW_MISSING_ARG=--allow-missing-platforms
+          else
+            ALLOW_MISSING_ARG=
+          fi
           python3 "$SUMMARY_REPO_DIR/quwoquan_ops/ci/device_matrix/check_gate.py" \
             --discover-result "$STACK" \
             --android-result "$ANDROID" \
             --ios-result "$IOS" \
             --has-android true \
             --has-ios true \
-            "${args[@]}"
+            ${ALLOW_MISSING_ARG:+"$ALLOW_MISSING_ARG"}
           test "$AGGREGATE" = success
           if [ "$FORMAL_RUNTIME_STARTED" = true ]; then test "$TEARDOWN" = success; fi
           if [ "$MANAGED_RUNTIME_STARTED" = true ]; then test "$TEARDOWN" = success; fi

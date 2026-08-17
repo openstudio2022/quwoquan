@@ -10,16 +10,21 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/app
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/adapters/image_pick_gateway.dart';
 import 'package:quwoquan_app/service/content_service/media/media_upload_session/application/public/image_pick_source.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
+import 'package:quwoquan_app/runtime/transport/links/app_public_content_links.dart';
 import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/presentation/scan_contact_qr_page.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/adapters/contact_qr_image_analyzer.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/user_service/account/user_account/user_account_profile_typed_double.dart';
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/auth-profile-snapshot/profile-read-update/spec.md#gwt-004
+
+final _publicLinks = PublicContentLinkBuilder(
+  Uri.parse('https://quwoquan.com'),
+);
 
 Future<void> _pumpScanPage(
   WidgetTester tester, {
@@ -31,6 +36,8 @@ Future<void> _pumpScanPage(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        ...sealedCloudBoundaryOverrides(),
+        publicContentLinkBuilderProvider.overrideWithValue(_publicLinks),
         platformCapabilitiesProvider.overrideWithValue(capabilities),
         if (imagePicker != null)
           imagePickGatewayProvider.overrideWithValue(imagePicker),
@@ -72,15 +79,8 @@ Future<void> _pumpAsyncWork(WidgetTester tester) async {
 }
 
 void main() {
-  setUp(() {
-    CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
-      const <String, String>{'PUBLIC_WEB_BASE_URL': 'https://quwoquan.com'},
-      enforceNativeLaunchBinding: false,
-    );
-  });
   tearDown(() {
     AppToast.dismiss();
-    CloudRuntimeConfig.clearNativeRuntimePackageForTest();
   });
 
   testWidgets('无相机能力时使用自有 iOS 错误态，不暴露 mobile_scanner 默认英文文案', (tester) async {

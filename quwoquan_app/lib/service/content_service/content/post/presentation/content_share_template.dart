@@ -71,6 +71,7 @@ class ContentShareTemplateBuilder {
     required ContentSurfaceView surfaceView,
     required bool enableIdentityTemplate,
     String visibility = 'public',
+    PublicContentLinkBuilder? publicLinks,
   }) {
     final permission = _normalizeVisibility(visibility);
     if (permission == 'private') {
@@ -104,7 +105,11 @@ class ContentShareTemplateBuilder {
       utmSource: ShareAttribution.sourceApp,
       utmMedium: ShareAttribution.mediumSocial,
     );
-    final landingUrl = attribution.applyTo(publicPostUrl(surfaceView.postId));
+    final landingUrl = attribution.applyTo(
+      (publicLinks ?? PublicContentLinkBuilder.fromRuntimeConfig()).postWebUrl(
+        surfaceView.postId,
+      ),
+    );
     final summary = _decorateSummary(
       base: shareSeed.summary,
       includeTimeContext: profile.includeTimeContext,

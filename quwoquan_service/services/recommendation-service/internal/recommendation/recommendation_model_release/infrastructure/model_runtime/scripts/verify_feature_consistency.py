@@ -437,6 +437,17 @@ def check_context_feature_registry():
 
 RETIRED_SKEWED_ITEM_FEATURES = ("bodyLength", "aspectRatio", "hasCover")
 RETIRED_DEAD_USER_PROJECTION_FIELDS = ("sourceDistribution",)
+RETIRED_CONTENT_OWNED_RECOMMEND_FEATURE_PROJECTOR = (
+    SERVICE_ROOT
+    / "services"
+    / "content-service"
+    / "internal"
+    / "content"
+    / "post"
+    / "infrastructure"
+    / "recommendation"
+    / "recommend_feature.go"
+)
 
 
 def check_n3_feature_skew_contract():
@@ -500,24 +511,19 @@ def check_n3_feature_skew_contract():
             if re.search(rf"""["']{re.escape(feature)}["']\s*:""", content):
                 issues.append(f"{label} still emits retired feature '{feature}'")
 
+    # Content 不再拥有 Recommendation 存储或学习投影；已退役的 build-tag WIP
+    # 不能回到源码树，否则会恢复第二条 rm_recommend_feature 写路径。
+    if RETIRED_CONTENT_OWNED_RECOMMEND_FEATURE_PROJECTOR.exists():
+        issues.append(
+            "retired content-owned RecommendFeatureProjector returned to the source tree"
+        )
+
     # sourceDistribution 从未进入 registry、在线模型或不可变训练快照；继续维护
     # 它只会制造一条不可消费的宽表写路径，故作为 N3-3 死特征彻底退役。
     for label, path in (
         (
             "UserFeatureVector",
             SERVICE_ROOT / "runtime" / "recommendation" / "feature.go",
-        ),
-        (
-            "RecommendFeatureProjector",
-            SERVICE_ROOT
-            / "services"
-            / "content-service"
-            / "internal"
-            / "content"
-            / "post"
-            / "infrastructure"
-            / "recommendation"
-            / "recommend_feature.go",
         ),
         ("generate_seed_data.py", SCRIPT_DIR / "generate_seed_data.py"),
     ):

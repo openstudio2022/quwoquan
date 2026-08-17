@@ -229,10 +229,37 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
+          fetch-depth: 0
           ref: ${{ inputs.checkout_ref || github.sha }}
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - id: graphql_migration_range
+        name: Resolve immutable GraphQL migration range
+        env:
+          REQUESTED_BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || '' }}
+          REQUESTED_CANDIDATE_SHA: ${{ inputs.head_sha || github.sha }}
+        run: |
+          CANDIDATE_SHA="$(git rev-parse "$REQUESTED_CANDIDATE_SHA")"
+          BASE_SHA="$REQUESTED_BASE_SHA"
+          if [[ -z "$BASE_SHA" ]]; then
+            BASE_SHA="$(git rev-parse "${CANDIDATE_SHA}^" 2>/dev/null || true)"
+          else
+            BASE_SHA="$(git rev-parse "$BASE_SHA")"
+          fi
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ ! "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::GATE_BLOCK: GraphQL migration ratchet requires exact base/candidate SHAs"
+            exit 2
+          fi
+          if [[ "$CANDIDATE_SHA" != "$(git rev-parse HEAD)" ]] || \
+             ! git merge-base --is-ancestor "$BASE_SHA" "$CANDIDATE_SHA"; then
+            echo "::error::GATE_BLOCK: GraphQL migration range is not the checked-out descendant"
+            exit 2
+          fi
+          {
+            echo "base_sha=$BASE_SHA"
+            echo "candidate_sha=$CANDIDATE_SHA"
+          } >> "$GITHUB_OUTPUT"
       - name: 设置 Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
         with:
@@ -251,6 +278,9 @@ jobs:
         run: |
           pip install -r quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt
       - name: Gate (quwoquan_service)
+        env:
+          GRAPHQL_MIGRATION_BASE_SHA: ${{ steps.graphql_migration_range.outputs.base_sha }}
+          GRAPHQL_MIGRATION_CANDIDATE_SHA: ${{ steps.graphql_migration_range.outputs.candidate_sha }}
         run: |
           bash quwoquan_ops/gate/gate_repo.sh --scope service
       - id: finish

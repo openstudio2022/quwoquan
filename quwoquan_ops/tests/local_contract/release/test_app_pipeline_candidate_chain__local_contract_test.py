@@ -65,6 +65,20 @@ def test_app_pipeline_requires_four_environment_platform_package_set() -> None:
     assert "QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON" in text
 
 
+def test_app_pipeline_missing_signing_inputs_are_typed_gate_blocks() -> None:
+    text = WORKFLOW.read_text(encoding="utf-8")
+
+    assert text.count("quwoquan_ops/gate/require_ci_inputs.py") == 3
+    assert text.count("../quwoquan_ops/gate/require_ci_inputs.py") == 1
+    assert text.count("--scope release-signing") == 3
+    for required in (
+        "QWQ_ANDROID_RELEASE_KEYSTORE_B64",
+        "QWQ_IOS_DISTRIBUTION_CERT_P12_B64",
+        "PROD_OPS_OIDC_ISSUER",
+    ):
+        assert required in text
+
+
 def test_app_release_evidence_identity_has_no_contract_number_suffix() -> None:
     assert SPEC_REF
     sources = (

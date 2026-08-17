@@ -186,3 +186,9 @@ streams:
     idempotency_key: streamId
     retention_seconds: 604800
     description: RecommendationFeatureProfileView 的 TagFeedbackRecorded typed consumer 终止失败记录。
+  events.search.recommendation_signals.recommendation-feature.dlq:
+    entity: RecommendationFeatureProfileView
+    role: dead_letter
+    idempotency_key: streamId
+    retention_seconds: 604800
+    description: RecommendationFeatureProfileView 的 SearchRecommendationSignalPublished typed consumer 终止失败记录。

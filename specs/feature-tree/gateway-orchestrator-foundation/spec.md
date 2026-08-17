@@ -80,6 +80,7 @@
 - 跨服务业务读取使用对象 owner 的 typed query，可经进程内 application port 或受限内部 HTTP 传输，不绕行 App GraphQL。内部 HTTP 必须绑定 canonical operation/Reader/Slice、验签 service principal、最小 scope、`internal` visibility 与 ContractGraph operation identity，且不进入 App/public exposure。
 - 运营控制面读取可保留明确的 typed REST query，但必须使用验签 operator/admin principal、显式 scope 与 canonical operation，不得作为 App 或公众业务读面。非业务 HTTP 入口另行声明闭集 `transport_role`，且不得返回普通业务 Query Slice。路径名称不产生隐式豁免。
 - 历史 App 的 REST read 在其 Build 仍受支持期间是正式契约；迁移必须按对象执行“新增 persisted query、新 App 切换、验证、minimum 提升、删除旧 REST read”，同一 App Build 不得长期双读或择优返回。
+- Source-only metadata 门对 GraphQL mutation、未知读面、缺失 owner/operator 安全边界等结构违规保持 strict-zero；仍受支持的历史 App/public REST read 单独形成迁移义务。PR 必须以事件绑定的 immutable base/candidate Git SHA 现场生成迁移 identity 集合并证明 candidate 是 base 的子集，禁止新增、改名或换 path 规避义务，禁止固定数量 baseline、allowlist 或 warn-only。全量清零只在 Prod/release cutover 中与 hosted GraphQL readiness、minimum-build 窗口关闭和 legacy 调用量为零的证据共同裁决。
 - 领域模型 `major.minor`、ContractGraph digest 只用于 build/deploy/release evidence 与变更门禁，不进入请求、路由、GraphQL response 或 App UI；端云组合仅由受支持 operation、当前 stable 集成验证和 minimum Build 治理。
 
 ## 6. 领域验收
@@ -121,9 +122,9 @@
 - 准出影响：`block`
 - 影响或价值：尚缺 `POST /graphql` 统一读入口的 hosted 商用证据（api-edge contract 以 `gap_id: GATEWAY_GRAPHQL_READ_HOSTED_EVIDENCE` 声明 `commercial.status: blocked`）。
   - 缺 API Edge composition root 接入、签名 persisted query registry 发布包与真实 owner Query Slice 的 api_integration 证据。
-  - 在该前置解除前，`verify_graphql_read_rest_command_single_track.py` 计数的 App/public legacy REST query（当前 167 条）无一可完成商用切轨；`content.post.GetPost` 五 slice persisted 链虽已双侧合约齐备，App 仍必须走 REST。
+  - 在该前置解除前，`verify_graphql_read_rest_command_single_track.py` 现场报告的 App/public legacy REST migration obligations 无一可完成商用切轨；`content.post.GetPost` 五 slice persisted 链虽已双侧合约齐备，App 仍必须走 REST。
   - 例外：SearchPage 专属路由已 `commercial: ready`，是当前唯一 hosted GraphQL 读面先例。
 - 完成判定：[`DOM-001`](#dom-001) 对应行为在 hosted GraphQL 读面上满足并有真实测试 `spec_ref`，具体为下列全部达成。
   - api-edge `/graphql` 路由 `commercial.status` 转为 `ready` 且 gap_id 撤销。
   - composition root 装配、签名 registry 发布与至少一条 owner Query Slice（建议 `content.post.GetPost`）的 api_integration 证据绑定本节点。
-  - 随后首批迁移波次（零 App 消费的 `GetCounters`、`GetHelperRead`、`GetOwnedMediaAsset` 优先裁决，`GetPost` 作为首条真实切轨）使 `appPublicLegacyRestQueryRoutes` 从 167 严格下降。
+  - 随后首批迁移波次（零 App 消费的 `GetCounters`、`GetHelperRead`、`GetOwnedMediaAsset` 优先裁决，`GetPost` 作为首条真实切轨）使 immutable base/candidate SHA 间的 migration identity 集合严格下降且不产生新身份。

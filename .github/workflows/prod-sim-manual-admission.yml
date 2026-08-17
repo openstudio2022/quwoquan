@@ -33,6 +33,8 @@ jobs:
       contents: read
       attestations: read
       packages: read
+    env:
+      PROD_SIM_SSH_MANAGEMENT_HOST: ${{ vars.PROD_SIM_SSH_MANAGEMENT_HOST }}
     outputs:
       prod_sim_receipt_base64: ${{ steps.prod_sim_receipt.outputs.receipt_base64 }}
     steps:
@@ -82,29 +84,50 @@ jobs:
             --expected-source-sha "${{ inputs.source_sha }}" \
             --output-dir "$ROOT" \
             --github-output "$GITHUB_OUTPUT"
-      - name: Materialize isolated prevalidation SSH credentials
-        env:
-          EDGE_KEY_MATERIAL: ${{ secrets.PROD_EDGE_SSH_KEY }}
-          KEY_MATERIAL: ${{ secrets.PROD_SERVICE_SSH_KEY }}
+      - name: Require runner-local prevalidation SSH credentials
         run: |
           set -euo pipefail
-          for material in "$EDGE_KEY_MATERIAL" "$KEY_MATERIAL"; do
-            if [[ -z "$material" || "$material" != *"PRIVATE KEY"* ]]; then
-              echo "::error::GATE_BLOCK: prod-sim admission SSH key material is missing"
-              exit 2
-            fi
-          done
-          EDGE_KEY_FILE="$RUNNER_TEMP/prod-sim-edge-ssh-key"
-          KEY_FILE="$RUNNER_TEMP/prod-sim-service-ssh-key"
-          (umask 077 && printf '%s\n' "$EDGE_KEY_MATERIAL" > "$EDGE_KEY_FILE")
-          (umask 077 && printf '%s\n' "$KEY_MATERIAL" > "$KEY_FILE")
-          echo "PROD_EDGE_SSH_KEY_FILE=$EDGE_KEY_FILE" >> "$GITHUB_ENV"
-          echo "PROD_SERVICE_SSH_KEY_FILE=$KEY_FILE" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import ipaddress
+          import os
+          import re
+          import stat
+          from pathlib import Path
+
+          host = os.environ.get("PROD_SIM_SSH_MANAGEMENT_HOST", "").strip()
+          try:
+              valid_host = ipaddress.ip_address(host).version == 4
+          except ValueError:
+              labels = host.split(".")
+              valid_host = (
+                  0 < len(host) <= 253
+                  and all(
+                      re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+                      for label in labels
+                  )
+              )
+          if not valid_host:
+              print("::error::GATE_BLOCK: PROD_SIM_SSH_MANAGEMENT_HOST must be a bare SSH host")
+              raise SystemExit(2)
+          key_dir = Path(os.environ["HOME"]) / ".ssh" / "quwoquan-prod"
+          for account in ("prod-edge-svc", "prod-service-svc"):
+              key = key_dir / account
+              if key.is_symlink() or not key.is_file():
+                  print(f"::error::GATE_BLOCK: runner-local SSH key is missing for {account}")
+                  raise SystemExit(2)
+              if stat.S_IMODE(key.stat().st_mode) != 0o600:
+                  print(
+                      "::error::GATE_BLOCK: runner-local SSH key must use mode 0600 "
+                      f"for {account}"
+                  )
+                  raise SystemExit(2)
+          PY
       - name: Run non-promotable isolated first-party prevalidation
         run: |
           python3 quwoquan_ops/cli/stackctl.py deploy \
             --target prod-hosted \
             --mode prevalidate \
+            --ssh-host "$PROD_SIM_SSH_MANAGEMENT_HOST" \
             --data-mode isolated \
             --prevalidate-scope first-party \
             --release-manifest "$QWQ_OUTPUT_ROOT/env/prod/runs/prod-sim-admission/release/manifest.json" \
@@ -163,7 +186,7 @@ jobs:
   attest_prod_sim_report:
     name: Attest exact passed non-promotable prod-sim report
     needs: prod_sim_admission
-    if: ${{ needs.prod_sim_admission.result == 'success' && needs.prod_sim_admission.outputs.prod_sim_receipt_base64 != '' }}
+    if: ${{ needs.prod_sim_admission.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions:
@@ -187,6 +210,8 @@ jobs:
           import os
           from pathlib import Path
 
+          if not os.environ["RECEIPT_BASE64"]:
+              raise SystemExit("GATE_BLOCK: passed prod-sim admission did not emit a receipt")
           Path(os.environ["RECEIPT_PATH"]).write_bytes(
               base64.b64decode(os.environ["RECEIPT_BASE64"], validate=True)
           )

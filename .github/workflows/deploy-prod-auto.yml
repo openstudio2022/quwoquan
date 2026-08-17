@@ -1374,6 +1374,14 @@ jobs:
             --target prod-hosted \
             --include-services \
             --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-package"
+      - name: Verify exact Prod packaging candidate
+        run: |
+          python3 quwoquan_ops/cli/stackctl.py verify \
+            --env prod \
+            --target prod-hosted \
+            --kind packaging \
+            --profile smoke \
+            --report-dir "$QWQ_OUTPUT_ROOT/env/prod/runs/mainline-package-verify"
       - name: Require the prebuilt immutable Ops Portal package
         run: |
           python3 - <<'PY'

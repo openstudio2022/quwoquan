@@ -5,10 +5,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_environment.dart';
-import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/runtime/transport/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
+import 'package:quwoquan_app/runtime/transport/media/media_delivery_reference.dart';
 import 'package:quwoquan_app/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_reader_remote.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_detail_view.dart';
@@ -18,6 +18,16 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/post_
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
+final _articleMediaResolver = MediaDeliveryResolver(
+  MediaEndpointConfig(
+    avatarBaseUrl: 'https://media.example.com/avatar',
+    imageBaseUrl: 'https://media.example.com/image',
+    videoBaseUrl: 'https://media.example.com/video',
+    attachmentBaseUrl: 'https://media.example.com/image',
+  ),
+);
 
 ContentPostViewData _articlePost(String postId) => contentPostViewDataBuilder(
   postId: postId,
@@ -47,19 +57,6 @@ InMemoryContentPostDetailReader _articleReader(
 }
 
 void main() {
-  setUp(() {
-    CloudRuntimeConfig.hydrateFromNativeRuntimePackageForTest(
-      const <String, String>{
-        'MEDIA_AVATAR_CDN_BASE_URL': 'https://media.example.com/avatar',
-        'MEDIA_IMAGE_CDN_BASE_URL': 'https://media.example.com/image',
-        'MEDIA_VIDEO_CDN_BASE_URL': 'https://media.example.com/video',
-      },
-      enforceNativeLaunchBinding: false,
-    );
-  });
-
-  tearDown(CloudRuntimeConfig.clearNativeRuntimePackageForTest);
-
   group('Article getPost hydration contract', () {
     test('Mock getPost 暴露 canonical ContentPostDetailPayload 文章扩展字段', () async {
       final post = _articlePost('web-dev');
@@ -92,7 +89,7 @@ void main() {
           ),
           clientContextProvider: const _ArticleTestClientContext(),
           telemetrySink: const _NoopCloudOperationTelemetrySink(),
-          environment: CloudRuntimeEnvironment(
+          environment: testCloudRuntimeEnvironment(
             environment: CloudEnvironment.gamma,
             gatewayBaseUri: Uri.parse('https://example.com'),
           ),
@@ -108,10 +105,12 @@ void main() {
       final mockView = projectArticleDetailViewFromPayload(
         mockDetail,
         fallbackArticleId: postId,
+        mediaResolver: _articleMediaResolver,
       );
       final remoteView = projectArticleDetailViewFromPayload(
         remoteDetail,
         fallbackArticleId: postId,
+        mediaResolver: _articleMediaResolver,
       );
 
       expect(remoteView.documentSource, ArticleDetailDocumentSource.markdown);
@@ -146,6 +145,7 @@ void main() {
       final view = projectArticleDetailViewFromPayload(
         detail,
         fallbackArticleId: post.id,
+        mediaResolver: _articleMediaResolver,
       );
       final imageNodes = view.document.nodes
           .where((node) => node.isFigure)
@@ -194,10 +194,12 @@ void main() {
       final before = projectArticleDetailView(
         summaryRaw,
         fallbackArticleId: 'article_hydration_switch',
+        mediaResolver: _articleMediaResolver,
       );
       final after = projectArticleDetailView(
         hydratedRaw,
         fallbackArticleId: 'article_hydration_switch',
+        mediaResolver: _articleMediaResolver,
       );
 
       expect(before.documentSource, ArticleDetailDocumentSource.empty);

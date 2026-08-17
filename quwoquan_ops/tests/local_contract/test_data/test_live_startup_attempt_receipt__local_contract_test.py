@@ -177,6 +177,44 @@ class TestLiveStartupAttemptReceiptContractTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "fields mismatch"):
                     receipt.validate_test_live_startup_attempt(invalid)
 
+    def test_public_web_origin_is_resolved_from_target_topology(self) -> None:
+        plan = _plan()
+        plan["publicWebPackage"] = {
+            **plan["publicWebPackage"],
+            "publicOrigin": "https://web.alpha.example:17000",
+        }
+        topology = {
+            "targets": {
+                "alpha-local": {
+                    "name": "alpha-local",
+                    "env": "alpha",
+                    "publicBases": {
+                        "publicWeb": "https://web.alpha.example:17000"
+                    },
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            process_patch, runs_patch = self._patch_roots(root)
+            with process_patch, runs_patch, mock.patch.object(
+                receipt,
+                "load_environment_topology",
+                return_value=topology,
+            ):
+                prepared = receipt.transition_test_live_startup_attempt(
+                    environment="alpha",
+                    target="alpha-local",
+                    attempt_id="alpha-topology-web-origin",
+                    status="prepared",
+                    runtime_plan=plan,
+                    run_root=root / "runs" / "dev-session-alpha",
+                )
+        self.assertEqual(
+            prepared["publicWebPackage"]["publicOrigin"],
+            "https://web.alpha.example:17000",
+        )
+
     def test_cross_target_ports_and_unsafe_receipt_paths_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

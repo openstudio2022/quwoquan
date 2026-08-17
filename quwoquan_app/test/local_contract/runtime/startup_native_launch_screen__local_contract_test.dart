@@ -1182,9 +1182,18 @@ void main() {
       final runtimeConfig = _readAppFile(
         'lib/runtime/config/cloud_runtime_config.dart',
       );
-      expect(runtimeConfig, contains('_nativeRuntimeDriftKeys'));
+      expect(runtimeConfig, contains('CloudRuntimePackageResolution.resolve'));
+      expect(runtimeConfig, contains('nativeRuntimeDriftKeys'));
       expect(runtimeConfig, contains(r'NATIVE_RUNTIME_PACKAGE.$key'));
-      expect(runtimeConfig, contains('if (!shouldLoadNativeRuntimePackage)'));
+      expect(runtimeConfig, contains('hydrateFromNativeRuntimePackage('));
+      expect(
+        runtimeConfig,
+        isNot(contains('hydrateFromNativeRuntimePackageForTest')),
+      );
+      expect(
+        runtimeConfig,
+        isNot(contains('_forceNativeRuntimePackageForTest')),
+      );
       expect(gradle, contains('requireCompleteRuntimeDartDefines'));
       expect(gradle, contains('verifyAndroidLocalLauncherContract'));
       expect(gradle, contains('QWQ_CONSUMER_LEASE_ACQUIRED'));

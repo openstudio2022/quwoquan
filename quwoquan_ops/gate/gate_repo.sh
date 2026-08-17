@@ -34,6 +34,21 @@ if [[ "${1:-}" == "--scope" ]]; then
   scope="${2:-}"
 fi
 
+# Python script governance derives independent app/service/ops/data
+# boundaries. A scoped Delivery job validates its own boundary; the aggregate
+# local gate keeps the strict whole-repository check.
+case "$scope" in
+  all) python_script_scope="all" ;;
+  service) python_script_scope="service" ;;
+  app|patrol) python_script_scope="app" ;;
+  portal|ops-portal) python_script_scope="ops" ;;
+  data) python_script_scope="data" ;;
+  *)
+    echo "[gate] FAIL: invalid scope: $scope (expected all|service|app|portal|data|patrol)" 1>&2
+    exit 2
+    ;;
+esac
+
 run_vertical_architecture_ratchet() {
   local vertical_scope="$1"
   echo "[gate] vertical architecture static ratchet (scope=$vertical_scope)"
@@ -114,7 +129,7 @@ python3 quwoquan_ops/gate/verify_provider_substitute_prod_purity.py
 python3 quwoquan_ops/gate/verify_provider_conformance_evidence.py
 python3 quwoquan_ops/gate/verify_entrypoint_script_paths.py
 python3 quwoquan_ops/gate/verify_github_artifact_lifecycle.py
-python3 -B quwoquan_ops/gate/verify_python_script_governance.py --scope all --mode check
+python3 -B quwoquan_ops/gate/verify_python_script_governance.py --scope "$python_script_scope" --mode check
 PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" \
   python3 -B quwoquan_ops/tests/local_contract/gate/test_python_script_governance__derivation__local_contract_test.py
 python3 quwoquan_ops/gate/verify_markdown_local_links.py
@@ -173,7 +188,7 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   # topology 由 delivery-gate topology job / make gate 负责，避免重复
   bash quwoquan_ops/environments/verify/verify_deploy_kustomization.sh
   bash quwoquan_service/scripts/recommendation-service/verify_recommendation_service_contract.sh
-  python3 quwoquan_service/scripts/content-service/content/post/verify_daily_metrics_dimension_consistency.py
+  python3 quwoquan_service/scripts/content-service/content/content_behavior_fact/verify_daily_metrics_dimension_consistency.py
   # 推荐 policy 单轨守卫：禁止环境变体，gamma release 只绑定 canonical 内容摘要。
   python3 quwoquan_ops/gate/verify_canonical_recommendation_policy.py
   bash quwoquan_ops/environments/verify/verify_gray_rollout_stages.sh
@@ -223,6 +238,7 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   bash quwoquan_ops/environments/verify/verify_image_identity_single_track.sh
   bash quwoquan_ops/environments/verify/verify_config_pr_policy.sh
   make verify-env-packaging
+  make verify-prod-packaging-contract
   # 环境包生成后再次断言，防止 package/renderer 旁路把配置或 payload 写回 output。
   python3 quwoquan_ops/gate/verify_output_layout.py
   command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
@@ -369,12 +385,13 @@ run_app() {
     python3 quwoquan_service/scripts/assistant-service/verify_assistant_security_contract.py || exit 1
     python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py || exit 1
     python3 quwoquan_app/scripts/env/verify_aggregate_mock_ratchet.py || exit 1
-    # Static source CI only proves the three non-production component configs.
-    # The gate defaults to all environments for runtime/release callers, where
-    # the immutable Prod package is mandatory.
-    python3 quwoquan_ops/gate/verify_media_delivery_contract.py --env alpha || exit 1
-    python3 quwoquan_ops/gate/verify_media_delivery_contract.py --env beta || exit 1
-    python3 quwoquan_ops/gate/verify_media_delivery_contract.py --env gamma || exit 1
+    # Static source CI proves the three non-production component configs in one
+    # scan. Release callers use --env/default and still require immutable
+    # packaged runtime evidence, including Prod.
+    python3 quwoquan_ops/gate/verify_media_delivery_contract.py \
+      --component-environment alpha \
+      --component-environment beta \
+      --component-environment gamma || exit 1
     python3 quwoquan_app/scripts/runtime/architecture/verify_app_no_integration_test_dir.py || exit 1
     # 五域对象级 generated Remote api_integration 证据：ContractGraph 派生，
     # local_contract 锁 stackctl 接线与单调棘轮，再执行静态边界门禁。
@@ -505,20 +522,31 @@ run_app() {
 
 }
 
-run_portal() {
+run_portal() (
   echo "[gate] ops-portal"
   command -v npm >/dev/null 2>&1 || { echo "[gate] FAIL: npm not found in PATH" 1>&2; exit 1; }
   local portal_dir="quwoquan_ops/portal"
+  local portal_build_root=""
+  cleanup_portal_build_root() {
+    if [[ -n "$portal_build_root" ]]; then
+      rm -rf "$portal_build_root"
+    fi
+  }
+  trap cleanup_portal_build_root EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   if [[ ! -f "$portal_dir/package-lock.json" ]]; then
     echo "[gate] FAIL: $portal_dir/package-lock.json missing — Portal dependencies must be locked in the Portal domain" 1>&2
     exit 1
   fi
   npm --prefix "$portal_dir" ci
   npm --prefix "$portal_dir" test
-  npm --prefix "$portal_dir" run build
+  portal_build_root="$(mktemp -d "${TMPDIR:-/tmp}/qwq-portal-build.XXXXXX")"
+  QWQ_DEPLOY_WORK_ROOT="$portal_build_root" QWQ_DEPLOY_TARGET="prod-hosted" \
+    npm --prefix "$portal_dir" run build
   rm -rf "$portal_dir/dist" "$portal_dir/.test-dist"
   rm -f "$portal_dir"/*.tsbuildinfo "$portal_dir"/vite.config.js "$portal_dir"/vite.config.d.ts
-}
+)
 
 run_data() {
   echo "[gate] quwoquan_data"

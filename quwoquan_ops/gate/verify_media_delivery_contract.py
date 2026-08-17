@@ -606,6 +606,8 @@ def _validate_consumer_boundary(issues: list[str]) -> None:
 def _validate_runtime_config_authority_parity(
     issues: list[str],
     environments: tuple[str, ...] = tuple(ENVIRONMENTS),
+    *,
+    launch_policy: str = "prod_release",
 ) -> None:
     topology = load_environment_topology()
     for env_name in environments:
@@ -636,18 +638,21 @@ def _validate_runtime_config_authority_parity(
                     f"{config_path.relative_to(ROOT)}: {runtime_field} 必须保持空模板，"
                     "公开 URL 只能由 topology resolver 投影"
                 )
+        define_command = [
+            sys.executable,
+            str(APP_RUNTIME_DEFINE_SCRIPT),
+            "--env",
+            env_name,
+            "--target",
+            DEFAULT_DEPLOY_TARGET_BY_ENV[env_name],
+            "--format",
+            "json",
+            "--launch-policy",
+            launch_policy,
+        ]
         try:
             result = subprocess.run(
-                [
-                    sys.executable,
-                    str(APP_RUNTIME_DEFINE_SCRIPT),
-                    "--env",
-                    env_name,
-                    "--target",
-                    DEFAULT_DEPLOY_TARGET_BY_ENV[env_name],
-                    "--format",
-                    "json",
-                ],
+                define_command,
                 cwd=str(ROOT),
                 text=True,
                 capture_output=True,
@@ -820,8 +825,25 @@ def _validate_public_ca_tls_boundary(issues: list[str]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", choices=tuple(ENVIRONMENTS))
+    environment_mode = parser.add_mutually_exclusive_group()
+    environment_mode.add_argument("--env", choices=tuple(ENVIRONMENTS))
+    environment_mode.add_argument(
+        "--component-environment",
+        action="append",
+        choices=("alpha", "beta", "gamma"),
+        default=[],
+        help=(
+            "validate a non-production source component against canonical test_live "
+            "topology without reading a packaged runtime; repeat for each environment"
+        ),
+    )
     args = parser.parse_args()
+    component_environments = tuple(dict.fromkeys(args.component_environment))
+    selected_environments = (
+        component_environments
+        or ((args.env,) if args.env else tuple(ENVIRONMENTS))
+    )
+    launch_policy = "test_live" if component_environments else "prod_release"
     issues: list[str] = []
     _validate_topology_urls(issues)
     _validate_playback_canary_topology(issues)
@@ -832,7 +854,8 @@ def main() -> int:
     _validate_consumer_boundary(issues)
     _validate_runtime_config_authority_parity(
         issues,
-        (args.env,) if args.env else tuple(ENVIRONMENTS),
+        selected_environments,
+        launch_policy=launch_policy,
     )
     _validate_video_playback_patrol_contract(issues)
     _validate_avatar_media_patrol_contract(issues)

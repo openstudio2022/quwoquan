@@ -97,3 +97,19 @@ readiness_cases:
   runner_source_path: quwoquan_service/services/assistant-service/tests/api_integration/assistant/skill_surface_placement/skill_surface_placement_postgres__api_integration_test.go
   executions:
   - {env: beta, platform: service, device: runner, provider: postgres-immutable-skill-package-first-party-http, digest_binding: candidate}
+- case_id: skill_surface_placement_app_api
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/shared-surface-skill-placement/spec.md#gwt-001
+  producer: app
+  layer: api_integration
+  target: {kind: operation, id: GetSkillSurfacePlacement}
+  runner_source_path: quwoquan_app/test/api_integration/service/assistant_service/assistant/skill_surface_placement/skill_surface_placement_remote__api_integration_test.dart
+  executions:
+  - {env: gamma, platform: app, device: runner, provider: first-party-https, digest_binding: candidate}
+- case_id: skill_surface_placement_readiness_ops_env
+  spec_ref: specs/feature-tree/assistant-run-learning/skill-product-integration-platform/shared-surface-skill-placement/spec.md#gwt-001
+  producer: ops
+  layer: environment_acceptance
+  target: {kind: object, id: assistant.skill_surface_placement}
+  runner_source_path: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/run_skill_surface_placement_readiness.py
+  executions:
+  - {env: gamma, platform: linux, device: ci-runner, provider: first-party-https, digest_binding: candidate}

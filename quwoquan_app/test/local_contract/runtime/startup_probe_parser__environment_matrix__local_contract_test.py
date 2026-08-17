@@ -107,6 +107,10 @@ class StartupProbeParserContractTest(unittest.TestCase):
         defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
 
         def environment_defines(environment: str) -> dict[str, str]:
+            if environment == "prod":
+                raise RuntimeError(
+                    "test_live target/environment selection is invalid"
+                )
             return {**defines, "APP_RUNTIME_ENV": environment}
 
         def handoff(environment: str, target: str | None = None) -> dict[str, str]:
@@ -315,10 +319,17 @@ class StartupProbeParserContractTest(unittest.TestCase):
                 self.assertEqual(startup_matrix.main(), 0)
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(report["status"], "passed")
-            self.assertEqual(report["required"], 30)
-            self.assertEqual(report["executed"], 30)
+            self.assertEqual(report["required"], 29)
+            self.assertEqual(report["executed"], 29)
             self.assertEqual(report["skipped"], 0)
             self.assertEqual(report["failed"], 0)
+            prod_component = next(
+                case
+                for case in report["cases"]
+                if case["caseId"] == "component:prod"
+            )
+            self.assertFalse(prod_component["required"])
+            self.assertEqual(prod_component["status"], "expected_fail_closed")
 
     def test_startup_matrix_status_distinguishes_component_and_release_evidence(
         self,
@@ -346,12 +357,17 @@ class StartupProbeParserContractTest(unittest.TestCase):
             {"required": 2, "executed": 1, "skipped": 0, "failed": 0},
         )
 
-    def test_component_matrix_can_exclude_unbuilt_prod_package(self) -> None:
+    def test_default_component_matrix_requires_non_prod_and_records_prod_boundary(
+        self,
+    ) -> None:
         digest = "sha256:" + "a" * 64
         defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
 
         def environment_defines(environment: str) -> dict[str, str]:
-            self.assertNotEqual(environment, "prod")
+            if environment == "prod":
+                raise RuntimeError(
+                    "test_live target/environment selection is invalid"
+                )
             return {**defines, "APP_RUNTIME_ENV": environment}
 
         def handoff(environment: str, target: str | None = None) -> dict[str, str]:
@@ -368,12 +384,6 @@ class StartupProbeParserContractTest(unittest.TestCase):
             report_path = Path(directory) / "report.json"
             argv = [
                 "verify_startup_environment_matrix.py",
-                "--component-environment",
-                "alpha",
-                "--component-environment",
-                "beta",
-                "--component-environment",
-                "gamma",
                 "--report",
                 str(report_path),
             ]
@@ -398,14 +408,168 @@ class StartupProbeParserContractTest(unittest.TestCase):
             ):
                 self.assertEqual(startup_matrix.main(), 0)
             report = json.loads(report_path.read_text(encoding="utf-8"))
-            self.assertEqual(set(report["packages"]), {"alpha", "beta", "gamma"})
+            self.assertEqual(
+                set(report["packages"]),
+                {"alpha", "beta", "gamma", "prod"},
+            )
             self.assertEqual(report["status"], "component_ready")
+            components = {
+                case["environment"]: case
+                for case in report["cases"]
+                if case["kind"] == "component_readiness"
+            }
+            for environment in ("alpha", "beta", "gamma"):
+                self.assertTrue(components[environment]["required"])
+                self.assertEqual(
+                    components[environment]["status"],
+                    "component_ready",
+                )
+            self.assertFalse(components["prod"]["required"])
+            self.assertEqual(
+                components["prod"]["status"],
+                "expected_fail_closed",
+            )
+            self.assertFalse(components["prod"]["componentEligible"])
+            self.assertFalse(components["prod"]["promotionEligible"])
+            self.assertEqual(
+                components["prod"]["reason"],
+                "test_live target/environment selection is invalid",
+            )
+            self.assertEqual(report["packages"]["prod"]["dartDefinesDigest"], "")
+            self.assertEqual(
+                report["packages"]["prod"]["effectiveLaunchManifestDigest"],
+                "",
+            )
+
+    def test_prod_component_boundary_fails_if_test_live_is_accepted(self) -> None:
+        defines = {
+            **{key: "value" for key in startup_matrix.REQUIRED_DEFINES},
+            "APP_RUNTIME_ENV": "prod",
+        }
+        argv = [
+            "verify_startup_environment_matrix.py",
+            "--component-environment",
+            "prod",
+        ]
+        output = io.StringIO()
+        with (
+            mock.patch.object(
+                startup_matrix.cli,
+                "_runtime_defines",
+                return_value=defines,
+            ),
+            mock.patch.object(sys, "argv", argv),
+            redirect_stdout(output),
+        ):
+            self.assertEqual(startup_matrix.main(), 1)
+
+        report = json.loads(output.getvalue())
+        self.assertEqual(report["status"], "failed")
+        prod_component = report["cases"][0]
+        self.assertTrue(prod_component["required"])
+        self.assertEqual(prod_component["status"], "failed")
+        self.assertEqual(
+            prod_component["issues"],
+            ["prod: test_live was unexpectedly accepted"],
+        )
+
+    def test_release_gate_keeps_missing_prod_physical_evidence_blocking(self) -> None:
+        digest = "sha256:" + "f" * 64
+        defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
+
+        def environment_defines(environment: str) -> dict[str, str]:
+            if environment == "prod":
+                raise RuntimeError(
+                    "test_live target/environment selection is invalid"
+                )
+            return {**defines, "APP_RUNTIME_ENV": environment}
+
+        def handoff(environment: str, target: str | None = None) -> dict[str, str]:
+            return {
+                "target": target or startup_matrix.RUNTIME_TARGETS[environment],
+                "entrypoint": "lib/main_prod.dart",
+                "dartDefinesDigest": digest,
+                "runtimeConfigDigest": digest,
+                "effectiveLaunchManifestDigest": digest,
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = Path(directory) / "report.json"
+            argv = [
+                "verify_startup_environment_matrix.py",
+                "--evidence-root",
+                str(Path(directory) / "evidence"),
+                "--require-runtime-evidence",
+                "--require-readback",
+                "--require-observability",
+                "--require-physical-release",
+                "--baseline-id",
+                "baseline-001",
+                "--release-id",
+                "release-001",
+                "--release-digest",
+                digest,
+                "--report",
+                str(report_path),
+            ]
+            with (
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_runtime_defines",
+                    side_effect=environment_defines,
+                ),
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_ios_defines",
+                    side_effect=environment_defines,
+                ),
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "_launcher_handoff",
+                    side_effect=handoff,
+                ),
+                mock.patch.object(
+                    startup_matrix.cli,
+                    "RUNTIME_CASES",
+                    (("prod", "prod-hosted"),),
+                ),
+                mock.patch.object(sys, "argv", argv),
+                mock.patch("builtins.print"),
+            ):
+                self.assertEqual(startup_matrix.main(), 2)
+
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertEqual(report["status"], "gate_block")
+            prod_component = next(
+                case
+                for case in report["cases"]
+                if case["caseId"] == "component:prod"
+            )
+            self.assertFalse(prod_component["required"])
+            self.assertEqual(prod_component["status"], "expected_fail_closed")
+            blocked_prod_cases = {
+                case["caseId"]
+                for case in report["cases"]
+                if case["required"] and case["status"] == "gate_block"
+            }
+            self.assertIn(
+                "startup:prod-hosted/android-physical",
+                blocked_prod_cases,
+            )
+            self.assertIn(
+                "startup:prod-hosted/ios-physical",
+                blocked_prod_cases,
+            )
 
     def test_partial_release_evidence_request_is_gate_blocked(self) -> None:
         digest = "sha256:" + "e" * 64
         defines = {key: "value" for key in startup_matrix.REQUIRED_DEFINES}
 
         def environment_defines(environment: str) -> dict[str, str]:
+            if environment == "prod":
+                raise RuntimeError(
+                    "test_live target/environment selection is invalid"
+                )
             return {**defines, "APP_RUNTIME_ENV": environment}
 
         def handoff(environment: str, target: str | None = None) -> dict[str, str]:

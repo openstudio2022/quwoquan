@@ -30,23 +30,50 @@ NONPROD_DEFAULTS = {
         "http://integration-service:18086"
     ),
 }
-NONPROD_BINDINGS = {
-    "identity.sms.otp": {"state": "enabled"},
-    "identity.carrier.one_tap": {"state": "not_required"},
-    "identity.social.login": {"state": "not_required"},
+NONPROD_USER_BINDINGS = {
+    "identity.carrier.one_tap": {
+        "state": "enabled",
+        "adapter": "ext.auth.carrier_one_tap_protocol_fixture",
+    },
+    "identity.social.login": {
+        "state": "enabled",
+        "adapter": "ext.auth.federated_identity_protocol_fixture",
+    },
 }
-PROD_BINDINGS = {
-    "identity.sms.otp": {"state": "enabled"},
-    "identity.carrier.one_tap": {"state": "enabled"},
-    "identity.social.login": {"state": "enabled"},
+PROD_USER_BINDINGS = {
+    "identity.carrier.one_tap": {
+        "state": "enabled",
+        "adapter": "ext.auth.carrier_one_tap",
+    },
+    "identity.social.login": {
+        "state": "enabled",
+        "adapter": "ext.auth.federated_identity",
+    },
+}
+NONPROD_INTEGRATION_CONFIG = {
+    "externalBindings": {
+        "identity.sms.otp": {
+            "state": "enabled",
+            "adapter": "ext.sms.local_capture",
+        }
+    }
+}
+PROD_INTEGRATION_CONFIG = {
+    "externalBindings": {
+        "identity.sms.otp": {
+            "state": "enabled",
+            "adapter": "ext.sms.aliyun",
+        }
+    }
 }
 
 
 def test_login_dependency_config__repository_matrix__security__local_contract() -> None:
     assert verify_config(
         "gamma",
-        {"externalBindings": NONPROD_BINDINGS},
+        {"externalBindings": NONPROD_USER_BINDINGS},
         NONPROD_DEFAULTS,
+        NONPROD_INTEGRATION_CONFIG,
     ) == []
 
 
@@ -64,14 +91,16 @@ def test_login_dependency_config__retired_bypass__security__local_contract() -> 
             "social": {"providers": {}},
             "one_tap": {"resolver": "aliyun", "sandbox_phones": {}},
         },
-        "externalBindings": NONPROD_BINDINGS,
+        "externalBindings": NONPROD_USER_BINDINGS,
     }
 
     assert retired_key_paths(config) == [
         "integration.sms_otp.sandbox_allowlist",
         "integration.one_tap.sandbox_phones",
     ]
-    assert verify_config("gamma", config, NONPROD_DEFAULTS) == [
+    assert verify_config(
+        "gamma", config, NONPROD_DEFAULTS, NONPROD_INTEGRATION_CONFIG
+    ) == [
         "gamma: retired login config key integration.sms_otp.sandbox_allowlist",
         "gamma: retired login config key integration.one_tap.sandbox_phones",
     ]
@@ -87,9 +116,10 @@ def test_login_dependency_config__retired_otp_mode__security__local_contract() -
                 ),
                 "sys.user-service.integration.otp.mode": "retired",
             },
-            "externalBindings": PROD_BINDINGS,
+            "externalBindings": PROD_USER_BINDINGS,
         },
         NONPROD_DEFAULTS,
+        PROD_INTEGRATION_CONFIG,
     )
     assert failures == [
         "prod: retired OTP mode configuration sys.user-service.integration.otp.mode"

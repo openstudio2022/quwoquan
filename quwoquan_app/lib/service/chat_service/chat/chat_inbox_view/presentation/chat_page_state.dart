@@ -16,7 +16,11 @@ class _ChatPageState extends ConsumerState<ChatPage>
   @override
   void initState() {
     super.initState();
-    unawaited(_refreshAuthoritativePageState());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_refreshAuthoritativePageState());
+      }
+    });
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => mounted
           ? recordChatPageVisit(ref, _mainTabIndex, _subTabIndex)

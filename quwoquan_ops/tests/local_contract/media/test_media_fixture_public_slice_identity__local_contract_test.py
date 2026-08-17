@@ -155,6 +155,10 @@ class PublicFixtureSliceIdentityTest(unittest.TestCase):
                 target_name,
                 gate.DEFAULT_DEPLOY_TARGET_BY_ENV[env_name],
             )
+            self.assertEqual(
+                command[command.index("--launch-policy") + 1],
+                "test_live",
+            )
             public_bases = topology["environments"][env_name]["publicBases"]
             defines = {
                 define_key: public_bases[topology_field]
@@ -173,7 +177,42 @@ class PublicFixtureSliceIdentityTest(unittest.TestCase):
             "run",
             side_effect=resolve_defines,
         ):
-            gate._validate_runtime_config_authority_parity(issues)
+            gate._validate_runtime_config_authority_parity(
+                issues,
+                ("alpha", "beta", "gamma"),
+                launch_policy="test_live",
+            )
+        self.assertEqual(issues, [])
+
+    def test_release_runtime_config_parity_keeps_prod_release_policy(self) -> None:
+        topology = gate.load_environment_topology()
+
+        def resolve_defines(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+            self.assertEqual(
+                command[command.index("--launch-policy") + 1],
+                "prod_release",
+            )
+            env_name = command[command.index("--env") + 1]
+            public_bases = topology["environments"][env_name]["publicBases"]
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        define_key: public_bases[topology_field]
+                        for topology_field, define_key in gate.APP_RUNTIME_CONFIG_MEDIA_FIELDS.values()
+                    }
+                ),
+                stderr="",
+            )
+
+        issues: list[str] = []
+        with mock.patch.object(gate.subprocess, "run", side_effect=resolve_defines):
+            gate._validate_runtime_config_authority_parity(
+                issues,
+                ("prod",),
+                launch_policy="prod_release",
+            )
         self.assertEqual(issues, [])
 
 if __name__ == "__main__":

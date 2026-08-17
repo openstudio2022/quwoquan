@@ -10,6 +10,7 @@ ContentPostViewData _post({
   required String displayName,
   String? title,
   required String body,
+  String? summary,
   String articleTemplate = '',
   String articleFontPreset = '',
 }) => ContentPostViewData.fromWire(
@@ -22,6 +23,7 @@ ContentPostViewData _post({
     authorAvatarUrl: '',
     title: title,
     body: body,
+    summary: summary,
     articleTemplate: articleTemplate,
     articleFontPreset: articleFontPreset,
     likeCount: contentType == 'micro' ? 1 : 0,
@@ -80,7 +82,7 @@ void main() {
       expect(post.articleFontPreset, 'editorial');
     });
 
-    test('article preview uses body only when canonical summary is absent', () {
+    test('article preview stays empty when canonical summary is absent', () {
       final post = _post(
         id: 'a_body_only',
         contentType: 'article',
@@ -89,7 +91,20 @@ void main() {
         body: '正文承担无摘要文章的预览内容。',
       );
 
-      expect(post.articlePreviewText, '正文承担无摘要文章的预览内容。');
+      expect(post.articlePreviewText, isEmpty);
+    });
+
+    test('article preview uses canonical summary instead of distinct body', () {
+      final post = _post(
+        id: 'a_summary',
+        contentType: 'article',
+        authorId: 'u',
+        displayName: 'U',
+        body: '# 详情正文',
+        summary: '列表摘要',
+      );
+
+      expect(post.articlePreviewText, '列表摘要');
     });
   });
 }

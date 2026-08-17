@@ -66055,6 +66055,50 @@
       "sourcePath": "assistant/assistant/skill_surface_placement/operations.yaml"
     },
     {
+      "objectId": "assistant.skill_surface_placement",
+      "specRef": "specs/feature-tree/assistant-run-learning/skill-product-integration-platform/shared-surface-skill-placement/spec.md#gwt-001",
+      "caseId": "skill_surface_placement_app_api",
+      "producer": "app",
+      "layer": "api_integration",
+      "target": {
+        "kind": "operation",
+        "id": "assistant.skill_surface_placement.GetSkillSurfacePlacement"
+      },
+      "runnerSourcePath": "quwoquan_app/test/api_integration/service/assistant_service/assistant/skill_surface_placement/skill_surface_placement_remote__api_integration_test.dart",
+      "executions": [
+        {
+          "environment": "gamma",
+          "platform": "app",
+          "deviceClass": "runner",
+          "provider": "first-party-https",
+          "digestBinding": "candidate"
+        }
+      ],
+      "sourcePath": "assistant/assistant/skill_surface_placement/operations.yaml"
+    },
+    {
+      "objectId": "assistant.skill_surface_placement",
+      "specRef": "specs/feature-tree/assistant-run-learning/skill-product-integration-platform/shared-surface-skill-placement/spec.md#gwt-001",
+      "caseId": "skill_surface_placement_readiness_ops_env",
+      "producer": "ops",
+      "layer": "environment_acceptance",
+      "target": {
+        "kind": "object",
+        "id": "assistant.skill_surface_placement"
+      },
+      "runnerSourcePath": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/run_skill_surface_placement_readiness.py",
+      "executions": [
+        {
+          "environment": "gamma",
+          "platform": "linux",
+          "deviceClass": "ci-runner",
+          "provider": "first-party-https",
+          "digestBinding": "candidate"
+        }
+      ],
+      "sourcePath": "assistant/assistant/skill_surface_placement/operations.yaml"
+    },
+    {
       "objectId": "assistant.skill_user_setting",
       "specRef": "specs/feature-tree/assistant-run-learning/skill-product-integration-platform/skill-user-lifecycle/spec.md#gwt-001",
       "caseId": "get-skill-user-setting-api",
@@ -75843,6 +75887,35 @@
     },
     {
       "objectId": "content.filter_catalog_release",
+      "specRef": "specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-003",
+      "caseId": "filter_catalog_release_remote_app_uat",
+      "producer": "app",
+      "layer": "user_acceptance",
+      "target": {
+        "kind": "page",
+        "id": "media.image_editor"
+      },
+      "runnerSourcePath": "quwoquan_app/test/user_acceptance/service/content_service/media/filter_catalog_release/filter_catalog_remote__user_acceptance_test.dart",
+      "executions": [
+        {
+          "environment": "gamma",
+          "platform": "android",
+          "deviceClass": "physical",
+          "provider": "first-party-https",
+          "digestBinding": "candidate"
+        },
+        {
+          "environment": "gamma",
+          "platform": "ios",
+          "deviceClass": "physical",
+          "provider": "first-party-https",
+          "digestBinding": "candidate"
+        }
+      ],
+      "sourcePath": "content/media/filter_catalog_release/operations.yaml"
+    },
+    {
+      "objectId": "content.filter_catalog_release",
       "specRef": "specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-001",
       "caseId": "get-active-filter-catalog-api",
       "producer": "service",
@@ -76540,6 +76613,35 @@
           "platform": "service",
           "deviceClass": "runner",
           "provider": "none",
+          "digestBinding": "candidate"
+        }
+      ],
+      "sourcePath": "content/media/media_asset/operations.yaml"
+    },
+    {
+      "objectId": "content.media_asset",
+      "specRef": "specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-001",
+      "caseId": "media_asset_viewer_remote_app_uat",
+      "producer": "app",
+      "layer": "user_acceptance",
+      "target": {
+        "kind": "page",
+        "id": "content.media_viewer"
+      },
+      "runnerSourcePath": "quwoquan_app/test/user_acceptance/service/content_service/media/media_asset/media_asset_viewer_remote__user_acceptance_test.dart",
+      "executions": [
+        {
+          "environment": "gamma",
+          "platform": "android",
+          "deviceClass": "physical",
+          "provider": "first-party-https",
+          "digestBinding": "candidate"
+        },
+        {
+          "environment": "gamma",
+          "platform": "ios",
+          "deviceClass": "physical",
+          "provider": "first-party-https",
           "digestBinding": "candidate"
         }
       ],
@@ -81955,6 +82057,72 @@
         {
           "environment": "alpha",
           "platform": "service",
+          "deviceClass": "runner",
+          "provider": "none",
+          "digestBinding": "candidate"
+        }
+      ],
+      "sourcePath": "gateway/graphql_read/persisted_query_execution/operations.yaml"
+    },
+    {
+      "objectId": "gateway.persisted_query_execution",
+      "specRef": "specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-002",
+      "caseId": "persisted_query_execution_readiness_ops_env",
+      "producer": "ops",
+      "layer": "environment_acceptance",
+      "target": {
+        "kind": "object",
+        "id": "gateway.persisted_query_execution"
+      },
+      "runnerSourcePath": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/api-edge/smoke/run_persisted_query_execution_readiness.py",
+      "executions": [
+        {
+          "environment": "gamma",
+          "platform": "linux",
+          "deviceClass": "ci-runner",
+          "provider": "first-party-https",
+          "digestBinding": "candidate"
+        }
+      ],
+      "sourcePath": "gateway/graphql_read/persisted_query_execution/operations.yaml"
+    },
+    {
+      "objectId": "gateway.persisted_query_execution",
+      "specRef": "specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-002",
+      "caseId": "persisted_query_execution_search_page_app_api",
+      "producer": "app",
+      "layer": "api_integration",
+      "target": {
+        "kind": "operation",
+        "id": "gateway.persisted_query_execution.SearchPage"
+      },
+      "runnerSourcePath": "quwoquan_app/test/api_integration/service/api_edge/graphql_read/persisted_query_execution/persisted_search_page_remote__api_integration_test.dart",
+      "executions": [
+        {
+          "environment": "gamma",
+          "platform": "app",
+          "deviceClass": "runner",
+          "provider": "first-party-https",
+          "digestBinding": "candidate"
+        }
+      ],
+      "sourcePath": "gateway/graphql_read/persisted_query_execution/operations.yaml"
+    },
+    {
+      "objectId": "gateway.persisted_query_execution",
+      "specRef": "specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-001",
+      "caseId": "persisted_query_execution_search_page_app_local",
+      "producer": "app",
+      "layer": "local_contract",
+      "target": {
+        "kind": "operation",
+        "id": "gateway.persisted_query_execution.SearchPage"
+      },
+      "runnerSourcePath": "quwoquan_app/test/local_contract/service/api_edge/graphql_read/persisted_query_execution/search_page_production_composition__local_contract_test.dart",
+      "executions": [
+        {
+          "environment": "alpha",
+          "platform": "app",
           "deviceClass": "runner",
           "provider": "none",
           "digestBinding": "candidate"
@@ -101685,7 +101853,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/application/personal_assistant_stream_controller.dart",
-            "sha256": "d6098210da11b58aa8ed407f9ebf611252befe75adba94b0622c28d7e53366c2"
+            "sha256": "aa7d1a22ff2f0800a6af6e9daf9932f3365f6c0d38f2e557cbd1c5b04f9a26b8"
           },
           {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/assistant_run/application/personal_assistant_stream_controller_actions.dart",
@@ -103999,6 +104167,10 @@
         ],
         "application": [
           {
+            "path": "quwoquan_app/lib/service/assistant_service/assistant/skill_surface_placement/application/public/assistant_skill_placement_open_request.dart",
+            "sha256": "c6003ea0aaa8d3cb24110e9cff9262e2f35f42cb72e1e7d8e092c5ac87012c12"
+          },
+          {
             "path": "quwoquan_app/lib/service/assistant_service/assistant/skill_surface_placement/application/skill_surface_placement_facet.dart",
             "sha256": "55262f5ae4670edb0f22a645af16845619de40015ed80162a3198afc34c25496"
           }
@@ -104024,13 +104196,23 @@
             "sha256": "d9ee01d4e9cbcef091db9ff9a8dacbd99e87a9a0f887f4f731140cd308fdf832"
           }
         ],
-        "apiIntegration": [],
+        "apiIntegration": [
+          {
+            "path": "quwoquan_app/test/api_integration/service/assistant_service/assistant/skill_surface_placement/skill_surface_placement_remote__api_integration_test.dart",
+            "sha256": "a8d097957fd17eb8ebe0724499ad81371003317c496112875e884fe5298aa6a6"
+          }
+        ],
         "userAcceptance": [],
-        "pageParticipant": false,
+        "pageParticipant": true,
         "pageOwned": false
       },
       "ops": {
-        "environmentAcceptance": [],
+        "environmentAcceptance": [
+          {
+            "path": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/run_skill_surface_placement_readiness.py",
+            "sha256": "0b086defcddc317b6c9159c3b6f3dab8515c85163d018bb9d378135d16e464dd"
+          }
+        ],
         "rollbackRunner": [],
         "replayRunner": []
       },
@@ -105528,7 +105710,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation_membership/presentation/group_manage_page.dart",
-            "sha256": "4dc628fcbb7662fc7a2fb5ce6c1a874d69379c6af502cccce7b466b6cc761316"
+            "sha256": "54c0e7f5b9d28dc94af40dde2d25607f6ac6626098440eeb63feb1f5121d5365"
           },
           {
             "path": "quwoquan_app/lib/service/chat_service/chat/conversation_membership/presentation/group_member_search_page.dart",
@@ -105542,7 +105724,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation_membership/chat_group_management_journey__local_contract_test.dart",
-            "sha256": "014cc3dca1b66725fc6bada776232507e6e6e729713e29a1261e770e61d6178d"
+            "sha256": "84dd90206a2e09d925f8ff8c16dc615da9dbe14e8676b639dbe475e5ec30c10b"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation_membership/chat_member_roster_consistency__local_contract_test.dart",
@@ -105566,7 +105748,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation_membership/group_manage_page_widget__local_contract_test.dart",
-            "sha256": "8459ef2dda7f0f4ef8f2f8124be1a6ec545b93da8ea51020ccf1cfa35bc5b177"
+            "sha256": "ebe6d88f92e841bef1232ad4a15f34ec208a6f3a467de3b53aa8c47d88e80ef8"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/chat_service/chat/conversation_membership/group_member_search_page_widget__local_contract_test.dart",
@@ -106847,7 +107029,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/circle_behavior_fact/circle_behavior_fact_generated_abi__contract__local_contract_test.dart",
-            "sha256": "3c504c3e36c607afd46adb44e8a094e970441b2fccbed7bc986f0d48d2028efd"
+            "sha256": "9da1868089a78f5c23efd697e60b8560d23c1108a24c8b506c469f97e76b88b4"
           }
         ],
         "apiIntegration": [
@@ -108305,7 +108487,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/gathering_source_cards_section__local_contract_test.dart",
-            "sha256": "590568910e964fafa2b27cddc6008fec5c8c25ca4f2b105dd41cc9d01d78bbcf"
+            "sha256": "b04a9b9f4403283f878399f018b4be259f8380fab3d5ef14a04a1ed8ad91053a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/circle_service/circle_management/gathering/my_gatherings_entry_card__local_contract_test.dart",
@@ -109107,7 +109289,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/content_behavior_fact/application/content_behavior_tracker.dart",
-            "sha256": "9d882f8fe45a5369447e0605811d31645f6898154a43932dddae6955eae2a363"
+            "sha256": "c0dbf33d55166f21f3cf00da04609fbc1f7e47d37b50c19f7d2be1e367bd708a"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/content_behavior_fact/application/content_behavior_tracker_event_normalization.dart",
@@ -109914,7 +110096,12 @@
             "sha256": "3ae94730f9adb6b2b7570c8265d28d38177940f37b1c2375ae8acddef5033f2a"
           }
         ],
-        "userAcceptance": [],
+        "userAcceptance": [
+          {
+            "path": "quwoquan_app/test/user_acceptance/service/content_service/media/filter_catalog_release/filter_catalog_remote__user_acceptance_test.dart",
+            "sha256": "dfac34d173eb89f40b9a35b561b84792e42eca511f0e30d26bc723310e350e32"
+          }
+        ],
         "pageParticipant": true,
         "pageOwned": true
       },
@@ -110596,8 +110783,18 @@
             "sha256": "205c796169c86861e88b292e2c396748644548f7dfca5b118e3a5ae226014b3d"
           }
         ],
-        "apiIntegration": [],
-        "userAcceptance": [],
+        "apiIntegration": [
+          {
+            "path": "quwoquan_app/test/api_integration/service/content_service/media/media_asset/media_asset_remote__api_integration_test.dart",
+            "sha256": "49b33c4eb63f039b075aa8611fbff1d24aa46910db447d57d175d8a591049717"
+          }
+        ],
+        "userAcceptance": [
+          {
+            "path": "quwoquan_app/test/user_acceptance/service/content_service/media/media_asset/media_asset_viewer_remote__user_acceptance_test.dart",
+            "sha256": "1fb0c2cbe9406620f5558225fe5f7edbe310166e43da8bb61cc3da078ec3dffe"
+          }
+        ],
         "pageParticipant": true,
         "pageOwned": true
       },
@@ -111133,7 +111330,12 @@
             "sha256": "538a1c71902aea5ce456ee0a8eb78ea424ef923e34009b89ad89574695b6be88"
           }
         ],
-        "apiIntegration": [],
+        "apiIntegration": [
+          {
+            "path": "quwoquan_app/test/api_integration/service/content_service/media/media_upload_session/media_upload_session_remote__api_integration_test.dart",
+            "sha256": "135acc650d5200889e0db90af5986a042881c7fab39aeb1b5a37a1c3b2734d21"
+          }
+        ],
         "userAcceptance": [
           {
             "path": "quwoquan_app/test/user_acceptance/service/content_service/media/media_upload_session/media_publication_remote__user_acceptance_test.dart",
@@ -111260,7 +111462,12 @@
             "sha256": "fb8db667c3bf397d25af437eba9557a34de29a424e3052d5f78f061be91d1a60"
           }
         ],
-        "apiIntegration": [],
+        "apiIntegration": [
+          {
+            "path": "quwoquan_app/test/api_integration/service/content_service/media/original_access_quota/original_access_quota_remote__api_integration_test.dart",
+            "sha256": "21847fae4c3ba1e17101f6745da837e0853c11420cbf61e555eef812f6f69ae5"
+          }
+        ],
         "userAcceptance": [],
         "pageParticipant": true,
         "pageOwned": false
@@ -111366,7 +111573,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/outbound_share_fact/outbound_share_appender__contract__local_contract_test.dart",
-            "sha256": "f739fc68fad5af25415fbbbd26b8ab76b352229ceb5c13104ceafb1540d0c46f"
+            "sha256": "2f864cd8fb928ff6806185609ff1e4d841530a46f253dffc14f6b37dda352dcd"
           }
         ],
         "apiIntegration": [
@@ -111537,7 +111744,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_post_store.go",
-            "sha256": "8fc0ee3a54195c2e2a59feba8deca0ec3eeece6e4d2d411abb81f5e428eb35d0"
+            "sha256": "67b5c39f0ab0c170ab657a525c8ba23c132cae0a31c5d20820e950d6bf8db5d8"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_research_release_reader.go",
@@ -111602,10 +111809,6 @@
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation/projector_event.go",
             "sha256": "0f93037bb0ccac63c15ff2fb88976a07923e72a9b03c9087487c2b8bf6a4f2f1"
-          },
-          {
-            "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation/recommend_feature.go",
-            "sha256": "cfbcefc1e0f2cc10afdeab6e21ad9f7d12e3c71d9b203ab21c1b164354b67866"
           },
           {
             "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/recommendation/redis_client.go",
@@ -111693,7 +111896,7 @@
             "storage": "content_outbox",
             "artifact": {
               "path": "quwoquan_service/services/content-service/internal/content/post/infrastructure/persistence/mongo_post_store.go",
-              "sha256": "8fc0ee3a54195c2e2a59feba8deca0ec3eeece6e4d2d411abb81f5e428eb35d0"
+              "sha256": "67b5c39f0ab0c170ab657a525c8ba23c132cae0a31c5d20820e950d6bf8db5d8"
             }
           }
         ],
@@ -112597,6 +112800,10 @@
             "sha256": "b1a744472f6f68ed9d57f855f9e4171260a926c4a729d7d9e5ba3acad2d27c6e"
           },
           {
+            "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/post_mongo_indexes__data_consistency__api_integration_test.go",
+            "sha256": "c4eb1d0e7f45d9cb6cea7df70a8d36efe8c65628f597a856dad9b2fda6637381"
+          },
+          {
             "path": "quwoquan_service/services/content-service/tests/api_integration/content/post/post_profile_interaction_contract__api_integration_test.go",
             "sha256": "7fabe4f4689582f3e3e7e032e79a1b062c522b33750a702da08d41717f093d15"
           },
@@ -112788,7 +112995,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_feed_loading.dart",
-            "sha256": "f9c680d5fdb4d9baf65b7f6b3e9df0b4af581eb2c78f94ee6a6fe6ec221b790a"
+            "sha256": "00b68449ca1550033b60f74b61d1d5591adbbea4e48fd75a48a1b70de36aff73"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_feed_pagination_lifecycle.dart",
@@ -112796,7 +113003,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_feed_provider.dart",
-            "sha256": "4d64860b763b0291bdb4222928b772a0de12fe98a5e3e7340b8e85a0a655cf27"
+            "sha256": "d478620f993c6a73527576a6c594ddc5020db7edba41d8414bfee95ce6ab5f42"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/discovery_state_provider.dart",
@@ -112908,7 +113115,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/content_post_view_data.dart",
-            "sha256": "052c9bcc132867e27d0cd98f954f4c8748825c5d861438b9685c48e3b57ad91e"
+            "sha256": "6273f5c712723054ea6d939dcd782a2f1c0af207aeefe40d39581caf6ee4801f"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/application/public/content_surface_view.dart",
@@ -113062,7 +113269,7 @@
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/post_view_projection.dart",
-            "sha256": "5c904aeaa24d79a29f9ba288b78e0e157eec2f100d35d87adcb5aeeb9ba6f450"
+            "sha256": "aeb6d26d0c4c66662acac20102b31b74ae381f0bd89d86b3a57f1d8adac549cb"
           },
           {
             "path": "quwoquan_app/lib/service/content_service/content/post/adapters/prepared_post_publication_payload.dart",
@@ -113158,7 +113365,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_get_post_hydration_contract__local_contract_test.dart",
-            "sha256": "b59ed2f3953cb8655ad6f7b3808b53cebd2d5d23975a0485bdf46218035a61c7"
+            "sha256": "b5ab58cdf432ca3321e3ac2ef680f9e6c9b5421453173b30f9ecdc93cc2c3ecd"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/article_markdown_codec__local_contract_test.dart",
@@ -113262,7 +113469,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_post_view_data__local_contract_test.dart",
-            "sha256": "41cebb02e3b81771102131aa05d12ab2ee9ede720ee32921b670e0c6b0592e3a"
+            "sha256": "02dfcc099e2e508c782a9094235356b38cc51aa7dfb42a0d5e312478d40bc1cc"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_query_snapshot_byte_admission__local_contract_test.dart",
@@ -113282,7 +113489,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_share_template_public_link__local_contract_test.dart",
-            "sha256": "df380b3b31cb16c07fa2fbd57c68139281aa4a3b73a7bac7aff4c06fda947a11"
+            "sha256": "7fa7479390dc892347dbc94237db3c50421be8368c61e9c147cd04b31013d6dc"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/content_surface_view_mapper__local_contract_test.dart",
@@ -113358,7 +113565,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/discovery_feed_home_channel_lifecycle__local_contract_test.dart",
-            "sha256": "686b6f50587cfd40ca123b0a9ee3af5ad4faa58fbe1c2b33cfe152a8e5996d3b"
+            "sha256": "a741e2ddaa165125c5c3340067e56e40a7781bb3e062464ca77bb1294f184f1b"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/discovery_feed_query_contract__local_contract_test.dart",
@@ -113458,7 +113665,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/home_page_widget__local_contract_test.dart",
-            "sha256": "30f5b4bbe12161c5d162b484c4315c2fd364bd16cc0d90b8acf0fdb7278cc9a1"
+            "sha256": "fb97ae54a2b15e431e72d6852f332424d7b32f322a714cb1f2e18a5b071ee807"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/homepage_reference_draft_codec__local_contract_test.dart",
@@ -113554,7 +113761,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/post_view_projection_contract__local_contract_test.dart",
-            "sha256": "62e9ac6b8b69677891aafbd969cb755e96c97bf9a366e53e396c26c26e94863f"
+            "sha256": "6de242d8471164a412e2caa59da023d3d6914613d28aec1a61096324c6d161aa"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/content_service/content/post/profile_interaction_persona_route_contract__local_contract_test.dart",
@@ -114782,7 +114989,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_detail_auth_continuation__functional__local_contract_test.dart",
-            "sha256": "a80963fec8cefe7e1a3c49b9686559bc82587afff0ff69a87a3ad6cf6f1909e8"
+            "sha256": "7e245c0b947ed14d72733423b5b76fcff08c24a65cc0d2b391cf95b468dd3e5a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage/homepage_detail_page_widget__local_contract_test.dart",
@@ -115150,7 +115357,7 @@
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_review/homepage_review_claim_journey__local_contract_test.dart",
-            "sha256": "ffec26033c5c98a62cba612e038f08f14f327746021eac31ae93bc36a168c0f8"
+            "sha256": "6768f6733bef1a8489594f39929a4045f8d8800ddbbf5c5a718defaafd29b3e2"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/entity_service/entity_homepage/homepage_review/homepage_review_facet__contract__local_contract_test.dart",
@@ -115516,7 +115723,7 @@
           },
           {
             "path": "quwoquan_service/services/api-edge/tests/local_contract/graphql_read/persisted_query_execution/graphql_read_rest_command_single_track__local_contract_test.py",
-            "sha256": "8511dbf7d4c4d7d5ef9576abce9f94d11792f71ac7899ea2e2ee1cc8039f95b2"
+            "sha256": "d1d5ee1bf55557b06fb885fcade80eca677153b34c095ae66dc8e3839005fded"
           },
           {
             "path": "quwoquan_service/services/api-edge/tests/local_contract/graphql_read/persisted_query_execution/persisted_query_execution__local_contract_test.go",
@@ -115569,14 +115776,29 @@
           }
         ],
         "presentation": [],
-        "localContract": [],
-        "apiIntegration": [],
+        "localContract": [
+          {
+            "path": "quwoquan_app/test/local_contract/service/api_edge/graphql_read/persisted_query_execution/search_page_production_composition__local_contract_test.dart",
+            "sha256": "f6e38b11340659892bceae2956f54d34b20f4c18d94086ea6f4249e79725a52a"
+          }
+        ],
+        "apiIntegration": [
+          {
+            "path": "quwoquan_app/test/api_integration/service/api_edge/graphql_read/persisted_query_execution/persisted_search_page_remote__api_integration_test.dart",
+            "sha256": "c6d9d142cef62468d514f0e576cc958a21aa831f653741accaa7e1c025ea7d29"
+          }
+        ],
         "userAcceptance": [],
-        "pageParticipant": false,
+        "pageParticipant": true,
         "pageOwned": false
       },
       "ops": {
-        "environmentAcceptance": [],
+        "environmentAcceptance": [
+          {
+            "path": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/api-edge/smoke/run_persisted_query_execution_readiness.py",
+            "sha256": "3ae5642346ea9143ee93e1f3b4b0761a1ae6b5ad791f780a4fd6dc0a998182e0"
+          }
+        ],
         "rollbackRunner": [],
         "replayRunner": []
       },
@@ -118786,7 +119008,7 @@
           },
           {
             "path": "quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/delivery_failure_terminates__reliability__local_contract_test.go",
-            "sha256": "3e76a2daa1de93ad5c3a9b5fa877426fc347be357e9e1021e97c91608fde02f3"
+            "sha256": "5ba86207e2422f906cd7a048b0a73962518cab80e5316148d0ba3f074b357c4e"
           },
           {
             "path": "quwoquan_service/services/realtime-gateway/tests/local_contract/realtime/connection/gateway__local_contract_test.go",
@@ -119487,15 +119709,15 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_feature_profile_view/infrastructure/mongo_store_core.py",
-            "sha256": "057e1893d261782f28268c3a3b7a996e6ebfa87ae6e10b86c4c0cbaf260dcf52"
+            "sha256": "4d66509baa6c5e7056d55862631e1c6952875c2bb8c3045dd6898d45bb1633c2"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_feature_profile_view/infrastructure/mongo_store_intersection_reads.py",
-            "sha256": "d9f86a5cc66c7a3779273353b413ed171c17435d411a4686033ed8225a7b1b07"
+            "sha256": "36a5c982f5b9b5503df88d99f81ca8de22cb1abf76e4a19fb84244c30198055a"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_feature_profile_view/infrastructure/mongo_store_intersection_writes.py",
-            "sha256": "b3b6330221f4b5ea9c3bc162ab27979c348bd75000a6a8c970f5f955f19cccf9"
+            "sha256": "4f7660662f4bce38d637649d76031c7e3bc17661cd658103f0b4fc20c853ff59"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_feature_profile_view/infrastructure/mongo_store_profile_writes.py",
@@ -119637,6 +119859,10 @@
             "sha256": "d59642fa27ea71aa0aedec8045c9cd53cce9dfca7f011779ed6a4550a31db0a6"
           },
           {
+            "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_mongo_store_indexes__contract__local_contract_test.py",
+            "sha256": "e12165b2c2f852a98d0173c6f6cb78676c99be07de4913583edc9e4fa3411dff"
+          },
+          {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_feature_profile_view/test_search_signal_consumer__local_contract_test.py",
             "sha256": "7ae2c4fce3168ebd17fb1db4dd0b6e47c3ce9ddacff64415eca39ebf034eb156"
           },
@@ -119648,7 +119874,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_gathering_flywheel_stream__api_integration_test.py",
-            "sha256": "0a43f694879e8a206c18b74db05c015280344b7c23ed7640a2478d31c449a4a2"
+            "sha256": "67aa7a387dac0929e1d7a7c3873033e681d6c44d4ef5f594cba88c86a873deac"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/api_integration/recommendation/recommendation_feature_profile_view/test_mongo_feature_checkpoint__api_integration_test.py",
@@ -119877,6 +120103,7 @@
         "events.content.behavior_facts.recommendation-feature.dlq",
         "events.content.post_lifecycle.recommendation-feature.dlq",
         "events.recommendation.intersections",
+        "events.search.recommendation_signals.recommendation-feature.dlq",
         "events.tag.feedback.recommendation-feature.dlq",
         "events.user.persona_relationship.recommendation-feature.dlq",
         "recommendation_feature_projection_checkpoints",
@@ -120159,7 +120386,7 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/scripts/verify_feature_consistency.py",
-            "sha256": "9ee21a8e301875be3a7de09c902a54ac16d6236024d73436fd5ec39e2c10cc04"
+            "sha256": "9b7757c2dd08f1a4a03bf06b33096a188ca1c0fa727eb202a2c2837b7996191d"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/security/__init__.py",
@@ -120245,6 +120472,10 @@
         ],
         "localContract": [
           {
+            "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/impact_help_type_registry__resolver_shape__local_contract_test.py",
+            "sha256": "15599557dabb89e7203d915f67375c0a41ad8dc6a184cbe0401ff174a6527b48"
+          },
+          {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/intersection_kind_registry__producer_shape__local_contract_test.py",
             "sha256": "50e2d63ebf22b6ae838b3160cc6dad90330c93cd972a2c45f2010bb0dc885698"
           },
@@ -120258,7 +120489,7 @@
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/model_contract/test_feature_registry_projection__contract__local_contract_test.py",
-            "sha256": "5e6e74100eb1a26a7447fa21a9cee200591402e11ca5472ca25a26b0f6d564a6"
+            "sha256": "e59a2c5d8634feb853137540dd77a74c75d9882ba979d1aec9c541a7c17076c9"
           },
           {
             "path": "quwoquan_service/services/recommendation-service/tests/local_contract/recommendation/recommendation_model_release/model_contract/test_gate_contract__gate_decision__contract__local_contract_test.py",
@@ -121616,7 +121847,7 @@
           },
           {
             "path": "quwoquan_service/services/search-service/tests/local_contract/search/search_index_view/account_security_authority__security__local_contract_test.go",
-            "sha256": "479dbf36864f5d1aa397bedf3801a6b971880a56a93ff505ecdfd17c4414aa81"
+            "sha256": "df15f6e1b49d4e70482cba7088f599acf8edd31ff6434e83f53c2abf9b5a4ff6"
           },
           {
             "path": "quwoquan_service/services/search-service/tests/local_contract/search/search_index_view/canonical_search_hit__contract__local_contract_test.go",
@@ -121878,10 +122109,6 @@
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_page_graphql_repository__local_contract_test.dart",
             "sha256": "31485ef94d37218c7d38eecc1aaf81c489c36fdb5b28e6328711388971b773bf"
-          },
-          {
-            "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_page_production_composition__local_contract_test.dart",
-            "sha256": "2aa34d4547ce90f85b87c413e0e2fce77498d9b11fe563ed65310c386247ee3a"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/search_service/search/search_index_view/search_remote_api_path__local_contract_test.dart",
@@ -123112,7 +123339,12 @@
         ]
       },
       "app": {
-        "domain": [],
+        "domain": [
+          {
+            "path": "quwoquan_app/lib/service/user_service/relationship/contact_discovery_record/domain/contact_hash_service.dart",
+            "sha256": "a20f549332795882c769c2c0534d6c8fb118e033e041b7323ae279d319cf8cf5"
+          }
+        ],
         "application": [
           {
             "path": "quwoquan_app/lib/service/user_service/relationship/contact_discovery_record/application/public/contact_discovery_repository.dart",
@@ -123123,22 +123355,18 @@
           {
             "path": "quwoquan_app/lib/service/user_service/relationship/contact_discovery_record/adapters/contact_discovery_remote.dart",
             "sha256": "30603a98f930b41a8ade1f269580880519b1f58ee8e3b139ee7c08e479ea222e"
-          },
-          {
-            "path": "quwoquan_app/lib/service/user_service/relationship/contact_discovery_record/adapters/contact_hash_service.dart",
-            "sha256": "a20f549332795882c769c2c0534d6c8fb118e033e041b7323ae279d319cf8cf5"
           }
         ],
         "presentation": [
           {
             "path": "quwoquan_app/lib/service/user_service/relationship/contact_discovery_record/presentation/phone_contacts_page.dart",
-            "sha256": "5761d6e58a851f0d4b11fba8a43cc65f4de60854eb8037242a943507b698e945"
+            "sha256": "730219736bf847129f494ef16b29b60f47c23e570330dd93b01ccdfd20629705"
           }
         ],
         "localContract": [
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/relationship/contact_discovery_record/add_contact_phone_page__local_contract_test.dart",
-            "sha256": "08f0d4b46f15939b1f36b2b5e82ef33c52270c8f38fe19fd98f3f8b1d63153e4"
+            "sha256": "124efa266571154d5d51fd527488c8ea1ada56de2d8d5589bddd199eddc22314"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/relationship/contact_discovery_record/add_contact_search_page__local_contract_test.dart",
@@ -123154,7 +123382,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/relationship/contact_discovery_record/contact_hash_service__local_contract_test.dart",
-            "sha256": "6520eaf641f67fe9e28f501dd635520cab141755783198d2e5bc8d0b9652af84"
+            "sha256": "29e7c7fe928ae2475d8d0cc0659c47b9348395eda9762c888141e9641bb65593"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/relationship/contact_discovery_record/contact_search_result_page__local_contract_test.dart",
@@ -123164,7 +123392,7 @@
         "apiIntegration": [
           {
             "path": "quwoquan_app/test/api_integration/service/user_service/relationship/contact_discovery_record/contact_discovery_provider_remote__api_integration_test.dart",
-            "sha256": "933cade5aa3fb795fa8e6b5eb40b5e209f48ddcaec5106cbd7dfc9cecebe741a"
+            "sha256": "06096301d63f19e227d3588764275c290ded5396c03c7d3cc5d14759c0d2a064"
           }
         ],
         "userAcceptance": [
@@ -124333,7 +124561,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/edit_profile_journey__local_contract_test.dart",
-            "sha256": "6d4ec565de6f7e7ccabd7f91ca843a26639be99f0baaa051488d0288c4ce488d"
+            "sha256": "b63c6a07f19f52d9992748830cb046cf07f7a8871f2c2a470f39d72403303983"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/persona_management/persona/edit_profile_page__local_contract_test.dart",
@@ -125945,11 +126173,11 @@
           },
           {
             "path": "quwoquan_app/lib/service/user_service/account/user_account/presentation/my_qr_code_page.dart",
-            "sha256": "39d3b2c2265624acf47c1e08d76b7db6e63c80cf3374b4c6487919e2f4ca7cde"
+            "sha256": "7d0c063a91ba1f192fc2ffacf2f42ed9dbfd7ff5c8a3c5f19ffeab9652bca24b"
           },
           {
             "path": "quwoquan_app/lib/service/user_service/account/user_account/presentation/scan_contact_qr_page.dart",
-            "sha256": "fcf2f1e610e68324e970b1976050aa95d8885b1f7bef13cf6c737b8b8eaf0d4f"
+            "sha256": "1de9f957a68616465313546a72a93b95796b9e5c652d9d3f4b9088ea147068fd"
           },
           {
             "path": "quwoquan_app/lib/service/user_service/account/user_account/presentation/settings_account_security_page.dart",
@@ -125983,7 +126211,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/user_account/my_qr_code_page__local_contract_test.dart",
-            "sha256": "b3a3caf47b20ae8a51a765bdf5f8387e7f5de6d2ad16c07f36ffc1e332baab64"
+            "sha256": "af4e009656709bcb27cff87d52fd01585b89ce250ee419c93d917e0b48de2dca"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/user_account/prefab_user_resolver__empty_persona_refs__contract__local_contract_test.dart",
@@ -125999,7 +126227,7 @@
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/user_account/scan_contact_qr_page_unavailable__local_contract_test.dart",
-            "sha256": "57bcc6491402d5875ed12450fcd9c9ebb531a291f5b124655ecef71a05ed49a5"
+            "sha256": "62f917d8edfee760329a7b268338e5626206b5fb8325027e78147af86701f9eb"
           },
           {
             "path": "quwoquan_app/test/local_contract/service/user_service/account/user_account/settings_account_security_page__local_contract_test.dart",
@@ -126506,15 +126734,15 @@
     },
     {
       "objectId": "assistant.skill_surface_placement",
-      "stage": "contract-ready",
+      "stage": "implemented",
       "modeled": true,
       "contractReady": true,
-      "implemented": false,
+      "implemented": true,
       "commercialReady": false,
       "missing": [
         "commercial.operation.GetSkillSurfacePlacement",
         "commercial.operation.PutSkillSurfacePlacement",
-        "implementation.app.api_integration"
+        "commercial.result_bundle"
       ]
     },
     {
@@ -126791,13 +127019,13 @@
     },
     {
       "objectId": "content.filter_catalog_release",
-      "stage": "contract-ready",
+      "stage": "implemented",
       "modeled": true,
       "contractReady": true,
-      "implemented": false,
+      "implemented": true,
       "commercialReady": false,
       "missing": [
-        "implementation.app.user_acceptance"
+        "commercial.result_bundle"
       ]
     },
     {
@@ -126813,15 +127041,14 @@
     },
     {
       "objectId": "content.media_asset",
-      "stage": "contract-ready",
+      "stage": "implemented",
       "modeled": true,
       "contractReady": true,
-      "implemented": false,
+      "implemented": true,
       "commercialReady": false,
       "missing": [
         "commercial.operation.GetMediaAsset",
-        "implementation.app.api_integration",
-        "implementation.app.user_acceptance"
+        "commercial.result_bundle"
       ]
     },
     {
@@ -126848,25 +127075,25 @@
     },
     {
       "objectId": "content.media_upload_session",
-      "stage": "contract-ready",
+      "stage": "implemented",
       "modeled": true,
       "contractReady": true,
-      "implemented": false,
+      "implemented": true,
       "commercialReady": false,
       "missing": [
-        "implementation.app.api_integration"
+        "commercial.result_bundle"
       ]
     },
     {
       "objectId": "content.original_access_quota",
-      "stage": "contract-ready",
+      "stage": "implemented",
       "modeled": true,
       "contractReady": true,
-      "implemented": false,
+      "implemented": true,
       "commercialReady": false,
       "missing": [
         "commercial.operation.GetOriginalImageAccessAudit",
-        "implementation.app.api_integration"
+        "commercial.result_bundle"
       ]
     },
     {
@@ -126997,15 +127224,14 @@
     },
     {
       "objectId": "gateway.persisted_query_execution",
-      "stage": "contract-ready",
+      "stage": "implemented",
       "modeled": true,
       "contractReady": true,
-      "implemented": false,
+      "implemented": true,
       "commercialReady": false,
       "missing": [
         "commercial.operation.ExecutePersistedGraphQLQuery",
-        "implementation.app.api_integration",
-        "implementation.app.local_contract"
+        "commercial.result_bundle"
       ]
     },
     {
@@ -127814,7 +128040,7 @@
     },
     {
       "path": "_schemas/storage.schema.json",
-      "sha256": "53da4da9cb172c5a168d9bb5ac30d6ea7194ca60797edfbdae3173862f5974cf"
+      "sha256": "27c410d6fc54fc905f7fd966796d0d200b7a07b398bab70539cd186c6e5bc9fd"
     },
     {
       "path": "_shared/app_launch_manifest.yaml",
@@ -127862,7 +128088,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "9388e526ed6125437cb428728e3d1b48fb0f768ca2f0526d9e304c30505f8467"
+      "sha256": "3da1639642279e42e565898d1a08c348a2b84f905bc34ea615c764ad51eece90"
     },
     {
       "path": "_shared/realtime_event_catalog.yaml",
@@ -128374,7 +128600,7 @@
     },
     {
       "path": "assistant/assistant/skill_surface_placement/operations.yaml",
-      "sha256": "993fb8e2b08e95316291790ee07fac38952b6246e920aa08665939e6e16923b2"
+      "sha256": "6082390bf7de3f07ac8792287f14446e77b212633f7798e1ab6ff522b985bf7a"
     },
     {
       "path": "assistant/assistant/skill_surface_placement/storage.yaml",
@@ -129102,7 +129328,7 @@
     },
     {
       "path": "content/content/content_behavior_fact/behaviors.yaml",
-      "sha256": "5a64d15af5759776fa44289fcc6d0895fc930c2874d408afa8159f12e5466c73"
+      "sha256": "23d891e052bf774dfb5aba85c1e986217eb7cbb5f5e7a40f0fb2843c98f666bc"
     },
     {
       "path": "content/content/content_behavior_fact/events.yaml",
@@ -129486,7 +129712,7 @@
     },
     {
       "path": "content/media/filter_catalog_release/operations.yaml",
-      "sha256": "b5e2932fcc926416c1c03098b391c55bce082e1eb6c6b43dbed7e6728a71fb1d"
+      "sha256": "c21a04c3cfd716b28c2d8fceaec125ded531cbc2ad9aefa1e49dae6d2715ae32"
     },
     {
       "path": "content/media/filter_catalog_release/projections/filter_catalog_slice.yaml",
@@ -129522,7 +129748,7 @@
     },
     {
       "path": "content/media/media_asset/operations.yaml",
-      "sha256": "c937412f3baaaec3deb78b737798df3e81362327a0e4617136212c9c65312757"
+      "sha256": "e791f3f48504ad78b78b6bd2a2c98c7400d13ed2506aad3ea487fc269f0ea082"
     },
     {
       "path": "content/media/media_asset/preview_track_manifest.schema.json",
@@ -129986,7 +130212,7 @@
     },
     {
       "path": "gateway/graphql_read/persisted_query_execution/operations.yaml",
-      "sha256": "135979c2043f904744f63d87524b802901431b3c48fd4f8326621f0e130fdfde"
+      "sha256": "c2b512f0d577a479e693e649b9b6560746ca98124cdf31f22a4a3cd40363d352"
     },
     {
       "path": "gateway/graphql_read/persisted_query_execution/persisted_queries/search_page.yaml",
@@ -130718,7 +130944,7 @@
     },
     {
       "path": "recommendation/recommendation/recommendation_candidate_index_view/storage.yaml",
-      "sha256": "b4cbc34cd72a6c4fb32288c42c744cb7bddf1dd06ac09e3978aa7d9509242911"
+      "sha256": "3b87e1851d9f102e5a600451024cbe9bdcbcee6c923b5697cbf462e89ca3ef86"
     },
     {
       "path": "recommendation/recommendation/recommendation_exposure_fact/errors.yaml",
@@ -130806,7 +131032,7 @@
     },
     {
       "path": "recommendation/recommendation/recommendation_feature_profile_view/storage.yaml",
-      "sha256": "6c1a9e4e44d1daa4e5ebcb7a060b16ff797edbe2e6782d0aed6b5f137c1f599b"
+      "sha256": "88425ca9f357a2f481ec70578e6f0bd89f13d26b257eaceb29fef577459603a6"
     },
     {
       "path": "recommendation/recommendation/recommendation_feedback_fact/errors.yaml",
@@ -136033,7 +136259,7 @@
     },
     {
       "path": "_shared/page_object_contract.yaml",
-      "sha256": "9388e526ed6125437cb428728e3d1b48fb0f768ca2f0526d9e304c30505f8467",
+      "sha256": "3da1639642279e42e565898d1a08c348a2b84f905bc34ea615c764ad51eece90",
       "mediaType": "application/yaml",
       "content": {
         "contract_id": "app_page_object_contract",
@@ -137089,18 +137315,24 @@
               "all_of": [],
               "any_of": []
             },
+            "command_operations": [
+              "assistant.skill_surface_placement.PutSkillSurfacePlacement"
+            ],
             "data_owners": [
+              "assistant",
               "chat"
             ],
             "entry_widget": "GroupManagePage",
             "experience_owner": "chat",
             "object_ids": [
+              "assistant.skill_surface_placement",
               "chat.conversation",
               "chat.conversation_membership"
             ],
             "page_id": "chat.group_manage",
             "page_kind": "routed",
             "query_slices": [
+              "assistant.skill_surface_placement",
               "chat.conversation",
               "chat.conversation_membership.projection.conversation_member_list_row"
             ],
@@ -137122,6 +137354,7 @@
               ]
             },
             "typed_presentation": [
+              "SkillSurfacePlacement",
               "ChatGroupSettingsViewData",
               "ConversationMemberListRow"
             ]
@@ -138974,6 +139207,7 @@
               "search.search_feedback_fact.ReportSearchFeedback"
             ],
             "data_owners": [
+              "gateway",
               "search",
               "content",
               "circle"
@@ -138983,6 +139217,7 @@
             "object_ids": [
               "circle.circle",
               "content.post",
+              "gateway.persisted_query_execution",
               "search.search_feedback_fact",
               "search.search_index_view",
               "search.search_request_fact"
@@ -138990,6 +139225,7 @@
             "page_id": "search.network_results",
             "page_kind": "routed",
             "query_slices": [
+              "gateway.persisted_query_execution",
               "search.search_index_view.projection.search_response_view",
               "content.post.projection.post_read_presentation"
             ],
@@ -139012,6 +139248,7 @@
               ]
             },
             "typed_presentation": [
+              "SearchPageSlice",
               "SearchHit",
               "CanonicalSearchContentHit",
               "ContentPostViewData"
@@ -174984,7 +175221,7 @@
     },
     {
       "path": "assistant/assistant/skill_surface_placement/operations.yaml",
-      "sha256": "993fb8e2b08e95316291790ee07fac38952b6246e920aa08665939e6e16923b2",
+      "sha256": "6082390bf7de3f07ac8792287f14446e77b212633f7798e1ab6ff522b985bf7a",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -175289,6 +175526,46 @@
             "target": {
               "id": "PutSkillSurfacePlacement",
               "kind": "operation"
+            }
+          },
+          {
+            "case_id": "skill_surface_placement_app_api",
+            "executions": [
+              {
+                "device": "runner",
+                "digest_binding": "candidate",
+                "env": "gamma",
+                "platform": "app",
+                "provider": "first-party-https"
+              }
+            ],
+            "layer": "api_integration",
+            "producer": "app",
+            "runner_source_path": "quwoquan_app/test/api_integration/service/assistant_service/assistant/skill_surface_placement/skill_surface_placement_remote__api_integration_test.dart",
+            "spec_ref": "specs/feature-tree/assistant-run-learning/skill-product-integration-platform/shared-surface-skill-placement/spec.md#gwt-001",
+            "target": {
+              "id": "GetSkillSurfacePlacement",
+              "kind": "operation"
+            }
+          },
+          {
+            "case_id": "skill_surface_placement_readiness_ops_env",
+            "executions": [
+              {
+                "device": "ci-runner",
+                "digest_binding": "candidate",
+                "env": "gamma",
+                "platform": "linux",
+                "provider": "first-party-https"
+              }
+            ],
+            "layer": "environment_acceptance",
+            "producer": "ops",
+            "runner_source_path": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/run_skill_surface_placement_readiness.py",
+            "spec_ref": "specs/feature-tree/assistant-run-learning/skill-product-integration-platform/shared-surface-skill-placement/spec.md#gwt-001",
+            "target": {
+              "id": "assistant.skill_surface_placement",
+              "kind": "object"
             }
           }
         ]
@@ -248008,7 +248285,7 @@
     },
     {
       "path": "content/content/content_behavior_fact/behaviors.yaml",
-      "sha256": "5a64d15af5759776fa44289fcc6d0895fc930c2874d408afa8159f12e5466c73",
+      "sha256": "23d891e052bf774dfb5aba85c1e986217eb7cbb5f5e7a40f0fb2843c98f666bc",
       "mediaType": "application/yaml",
       "content": {
         "aggregate": "ContentBehaviorFact",
@@ -248420,9 +248697,9 @@
             "batch": true,
             "batch_route": "POST /content/behaviors",
             "dart_method": "trackAssistantInterest",
-            "description": "小艺对话中浮现的兴趣标签回流（对话兴趣 → 推荐特征，不绑定具体 post）",
+            "description": "小艺对话中浮现的兴趣标签行为事实（不绑定具体 post）",
             "ml_signal": "moderate_positive",
-            "notes": "由小艺（assistant）每轮对话产出的 diagnostics.emergedTags 合成上报，\npayload 只带 tagRefs（路径制标签），不绑定 contentId；\n经 ProcessBatch → RecommendFeatureProjector 进 rm_recommend_feature 的 tagInteraction。\n",
+            "notes": "由小艺（assistant）每轮对话产出的 diagnostics.emergedTags 合成上报，\npayload 只带 tagRefs（路径制标签），不绑定 contentId；\n通过 Content ProcessBatch 更新当前会话 HotPath tag weights，并发布 ContentBehaviorRecorded typed fact；当前 Recommendation 持久化 consumer 对无 targetId 的事件不写 rm_recommend_feature，不得把成功接收解释为长期画像已更新。\n",
             "payload_fields": [
               "tagRefs"
             ],
@@ -248435,7 +248712,7 @@
             "batch_route": "POST /content/behaviors",
             "description": "新用户首启兴趣采集（interest-onboarding-prior，W11/B12）——四维标签选择写入推荐先验",
             "ml_signal": "strong_positive",
-            "notes": "冷启动期新用户占比 100%（全规划 ROI 最高单项）：首启兴趣采集页四维标签\n选择（topic/audience/format/entity；每个值均是 control_plane/governance/taxonomy\n发布的路径制 tagRef，用户声明字段由 user/account/user_account/fields.yaml 的\ninterestTags 统一定义）合成上报。payload 只带唯一不可变发布身份 taxonomyReleaseId 与 tagRefs（路径制标签），不绑定 contentId（与\nassistant_interest 同为 contentId 豁免事件）；经 ProcessBatch → HotPath\ntag weights + RecommendFeatureProjector 进 rm_recommend_feature 先验，\n首刷 TagRecall 立即可用；跳过者维持 hot/explore+UCB 保底。独立 action\n使 onboarding 转化漏斗可与对话兴趣回流分开归因。该确认型事件只走 ConfirmedOnboardingInterestWriter，不生成尽力 tracker 入队入口。\n",
+            "notes": "冷启动期新用户占比 100%（全规划 ROI 最高单项）：首启兴趣采集页四维标签\n选择（topic/audience/format/entity；每个值均是 control_plane/governance/taxonomy\n发布的路径制 tagRef，用户声明字段由 user/account/user_account/fields.yaml 的\ninterestTags 统一定义）合成上报。payload 只带唯一不可变发布身份 taxonomyReleaseId 与 tagRefs（路径制标签），不绑定 contentId（与\nassistant_interest 同为 contentId 豁免事件）；经 ProcessBatch 更新当前会话 HotPath tag weights，并发布 ContentBehaviorRecorded typed fact；当前 Recommendation 持久化 consumer 对无 targetId 的事件不写 rm_recommend_feature。 首刷 TagRecall 只依赖同一会话 HotPath；跳过者维持 hot/explore+UCB 保底。独立 action\n使 onboarding 转化漏斗可与对话兴趣回流分开归因。该确认型事件只走 ConfirmedOnboardingInterestWriter，不生成尽力 tracker 入队入口。\n",
             "payload_fields": [
               "taxonomyReleaseId",
               "tagRefs"
@@ -271012,7 +271289,7 @@
     },
     {
       "path": "content/media/filter_catalog_release/operations.yaml",
-      "sha256": "b5e2932fcc926416c1c03098b391c55bce082e1eb6c6b43dbed7e6728a71fb1d",
+      "sha256": "c21a04c3cfd716b28c2d8fceaec125ded531cbc2ad9aefa1e49dae6d2715ae32",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -271524,6 +271801,33 @@
             "target": {
               "id": "GetActiveFilterCatalog",
               "kind": "operation"
+            }
+          },
+          {
+            "case_id": "filter_catalog_release_remote_app_uat",
+            "executions": [
+              {
+                "device": "physical",
+                "digest_binding": "candidate",
+                "env": "gamma",
+                "platform": "android",
+                "provider": "first-party-https"
+              },
+              {
+                "device": "physical",
+                "digest_binding": "candidate",
+                "env": "gamma",
+                "platform": "ios",
+                "provider": "first-party-https"
+              }
+            ],
+            "layer": "user_acceptance",
+            "producer": "app",
+            "runner_source_path": "quwoquan_app/test/user_acceptance/service/content_service/media/filter_catalog_release/filter_catalog_remote__user_acceptance_test.dart",
+            "spec_ref": "specs/feature-tree/discovery-content/publish-comment-reaction/filter-catalog-release/spec.md#gwt-003",
+            "target": {
+              "id": "media.image_editor",
+              "kind": "page"
             }
           }
         ]
@@ -273901,7 +274205,7 @@
     },
     {
       "path": "content/media/media_asset/operations.yaml",
-      "sha256": "c937412f3baaaec3deb78b737798df3e81362327a0e4617136212c9c65312757",
+      "sha256": "e791f3f48504ad78b78b6bd2a2c98c7400d13ed2506aad3ea487fc269f0ea082",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -275093,6 +275397,33 @@
             "target": {
               "id": "SelectManualVideoCover",
               "kind": "operation"
+            }
+          },
+          {
+            "case_id": "media_asset_viewer_remote_app_uat",
+            "executions": [
+              {
+                "device": "physical",
+                "digest_binding": "candidate",
+                "env": "gamma",
+                "platform": "android",
+                "provider": "first-party-https"
+              },
+              {
+                "device": "physical",
+                "digest_binding": "candidate",
+                "env": "gamma",
+                "platform": "ios",
+                "provider": "first-party-https"
+              }
+            ],
+            "layer": "user_acceptance",
+            "producer": "app",
+            "runner_source_path": "quwoquan_app/test/user_acceptance/service/content_service/media/media_asset/media_asset_viewer_remote__user_acceptance_test.dart",
+            "spec_ref": "specs/feature-tree/discovery-content/media-processing-helper-read/image-delivery-variants/spec.md#gwt-001",
+            "target": {
+              "id": "content.media_viewer",
+              "kind": "page"
             }
           }
         ]
@@ -304416,7 +304747,7 @@
     },
     {
       "path": "gateway/graphql_read/persisted_query_execution/operations.yaml",
-      "sha256": "135979c2043f904744f63d87524b802901431b3c48fd4f8326621f0e130fdfde",
+      "sha256": "c2b512f0d577a479e693e649b9b6560746ca98124cdf31f22a4a3cd40363d352",
       "mediaType": "application/yaml",
       "content": {
         "api_routes": [
@@ -304633,6 +304964,66 @@
             "target": {
               "id": "SearchPage",
               "kind": "operation"
+            }
+          },
+          {
+            "case_id": "persisted_query_execution_search_page_app_local",
+            "executions": [
+              {
+                "device": "runner",
+                "digest_binding": "candidate",
+                "env": "alpha",
+                "platform": "app",
+                "provider": "none"
+              }
+            ],
+            "layer": "local_contract",
+            "producer": "app",
+            "runner_source_path": "quwoquan_app/test/local_contract/service/api_edge/graphql_read/persisted_query_execution/search_page_production_composition__local_contract_test.dart",
+            "spec_ref": "specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-001",
+            "target": {
+              "id": "SearchPage",
+              "kind": "operation"
+            }
+          },
+          {
+            "case_id": "persisted_query_execution_search_page_app_api",
+            "executions": [
+              {
+                "device": "runner",
+                "digest_binding": "candidate",
+                "env": "gamma",
+                "platform": "app",
+                "provider": "first-party-https"
+              }
+            ],
+            "layer": "api_integration",
+            "producer": "app",
+            "runner_source_path": "quwoquan_app/test/api_integration/service/api_edge/graphql_read/persisted_query_execution/persisted_search_page_remote__api_integration_test.dart",
+            "spec_ref": "specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-002",
+            "target": {
+              "id": "SearchPage",
+              "kind": "operation"
+            }
+          },
+          {
+            "case_id": "persisted_query_execution_readiness_ops_env",
+            "executions": [
+              {
+                "device": "ci-runner",
+                "digest_binding": "candidate",
+                "env": "gamma",
+                "platform": "linux",
+                "provider": "first-party-https"
+              }
+            ],
+            "layer": "environment_acceptance",
+            "producer": "ops",
+            "runner_source_path": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/api-edge/smoke/run_persisted_query_execution_readiness.py",
+            "spec_ref": "specs/feature-tree/global-search-experience/cross-domain-search/multi-domain-result-composition/spec.md#gwt-002",
+            "target": {
+              "id": "gateway.persisted_query_execution",
+              "kind": "object"
             }
           }
         ]
@@ -359313,7 +359704,7 @@
     },
     {
       "path": "recommendation/recommendation/recommendation_candidate_index_view/storage.yaml",
-      "sha256": "b4cbc34cd72a6c4fb32288c42c744cb7bddf1dd06ac09e3978aa7d9509242911",
+      "sha256": "3b87e1851d9f102e5a600451024cbe9bdcbcee6c923b5697cbf462e89ca3ef86",
       "mediaType": "application/yaml",
       "content": {
         "backend": "mongodb",
@@ -359433,8 +359824,12 @@
             "role": "projection_checkpoint"
           },
           "rm_discovery_feed": {
+            "description": "recommendation-service 是唯一存储 owner；content-service 仅作为 specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md#open-001 关闭前的受控过渡 projector writer，OPEN-001 关闭时必须同步移除本 writer 声明。",
             "entity": "RecommendationCandidateIndexView",
-            "role": "projection"
+            "role": "projection",
+            "writers": [
+              "content-service"
+            ]
           },
           "rm_entity_tags": {
             "entity": "RecommendationEntityTagProjection",
@@ -363392,7 +363787,7 @@
     },
     {
       "path": "recommendation/recommendation/recommendation_feature_profile_view/storage.yaml",
-      "sha256": "6c1a9e4e44d1daa4e5ebcb7a060b16ff797edbe2e6782d0aed6b5f137c1f599b",
+      "sha256": "88425ca9f357a2f481ec70578e6f0bd89f13d26b257eaceb29fef577459603a6",
       "mediaType": "application/yaml",
       "content": {
         "backend": "mongodb",
@@ -363824,6 +364219,13 @@
             "idempotency_key": "eventId",
             "retention_seconds": 604800,
             "role": "append_only"
+          },
+          "events.search.recommendation_signals.recommendation-feature.dlq": {
+            "description": "RecommendationFeatureProfileView 的 SearchRecommendationSignalPublished typed consumer 终止失败记录。",
+            "entity": "RecommendationFeatureProfileView",
+            "idempotency_key": "streamId",
+            "retention_seconds": 604800,
+            "role": "dead_letter"
           },
           "events.tag.feedback.recommendation-feature.dlq": {
             "description": "RecommendationFeatureProfileView 的 TagFeedbackRecorded typed consumer 终止失败记录。",

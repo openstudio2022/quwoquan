@@ -18,6 +18,8 @@ on:
   schedule:
     - cron: "30 19 * * *" # 每日 UTC 19:30（北京 03:30），错峰 ML 训练管线
   pull_request:
+    branches:
+      - main
     paths:
       - "quwoquan_service/services/content-service/**"
       - "quwoquan_service/services/recommendation-service/**"

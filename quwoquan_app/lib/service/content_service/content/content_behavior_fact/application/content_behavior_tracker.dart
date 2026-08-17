@@ -670,8 +670,8 @@ class ContentBehaviorTracker implements ContentBehaviorTrackerPort {
 
   /// 记录小艺对话浮现兴趣（assistant_interest）。不绑定具体 post，仅回流路径制 tagRefs。
   ///
-  /// 经 reportEvents → 云侧 BehaviorBatchReported → RecommendFeatureProjector
-  /// 的 tagInteraction 累加，使对话兴趣进入推荐特征（rm_recommend_feature）。
+  /// 经 reportEvents 形成受校验的 ContentBehaviorRecorded 事实并更新当前会话
+  /// HotPath；无 contentId 的事件不代表 Recommendation 长期画像已持久化。
   @override
   void trackAssistantInterest(List<String> tagRefs) {
     final normalized = tagRefs
