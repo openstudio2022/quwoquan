@@ -22,6 +22,7 @@
 """
 from __future__ import annotations
 
+import ast
 import json
 import subprocess
 import sys
@@ -427,16 +428,13 @@ def test_real_app_shard_uses_the_guarded_runner_with_a_closed_environment(
         phase_path.write_text(_SHARD_A_LCOV, encoding="utf-8")
         return subprocess.CompletedProcess(list(command), 0, stdout="", stderr="")
 
-    for key, value in {
-        "FLUTTER_TEST_TOTAL_SHARDS": "4",
-        "FLUTTER_TEST_SHARD_INDEX": "2",
-        "FLUTTER_TEST_SERIAL_MODE": "exclude",
-        "FLUTTER_TEST_CONCURRENCY": "8",
-        "QWQ_APP_RUNTIME_ENV": "gamma",
-        "QWQ_DEPLOY_TARGET": "gamma-local",
-        "APP_LEGAL_BASE_URL": "https://ambient.invalid",
-    }.items():
-        monkeypatch.setenv(key, value)
+    forced_environment = {
+        "FLUTTER_TEST_GUARD_MAX_ATTEMPTS": "1",
+        "FLUTTER_TEST_GUARD_TIMEOUT_SECONDS": "1800",
+        "QWQ_APP_RUNTIME_ENV": "alpha",
+    }
+    for key in set(vcr.APP_COVERAGE_CLEARED_ENV_KEYS) | set(forced_environment):
+        monkeypatch.setenv(key, "ambient-invalid")
     monkeypatch.setattr(vcr, "APP_ROOT", app_root)
     monkeypatch.setattr(vcr, "_run", fake_run)
 
@@ -484,12 +482,126 @@ def test_real_app_shard_uses_the_guarded_runner_with_a_closed_environment(
         environment = invocation["env"]
         assert isinstance(environment, dict)
         for key in vcr.APP_COVERAGE_CLEARED_ENV_KEYS:
-            if key == "QWQ_APP_RUNTIME_ENV":
-                continue
             assert key not in environment
-        assert environment["QWQ_APP_RUNTIME_ENV"] == "alpha"
-        assert environment["FLUTTER_TEST_GUARD_MAX_ATTEMPTS"] == "1"
-        assert environment["FLUTTER_TEST_GUARD_TIMEOUT_SECONDS"] == "1800"
+        for key, expected in forced_environment.items():
+            assert environment[key] == expected
+
+
+def _environment_read_keys(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=path.as_posix())
+    keys: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            owner = node.func.value
+            is_os_getenv = (
+                isinstance(owner, ast.Name)
+                and owner.id == "os"
+                and node.func.attr == "getenv"
+            )
+            is_environ_get = (
+                isinstance(owner, ast.Attribute)
+                and isinstance(owner.value, ast.Name)
+                and owner.value.id == "os"
+                and owner.attr == "environ"
+                and node.func.attr == "get"
+            )
+            if is_os_getenv or is_environ_get:
+                if not node.args:
+                    raise AssertionError(f"{path}: environment selector 缺少 key")
+                key = node.args[0]
+                if not isinstance(key, ast.Constant) or not isinstance(key.value, str):
+                    raise AssertionError(
+                        f"{path}: environment selector key 必须是静态字符串"
+                    )
+                keys.add(key.value)
+        if isinstance(node, ast.Subscript):
+            owner = node.value
+            if (
+                isinstance(owner, ast.Attribute)
+                and isinstance(owner.value, ast.Name)
+                and owner.value.id == "os"
+                and owner.attr == "environ"
+            ):
+                if not isinstance(node.slice, ast.Constant) or not isinstance(
+                    node.slice.value, str
+                ):
+                    raise AssertionError(
+                        f"{path}: environment selector key 必须是静态字符串"
+                    )
+                keys.add(node.slice.value)
+    return keys
+
+
+@pytest.mark.parametrize(
+    "expression",
+    (
+        'os.environ.get("NEW_TEST_SELECTOR")',
+        "os.environ.get('NEW_TEST_SELECTOR')",
+        "os.getenv('NEW_TEST_SELECTOR')",
+        "os.environ['NEW_TEST_SELECTOR']",
+    ),
+)
+def test_environment_selector_scanner_recognizes_supported_python_reads(
+    expression: str,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "selector.py"
+    source.write_text(f"import os\nVALUE = {expression}\n", encoding="utf-8")
+    assert _environment_read_keys(source) == {"NEW_TEST_SELECTOR"}
+
+
+@pytest.mark.parametrize(
+    "expression",
+    (
+        "os.environ.get(KEY)",
+        "os.getenv(KEY)",
+        "os.environ[KEY]",
+    ),
+)
+def test_environment_selector_scanner_rejects_dynamic_keys(
+    expression: str,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "selector.py"
+    source.write_text(
+        f"import os\nKEY = 'NEW_TEST_SELECTOR'\nVALUE = {expression}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(AssertionError, match="key 必须是静态字符串"):
+        _environment_read_keys(source)
+
+
+def test_app_coverage_environment_clears_or_forces_every_owned_selector() -> None:
+    forced = {
+        "FLUTTER_TEST_GUARD_MAX_ATTEMPTS": "1",
+        "FLUTTER_TEST_GUARD_TIMEOUT_SECONDS": "1800",
+        "QWQ_APP_RUNTIME_ENV": "alpha",
+    }
+    hostile = {
+        key: "ambient-invalid"
+        for key in set(vcr.APP_COVERAGE_CLEARED_ENV_KEYS) | set(forced)
+    }
+    environment = vcr.canonical_app_coverage_environment(hostile)
+    assert set(vcr.APP_COVERAGE_CLEARED_ENV_KEYS).isdisjoint(environment)
+    for key, expected in forced.items():
+        assert environment[key] == expected
+
+
+def test_app_coverage_environment_owns_every_downstream_selector() -> None:
+    forced = {
+        "FLUTTER_TEST_GUARD_MAX_ATTEMPTS",
+        "FLUTTER_TEST_GUARD_TIMEOUT_SECONDS",
+        "QWQ_APP_RUNTIME_ENV",
+    }
+    downstream_paths = (
+        vcr.APP_ROOT / vcr.APP_FLUTTER_TEST_RUNNER,
+        vcr.APP_ROOT / vcr.APP_RUNTIME_DEFINE_RESOLVER,
+        vcr.APP_ROOT / vcr.APP_TEST_SELECTION_POLICY,
+    )
+    observed = {key for path in downstream_paths for key in _environment_read_keys(path)}
+    assert observed == (
+        set(vcr.APP_COVERAGE_CLEARED_ENV_KEYS) - {"QWQ_DEPLOY_TARGET"}
+    ) | forced
 
 
 def test_app_coverage_config_identity_contains_the_runner_and_topology_closure() -> None:
@@ -775,7 +887,12 @@ def _tracked_baseline() -> dict:
     }
     receipts = _receipts_for_app_unit()
     return {
-        "_governance": {"owner": "o", "reason": "r", "expires_when": "w"},
+        "_governance": {
+            "owner": "o",
+            "reason": "r",
+            "expires_when": "w",
+            "measure": "m",
+        },
         "schema": vcr.BASELINE_SCHEMA,
         "ruleId": vcr.RULE_ID,
         "policy": {

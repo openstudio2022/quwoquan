@@ -174,6 +174,20 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
         self.assertIn('test "$AGGREGATE" = success', self.workflow)
         self.assertIn("--has-android true", self.workflow)
         self.assertIn("--has-ios true", self.workflow)
+        self.assertEqual(
+            self.workflow.count(
+                "account_closure_disposable_ack: "
+                "${{ inputs.account_closure_disposable_ack == true }}"
+            ),
+            2,
+        )
+        self.assertEqual(
+            self.workflow.count(
+                "account_closure_prod_platform: "
+                "${{ inputs.account_closure_prod_platform || 'ios' }}"
+            ),
+            2,
+        )
 
     def test_managed_runtime_teardown_is_always_run_and_gate_visible(self) -> None:
         self.assertIn(

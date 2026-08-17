@@ -513,8 +513,8 @@ jobs:
       expected_host_digest: ${{ needs.beta_stack.outputs.host_digest }}
       release_evidence_ref: ${{ needs.beta_stack.outputs.release_evidence_ref }}
       event_name: ${{ github.event_name }}
-      account_closure_disposable_ack: ${{ inputs.account_closure_disposable_ack }}
-      account_closure_prod_platform: ${{ inputs.account_closure_prod_platform }}
+      account_closure_disposable_ack: ${{ inputs.account_closure_disposable_ack == true }}
+      account_closure_prod_platform: ${{ inputs.account_closure_prod_platform || 'ios' }}
       account_closure_prod_device_id: ${{ inputs.account_closure_prod_device_id }}
     secrets: inherit
 
@@ -536,8 +536,8 @@ jobs:
       expected_host_digest: ${{ needs.beta_stack.outputs.host_digest }}
       release_evidence_ref: ${{ needs.beta_stack.outputs.release_evidence_ref }}
       event_name: ${{ github.event_name }}
-      account_closure_disposable_ack: ${{ inputs.account_closure_disposable_ack }}
-      account_closure_prod_platform: ${{ inputs.account_closure_prod_platform }}
+      account_closure_disposable_ack: ${{ inputs.account_closure_disposable_ack == true }}
+      account_closure_prod_platform: ${{ inputs.account_closure_prod_platform || 'ios' }}
       account_closure_prod_device_id: ${{ inputs.account_closure_prod_device_id }}
     secrets: inherit
 

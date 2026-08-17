@@ -179,6 +179,16 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert jobs["ios_device_matrix"]["needs"] == "beta_stack"
     assert jobs["android_device_matrix"]["with"]["platform"] == "android"
     assert jobs["ios_device_matrix"]["with"]["platform"] == "ios"
+    for job_name in ("android_device_matrix", "ios_device_matrix"):
+        inputs = jobs[job_name]["with"]
+        assert (
+            inputs["account_closure_disposable_ack"]
+            == "${{ inputs.account_closure_disposable_ack == true }}"
+        )
+        assert (
+            inputs["account_closure_prod_platform"]
+            == "${{ inputs.account_closure_prod_platform || 'ios' }}"
+        )
     assert jobs["beta_teardown"]["needs"][-1] == "mobile_matrix"
     assert 'runs-on: [self-hosted, macOS, ARM64]' in platform_text
     assert 'runs-on: [self-hosted, macOS, ARM64, "mobile-${{ inputs.platform }}"]' not in platform_text
