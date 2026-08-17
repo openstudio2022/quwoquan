@@ -21,6 +21,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -860,9 +861,14 @@ def test_unknown_domain_is_rejected_instead_of_silently_passing() -> None:
 
 
 def _gate_function(source: str, name: str, next_name: str) -> str:
-    start = source.index(f"\n{name}() {{") + 1
-    end = source.index(f"\n{next_name}() {{", start)
-    return source[start:end]
+    def function_pattern(function_name: str) -> re.Pattern[str]:
+        return re.compile(rf"(?m)^{re.escape(function_name)}\(\)\s+[({{]")
+
+    start_match = function_pattern(name).search(source)
+    assert start_match is not None, f"missing shell function: {name}"
+    end_match = function_pattern(next_name).search(source, start_match.end())
+    assert end_match is not None, f"missing next shell function: {next_name}"
+    return source[start_match.start() : end_match.start()]
 
 
 def test_repo_gate_runs_app_architecture_only_from_app_static_phase() -> None:
