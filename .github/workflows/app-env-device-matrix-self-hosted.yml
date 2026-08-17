@@ -252,7 +252,10 @@ jobs:
     needs: resolve_release_evidence
     if: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
     runs-on: [self-hosted, macOS, ARM64]
-    timeout-minutes: ${{ (github.event_name == 'schedule' || inputs.validation_profile == 'manual_full' || inputs.validation_profile == 'nightly_full' || inputs.validation_profile == 'release_candidate') && 20 || 2 }}
+    # A cold self-hosted checkout can consume more than two minutes on its own.
+    # Keep full profiles at 20 minutes and give PR-light enough room to finish
+    # checkout plus the fail-closed prerequisite probes.
+    timeout-minutes: ${{ (github.event_name == 'schedule' || inputs.validation_profile == 'manual_full' || inputs.validation_profile == 'nightly_full' || inputs.validation_profile == 'release_candidate') && 20 || 10 }}
     permissions:
       contents: read
       packages: read

@@ -112,7 +112,7 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
     def test_full_profile_has_bounded_managed_runtime_and_attestations(self) -> None:
         self.assertIn(
             "inputs.validation_profile == 'nightly_full' || "
-            "inputs.validation_profile == 'release_candidate') && 20 || 2",
+            "inputs.validation_profile == 'release_candidate') && 20 || 10",
             self.workflow,
         )
         self.assertIn("name: Start stackctl-managed Gamma full runtime", self.workflow)

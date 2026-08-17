@@ -208,7 +208,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "RepoDigests" not in text
     assert "timeout-minutes: 120" not in combined
     assert "timeout-minutes: 30" not in combined
-    assert "20 || 2" in jobs["beta_stack"]["timeout-minutes"]
+    assert "20 || 10" in jobs["beta_stack"]["timeout-minutes"]
     assert "mainline_auto_prod" in aggregate_job["timeout-minutes"]
     assert "20" in aggregate_job["timeout-minutes"]
     assert "|| 2" in aggregate_job["timeout-minutes"]
