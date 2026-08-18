@@ -149,7 +149,7 @@ on:
         value: ${{ jobs.mobile_matrix.outputs.receipt_digest }}
 
 concurrency:
-  group: app-env-device-matrix-beta-stack
+  group: app-env-device-matrix-${{ (inputs.validation_profile == '' && (github.event_name == 'push' || github.event_name == 'pull_request')) && format('pr-light-{0}-{1}', github.event_name, github.ref) || 'shared-runtime' }}
   cancel-in-progress: false
 
 jobs:

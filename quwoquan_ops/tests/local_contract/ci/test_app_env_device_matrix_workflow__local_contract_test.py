@@ -17,6 +17,20 @@ WORKFLOW = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
 PROFILES = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
 TIMING_BUDGETS = ROOT / "quwoquan_ops/environments/pr_gate_timing_budgets.json"
 MOBILE_MATRIX_RUNNER = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
+CONCURRENCY_GROUP_EXPRESSION = (
+    "group: app-env-device-matrix-${{ (inputs.validation_profile == '' && "
+    "(github.event_name == 'push' || github.event_name == 'pull_request')) && "
+    "format('pr-light-{0}-{1}', github.event_name, github.ref) || "
+    "'shared-runtime' }}"
+)
+
+
+def _expected_concurrency_group(
+    *, event_name: str, validation_profile: str, git_ref: str
+) -> str:
+    if validation_profile == "" and event_name in {"push", "pull_request"}:
+        return f"app-env-device-matrix-pr-light-{event_name}-{git_ref}"
+    return "app-env-device-matrix-shared-runtime"
 
 
 def _run_stubbed_mobile_matrix(
@@ -89,6 +103,58 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
         self.assertIn("App Matrix — Branch Policy", self.workflow)
         self.assertIn("Enforce canonical repository branch admission", self.workflow)
         self.assertIn("needs: branch_policy", self.workflow)
+
+    def test_pr_light_events_do_not_cancel_each_other_or_relax_full_runtime_serialisation(
+        self,
+    ) -> None:
+        concurrency = self.workflow.split("concurrency:\n", maxsplit=1)[1].split(
+            "\njobs:\n", maxsplit=1
+        )[0]
+        self.assertIn(CONCURRENCY_GROUP_EXPRESSION, concurrency)
+        self.assertIn("cancel-in-progress: false", concurrency)
+
+        cases = (
+            (
+                "push",
+                "",
+                "refs/heads/dev1.0",
+                "app-env-device-matrix-pr-light-push-refs/heads/dev1.0",
+            ),
+            (
+                "pull_request",
+                "",
+                "refs/pull/60/merge",
+                "app-env-device-matrix-pr-light-pull_request-refs/pull/60/merge",
+            ),
+            (
+                "workflow_call",
+                "mainline_auto_prod",
+                "refs/heads/main",
+                "app-env-device-matrix-shared-runtime",
+            ),
+            (
+                "workflow_dispatch",
+                "manual_full",
+                "refs/heads/dev1.0",
+                "app-env-device-matrix-shared-runtime",
+            ),
+            (
+                "schedule",
+                "nightly_full",
+                "refs/heads/main",
+                "app-env-device-matrix-shared-runtime",
+            ),
+        )
+        for event_name, validation_profile, git_ref, expected in cases:
+            with self.subTest(event_name=event_name, profile=validation_profile):
+                self.assertEqual(
+                    _expected_concurrency_group(
+                        event_name=event_name,
+                        validation_profile=validation_profile,
+                        git_ref=git_ref,
+                    ),
+                    expected,
+                )
 
     def test_pr_light_binds_checkout_to_the_exact_pull_request_head(self) -> None:
         self.assertIn(

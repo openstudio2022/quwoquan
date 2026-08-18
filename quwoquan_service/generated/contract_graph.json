@@ -114060,7 +114060,7 @@
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/moderation_error_semantics__local_contract_test.go",
-            "sha256": "c353551651974427f6372e6e9afe88224ce846291eb593008415abe5c029924a"
+            "sha256": "0d40b966efd49fa3334e2953b97261821abfe89bc45a801bceedd14eeae0e4f4"
           },
           {
             "path": "quwoquan_service/services/content-service/tests/local_contract/trust_safety/post_moderation_case/application/moderation_operations__local_contract_test.go",
