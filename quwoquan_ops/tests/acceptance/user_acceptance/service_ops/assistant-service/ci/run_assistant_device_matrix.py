@@ -8,13 +8,13 @@ import base64
 import datetime as dt
 import json
 import os
-import shutil
 import signal
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -46,6 +46,7 @@ from quwoquan_ops.cli.lib.local_environment_auth import (
     close_test_data_acceptance_actor,
     open_test_data_acceptance_session,
 )
+from quwoquan_ops.cli.lib.patrol_cli import resolve_patrol_cli
 
 
 APP_DIR = REPO_ROOT / "quwoquan_app"
@@ -209,6 +210,25 @@ def gateway_for_device(device: dict[str, Any], args: argparse.Namespace) -> str:
     return args.ios_gateway_base_url
 
 
+def gateway_port_from_base_url(base_url: str) -> int:
+    parsed = urllib.parse.urlsplit(base_url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError("canonical gateway base URL must use http or https")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("canonical gateway base URL must not include userinfo")
+    if not parsed.hostname:
+        raise ValueError("canonical gateway base URL must include a host")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("canonical gateway base URL has an invalid port") from exc
+    if port is not None:
+        if port < 1:
+            raise ValueError("canonical gateway base URL has an invalid port")
+        return port
+    return 443 if parsed.scheme == "https" else 80
+
+
 def wait_for_gateway(base_url: str, timeout_seconds: int) -> bool:
     deadline = time.monotonic() + timeout_seconds
     url = base_url.rstrip("/") + "/healthz"
@@ -293,7 +313,35 @@ def execute_patrol_test(
     run_dir: Path,
     private_defines_path: Path,
 ) -> tuple[dict[str, Any], list[str], str, str]:
-    patrol_executable = shutil.which("patrol") or "patrol"
+    patrol_resolution = resolve_patrol_cli()
+    if patrol_resolution.executable is None:
+        command_path = write_json(
+            run_dir / "command.json",
+            {
+                "capturedAt": utc_now(),
+                "env": env_name,
+                "deviceId": device["id"],
+                "gatewayBaseUrl": device["gatewayBaseUrl"],
+                "command": [],
+                "patrolCli": patrol_resolution.as_report(required=True),
+            },
+        )
+        return (
+            {
+                "command": [],
+                "exitCode": 2,
+                "durationMs": 0,
+                "timedOut": False,
+                "outputSummary": patrol_resolution.error,
+                "failureCategory": "tool_preflight_failed",
+                "failureReason": patrol_resolution.error,
+                "logPath": "",
+            },
+            [],
+            command_path,
+            "",
+        )
+    patrol_executable = patrol_resolution.executable
     command = [
         patrol_executable,
         "test",
@@ -420,6 +468,26 @@ def run_matrix_test(
     evidence_root: Path,
 ) -> dict[str, Any]:
     run_dir = evidence_root / env_name / sanitize_device_id(str(device.get("id", "")))
+    try:
+        gateway_port = gateway_port_from_base_url(str(device["gatewayBaseUrl"]))
+    except ValueError as exc:
+        return {
+            "command": [],
+            "cwd": str(REPO_ROOT),
+            "exitCode": 2,
+            "durationMs": 0,
+            "timedOut": False,
+            "outputSummary": str(exc),
+            "env": env_name,
+            "deviceId": device["id"],
+            "deviceName": device["name"],
+            "screenClass": device["screenClass"],
+            "gatewayBaseUrl": "",
+            "status": "failed",
+            "failureCategory": "device_bridge_failed",
+            "failureReason": str(exc),
+            "evidence": {"runDirectory": repo_relative(run_dir)},
+        }
     run_dir.mkdir(parents=True, exist_ok=True)
     device_manifest_path = write_device_manifest(
         run_dir / "device.json",
@@ -432,15 +500,16 @@ def run_matrix_test(
     if env_name in {"alpha", "beta", "gamma"} and str(
         device.get("targetPlatform", "")
     ).lower().startswith("android"):
+        reverse_command = [
+            "adb",
+            "-s",
+            str(device["id"]),
+            "reverse",
+            f"tcp:{gateway_port}",
+            f"tcp:{gateway_port}",
+        ]
         reverse_result = run_command(
-            [
-                "adb",
-                "-s",
-                str(device["id"]),
-                "reverse",
-                f"tcp:{args.gateway_port}",
-                f"tcp:{args.gateway_port}",
-            ],
+            reverse_command,
             cwd=REPO_ROOT,
             timeout_seconds=20,
             log_path=run_dir / "adb-reverse.log",
@@ -465,14 +534,7 @@ def run_matrix_test(
                             {
                                 "capturedAt": utc_now(),
                                 "env": env_name,
-                                "command": [
-                                    "adb",
-                                    "-s",
-                                    str(device["id"]),
-                                    "reverse",
-                                    f"tcp:{args.gateway_port}",
-                                    f"tcp:{args.gateway_port}",
-                                ],
+                                "command": reverse_command,
                             },
                         ),
                         "rawLogPath": reverse_result.get("logPath", ""),
@@ -655,6 +717,8 @@ def run_matrix_test(
             "failureCategory": (
                 "test_actor_cleanup_failed"
                 if cleanup_became_blocker
+                else str(result.get("failureCategory") or "")
+                if result.get("failureCategory")
                 else "test_timeout"
                 if result.get("timedOut")
                 else (
@@ -724,6 +788,40 @@ def main() -> int:
     report_path = Path(args.report)
     if not report_path.is_absolute():
         report_path = REPO_ROOT / report_path
+    gateway_urls = [
+        args.gateway_health_url,
+        args.ios_gateway_base_url,
+        args.android_gateway_base_url,
+    ]
+    if args.gateway_base_url:
+        gateway_urls.append(args.gateway_base_url)
+    try:
+        for gateway_url in gateway_urls:
+            gateway_port_from_base_url(gateway_url)
+    except ValueError as exc:
+        return write_report_and_exit(
+            {
+                "suiteId": "assistant_main_chain",
+                "startedAt": utc_now(),
+                "endedAt": "",
+                "status": "gate_block",
+                "failureCategory": "invalid_gateway_configuration",
+                "blockingReason": str(exc),
+                "retryable": False,
+                "requestedEnvironments": requested_envs,
+                "devices": [],
+                "runs": [],
+                "deviceInventoryPath": "",
+                "evidenceRoot": "",
+                "environmentGateway": {
+                    "baseUrl": "",
+                    "gatewayReachable": False,
+                    "composition": "production-remote",
+                },
+            },
+            report_path,
+            2,
+        )
     report = {
         "suiteId": "assistant_main_chain",
         "startedAt": utc_now(),

@@ -69,6 +69,321 @@ class AssistantDeviceMatrixLocalContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unsupported env"):
             self.runner.test_path_for_environment("prod")
 
+    def test_gateway_port_is_derived_from_the_canonical_base_url(self) -> None:
+        cases = {
+            "https://api.beta.quwoquan.com:18000": 18000,
+            "https://api.example.com": 443,
+            "http://api.example.com": 80,
+        }
+        for base_url, expected in cases.items():
+            with self.subTest(base_url=base_url):
+                self.assertEqual(
+                    self.runner.gateway_port_from_base_url(base_url),
+                    expected,
+                )
+
+    def test_invalid_gateway_base_url_fails_closed(self) -> None:
+        for base_url in (
+            "ftp://api.example.com:18000",
+            "https:///missing-host",
+            "https://api.example.com:not-a-port",
+            "https://api.example.com:0",
+            "https://api.example.com:65536",
+            "https://user:example-secret@api.example.com:18000",
+        ):
+            with self.subTest(base_url=base_url):
+                with self.assertRaisesRegex(ValueError, "canonical gateway base URL"):
+                    self.runner.gateway_port_from_base_url(base_url)
+
+    def test_android_reverse_uses_the_port_from_the_canonical_device_url(self) -> None:
+        device = {
+            "id": "emulator-5554",
+            "name": "Android Emulator",
+            "targetPlatform": "android-arm64",
+            "screenClass": "phone",
+            "gatewayBaseUrl": "https://api.beta.quwoquan.com:18000",
+        }
+        args = SimpleNamespace(
+            gateway_health_url="https://api.beta.quwoquan.com:18000",
+        )
+        captured_commands: list[list[str]] = []
+
+        def fail_reverse(command, **_kwargs):
+            captured_commands.append(command)
+            return {
+                "command": command,
+                "exitCode": 1,
+                "durationMs": 1,
+                "timedOut": False,
+                "outputSummary": "adb reverse failed",
+                "logPath": "adb-reverse.log",
+            }
+
+        local_root = ROOT / ".qwq_output" / "env" / "repo" / "local"
+        local_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=local_root) as temporary:
+            with (
+                mock.patch.object(
+                    self.runner,
+                    "write_device_manifest",
+                    return_value="device.json",
+                ),
+                mock.patch.object(
+                    self.runner,
+                    "capture_device_screenshot",
+                    return_value={"status": "captured"},
+                ),
+                mock.patch.object(
+                    self.runner,
+                    "write_json",
+                    return_value="command.json",
+                ),
+                mock.patch.object(
+                    self.runner,
+                    "run_command",
+                    side_effect=fail_reverse,
+                ),
+            ):
+                result = self.runner.run_matrix_test(
+                    "beta",
+                    device,
+                    args,
+                    evidence_root=Path(temporary),
+                )
+
+        self.assertEqual(
+            captured_commands,
+            [
+                [
+                    "adb",
+                    "-s",
+                    "emulator-5554",
+                    "reverse",
+                    "tcp:18000",
+                    "tcp:18000",
+                ]
+            ],
+        )
+        self.assertEqual(result["failureCategory"], "device_bridge_failed")
+
+    def test_android_invalid_gateway_url_fails_before_adb(self) -> None:
+        device = {
+            "id": "emulator-5554",
+            "name": "Android Emulator",
+            "targetPlatform": "android-arm64",
+            "screenClass": "phone",
+            "gatewayBaseUrl": "https://api.beta.quwoquan.com:not-a-port",
+        }
+        args = SimpleNamespace(
+            gateway_health_url="https://api.beta.quwoquan.com:18000",
+        )
+        local_root = ROOT / ".qwq_output" / "env" / "repo" / "local"
+        local_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=local_root) as temporary:
+            with (
+                mock.patch.object(
+                    self.runner,
+                    "write_device_manifest",
+                    return_value="device.json",
+                ),
+                mock.patch.object(
+                    self.runner,
+                    "capture_device_screenshot",
+                    return_value={"status": "captured"},
+                ),
+                mock.patch.object(self.runner, "run_command") as run_command,
+            ):
+                result = self.runner.run_matrix_test(
+                    "beta",
+                    device,
+                    args,
+                    evidence_root=Path(temporary),
+                )
+
+        run_command.assert_not_called()
+        self.assertEqual(result["exitCode"], 2)
+        self.assertEqual(result["failureCategory"], "device_bridge_failed")
+        self.assertIn("invalid port", result["failureReason"])
+
+    def test_android_gateway_userinfo_is_rejected_without_persisting_credentials(self) -> None:
+        secret = "example-secret"
+        device = {
+            "id": "emulator-5554",
+            "name": "Android Emulator",
+            "targetPlatform": "android-arm64",
+            "screenClass": "phone",
+            "gatewayBaseUrl": f"https://user:{secret}@api.beta.quwoquan.com:18000",
+        }
+        args = SimpleNamespace(
+            gateway_health_url="https://api.beta.quwoquan.com:18000",
+        )
+        local_root = ROOT / ".qwq_output" / "env" / "repo" / "local"
+        local_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=local_root) as temporary:
+            with (
+                mock.patch.object(self.runner, "run_command") as run_command,
+                mock.patch.object(
+                    self.runner,
+                    "write_device_manifest",
+                ) as write_device_manifest,
+                mock.patch.object(
+                    self.runner,
+                    "capture_device_screenshot",
+                ) as capture_device_screenshot,
+            ):
+                result = self.runner.run_matrix_test(
+                    "beta",
+                    device,
+                    args,
+                    evidence_root=Path(temporary),
+                )
+
+        run_command.assert_not_called()
+        write_device_manifest.assert_not_called()
+        capture_device_screenshot.assert_not_called()
+        self.assertEqual(result["exitCode"], 2)
+        self.assertEqual(result["gatewayBaseUrl"], "")
+        self.assertNotIn(secret, json.dumps(result))
+
+    def test_main_rejects_gateway_userinfo_before_device_discovery_or_report_persistence(self) -> None:
+        secret = "example-secret"
+        local_root = ROOT / ".qwq_output" / "env" / "repo" / "local"
+        local_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=local_root) as temporary:
+            report_path = Path(temporary) / "report.json"
+            args = SimpleNamespace(
+                env="beta",
+                report=str(report_path),
+                gateway_base_url="",
+                ios_gateway_base_url=f"https://user:{secret}@api.example.com:18000",
+                android_gateway_base_url="http://127.0.0.1:18000",
+                gateway_health_url="https://api.example.com:18000",
+            )
+            with (
+                mock.patch.object(self.runner, "parse_args", return_value=args),
+                mock.patch.object(self.runner, "discover_devices") as discover_devices,
+            ):
+                exit_code = self.runner.main()
+
+            report_text = report_path.read_text(encoding="utf-8")
+
+        self.assertEqual(exit_code, 2)
+        discover_devices.assert_not_called()
+        self.assertNotIn(secret, report_text)
+        report = json.loads(report_text)
+        self.assertEqual(report["failureCategory"], "invalid_gateway_configuration")
+        self.assertEqual(report["environmentGateway"]["baseUrl"], "")
+
+    def test_patrol_execution_uses_the_canonical_cli_resolution(self) -> None:
+        device = {
+            "id": "ios-device",
+            "name": "iPhone",
+            "targetPlatform": "ios",
+            "screenClass": "phone",
+            "gatewayBaseUrl": "https://api.example.com:18000",
+        }
+        args = SimpleNamespace(
+            test_timeout_seconds=30,
+            remote_retry_attempts=0,
+            retry_wait_timeout_seconds=1,
+            retry_sleep_seconds=0,
+            gateway_health_url="https://api.example.com:18000",
+        )
+        captured_commands: list[list[str]] = []
+
+        def pass_patrol(command, **_kwargs):
+            captured_commands.append(command)
+            return {
+                "command": command,
+                "exitCode": 0,
+                "durationMs": 1,
+                "timedOut": False,
+                "outputSummary": "passed",
+                "logPath": "patrol.log",
+            }
+
+        local_root = ROOT / ".qwq_output" / "env" / "repo" / "local"
+        local_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=local_root) as temporary:
+            with (
+                mock.patch.object(
+                    self.runner,
+                    "resolve_patrol_cli",
+                    return_value=SimpleNamespace(
+                        executable="/Users/runner/.pub-cache/bin/patrol"
+                    ),
+                ),
+                mock.patch.object(
+                    self.runner,
+                    "run_command",
+                    side_effect=pass_patrol,
+                ),
+            ):
+                self.runner.execute_patrol_test(
+                    "beta",
+                    device,
+                    args,
+                    run_dir=Path(temporary),
+                    private_defines_path=Path(temporary) / "defines.json",
+                )
+
+        self.assertEqual(
+            captured_commands[0][0],
+            "/Users/runner/.pub-cache/bin/patrol",
+        )
+
+    def test_patrol_resolution_failure_blocks_without_starting_a_subprocess(self) -> None:
+        device = {
+            "id": "ios-device",
+            "name": "iPhone",
+            "targetPlatform": "ios",
+            "screenClass": "phone",
+            "gatewayBaseUrl": "https://api.example.com:18000",
+        }
+        args = SimpleNamespace(
+            test_timeout_seconds=30,
+            remote_retry_attempts=0,
+            retry_wait_timeout_seconds=1,
+            retry_sleep_seconds=0,
+            gateway_health_url="https://api.example.com:18000",
+        )
+        resolution_error = "Patrol CLI must be v4.4.0"
+        local_root = ROOT / ".qwq_output" / "env" / "repo" / "local"
+        local_root.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=local_root) as temporary:
+            resolution = SimpleNamespace(
+                executable=None,
+                error=resolution_error,
+                as_report=lambda **_kwargs: {
+                    "required": True,
+                    "error": resolution_error,
+                },
+            )
+            with (
+                mock.patch.object(
+                    self.runner,
+                    "resolve_patrol_cli",
+                    return_value=resolution,
+                ),
+                mock.patch.object(self.runner, "run_command") as run_command,
+            ):
+                result, command, command_path, initial_log_path = (
+                    self.runner.execute_patrol_test(
+                        "beta",
+                        device,
+                        args,
+                        run_dir=Path(temporary),
+                        private_defines_path=Path(temporary) / "defines.json",
+                    )
+                )
+
+        run_command.assert_not_called()
+        self.assertEqual(command, [])
+        self.assertEqual(initial_log_path, "")
+        self.assertEqual(result["failureCategory"], "tool_preflight_failed")
+        self.assertEqual(result["failureReason"], resolution_error)
+        self.assertTrue(command_path.endswith("command.json"))
+
     def test_private_defines_are_owner_only_and_receipt_is_redacted(self) -> None:
         path = self.runner.write_private_flutter_defines(
             {
@@ -115,7 +430,6 @@ class AssistantDeviceMatrixLocalContractTest(unittest.TestCase):
         }
         args = SimpleNamespace(
             gateway_health_url="https://api.beta.quwoquan.com:18000",
-            gateway_port=18000,
             test_timeout_seconds=30,
             remote_retry_attempts=0,
             retry_wait_timeout_seconds=1,
@@ -236,7 +550,6 @@ class AssistantDeviceMatrixLocalContractTest(unittest.TestCase):
         }
         args = SimpleNamespace(
             gateway_health_url="https://api.beta.quwoquan.com:18000",
-            gateway_port=18000,
             test_timeout_seconds=30,
             remote_retry_attempts=0,
             retry_wait_timeout_seconds=1,
@@ -320,7 +633,6 @@ class AssistantDeviceMatrixLocalContractTest(unittest.TestCase):
         }
         args = SimpleNamespace(
             gateway_health_url="https://api.beta.quwoquan.com:18000",
-            gateway_port=18000,
             test_timeout_seconds=30,
             remote_retry_attempts=0,
             retry_wait_timeout_seconds=1,
@@ -406,7 +718,6 @@ class AssistantDeviceMatrixLocalContractTest(unittest.TestCase):
         }
         args = SimpleNamespace(
             gateway_health_url="https://api.beta.quwoquan.com:18000",
-            gateway_port=18000,
             test_timeout_seconds=30,
             remote_retry_attempts=0,
             retry_wait_timeout_seconds=1,
