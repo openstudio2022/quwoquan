@@ -1,5 +1,9 @@
 name: Beta Device Platform
 
+env:
+  PUB_HOSTED_URL: https://pub.flutter-io.cn
+  FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn
+
 on:
   workflow_call:
     inputs:
@@ -196,7 +200,7 @@ jobs:
           echo "QWQ_PROD_RELEASE_ARTIFACT_ROOT=$ROOT" >> "$GITHUB_ENV"
       - name: Install Flutter dependencies
         working-directory: ${{ env.PLATFORM_REPO_DIR }}/quwoquan_app
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
       - name: Build Android package-only startup matrix
         if: ${{ inputs.platform == 'android' }}
         working-directory: ${{ env.PLATFORM_REPO_DIR }}/quwoquan_app

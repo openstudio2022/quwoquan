@@ -126,6 +126,11 @@ class DeviceMatrixDomainProjectionLocalContractTest(unittest.TestCase):
                 "call",
                 return_value=0,
             ) as call,
+            mock.patch.object(
+                self.assistant,
+                "root_certificate_path",
+                return_value=Path("/managed/beta-local/root.crt"),
+            ),
             mock.patch.dict(
                 self.assistant.os.environ,
                 {"API_CONTRACT_ENV": "beta"},
@@ -144,6 +149,52 @@ class DeviceMatrixDomainProjectionLocalContractTest(unittest.TestCase):
         ):
             self.assertEqual(command[command.index(argument) + 1], canonical)
         self.assertNotIn("--skip-beta-services", command)
+
+    def test_assistant_host_probe_uses_the_canonical_local_managed_ca(self) -> None:
+        root = Path("/managed/beta-local/root.crt")
+        with (
+            mock.patch.object(
+                self.assistant,
+                "root_certificate_path",
+                return_value=root,
+            ) as resolve_root,
+            mock.patch.dict(self.assistant.os.environ, {}, clear=True),
+        ):
+            self.assertEqual(self.assistant.configure_gateway_tls("beta"), root)
+            self.assertEqual(self.assistant.os.environ["SSL_CERT_FILE"], str(root))
+
+        resolve_root.assert_called_once_with("beta-local")
+
+    def test_assistant_wrapper_blocks_before_device_execution_when_ca_is_missing(
+        self,
+    ) -> None:
+        error = self.assistant.PublicDomainTlsError(
+            "GATE_BLOCK: local-managed root certificate is missing for beta-local"
+        )
+        stderr = io.StringIO()
+        with (
+            mock.patch.object(
+                self.assistant,
+                "parse_args",
+                return_value=SimpleNamespace(platform="ios"),
+            ),
+            mock.patch.object(
+                self.assistant,
+                "root_certificate_path",
+                side_effect=error,
+            ),
+            mock.patch.object(self.assistant.subprocess, "call") as call,
+            mock.patch.dict(
+                self.assistant.os.environ,
+                {"API_CONTRACT_ENV": "beta"},
+                clear=True,
+            ),
+            mock.patch.object(self.assistant.sys, "stderr", stderr),
+        ):
+            self.assertEqual(self.assistant.main(), 2)
+
+        call.assert_not_called()
+        self.assertIn("GATE_BLOCK", stderr.getvalue())
 
     def test_chat_android_reverses_canonical_local_authority_ports(self) -> None:
         device = {"id": "emulator-5554", "targetPlatform": "android-arm64"}

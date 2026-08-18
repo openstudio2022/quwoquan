@@ -105,7 +105,6 @@ jobs:
       run:
         working-directory: quwoquan_service/services/recommendation-service
     env:
-      QWQ_TEST_MONGO_URI: mongodb://127.0.0.1:27017/?directConnection=true
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
@@ -114,27 +113,10 @@ jobs:
           python-version: "3.11"
       - name: Install redis-server binary
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends redis-server
+          bash "$GITHUB_WORKSPACE/quwoquan_ops/ci/run_bounded_apt_install.sh" redis-server
           sudo systemctl stop redis-server || true
       - name: Start MongoDB replica set
-        run: |
-          docker run -d --name qwq-rec-mongo -p 27017:27017 mongo:7-jammy \
-            --replSet rs0 --bind_ip_all
-          for _ in $(seq 1 60); do
-            if docker exec qwq-rec-mongo mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1; then
-              break
-            fi
-            sleep 1
-          done
-          docker exec qwq-rec-mongo mongosh --quiet --eval \
-            'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
-          for _ in $(seq 1 60); do
-            if docker exec qwq-rec-mongo mongosh --quiet --eval 'db.hello().isWritablePrimary' | grep -q true; then
-              break
-            fi
-            sleep 1
-          done
+        run: bash "$GITHUB_WORKSPACE/quwoquan_ops/ci/run_recommendation_test_mongodb.sh"
       - name: Install Python dependencies
         run: |
           pip install \

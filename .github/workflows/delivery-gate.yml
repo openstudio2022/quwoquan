@@ -301,7 +301,11 @@ jobs:
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
       - name: 安装 Service 系统测试依赖
-        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh prometheus tesseract-ocr ffmpeg
+        run: |
+          bash quwoquan_ops/ci/run_bounded_apt_install.sh prometheus tesseract-ocr ffmpeg redis-server
+          sudo systemctl stop redis-server || true
+      - name: Start recommendation test MongoDB replica set
+        run: bash quwoquan_ops/ci/run_recommendation_test_mongodb.sh
       - name: 安装 Python 依赖 (recommendation-service)
         run: |
           pip install -r quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt
@@ -561,7 +565,10 @@ jobs:
 
   quwoquan_app_coverage:
     name: Delivery Gate — App Canonical Coverage
-    runs-on: ubuntu-latest
+    # Canonical coverage includes the serial/visual subset. Its tracked goldens
+    # are produced and validated on the same macOS ARM64 lane as App Serial;
+    # running that subset on Linux changes rasterization rather than behavior.
+    runs-on: [self-hosted, macOS, ARM64]
     timeout-minutes: 40
     needs: topology_regression
     if: ${{ needs.topology_regression.outputs.app == 'true' }}

@@ -195,6 +195,10 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
         )
     assert jobs["beta_teardown"]["needs"][-1] == "mobile_matrix"
     assert 'runs-on: [self-hosted, macOS, ARM64]' in platform_text
+    assert "PUB_HOSTED_URL: https://pub.flutter-io.cn" in platform_text
+    assert "FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn" in platform_text
+    assert "flutter pub get --enforce-lockfile" in platform_text
+    assert "run: flutter pub get\n" not in platform_text
     assert 'runs-on: [self-hosted, macOS, ARM64, "mobile-${{ inputs.platform }}"]' not in platform_text
     assert '--runner-label "mobile-${{ inputs.platform }}"' in platform_text
     assert "device_runner_lease.py acquire" in platform_text

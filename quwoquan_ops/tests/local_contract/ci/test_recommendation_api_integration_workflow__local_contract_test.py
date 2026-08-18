@@ -31,6 +31,18 @@ def test_recommendation_api_integration_uses_canonical_content_post_package() ->
     assert "sudo apt-get install -y --no-install-recommends ffmpeg" in workflow
 
 
+def test_recommendation_api_integration_reuses_bounded_dependency_bootstrap() -> None:
+    workflow = (ROOT / ".github/workflows/recommendation_api_integration.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert workflow.count("run_bounded_apt_install.sh\" redis-server") == 1
+    assert workflow.count("run_recommendation_test_mongodb.sh") == 1
+    assert "docker run -d --name qwq-rec-mongo" not in workflow
+    assert "rs.initiate" not in workflow
+    assert "QWQ_TEST_MONGO_URI:" not in workflow
+
+
 def test_recommendation_required_tests_follow_current_object_owners() -> None:
     workflow = (ROOT / ".github/workflows/recommendation_api_integration.yml").read_text(
         encoding="utf-8"

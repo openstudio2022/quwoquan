@@ -34,6 +34,10 @@ from quwoquan_ops.cli.lib.environment_topology import (
     get_target,
     load_environment_topology,
 )
+from quwoquan_ops.cli.lib.public_domain_tls import (
+    PublicDomainTlsError,
+    root_certificate_path,
+)
 
 FAIL_FAST_EXIT_CODE = 86
 FAIL_FAST_CATEGORIES = {
@@ -140,6 +144,15 @@ def canonical_gateway_base_url(env_name: str) -> str:
     ).rstrip("/")
 
 
+def configure_gateway_tls(env_name: str) -> Path:
+    """Bind host-side probes to the canonical local-managed CA."""
+
+    target_name = ENVIRONMENT_CANONICAL_TARGET[env_name]
+    root = root_certificate_path(target_name)
+    os.environ["SSL_CERT_FILE"] = str(root)
+    return root
+
+
 def main() -> int:
     args = parse_args()
     env_name = os.environ.get("API_CONTRACT_ENV", "").strip()
@@ -148,6 +161,11 @@ def main() -> int:
             f"::error::API_CONTRACT_ENV={env_name!r} 不属于 alpha/beta/gamma",
             file=sys.stderr,
         )
+        return 2
+    try:
+        configure_gateway_tls(env_name)
+    except PublicDomainTlsError as exc:
+        print(f"::error::{exc}", file=sys.stderr)
         return 2
 
     all_devices_mode = (

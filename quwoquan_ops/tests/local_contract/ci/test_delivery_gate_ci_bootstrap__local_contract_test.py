@@ -176,8 +176,12 @@ def test_service_gate_installs_required_native_test_dependencies() -> None:
     job_end = workflow.index("\n  search_contract_smoke:\n", job_start)
     job = workflow[job_start:job_end]
 
-    assert "prometheus tesseract-ocr ffmpeg" in job
+    assert "prometheus tesseract-ocr ffmpeg redis-server" in job
     assert "run_bounded_apt_install.sh" in job
+    assert "QWQ_TEST_MONGO_URI:" not in job
+    assert job.count("run_recommendation_test_mongodb.sh") == 1
+    assert "docker run -d --name qwq-rec-mongo" not in job
+    assert "rs.initiate" not in job
 
 
 def test_service_gate_phase_partition_preserves_default_full_gate() -> None:
@@ -476,6 +480,18 @@ def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -
     assert 'run_app_flutter_tests "${FLUTTER_TEST_SERIAL_MODE:-exclude}"' in gate
 
 
+def test_canonical_coverage_uses_the_serial_golden_platform() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
+        encoding="utf-8"
+    )
+    coverage_start = workflow.index("  quwoquan_app_coverage:\n")
+    aggregate_start = workflow.index("\n  quwoquan_app:\n", coverage_start)
+    coverage = workflow[coverage_start:aggregate_start]
+
+    assert "runs-on: [self-hosted, macOS, ARM64]" in coverage
+    assert "GATE_APP_PHASE: coverage" in coverage
+
+
 def test_app_shard_zero_owns_native_dependencies_and_shared_contracts() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     job_start = workflow.index("  quwoquan_app_tests:\n")
@@ -607,7 +623,7 @@ def test_app_test_phase_rejects_invalid_shards_before_execution(
         assert not log_path.exists()
 
 
-def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_serial_on_controlled_macos() -> None:
+def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_phases_on_controlled_macos() -> None:
     delivery = (ROOT / ".github/workflows/delivery-gate.yml").read_text(
         encoding="utf-8"
     )
@@ -618,7 +634,6 @@ def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_serial_on_c
         "search_contract_smoke",
         "quwoquan_app_static",
         "quwoquan_app_tests",
-        "quwoquan_app_coverage",
         "quwoquan_app",
         "quwoquan_data",
         "ops_portal",
@@ -634,10 +649,14 @@ def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_serial_on_c
         job_body = delivery[job_start:job_end]
         assert "runs-on: ubuntu-latest" in job_body
 
-    serial_start = delivery.index("  quwoquan_app_serial:\n")
-    serial_end = delivery.index("\n  quwoquan_app:\n", serial_start)
-    serial_job = delivery[serial_start:serial_end]
-    assert "runs-on: [self-hosted, macOS, ARM64]" in serial_job
+    for job_name, next_job_name in (
+        ("quwoquan_app_serial", "quwoquan_app_coverage"),
+        ("quwoquan_app_coverage", "quwoquan_app"),
+    ):
+        job_start = delivery.index(f"  {job_name}:\n")
+        job_end = delivery.index(f"\n  {next_job_name}:\n", job_start)
+        job_body = delivery[job_start:job_end]
+        assert "runs-on: [self-hosted, macOS, ARM64]" in job_body
     assert "runs-on: macos-latest" not in delivery
 
 
