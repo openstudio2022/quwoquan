@@ -257,88 +257,95 @@ def verify_release_governance(
     verified_checks: list[dict[str, Any]] = []
     for required_check in branch_policy.required_promotion_checks:
         matches = checks_by_name.get(required_check.name, [])
-        if len(matches) != 1:
-            raise RuntimeError(
-                f"required promotion check {required_check.name!r} must have exactly one latest run"
-            )
-        check = matches[0]
-        if (
-            check.get("head_sha") != promotion_head_oid
-            or check.get("status") != "completed"
-            or check.get("conclusion") != "success"
+        if matches and not any(
+            check.get("head_sha") == promotion_head_oid
+            and check.get("status") == "completed"
+            and check.get("conclusion") == "success"
+            for check in matches
         ):
             raise RuntimeError(
                 f"required promotion check {required_check.name!r} is not successful for exact SHA"
             )
-        app = check.get("app") or {}
-        check_suite = check.get("check_suite") or {}
-        if (
-            not isinstance(app, dict)
-            or app.get("slug") != "github-actions"
-            or not isinstance(check_suite, dict)
-        ):
-            raise RuntimeError(
-                f"required promotion check {required_check.name!r} is not owned by the exact GitHub Actions suite"
+        canonical_matches: list[dict[str, Any]] = []
+        for check in matches:
+            if (
+                check.get("head_sha") != promotion_head_oid
+                or check.get("status") != "completed"
+                or check.get("conclusion") != "success"
+            ):
+                continue
+            app = check.get("app") or {}
+            check_suite = check.get("check_suite") or {}
+            if (
+                not isinstance(app, dict)
+                or app.get("slug") != "github-actions"
+                or not isinstance(check_suite, dict)
+            ):
+                continue
+            details_url = str(check.get("details_url") or "")
+            details_match = re.fullmatch(
+                rf"https://github\.com/{re.escape(repository)}/actions/runs/(\d+)/job/\d+",
+                details_url,
             )
-        details_url = str(check.get("details_url") or "")
-        details_match = re.fullmatch(
-            rf"https://github\.com/{re.escape(repository)}/actions/runs/(\d+)/job/\d+",
-            details_url,
-        )
-        if details_match is None:
-            raise RuntimeError(
-                f"required promotion check {required_check.name!r} lacks canonical Actions run identity"
+            if details_match is None:
+                continue
+            required_run_id = int(details_match.group(1))
+            try:
+                check_run_id = int(check.get("id") or 0)
+                check_suite_id = int(check_suite.get("id") or 0)
+            except (TypeError, ValueError):
+                continue
+            if check_run_id < 1 or check_suite_id < 1:
+                continue
+            workflow_run = _api_get(
+                repository,
+                f"/actions/runs/{required_run_id}",
+                token,
             )
-        workflow_run_id = int(details_match.group(1))
-        try:
-            check_run_id = int(check.get("id") or 0)
-            check_suite_id = int(check_suite.get("id") or 0)
-        except (TypeError, ValueError) as error:
-            raise RuntimeError(
-                f"required promotion check {required_check.name!r} has invalid hosted identity"
-            ) from error
-        if check_run_id < 1 or check_suite_id < 1:
-            raise RuntimeError(
-                f"required promotion check {required_check.name!r} has invalid hosted identity"
+            workflow_pull_numbers = (
+                {
+                    int(item["number"])
+                    for item in (workflow_run.get("pull_requests") or [])
+                    if isinstance(item, dict)
+                    and str(item.get("number") or "").isdigit()
+                }
+                if isinstance(workflow_run, dict)
+                else set()
             )
-        workflow_run = _api_get(
-            repository,
-            f"/actions/runs/{workflow_run_id}",
-            token,
-        )
-        workflow_pull_numbers = {
-            int(item["number"])
-            for item in (workflow_run.get("pull_requests") or [])
-            if isinstance(item, dict) and str(item.get("number") or "").isdigit()
-        } if isinstance(workflow_run, dict) else set()
-        if (
-            not isinstance(workflow_run, dict)
-            or workflow_run.get("id") != workflow_run_id
-            or workflow_run.get("event") != "pull_request"
-            or workflow_run.get("head_sha") != promotion_head_oid
-            or workflow_run.get("status") != "completed"
-            or workflow_run.get("conclusion") != "success"
-            or workflow_run.get("path") != required_check.workflow
-            or number not in workflow_pull_numbers
-            or str(((workflow_run.get("repository") or {}).get("full_name")) or "")
-            != repository
-            or not isinstance(workflow_run.get("run_attempt"), int)
-            or int(workflow_run["run_attempt"]) < 1
-            or not str(((workflow_run.get("actor") or {}).get("login")) or "")
-        ):
-            raise RuntimeError(
-                f"required promotion check {required_check.name!r} is not bound to its canonical workflow run"
+            if (
+                not isinstance(workflow_run, dict)
+                or workflow_run.get("id") != required_run_id
+                or workflow_run.get("event") != "pull_request"
+                or workflow_run.get("head_sha") != promotion_head_oid
+                or workflow_run.get("status") != "completed"
+                or workflow_run.get("conclusion") != "success"
+                or workflow_run.get("path") != required_check.workflow
+                or number not in workflow_pull_numbers
+                or str(
+                    ((workflow_run.get("repository") or {}).get("full_name"))
+                    or ""
+                )
+                != repository
+                or not isinstance(workflow_run.get("run_attempt"), int)
+                or int(workflow_run["run_attempt"]) < 1
+                or not str(((workflow_run.get("actor") or {}).get("login")) or "")
+            ):
+                continue
+            canonical_matches.append(
+                {
+                    "name": required_check.name,
+                    "workflow": required_check.workflow,
+                    "runId": required_run_id,
+                    "runAttempt": int(workflow_run["run_attempt"]),
+                    "checkRunId": check_run_id,
+                    "checkSuiteId": check_suite_id,
+                }
             )
-        verified_checks.append(
-            {
-                "name": required_check.name,
-                "workflow": required_check.workflow,
-                "runId": workflow_run_id,
-                "runAttempt": int(workflow_run["run_attempt"]),
-                "checkRunId": check_run_id,
-                "checkSuiteId": check_suite_id,
-            }
-        )
+        if len(canonical_matches) != 1:
+            raise RuntimeError(
+                f"required promotion check {required_check.name!r} must bind exactly one canonical workflow run for PR #{number}; found {len(canonical_matches)}"
+            )
+        verified_checks.append(canonical_matches[0])
     receipt = {
         "schema": (
             "prod-release-governance-receipt"

@@ -2,8 +2,9 @@
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-003.t2
 from __future__ import annotations
 
-import urllib.error
+import copy
 import unittest
+import urllib.error
 from unittest.mock import patch
 
 from quwoquan_ops.ci.verify_release_governance import (
@@ -189,6 +190,37 @@ class ReleaseGovernanceContractTest(unittest.TestCase):
         self.assertEqual(receipt["workflowRef"], WORKFLOW_REF)
         self.assertEqual(len(receipt["requiredChecks"]), 3)
         self.assertGreaterEqual(len(receipt["distinctPrincipals"]), 2)
+
+    def test_same_named_check_from_another_pull_request_is_not_stitched(self) -> None:
+        checks = _successful_checks()
+        unrelated_check = copy.deepcopy(checks["check_runs"][0])
+        unrelated_check["id"] = 2999
+        unrelated_check["check_suite"]["id"] = 4999
+        unrelated_check["details_url"] = (
+            f"https://github.com/{REPOSITORY}/actions/runs/1999/job/3999"
+        )
+        checks["check_runs"].insert(1, unrelated_check)
+        workflow_runs = _successful_workflow_runs()
+        unrelated_run = copy.deepcopy(workflow_runs[0])
+        unrelated_run["id"] = 1999
+        unrelated_run["pull_requests"] = [{"number": 59}]
+        workflow_runs.insert(1, unrelated_run)
+
+        with patch(
+            "quwoquan_ops.ci.verify_release_governance._api_get",
+            side_effect=_hosted_responses(
+                checks=checks,
+                workflow_runs=workflow_runs,
+            ),
+        ):
+            receipt = verify_release_governance(
+                repository=REPOSITORY,
+                git_sha=SHA,
+                token="token",
+                workflow_ref=WORKFLOW_REF,
+            )
+
+        self.assertEqual(receipt["requiredChecks"][0]["runId"], 1000)
 
     def test_direct_push_and_author_self_approval_fail_closed(self) -> None:
         with patch(
