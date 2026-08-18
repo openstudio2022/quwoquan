@@ -9,11 +9,13 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"quwoquan_service/runtime/commandmeta"
 	rterr "quwoquan_service/runtime/errors"
 	mediacontract "quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport/media_contract"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
+	moderationmodel "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/model"
 )
 
 func requireModerationAppErrorCode(t *testing.T, err error, wantCode string) {
@@ -45,4 +47,32 @@ func TestReviewUnknownCaseEmitsModerationCaseNotFound(t *testing.T) {
 		},
 	)
 	requireModerationAppErrorCode(t, err, "CONTENT.USER.moderation_case_not_found")
+}
+
+func TestNilModerationOutboxRelayFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	var relay *moderationapp.OutboxRelay
+	if _, err := relay.Drain(context.Background(), 1); err == nil {
+		t.Fatal("nil moderation outbox relay Drain must fail closed")
+	}
+	if err := relay.Run(context.Background(), time.Millisecond); err == nil {
+		t.Fatal("nil moderation outbox relay Run must fail closed")
+	}
+	if err := relay.Healthy(time.Second); err == nil {
+		t.Fatal("nil moderation outbox relay Healthy must fail closed")
+	}
+}
+
+func TestNilModerationCaseIsNeverPublicationEligible(t *testing.T) {
+	t.Parallel()
+
+	var moderationCase *moderationmodel.PostModerationCase
+	if moderationCase.IsPublicationEligible(
+		"post-missing",
+		1,
+		"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	) {
+		t.Fatal("nil moderation case must not make a post publication eligible")
+	}
 }
