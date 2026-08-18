@@ -199,6 +199,9 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "FLUTTER_STORAGE_BASE_URL: https://storage.flutter-io.cn" in platform_text
     assert "flutter pub get --enforce-lockfile" in platform_text
     assert "run: flutter pub get\n" not in platform_text
+    assert "MOBILE_MATRIX_ENV_JSON: ${{ inputs.env_json }}" in platform_text
+    assert 'MATRIX_ENV_ARGS+=(--environment "$environment")' in platform_text
+    assert '"${MATRIX_ENV_ARGS[@]}"' in platform_text
     assert 'runs-on: [self-hosted, macOS, ARM64, "mobile-${{ inputs.platform }}"]' not in platform_text
     assert '--runner-label "mobile-${{ inputs.platform }}"' in platform_text
     assert "device_runner_lease.py acquire" in platform_text

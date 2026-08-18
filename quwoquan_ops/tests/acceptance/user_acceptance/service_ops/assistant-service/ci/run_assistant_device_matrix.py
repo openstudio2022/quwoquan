@@ -8,13 +8,17 @@ import base64
 import datetime as dt
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import Any
+from uuid import uuid4
 
 
 def _find_repo_root() -> Path:
@@ -22,7 +26,11 @@ def _find_repo_root() -> Path:
         if (candidate / "quwoquan_app").is_dir() and (candidate / "quwoquan_service").is_dir():
             return candidate
     raise RuntimeError("cannot locate quwoquan repo root")
-from typing import Any
+
+
+REPO_ROOT = _find_repo_root()
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from quwoquan_ops.ci.device_matrix.evidence import (
     capture_device_screenshot,
@@ -32,12 +40,21 @@ from quwoquan_ops.ci.device_matrix.evidence import (
     write_discovered_devices_snapshot,
     write_json,
 )
+from quwoquan_ops.cli.lib.environment_topology import ENVIRONMENT_CANONICAL_TARGET
+from quwoquan_ops.cli.lib.local_environment_auth import (
+    LocalAcceptanceActor,
+    close_test_data_acceptance_actor,
+    open_test_data_acceptance_session,
+)
 
 
-REPO_ROOT = _find_repo_root()
 APP_DIR = REPO_ROOT / "quwoquan_app"
 DEFAULT_REPORT_PATH = REPO_ROOT / ".qwq_output" / "env" / "beta" / "runs" / "assistant-device-matrix" / "report.json"
-TEST_PATH = "test/user_acceptance/service/assistant_service/assistant/assistant_run/assistant_environment_smoke__user_acceptance_test.dart"
+USER_ACCEPTANCE_TEST_PATH = (
+    "test/user_acceptance/service/assistant_service/assistant/assistant_run/"
+    "model_generation_provider__user_acceptance_test.dart"
+)
+PRIVATE_DEFINES_PLACEHOLDER = "<ephemeral-private-dart-defines>"
 ASSISTANT_SCENARIO_FIXTURE = (
     REPO_ROOT
     / "quwoquan_service"
@@ -203,7 +220,171 @@ def wait_for_gateway(base_url: str, timeout_seconds: int) -> bool:
         except (urllib.error.URLError, TimeoutError, OSError):
             time.sleep(1)
     return False
-def collect_real_chain_evidence(args: argparse.Namespace, report: dict[str, Any]) -> None:
+
+
+def test_path_for_environment(env_name: str) -> str:
+    if env_name in {"alpha", "beta", "gamma"}:
+        return USER_ACCEPTANCE_TEST_PATH
+    raise ValueError(f"unsupported env: {env_name}")
+
+
+def write_private_flutter_defines(defines: dict[str, str]) -> Path:
+    descriptor, raw_path = tempfile.mkstemp(
+        prefix="qwq_assistant_device_matrix_",
+        suffix=".json",
+        text=True,
+    )
+    path = Path(raw_path)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8", closefd=True) as handle:
+            json.dump(defines, handle, ensure_ascii=False, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except BaseException:
+        try:
+            os.close(descriptor)
+        except OSError:
+            pass
+        path.unlink(missing_ok=True)
+        raise
+    return path
+
+
+def public_command(command: list[str]) -> list[str]:
+    return [
+        (
+            "--dart-define-from-file=" + PRIVATE_DEFINES_PLACEHOLDER
+            if item.startswith("--dart-define-from-file=")
+            else item
+        )
+        for item in command
+    ]
+
+
+def open_test_actor(
+    env_name: str,
+    device: dict[str, Any],
+    args: argparse.Namespace,
+) -> tuple[LocalAcceptanceActor, str]:
+    if env_name not in {"alpha", "beta", "gamma"}:
+        raise ValueError("assistant actor environment is unsupported")
+    instance_id = (
+        f"assistant-device-{env_name}-"
+        f"{sanitize_device_id(str(device.get('id', 'unknown')))}-{uuid4().hex}"
+    )
+    actor = open_test_data_acceptance_session(
+        args.gateway_health_url.rstrip("/"),
+        environment=env_name,
+        target_name=ENVIRONMENT_CANONICAL_TARGET[env_name],
+        test_data_instance_id=instance_id,
+        actor_role="assistant-device-matrix",
+        actor_index=0,
+    )
+    return actor, instance_id
+
+
+def execute_patrol_test(
+    env_name: str,
+    device: dict[str, Any],
+    args: argparse.Namespace,
+    *,
+    run_dir: Path,
+    private_defines_path: Path,
+) -> tuple[dict[str, Any], list[str], str, str]:
+    patrol_executable = shutil.which("patrol") or "patrol"
+    command = [
+        patrol_executable,
+        "test",
+        "-t",
+        test_path_for_environment(env_name),
+        "-d",
+        device["id"],
+        f"--dart-define-from-file={private_defines_path}",
+    ]
+    receipt_command = public_command(command)
+    command_path = write_json(
+        run_dir / "command.json",
+        {
+            "capturedAt": utc_now(),
+            "env": env_name,
+            "deviceId": device["id"],
+            "gatewayBaseUrl": device["gatewayBaseUrl"],
+            "command": receipt_command,
+        },
+    )
+
+    print(
+        "[assistant-device-matrix] "
+        f"{env_name} -> {device['name']} ({device['id']}, {device['screenClass']})",
+        flush=True,
+    )
+    result = run_command(
+        command,
+        cwd=APP_DIR,
+        timeout_seconds=args.test_timeout_seconds,
+        log_path=run_dir / "flutter-test.log",
+    )
+    initial_log_path = str(result.get("logPath", ""))
+    retry_markers = [
+        "Connection timed out",
+        "Connection refused",
+        "Operation timed out",
+        "timed out",
+        "找私助暂时不可用",
+        "assistant beta gateway upstream failed",
+        "SocketException",
+        "Shell subprocess crashed with SIGTERM",
+        "PathNotFoundException",
+        "Building native assets failed",
+        "Connection closed while receiving data",
+        "HttpException",
+        "release-assets.githubusercontent.com",
+    ]
+    if result["exitCode"] != 0:
+        retries: list[dict[str, Any]] = []
+        max_retries = max(0, args.remote_retry_attempts)
+        summary = str(result.get("outputSummary", ""))
+        matched_markers = [marker for marker in retry_markers if marker in summary]
+        while len(retries) < max_retries and matched_markers:
+            retries.append(
+                {
+                    "attempt": len(retries) + 1,
+                    "exitCode": result.get("exitCode", 1),
+                    "timedOut": result.get("timedOut", False),
+                    "matchedRetryMarkers": matched_markers,
+                    "logPath": result.get("logPath", ""),
+                }
+            )
+            if env_name in {"beta", "gamma"}:
+                health_base = (
+                    args.gateway_health_url.rstrip("/")
+                    if env_name == "beta"
+                    else str(device["gatewayBaseUrl"]).rstrip("/")
+                )
+                wait_for_gateway(health_base, args.retry_wait_timeout_seconds)
+            time.sleep(args.retry_sleep_seconds)
+            result = run_command(
+                command,
+                cwd=APP_DIR,
+                timeout_seconds=args.test_timeout_seconds,
+                log_path=run_dir / f"flutter-test.retry-{len(retries) + 1}.log",
+            )
+            summary = str(result.get("outputSummary", ""))
+            matched_markers = [marker for marker in retry_markers if marker in summary]
+            if result["exitCode"] == 0:
+                break
+        if retries:
+            result["retryAttempted"] = True
+            result["retryAttempts"] = retries
+    return result, receipt_command, command_path, initial_log_path
+
+
+def collect_real_chain_evidence(
+    args: argparse.Namespace,
+    report: dict[str, Any],
+) -> None:
     beta_runs = [run for run in report.get("runs", []) if run.get("env") == "beta"]
     if not beta_runs:
         return
@@ -300,99 +481,159 @@ def run_matrix_test(
             )
             return reverse_result
 
-    command = [
-        "flutter",
-        "test",
-        TEST_PATH,
-        "-d",
-        device["id"],
-        f"--dart-define=APP_RUNTIME_ENV={env_name}",
-        f"--dart-define=VALIDATION_SCREEN_CLASS={device['screenClass']}",
-        "--dart-define=ASSISTANT_SCENARIO_FIXTURE_JSON_B64="
-        + assistant_scenario_fixture_b64(),
-    ]
-    if env_name in {"beta", "gamma"}:
-        command.extend(
-            [
-                f"--dart-define=CLOUD_GATEWAY_BASE_URL={device['gatewayBaseUrl']}",
-            ]
-        )
-    elif env_name != "alpha":
-        raise ValueError(f"unsupported env: {env_name}")
-    command_path = write_json(
-        run_dir / "command.json",
-        {
-            "capturedAt": utc_now(),
+    actor: LocalAcceptanceActor | None = None
+    actor_instance_id = ""
+    try:
+        actor, actor_instance_id = open_test_actor(env_name, device, args)
+    except (OSError, RuntimeError, ValueError) as exc:
+        return {
+            "command": [],
+            "cwd": str(APP_DIR),
+            "exitCode": 2,
+            "durationMs": 0,
+            "timedOut": False,
+            "outputSummary": f"assistant test actor preparation failed: {exc}",
             "env": env_name,
             "deviceId": device["id"],
-            "gatewayBaseUrl": device["gatewayBaseUrl"] if env_name in {"beta", "gamma"} else "",
-            "command": command,
-        },
-    )
+            "deviceName": device["name"],
+            "screenClass": device["screenClass"],
+            "gatewayBaseUrl": device["gatewayBaseUrl"],
+            "status": "failed",
+            "failureCategory": "test_actor_preparation_failed",
+            "failureReason": "candidate-bound assistant test actor could not be prepared",
+            "testDataLifecycle": {
+                "testDataInstanceId": actor_instance_id,
+                "actorRole": "assistant-device-matrix",
+                "cleanupStatus": "not_started",
+            },
+            "evidence": {
+                "runDirectory": repo_relative(run_dir),
+                "deviceManifestPath": device_manifest_path,
+                "beforeScreenshot": before_screenshot,
+                "afterScreenshot": {
+                    "status": "skipped",
+                    "reason": "actor preparation failed",
+                },
+                "failureScreenshot": capture_device_screenshot(
+                    device, run_dir / "failure.png"
+                ),
+            },
+        }
 
-    print(
-        "[assistant-device-matrix] "
-        f"{env_name} -> {device['name']} ({device['id']}, {device['screenClass']})",
-        flush=True,
+    defines = {
+        "RUN_PATROL_ACCEPTANCE": "true",
+        "APP_RUNTIME_ENV": env_name,
+        "API_CONTRACT_ENV": env_name,
+        "API_CONTRACT_BASE_URL": str(device["gatewayBaseUrl"]),
+        "CLOUD_GATEWAY_BASE_URL": str(device["gatewayBaseUrl"]),
+        "VALIDATION_SCREEN_CLASS": str(device["screenClass"]),
+    }
+    if actor is None:
+        raise RuntimeError("assistant device matrix requires a prepared actor")
+    defines.update(
+        {
+            "TEST_AUTH_TOKEN": actor.session.access_token,
+            "TEST_REFRESH_TOKEN": actor.session.refresh_token,
+            "APP_CURRENT_OWNER_ID": actor.session.owner_id,
+            "APP_CURRENT_PERSONA_ID": actor.session.persona_id,
+        }
     )
-    result = run_command(
-        command,
-        cwd=APP_DIR,
-        timeout_seconds=args.test_timeout_seconds,
-        log_path=run_dir / "flutter-test.log",
-    )
-    initial_log_path = str(result.get("logPath", ""))
-    retry_markers = [
-        "Connection timed out",
-        "Connection refused",
-        "Operation timed out",
-        "timed out",
-        "找私助暂时不可用",
-        "assistant beta gateway upstream failed",
-        "SocketException",
-        "Shell subprocess crashed with SIGTERM",
-        "PathNotFoundException",
-        "Building native assets failed",
-        "Connection closed while receiving data",
-        "HttpException",
-        "release-assets.githubusercontent.com",
-    ]
-    if result["exitCode"] != 0:
-        retries: list[dict[str, Any]] = []
-        max_retries = max(0, args.remote_retry_attempts)
-        summary = str(result.get("outputSummary", ""))
-        matched_markers = [marker for marker in retry_markers if marker in summary]
-        while len(retries) < max_retries and matched_markers:
-            retries.append(
-                {
-                    "attempt": len(retries) + 1,
-                    "exitCode": result.get("exitCode", 1),
-                    "timedOut": result.get("timedOut", False),
-                    "matchedRetryMarkers": matched_markers,
-                    "logPath": result.get("logPath", ""),
-                }
-            )
-            if env_name in {"beta", "gamma"}:
-                health_base = (
-                    args.gateway_health_url.rstrip("/")
-                    if env_name == "beta"
-                    else str(device["gatewayBaseUrl"]).rstrip("/")
+    try:
+        private_defines_path = write_private_flutter_defines(defines)
+    except OSError as exc:
+        cleanup_status = "not_required"
+        if actor is not None:
+            cleanup_status = "passed"
+            try:
+                close_test_data_acceptance_actor(
+                    args.gateway_health_url.rstrip("/"),
+                    actor=actor,
+                    test_data_instance_id=actor_instance_id,
                 )
-                wait_for_gateway(health_base, args.retry_wait_timeout_seconds)
-            time.sleep(args.retry_sleep_seconds)
-            result = run_command(
-                command,
-                cwd=APP_DIR,
-                timeout_seconds=args.test_timeout_seconds,
-                log_path=run_dir / f"flutter-test.retry-{len(retries) + 1}.log",
+            except (OSError, RuntimeError, ValueError):
+                cleanup_status = "failed"
+        return {
+            "command": [],
+            "cwd": str(APP_DIR),
+            "exitCode": 2,
+            "durationMs": 0,
+            "timedOut": False,
+            "outputSummary": f"private Flutter defines preparation failed: {exc}",
+            "env": env_name,
+            "deviceId": device["id"],
+            "deviceName": device["name"],
+            "screenClass": device["screenClass"],
+            "gatewayBaseUrl": device["gatewayBaseUrl"],
+            "status": "failed",
+            "failureCategory": "private_test_configuration_failed",
+            "failureReason": "private Flutter test configuration could not be prepared",
+            "testDataLifecycle": {
+                "testDataInstanceId": actor_instance_id,
+                "actorRole": "assistant-device-matrix" if actor is not None else "",
+                "cleanupStatus": cleanup_status,
+            },
+            "evidence": {
+                "runDirectory": repo_relative(run_dir),
+                "deviceManifestPath": device_manifest_path,
+                "beforeScreenshot": before_screenshot,
+                "afterScreenshot": {
+                    "status": "skipped",
+                    "reason": "private test configuration failed",
+                },
+                "failureScreenshot": capture_device_screenshot(
+                    device, run_dir / "failure.png"
+                ),
+            },
+        }
+    cleanup_error = ""
+    cleanup_became_blocker = False
+    execution_error: BaseException | None = None
+    try:
+        result, receipt_command, command_path, initial_log_path = (
+            execute_patrol_test(
+                env_name,
+                device,
+                args,
+                run_dir=run_dir,
+                private_defines_path=private_defines_path,
             )
-            summary = str(result.get("outputSummary", ""))
-            matched_markers = [marker for marker in retry_markers if marker in summary]
-            if result["exitCode"] == 0:
-                break
-        if retries:
-            result["retryAttempted"] = True
-            result["retryAttempts"] = retries
+        )
+    except BaseException as exc:
+        execution_error = exc
+    finally:
+        private_defines_path.unlink(missing_ok=True)
+        try:
+            close_test_data_acceptance_actor(
+                args.gateway_health_url.rstrip("/"),
+                actor=actor,
+                test_data_instance_id=actor_instance_id,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            cleanup_error = str(exc)
+
+    if execution_error is not None:
+        if cleanup_error:
+            raise BaseExceptionGroup(
+                "assistant Patrol execution and actor cleanup failed",
+                [
+                    execution_error,
+                    RuntimeError(
+                        "candidate-bound assistant test actor cleanup failed"
+                    ),
+                ],
+            )
+        raise execution_error
+
+    result["command"] = receipt_command
+    if cleanup_error and result["exitCode"] == 0:
+        cleanup_became_blocker = True
+        result.update(
+            {
+                "exitCode": 2,
+                "outputSummary": "assistant test actor cleanup failed",
+                "failureReason": "candidate-bound assistant test actor cleanup failed",
+            }
+        )
     after_screenshot = (
         capture_device_screenshot(device, run_dir / "after.png")
         if result["exitCode"] == 0
@@ -412,7 +653,9 @@ def run_matrix_test(
             "gatewayBaseUrl": device["gatewayBaseUrl"] if env_name in {"beta", "gamma"} else "",
             "status": "passed" if result["exitCode"] == 0 else "failed",
             "failureCategory": (
-                "test_timeout"
+                "test_actor_cleanup_failed"
+                if cleanup_became_blocker
+                else "test_timeout"
                 if result.get("timedOut")
                 else (
                     "gateway_or_transport_flake"
@@ -420,6 +663,17 @@ def run_matrix_test(
                     else "test_body_failed"
                 )
             ) if result["exitCode"] != 0 else "",
+            "testDataLifecycle": {
+                "testDataInstanceId": actor_instance_id,
+                "actorRole": "assistant-device-matrix" if actor is not None else "",
+                "cleanupStatus": (
+                    "failed"
+                    if cleanup_error
+                    else "passed"
+                    if actor is not None
+                    else "not_required"
+                ),
+            },
             "evidence": {
                 "runDirectory": repo_relative(run_dir),
                 "deviceManifestPath": device_manifest_path,

@@ -204,9 +204,27 @@ jobs:
       - name: Build Android package-only startup matrix
         if: ${{ inputs.platform == 'android' }}
         working-directory: ${{ env.PLATFORM_REPO_DIR }}/quwoquan_app
+        env:
+          MOBILE_MATRIX_ENV_JSON: ${{ inputs.env_json }}
         run: |
+          set -euo pipefail
+          STARTUP_ENVIRONMENTS="$(python3 -c '
+          import json, sys
+          environments = json.loads(sys.argv[1])
+          allowed = {"alpha", "beta", "gamma", "prod"}
+          if not isinstance(environments, list) or not environments:
+              raise SystemExit("GATE_BLOCK: mobile matrix environment list is empty")
+          if any(not isinstance(item, str) or item not in allowed for item in environments):
+              raise SystemExit("GATE_BLOCK: mobile matrix environment list is invalid")
+          print("\n".join(dict.fromkeys(environments)))
+          ' "$MOBILE_MATRIX_ENV_JSON")"
+          MATRIX_ENV_ARGS=()
+          while IFS= read -r environment; do
+            MATRIX_ENV_ARGS+=(--environment "$environment")
+          done <<< "$STARTUP_ENVIRONMENTS"
           python3 scripts/device/build_startup_environment_matrix.py \
             --platform android \
+            "${MATRIX_ENV_ARGS[@]}" \
             --output-root "$QWQ_OUTPUT_ROOT/env/repo/runs/startup-environment-android-build-matrix"
       - name: Verify Android native startup on the leased device
         if: ${{ inputs.platform == 'android' }}
