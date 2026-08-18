@@ -270,6 +270,20 @@ run_app() {
       exit 2
       ;;
   esac
+  local app_test_shared_suite="run"
+  if [[ "$app_phase" == "tests" ]] && \
+     [[ -n "${FLUTTER_TEST_TOTAL_SHARDS:-}" || -n "${FLUTTER_TEST_SHARD_INDEX:-}" ]]; then
+    if [[ ! "${FLUTTER_TEST_TOTAL_SHARDS:-}" =~ ^[1-9][0-9]*$ ]] || \
+       [[ ! "${FLUTTER_TEST_SHARD_INDEX:-}" =~ ^[0-9]+$ ]] || \
+       (( 10#${FLUTTER_TEST_SHARD_INDEX} >= 10#${FLUTTER_TEST_TOTAL_SHARDS} )); then
+      echo "[gate] FAIL: app phase=tests sharding requires total>0 and 0<=index<total" >&2
+      echo "[gate] FIX: set both FLUTTER_TEST_TOTAL_SHARDS and FLUTTER_TEST_SHARD_INDEX to a valid range, or unset both for unsharded execution" >&2
+      return 2
+    fi
+    if (( 10#${FLUTTER_TEST_SHARD_INDEX} != 0 )); then
+      app_test_shared_suite="skip"
+    fi
+  fi
   command -v flutter >/dev/null 2>&1 || { echo "[gate] FAIL: flutter not found in PATH" 1>&2; exit 1; }
   command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
 
@@ -504,8 +518,12 @@ run_app() {
   if [[ "$app_phase" == "tests" ]]; then
     FLUTTER_TEST_GUARD_TIMEOUT_SECONDS="${FLUTTER_TEST_GUARD_TIMEOUT_SECONDS:-1800}" \
       run_app_flutter_tests "${FLUTTER_TEST_SERIAL_MODE:-exclude}" "${FLUTTER_TEST_CONCURRENCY:-8}" || return 1
-    run_app_python_local_contract_tests || return 1
-    run_app_canonical_coverage
+    if [[ "$app_test_shared_suite" == "run" ]]; then
+      run_app_python_local_contract_tests || return 1
+      run_app_canonical_coverage
+    else
+      echo "[gate] app shared Python contracts and canonical coverage owned by shard 0"
+    fi
     echo "[gate] app phase=tests OK"
     return 0
   fi

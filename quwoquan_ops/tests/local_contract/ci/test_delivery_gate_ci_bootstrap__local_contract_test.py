@@ -1,10 +1,67 @@
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[4]
+GATE_REPO_PATH = ROOT / "quwoquan_ops/gate/gate_repo.sh"
+
+
+def _run_stubbed_app_test_phase(
+    tmp_path: Path,
+    *,
+    shard_total: str | None = "4",
+    shard_index: str | None = "0",
+) -> tuple[subprocess.CompletedProcess[str], Path]:
+    source = GATE_REPO_PATH.read_text(encoding="utf-8")
+    start = re.search(r"(?m)^run_app\(\)\s+\{", source)
+    end = re.search(r"(?m)^run_portal\(\)\s+\(", source)
+    assert start is not None and end is not None and start.start() < end.start()
+    app = source[start.start() : end.start()]
+    total_label = shard_total if shard_total is not None else "unset"
+    index_label = shard_index if shard_index is not None else "unset"
+    case_dir = tmp_path / f"shard-{total_label}-{index_label}"
+    stub_dir = case_dir / "bin"
+    stub_dir.mkdir(parents=True)
+    log_path = case_dir / "commands.log"
+    stub = '#!/usr/bin/env sh\nprintf "%s %s\\n" "$0" "$*" >>"$GATE_STUB_LOG"\n'
+    for executable in ("python3", "dart", "flutter", "make"):
+        path = stub_dir / executable
+        path.write_text(stub, encoding="utf-8")
+        path.chmod(0o755)
+    harness = case_dir / "run_app_tests.sh"
+    harness.write_text(
+        "#!/bin/bash\nset -euo pipefail\n"
+        f"ROOT={str(ROOT)!r}\ncd \"$ROOT\"\n{app}\nrun_app\n",
+        encoding="utf-8",
+    )
+    harness.chmod(0o755)
+    environment = os.environ.copy()
+    environment.pop("FLUTTER_TEST_TOTAL_SHARDS", None)
+    environment.pop("FLUTTER_TEST_SHARD_INDEX", None)
+    environment.update(
+        {
+            "GATE_APP_PHASE": "tests",
+            "GATE_STUB_LOG": str(log_path),
+            "PATH": f"{stub_dir}:/usr/bin:/bin",
+        }
+    )
+    if shard_total is not None:
+        environment["FLUTTER_TEST_TOTAL_SHARDS"] = shard_total
+    if shard_index is not None:
+        environment["FLUTTER_TEST_SHARD_INDEX"] = shard_index
+    completed = subprocess.run(
+        ["/bin/bash", str(harness)],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return completed, log_path
 
 
 def test_delivery_gate_bootstrap_uses_pinned_verified_toolchains() -> None:
@@ -111,6 +168,99 @@ def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -
     assert "GATE_APP_PHASE: serial" in workflow
     assert 'local app_phase="${GATE_APP_PHASE:-all}"' in gate
     assert 'run_app_flutter_tests "${FLUTTER_TEST_SERIAL_MODE:-exclude}"' in gate
+
+
+def test_app_shard_zero_owns_native_dependencies_and_shared_contracts() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    job_start = workflow.index("  quwoquan_app_tests:\n")
+    job_end = workflow.index("\n  quwoquan_app_serial:\n", job_start)
+    job = workflow[job_start:job_end]
+    gate = (ROOT / "quwoquan_ops/gate/gate_repo.sh").read_text(encoding="utf-8")
+
+    assert "Install App shared contract native dependencies" in job
+    assert "if: ${{ matrix.shard_index == 0 }}" in job
+    assert "tesseract-ocr" in job
+    assert 'local app_test_shared_suite="run"' in gate
+    assert 'if (( 10#${FLUTTER_TEST_SHARD_INDEX} != 0 )); then' in gate
+    assert 'app_test_shared_suite="skip"' in gate
+    assert 'if [[ "$app_test_shared_suite" == "run" ]]; then' in gate
+    assert "run_app_python_local_contract_tests || return 1" in gate
+    assert "run_app_canonical_coverage" in gate
+
+
+def test_app_test_phase_executes_shared_contracts_only_on_shard_zero(
+    tmp_path: Path,
+) -> None:
+    for shard_index in ("0", "1", "2", "3"):
+        completed, log_path = _run_stubbed_app_test_phase(
+            tmp_path,
+            shard_index=shard_index,
+        )
+        assert completed.returncode == 0, completed.stderr
+        commands = log_path.read_text(encoding="utf-8").splitlines()
+        python_contract_commands = [
+            command
+            for command in commands
+            if "test-app-python-local-contract" in command
+        ]
+        canonical_coverage_commands = [
+            command
+            for command in commands
+            if "verify_canonical_coverage.py --collect --scope app" in command
+        ]
+        expected_count = 1 if shard_index == "0" else 0
+        assert len(python_contract_commands) == expected_count
+        assert len(canonical_coverage_commands) == expected_count
+
+
+def test_unsharded_app_test_phase_keeps_the_full_shared_suite(
+    tmp_path: Path,
+) -> None:
+    completed, log_path = _run_stubbed_app_test_phase(
+        tmp_path,
+        shard_total=None,
+        shard_index=None,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    commands = log_path.read_text(encoding="utf-8").splitlines()
+    assert sum("test-app-python-local-contract" in row for row in commands) == 1
+    assert (
+        sum(
+            "verify_canonical_coverage.py --collect --scope app" in row
+            for row in commands
+        )
+        == 1
+    )
+
+
+def test_app_test_phase_rejects_invalid_shards_before_execution(
+    tmp_path: Path,
+) -> None:
+    invalid_shards = (
+        (None, "0"),
+        ("4", None),
+        ("0", "0"),
+        ("not-a-number", "0"),
+        ("4", "-1"),
+        ("4", "not-a-number"),
+        ("4", "4"),
+    )
+
+    for shard_total, shard_index in invalid_shards:
+        completed, log_path = _run_stubbed_app_test_phase(
+            tmp_path,
+            shard_total=shard_total,
+            shard_index=shard_index,
+        )
+
+        assert completed.returncode == 2
+        assert (
+            "app phase=tests sharding requires total>0 and 0<=index<total"
+            in completed.stderr
+        )
+        assert "or unset both for unsharded execution" in completed.stderr
+        assert not log_path.exists()
 
 
 def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_serial_on_controlled_macos() -> None:
