@@ -26,9 +26,9 @@ CONCURRENCY_GROUP_EXPRESSION = (
 
 
 def _expected_concurrency_group(
-    *, event_name: str, validation_profile: str, git_ref: str
+    *, event_name: str, selected_profile: str, git_ref: str
 ) -> str:
-    if validation_profile == "" and event_name in {"push", "pull_request"}:
+    if selected_profile == "" and event_name in {"push", "pull_request"}:
         return f"app-env-device-matrix-pr-light-{event_name}-{git_ref}"
     return "app-env-device-matrix-shared-runtime"
 
@@ -145,12 +145,12 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
                 "app-env-device-matrix-shared-runtime",
             ),
         )
-        for event_name, validation_profile, git_ref, expected in cases:
-            with self.subTest(event_name=event_name, profile=validation_profile):
+        for event_name, selected_profile, git_ref, expected in cases:
+            with self.subTest(event_name=event_name, profile=selected_profile):
                 self.assertEqual(
                     _expected_concurrency_group(
                         event_name=event_name,
-                        validation_profile=validation_profile,
+                        selected_profile=selected_profile,
                         git_ref=git_ref,
                     ),
                     expected,
