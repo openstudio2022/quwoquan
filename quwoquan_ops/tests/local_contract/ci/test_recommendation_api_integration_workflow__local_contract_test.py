@@ -1,17 +1,24 @@
 from __future__ import annotations
 
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t1
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t2
+
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[4]
 
 
-def test_recommendation_api_integration_pr_targets_only_main() -> None:
+def test_recommendation_api_integration_defers_edges_to_canonical_evaluator() -> None:
     workflow = (ROOT / ".github/workflows/recommendation_api_integration.yml").read_text(
         encoding="utf-8"
     )
 
-    assert "pull_request:\n    branches:\n      - main\n    paths:" in workflow
+    assert "pull_request:\n    branches:" not in workflow
+    assert "pull_request:\n    paths:" in workflow
+    assert "Recommendation — Branch Policy" in workflow
+    assert workflow.count("needs: branch-policy") == 2
+    assert "verify_git_branch_policy.py" in workflow
 
 
 def test_recommendation_api_integration_uses_canonical_content_post_package() -> None:

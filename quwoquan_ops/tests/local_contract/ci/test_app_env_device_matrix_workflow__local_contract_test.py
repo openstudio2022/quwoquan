@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t1
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t2
+
 import json
 import os
 from pathlib import Path
@@ -19,6 +22,12 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.workflow = WORKFLOW.read_text(encoding="utf-8")
         cls.profiles = json.loads(PROFILES.read_text(encoding="utf-8"))
+
+    def test_promotion_pull_request_is_gated_by_canonical_branch_policy(self) -> None:
+        self.assertNotIn("pull_request:\n    branches:", self.workflow)
+        self.assertIn("App Matrix — Branch Policy", self.workflow)
+        self.assertIn("Enforce the reviewed promotion edge", self.workflow)
+        self.assertIn("needs: branch_policy", self.workflow)
 
     def run_summary(
         self,

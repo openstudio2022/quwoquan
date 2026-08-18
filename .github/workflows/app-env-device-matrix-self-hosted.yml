@@ -15,8 +15,6 @@ on:
   schedule:
     - cron: '0 18 * * *'
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       validation_profile:
@@ -153,8 +151,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  branch_policy:
+    name: App Matrix — Branch Policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+      - if: ${{ github.event_name == 'pull_request' }}
+        name: Enforce the reviewed promotion edge
+        run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
+
   resolve_release_evidence:
     name: Resolve one canonical release evidence reference
+    needs: branch_policy
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

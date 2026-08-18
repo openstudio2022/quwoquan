@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t1
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t2
+
 import os
 import re
 import subprocess
@@ -105,15 +108,18 @@ def test_service_gate_installs_required_native_test_dependencies() -> None:
     assert "--no-install-recommends" in job
 
 
-def test_delivery_gate_runs_for_main_pull_requests() -> None:
+def test_delivery_and_promotion_gates_defer_edges_to_canonical_evaluator() -> None:
     workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
     pre_release = (ROOT / ".github/workflows/pre-release-gate.yml").read_text(encoding="utf-8")
 
-    assert "pull_request:\n    branches:\n      - main" in workflow
-    assert "pull_request:\n    branches:\n      - main" in pre_release
+    assert "pull_request:\n    branches:" not in workflow
+    assert "pull_request:\n    branches:" not in pre_release
     assert "\n  push:\n" not in workflow
     assert "Enforce the reviewed pull-request branch edge" in workflow
     assert "verify_git_branch_policy.py" in workflow
+    assert "Pre-Release — Branch Policy" in pre_release
+    assert "Enforce the reviewed promotion edge" in pre_release
+    assert "needs: branch_policy" in pre_release
 
 
 def test_app_pipeline_uses_only_the_repository_pinned_flutter_version() -> None:

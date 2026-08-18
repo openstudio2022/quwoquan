@@ -1,6 +1,6 @@
 # 04 PR 轻量门禁：pr_light 不访问远端；manual_full/mainline_auto_prod
 # 必须对显式 beta/prod URL 执行 canonical /search 商业信封探针。hosted gamma 预检保持退役。
-# 触发：pull_request(main) + workflow_dispatch
+# 触发：pull_request + workflow_dispatch；canonical evaluator 决定是否为 promotion
 # 执行语义见 .cursor/commands/verify.md；本 workflow 是 CI 行为真相源。
 name: 04. Pre-Release Gate
 
@@ -9,8 +9,6 @@ permissions:
 
 on:
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       validation_profile:
@@ -41,8 +39,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  branch_policy:
+    name: Pre-Release — Branch Policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+      - if: ${{ github.event_name == 'pull_request' }}
+        name: Enforce the reviewed promotion edge
+        run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
+
   resolve_profile:
     name: Resolve validation profile
+    needs: branch_policy
     runs-on: [self-hosted, macOS, ARM64]
     outputs:
       profile: ${{ steps.resolve.outputs.profile }}

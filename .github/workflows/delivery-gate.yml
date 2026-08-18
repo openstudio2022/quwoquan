@@ -1,5 +1,5 @@
 # Delivery Gate — PR 合入主门禁（L1+L2）
-# 触发：pull_request(main) + workflow_dispatch
+# 触发：pull_request + workflow_dispatch；生产 branch evaluator 决定合法边
 # 职责：拓扑校验 + metadata + L1(Flutter) + L2(Go contract) + portal
 # 执行语义见 .cursor/commands/deliver.md；本 workflow 是 CI 行为真相源。
 name: 03. Delivery Gate
@@ -15,8 +15,6 @@ env:
 
 on:
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
   workflow_call:
     inputs:

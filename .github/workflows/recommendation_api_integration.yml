@@ -18,8 +18,6 @@ on:
   schedule:
     - cron: "30 19 * * *" # 每日 UTC 19:30（北京 03:30），错峰 ML 训练管线
   pull_request:
-    branches:
-      - main
     paths:
       - "quwoquan_service/services/content-service/**"
       - "quwoquan_service/services/recommendation-service/**"
@@ -31,8 +29,22 @@ env:
   QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
 
 jobs:
+  branch-policy:
+    name: Recommendation — Branch Policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - if: ${{ github.event_name == 'pull_request' }}
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+      - if: ${{ github.event_name == 'pull_request' }}
+        name: Enforce the reviewed pull-request edge
+        run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
+
   content-service-api-integration:
     name: "content-service api_integration (testcontainers)"
+    needs: branch-policy
     runs-on: ubuntu-latest
     timeout-minutes: 40
     defaults:
@@ -86,6 +98,7 @@ jobs:
 
   recommendation-service-api-integration:
     name: "recommendation-service api_integration (pytest)"
+    needs: branch-policy
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:

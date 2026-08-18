@@ -1,8 +1,43 @@
 allowed_local_branches:
+  - dev1.0
   - main
 
 allowed_remote_branches:
+  - dev1.0
   - main
 
 pull_request_branch_prefixes:
   - codex/
+
+integration_branch: dev1.0
+release_branch: main
+production_source_branch: main
+production_workflow: .github/workflows/deploy-prod-auto.yml
+
+required_promotion_checks:
+  - name: 03. Delivery Gate
+    workflow: .github/workflows/delivery-gate.yml
+  - name: 04. Pre-Release Gate
+    workflow: .github/workflows/pre-release-gate.yml
+  - name: 05. App Env Device Matrix
+    workflow: .github/workflows/app-env-device-matrix-self-hosted.yml
+
+allowed_pull_request_edges:
+  - head: codex/*
+    base: dev1.0
+  - head: dev1.0
+    base: main
+
+system_backsync:
+  head: main
+  base: dev1.0
+  mode: fast-forward-only
+
+failure_codes:
+  policy_invalid: OPS.BRANCH.POLICY_INVALID
+  ref_not_allowed: OPS.BRANCH.REF_NOT_ALLOWED
+  direct_push_not_allowed: OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED
+  backsync_not_fast_forward: OPS.BRANCH.BACKSYNC_NOT_FAST_FORWARD
+  backsync_cas_conflict: OPS.BRANCH.BACKSYNC_CAS_CONFLICT
+  authority_unavailable: OPS.BRANCH.AUTHORITY_UNAVAILABLE
+  source_not_main_reachable: OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE

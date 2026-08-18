@@ -17,9 +17,118 @@ VALIDATION = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
 PIPELINE_SPEC = (
     ROOT / "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md"
 )
+SOURCE_ADMISSION_SPEC_REFS = (
+    "spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001.t1",
+    "spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t2",
+    "spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-003.t1",
+    "spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-003.t2",
+)
 
 
 class ReleaseWorkflowConvergenceContractTest(unittest.TestCase):
+    def test_source_promotion_admission_precedes_candidate_and_prod_credentials(
+        self,
+    ) -> None:
+        for spec_ref in SOURCE_ADMISSION_SPEC_REFS:
+            self.assertTrue(spec_ref.startswith("spec_ref: "))
+
+        import yaml
+
+        source = CONTROLLED_PROD.read_text(encoding="utf-8")
+        jobs = yaml.safe_load(source)["jobs"]
+        source_context = jobs["source_context"]
+        admission_step = next(
+            step
+            for step in source_context["steps"]
+            if step.get("name")
+            == "Admit the unique reviewed dev1.0 to main promotion"
+        )
+        source_commands = "\n".join(
+            str(step.get("run") or "") for step in source_context["steps"]
+        )
+
+        self.assertEqual(source_context["permissions"]["contents"], "read")
+        self.assertEqual(source_context["permissions"]["actions"], "read")
+        self.assertEqual(source_context["permissions"]["checks"], "read")
+        self.assertEqual(
+            source_context["permissions"]["pull-requests"], "read"
+        )
+        self.assertNotIn("git merge-base --is-ancestor", source_commands)
+        self.assertNotIn("EXPECTED_WORKFLOW_REF", source_commands)
+        self.assertIn("verify_release_governance.py", source_commands)
+        self.assertIn("PyYAML==6.0.3", source_commands)
+        self.assertIn('--git-sha "$SOURCE_SHA"', source_commands)
+        self.assertNotIn("ADMISSION_DIGEST", source_commands)
+        self.assertIn('--minimum-approvals 1', source_commands)
+        self.assertIn("$RUNNER_TEMP/source-promotion-admission.json", source_commands)
+        self.assertNotIn("--release-manifest", source_commands)
+        self.assertIn("OPS.BRANCH.SOURCE_NOT_MAIN_REACHABLE", source_commands)
+        self.assertNotIn("if", admission_step)
+        self.assertNotIn("continue-on-error", admission_step)
+        self.assertEqual(
+            admission_step["env"]["SOURCE_SHA"],
+            "${{ steps.source.outputs.source_git_sha }}",
+        )
+        self.assertIn('"schema": "prod-source-governance-receipt"', source_commands)
+
+        for producer in ("service_pipeline", "app_pipeline", "delivery_gate"):
+            needs = jobs[producer]["needs"]
+            if isinstance(needs, str):
+                needs = [needs]
+            self.assertIn("source_context", needs)
+
+        def depends_on_source_context(job_name: str) -> bool:
+            needs = jobs[job_name].get("needs", [])
+            if isinstance(needs, str):
+                needs = [needs]
+            return "source_context" in needs or any(
+                depends_on_source_context(dependency) for dependency in needs
+            )
+
+        for protected_job in (
+            "service_pipeline",
+            "app_pipeline",
+            "delivery_gate",
+            "prepare",
+            "alpha_local",
+            "beta_device_matrix",
+            "gamma_local",
+            "preprod_evidence",
+            "prod_rollout",
+            "prod_soak_acceptance",
+        ):
+            self.assertTrue(
+                depends_on_source_context(protected_job),
+                f"{protected_job} could run after rejected direct/non-dev promotion",
+            )
+
+        self.assertEqual(
+            jobs["mainline_summary"]["if"],
+            "${{ always() && needs.source_context.result == 'success' }}",
+        )
+        early_admission = source.index(
+            "Admit the unique reviewed dev1.0 to main promotion"
+        )
+        for protected_operation in (
+            "Service Pipeline (same mainline DAG)",
+            "App package evidence (same mainline DAG)",
+            "Delivery Gate (mainline)",
+            "Publish sealed candidate evidence",
+            "Materialize hosted service-plane SSH credential",
+            "Materialize hosted rollout SSH credentials",
+            "Deploy Prod canary",
+        ):
+            self.assertLess(early_admission, source.index(protected_operation))
+
+        formal_block = source.index(
+            "Block formal Prod while hosted protection is unverified"
+        )
+        self.assertLess(
+            formal_block,
+            source.index("Materialize hosted rollout SSH credentials"),
+        )
+        self.assertIn("OPS.BRANCH.AUTHORITY_UNAVAILABLE", source[formal_block:])
+
     def test_release_budgets_have_one_unversioned_10_30_contract(self) -> None:
         payload = json.loads(BUDGETS.read_text(encoding="utf-8"))
         self.assertNotIn("version", payload)
