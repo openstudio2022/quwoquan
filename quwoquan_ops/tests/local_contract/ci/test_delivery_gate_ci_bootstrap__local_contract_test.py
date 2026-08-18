@@ -61,6 +61,7 @@ def _run_delivery_change_range(
 def _run_stubbed_app_test_phase(
     tmp_path: Path,
     *,
+    phase: str = "tests",
     shard_total: str | None = "4",
     shard_index: str | None = "0",
 ) -> tuple[subprocess.CompletedProcess[str], Path]:
@@ -92,7 +93,7 @@ def _run_stubbed_app_test_phase(
     environment.pop("FLUTTER_TEST_SHARD_INDEX", None)
     environment.update(
         {
-            "GATE_APP_PHASE": "tests",
+            "GATE_APP_PHASE": phase,
             "GATE_STUB_LOG": str(log_path),
             "PATH": f"{stub_dir}:/usr/bin:/bin",
         }
@@ -175,7 +176,7 @@ def test_service_gate_installs_required_native_test_dependencies() -> None:
     job_end = workflow.index("\n  search_contract_smoke:\n", job_start)
     job = workflow[job_start:job_end]
 
-    assert "prometheus tesseract-ocr" in job
+    assert "prometheus tesseract-ocr ffmpeg" in job
     assert "run_bounded_apt_install.sh" in job
 
 
@@ -250,7 +251,7 @@ def test_delivery_runs_service_core_and_packaging_as_parallel_siblings() -> None
     assert "GATE_SERVICE_PHASE: packaging" in packaging
     assert "设置 Go" not in packaging
     assert "设置 Dart" not in packaging
-    assert "run_bounded_apt_install.sh" not in packaging
+    assert "run_bounded_apt_install.sh tesseract-ocr" in packaging
     assert '--require-count "service=1" --require-count "service_packaging=1"' in workflow
     assert "FANOUT+=(service service_packaging)" in workflow
     assert "--local-required service --local-required service_packaging" in workflow
@@ -377,7 +378,7 @@ def test_pull_request_jobs_checkout_and_diff_the_exact_event_head() -> None:
         "ref: ${{ inputs.checkout_ref || "
         "github.event.pull_request.head.sha || github.sha }}"
     )
-    assert workflow.count(exact_checkout) == 11
+    assert workflow.count(exact_checkout) == 12
     assert "PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}" in workflow
     assert "PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}" in workflow
     assert "PUSH_BEFORE_SHA: ${{ github.event.before || '' }}" in workflow
@@ -439,6 +440,7 @@ def test_delivery_gate_has_bounded_jobs() -> None:
         "quwoquan_app_static": 20,
         "quwoquan_app_tests": 40,
         "quwoquan_app_serial": 40,
+        "quwoquan_app_coverage": 40,
         "quwoquan_app": 10,
         "quwoquan_data": 10,
         "ops_portal": 10,
@@ -462,12 +464,14 @@ def test_delivery_gate_shards_app_contract_without_weakening_local_full_gate() -
     assert "quwoquan_app_static:" in workflow
     assert "quwoquan_app_tests:" in workflow
     assert "quwoquan_app_serial:" in workflow
+    assert "quwoquan_app_coverage:" in workflow
     assert "shard_index: [0, 1, 2, 3]" in workflow
     assert 'FLUTTER_TEST_TOTAL_SHARDS: "4"' in workflow
     assert "FLUTTER_TEST_SHARD_INDEX: ${{ matrix.shard_index }}" in workflow
     assert "GATE_APP_PHASE: static" in workflow
     assert "GATE_APP_PHASE: tests" in workflow
     assert "GATE_APP_PHASE: serial" in workflow
+    assert "GATE_APP_PHASE: coverage" in workflow
     assert 'local app_phase="${GATE_APP_PHASE:-all}"' in gate
     assert 'run_app_flutter_tests "${FLUTTER_TEST_SERIAL_MODE:-exclude}"' in gate
 
@@ -489,7 +493,10 @@ def test_app_shard_zero_owns_native_dependencies_and_shared_contracts() -> None:
     assert 'app_test_shared_suite="skip"' in gate
     assert 'if [[ "$app_test_shared_suite" == "run" ]]; then' in gate
     assert "run_app_python_local_contract_tests || return 1" in gate
+    assert 'if [[ "$app_phase" == "coverage" ]]; then' in gate
     assert "run_app_canonical_coverage" in gate
+    assert "quwoquan_app_coverage" in workflow
+    assert "--local-required app_coverage" in workflow
 
 
 def test_hosted_delivery_budgets_match_observed_parallel_shape() -> None:
@@ -505,7 +512,7 @@ def test_hosted_delivery_budgets_match_observed_parallel_shape() -> None:
         "topology_regression + max(quwoquan_service, "
         "quwoquan_service_packaging, search_contract_smoke, "
         "quwoquan_app_static, quwoquan_app_tests, "
-        "quwoquan_app_serial, quwoquan_data, ops_portal)"
+        "quwoquan_app_serial, quwoquan_app_coverage, quwoquan_data, ops_portal)"
     )
 
 
@@ -531,7 +538,7 @@ def test_app_test_phase_executes_shared_contracts_only_on_shard_zero(
         ]
         expected_count = 1 if shard_index == "0" else 0
         assert len(python_contract_commands) == expected_count
-        assert len(canonical_coverage_commands) == expected_count
+        assert len(canonical_coverage_commands) == 0
 
 
 def test_unsharded_app_test_phase_keeps_the_full_shared_suite(
@@ -546,13 +553,29 @@ def test_unsharded_app_test_phase_keeps_the_full_shared_suite(
     assert completed.returncode == 0, completed.stderr
     commands = log_path.read_text(encoding="utf-8").splitlines()
     assert sum("test-app-python-local-contract" in row for row in commands) == 1
-    assert (
-        sum(
-            "verify_canonical_coverage.py --collect --scope app" in row
-            for row in commands
-        )
-        == 1
+    assert not any(
+        "verify_canonical_coverage.py --collect --scope app" in row
+        for row in commands
     )
+
+
+def test_app_coverage_phase_executes_canonical_coverage_once(
+    tmp_path: Path,
+) -> None:
+    completed, log_path = _run_stubbed_app_test_phase(
+        tmp_path,
+        phase="coverage",
+        shard_total=None,
+        shard_index=None,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    commands = log_path.read_text(encoding="utf-8").splitlines()
+    assert not any("test-app-python-local-contract" in row for row in commands)
+    assert sum(
+        "verify_canonical_coverage.py --collect --scope app" in row
+        for row in commands
+    ) == 1
 
 
 def test_app_test_phase_rejects_invalid_shards_before_execution(
@@ -595,6 +618,7 @@ def test_delivery_gate_keeps_cross_platform_jobs_on_linux_and_visual_serial_on_c
         "search_contract_smoke",
         "quwoquan_app_static",
         "quwoquan_app_tests",
+        "quwoquan_app_coverage",
         "quwoquan_app",
         "quwoquan_data",
         "ops_portal",

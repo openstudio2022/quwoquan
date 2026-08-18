@@ -1242,6 +1242,14 @@ test-gate-companion-local-contract: prepare-test-python
 		quwoquan_ops/tests/local_contract/gate/test_cleanup_deployment_test_workspace__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_prepare_environment_packaging_contract_inputs__local_contract_test.py \
 		quwoquan_ops/tests/local_contract/gate/test_require_ci_inputs__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_lib_no_test_only_symbols__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_performance_budget__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_domain_model_storage_governance__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_media_delivery_contract__public_slice__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_prod_rollout_stackctl_contract__workflow__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_runtime_config_release_layout__single_track__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_api_edge_rate_limit_single_track__gate__local_contract_test.py \
+		quwoquan_ops/tests/local_contract/gate/test_graphql_read_rest_command_single_track__gate__local_contract_test.py \
 		-q
 
 verify-test-no-fake:

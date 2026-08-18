@@ -6,12 +6,13 @@ readonly DEFAULT_COMMAND_TIMEOUT_SECONDS=80
 readonly DEFAULT_KILL_GRACE_SECONDS=10
 readonly DEFAULT_RETRY_DELAY_SECONDS=10
 
-# Trigger: Service core and App test shard 0 install their declared Ubuntu
-# packages through this runner. Empty/invalid package input fails before sudo;
-# mirror, dpkg-lock, package-resolution or timeout failures retry once and then
-# emit CI.DEPENDENCY.APT_INSTALL_RETRY_EXHAUSTED. Inspect the per-attempt apt
-# output, repair the runner/mirror/package declaration, then rerun the exact job.
-# Test-only shorter values are allowed, but never values above production bounds.
+# Trigger: Service core, Service packaging and App test shard 0 install their
+# declared Ubuntu packages through this runner. Empty/invalid package input fails
+# before sudo; mirror, dpkg-lock, package-resolution or timeout failures retry
+# once and then emit CI.DEPENDENCY.APT_INSTALL_RETRY_EXHAUSTED. Inspect the
+# per-attempt apt output, repair the runner/mirror/package declaration, then rerun
+# the exact job. Test-only shorter values are allowed, but never values above
+# production bounds.
 command_timeout_seconds="${QWQ_CI_APT_COMMAND_TIMEOUT_SECONDS:-$DEFAULT_COMMAND_TIMEOUT_SECONDS}"
 kill_grace_seconds="${QWQ_CI_APT_KILL_GRACE_SECONDS:-$DEFAULT_KILL_GRACE_SECONDS}"
 retry_delay_seconds="${QWQ_CI_APT_RETRY_DELAY_SECONDS:-$DEFAULT_RETRY_DELAY_SECONDS}"

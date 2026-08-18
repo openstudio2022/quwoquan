@@ -301,7 +301,7 @@ jobs:
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
       - name: 安装 Service 系统测试依赖
-        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh prometheus tesseract-ocr
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh prometheus tesseract-ocr ffmpeg
       - name: 安装 Python 依赖 (recommendation-service)
         run: |
           pip install -r quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime/requirements.txt
@@ -338,6 +338,8 @@ jobs:
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: 安装 kustomize
         run: bash quwoquan_ops/cli/shared/install_kustomize.sh
+      - name: 安装 Service Packaging 系统测试依赖
+        run: bash quwoquan_ops/ci/run_bounded_apt_install.sh tesseract-ocr
       - name: Gate (quwoquan_service packaging)
         env:
           GATE_SERVICE_PHASE: packaging
@@ -557,6 +559,56 @@ jobs:
         run: |
           echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
+  quwoquan_app_coverage:
+    name: Delivery Gate — App Canonical Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.app == 'true' }}
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          ref: ${{ inputs.checkout_ref || github.event.pull_request.head.sha || github.sha }}
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: Configure App CI paths
+        run: echo "QWQ_DEPLOY_WORK_ROOT=$RUNNER_TEMP/quwoquan-deploy" >> "$GITHUB_ENV"
+      - id: flutter
+        name: Resolve repository-pinned Flutter SDK
+        run: python3 quwoquan_ops/ci/setup_flutter_sdk.py resolve --version-file quwoquan_app/.flutter-version
+      - name: Cache lock-bound Dart dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: ~/.pub-cache
+          key: "pub-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('quwoquan_app/pubspec.lock') }}"
+          restore-keys: |
+            pub-${{ runner.os }}-${{ runner.arch }}-
+      - name: Install verified Flutter SDK
+        env:
+          FLUTTER_ARCHIVE_URL: ${{ steps.flutter.outputs.archive_url }}
+          FLUTTER_CACHE_PATH: ${{ steps.flutter.outputs.cache_path }}
+          FLUTTER_SHA256: ${{ steps.flutter.outputs.sha256 }}
+        run: |
+          python3 quwoquan_ops/ci/setup_flutter_sdk.py install \
+            --archive-url "$FLUTTER_ARCHIVE_URL" \
+            --cache-path "$FLUTTER_CACHE_PATH" \
+            --sha256 "$FLUTTER_SHA256"
+      - name: Resolve locked App dependencies
+        working-directory: quwoquan_app
+        run: flutter pub get --enforce-lockfile
+      - name: Gate (quwoquan_app canonical coverage)
+        env:
+          GATE_APP_PHASE: coverage
+        run: bash quwoquan_ops/gate/gate_repo.sh --scope app
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
   quwoquan_app:
     name: Delivery Gate — App (L1)
     runs-on: ubuntu-latest
@@ -566,6 +618,7 @@ jobs:
       - quwoquan_app_static
       - quwoquan_app_tests
       - quwoquan_app_serial
+      - quwoquan_app_coverage
     if: always() && needs.topology_regression.outputs.app == 'true'
     steps:
       - id: combine
@@ -574,13 +627,14 @@ jobs:
           TESTS_RESULT: ${{ needs.quwoquan_app_tests.result }}
           STATIC_RESULT: ${{ needs.quwoquan_app_static.result }}
           SERIAL_RESULT: ${{ needs.quwoquan_app_serial.result }}
+          COVERAGE_RESULT: ${{ needs.quwoquan_app_coverage.result }}
         run: |
           set -euo pipefail
-          if [ "${STATIC_RESULT}" != "success" ] || [ "${SERIAL_RESULT}" != "success" ] || [ "${TESTS_RESULT}" != "success" ]; then
-            echo "::error::App L1 phases failed (static=${STATIC_RESULT}, tests=${TESTS_RESULT}, serial=${SERIAL_RESULT})"
+          if [ "${STATIC_RESULT}" != "success" ] || [ "${SERIAL_RESULT}" != "success" ] || [ "${TESTS_RESULT}" != "success" ] || [ "${COVERAGE_RESULT}" != "success" ]; then
+            echo "::error::App L1 phases failed (static=${STATIC_RESULT}, tests=${TESTS_RESULT}, serial=${SERIAL_RESULT}, coverage=${COVERAGE_RESULT})"
             exit 1
           fi
-          echo "App L1 static, all four test shards and serial suites succeeded."
+          echo "App L1 static, all four test shards, serial suites and canonical coverage succeeded."
 
   quwoquan_data:
     name: Delivery Gate — Data
@@ -654,6 +708,7 @@ jobs:
       - quwoquan_app_static
       - quwoquan_app_tests
       - quwoquan_app_serial
+      - quwoquan_app_coverage
       - quwoquan_data
       - ops_portal
     if: always() && inputs.produce_release_evidence
@@ -792,6 +847,7 @@ jobs:
           APP_STATIC_RESULT: ${{ needs.quwoquan_app_static.result }}
           APP_TESTS_RESULT: ${{ needs.quwoquan_app_tests.result }}
           APP_SERIAL_RESULT: ${{ needs.quwoquan_app_serial.result }}
+          APP_COVERAGE_RESULT: ${{ needs.quwoquan_app_coverage.result }}
           DATA_RESULT: ${{ needs.quwoquan_data.result }}
           PORTAL_RESULT: ${{ needs.ops_portal.result }}
           SOURCE_GIT_SHA: ${{ steps.identity.outputs.source_git_sha }}
@@ -811,6 +867,7 @@ jobs:
             --job-result "app_static=$APP_STATIC_RESULT"
             --job-result "app_tests=$APP_TESTS_RESULT"
             --job-result "app_serial=$APP_SERIAL_RESULT"
+            --job-result "app_coverage=$APP_COVERAGE_RESULT"
             --job-result "data=$DATA_RESULT"
             --job-result "portal=$PORTAL_RESULT"
             --local-required topology
@@ -826,7 +883,7 @@ jobs:
           )
           if [[ "$SERVICE_IMPACTED" == "true" ]]; then ARGS+=(--local-required service --local-required service_packaging); fi
           if [[ "$APP_IMPACTED" == "true" ]]; then
-            ARGS+=(--local-required app_static --local-required app_tests --local-required app_serial)
+            ARGS+=(--local-required app_static --local-required app_tests --local-required app_serial --local-required app_coverage)
           fi
           if [[ "$DATA_IMPACTED" == "true" ]]; then ARGS+=(--local-required data); fi
           if [[ "$PORTAL_IMPACTED" == "true" ]]; then ARGS+=(--local-required portal); fi
@@ -864,6 +921,7 @@ jobs:
       - quwoquan_app_static
       - quwoquan_app_tests
       - quwoquan_app_serial
+      - quwoquan_app_coverage
       - quwoquan_data
       - ops_portal
       - release_evidence
@@ -900,6 +958,7 @@ jobs:
             --phase "app_static=Delivery Gate — App Static"
             --phase "app_tests=Delivery Gate — App Tests Shard "
             --phase "app_serial=Delivery Gate — App Serial"
+            --phase "app_coverage=Delivery Gate — App Canonical Coverage"
             --phase "data=Delivery Gate — Data"
             --phase "portal=Delivery Gate — Ops Portal"
             --phase "release_evidence=Delivery Gate — Candidate qualification evidence"
@@ -915,8 +974,8 @@ jobs:
           fi
           if [[ "$SERVICE_IMPACTED" == "true" || "$APP_IMPACTED" == "true" || "$TOPOLOGY_IMPACTED" == "true" || "$PRODUCE_RELEASE_EVIDENCE" == "true" ]]; then ARGS+=(--require-count "search=1"); FANOUT+=(search); fi
           if [[ "$APP_IMPACTED" == "true" ]]; then
-            ARGS+=(--require-count "app_static=1" --require-count "app_tests=4" --require-count "app_serial=1")
-            FANOUT+=(app_static app_tests app_serial)
+            ARGS+=(--require-count "app_static=1" --require-count "app_tests=4" --require-count "app_serial=1" --require-count "app_coverage=1")
+            FANOUT+=(app_static app_tests app_serial app_coverage)
           fi
           if [[ "$DATA_IMPACTED" == "true" ]]; then ARGS+=(--require-count "data=1"); FANOUT+=(data); fi
           if [[ "$PORTAL_IMPACTED" == "true" ]]; then ARGS+=(--require-count "portal=1"); FANOUT+=(portal); fi
@@ -951,6 +1010,7 @@ jobs:
           APP_STATIC_SECONDS: ${{ steps.job_timing.outputs.phase_app_static }}
           APP_TESTS_SECONDS: ${{ steps.job_timing.outputs.phase_app_tests }}
           APP_SERIAL_SECONDS: ${{ steps.job_timing.outputs.phase_app_serial }}
+          APP_COVERAGE_SECONDS: ${{ steps.job_timing.outputs.phase_app_coverage }}
           DATA_SECONDS: ${{ steps.job_timing.outputs.phase_data }}
           PORTAL_SECONDS: ${{ steps.job_timing.outputs.phase_portal }}
           MACHINE_CRITICAL_PATH_SECONDS: ${{ steps.job_timing.outputs.machine_critical_path_seconds }}
@@ -978,6 +1038,7 @@ jobs:
           if [[ -n "$APP_STATIC_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_app_static=${APP_STATIC_SECONDS}"); fi
           if [[ -n "$APP_TESTS_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_app_tests=${APP_TESTS_SECONDS}"); fi
           if [[ -n "$APP_SERIAL_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_app_serial=${APP_SERIAL_SECONDS}"); fi
+          if [[ -n "$APP_COVERAGE_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_app_coverage=${APP_COVERAGE_SECONDS}"); fi
           if [[ -n "$DATA_SECONDS" ]]; then PHASE_ARGS+=(--phase "quwoquan_data=${DATA_SECONDS}"); fi
           if [[ -n "$PORTAL_SECONDS" ]]; then PHASE_ARGS+=(--phase "ops_portal=${PORTAL_SECONDS}"); fi
           DURATION_ARGS=(--calendar-lead-time-seconds "$CALENDAR_SECONDS")
@@ -1029,6 +1090,7 @@ jobs:
           APP_STATIC: ${{ needs.quwoquan_app_static.result }}
           APP_TESTS: ${{ needs.quwoquan_app_tests.result }}
           APP_SERIAL: ${{ needs.quwoquan_app_serial.result }}
+          APP_COVERAGE: ${{ needs.quwoquan_app_coverage.result }}
           DATA: ${{ needs.quwoquan_data.result }}
           PORTAL: ${{ needs.ops_portal.result }}
           RELEASE_EVIDENCE: ${{ needs.release_evidence.result }}
@@ -1058,6 +1120,7 @@ jobs:
           expect_success_or_skipped "quwoquan_app_static" "${APP_STATIC}" "检查 app static + PA core"
           expect_success_or_skipped "quwoquan_app_tests" "${APP_TESTS}" "检查 app 分片测试"
           expect_success_or_skipped "quwoquan_app_serial" "${APP_SERIAL}" "检查 app 串行套件"
+          expect_success_or_skipped "quwoquan_app_coverage" "${APP_COVERAGE}" "检查 app canonical coverage"
           expect_success_or_skipped "quwoquan_data" "${DATA}" "检查 data scope gate 输出"
           expect_success_or_skipped "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
           if [ "${PRODUCE_RELEASE_EVIDENCE}" = "true" ]; then

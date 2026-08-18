@@ -316,9 +316,9 @@ run_app() {
   echo "[gate] quwoquan_app"
   local app_phase="${GATE_APP_PHASE:-all}"
   case "$app_phase" in
-    all|static|tests|serial) ;;
+    all|static|tests|coverage|serial) ;;
     *)
-      echo "[gate] FAIL: invalid GATE_APP_PHASE=$app_phase (expected all|static|tests|serial)" >&2
+      echo "[gate] FAIL: invalid GATE_APP_PHASE=$app_phase (expected all|static|tests|coverage|serial)" >&2
       exit 2
       ;;
   esac
@@ -507,14 +507,15 @@ run_app() {
     return 0
   fi
 
-  if [[ "$app_phase" == "tests" || "$app_phase" == "serial" ]]; then
+  if [[ "$app_phase" == "tests" || "$app_phase" == "coverage" || "$app_phase" == "serial" ]]; then
     (cd quwoquan_app && flutter pub get --offline)
   fi
 
   # 唯一 canonical coverage rule 的端侧行 + 分支计量。--collect 自带一次
   # `flutter test --coverage --branch-coverage test/local_contract` 采集，
   # 采集范围与基线登记的 scope 同源；产物落在 .qwq_output 的可删除缓存里。
-  # 放在常规套件之后：套件红的时候先报套件本身的失败，别让覆盖率采集抢先。
+  # CI 由独立 coverage 相位执行；all 相位仍在常规套件之后执行，避免同一
+  # 工作树并发写 coverage/lcov.info。
   run_app_canonical_coverage() {
     python3 quwoquan_ops/gate/verify_canonical_coverage.py --collect --scope app
   }
@@ -560,7 +561,7 @@ run_app() {
   }
 
   if [[ "$app_phase" == "serial" ]]; then
-    # serial 分片只跑隔离子集，覆盖率不具代表性；棘轮由 tests / all 相位承担。
+    # serial 分片只跑隔离子集，覆盖率不具代表性；棘轮由 coverage / all 相位承担。
     FLUTTER_TEST_GUARD_TIMEOUT_SECONDS="${FLUTTER_TEST_GUARD_TIMEOUT_SECONDS:-1800}" \
       run_app_flutter_tests "only" "1" || return 1
     echo "[gate] app phase=serial OK"
@@ -572,11 +573,16 @@ run_app() {
       run_app_flutter_tests "${FLUTTER_TEST_SERIAL_MODE:-exclude}" "${FLUTTER_TEST_CONCURRENCY:-8}" || return 1
     if [[ "$app_test_shared_suite" == "run" ]]; then
       run_app_python_local_contract_tests || return 1
-      run_app_canonical_coverage
     else
-      echo "[gate] app shared Python contracts and canonical coverage owned by shard 0"
+      echo "[gate] app shared Python contracts owned by shard 0"
     fi
     echo "[gate] app phase=tests OK"
+    return 0
+  fi
+
+  if [[ "$app_phase" == "coverage" ]]; then
+    run_app_canonical_coverage
+    echo "[gate] app phase=coverage OK"
     return 0
   fi
 

@@ -1525,6 +1525,33 @@ func TestEngine_RecallTimeoutDoesNotWaitForSourceIgnoringContext(t *testing.T) {
 	}
 }
 
+func TestEngine_SequentialRecallReleasesSourceSlotBeforeReturning(t *testing.T) {
+	source := &mockCandidateSource{
+		candidates: []ContentCandidate{
+			{ContentID: "stable1", ContentType: "photo", PublishedAt: time.Now()},
+		},
+	}
+	engine := NewEngine(
+		NewHotPath(newMockRedis()),
+		[]CandidateSource{source},
+		WithRecallSourceMaxInflight(1),
+		WithRecallGlobalMaxInflight(1),
+	)
+
+	for index := 0; index < 100; index++ {
+		response, err := engine.GetFeed(
+			context.Background(),
+			GetFeedRequest{UserID: fmt.Sprintf("sequential-%d", index), Limit: 1},
+		)
+		if err != nil {
+			t.Fatalf("sequential request %d observed an occupied recall slot: %v", index, err)
+		}
+		if response == nil || len(response.Items) != 1 {
+			t.Fatalf("sequential request %d returned no admitted item", index)
+		}
+	}
+}
+
 func TestEngine_RecallSourceOutputIsAdmittedBeforeDownstreamWork(t *testing.T) {
 	const pageLimit = 20
 	sourceCandidates := make([]ContentCandidate, rankedFeedWindowLimit(pageLimit)+1)
