@@ -131,7 +131,6 @@
 - AND Alpha/Beta/Gamma `dev-session` 从当前工作树与 topology 实时 render target 隔离的 test-live runtime，不创建 immutable candidate；工作区或配置变化进入告警，严格 health/verify 仍如实失败。
 - AND Prod `stackctl package / up / health / verify` 只读取 immutable active candidate，重复 package 只在完整 manifest 和全部 digest 相同的情况下返回原始 receipt，不隐式重建或覆盖候选。
 - AND 同一 release train 的 Alpha/Beta/Gamma/Prod environment artifact 从同一 source capsule 派生但最终镜像 digest 互不复用；交换 image/config/binding、篡改 `APP_ENV` 或在运行时选择其他环境时均在 listener 前失败。
-- AND 同一 release train 的 Alpha/Beta/Gamma/Prod environment artifact 从同一 source capsule 派生但最终镜像 digest 互不复用；交换 image/config/binding、篡改 `APP_ENV` 或在运行时选择其他环境时均在 listener 前失败。
 - AND `dev-session --all-nonprod` 顺序生成三份 target 隔离的 compile/launch、告警与 health 结果，单个 target 的 runtime health 失败不得抹除其真实编译结果。
 - AND bounded content workload 复用健康 full runtime 后，App preflight 仍读取原 full receipt；独立 bounded runtime 的 receipt 不冒充 full readiness。
 - AND `stackctl status` 在环境未启动、secret 缺失或 Provider 不可用时只返回诊断失败，不创建 secret、不启动或修复任何组件；consumer/commercial readiness 只有在 canonical Data receipt 与三个 release-bound exact query 均通过时才返回成功。

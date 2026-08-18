@@ -31,6 +31,7 @@ class CloudEnvironmentArtifactBindingGateTest(unittest.TestCase):
                 entrypoint.read_text(encoding="utf-8").replace(
                     "artifactidentity.LoadAndValidate(",
                     "artifactidentity.RemovedValidation(",
+                    1,
                 ),
                 encoding="utf-8",
             )
