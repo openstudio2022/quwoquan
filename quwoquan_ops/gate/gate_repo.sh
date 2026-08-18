@@ -34,6 +34,18 @@ if [[ "${1:-}" == "--scope" ]]; then
   scope="${2:-}"
 fi
 
+gate_change_range_args=()
+if [[ -n "${GATE_CHANGE_BASE_SHA:-}" || -n "${GATE_CHANGE_HEAD_SHA:-}" ]]; then
+  if [[ -z "${GATE_CHANGE_BASE_SHA:-}" || -z "${GATE_CHANGE_HEAD_SHA:-}" ]]; then
+    echo "[gate] GATE_BLOCK: GATE_CHANGE_BASE_SHA and GATE_CHANGE_HEAD_SHA must be provided together" >&2
+    exit 2
+  fi
+  gate_change_range_args=(
+    --base-sha "$GATE_CHANGE_BASE_SHA"
+    --head-sha "$GATE_CHANGE_HEAD_SHA"
+  )
+fi
+
 # Python script governance derives independent app/service/ops/data
 # boundaries. A scoped Delivery job validates its own boundary; the aggregate
 # local gate keeps the strict whole-repository check.
@@ -166,7 +178,7 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   # 否则门禁实现回退无人可见。缺口容忍基线已删除，本门禁为零容忍——配套测试统一由
   # make test-gate-companion-local-contract 执行。
   make test-gate-companion-local-contract
-  python3 quwoquan_ops/gate/verify_gate_local_contract_execution.py
+  python3 quwoquan_ops/gate/verify_gate_local_contract_execution.py "${gate_change_range_args[@]}"
   python3 quwoquan_ops/tests/local_contract/gate/test_gate_local_contract_execution__contract__local_contract_test.py
   python3 quwoquan_ops/gate/verify_local_env_port_manifest.py
   python3 quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py

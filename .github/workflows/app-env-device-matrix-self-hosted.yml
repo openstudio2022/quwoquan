@@ -160,6 +160,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
+          persist-credentials: false
       - if: ${{ github.event_name == 'pull_request' }}
         name: Enforce the reviewed promotion edge
         run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
@@ -264,10 +265,10 @@ jobs:
     needs: resolve_release_evidence
     if: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
     runs-on: [self-hosted, macOS, ARM64]
-    # A cold self-hosted checkout can consume more than two minutes on its own.
-    # Keep full profiles at 20 minutes and give PR-light enough room to finish
-    # checkout plus the fail-closed prerequisite probes.
-    timeout-minutes: ${{ (github.event_name == 'schedule' || inputs.validation_profile == 'manual_full' || inputs.validation_profile == 'nightly_full' || inputs.validation_profile == 'release_candidate') && 20 || 10 }}
+    # A cold public-repository checkout has exceeded ten minutes on this
+    # dedicated runner. Keep one bounded 20-minute budget for every profile;
+    # all candidate, device and aggregation assertions remain fail closed.
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: read

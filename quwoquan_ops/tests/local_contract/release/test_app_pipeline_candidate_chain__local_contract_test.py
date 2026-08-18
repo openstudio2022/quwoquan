@@ -218,7 +218,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "RepoDigests" not in text
     assert "timeout-minutes: 120" not in combined
     assert "timeout-minutes: 30" not in combined
-    assert "20 || 10" in jobs["beta_stack"]["timeout-minutes"]
+    assert jobs["beta_stack"]["timeout-minutes"] == "20"
     assert "mainline_auto_prod" in aggregate_job["timeout-minutes"]
     assert "20" in aggregate_job["timeout-minutes"]
     assert "|| 2" in aggregate_job["timeout-minutes"]
@@ -275,7 +275,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "source-built or destructive Beta formal runtime" not in text
     assert "steps.formal_runtime.outputs.started" in text
     assert "destructiveActions" in DEVICE_EVIDENCE.read_text(encoding="utf-8")
-    assert combined.count("persist-credentials: false") == 9
+    assert combined.count("persist-credentials: false") == 10
     assert "config --local http.https://github.com/.extraheader" not in combined
     checkout_steps = [
         step
@@ -289,7 +289,7 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
         for step in job.get("steps", [])
         if str(step.get("uses") or "").startswith("actions/checkout@")
     ]
-    assert len(checkout_steps) == 8
+    assert len(checkout_steps) == 9
     assert len(called_checkout_steps) == 1
     assert sum(
         step["with"].get("clean") == "false" for step in checkout_steps

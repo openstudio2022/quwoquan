@@ -6,11 +6,52 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import textwrap
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[4]
 GATE_REPO_PATH = ROOT / "quwoquan_ops/gate/gate_repo.sh"
+
+
+def _delivery_change_range_script() -> str:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    step_start = workflow.index("      - id: change_range\n")
+    run_start = workflow.index("        run: |\n", step_start) + len("        run: |\n")
+    run_end = workflow.index("      - name: 设置 Go\n", run_start)
+    return textwrap.dedent(workflow[run_start:run_end])
+
+
+def _run_delivery_change_range(
+    tmp_path: Path,
+    *,
+    event_name: str,
+    checkout_ref: str = "",
+    base_sha: str = "",
+    head_sha: str = "",
+    pr_base_sha: str = "",
+    pr_head_sha: str = "",
+) -> subprocess.CompletedProcess[str]:
+    output = tmp_path / "github-output"
+    environment = {
+        **os.environ,
+        "EVENT_NAME": event_name,
+        "INPUT_CHECKOUT_REF": checkout_ref,
+        "INPUT_BASE_SHA": base_sha,
+        "INPUT_HEAD_SHA": head_sha,
+        "PR_BASE_SHA": pr_base_sha,
+        "PR_HEAD_SHA": pr_head_sha,
+        "DISPATCH_SHA": head_sha,
+        "GITHUB_OUTPUT": str(output),
+    }
+    return subprocess.run(
+        ["bash", "-c", _delivery_change_range_script()],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def _run_stubbed_app_test_phase(
@@ -106,6 +147,120 @@ def test_service_gate_installs_required_native_test_dependencies() -> None:
 
     assert "prometheus tesseract-ocr" in job
     assert "--no-install-recommends" in job
+
+
+def test_service_gate_passes_the_exact_reviewed_change_range() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    gate = GATE_REPO_PATH.read_text(encoding="utf-8")
+    job_start = workflow.index("  quwoquan_service:\n")
+    job_end = workflow.index("\n  search_contract_smoke:\n", job_start)
+    job = workflow[job_start:job_end]
+
+    assert "id: change_range" in job
+    assert "Resolve immutable Delivery change range" in job
+    assert "GATE_CHANGE_BASE_SHA: ${{ steps.change_range.outputs.base_sha }}" in job
+    assert "GATE_CHANGE_HEAD_SHA: ${{ steps.change_range.outputs.candidate_sha }}" in job
+    assert "GRAPHQL_MIGRATION_BASE_SHA: ${{ steps.change_range.outputs.base_sha }}" in job
+    assert "git merge-base --is-ancestor \"$BASE_SHA\" \"$CANDIDATE_SHA\"" in job
+    assert "GATE_CHANGE_BASE_SHA and GATE_CHANGE_HEAD_SHA must be provided together" in gate
+    assert '--base-sha "$GATE_CHANGE_BASE_SHA"' in gate
+    assert '--head-sha "$GATE_CHANGE_HEAD_SHA"' in gate
+    assert 'verify_gate_local_contract_execution.py "${gate_change_range_args[@]}"' in gate
+
+
+def test_delivery_change_range_requires_complete_workflow_call_identity(
+    tmp_path: Path,
+) -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+    workflow_call_inputs = workflow.split("  workflow_call:\n", 1)[1].split(
+        "    outputs:\n", 1
+    )[0]
+    for input_name in ("checkout_ref", "base_sha", "head_sha"):
+        match = re.search(
+            rf"(?m)^      {input_name}:\n(?P<body>(?:        .*\n)+)",
+            workflow_call_inputs,
+        )
+        assert match is not None
+        input_block = match.group("body")
+        assert "required: true" in input_block
+        assert "default:" not in input_block
+
+    head_sha = subprocess.run(
+        ("git", "rev-parse", "HEAD"),
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    base_sha = subprocess.run(
+        ("git", "rev-parse", "HEAD^"),
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+    for checkout_ref, requested_base, requested_head in (
+        (head_sha, "", head_sha),
+        (head_sha, base_sha, ""),
+        ("", base_sha, head_sha),
+    ):
+        result = _run_delivery_change_range(
+            tmp_path,
+            event_name="workflow_call",
+            checkout_ref=checkout_ref,
+            base_sha=requested_base,
+            head_sha=requested_head,
+        )
+        assert result.returncode == 2
+        assert "requires checkout_ref, base_sha and head_sha together" in result.stdout
+
+    mismatch = _run_delivery_change_range(
+        tmp_path,
+        event_name="workflow_call",
+        checkout_ref=base_sha,
+        base_sha=base_sha,
+        head_sha=head_sha,
+    )
+    assert mismatch.returncode == 2
+    assert "checkout_ref must equal head_sha" in mismatch.stdout
+
+    success = _run_delivery_change_range(
+        tmp_path,
+        event_name="workflow_dispatch",
+        checkout_ref=head_sha,
+        base_sha=base_sha,
+        head_sha=head_sha,
+    )
+    assert success.returncode == 0, success.stderr
+
+    pull_request = _run_delivery_change_range(
+        tmp_path,
+        event_name="pull_request",
+        pr_base_sha=base_sha,
+        pr_head_sha=head_sha,
+    )
+    assert pull_request.returncode == 0, pull_request.stderr
+
+
+def test_pull_request_jobs_checkout_and_diff_the_exact_event_head() -> None:
+    workflow = (ROOT / ".github/workflows/delivery-gate.yml").read_text(encoding="utf-8")
+
+    exact_checkout = (
+        "ref: ${{ inputs.checkout_ref || "
+        "github.event.pull_request.head.sha || github.sha }}"
+    )
+    assert workflow.count(exact_checkout) == 10
+    assert "PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}" in workflow
+    assert "PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}" in workflow
+    assert (
+        "HEAD_SHA: ${{ inputs.head_sha || "
+        "github.event.pull_request.head.sha || github.sha }}"
+    ) in workflow
+    assert (
+        '--source-git-sha "${{ inputs.source_git_sha || '
+        'github.event.pull_request.head.sha || github.sha }}"'
+    ) in workflow
 
 
 def test_delivery_and_promotion_gates_defer_edges_to_canonical_evaluator() -> None:

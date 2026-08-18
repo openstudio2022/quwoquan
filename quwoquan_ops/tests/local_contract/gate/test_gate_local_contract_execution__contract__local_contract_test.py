@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -147,7 +148,18 @@ class GateLocalContractExecutionContractTest(unittest.TestCase):
         baseline_keys, problems = module._load_baseline()
         self.assertEqual(problems, [])
         self.assertEqual(baseline_keys, set())
-        self.assertEqual(module.main([]), 0)
+        head_sha = subprocess.run(
+            ("git", "rev-parse", "HEAD"),
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        self.assertEqual(
+            module.main(["--base-sha", head_sha, "--head-sha", head_sha]),
+            0,
+            "判据 A 的零容忍自检不得混入当前分支相对 main 的历史变更面",
+        )
 
     def test_missing_governance_keys_are_blocking(self) -> None:
         """负例：基线缺 governance 三键必须阻断，不能悄悄放行。"""
@@ -239,6 +251,129 @@ class ChangedGateNeedsCompanionTest(unittest.TestCase):
             ["quwoquan_ops/gate/verify_brand_new_thing.py"],
             module.changed_gate_scripts(),
             "只有 verify_ 前缀的门禁脚本进入判据 B",
+        )
+
+    def test_explicit_pr_range_does_not_reaudit_dev1_history(self) -> None:
+        root = self._repository()
+        historical = root / "quwoquan_ops/gate/verify_historical_gate.py"
+        historical.parent.mkdir(parents=True, exist_ok=True)
+        historical.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
+        self._git("add", str(historical.relative_to(root)))
+        self._git("commit", "-q", "-m", "historical dev1 gate")
+        dev1_sha = subprocess.run(
+            ("git", "rev-parse", "HEAD"),
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        self._git("checkout", "-q", "-b", "codex/pr")
+        (root / "README.md").write_text("current PR\n", encoding="utf-8")
+        self._git("add", "README.md")
+        self._git("commit", "-q", "-m", "non-gate PR")
+        head_sha = subprocess.run(
+            ("git", "rev-parse", "HEAD"),
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+        module = _load_verifier()
+        module.ROOT = root
+        self.assertEqual([], module.changed_gate_scripts(dev1_sha, head_sha))
+        self.assertEqual(
+            ["quwoquan_ops/gate/verify_historical_gate.py"],
+            module.changed_gate_scripts(
+                subprocess.run(
+                    ("git", "rev-parse", "main"),
+                    cwd=root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip(),
+                head_sha,
+            ),
+            "main -> dev1 promotion 仍必须审计历史 gate",
+        )
+
+    def test_explicit_range_reports_only_the_gate_changed_by_this_pr(self) -> None:
+        module, root = self._committed_gate("verify_brand_new_thing.py")
+        head_sha = subprocess.run(
+            ("git", "rev-parse", "HEAD"),
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        base_sha = subprocess.run(
+            ("git", "rev-parse", "main"),
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        self.assertEqual(
+            ["quwoquan_ops/gate/verify_brand_new_thing.py"],
+            module.changed_gate_scripts(base_sha, head_sha),
+        )
+
+    def test_explicit_range_fails_closed_for_missing_or_invalid_identity(self) -> None:
+        module, root = self._committed_gate("verify_brand_new_thing.py")
+        head_sha = subprocess.run(
+            ("git", "rev-parse", "HEAD"),
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        base_sha = subprocess.run(
+            ("git", "rev-parse", "main"),
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+        with self.assertRaisesRegex(module.ChangeRangeError, "成对提供"):
+            module.changed_gate_scripts(base_sha, None)
+        with self.assertRaisesRegex(module.ChangeRangeError, "40 位"):
+            module.changed_gate_scripts("not-a-sha", head_sha)
+        with self.assertRaisesRegex(module.ChangeRangeError, "当前 checkout HEAD"):
+            module.changed_gate_scripts(base_sha, base_sha)
+
+        self._git("checkout", "-q", "main")
+        self._git("checkout", "-q", "-b", "sibling")
+        (root / "README.md").write_text("sibling\n", encoding="utf-8")
+        self._git("add", "README.md")
+        self._git("commit", "-q", "-m", "sibling")
+        sibling_sha = subprocess.run(
+            ("git", "rev-parse", "HEAD"),
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        with self.assertRaisesRegex(module.ChangeRangeError, "必须是 head_sha 的祖先"):
+            module.changed_gate_scripts(head_sha, sibling_sha)
+
+        original_git = module._git
+
+        def fail_diff(*arguments: str):
+            if arguments[:2] == ("diff", "--name-only"):
+                return None
+            return original_git(*arguments)
+
+        module._git = fail_diff
+        with self.assertRaisesRegex(module.ChangeRangeError, "git diff"):
+            module.changed_gate_scripts(base_sha, sibling_sha)
+
+        self.assertEqual(
+            2,
+            module.main(
+                ["--print-current", "--base-sha", "not-a-sha", "--head-sha", sibling_sha]
+            ),
+            "诊断输出也不得绕过显式 change range 的 fail-closed 校验",
         )
 
     def test_uncommitted_worktree_changes_are_not_counted(self) -> None:

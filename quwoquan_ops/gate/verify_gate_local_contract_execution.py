@@ -28,10 +28,15 @@
 （含 `quwoquan_app` / `quwoquan_data` 的门禁树）而不误伤存量——存量的 96 处缺口需要
 逐个补测试，那是独立工作项，不能挂在任何一次无关改动上。
 
-改动面取 `merge-base HEAD origin/main`..HEAD 的**已提交**增量，不含未提交工作树。这里
-不是漏了一种情况：本仓库脏工作树是常态，一次会话里往往同时躺着好几个域的并行改动，
-把工作树计入会让判据 B 长期为别人的改动报红——而持续假红最终只会被 `--no-verify`
-绕过，比没有这条判据更糟。合入门看的正是 `base...HEAD`，判据 B 在那里完整生效。
+CI 调用方必须传入已经校验过的 exact `base_sha` / `head_sha`，判据 B 只看这一条 PR 或
+promotion 边的**已提交**增量；本地未显式传参时才保守回退到 `origin/main` / `main`。
+显式范围缺键、不是完整 commit SHA、head 不是当前 checkout 或 base 不是 head 祖先时一律
+fail closed，不能静默回退到本地分支。这样 `codex/* -> dev1.0` 不会重复审计历史增量，
+而 `dev1.0 -> main` 仍会完整审计 promotion 范围。
+
+改动面不含未提交工作树。这里不是漏了一种情况：本仓库脏工作树是常态，一次会话里往往
+同时躺着好几个域的并行改动，把工作树计入会让判据 B 长期为别人的改动报红——而持续
+假红最终只会被 `--no-verify` 绕过，比没有这条判据更糟。
 
 仓库不是 git 工作副本时（打包产物、tarball）判据 B 静默跳过——那种环境里 diff 无从
 计算，强行报错只会制造另一种假红灯。
@@ -68,6 +73,7 @@ CHANGED_GATE_SCRIPT_ROOTS = GATE_SCRIPT_ROOTS + (
 
 #: 判据 B 的 base。`origin/main` 缺失时退回单看工作树。
 BASE_CANDIDATES = ("origin/main", "main")
+EXACT_SHA_RE = re.compile(r"[0-9a-f]{40}")
 
 #: canonical local_contract 测试树。App Dart 树不在此列——它没有 Python 门禁配套。
 LOCAL_CONTRACT_TEST_ROOTS = (
@@ -277,19 +283,52 @@ def _git(*arguments: str) -> str | None:
     return completed.stdout if completed.returncode == 0 else None
 
 
-def changed_gate_scripts() -> list[str] | None:
+class ChangeRangeError(ValueError):
+    """显式 CI 改动范围非法，调用方必须 fail closed。"""
+
+
+def _validate_explicit_change_range(base_sha: str, head_sha: str) -> None:
+    for label, sha in (("base", base_sha), ("head", head_sha)):
+        if EXACT_SHA_RE.fullmatch(sha) is None:
+            raise ChangeRangeError(f"{label}_sha 必须是 40 位小写 commit SHA")
+        if _git("cat-file", "-e", f"{sha}^{{commit}}") is None:
+            raise ChangeRangeError(f"{label}_sha 不是当前 checkout 可达的 commit: {sha}")
+
+    checked_out = _git("rev-parse", "HEAD")
+    if checked_out is None or checked_out.strip() != head_sha:
+        raise ChangeRangeError("head_sha 必须精确等于当前 checkout HEAD")
+    if _git("merge-base", "--is-ancestor", base_sha, head_sha) is None:
+        raise ChangeRangeError("base_sha 必须是 head_sha 的祖先")
+
+
+def changed_gate_scripts(
+    base_sha: str | None = None,
+    head_sha: str | None = None,
+) -> list[str] | None:
     """本次已提交增量里的门禁脚本。不是 git 工作副本时返回 `None`（判据 B 跳过）。"""
     if _git("rev-parse", "--git-dir") is None:
+        if base_sha is not None or head_sha is not None:
+            raise ChangeRangeError("显式改动范围只能在 git checkout 中验证")
         return None
     paths: set[str] = set()
-    for candidate in BASE_CANDIDATES:
-        merge_base = _git("merge-base", "HEAD", candidate)
-        if merge_base is None:
-            continue
-        committed = _git("diff", "--name-only", f"{merge_base.strip()}...HEAD")
+    if base_sha is not None or head_sha is not None:
+        if base_sha is None or head_sha is None:
+            raise ChangeRangeError("base_sha 与 head_sha 必须成对提供")
+        _validate_explicit_change_range(base_sha, head_sha)
+        committed = _git("diff", "--name-only", f"{base_sha}...{head_sha}")
+        if committed is None:
+            raise ChangeRangeError("git diff 无法读取显式 base/head 改动范围")
         if committed:
             paths.update(committed.split())
-        break
+    else:
+        for candidate in BASE_CANDIDATES:
+            merge_base = _git("merge-base", "HEAD", candidate)
+            if merge_base is None:
+                continue
+            committed = _git("diff", "--name-only", f"{merge_base.strip()}...HEAD")
+            if committed:
+                paths.update(committed.split())
+            break
     return sorted(
         path
         for path in paths
@@ -339,7 +378,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="打印当前实际缺口，用于生成或收紧基线",
     )
+    parser.add_argument("--base-sha", help="CI 已校验的 exact base commit SHA")
+    parser.add_argument("--head-sha", help="CI 已校验且已 checkout 的 exact head commit SHA")
     args = parser.parse_args(argv)
+
+    if (args.base_sha is None) != (args.head_sha is None):
+        print(
+            "[gate-local-contract] GATE_BLOCK: --base-sha 与 --head-sha 必须成对提供",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        changed = changed_gate_scripts(args.base_sha, args.head_sha)
+    except ChangeRangeError as error:
+        print(f"[gate-local-contract] GATE_BLOCK: {error}", file=sys.stderr)
+        return 2
 
     commands = _collect_reachable_commands()
     scripts, pytest_paths, unittest_modules = _reachable_scripts_and_test_paths(
@@ -403,7 +457,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         for key in stale_keys:
             print(f"  {key}", file=sys.stderr)
 
-    changed = changed_gate_scripts()
     if changed is None:
         print("[gate-local-contract] 非 git 工作副本，跳过改动面判据")
     else:
