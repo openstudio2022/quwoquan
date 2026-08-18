@@ -214,6 +214,8 @@ class FinalAcceptanceFixture:
                 "schema": "quwoquan_data.release_attestation",
                 "releaseId": ROLLBACK_ID,
                 "payloadSha256": ROLLBACK_DIGEST,
+                "releaseClass": "commercial",
+                "productLifecycleState": "commercial",
                 "recordedAt": self.pilot_recorded_at,
             },
         )
@@ -895,4 +897,3 @@ def _evaluate(
 
 def _codes(payload: dict[str, Any]) -> set[str]:
     return {blocker["code"] for blocker in payload["blockers"]}
-

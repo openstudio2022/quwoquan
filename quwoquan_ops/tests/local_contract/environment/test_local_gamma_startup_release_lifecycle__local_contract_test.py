@@ -235,7 +235,7 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
         self.assertNotIn("tag-service:", gamma_proxy)
         self.assertIn("gamma_full_workload_dependencies_ready", start_script)
         self.assertIn(
-            'curl -fsS "http://127.0.0.1:${LOCAL_GAMMA_TAG_PORT:-19270}/healthz"',
+            'curl -fsS -H "Host: tag-service" "http://127.0.0.1:${LOCAL_GAMMA_TAG_PORT:-19270}/healthz"',
             start_script,
         )
         self.assertIn(
@@ -560,4 +560,3 @@ class LocalGammaStartupReleaseLifecycleTest(unittest.TestCase):
                     "QWQ_OUTPUT_ROOT/env/gamma/runs",
                 ):
                     module.resolve_release_consumer_report_path(str(forbidden))
-
