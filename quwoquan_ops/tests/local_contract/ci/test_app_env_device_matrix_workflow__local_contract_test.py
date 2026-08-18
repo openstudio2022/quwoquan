@@ -29,6 +29,17 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
         self.assertIn("Enforce the reviewed promotion edge", self.workflow)
         self.assertIn("needs: branch_policy", self.workflow)
 
+    def test_pr_light_binds_checkout_to_the_exact_pull_request_head(self) -> None:
+        self.assertIn(
+            "DEFAULT_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}",
+            self.workflow,
+        )
+        self.assertIn(
+            'CHECKOUT_REF="${INPUT_CHECKOUT_REF:-$DEFAULT_SOURCE_SHA}"',
+            self.workflow,
+        )
+        self.assertNotIn('CHECKOUT_REF="${INPUT_CHECKOUT_REF:-${{ github.sha }}}"', self.workflow)
+
     def run_summary(
         self,
         *,

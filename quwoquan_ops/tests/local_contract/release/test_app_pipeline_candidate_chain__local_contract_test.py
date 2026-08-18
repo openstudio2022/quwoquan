@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -236,8 +237,11 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "nightly_full" in platform_timeout
     assert "120" in platform_timeout
     assert "release_candidate" in platform_timeout
+    assert "manual_full" in platform_timeout
+    assert "mainline_auto_prod" in platform_timeout
     assert "90" in platform_timeout
-    assert "|| 4" in platform_timeout
+    assert "|| 40" in platform_timeout
+    assert re.search(r"\|\|\s+4(?:\D|$)", platform_timeout) is None
     assert 'if [ "$VALIDATION_PROFILE" = mainline_auto_prod ]' in text
     assert 'if [ "$calendar_lead_time_seconds" -gt 480 ]' in text
     assert "STACKCTL_AUTO_WIPE_MIGRATION_DRIFT: \"0\"" in text

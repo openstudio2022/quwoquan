@@ -193,6 +193,7 @@ jobs:
           INPUT_PROFILE: ${{ inputs.validation_profile }}
           INPUT_RELEASE_REF: ${{ inputs.release_evidence_ref }}
           INPUT_CHECKOUT_REF: ${{ inputs.checkout_ref }}
+          DEFAULT_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           SCHEDULE_RELEASE_REF: ${{ vars.RELEASED_RELEASE_EVIDENCE_REF }}
         run: |
           set -euo pipefail
@@ -203,7 +204,7 @@ jobs:
             pr_light)
               RELEASE_REF=""
               REQUIRED_STATUS=""
-              CHECKOUT_REF="${INPUT_CHECKOUT_REF:-${{ github.sha }}}"
+              CHECKOUT_REF="${INPUT_CHECKOUT_REF:-$DEFAULT_SOURCE_SHA}"
               ;;
             mainline_auto_prod|release_candidate)
               RELEASE_REF="$INPUT_RELEASE_REF"
