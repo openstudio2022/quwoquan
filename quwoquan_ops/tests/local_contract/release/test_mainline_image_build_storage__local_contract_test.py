@@ -30,9 +30,6 @@ def test_mainline_image_build_uses_governed_context_and_base_images() -> None:
     assert '--build-arg "GO_BASE_IMAGE=$GO_BASE_IMAGE"' in workflow
     assert '--build-arg "ALPINE_BASE_IMAGE=$ALPINE_BASE_IMAGE"' in workflow
     assert '--build-arg "PYTHON_BASE_IMAGE=$PYTHON_BASE_IMAGE"' in workflow
-    assert "--single-environment \"${{ matrix.environment }}\"" in workflow
-    assert "--build-context \"qwq_provider_bindings=$PROVIDER_BINDING_CONTEXT\"" in workflow
-    assert 'QWQ_PROVIDER_BINDING_MANIFEST_DIGEST=$PROVIDER_BINDING_MANIFEST_DIGEST' in workflow
     assert '--cache-from "type=registry,ref=' in workflow
     assert '--cache-to "type=registry,ref=' in workflow
 

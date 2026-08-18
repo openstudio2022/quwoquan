@@ -1,18 +1,11 @@
 """external_provider_governance 实现包。
 
-公开入口由稳定 façade ``external_provider_governance.py`` re-export。这里仅保留
-延迟包装，避免包初始化时反向加载 façade 形成循环依赖。
+实现按职责切分为 constants / models / derived_sources / validation /
+compilation / go_descriptors 六个子模块；公开与被测私有符号统一由稳定
+薄入口 ``quwoquan_ops/cli/lib/external_provider_governance.py`` re-export，
+消费者不应直接 import 本包内部模块。
 """
 
-from __future__ import annotations
-
-from typing import Any
-
-
-def compile_single_environment_bindings(**kwargs: Any) -> dict[str, Any]:
-    from .single_environment import compile_single_environment_bindings as compile_bindings
-
-    return compile_bindings(**kwargs)
-
+from .single_environment import compile_single_environment_bindings
 
 __all__ = ["compile_single_environment_bindings"]
