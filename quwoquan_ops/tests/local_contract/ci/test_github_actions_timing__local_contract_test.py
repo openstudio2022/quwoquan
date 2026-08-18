@@ -31,6 +31,62 @@ def job(name: str, created: str, started: str, completed: str) -> dict:
 
 
 class GithubActionsTimingTest(unittest.TestCase):
+    def test_delivery_service_packaging_sibling_uses_parallel_max_not_sum(self) -> None:
+        run = {"created_at": "2026-08-18T00:00:00Z"}
+        jobs = [
+            job(
+                "Delivery Gate — Topology",
+                "2026-08-18T00:00:00Z",
+                "2026-08-18T00:00:05Z",
+                "2026-08-18T00:01:41Z",
+            ),
+            job(
+                "Delivery Gate — Service Core (L2)",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:16:41Z",
+            ),
+            job(
+                "Delivery Gate — Service Packaging",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:15:01Z",
+            ),
+            job(
+                "Delivery Gate — App Tests Shard 1",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:01:41Z",
+                "2026-08-18T00:21:13Z",
+            ),
+        ]
+
+        values = calculate(
+            run,
+            jobs,
+            phases={
+                "topology": "Delivery Gate — Topology",
+                "service": "Delivery Gate — Service Core (L2)",
+                "service_packaging": "Delivery Gate — Service Packaging",
+                "app": "Delivery Gate — App Tests Shard",
+            },
+            required_counts={
+                "topology": 1,
+                "service": 1,
+                "service_packaging": 1,
+                "app": 1,
+            },
+            candidate_job="Delivery Gate — App Tests Shard 1",
+            prod_job="",
+            critical_start="run",
+            dag_layers=[
+                ("topology",),
+                ("service", "service_packaging", "app"),
+            ],
+        )
+
+        self.assertEqual(values["machine_critical_path_seconds"], 1268)
+        self.assertEqual(values["calendar_lead_time_seconds"], 1273)
+
     def test_official_job_and_step_timestamps_drive_longest_matrix(self) -> None:
         run = {"created_at": "2026-07-28T00:00:00Z"}
         jobs = [

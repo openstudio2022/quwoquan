@@ -124,7 +124,6 @@ def _hosted_responses(
         {
             "full_name": REPOSITORY,
             "default_branch": "main",
-            "delete_branch_on_merge": True,
         },
         {"sha": sha, "parents": [{"sha": PROMOTION_HEAD_SHA}]},
         {"object": {"sha": sha, "type": "commit"}},
@@ -257,7 +256,7 @@ class ReleaseGovernanceContractTest(unittest.TestCase):
                     workflow_ref=WORKFLOW_REF,
                 )
 
-    def test_codex_to_main_merge_never_has_release_eligibility(self) -> None:
+    def test_non_dev_to_main_merge_never_has_release_eligibility(self) -> None:
         responses = [
             [
                 {
@@ -266,7 +265,7 @@ class ReleaseGovernanceContractTest(unittest.TestCase):
                     "merge_commit_sha": SHA,
                     "base": {"ref": "main"},
                     "head": {
-                        "ref": "codex/direct-main",
+                        "ref": "feature/direct-main",
                         "repo": {"full_name": REPOSITORY},
                     },
                     "user": {"login": "author"},

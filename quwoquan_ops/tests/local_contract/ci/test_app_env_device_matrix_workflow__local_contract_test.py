@@ -15,6 +15,66 @@ import unittest
 ROOT = Path(__file__).resolve().parents[4]
 WORKFLOW = ROOT / ".github/workflows/app-env-device-matrix-self-hosted.yml"
 PROFILES = ROOT / "quwoquan_ops/environments/gamma/validation_suites.json"
+TIMING_BUDGETS = ROOT / "quwoquan_ops/environments/pr_gate_timing_budgets.json"
+MOBILE_MATRIX_RUNNER = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
+
+
+def _run_stubbed_mobile_matrix(
+    tmp_path: Path, *, matrix_kind: str, video_work_id: str = ""
+) -> tuple[subprocess.CompletedProcess[str], list[str]]:
+    bin_dir = tmp_path / f"bin-{matrix_kind}"
+    bin_dir.mkdir()
+    invocation_log = tmp_path / f"{matrix_kind}-invocations"
+    python_stub = bin_dir / "python3"
+    python_stub.write_text(
+        """#!/bin/sh
+if [ "${1:-}" = - ]; then
+  if [ -n "${MOBILE_MATRIX_ENV_JSON_VALUE:-}" ]; then
+    printf '%s\n' beta
+  elif [ -n "${MOBILE_MATRIX_KIND_VALUE:-}" ]; then
+    printf '%s\n' "$MOBILE_MATRIX_KIND_VALUE"
+  elif [ "${2:-}" = beta-local ]; then
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      http://api http://ops http://avatar http://image http://video http://upload ws://rtc
+  else
+    echo "unexpected inline python invocation: $*" >&2
+    exit 91
+  fi
+  exit 0
+fi
+printf '%s\n' "$*" >> "$MOBILE_MATRIX_INVOCATION_LOG"
+exit 0
+""",
+        encoding="utf-8",
+    )
+    python_stub.chmod(0o755)
+    environment = {
+        **os.environ,
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "MOBILE_PLATFORM": "android",
+        "MOBILE_DEVICE_ID": "emulator-contract",
+        "MOBILE_MATRIX_ENV_JSON": '["beta"]',
+        "MOBILE_MATRIX_KIND": matrix_kind,
+        "MOBILE_MATRIX_INVOCATION_LOG": str(invocation_log),
+        "QWQ_OUTPUT_ROOT": str(tmp_path / "output"),
+    }
+    environment.pop("VIDEO_PLAYBACK_CANARY_WORK_ID", None)
+    if video_work_id:
+        environment["VIDEO_PLAYBACK_CANARY_WORK_ID"] = video_work_id
+    completed = subprocess.run(
+        ["/bin/bash", str(MOBILE_MATRIX_RUNNER)],
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    invocations = (
+        invocation_log.read_text(encoding="utf-8").splitlines()
+        if invocation_log.exists()
+        else []
+    )
+    return completed, invocations
 
 
 class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
@@ -22,11 +82,12 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.workflow = WORKFLOW.read_text(encoding="utf-8")
         cls.profiles = json.loads(PROFILES.read_text(encoding="utf-8"))
+        cls.timing_budgets = json.loads(TIMING_BUDGETS.read_text(encoding="utf-8"))
 
     def test_promotion_pull_request_is_gated_by_canonical_branch_policy(self) -> None:
         self.assertNotIn("pull_request:\n    branches:", self.workflow)
         self.assertIn("App Matrix — Branch Policy", self.workflow)
-        self.assertIn("Enforce the reviewed promotion edge", self.workflow)
+        self.assertIn("Enforce canonical repository branch admission", self.workflow)
         self.assertIn("needs: branch_policy", self.workflow)
 
     def test_pr_light_binds_checkout_to_the_exact_pull_request_head(self) -> None:
@@ -39,6 +100,62 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
             self.workflow,
         )
         self.assertNotIn('CHECKOUT_REF="${INPUT_CHECKOUT_REF:-${{ github.sha }}}"', self.workflow)
+
+    def test_pr_light_is_content_free_but_full_profiles_keep_release_readback(self) -> None:
+        profiles = self.profiles["profiles"]
+        self.assertEqual(
+            profiles["pr_light"]["deviceMatrix"]["matrixKinds"],
+            ["assistant", "environment-smoke"],
+        )
+        self.assertTrue(profiles["pr_light"]["deviceMatrix"]["requireAllPlatforms"])
+        for profile_name in ("manual_full", "nightly_full", "release_candidate"):
+            self.assertIn(
+                "app-core-readback",
+                profiles[profile_name]["deviceMatrix"]["matrixKinds"],
+            )
+
+    def test_content_free_smoke_dispatches_without_video_canary(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result, invocations = _run_stubbed_mobile_matrix(
+                Path(temp_dir), matrix_kind="environment-smoke"
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(invocations), 1)
+        invocation = invocations[0]
+        self.assertIn("run_environment_patrol_smoke.py", invocation)
+        self.assertIn("basic_viability__user_acceptance_test.dart", invocation)
+        self.assertNotIn("--video-playback-canary-work-id", invocation)
+
+    def test_release_readback_fails_before_dispatch_without_video_canary(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result, invocations = _run_stubbed_mobile_matrix(
+                Path(temp_dir), matrix_kind="app-core-readback"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(invocations, [])
+        self.assertIn("VIDEO_PLAYBACK_CANARY_WORK_ID is required", result.stdout)
+
+    def test_release_readback_dispatches_exact_video_canary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result, invocations = _run_stubbed_mobile_matrix(
+                Path(temp_dir),
+                matrix_kind="app-core-readback",
+                video_work_id="release-video-42",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(invocations), 1)
+        invocation = invocations[0]
+        self.assertIn("app_core_readback__user_acceptance_test.dart", invocation)
+        self.assertIn(
+            "--video-playback-canary-work-id release-video-42", invocation
+        )
 
     def run_summary(
         self,
@@ -169,6 +286,31 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
             self.workflow,
         )
         self.assertIn("echo \"started=true\" >> \"$GITHUB_OUTPUT\"", self.workflow)
+        timing_gate = self.timing_budgets["gates"]["05.app_env_device_matrix_pr"]
+        self.assertEqual(
+            timing_gate["profileHardFailSeconds"],
+            {
+                "pr_light": 5400,
+                "manual_full": 5400,
+                "release_candidate": 5400,
+                "mainline_auto_prod": 480,
+                "nightly_full": 7200,
+            },
+        )
+        self.assertEqual(
+            set(timing_gate["phaseBudgetsSeconds"]),
+            {"beta_stack", "android", "ios", "aggregation"},
+        )
+        self.assertNotIn("profileHardFailSeconds", self.workflow)
+        self.assertIn('--budget-profile "$VALIDATION_PROFILE"', self.workflow)
+        self.assertIn(
+            'if [[ "$timing_status" == "failed" || "$timing_status" == "historical_incomplete" ]]',
+            self.workflow,
+        )
+        self.assertNotIn(
+            '"$calendar_lead_time_seconds" -gt "$profile_hard_fail_seconds"',
+            self.workflow,
+        )
 
     def test_android_and_ios_are_independent_required_jobs(self) -> None:
         self.assertIn("android_device_matrix:\n    name: Android device matrix", self.workflow)
@@ -225,11 +367,7 @@ class AppEnvDeviceMatrixWorkflowContractTest(unittest.TestCase):
             'if [ "$MANAGED_RUNTIME_STARTED" = true ]; then test "$TEARDOWN" = success; fi',
             self.workflow,
         )
-        self.assertIn(
-            'if [ "$VALIDATION_PROFILE" = nightly_full ] && '
-            '[ "$calendar_lead_time_seconds" -gt 7200 ]',
-            self.workflow,
-        )
+        self.assertIn("canonical App device timing status", self.workflow)
 
 
 if __name__ == "__main__":

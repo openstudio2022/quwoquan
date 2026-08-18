@@ -148,10 +148,9 @@ def verify_release_governance(
         not isinstance(repository_state, dict)
         or repository_state.get("full_name") != repository
         or repository_state.get("default_branch") != branch_policy.release_branch
-        or repository_state.get("delete_branch_on_merge") is not True
     ):
         raise RuntimeError(
-            "hosted repository identity/default branch/auto-delete authority is invalid"
+            "hosted repository identity/default branch authority is invalid"
         )
     head_repository = str(
         ((((pull.get("head") or {}).get("repo") or {}).get("full_name"))) or ""

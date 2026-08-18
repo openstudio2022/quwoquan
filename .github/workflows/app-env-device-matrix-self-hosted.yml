@@ -12,6 +12,8 @@ env:
   QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
 
 on:
+  push:
+    branches: [dev1.0]
   schedule:
     - cron: '0 18 * * *'
   pull_request:
@@ -156,13 +158,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - if: ${{ github.event_name == 'pull_request' }}
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
           persist-credentials: false
-      - if: ${{ github.event_name == 'pull_request' }}
-        name: Enforce the reviewed promotion edge
+      - if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+        name: Enforce canonical repository branch admission
         run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
 
   resolve_release_evidence:
@@ -951,6 +952,7 @@ jobs:
           python3 quwoquan_ops/ci/render_ci_timing_summary.py \
             --gate-key 05.app_env_device_matrix_pr \
             --title "05. App Env Device Matrix" \
+            --budget-profile "$VALIDATION_PROFILE" \
             --machine-critical-path-seconds "$machine_critical_path_seconds" \
             --critical-path-source github_run_calendar \
             --run-created-at "$run_created_at" \
@@ -965,14 +967,22 @@ jobs:
             --note "GitHub Jobs API proves explicit Android/iOS jobs share one host-bound stack and execute before one aggregator." \
             --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/app-env-device-matrix-summary.json" \
             --write-step-summary
-          if [ "$VALIDATION_PROFILE" = mainline_auto_prod ]; then
-            if [ "$calendar_lead_time_seconds" -gt 480 ]; then
-              echo "::error::GATE_BLOCK: Beta stack/device/aggregation calendar path exceeded the 480 second hard budget"
-              exit 2
-            fi
-          fi
-          if [ "$VALIDATION_PROFILE" = nightly_full ] && [ "$calendar_lead_time_seconds" -gt 7200 ]; then
-            echo "::error::GATE_BLOCK: nightly full device matrix exceeded the 7200 second soak budget"
+          timing_status="$(python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["QWQ_OUTPUT_ROOT"])
+          summary = json.loads(
+              (root / "env/repo/runs/ci-timing/app-env-device-matrix-summary.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          print(str(summary.get("status") or "missing"))
+          PY
+          )"
+          if [[ "$timing_status" == "failed" || "$timing_status" == "historical_incomplete" ]]; then
+            echo "::error::GATE_BLOCK: canonical App device timing status=${timing_status}"
             exit 2
           fi
           if [[ -n "${missing_evidence:-}" ]]; then
@@ -981,6 +991,7 @@ jobs:
           fi
       - id: summary
         name: Block any missing or failed platform
+        if: always()
         env:
           SELF_HOSTED_ENABLED: ${{ vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true' }}
           DEBUG_SKIP_REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_disabled_mobile_matrix_debug == true }}

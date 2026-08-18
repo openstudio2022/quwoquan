@@ -23,10 +23,12 @@ from quwoquan_ops.gate.verify_git_branch_policy import (
     RequiredPromotionCheck,
     SystemBacksync,
     branch_policy_issues,
+    current_repo_issues,
     evaluate_transition,
     load_policy,
     pre_push_issues,
     pull_request_context_from_environment,
+    repository_branch_context_from_environment,
 )
 
 
@@ -71,7 +73,7 @@ def test_repository_policy_declares_dev_integration_and_main_release() -> None:
 
     assert policy.allowed_local == {"dev1.0", "main"}
     assert policy.allowed_remote == {"dev1.0", "main"}
-    assert policy.pull_request_prefixes == {"codex/"}
+    assert policy.pull_request_prefixes == set()
     assert policy.integration_branch == "dev1.0"
     assert policy.release_branch == "main"
     assert policy.production_source_branch == "main"
@@ -91,7 +93,6 @@ def test_repository_policy_declares_dev_integration_and_main_release() -> None:
         ),
     )
     assert policy.allowed_pull_request_edges == (
-        PullRequestEdge(base="dev1.0", head="codex/*"),
         PullRequestEdge(base="main", head="dev1.0"),
     )
     assert policy.system_backsync == SystemBacksync(
@@ -131,17 +132,17 @@ def test_branch_policy_rejects_a_third_long_lived_branch() -> None:
     assert any("unexpected remote branches: release/other" in issue for issue in issues)
 
 
-def test_branch_policy_accepts_codex_to_dev_pull_request() -> None:
-    assert (
-        _issues(
-            current_branch=None,
-            local_branches=[],
-            remote_branches=["dev1.0", "main"],
-            ci_head_branch="codex/nullability",
-            ci_base_branch="dev1.0",
-        )
-        == []
+def test_branch_policy_rejects_codex_branch_even_when_it_targets_dev() -> None:
+    issues = _issues(
+        current_branch=None,
+        local_branches=[],
+        remote_branches=["dev1.0", "main", "codex/nullability"],
+        ci_head_branch="codex/nullability",
+        ci_base_branch="dev1.0",
     )
+
+    assert any("codex/nullability -> dev1.0" in issue for issue in issues)
+    assert any("unexpected remote branches: codex/nullability" in issue for issue in issues)
 
 
 def test_branch_policy_accepts_dev_to_main_promotion() -> None:
@@ -161,7 +162,10 @@ def test_branch_policy_accepts_dev_to_main_promotion() -> None:
     ("head", "base"),
     [
         ("codex/nullability", "main"),
+        ("codex/nullability", "dev1.0"),
         ("main", "dev1.0"),
+        ("dev1.0", "dev1.0"),
+        ("main", "main"),
         ("release/other", "main"),
     ],
 )
@@ -189,18 +193,64 @@ def test_pull_request_context_requires_github_pull_request_event() -> None:
         {
             "GITHUB_ACTIONS": "true",
             "GITHUB_EVENT_NAME": "pull_request",
-            "GITHUB_HEAD_REF": "codex/nullability",
-            "GITHUB_BASE_REF": "dev1.0",
+            "GITHUB_HEAD_REF": "dev1.0",
+            "GITHUB_BASE_REF": "main",
         }
-    ) == ("codex/nullability", "dev1.0")
+    ) == ("dev1.0", "main")
     assert pull_request_context_from_environment(
         {
             "GITHUB_ACTIONS": "true",
             "GITHUB_EVENT_NAME": "workflow_dispatch",
-            "GITHUB_HEAD_REF": "codex/nullability",
-            "GITHUB_BASE_REF": "dev1.0",
+            "GITHUB_HEAD_REF": "dev1.0",
+            "GITHUB_BASE_REF": "main",
         }
     ) == (None, None)
+
+
+@pytest.mark.parametrize("event_name", ["push", "workflow_dispatch"])
+def test_hosted_direct_run_uses_exact_branch_context(event_name: str) -> None:
+    assert repository_branch_context_from_environment(
+        {
+            "GITHUB_ACTIONS": "true",
+            "GITHUB_EVENT_NAME": event_name,
+            "GITHUB_REF_TYPE": "branch",
+            "GITHUB_REF_NAME": "dev1.0",
+        }
+    ) == "dev1.0"
+    assert repository_branch_context_from_environment(
+        {
+            "GITHUB_ACTIONS": "true",
+            "GITHUB_EVENT_NAME": event_name,
+            "GITHUB_REF_TYPE": "tag",
+            "GITHUB_REF_NAME": "v1.0.0",
+        }
+    ) is None
+
+
+@pytest.mark.parametrize(
+    ("branch", "expected_code"),
+    [
+        ("dev1.0", None),
+        ("main", "OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED"),
+    ],
+)
+def test_hosted_push_uses_canonical_direct_push_evaluator(
+    monkeypatch: pytest.MonkeyPatch,
+    branch: str,
+    expected_code: str | None,
+) -> None:
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "push")
+    monkeypatch.setenv("GITHUB_REF_TYPE", "branch")
+    monkeypatch.setenv("GITHUB_REF_NAME", branch)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "openstudio2022/quwoquan")
+
+    issues = current_repo_issues()
+
+    if expected_code is None:
+        assert issues == []
+    else:
+        assert any(issue.startswith(f"{expected_code}:") for issue in issues)
 
 
 def test_branch_policy_does_not_trust_detached_non_pr_environment() -> None:
@@ -219,7 +269,7 @@ def test_main_only_fixture_still_fails_closed_for_dev_branch(tmp_path: Path) -> 
     payload["allowed_local_branches"] = ["main"]
     payload["allowed_remote_branches"] = ["main"]
     payload["integration_branch"] = "main"
-    payload["allowed_pull_request_edges"] = [{"head": "codex/*", "base": "main"}]
+    payload["allowed_pull_request_edges"] = [{"head": "main", "base": "main"}]
     payload.pop("system_backsync")
     fixture_policy.write_text(
         yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8"
@@ -260,10 +310,10 @@ def test_transition_evaluator_has_single_typed_result_semantics() -> None:
     accepted = evaluate_transition(
         policy=policy,
         transition=BranchTransition(
-            event="pull_request",
-            actor_kind="github",
+            event="direct_push",
+            actor_kind="human",
             repository="owner/repo",
-            head="codex/branch-policy",
+            head="dev1.0",
             base="dev1.0",
         ),
     )
@@ -273,18 +323,18 @@ def test_transition_evaluator_has_single_typed_result_semantics() -> None:
             event="direct_push",
             actor_kind="human",
             repository="owner/repo",
-            head="dev1.0",
-            base="dev1.0",
+            head="main",
+            base="main",
         ),
     )
 
     assert accepted == BranchDecision(
         status="allowed",
         string_context=(
-            ("actorKind", "github"),
+            ("actorKind", "human"),
             ("base", "dev1.0"),
-            ("event", "pull_request"),
-            ("head", "codex/branch-policy"),
+            ("event", "direct_push"),
+            ("head", "dev1.0"),
             ("repository", "owner/repo"),
         ),
     )
@@ -293,17 +343,17 @@ def test_transition_evaluator_has_single_typed_result_semantics() -> None:
     assert blocked.allowed is False
 
 
-def test_pre_push_accepts_only_matching_codex_remote_branch() -> None:
+def test_pre_push_accepts_only_matching_dev_remote_branch() -> None:
     policy = _repository_policy()
 
     assert (
         pre_push_issues(
             policy=policy,
-            current_branch="codex/nullability",
+            current_branch="dev1.0",
             update_lines=[
                 _update(
-                    local_branch="codex/nullability",
-                    remote_branch="codex/nullability",
+                    local_branch="dev1.0",
+                    remote_branch="dev1.0",
                 )
             ],
             environment={},
@@ -312,37 +362,26 @@ def test_pre_push_accepts_only_matching_codex_remote_branch() -> None:
     )
     issues = pre_push_issues(
         policy=policy,
-        current_branch="codex/nullability",
+        current_branch="main",
         update_lines=[
-            _update(local_branch="codex/nullability", remote_branch="codex/other")
+            _update(local_branch="main", remote_branch="dev1.0")
         ],
         environment={},
     )
-    assert any("matching remote ref" in issue for issue in issues)
+    assert any("matching local dev1.0 branch" in issue for issue in issues)
 
 
-@pytest.mark.parametrize(
-    ("current_branch", "remote_branch", "expected"),
-    [
-        ("dev1.0", "dev1.0", "codex/* -> dev1.0 PR"),
-        ("dev1.0", "main", "dev1.0 -> main promotion PR"),
-    ],
-)
-def test_pre_push_blocks_direct_long_lived_updates(
-    current_branch: str,
-    remote_branch: str,
-    expected: str,
-) -> None:
+def test_pre_push_blocks_direct_main_update() -> None:
     issues = pre_push_issues(
         policy=_repository_policy(),
-        current_branch=current_branch,
+        current_branch="dev1.0",
         update_lines=[
-            _update(local_branch=current_branch, remote_branch=remote_branch)
+            _update(local_branch="dev1.0", remote_branch="main")
         ],
         environment={},
     )
 
-    assert any(expected in issue for issue in issues)
+    assert any("dev1.0 -> main promotion PR" in issue for issue in issues)
     assert all(
         issue.startswith("OPS.BRANCH.DIRECT_PUSH_NOT_ALLOWED:") for issue in issues
     )
@@ -427,25 +466,9 @@ def test_system_backsync_decision_table_is_pure_and_fail_closed(
     assert decision.reason_code == reason_code
 
 
-def test_pre_push_allows_remote_branch_deletion_for_cleanup() -> None:
-    assert (
-        pre_push_issues(
-            policy=_repository_policy(),
-            current_branch="dev1.0",
-            update_lines=[
-                _update(
-                    local_branch="dev1.0",
-                    remote_branch="codex/merged",
-                    local_sha=ZERO_SHA,
-                )
-            ],
-            environment={},
-        )
-        == []
-    )
-
-
-@pytest.mark.parametrize("remote_branch", ["dev1.0", "main", "release/other"])
+@pytest.mark.parametrize(
+    "remote_branch", ["dev1.0", "main", "codex/merged", "release/other"]
+)
 def test_pre_push_blocks_long_lived_or_undeclared_branch_deletion(
     remote_branch: str,
 ) -> None:

@@ -61,6 +61,11 @@ def parse_args() -> argparse.Namespace:
         default=str(DEFAULT_BUDGET_FILE),
     )
     parser.add_argument(
+        "--budget-profile",
+        default="",
+        help="Select one profileHardFailSeconds entry from the canonical gate budget.",
+    )
+    parser.add_argument(
         "--machine-critical-path-seconds", type=parse_non_negative_int
     )
     parser.add_argument(
@@ -131,6 +136,28 @@ def optional_budget_seconds(gate_budget: Dict[str, Any], key: str) -> Optional[i
     return value
 
 
+def profile_hard_budget_seconds(
+    gate_budget: Dict[str, Any], budget_profile: str
+) -> tuple[Optional[str], Optional[int], Optional[int]]:
+    profile = budget_profile.strip() or None
+    gate_hard_seconds = optional_budget_seconds(gate_budget, "hardFailSeconds")
+    if profile is None:
+        return None, gate_hard_seconds, gate_hard_seconds
+    raw_profiles = gate_budget.get("profileHardFailSeconds")
+    if not isinstance(raw_profiles, dict) or profile not in raw_profiles:
+        raise ValueError(
+            "canonical profile hard budget is missing: {0}".format(profile)
+        )
+    raw_value = raw_profiles[profile]
+    if isinstance(raw_value, bool) or not isinstance(raw_value, int) or raw_value <= 0:
+        raise ValueError(
+            "canonical profile hard budget must be a positive integer: {0}".format(
+                profile
+            )
+        )
+    return profile, raw_value, gate_hard_seconds
+
+
 def normalize_optional_timestamp(raw_value: str) -> Optional[str]:
     value = raw_value.strip()
     if not value:
@@ -182,6 +209,7 @@ def build_payload(
     source_git_sha: str,
     candidate_digest: str,
     gate_budget: Dict[str, Any],
+    budget_profile: str,
     machine_critical_path_seconds: Optional[int],
     critical_path_source: Optional[str],
     timestamps: Dict[str, Optional[str]],
@@ -192,7 +220,9 @@ def build_payload(
     release_outcome: str = "not_applicable",
 ) -> Dict[str, Any]:
     soft_seconds = optional_budget_seconds(gate_budget, "budgetSeconds")
-    hard_seconds = optional_budget_seconds(gate_budget, "hardFailSeconds")
+    normalized_budget_profile, hard_seconds, gate_hard_seconds = (
+        profile_hard_budget_seconds(gate_budget, budget_profile)
+    )
     critical_definition = str(gate_budget.get("criticalPath", "")).strip() or None
     raw_phase_budgets = gate_budget.get("phaseBudgetsSeconds") or {}
     phase_budgets = {
@@ -246,6 +276,25 @@ def build_payload(
         release_outcome=release_outcome,
     )
 
+    budget_payload: Dict[str, Any] = {
+        "softSeconds": soft_seconds,
+        "hardSeconds": hard_seconds,
+        "deltaFromSoftSeconds": (
+            end_to_end_seconds - soft_seconds
+            if soft_seconds is not None and end_to_end_seconds is not None
+            else None
+        ),
+        "deltaFromHardSeconds": (
+            end_to_end_seconds - hard_seconds
+            if hard_seconds is not None and end_to_end_seconds is not None
+            else None
+        ),
+        "phaseSeconds": phase_budgets,
+    }
+    if normalized_budget_profile is not None:
+        budget_payload["profile"] = normalized_budget_profile
+        budget_payload["gateHardSeconds"] = gate_hard_seconds
+
     return {
         "schema": CANONICAL_SCHEMA,
         "generatedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -260,21 +309,7 @@ def build_payload(
         "status": status,
         "timestamps": timestamps,
         "durations": durations,
-        "budget": {
-            "softSeconds": soft_seconds,
-            "hardSeconds": hard_seconds,
-            "deltaFromSoftSeconds": (
-                end_to_end_seconds - soft_seconds
-                if soft_seconds is not None and end_to_end_seconds is not None
-                else None
-            ),
-            "deltaFromHardSeconds": (
-                end_to_end_seconds - hard_seconds
-                if hard_seconds is not None and end_to_end_seconds is not None
-                else None
-            ),
-            "phaseSeconds": phase_budgets,
-        },
+        "budget": budget_payload,
         "criticalPath": {
             "source": critical_path_source,
             "definition": critical_definition,
@@ -370,6 +405,7 @@ def main() -> int:
         source_git_sha=args.source_git_sha,
         candidate_digest=args.candidate_digest,
         gate_budget=gate_budget,
+        budget_profile=args.budget_profile,
         machine_critical_path_seconds=args.machine_critical_path_seconds,
         critical_path_source=args.critical_path_source,
         timestamps=timestamps,

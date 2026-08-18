@@ -243,11 +243,34 @@ def main() -> int:
     suites = json.loads(VALIDATION.read_text(encoding="utf-8"))
     pr_light = suites["profiles"]["pr_light"]["deviceMatrix"]
     matrix_kinds = set(pr_light.get("matrixKinds") or [])
-    if "app-core-readback" not in matrix_kinds and "environment-smoke" not in matrix_kinds:
+    if matrix_kinds != {"assistant", "environment-smoke"}:
         fail(
             failures,
-            f"{VALIDATION.relative_to(ROOT)}: pr_light must require app-core-readback or environment-smoke",
+            (
+                f"{VALIDATION.relative_to(ROOT)}: pr_light must keep the "
+                "content-free assistant and environment-smoke device baseline"
+            ),
         )
+    if pr_light.get("requireAllPlatforms") is not True:
+        fail(
+            failures,
+            (
+                f"{VALIDATION.relative_to(ROOT)}: pr_light must require both "
+                "Android and iOS platform evidence"
+            ),
+        )
+    for profile_name in ("manual_full", "nightly_full", "release_candidate"):
+        full_matrix_kinds = set(
+            suites["profiles"][profile_name]["deviceMatrix"].get("matrixKinds") or []
+        )
+        if "app-core-readback" not in full_matrix_kinds:
+            fail(
+                failures,
+                (
+                    f"{VALIDATION.relative_to(ROOT)}: {profile_name} must retain "
+                    "release-bound app-core-readback"
+                ),
+            )
 
     workflow = DEVICE_MATRIX.read_text(encoding="utf-8")
     if "app-core-readback" not in workflow:

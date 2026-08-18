@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 from pathlib import Path
 
 import yaml
@@ -12,6 +13,7 @@ PLATFORM_WORKFLOW = ROOT / ".github/workflows/beta-device-platform.yml"
 DEVICE_EVIDENCE = ROOT / "quwoquan_ops/ci/render_beta_device_evidence.py"
 DEVICE_LEASE = ROOT / "quwoquan_ops/ci/device_runner_lease.py"
 PLATFORM_RUNNER = ROOT / "quwoquan_ops/ci/run_mobile_platform_matrix.sh"
+TIMING_BUDGETS = ROOT / "quwoquan_ops/environments/pr_gate_timing_budgets.json"
 EVIDENCE_DOCKERFILE = ROOT / "quwoquan_ops/ci/app_candidate_evidence.Dockerfile"
 SPEC_REF = "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001"
 
@@ -129,7 +131,8 @@ def test_device_matrix_nightly_schedule_selects_full_profile() -> None:
     assert "Inspect and doctor the managed Gamma runtime after soak" in text
     assert text.count("stackctl.py inspect") >= 2
     assert text.count("stackctl.py doctor") >= 2
-    assert "nightly full device matrix exceeded the 7200 second soak budget" in text
+    assert '--budget-profile "$VALIDATION_PROFILE"' in text
+    assert "canonical App device timing status" in text
 
 
 def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -> None:
@@ -210,6 +213,8 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "materialize_evidence_oci.py" in text
     assert "@${{ steps.receipt_bundle.outputs.digest }}" in text
     combined = f"{text}\n{platform_text}\n{lease_text}\n{runner_text}"
+    assert 'export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"' in runner_text
+    assert 'cd "$ROOT"' in runner_text
     assert "actions/upload-artifact@" not in combined
     assert "actions/download-artifact@" not in combined
     assert "rm -rf" not in combined
@@ -240,10 +245,17 @@ def test_beta_android_and_ios_run_in_parallel_before_one_receipt_aggregation() -
     assert "manual_full" in platform_timeout
     assert "mainline_auto_prod" in platform_timeout
     assert "90" in platform_timeout
-    assert "|| 40" in platform_timeout
+    assert "|| 60" in platform_timeout
     assert re.search(r"\|\|\s+4(?:\D|$)", platform_timeout) is None
-    assert 'if [ "$VALIDATION_PROFILE" = mainline_auto_prod ]' in text
-    assert 'if [ "$calendar_lead_time_seconds" -gt 480 ]' in text
+    timing_gate = json.loads(TIMING_BUDGETS.read_text(encoding="utf-8"))["gates"][
+        "05.app_env_device_matrix_pr"
+    ]
+    assert timing_gate["profileHardFailSeconds"]["mainline_auto_prod"] == 480
+    assert timing_gate["profileHardFailSeconds"]["nightly_full"] == 7200
+    assert '--budget-profile "$VALIDATION_PROFILE"' in text
+    assert 'canonical App device timing status=${timing_status}' in text
+    assert '"$calendar_lead_time_seconds" -gt "$profile_hard_fail_seconds"' not in text
+    assert 'if [ "$calendar_lead_time_seconds" -gt 480 ]' not in text
     assert "STACKCTL_AUTO_WIPE_MIGRATION_DRIFT: \"0\"" in text
     assert "stackctl.py up" in text
     assert "--formal-release" in text

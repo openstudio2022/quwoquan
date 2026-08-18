@@ -30,6 +30,21 @@ def test_environment_packaging_uses_hermetic_deploy_workspace_and_rechecks_outpu
     assert "--env prod" not in recipe
     assert "for env_name in alpha beta gamma" in recipe
     assert 'prepare_environment_packaging_contract_inputs.py "$$deploy_work_root";' in recipe
+    assert "run_phase()" in recipe
+    for phase in (
+        "prepare",
+        "package-alpha",
+        "package-beta",
+        "package-gamma",
+        "contract-$$env_name",
+        "isolation-$$env_name",
+        "gamma-prod-isomorphism",
+    ):
+        assert phase in recipe
+    assert "durationSeconds=" in recipe
+    assert "GATE_BLOCK phase=$$phase_name status=$$phase_status" in recipe
+    assert "FIX: repair the first typed blocker above" in recipe
+    assert ">/dev/null" not in recipe
     assert "rm -rf" not in recipe
     assert 'trap \'cleanup_deploy_work_root "$$?"\' EXIT' in recipe
     assert 'exit "$$cleanup_status"' in recipe
@@ -86,9 +101,74 @@ esac
 
     assert result.returncode != 0, result.stdout + result.stderr
     assert "GATE_BLOCK: controlled prepare failure" in result.stderr
+    assert "GATE_BLOCK phase=prepare status=27" in result.stderr
+    assert "FIX: repair the first typed blocker above" in result.stderr
     assert "Error 27" in result.stderr
     assert "candidate" not in result.stderr
     assert not marker.exists()
+
+
+def test_environment_packaging_stops_on_first_package_blocker_and_preserves_status(
+    tmp_path: Path,
+) -> None:
+    shim_dir = tmp_path / "bin"
+    shim_dir.mkdir()
+    invocation_log = tmp_path / "python-invocations"
+    python_shim = shim_dir / "python3"
+    python_shim.write_text(
+        """#!/bin/sh
+printf '%s\n' "$*" >> "$QWQ_TEST_PYTHON_INVOCATIONS"
+case "$1" in
+  *prepare_environment_packaging_contract_inputs.py)
+    exit 0
+    ;;
+  *stackctl.py)
+    case " $* " in
+      *" --env beta "*)
+        echo 'GATE_BLOCK: controlled beta package failure' >&2
+        exit 29
+        ;;
+    esac
+    exit 0
+    ;;
+  *cleanup_deployment_test_workspace.py)
+    rmdir "$2"
+    exit 0
+    ;;
+  *)
+    exit 99
+    ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    python_shim.chmod(0o755)
+
+    result = subprocess.run(
+        ["make", "verify-env-packaging"],
+        cwd=ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{shim_dir}:{os.environ['PATH']}",
+            "QWQ_TEST_PYTHON_INVOCATIONS": str(invocation_log),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "START phase=package-alpha" in result.stdout
+    assert "DONE phase=package-alpha" in result.stdout
+    assert "START phase=package-beta" in result.stdout
+    assert "GATE_BLOCK: controlled beta package failure" in result.stderr
+    assert "GATE_BLOCK phase=package-beta status=29" in result.stderr
+    assert "Error 29" in result.stderr
+    invocations = invocation_log.read_text(encoding="utf-8")
+    assert "--env alpha" in invocations
+    assert "--env beta" in invocations
+    assert "--env gamma" not in invocations
+    assert "verify_environment_packaging_contract.py" not in invocations
 
 
 def test_prod_packaging_contract_and_runtime_readiness_are_separate_and_wired() -> None:

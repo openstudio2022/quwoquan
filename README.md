@@ -53,10 +53,8 @@ bash quwoquan_ops/gate/gate_repo.sh
 
 ## 分支治理
 
-- 本地与远端长期分支只允许 `dev1.0` 与 `main`：`dev1.0` 是集成真相源，`main` 是发布真相源。
-- 正常开发只走 `codex/* -> dev1.0`，发布晋级只走 `dev1.0 -> main`；`main -> dev1.0` 只允许 promotion 成功后的系统 fast-forward backsync。
-- Prod 只接受可达 `main` 的精确 SHA；禁止第三长期分支或绕过 PR 直接更新长期分支。GitHub 原生保护不可用时，仓内 gate 只阻断 release eligibility，不冒充远端 ref 未被修改。
-- 未经明确批准，不允许创建、提交或推送其他临时分支。
+- 本地与远端只允许 `dev1.0` 与 `main`：日常开发直接提交并推送到集成真相源 `dev1.0`，发布晋级只走 `dev1.0 -> main` PR；`main -> dev1.0` 只允许 promotion 成功后的系统 fast-forward backsync。
+- Prod 只接受可达 `main` 的精确 SHA；禁止临时分支、第三长期分支或绕过 promotion PR 直接更新 `main`。GitHub 原生保护不可用时，仓内 gate 只阻断 release eligibility，不冒充远端 ref 未被修改。
 - 本地执行 `bash quwoquan_ops/hooks/run_install_hooks.sh` 后，`pre-commit` 和 `pre-push` 会阻断非白名单分支；repo gate 也会对本地/远端分支做同样校验。
 - `pre-commit` 跑 L0 `make commit-gate`（目标 ≤10 分钟，硬顶 15 分钟：并行静态 + 影响面测试）；全量 local_contract 由 CI Delivery Gate 分片承接。
 

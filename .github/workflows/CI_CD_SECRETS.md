@@ -11,11 +11,11 @@ Podman；ACK 仅作为后续演进项。volcengine、huaweicloud 入口保留，
 
 | Workflow | 触发 | 职责 | 对应阶段 |
 |----------|------|------|----------|
-| **delivery-gate.yml** | `pull_request(main)`、手动 | PR 主门禁：拓扑校验、L1+L2 | G0~G3 |
+| **delivery-gate.yml** | `push dev1.0`、`pull_request(dev1.0 -> main)`、手动 | 集成与 promotion 主门禁：拓扑校验、L1+L2 | G0~G3 |
 | **service_pipeline.yml** | `push main`、手动 | main 后 Go 构建、rec-model 镜像、kustomize 校验 | G2 |
 | **app_pipeline.yml** | 仅由 mainline `workflow_call` | 四环境 Android/iOS/macOS/Web、Prod Ops Portal 与 immutable App OCI evidence | G2 / 候选 |
-| **pre-release-gate.yml** | `pull_request(main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
-| **app-env-device-matrix-self-hosted.yml** | `pull_request(main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
+| **pre-release-gate.yml** | `push dev1.0`、`pull_request(dev1.0 -> main)`、手动 | deploy → L3 → L4 → gamma smoke | G3→G5b |
+| **app-env-device-matrix-self-hosted.yml** | `push dev1.0` / `pull_request(dev1.0 -> main)` / 被调用 / 手动 | self-hosted 动态设备矩阵唯一入口 | G5b |
 | **prod-sim-manual-admission.yml** | 手动 | exact main SHA 的隔离、不可晋级 first-party 预演 | G5b 诊断 |
 | **deploy-prod-auto.yml** | `push main`、手动 | main 后自动推进 prod 主链，并在 `canary` 承接真实远端集成复验 | G5c |
 | **domain-governance.yml** | 每周、手动 | DNS 唯一记录收敛、DNS-01 续期与加密证书交接 | 环境治理 |
@@ -102,13 +102,13 @@ App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关�
 - `api_integration` / `user_acceptance` 验证统一跑 `gamma-local`，默认 URL 由 `quwoquan_ops/environments/gamma/runtime.yaml` 经 `stackctl` 解析。
 - 如需手动覆盖 local-gamma 入口，可在命令行或 workflow input 传 `gamma_base_url`，而不是维护第二套 GitHub secret。
 - `user_acceptance` Patrol 已统一迁到 **本机 macOS self-hosted runner**，通过 `flutter devices --machine` 动态发现当前可见的 Android/iOS 模拟器或真机。`03` / `04` / `05` 的 required PR 路径要求 Android 与 iOS 两个独立 job 均成功，任一平台缺席或失败都会 fail-closed。
-- `main` 的 pull request 合入规则中，`03` / `04` / `05` 需同时配置为 required checks。
+- `main` 的 `dev1.0 -> main` promotion 合入规则中，`03` / `04` / `05` 需同时配置为 required checks；`dev1.0` direct push 会为同一精确 SHA 生成三项 integration check evidence。
 
 ---
 
 ## 六、App Env Device Matrix（app-env-device-matrix-self-hosted.yml）
 
-### self-hosted（pull_request / workflow_call / 手动统一复用）
+### self-hosted（dev1.0 push / promotion pull_request / workflow_call / 手动统一复用）
 
 | Secret | 用途 |
 |--------|------|
@@ -131,7 +131,7 @@ App 候选构建会 fail closed，且会把人为等待错误引入 600 秒关�
 
 ### 说明
 
-- `app-env-device-matrix-self-hosted.yml` 已成为唯一的 **05. App Env Device Matrix** 入口；同时支持 `pull_request(main)`、被其他 workflow 调用以及手动调试。
+- `app-env-device-matrix-self-hosted.yml` 已成为唯一的 **05. App Env Device Matrix** 入口；同时支持 `push dev1.0`、`pull_request(dev1.0 -> main)`、被其他 workflow 调用以及手动调试。
 - Nightly schedule 只读取 `RELEASED_RELEASE_EVIDENCE_REF`；手动 full/release-candidate 与
   reusable caller 只接受一个 `release_evidence_ref`。`candidateId`、`artifactDigest`、
   source Git SHA/workflow run、pilot/rollback attestation、Alpha/Beta/Gamma lifecycle 与

@@ -21,10 +21,10 @@
         "envs": [
           "beta"
         ],
-        "requireAllPlatforms": false,
+        "requireAllPlatforms": true,
         "matrixKinds": [
           "assistant",
-          "app-core-readback"
+          "environment-smoke"
         ]
       }
     },

@@ -489,6 +489,20 @@ verify-emitted-error-code-declaration:
 verify-env-packaging:
 	@deploy_work_root="$$(mktemp -d "$${TMPDIR:-/tmp}/quwoquan-deploy.XXXXXX")"; \
 	set -eu; \
+	run_phase() { \
+		phase_name="$$1"; shift; \
+		phase_started_at="$$(date +%s)"; \
+		echo "[env-packaging] START phase=$$phase_name"; \
+		if "$$@"; then \
+			phase_status=0; \
+		else \
+			phase_status="$$?"; \
+			echo "[env-packaging] GATE_BLOCK phase=$$phase_name status=$$phase_status" >&2; \
+			echo "[env-packaging] FIX: repair the first typed blocker above, then rerun make verify-env-packaging" >&2; \
+			return "$$phase_status"; \
+		fi; \
+		echo "[env-packaging] DONE phase=$$phase_name durationSeconds=$$(( $$(date +%s) - phase_started_at ))"; \
+	}; \
 	cleanup_deploy_work_root() { \
 		command_status="$$1"; \
 		trap - EXIT; \
@@ -498,20 +512,20 @@ verify-env-packaging:
 		exit "$$cleanup_status"; \
 	}; \
 	trap 'cleanup_deploy_work_root "$$?"' EXIT; \
-	python3 quwoquan_ops/gate/prepare_environment_packaging_contract_inputs.py "$$deploy_work_root"; \
+	run_phase prepare python3 quwoquan_ops/gate/prepare_environment_packaging_contract_inputs.py "$$deploy_work_root"; \
 	candidate="$$deploy_work_root/candidate-release.json"; \
 	rollback="$$deploy_work_root/rollback-release.json"; \
 	export QWQ_GRAPHQL_READ_REGISTRY_SIGNING_KEY_ID="packaging-contract"; \
 	export QWQ_GRAPHQL_READ_REGISTRY_SIGNING_PRIVATE_KEY_FILE="$$deploy_work_root/graphql-signing-private.pem"; \
 	export QWQ_GRAPHQL_READ_REGISTRY_TRUSTED_PUBLIC_KEYS_FILE="$$deploy_work_root/graphql-trusted-public-keys.json"; \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env alpha --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback" >/dev/null && \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env beta --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback" >/dev/null && \
-	QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env gamma --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback" >/dev/null && \
+	run_phase package-alpha env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env alpha --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback"; \
+	run_phase package-beta env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env beta --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback"; \
+	run_phase package-gamma env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/cli/stackctl.py --output-format json package --env gamma --include-services --release-attestation "$$candidate" --rollback-release-attestation "$$rollback"; \
 	for env_name in alpha beta gamma; do \
-		QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_environment_packaging_contract.py --env "$$env_name" && \
-		QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_env_artifact_isolation.py --env "$$env_name" || exit "$$?"; \
-	done && \
-	python3 quwoquan_ops/environments/verify/verify_gamma_local_prod_isomorphism.py
+		run_phase "contract-$$env_name" env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_environment_packaging_contract.py --env "$$env_name"; \
+		run_phase "isolation-$$env_name" env QWQ_DEPLOY_WORK_ROOT="$$deploy_work_root" python3 quwoquan_ops/gate/verify_env_artifact_isolation.py --env "$$env_name"; \
+	done; \
+	run_phase gamma-prod-isomorphism python3 quwoquan_ops/environments/verify/verify_gamma_local_prod_isomorphism.py
 
 verify-prod-packaging-contract: prepare-test-python
 	@$(PYTEST_RUNNER) $(PYTEST_INTERPRETER_FLAGS) -m pytest $(PYTEST_FLAGS) \

@@ -121,13 +121,16 @@ def _required_string(payload: Mapping[str, object], key: str) -> str:
     return value
 
 
-def _string_set(payload: Mapping[str, object], key: str) -> frozenset[str]:
+def _string_set(
+    payload: Mapping[str, object], key: str, *, allow_empty: bool = False
+) -> frozenset[str]:
     raw = payload.get(key)
     if not isinstance(raw, list):
         raise TypeError(f"branch policy {key} must be a list")
     rows = [str(value).strip() for value in raw if str(value).strip()]
-    if not rows or len(rows) != len(set(rows)):
-        raise ValueError(f"branch policy {key} must be non-empty and duplicate-free")
+    if (not rows and not allow_empty) or len(rows) != len(set(rows)):
+        qualifier = "duplicate-free" if allow_empty else "non-empty and duplicate-free"
+        raise ValueError(f"branch policy {key} must be {qualifier}")
     return frozenset(rows)
 
 
@@ -235,7 +238,9 @@ def load_policy(path: Path = POLICY_PATH) -> BranchPolicy:
     policy = BranchPolicy(
         allowed_local=_string_set(payload, "allowed_local_branches"),
         allowed_remote=_string_set(payload, "allowed_remote_branches"),
-        pull_request_prefixes=_string_set(payload, "pull_request_branch_prefixes"),
+        pull_request_prefixes=_string_set(
+            payload, "pull_request_branch_prefixes", allow_empty=True
+        ),
         integration_branch=_required_string(payload, "integration_branch"),
         release_branch=_required_string(payload, "release_branch"),
         production_source_branch=_required_string(payload, "production_source_branch"),
@@ -315,6 +320,21 @@ def pull_request_context_from_environment(
     return head_ref, base_ref
 
 
+def repository_branch_context_from_environment(
+    environment: Mapping[str, str],
+) -> str | None:
+    """Return the authoritative repository branch for push/manual GitHub runs."""
+    if environment.get("GITHUB_ACTIONS") != "true":
+        return None
+    if environment.get("GITHUB_EVENT_NAME") not in {"push", "workflow_dispatch"}:
+        return None
+    ref_type = environment.get("GITHUB_REF_TYPE", "").strip()
+    ref_name = environment.get("GITHUB_REF_NAME", "").strip()
+    if ref_type != "branch" or not ref_name:
+        return None
+    return ref_name
+
+
 def _decision_context(**values: str | None) -> tuple[tuple[str, str], ...]:
     return tuple(sorted((key, value) for key, value in values.items() if value))
 
@@ -348,6 +368,11 @@ def evaluate_transition(
             string_context=context,
         )
     if transition.event == "direct_push":
+        if (
+            transition.head == policy.integration_branch
+            and transition.base == policy.integration_branch
+        ):
+            return BranchDecision(status="allowed", string_context=context)
         return BranchDecision(
             status="blocked",
             reason_code=policy.failure_code("direct_push_not_allowed"),
@@ -454,7 +479,7 @@ def branch_policy_issues(
                 _issue(
                     policy,
                     "ref_not_allowed",
-                    "detached HEAD is forbidden; use a declared long-lived or reviewed pull-request branch",
+                    "detached HEAD is forbidden; use one of the declared repository branches",
                 )
             )
     elif (
@@ -522,11 +547,14 @@ def current_repo_issues() -> list[str]:
         if ref not in {"origin", "origin/HEAD"}
     ]
     ci_head_branch, ci_base_branch = pull_request_context_from_environment(os.environ)
+    hosted_branch = repository_branch_context_from_environment(os.environ)
     try:
         current_branch = _run_git("symbolic-ref", "--quiet", "--short", "HEAD")[0]
     except (subprocess.CalledProcessError, IndexError):
         current_branch = None
-    return branch_policy_issues(
+    if hosted_branch is not None:
+        current_branch = hosted_branch
+    issues = branch_policy_issues(
         policy=policy,
         local_branches=local_branches,
         remote_branches=remote_branches,
@@ -534,6 +562,23 @@ def current_repo_issues() -> list[str]:
         ci_head_branch=ci_head_branch,
         ci_base_branch=ci_base_branch,
     )
+    if hosted_branch is not None and os.environ.get("GITHUB_EVENT_NAME") == "push":
+        decision = evaluate_transition(
+            policy=policy,
+            transition=BranchTransition(
+                event="direct_push",
+                actor_kind="github",
+                repository=os.environ.get("GITHUB_REPOSITORY", "github"),
+                head=hosted_branch,
+                base=hosted_branch,
+            ),
+        )
+        if not decision.allowed:
+            issues.append(
+                f"{decision.reason_code}: hosted direct push to "
+                f"'{hosted_branch}' is not allowed"
+            )
+    return issues
 
 
 def pre_push_issues(
@@ -620,14 +665,19 @@ def pre_push_issues(
             )
             continue
         if remote_branch == policy.integration_branch:
-            issues.append(
-                _issue(
-                    policy,
-                    "direct_push_not_allowed",
-                    f"direct update of '{remote_branch}' is blocked; use codex/* -> "
-                    f"{policy.integration_branch} PR or the system fast-forward backsync",
+            if (
+                current_branch != policy.integration_branch
+                or local_ref != f"refs/heads/{policy.integration_branch}"
+            ):
+                issues.append(
+                    _issue(
+                        policy,
+                        "direct_push_not_allowed",
+                        f"direct update of '{remote_branch}' must come from the matching "
+                        f"local {policy.integration_branch} branch",
+                    )
                 )
-            )
+            continue
         elif remote_branch == policy.release_branch:
             issues.append(
                 _issue(

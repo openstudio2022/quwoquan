@@ -46,9 +46,23 @@ if [[ -n "${GATE_CHANGE_BASE_SHA:-}" || -n "${GATE_CHANGE_HEAD_SHA:-}" ]]; then
   )
 fi
 
+service_phase="${GATE_SERVICE_PHASE:-all}"
+case "$service_phase" in
+  all|core|packaging) ;;
+  *)
+    echo "[gate] FAIL: invalid GATE_SERVICE_PHASE=$service_phase (expected all|core|packaging)" >&2
+    exit 2
+    ;;
+esac
+if [[ "$scope" != "service" && "$service_phase" != "all" ]]; then
+  echo "[gate] FAIL: GATE_SERVICE_PHASE is only valid with --scope service" >&2
+  exit 2
+fi
+
 # Python script governance derives independent app/service/ops/data
 # boundaries. A scoped Delivery job validates its own boundary; the aggregate
 # local gate keeps the strict whole-repository check.
+if [[ "$service_phase" != "packaging" ]]; then
 case "$scope" in
   all) python_script_scope="all" ;;
   service) python_script_scope="service" ;;
@@ -153,7 +167,9 @@ rm -rf "$ROOT/.pytest_cache"
 python3 quwoquan_ops/gate/verify_root_layout.py
 python3 quwoquan_app/scripts/runtime/architecture/verify_app_layout.py
 
-run_service() {
+fi
+
+run_service_core_before_packaging() {
   echo "[gate] quwoquan_service"
   # migration 控制面与架构棘轮单测只在 service/all 跑一次；app scope 仅跑前置静态扫描。
   run_vertical_architecture_local_contract
@@ -249,10 +265,17 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   bash quwoquan_ops/environments/verify/verify_service_config_digest_mapping.sh
   bash quwoquan_ops/environments/verify/verify_image_identity_single_track.sh
   bash quwoquan_ops/environments/verify/verify_config_pr_policy.sh
+}
+
+run_service_packaging() {
+  echo "[gate] quwoquan_service packaging"
   make verify-env-packaging
   make verify-prod-packaging-contract
   # 环境包生成后再次断言，防止 package/renderer 旁路把配置或 payload 写回 output。
   python3 quwoquan_ops/gate/verify_output_layout.py
+}
+
+run_service_core_after_packaging() {
   command -v dart >/dev/null 2>&1 || { echo "[gate] FAIL: dart not found in PATH" 1>&2; exit 1; }
   dart quwoquan_ops/tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
   dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
@@ -270,6 +293,23 @@ python3 quwoquan_ops/tests/local_contract/gate/test_emitted_error_code_declarati
   # shared runtime 分别进入显式 cross-cutting 单元。旧格式输入直接 fail-closed，
   # 只有唯一 canonical receipt/rule/baseline 能参与 Delivery Gate。
   python3 quwoquan_ops/gate/verify_canonical_coverage.py --collect --scope cloud
+}
+
+run_service() {
+  case "$service_phase" in
+    all)
+      run_service_core_before_packaging
+      run_service_packaging
+      run_service_core_after_packaging
+      ;;
+    core)
+      run_service_core_before_packaging
+      run_service_core_after_packaging
+      ;;
+    packaging)
+      run_service_packaging
+      ;;
+  esac
 }
 
 run_app() {

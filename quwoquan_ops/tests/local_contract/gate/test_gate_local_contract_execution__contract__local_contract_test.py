@@ -253,7 +253,7 @@ class ChangedGateNeedsCompanionTest(unittest.TestCase):
             "只有 verify_ 前缀的门禁脚本进入判据 B",
         )
 
-    def test_explicit_pr_range_does_not_reaudit_dev1_history(self) -> None:
+    def test_explicit_dev_push_range_does_not_reaudit_dev1_history(self) -> None:
         root = self._repository()
         historical = root / "quwoquan_ops/gate/verify_historical_gate.py"
         historical.parent.mkdir(parents=True, exist_ok=True)
@@ -267,7 +267,6 @@ class ChangedGateNeedsCompanionTest(unittest.TestCase):
             capture_output=True,
             text=True,
         ).stdout.strip()
-        self._git("checkout", "-q", "-b", "codex/pr")
         (root / "README.md").write_text("current PR\n", encoding="utf-8")
         self._git("add", "README.md")
         self._git("commit", "-q", "-m", "non-gate PR")

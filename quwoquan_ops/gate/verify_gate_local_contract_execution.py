@@ -31,7 +31,7 @@
 CI 调用方必须传入已经校验过的 exact `base_sha` / `head_sha`，判据 B 只看这一条 PR 或
 promotion 边的**已提交**增量；本地未显式传参时才保守回退到 `origin/main` / `main`。
 显式范围缺键、不是完整 commit SHA、head 不是当前 checkout 或 base 不是 head 祖先时一律
-fail closed，不能静默回退到本地分支。这样 `codex/* -> dev1.0` 不会重复审计历史增量，
+fail closed，不能静默回退到本地分支。这样 `dev1.0` direct push 只审计本次提交范围，
 而 `dev1.0 -> main` 仍会完整审计 promotion 范围。
 
 改动面不含未提交工作树。这里不是漏了一种情况：本仓库脏工作树是常态，一次会话里往往

@@ -6,8 +6,7 @@ allowed_remote_branches:
   - dev1.0
   - main
 
-pull_request_branch_prefixes:
-  - codex/
+pull_request_branch_prefixes: []
 
 integration_branch: dev1.0
 release_branch: main
@@ -23,8 +22,6 @@ required_promotion_checks:
     workflow: .github/workflows/app-env-device-matrix-self-hosted.yml
 
 allowed_pull_request_edges:
-  - head: codex/*
-    base: dev1.0
   - head: dev1.0
     base: main
 

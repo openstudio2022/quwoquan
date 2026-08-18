@@ -11,7 +11,7 @@
 
 ## 2. Story 协作与状态流
 
-- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：`dev1.0` 承接长期集成，`main` 承接唯一发布；短期 PR 分支受控、合入即删，禁止第三长期分支。
+- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：仓库只保留 `dev1.0` 与 `main`；日常开发直接进入 `dev1.0`，唯一 PR 边为 `dev1.0 -> main` promotion。
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：gamma-local 是开发与提交前的主验证链，统一本机模拟器/浏览器接入同一组域级入口。
 - [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
@@ -30,19 +30,19 @@
 
 <a id="dec-001"></a>
 ### DEC-001 dev1.0 集成与 main 发布组成唯一受控主链
-- 决策：长期集成真相源固定为 `dev1.0`，唯一发布真相源固定为 `main`。正常开发只走 `codex/* -> dev1.0` PR，发布只走 `dev1.0 -> main` promotion PR；promotion 成功后仅受管系统可把 `main` fast-forward backsync 到 `dev1.0`。
-- 单向状态流：`codex/*` 合入 `dev1.0` 后生成 integration receipt，但不取得 release eligibility。`dev1.0` 合入 `main` 后生成 promotion receipt 并允许 mainline candidate admission。系统 backsync 只同步 ref，不生成新的 promotion 或 release eligibility。
-- 机器真相源：`quwoquan_ops/policies/branch_policy.yaml` 唯一声明长期分支、短期前缀、合法 PR 边、integration/release/production-source 角色与 system backsync。hook、Actions、release governance 和 Prod source admission 只消费该合同，不各自维护第二份 allowlist。
-- 对象边界：`BranchPolicy` 是从上述版本化合同加载的不可变配置，`BranchTransition` 是一次评估的不可变输入值，`BranchDecision` 是不可变判断结果。Platform Ops 的 `BranchGovernanceEvidenceWriter` 是 integration、promotion、backsync 与 blocker receipt 的唯一 append-only writer；receipt 只引用 Git/GitHub 权威事实和 policy digest，不成为可修改分支状态或第二套 policy。
+- 决策：仓库只保留 `dev1.0`、`main` 两个分支。长期集成真相源固定为 `dev1.0` 并接受日常直接开发，唯一发布真相源固定为 `main` 且只接受 `dev1.0 -> main` promotion PR；promotion 成功后仅受管系统可把 `main` fast-forward backsync 到 `dev1.0`。
+- 单向状态流：`dev1.0` push 只生成绑定精确 SHA 的 `03/04/05` hosted check evidence，不取得 release eligibility。`dev1.0` 合入 `main` 后生成 promotion receipt 并允许 mainline candidate admission。系统 backsync 只同步 ref，不生成新的 promotion 或 release eligibility。
+- 机器真相源：`quwoquan_ops/policies/branch_policy.yaml` 唯一声明两个分支、唯一 PR 边、integration/release/production-source 角色与 system backsync。hook、Actions、release governance 和 Prod source admission 只消费该合同，不各自维护第二份 allowlist。
+- 对象边界：`BranchPolicy` 是从上述版本化合同加载的不可变配置，`BranchTransition` 是一次评估的不可变输入值，`BranchDecision` 是不可变判断结果。Integration evidence 直接使用 GitHub 对精确 SHA 的 hosted Check Runs；Platform Ops 的 `BranchGovernanceEvidenceWriter` 只负责 promotion、backsync 与 blocker receipt，receipt 只引用 Git/GitHub 权威事实和 policy digest，不成为可修改分支状态或第二套 policy。
 - 决策导出面：生产模块提供纯 `BranchTransition(event, actorKind, repository, head, base, beforeOid, afterOid, refs) -> BranchDecision(status, reasonCode, stringContext)`。`status` 只允许 `allowed|blocked`，`reasonCode` 只使用 `OPS.BRANCH.*` 稳定身份，OID、ref、actor 与远端诊断只进入 string context；local contract 直接调用该生产 evaluator。
 - Git authority 端口：`BranchRefReader.readHeads(repository) -> BranchRefSnapshot` 读取权威 heads、精确 OID 与 ancestry。`BranchBacksyncWriter.fastForward(expectedBeforeOid, promotionOid) -> BranchBacksyncResult` 只执行无 force fast-forward 并回读 exact after OID。equal 为幂等 no-op；同一 attempt 发现 before OID 漂移即返回 `OPS.BRANCH.BACKSYNC_CAS_CONFLICT` 且零写，只有新 attempt 取得新快照后才能重新判定。任何分叉、main 落后、non-fast-forward、权限或网络不可确认都不写 ref。
-- Hosted authority：只读 `HostedGovernanceReader` 绑定 repository/default branch、PR number、head/base/merged SHA、workflow run/attempt/source ref、actor/installation identity、main/dev before-after OID、适用 protection/ruleset/auto-delete、observedAt 与 evidence digest。fixture 只能验证 parser，不能冒充 hosted evidence；private-free 无法提供的 authority 保留在 L3 `OPEN-002`。
-- Prod admission：先验证 workflow definition 来自 `refs/heads/main`、source 是可达 `origin/main` 的精确 commit，并由 GitHub readback 证明唯一已合并 `dev1.0 -> main` promotion、merge SHA、最终 promotion head、绑定该 head 的 approval、canonical required workflow run/attempt/check identity、repository default branch/auto-delete 与当前 workflow attempt。
+- Hosted authority：只读 `HostedGovernanceReader` 绑定 repository/default branch、PR number、head/base/merged SHA、workflow run/attempt/source ref、actor/installation identity、main/dev before-after OID、适用 protection/ruleset、observedAt 与 evidence digest。fixture 只能验证 parser，不能冒充 hosted evidence；尚未精确证明的托管 authority 保留在 L3 `OPEN-002`。
+- Prod admission：先验证 workflow definition 来自 `refs/heads/main`、source 是可达 `origin/main` 的精确 commit，并由 GitHub readback 证明唯一已合并 `dev1.0 -> main` promotion、merge SHA、最终 promotion head、绑定该 head 的 approval、canonical required workflow run/attempt/check identity、repository default branch 与当前 workflow attempt。
 - Prod effect isolation：任一逐次 readback 不可证明时 fail-closed，只产 blocker receipt；candidate、credential materialization、Provider 与 `stackctl` rollout command 均不可达。
 - Private-free 边界：无原生 protection/ruleset 时记录 `hostedProtectionVerified=false` 并阻断 `formalProd` 声明，具备上述逐次证据的 release validation 可以继续；满足父能力的 hosted protection 与 approval 后才交给 `gray-release-to-prod` 的 effectful rollout。
 - 理由：把频繁集成和唯一发布拆开可以稳定 integration checks，同时保持未晋级代码无法取得 release eligibility；共享 evaluator、真实 Git 端口与 hosted readback使三层证据绑定同一 repository、run 与 OID。
-- 被否决方案：`main` 同时承担日常集成、恢复第三长期分支、`codex/* -> main` 直达发布、人工 `main -> dev1.0`、force backsync、用环境变量自报 system identity，或由 hook/workflow复制分支规则。
-- 约束与影响：GitHub 原生保护不可用时，仓内 gate 只能阻断 eligibility 而不能声称远端 direct push 未发生。异常 ref 通过新的 `codex/reconcile-* -> dev1.0` PR 恢复，禁止自动 merge、force push 或历史改写。
+- 被否决方案：`main` 同时承担日常集成、创建任何临时或第三长期分支、非 `dev1.0 -> main` PR 直达发布、人工 `main -> dev1.0`、force backsync、用环境变量自报 system identity，或由 hook/workflow复制分支规则。
+- 约束与影响：GitHub 原生保护不可用时，仓内 gate 只能阻断 eligibility 而不能声称远端 direct push 未发生。`dev1.0` 异常只允许在同一分支追加修复提交，禁止临时 reconcile 分支、自动 merge、force push 或历史改写。
 - 合法 main promotion 入库后自动启动同一 DAG，完成不可变 OCI `ReleaseEvidenceManifest` 的 `component-ready -> candidate-ready` 总装与 Alpha/Beta/Gamma 阻断验证；正式 Prod apply 不由 workflow_run 或 push 静默执行，必须由人工 dispatch 绑定可达 `main` 的精确 Git SHA、显式设置非 dry-run，并通过 production environment approval。
 - `candidate-ready` 必须绑定四环境配置包、四环境 App 真实 payload、ContractGraph、真实 Provider readiness 与三层测试；按序接受 Alpha/Beta/Gamma 回执并绑定 rollback readiness 后才成为 `deployable`，Prod 全量验证后才成为 `released`。
 - 同一候选制品就绪后，Alpha、Beta、Gamma-local 在隔离运行面并行执行；聚合器仍按 `alpha -> beta -> gamma` 验证回执，任一失败均不得申请 Prod approval。
@@ -81,9 +81,9 @@
 
 ## 5. 失败与恢复
 
-- 失败类型：分支 policy 无效、PR/ref 非法、direct push 无资格、backsync 非 fast-forward、ref compare-and-swap 冲突、Prod source 不可达 main、权限拒绝、依赖超时、候选摘要冲突、证据缺失或持久化失败。
+- 失败类型：分支 policy 无效、PR/ref 非法、`main` direct push、backsync 非 fast-forward、ref compare-and-swap 冲突、Prod source 不可达 main、权限拒绝、依赖超时、候选摘要冲突、证据缺失或持久化失败。
 - 可见结果：调用方收到稳定 `OPS.BRANCH.*` 或父能力 canonical failure；任何失败均不写 promotion、candidate、backsync、deploy 或 rollback 成功事实。
-- 恢复动作：非法 PR/ref 修正 head/base 后重试。backsync equal 幂等完成，安全 ancestor 可重读后重试，分叉只走 `codex/reconcile-* -> dev1.0` PR。push 返回成功但 readback 未知时禁止盲重试，先从权威 ref 回读；after 等于 promotion OID 时收口成功，after 仍等于 before 时可安全重试，其他值冻结 eligibility 并进入 reconcile。远端权限、网络、ancestry 或 hosted authority 不可确认时停止并保留 before/after readback。
+- 恢复动作：非法 PR/ref 修正 head/base 后重试。backsync equal 幂等完成，安全 ancestor 可重读后重试。`dev1.0` 分叉时停止并要求人工裁决，不创建临时分支或 force。push 返回成功但 readback 未知时禁止盲重试，先从权威 ref 回读。after 等于 promotion OID 时收口成功，after 仍等于 before 时可安全重试，其他值冻结 eligibility。远端权限、网络、ancestry 或 hosted authority 不可确认时停止并保留 before/after readback。
 - 禁止 fallback：不得回退到 Mock、旧 wire、双读双写或页面本地写副本。
 
 ## 6. 质量与观测

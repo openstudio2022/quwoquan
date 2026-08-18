@@ -1,6 +1,6 @@
 # 04 PR 轻量门禁：pr_light 不访问远端；manual_full/mainline_auto_prod
 # 必须对显式 beta/prod URL 执行 canonical /search 商业信封探针。hosted gamma 预检保持退役。
-# 触发：pull_request + workflow_dispatch；canonical evaluator 决定是否为 promotion
+# 触发：dev1.0 push + dev1.0 -> main pull_request + workflow_dispatch；canonical evaluator 决定是否为 promotion
 # 执行语义见 .cursor/commands/verify.md；本 workflow 是 CI 行为真相源。
 name: 04. Pre-Release Gate
 
@@ -8,6 +8,8 @@ permissions:
   contents: read
 
 on:
+  push:
+    branches: [dev1.0]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -44,12 +46,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - if: ${{ github.event_name == 'pull_request' }}
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
         with:
           fetch-depth: 0
-      - if: ${{ github.event_name == 'pull_request' }}
-        name: Enforce the reviewed promotion edge
+      - name: Enforce canonical repository branch admission
         run: python3 quwoquan_ops/gate/verify_git_branch_policy.py
 
   resolve_profile:
